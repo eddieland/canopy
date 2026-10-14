@@ -84,8 +84,8 @@ each, the worktree pools, and canopy's state. The loop runs from the workspace r
 
 canopy finds the workspace by walking up from the current directory to the nearest `canopy-workspace.toml`, so it
 works from inside `repos/` too. With none, every command that reads the config or the journal refuses, and names a
-`canopy.toml` left in the repository it was run from as not read (D016). `canopy init`, `canopy skill`, and
-`canopy secret` need no workspace.
+`canopy.toml` left in the repository it was run from as not read (D016). `canopy init`, `canopy skill`,
+`canopy secret`, and `canopy sandbox setup` need no workspace.
 
 ### The map
 

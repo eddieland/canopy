@@ -52,6 +52,7 @@ for command in (
     setup.cmd_init,
     setup.cmd_skill,
     setup.cmd_secret,
+    setup.sandbox_group,
     loop.cmd_loop,
     loop.cmd_tick,
     loop.cmd_status,

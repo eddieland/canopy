@@ -392,3 +392,11 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Why: under "push once", a worker that found its own lint error after pushing left it for a `fix-ci` run, or
   for nobody when the check is not in CI. Extra pushes cost a CI run each; the run timeout still bounds them.
 - Unchanged: no CI polling, no retry loop on a rejected push, and the harness's own fallback push happens once.
+
+## D117. The sandbox wrapper ships with canopy; `canopy sandbox setup` installs a pinned `srt` with npm
+
+- `canopy-sandbox` and its templates are a workspace member (D041); the harness reads the templates, never runs it.
+- `srt` is Node: `npm ci --ignore-scripts` from a lockfile canopy ships, into `~/.local/share/canopy/`, which a worker
+  cannot write. A new `srt` is a lockfile change. Root-only steps are printed, never run.
+- Rejected: `npm install -g` (unpinned, shared with the operator's own); bundling `srt` (it needs Node regardless).
+- Revisit: if `srt` ships a standalone binary, or the sandbox stops being opt-in.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fake `srt` (Anthropic's sandbox-runtime) for tests of `examples/sandbox/canopy-sandbox`. Sandboxes nothing.
+"""Fake `srt` (Anthropic's sandbox-runtime) for tests of `canopy-sandbox`. Sandboxes nothing.
 
 Speaks the one form the wrapper uses, `srt --settings PATH -- COMMAND [ARG]...`: it reads the policy at PATH, records
 what it was given, sets TMPDIR the way srt does, and replaces itself with COMMAND, which runs unsandboxed. A missing or

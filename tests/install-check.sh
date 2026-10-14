@@ -41,6 +41,19 @@ for sink in canopy-notify-desktop canopy-notify-slack; do
     usage=$("$sink" --help </dev/null) || fail "$sink --help failed"
     echo "$usage" | grep -q "^usage: $sink " || fail "$sink --help did not print the sink's usage"
 done
+# The sandbox wrapper too (HOST_ISOLATION §4.1). It refuses to run without a role, naming itself.
+[ "$(command -v canopy-sandbox)" = "$UV_TOOL_BIN_DIR/canopy-sandbox" ] || fail "canopy-sandbox was not installed"
+status=0
+usage=$(canopy-sandbox 2>&1 </dev/null) || status=$?
+[ "$status" = 2 ] || fail "canopy-sandbox with no role exited $status, not 2"
+echo "$usage" | grep -q "usage: canopy-sandbox " || fail "canopy-sandbox did not print its usage"
+# Its templates and srt's lockfile ship in the package: setup copies the templates, and names the version it would
+# install. With nothing but canopy on PATH, npm and bubblewrap are missing, so it exits 1 and installs nothing.
+status=0
+sandbox=$(PATH="$UV_TOOL_BIN_DIR" canopy sandbox setup) || status=$?
+[ "$status" = 1 ] || fail "canopy sandbox setup exited $status with nothing to install srt with"
+[ -s "$XDG_CONFIG_HOME/canopy/sandbox/worker.json" ] || fail "canopy sandbox setup did not copy the templates"
+echo "$sandbox" | grep -q "npm is not on PATH, so srt [0-9.]* is not installed" || fail "canopy sandbox setup: $sandbox"
 # Output is captured before grep, so a command that fails after printing the expected text still fails the check.
 skill=$(canopy skill)
 echo "$skill" | grep -qx 'name: canopy' || fail "canopy skill did not print the operator skill"

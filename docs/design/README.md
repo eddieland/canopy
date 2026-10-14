@@ -184,7 +184,8 @@ canopy (harness, Python)
     __main__.py    python -m canopy.serve --mock: serve for development and tests, or print the OpenAPI schema
 
   setup/
-    init.py        canopy init: the user config, branch protection text, the SSH push URL check
+    init.py        canopy init: the user config, branch protection text, the SSH push URL check, the sandbox hint
+    sandbox.py     canopy sandbox setup: the wrapper's templates, the pinned srt, and what needs root
     workspace.py   canopy init: the skeleton; canopy workspace sync: converge clones and pools (§18)
 
   core/            what every feature shares
@@ -235,6 +236,7 @@ operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessio
 migrations/      NNNN_name.sql
 packages/        uv workspace members: separate programs canopy ships, run only as commands
   canopy-notify-slack/  the Slack sink (§20); stdlib only, imports nothing from canopy
+  canopy-sandbox/  the sandbox wrapper, its policy templates, and srt's lockfile (HOST_ISOLATION §4, D117)
 ui/              the web UI (D079): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
 hatch_build.py   the wheel's build hook: builds ui/ with npm and bundles ui/dist as canopy/_data/ui
 ```
@@ -243,8 +245,8 @@ hatch_build.py   the wheel's build hook: builds ui/ with npm and bundles ui/dist
 them, with `migrations/`, under `canopy/_data/` through hatch's `force-include`, so a new runtime directory needs a
 line there.
 
-canopy installs from git with `uv tool install` (D046), which builds the wheel and so the web UI, and puts `canopy`
-and both sinks on `PATH`. Dispatch, chores, and reviews start `_run`, `_chore`, and `_review` via
+canopy installs from git with `uv tool install` (D046), which builds the wheel and so the web UI, and puts `canopy`,
+both sinks, and the sandbox wrapper on `PATH`. Dispatch, chores, and reviews start `_run`, `_chore`, and `_review` via
 `sys.executable -m canopy`, so whatever runs canopy must be an interpreter that imports it. The version is the tag's
 (D085): a build at `v0.2.0` is 0.2.0, and a build between tags names its distance from the last one and its commit.
 
@@ -255,8 +257,9 @@ Where later work goes:
 - A feature others write to keeps its writing half in `core`: dispatch, `_run`, `_chore`, and reconcile record §20's
   events through `core.outbox`; `notify` delivers them.
 - Code that runs in its own process and must not share the harness's imports or dependencies is a uv workspace member
-  under `packages/`, such as §20's Slack sink. `canopy`, the workspace root, lists the sink's script among its own, so
-  one install puts both on `PATH`.
+  under `packages/`, such as §20's Slack sink and the sandbox wrapper. `canopy`, the workspace root, lists each one's
+  script among its own, so one install puts them all on `PATH`. canopy reads the wrapper's bundled templates and
+  lockfile, and never runs it: only a command template does.
 - A module that takes on a second concern splits into a same-named package in the same layer, as `cli.py` did.
 
 Roles:

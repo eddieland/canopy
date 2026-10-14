@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 members = [
     "canopy",
     "canopy-notify-slack",
+    "canopy-sandbox",
 ]
 
 [[package]]
@@ -51,6 +52,7 @@ source = { editable = "." }
 dependencies = [
     { name = "anyio" },
     { name = "canopy-notify-slack" },
+    { name = "canopy-sandbox" },
     { name = "click" },
     { name = "fastapi" },
     { name = "pydantic" },
@@ -76,6 +78,7 @@ dev = [
 requires-dist = [
     { name = "anyio", specifier = ">=4.15.1" },
     { name = "canopy-notify-slack", editable = "packages/canopy-notify-slack" },
+    { name = "canopy-sandbox", editable = "packages/canopy-sandbox" },
     { name = "click", specifier = ">=8.5.0" },
     { name = "fastapi", specifier = ">=0.142.4" },
     { name = "pydantic", specifier = ">=2.13.5" },
@@ -101,6 +104,11 @@ dev = [
 name = "canopy-notify-slack"
 version = "0.0.1"
 source = { editable = "packages/canopy-notify-slack" }
+
+[[package]]
+name = "canopy-sandbox"
+version = "0.0.1"
+source = { editable = "packages/canopy-sandbox" }
 
 [[package]]
 name = "click"

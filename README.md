@@ -166,6 +166,9 @@ there, one stage at a time:
 - several repositories sharing one queue;
 - a large Bazel repository with a pool of warm slots.
 
+To run workers in a sandbox, so a steered worker cannot read your secrets or change canopy's config, run
+`canopy sandbox setup` and follow [docs/SANDBOX.md](docs/SANDBOX.md). It is opt-in, and not yet proven.
+
 ## Troubleshooting
 
 - **canopy cannot find `treehouse`:** check that it is on `PATH` (usually by adding `$(go env GOPATH)/bin`). If it is

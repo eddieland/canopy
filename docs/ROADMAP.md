@@ -348,17 +348,20 @@ canopy, not built after an incident.
 - `run_slots` records each slot's `.git` link (a new migration), so reconcile's `end_run` does the same cleanup for a
   run whose `_run` is gone, after the same link check `_run` makes; this closes the gap a `_run` killed with SIGKILL
   leaves (HOST_ISOLATION §5 item 2).
-- `examples/sandbox/`: `canopy-sandbox`, the wrapper HOST_ISOLATION §4.1 describes (resolve the cwd's worktrees and
-  their git directories, write a per-run `srt` policy, drop `BASH_ENV`, map `CANOPY_GIT_OBJECTS` to git's variables,
+- `canopy-sandbox`, the wrapper HOST_ISOLATION §4.1 describes (resolve the cwd's worktrees and their git directories,
+  write a per-run `srt` policy, drop `BASH_ENV`, map `CANOPY_GIT_OBJECTS` to git's variables,
   `exec srt --settings <policy> -- "$@"`), taking a role (`worker`, `setup`, `chore`) that picks the policy; and the
   policy template, §4.2's filesystem table and §4.3's network allowlist with the operator's hosts left to fill in. No
-  Unix sockets, so sandboxed runs push over HTTPS. Examples, not harness code: the harness sees only the
-  command template, as today.
-- `docs/SANDBOX.md`, an operator's guide like `docs/BAZEL.md`: the pinned `srt` install, the prefixes for `worker_cmd`,
-  `private_worker_cmd`, `split_cmd`, `setup_cmd`, and chore `cmd`, the allowlist, HTTPS remotes, and Ubuntu 24.04's
-  restriction on unprivileged user namespaces. `canopy init` prints the suggested `worker_cmd` and writes nothing.
+  Unix sockets, so sandboxed runs push over HTTPS. Not harness code: the harness sees only the command template, as
+  today. First an example under `examples/sandbox/`; on the operator's request (2026-10-14) it ships with canopy, as
+  the workspace member `packages/canopy-sandbox` (D041), and `canopy sandbox setup` copies the templates, installs the
+  `srt` its lockfile pins with npm, and checks and prints what needs root (D117).
+- `docs/SANDBOX.md`, an operator's guide like `docs/BAZEL.md`: `canopy sandbox setup` and what it cannot install, the
+  prefixes for `worker_cmd`, `private_worker_cmd`, `split_cmd`, `setup_cmd`, and chore `cmd`, the allowlist, HTTPS
+  remotes, and Ubuntu 24.04's restriction on unprivileged user namespaces. `canopy init` prints the suggested
+  `worker_cmd` and writes nothing.
 - The canary (HOST_ISOLATION §6), `tests/canopy/test_sandbox_canary.py`, opt-in with `CANOPY_SANDBOX_CANARY=1`: a
-  plain script run through the real `worker_cmd` prefix and the example wrapper, every denial and every positive
+  plain script run through the real `worker_cmd` prefix and the shipped wrapper, every denial and every positive
   control §6 lists, the prompt property test included. A Linux CI job runs it with bubblewrap and `srt`.
 - Settled before Accept, each in HOST_ISOLATION §7 or a decision: what treehouse's `return` runs in a slot; caches that
   tools keep as git repositories under the per-run object directory; OpenCode's local MCP servers inside the sandbox.
@@ -376,12 +379,18 @@ tries to read `~/.ssh` or write `~/.config/canopy` is refused.
 Status: in progress. The per-run object directory and the `run_slots` link are in: `_run` and reconcile tidy each slot
 before it is returned, and `tests/canopy/test_run_objects.py` holds the fakes-based tests above. Checking them found
 that the tidy step must also drop the slot's own refs, and that `_run`'s own push must put origin's remote-tracking ref
-back (HOST_ISOLATION §4.2). The wrapper and a policy template for each role are in `examples/sandbox/`, tested
+back (HOST_ISOLATION §4.2). The wrapper and a policy template for each role are in `packages/canopy-sandbox`, tested
 against a fake `srt` in `tests/canopy/test_sandbox_wrapper.py`, `_run` with the wrapper as `worker_cmd`'s prefix
 included. Trying them under `srt` 0.0.79 and bubblewrap found that `srt` binds an `allowRead` path over an
 `allowWrite` path beneath it, so the wrapper names the common git directory entry by entry, and that a write under a
 denied directory lands in a `tmpfs` and is dropped, so the canary must check writes on the host (HOST_ISOLATION §4.2,
-§6). Next: `docs/SANDBOX.md`, the canary, the questions Accept needs settled, and TRUST_MODEL T4 and T6.
+§6). `docs/SANDBOX.md` is the operator's guide, and `canopy init` prints the suggested `worker_cmd`. Running the
+guide's check under `srt` 0.0.79 and bubblewrap 0.9 found that a check run through the wrapper outside canopy must use
+a worktree of its own, since nothing tidies a slot it commits in, and that a process started with `setsid` inside the
+sandbox ends with it. `canopy sandbox setup` installs the wrapper's pinned `srt` in `~/.local/share/canopy/`; trying it
+found that `srt`'s seccomp helper runs inside the sandbox, so under the `$HOME` a template denies it is not found
+unless the wrapper re-allows reading `srt`'s `vendor/` directory, which it now does wherever `srt` is installed.
+Next: the canary, the questions Accept needs settled, and TRUST_MODEL T4 and T6.
 
 ## M27. Session transcripts in the web UI
 

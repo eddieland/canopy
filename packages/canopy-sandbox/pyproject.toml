@@ -1,0 +1,39 @@
+[project]
+name = "canopy-sandbox"
+version = "0.0.1"
+description = "canopy's sandbox wrapper: runs an agent command under srt with a policy made for the run."
+license = "MIT"
+authors = [{ name = "eddieland" }]
+keywords = ["canopy", "sandbox", "srt", "bubblewrap"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    # Makes PyPI refuse an upload (D046).
+    "Private :: Do Not Upload",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security",
+]
+requires-python = ">=3.12"
+# Stdlib only, and nothing from canopy: it runs as its own process, as the prefix on a command template (D041,
+# HOST_ISOLATION §4.1).
+dependencies = []
+
+[project.scripts]
+canopy-sandbox = "canopy_sandbox:main"
+
+[project.urls]
+Homepage = "https://github.com/eddieland/canopy"
+Repository = "https://github.com/eddieland/canopy/tree/main/packages/canopy-sandbox"
+Issues = "https://github.com/eddieland/canopy/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/canopy_sandbox"]
