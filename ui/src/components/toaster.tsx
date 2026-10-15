@@ -6,7 +6,6 @@ import { Toast, ToastDescription, ToastProvider, ToastTitle, ToastViewport } fro
 import { ToastContext } from '@/hooks/use-toast'
 import { addToast, closeToast } from '@/lib/toasts'
 import type { ToastItem } from '@/lib/toasts'
-import { cn } from '@/lib/utils'
 
 /** How long a toast shows, unless the pointer or the focus holds it. */
 const TOAST_MS = 3000
@@ -45,9 +44,7 @@ export function Toaster({
                         <div className="min-w-0">
                             <ToastTitle>{toast.title}</ToastTitle>
                             {toast.detail !== undefined && (
-                                <ToastDescription
-                                    className={cn('line-clamp-2 font-mono text-xs break-all', 'text-muted-foreground')}
-                                >
+                                <ToastDescription className="truncate font-mono text-xs text-muted-foreground">
                                     {toast.detail}
                                 </ToastDescription>
                             )}
