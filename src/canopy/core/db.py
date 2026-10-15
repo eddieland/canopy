@@ -1074,7 +1074,12 @@ def pull_requests(conn: sqlite3.Connection, limit: int, *, url: str | None = Non
     """
     if limit < 1:
         return []
-    urls = json.dumps([url] if url is not None else _candidates(conn, _PR_ACTIVITY, limit))
+    with _snapshot(conn):
+        urls = json.dumps([url] if url is not None else _candidates(conn, _PR_ACTIVITY, limit))
+        return _weighed_pull_requests(conn, urls, limit)
+
+
+def _weighed_pull_requests(conn: sqlite3.Connection, urls: str, limit: int) -> list[sqlite3.Row]:
     return conn.execute(
         "SELECT k.url, max(k.at) AS active_at, u.ticket_key, u.repo, u.branch, u.phase, t.title "
         "FROM ("
@@ -1117,6 +1122,24 @@ def _candidates(conn: sqlite3.Connection, sources: Sequence[str], limit: int) ->
     for sql in sources:
         found.update(dict.fromkeys(_newest(conn, sql, limit)))
     return list(found)
+
+
+@contextmanager
+def _snapshot(conn: sqlite3.Connection) -> Generator[None]:
+    """Every read in the block sees one snapshot of the journal: a deferred transaction, which writes nothing.
+
+    The candidates and the weighing of them are separate reads, and a commit between them in autocommit could leave
+    out a key that its new activity had just moved among the newest. Inside a transaction already, as the event
+    stream's reads are, the block reads in that one.
+    """
+    if conn.in_transaction:
+        yield
+        return
+    conn.execute("BEGIN")
+    try:
+        yield
+    finally:
+        conn.execute("COMMIT")
 
 
 def _newest(conn: sqlite3.Connection, sql: str, limit: int) -> list[str]:
@@ -1409,7 +1432,12 @@ def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = No
     """
     if limit < 1:
         return []
-    keys = [key] if key is not None else _candidates(conn, _TICKET_ACTIVITY, limit)
+    with _snapshot(conn):
+        keys = [key] if key is not None else _candidates(conn, _TICKET_ACTIVITY, limit)
+        return _weighed_tickets(conn, json.dumps(keys), limit)
+
+
+def _weighed_tickets(conn: sqlite3.Connection, keys: str, limit: int) -> list[sqlite3.Row]:
     return conn.execute(
         "SELECT t.*, max("
         "  t.last_seen_at,"
@@ -1419,14 +1447,15 @@ def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = No
         "    WHERE s.subject_kind = ? AND s.subject_id = t.key), '')"
         ") AS active_at "
         "FROM tickets t WHERE t.key IN (SELECT value FROM json_each(?)) ORDER BY active_at DESC, t.key LIMIT ?",
-        (SUBJECT_TICKET, SUBJECT_TICKET, json.dumps(keys), limit),
+        (SUBJECT_TICKET, SUBJECT_TICKET, keys, limit),
     ).fetchall()
 
 
 # Each source of a ticket's activity as `recent_tickets` weighs it: a ticket key and a time, newest first, read in
 # order from an index (migration 0022). A run that ended has its end time (`finish_run`), so the ended runs and the
 # running ones between them give each run's time as `recent_tickets` takes it. Messages and start records may name a
-# ticket the journal has no row for, which the join leaves out, so one never takes a real ticket's place.
+# ticket the journal has no row for, which the join leaves out, so one never takes a real ticket's place; CROSS JOIN
+# keeps SQLite reading the start records in order from their index, rather than sorting every one.
 _TICKET_ACTIVITY = (
     "SELECT key, last_seen_at FROM tickets ORDER BY last_seen_at DESC",
     (
@@ -1437,7 +1466,7 @@ _TICKET_ACTIVITY = (
     "SELECT ticket_key, started_at FROM runs WHERE status = 'running' ORDER BY started_at DESC",
     (
         "SELECT s.subject_id, coalesce(s.stopped_at, s.started_at) AS at FROM starts s "
-        "JOIN tickets t ON t.key = s.subject_id WHERE s.subject_kind = 'ticket' ORDER BY at DESC"
+        "CROSS JOIN tickets t ON t.key = s.subject_id WHERE s.subject_kind = 'ticket' ORDER BY at DESC"
     ),
 )
 

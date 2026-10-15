@@ -27,7 +27,7 @@ HISTORY_STARTS = 40 * 24 * 60
 # SQLite calls the progress handler once per this many virtual machine instructions: a step.
 STEP = 10
 # How much more work a read may do over five times the history: a deeper index, never another pass over it.
-GROWTH = 1.25
+GROWTH = 1.1
 SLACK = 5
 
 # Each read a page or the event stream makes, but the all-time spend: that one sums every cost ever recorded, from an
@@ -245,7 +245,8 @@ def add_history(conn: sqlite3.Connection, first: int, count: int) -> None:
     """Items `first` to `first + count` of a history older than the mock's rows, each older than the one before.
 
     Each item is a tick with a decision, a ticket with a unit, a PR, a run in a slot, and a message, a review of the
-    PR, and a chore run that checked and found nothing. Ids count down from below the mock's, as an older row's would.
+    PR, and a chore run that checked and found nothing; every fourth ticket was started and stopped privately. Ids
+    count down from below the mock's, as an older row's would.
     """
     rows = range(first, first + count)
     with db.transaction(conn):
@@ -279,6 +280,11 @@ def add_history(conn: sqlite3.Connection, first: int, count: int) -> None:
             "INSERT INTO messages (id, subject_kind, subject_id, at, source, kind, channel, run_id, body) "
             "VALUES (?, 'ticket', ?, ?, 'worker', 'report', 'run', ?, 'done')",
             [(-1 - i, f"OLD-{i}", old(i, 3), -1 - i) for i in rows],
+        )
+        conn.executemany(
+            "INSERT INTO starts (subject_kind, subject_id, status, started_at, stopped_at, channel) "
+            "VALUES ('ticket', ?, 'stopped', ?, ?, 'cli')",
+            [(f"OLD-{i}", old(i), old(i, 4)) for i in rows if i % 4 == 0],
         )
         conn.executemany(
             "INSERT INTO decisions (id, tick_id, ticket_key, action, rationale, created_at, pr) "

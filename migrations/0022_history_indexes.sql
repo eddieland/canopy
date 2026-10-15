@@ -11,11 +11,13 @@ CREATE INDEX chore_runs_spent ON chore_runs(started_at, cost_usd);
 CREATE INDEX review_runs_spent ON review_runs(started_at, cost_usd);
 CREATE INDEX ticks_spent ON ticks(started_at, cost_usd);
 
--- The tickets list: the tickets a tick saw last, the tickets with the newest messages, and each one's newest message.
--- Without the last, SQLite read a ticket's newest message through the second, from the newest message of any ticket.
+-- The tickets list: the tickets a tick saw last, the tickets with the newest messages, each one's newest message, and
+-- the newest starts and stops. Without the third, SQLite read a ticket's newest message through the second, from the
+-- newest message of any ticket.
 CREATE INDEX tickets_seen ON tickets(last_seen_at);
 CREATE INDEX messages_at ON messages(subject_kind, at);
 CREATE INDEX messages_subject_at ON messages(subject_kind, subject_id, at);
+CREATE INDEX starts_at ON starts(subject_kind, coalesce(stopped_at, started_at));
 
 -- The PRs list: the review runs that ended last, and the unit that has each PR. A PR's page: its latest decisions.
 -- Most decisions name no PR, so only those that do are indexed.
