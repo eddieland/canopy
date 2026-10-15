@@ -85,7 +85,7 @@ export function Conversation({
                             TONE[message.kind],
                         )}
                     >
-                        <LinkedText text={message.body} />
+                        <LinkedText text={message.body} pullRequests />
                     </p>
                 </li>
             ))}
