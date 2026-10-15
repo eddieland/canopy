@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help all check fmt lint test ui-fmt ui-check ui-e2e ui-build install-check sandbox-canary treehouse
+.PHONY: help all check fmt lint test ui-fmt ui-check ui-e2e ui-build install-check sandbox-canary prompt-sizes treehouse
 
 ##@ General
 
@@ -33,6 +33,10 @@ lint: ## Run linters and the type checker (ruff, pyrefly strict, rumdl, editorco
 # One worker per CPU. For one test or a debugger, run `uv run pytest` without -n: it stays serial.
 test: ## Run all tests, in parallel
 	uv run pytest -q -n auto
+
+# tests/canopy/test_prompt_sizes.py fails when one of these grows past its limit in tests/prompt_sizes.py.
+prompt-sizes: ## Print each bundled prompt's, agent definition's, and skill's size in characters and estimated tokens
+	uv run python -m tests.prompt_sizes
 
 ##@ Web UI (ui/; needs Node 22.12+, D079)
 

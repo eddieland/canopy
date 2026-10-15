@@ -182,6 +182,8 @@ banned-from = ["unittest.mock"]
 "src/canopy/cli/*" = ["DOC201", "DOC501"]
 # The fakes are standalone scripts that talk on stdout and stderr.
 "tests/fakes/*" = ["T201"]
+# `make prompt-sizes` runs it to print a table.
+"tests/prompt_sizes.py" = ["T201"]
 # The sandbox wrapper is a separate program, not canopy (DESIGN §24): it runs git and srt, and reports on
 # stderr.
 "packages/canopy-sandbox/**" = ["T201", "TID251"]

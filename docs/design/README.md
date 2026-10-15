@@ -254,6 +254,11 @@ hatch_build.py   the wheel's build hook: builds ui/ with npm and bundles ui/dist
 them, with `migrations/`, under `canopy/_data/` through hatch's `force-include`, so a new runtime directory needs a
 line there.
 
+Every file in `prompts/`, `agents/`, and `skills/` reaches the model on every run that uses it: the overseer's prompt,
+about 13k tokens, is its system prompt on every tick (§6). So each is held to a size recorded in
+`tests/prompt_sizes.py`, and a PR that grows one past it fails until it raises the number, which puts the growth in the
+diff for a reviewer to weigh. `make prompt-sizes` prints every file's characters and estimated tokens.
+
 canopy installs from git with `uv tool install` (D046), which builds the wheel and so the web UI, and puts `canopy`,
 both sinks, and the sandbox wrapper on `PATH`. Dispatch, chores, and reviews start `_run`, `_chore`, and `_review` via
 `sys.executable -m canopy`, so whatever runs canopy must be an interpreter that imports it. The version is the tag's
