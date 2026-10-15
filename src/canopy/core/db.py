@@ -54,6 +54,17 @@ UNIT_PHASES = frozenset(
 )
 
 
+# The tables of detached runs (DESIGN §6): workers' and splits', chores', and reviews'. Each has the same lifecycle,
+# written once below over a table from this closed set: claimed by its process's pid, its agent's pid recorded, its
+# report, and its close. A table name in SQL comes from here, never from input.
+type RunTable = Literal["runs", "chore_runs", "review_runs"]
+RUN_TABLES: tuple[RunTable, ...] = ("runs", "chore_runs", "review_runs")
+# What each run table's rows are called in a message, and the column it keeps its agent's pid in: the leader of the
+# process group the run's own process starts, which outlives that process if it dies.
+RUN_NOUNS: Mapping[RunTable, str] = {"runs": "run", "chore_runs": "chore run", "review_runs": "review run"}
+AGENT_PID: Mapping[RunTable, str] = {"runs": "worker_pid", "chore_runs": "agent_pid", "review_runs": "agent_pid"}
+
+
 class MigrationError(Exception):
     """The migrations on disk and the database disagree."""
 
@@ -216,14 +227,13 @@ def _check_no_live_runs(conn: sqlite3.Connection) -> None:
     """
     live: list[str] = []
     # Every table of detached runs: each process writes its own row when it ends.
-    for table, what in (("runs", "run"), ("chore_runs", "chore run"), ("review_runs", "review run")):
+    for table in RUN_TABLES:
         exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone()
         if not exists:
             continue
-        # The table name comes from the fixed list above, never from input.
         sql = f"SELECT id, pid, log_path FROM {table} WHERE status = 'running' ORDER BY id"  # noqa: S608
         rows = conn.execute(sql)
-        live += [f"{what} {r['id']}" for r in rows if procs.running(Path(r["log_path"]), r["pid"])]
+        live += [f"{RUN_NOUNS[table]} {r['id']}" for r in rows if procs.running(Path(r["log_path"]), r["pid"])]
     if live:
         runs = f"{live[0]} is" if len(live) == 1 else f"{', '.join(live)} are"
         raise MigrationError(
@@ -316,10 +326,6 @@ def previous_tick(conn: sqlite3.Connection, tick_id: int) -> sqlite3.Row | None:
     return row
 
 
-# The tables of detached runs: workers', chores', and reviews'. Fixed names, never input.
-_RUN_TABLES = ("runs", "chore_runs", "review_runs")
-
-
 def runs_moved_after(conn: sqlite3.Connection, since: str) -> bool:
     """Whether any run, chore run, or review run started or ended after `since`, a time the journal wrote (§6).
 
@@ -331,7 +337,7 @@ def runs_moved_after(conn: sqlite3.Connection, since: str) -> bool:
             f"SELECT 1 FROM {table} WHERE started_at > ? OR ended_at > ? LIMIT 1",  # noqa: S608
             (since, since),
         ).fetchone()
-        for table in _RUN_TABLES
+        for table in RUN_TABLES
     )
 
 
@@ -343,7 +349,7 @@ def runs_ended_after(conn: sqlite3.Connection, since: str) -> bool:
     """
     return any(
         conn.execute(f"SELECT 1 FROM {table} WHERE ended_at > ? LIMIT 1", (since,)).fetchone()  # noqa: S608
-        for table in _RUN_TABLES
+        for table in RUN_TABLES
     )
 
 
@@ -549,16 +555,90 @@ def recently_done(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
     ).fetchall()
 
 
-# Runs and decisions
+# The run lifecycle (DESIGN §6, §8): what every table of detached runs shares
 
 # A run with its ticket's title as `ticket_title`, for display (DESIGN §13). Every query a page or `canopy status` shows
 # runs from starts here.
 _RUNS = "SELECT r.*, t.title AS ticket_title FROM runs r LEFT JOIN tickets t ON t.key = r.ticket_key"
+# What a run table's rows are read as: a run with its ticket's title, for display, and any other run as it is.
+_RUN_SELECT: Mapping[RunTable, str] = {
+    "runs": _RUNS,
+    "chore_runs": "SELECT r.* FROM chore_runs r",
+    "review_runs": "SELECT r.* FROM review_runs r",
+}
 
 
-def running_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Return runs with status `running`, oldest first."""
-    return conn.execute(f"{_RUNS} WHERE r.status = 'running' ORDER BY r.started_at").fetchall()
+def running_runs(conn: sqlite3.Connection, table: RunTable) -> list[sqlite3.Row]:
+    """Return `table`'s runs with status `running`, oldest first."""
+    return conn.execute(f"{_RUN_SELECT[table]} WHERE r.status = 'running' ORDER BY r.started_at").fetchall()
+
+
+def claim_run(conn: sqlite3.Connection, table: RunTable, run_id: int, pid: int) -> bool:
+    """Record `pid` as the process working a running run in `table`. Only the first process to claim a run gets it.
+
+    The spawn claims with the pid it started, and the process (`_run`, `_chore`, `_review`) claims with its own, which
+    is the same pid; a second process for the same run has a different one and is refused.
+
+    Returns:
+        True if `pid` now holds the run; False if the run is not running or another pid holds it.
+    """
+    cur = conn.execute(
+        f"UPDATE {table} SET pid = ? WHERE id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)",  # noqa: S608
+        (pid, run_id, pid),
+    )
+    return cur.rowcount == 1
+
+
+def set_agent_pid(conn: sqlite3.Connection, table: RunTable, run_id: int, pid: int) -> None:
+    """Record the pid, and so the process group, of the agent a run in `table` started: a worker, chore, or reviewer."""
+    conn.execute(f"UPDATE {table} SET {AGENT_PID[table]} = ? WHERE id = ?", (pid, run_id))  # noqa: S608
+
+
+def set_run_report(
+    conn: sqlite3.Connection, table: RunTable, run_id: int, session_id: str | None, usage: Usage | None
+) -> None:
+    """Record what the agent runtime reported about a run in `table`: its session, and what it cost (DESIGN §13)."""
+    _set_report(conn, table, run_id, session_id, usage)
+
+
+def finish_run(
+    conn: sqlite3.Connection,
+    table: RunTable,
+    run_id: int,
+    status: str,
+    result_json: str | None,
+    *,
+    event: Event | None = None,
+) -> bool:
+    """Close a running run in `table`, recording `event` with it. Returns False if it was already closed.
+
+    A worker or split run that reports messages closes with `finish_ticket_run` instead.
+
+    Returns:
+        True if this call closed the run.
+    """
+    with transaction(conn):
+        closed = _close_run(conn, table, run_id, status, result_json)
+        if closed and event is not None:
+            record_event(conn, event)
+    return closed
+
+
+def _close_run(conn: sqlite3.Connection, table: RunTable, run_id: int, status: str, result_json: str | None) -> bool:
+    """Close a running run in `table`, in the caller's transaction. Nothing changes for one already closed.
+
+    Returns:
+        True if this call closed the run.
+    """
+    cur = conn.execute(
+        f"UPDATE {table} SET ended_at = ?, status = ?, result_json = ? "  # noqa: S608
+        "WHERE id = ? AND status = 'running'",
+        (now(), status, result_json, run_id),
+    )
+    return cur.rowcount == 1
+
+
+# Runs and decisions
 
 
 def insert_run(
@@ -641,33 +721,12 @@ def get_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
     return row
 
 
-def claim_run(conn: sqlite3.Connection, run_id: int, pid: int) -> bool:
-    """Record `pid` as the process working a running run. Only the first process to claim a run gets it.
-
-    `canopy dispatch` claims with the pid it spawned, and `canopy _run` claims with its own, which is the same pid; a
-    second `_run` for the same run has a different one and is refused.
-
-    Returns:
-        True if `pid` now holds the run; False if the run is not running or another pid holds it.
-    """
-    cur = conn.execute(
-        "UPDATE runs SET pid = ? WHERE id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)",
-        (pid, run_id, pid),
-    )
-    return cur.rowcount == 1
-
-
 def set_slot_link(conn: sqlite3.Connection, run_id: int, repo: str, link: bytes | None) -> None:
     """Record what a run's slot's `.git` file held when `_run` started (DESIGN §8)."""
     conn.execute("UPDATE run_slots SET git_link = ? WHERE run_id = ? AND repo = ?", (link, run_id, repo))
 
 
-def set_worker_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> None:
-    """Record the pid, and so the process group, of a run's worker agent."""
-    conn.execute("UPDATE runs SET worker_pid = ? WHERE id = ?", (pid, run_id))
-
-
-def finish_run(
+def finish_ticket_run(
     conn: sqlite3.Connection,
     run_id: int,
     status: str,
@@ -676,7 +735,7 @@ def finish_run(
     messages: Sequence[tuple[str, str]] = (),
     event: Callable[[int | None], Event | None] | None = None,
 ) -> bool:
-    """Close a running run, with the messages it reports and its event. Returns False if it was already closed.
+    """Close a running worker or split run, with the messages it reports and its event, as `finish_run` closes any run.
 
     `messages` are the run's `(kind, body)` messages about its ticket (DESIGN §22), recorded in order. `event` builds
     the `run.ended` event from the id of the last of them, or None if there are none. Nothing changes for a run already
@@ -686,13 +745,7 @@ def finish_run(
         True if this call closed the run.
     """
     with transaction(conn):
-        ended = now()
-        cur = conn.execute(
-            "UPDATE runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
-            (ended, status, result_json, run_id),
-        )
-        closed = cur.rowcount == 1
-        if not closed:
+        if not _close_run(conn, "runs", run_id, status, result_json):
             return False
         key = conn.execute("SELECT ticket_key FROM runs WHERE id = ?", (run_id,)).fetchone()[0]
         last: int | None = None
@@ -703,12 +756,7 @@ def finish_run(
         built = event(last) if event is not None else None
         if built is not None:
             record_event(conn, built)
-    return closed
-
-
-def set_run_report(conn: sqlite3.Connection, run_id: int, session_id: str | None, usage: Usage | None) -> None:
-    """Record what the agent runtime reported about a run: its session, and what it cost (DESIGN §13)."""
-    _set_report(conn, "runs", run_id, session_id, usage)
+    return True
 
 
 def set_tick_report(conn: sqlite3.Connection, tick_id: int, session_id: str | None, usage: Usage | None) -> None:
@@ -719,16 +767,6 @@ def set_tick_report(conn: sqlite3.Connection, tick_id: int, session_id: str | No
 def set_tick_session(conn: sqlite3.Connection, tick_id: int, session_id: str) -> None:
     """Record a tick's overseer session while it runs, before what it cost is known (§6, §13)."""
     conn.execute("UPDATE ticks SET session_id = ? WHERE id = ?", (session_id, tick_id))
-
-
-def set_chore_run_report(conn: sqlite3.Connection, run_id: int, session_id: str | None, usage: Usage | None) -> None:
-    """Record what the agent runtime reported about a chore run: its session, and what it cost (§13, §19)."""
-    _set_report(conn, "chore_runs", run_id, session_id, usage)
-
-
-def set_review_run_report(conn: sqlite3.Connection, run_id: int, session_id: str | None, usage: Usage | None) -> None:
-    """Record what the agent runtime reported about a review run: its session, and what it cost (§13, §21)."""
-    _set_report(conn, "review_runs", run_id, session_id, usage)
 
 
 def usage_of(row: sqlite3.Row) -> Usage | None:
@@ -753,7 +791,7 @@ def usage_of(row: sqlite3.Row) -> Usage | None:
 
 def _set_report(
     conn: sqlite3.Connection,
-    table: Literal["runs", "chore_runs", "review_runs", "ticks"],
+    table: RunTable | Literal["ticks"],
     row_id: int,
     session_id: str | None,
     usage: Usage | None,
@@ -876,48 +914,6 @@ def get_chore_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
     """Return the chore run with `run_id`, or None."""
     row: sqlite3.Row | None = conn.execute("SELECT * FROM chore_runs WHERE id = ?", (run_id,)).fetchone()
     return row
-
-
-def claim_chore_run(conn: sqlite3.Connection, run_id: int, pid: int) -> bool:
-    """Record `pid` as the process working a running chore run; only the first process to claim it gets it.
-
-    Returns:
-        True if `pid` now holds the chore run; False if it is not running or another pid holds it.
-    """
-    cur = conn.execute(
-        "UPDATE chore_runs SET pid = ? WHERE id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)",
-        (pid, run_id, pid),
-    )
-    return cur.rowcount == 1
-
-
-def set_chore_agent_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> None:
-    """Record the pid, and so the process group, of a chore run's agent."""
-    conn.execute("UPDATE chore_runs SET agent_pid = ? WHERE id = ?", (pid, run_id))
-
-
-def finish_chore_run(
-    conn: sqlite3.Connection, run_id: int, status: str, result_json: str | None, *, event: Event | None = None
-) -> bool:
-    """Close a running chore run, recording `event` with it. Returns False if it was already closed.
-
-    Returns:
-        True if this call closed the chore run.
-    """
-    with transaction(conn):
-        cur = conn.execute(
-            "UPDATE chore_runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
-            (now(), status, result_json, run_id),
-        )
-        closed = cur.rowcount == 1
-        if closed and event is not None:
-            record_event(conn, event)
-    return closed
-
-
-def running_chore_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Return chore runs with status `running`, oldest first."""
-    return conn.execute("SELECT * FROM chore_runs WHERE status = 'running' ORDER BY started_at").fetchall()
 
 
 def chore_runs(
@@ -1048,48 +1044,6 @@ def get_review_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
     return row
 
 
-def claim_review_run(conn: sqlite3.Connection, run_id: int, pid: int) -> bool:
-    """Record `pid` as the process working a running review run; only the first process to claim it gets it.
-
-    Returns:
-        True if `pid` now holds the review run; False if it is not running or another pid holds it.
-    """
-    cur = conn.execute(
-        "UPDATE review_runs SET pid = ? WHERE id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)",
-        (pid, run_id, pid),
-    )
-    return cur.rowcount == 1
-
-
-def set_review_agent_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> None:
-    """Record the pid, and so the process group, of a review run's agent."""
-    conn.execute("UPDATE review_runs SET agent_pid = ? WHERE id = ?", (pid, run_id))
-
-
-def finish_review_run(
-    conn: sqlite3.Connection, run_id: int, status: str, result_json: str | None, *, event: Event | None = None
-) -> bool:
-    """Close a running review run, recording `event` with it. Returns False if it was already closed.
-
-    Returns:
-        True if this call closed the review run.
-    """
-    with transaction(conn):
-        cur = conn.execute(
-            "UPDATE review_runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
-            (now(), status, result_json, run_id),
-        )
-        closed = cur.rowcount == 1
-        if closed and event is not None:
-            record_event(conn, event)
-    return closed
-
-
-def running_review_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Return review runs with status `running`, oldest first."""
-    return conn.execute("SELECT * FROM review_runs WHERE status = 'running' ORDER BY started_at").fetchall()
-
-
 def review_runs_of(conn: sqlite3.Connection, pr_url: str) -> list[sqlite3.Row]:
     """Return a PR's review runs, newest first."""
     return conn.execute("SELECT * FROM review_runs WHERE pr_url = ? ORDER BY id DESC", (pr_url,)).fetchall()
@@ -1156,7 +1110,7 @@ def _weighed_pull_requests(conn: sqlite3.Connection, urls: str, limit: int) -> l
 
 
 # Each source of a PR's activity as `pull_requests` weighs it, for `_candidates`: its units by when a tick last saw
-# their ticket, and its review runs by when each ended, or started while it runs (`finish_review_run` sets the end).
+# their ticket, and its review runs by when each ended, or started while it runs (`finish_run` sets the end).
 # CROSS JOIN keeps SQLite reading the tickets in order and each one's units after, rather than sorting every unit.
 _PR_ACTIVITY = (
     (
