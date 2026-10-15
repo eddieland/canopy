@@ -65,12 +65,6 @@ class Guard:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        headers = Headers(scope=scope)
-        refusal = self._refusal(scope["path"], headers)
-        if refusal is not None:
-            status, detail = refusal
-            await JSONResponse({"detail": detail}, status_code=status)(scope, receive, send)
-            return
 
         async def send_with_headers(message: Message) -> None:
             if message["type"] == "http.response.start":
@@ -78,6 +72,11 @@ class Guard:
                 message["headers"] = [*(raw if isinstance(raw, list) else []), *SECURITY_HEADERS]
             await send(message)
 
+        refusal = self._refusal(scope["path"], Headers(scope=scope))
+        if refusal is not None:
+            status, detail = refusal
+            await JSONResponse({"detail": detail}, status_code=status)(scope, receive, send_with_headers)
+            return
         await self.app(scope, receive, send_with_headers)
 
     def _refusal(self, path: str, headers: Headers) -> tuple[int, str] | None:

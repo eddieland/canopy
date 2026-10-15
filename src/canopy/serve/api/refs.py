@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from canopy.core import conversation, db
 from canopy.infra import logs
+from canopy.serve.guard import MAX_BODY_BYTES
 from canopy.serve.schema import ErrorResponse, RefusalResponse
 
 if TYPE_CHECKING:
@@ -44,7 +45,10 @@ GUARDED: Responses = {
         "model": ErrorResponse,
         "description": "Refused before the route ran: a chunked body, with no Content-Length.",
     },
-    413: {"model": ErrorResponse, "description": "Refused before the route ran: a body over 256 KiB."},
+    413: {
+        "model": ErrorResponse,
+        "description": f"Refused before the route ran: a body over {MAX_BODY_BYTES // 1024} KiB.",
+    },
 }
 # Every route's but the session's own (deps.signed_in).
 SIGNED_IN: Responses = {

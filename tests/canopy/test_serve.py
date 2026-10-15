@@ -221,12 +221,17 @@ def test_a_foreign_origin_is_refused_on_the_api(ui: Path, backend: Backend) -> N
 
 
 def test_a_body_too_large_is_refused_before_the_session_check(ui: Path, backend: Backend) -> None:
-    # Not signed in: FastAPI would read the whole body before the session check refused it.
+    # Not signed in: FastAPI would read the whole body before the session check refused it with a 401.
     c = client(ui, backend, key=SECRET)
-    big = c.post("/api/session", content=b"x" * (MAX_BODY_BYTES + 1), headers={"content-type": "application/json"})
-    assert big.status_code == 413
-    chunked = c.post("/api/session", content=iter([b'{"secret": "x"}']), headers={"content-type": "application/json"})
-    assert chunked.status_code == 411
+    json_body = {"content-type": "application/json"}
+    for path in ("/api/session", "/api/tickets/PROJ-1/replies"):
+        big = c.post(path, content=b"x" * (MAX_BODY_BYTES + 1), headers=json_body)
+        assert big.status_code == 413, path
+        assert big.headers["x-frame-options"] == "DENY"
+        chunked = c.post(path, content=iter([b'{"secret": "x"}']), headers=json_body)
+        assert chunked.status_code == 411, path
+    # The route is a signed-in one: a body within the limit gets as far as the session check.
+    assert c.post("/api/tickets/PROJ-1/replies", json={"body": "hi", "submission": "abcdefgh"}).status_code == 401
 
 
 def test_the_largest_reply_fits_the_body_limit(ui: Path, backend: Backend) -> None:
