@@ -109,10 +109,10 @@ to do instead.
 | Key | Scope | Why |
 |---|---|---|
 | `tracker.provider` | shared | a property of the repository's tracker |
+| `tracker.query` | shared | the repository scopes it to a project; a user may narrow it |
 | `tracker.needs_human_label` | shared | a signal to people; queues are already disjoint |
 | `tracker.ticket_url` | shared | the tracker's address is the team's; a link runs nothing |
 | `tracker.labels` | user-only | defines this operator's queue |
-| `tracker.queries` | user-only, per workspace | the overseer reads every ticket a query returns before it checks labels |
 | `tracker.mcp_server`, `tracker.read_tools` | user-only | what a private ticket's worker may call (§22) |
 | `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
 | `trust.branch_prefix`, `trust.pr_label` | shared | team conventions for spotting agent work |
@@ -139,6 +139,7 @@ Workspace file, beside the map (§18):
 [tracker]
 provider = "jira"            # jira | github | linear | any name; selects tracker-<provider> skill
 needs_human_label = "needs-human"
+query = 'project = PROJ AND statusCategory != Done'
 ticket_url = ""              # optional; a ticket's page, with {key} for its key, for the web UI to link (§17)
 
 [policy]
@@ -161,9 +162,6 @@ User file, personal:
 labels = ["agent-ready-yourname"]
 mcp_server = ""         # optional; the tracker's MCP server as OpenCode names it; default by provider (§22)
 # read_tools = [...]    # optional; the only tools of it a private ticket's worker may call; default by provider
-
-[tracker.queries]       # each workspace's, by its root: absolute, or from ~
-"~/work/acme" = 'project = PROJ AND statusCategory != Done'
 
 [capacity]
 max_workers = 2
@@ -216,10 +214,10 @@ port = 8765
 base_path = ""          # a path prefix such as "/canopy", for a proxy
 ```
 
-Built-in defaults are the values shown, except: `tracker.provider` and `tracker.labels` have no default and must be
-set, and so must the workspace's entry in `tracker.queries`; `trust.authorized_repliers` defaults to empty (nobody can
-resume blocked work), and so does `trust.trusted_reviewers` (every review waits for the operator). A trusted reviewer
-is `canopy:review` or a login of at most 100 characters with no whitespace, colon, or backtick.
+Built-in defaults are the values shown, except: `tracker.provider`, `tracker.query`, and `tracker.labels` have no
+default and must be set; `trust.authorized_repliers` defaults to empty (nobody can resume blocked work), and so does
+`trust.trusted_reviewers` (every review waits for the operator). A trusted reviewer is `canopy:review` or a login of at
+most 100 characters with no whitespace, colon, or backtick.
 
 `trust.comment_prefix` and `trust.comment_suffix` are each empty or one line of at most 80 characters, with a letter or
 digit, no backtick, and no surrounding spaces, and at least one is set.
@@ -260,11 +258,9 @@ Rules:
   `.canopy/`, which may be an earlier canopy's journal. In a git checkout it refuses, unless given `--workspace`:
   canopy writes nothing into a code repository. A repository at the home directory is the operator's dotfiles, not a
   code repository, and needs no flag. The refusal names a `canopy.toml` at the checkout's root as not read.
-- `canopy init` writes the user file if missing, with `tracker.labels = ["agent-ready-<$USER>"]`, the workspace's entry
-  in `tracker.queries` with an example query, and an empty `trust.authorized_repliers` and `trust.trusted_reviewers` to
-  fill in, and prints the label. It writes the workspace file only if there is none, with `tracker.provider`. A user
-  file it did not write it leaves alone, so for a second workspace the config does not load until the operator adds
-  that workspace's query, and the error it prints names the line to add. Neither file gets a key whose
+- `canopy init` writes the user file if missing, with `tracker.labels = ["agent-ready-<$USER>"]` and an empty
+  `trust.authorized_repliers` and `trust.trusted_reviewers` to fill in, and prints the label. It writes the workspace
+  file only if there is none, with `tracker.provider` and an example `tracker.query`. Neither file gets a key whose
   default serves: a default written into a file is pinned there, and a later canopy's never reaches it. It never
   overwrites either file and installs nothing else (§13). If the config does not load (for example, templates lacking
   `{definitions_dir}`), it prints the error. It warns about copies of canopy's agent definitions in the OpenCode config
@@ -326,19 +322,9 @@ serves every workspace the user file does. A passing condition, such as a CI out
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
 skill, and every shipped skill is in the definitions directory (§13). The one use canopy makes of it is to look up that
 skill by name and give it to the overseer in its definition, so it need not be loaded on every tick (§13).
-The workspace's entry in `tracker.queries` is how the overseer finds candidates: in the tracker's search syntax where it
-has one (JQL, GitHub issue search), otherwise plain language. It finds tickets; it does not authorize them (§17).
-Including the operator's labels saves the overseer reads.
-
-The query is user-only, though it finds and does not authorize. The overseer reads every ticket a query returns, its
-text and comments, before it checks for a label, so a workspace file that widened the query would put tickets nobody
-labeled in front of the model: any the operator's tracker account can see (TRUST_MODEL T7). It is a table and not one
-key because one user file serves every workspace (§18): one query for all of them would have a second workspace find
-the first's tickets, and with the queue labels shared too, work them in its own repositories. Each entry is keyed by
-the workspace's root, absolute or from `~`, matched after both are resolved, not by the map's `[workspace] name`,
-which the workspace file sets: a workspace file could rename itself to take another workspace's query. A
-`tracker.query` left in either file is a config error that says where it moved. A root with no entry does not load,
-and the error names the line to add.
+`tracker.query` is how the overseer finds candidates: in the tracker's search syntax where it has one (JQL, GitHub issue
+search), otherwise plain language. It finds tickets; it does not authorize them (§17). The repository's query usually
+omits the label; an operator can override it in the user file to include their labels and save the overseer reads.
 
 ## 13. Agent runtime
 

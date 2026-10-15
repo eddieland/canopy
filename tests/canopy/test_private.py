@@ -223,7 +223,7 @@ def test_the_operators_commands_refuse_inside_canopys_runs(
 def test_start_refuses_without_tracker_tools_for_a_private_worker(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    canopy_env.write_shared('[tracker]\nprovider = "linear"\n')
+    canopy_env.write_shared('[tracker]\nprovider = "linear"\nquery = "assigned to me"\n')
     assert main(["start", KEY]) == 1
     assert "start refused (no_read_tools)" in capsys.readouterr().err
     canopy_env.write_user(

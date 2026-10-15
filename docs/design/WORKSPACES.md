@@ -14,7 +14,7 @@ no tracker code in the harness. Tracker differences are handled in three places,
 
 1. **The contract below.** Agents map it onto the tools a tracker's MCP server exposes without being told how. This is
    the default for any tracker.
-2. **Config.** `tracker.provider`, the workspace's query in `tracker.queries`, the queue labels, `needs_human_label`, and
+2. **Config.** `tracker.provider`, `tracker.query`, the queue labels, `needs_human_label`, and
    `trust.authorized_repliers` in the tracker's own identity format. `tracker.ticket_url`, optional, is where a
    ticket's page is, with `{key}` for its key: the web UI links each ticket's page there (§22), the key URL-encoded.
    It is the only tracker address canopy knows, and nothing but a browser the operator clicks in follows it (D003).
@@ -33,7 +33,7 @@ What the loop needs from a tracker, as capabilities, each used by the role in pa
 
 | Capability | Used for |
 |---|---|
-| Find open tickets matching the workspace's query (overseer) | candidate set |
+| Find open tickets matching `tracker.query` (overseer) | candidate set |
 | Read a ticket: title, body, labels, open or closed (both) | phase, task |
 | List comments with a stable id, author account id, and timestamp (overseer) | cursors, authorized replies |
 | Post a comment (worker) | reports and questions |

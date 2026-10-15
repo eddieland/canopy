@@ -327,9 +327,7 @@ can push there can change that file, and a checkout of an unreviewed branch of i
 scripts a worker runs (T4), this file is read by the harness itself, outside any worktree and before any agent starts.
 If it could set the runtime commands, `notify.cmd`, chores, the review query, prompt paths, capacity, queue labels, or
 authorized repliers, one commit would be enough to run commands on operators' machines, raise their spend, or pick who
-steers their workers. If it could set the tracker query, which finds tickets and authorizes none, one commit could still
-widen it: the overseer reads every ticket a query returns, text and comments, before it checks for a label, so tickets
-nobody labeled, any the operator's tracker account can see, would reach the model.
+steers their workers.
 
 The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
 data, like ticket text. URLs are read only by `canopy workspace sync`, a command the operator runs, which prints each
@@ -342,8 +340,6 @@ Controls, in code:
 
 - Those keys are user-only (DESIGN §12) and are read only from the operator's own user config file. A workspace file
   that sets one is a config error and the tick does not run.
-- The tracker query is too, per workspace (`tracker.queries`, DESIGN §12), keyed by the workspace's root, never by the
-  map's name, which the workspace file sets, so a workspace file cannot take another workspace's query either.
 - `policy.*` values from the workspace file apply only when stricter than the built-in defaults.
 - No file in a code repository is read as canopy config; a `canopy.toml` there is named as not read, never loaded.
 - `trust.branch_prefix` must be non-empty and end in `/`.
@@ -362,8 +358,8 @@ that repeats one of canopy's permission patterns can put its own rules after it 
 - A command template that runs one of canopy's agents must name canopy's definitions directory, so OpenCode never falls
   back to its default agent, which allows everything.
 
-Residual: the repository still chooses the tracker provider, `needs_human_label`, `pr_label`, the branch prefix, and
-`tracker.ticket_url`, so the worst case is wasted ticks, mislabeled PRs,
+Residual: the repository still chooses the tracker provider, the query, `needs_human_label`, `pr_label`, the branch
+prefix, and `tracker.ticket_url`. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled PRs,
 agent branches under an unexpected prefix, which branch protection (§7) still governs, or the web UI's ticket links
 leading to an `https://` site other than the tracker: the UI shows each link's address, and following one runs
 nothing. The provider also picks the default tracker server and
