@@ -408,7 +408,9 @@ list, an empty state, or a skeleton by hand.
   not two. The state
   filter goes by each ticket's latest run, and so do the rail's working runs and the Running counter's `N blocked`: a
   blocked run a later one followed waits on nothing. A ticket's page lists its runs flat (`RunsTable`), since every row
-  there is the same ticket's.
+  there is the same ticket's. A run's line of links names its first three worktrees, then `+N more worktrees` with
+  every one on hover, never `+1 more`, which would take the room the fourth's path does: a ticket across many
+  repositories holds a slot in each, and its run's page lists them all.
 - **A total cost** (`CostTotalRow`) is the last row of a ticket's Work panel and a PR's Pull request panel: the total
   as a `readout` (`costText`, a dash when nothing reported one), then, muted, what it counted
   (`over 3 runs and 1 review, 1 unpriced`; `countedText`), since the page lists only the recent ones.
@@ -436,6 +438,7 @@ list, an empty state, or a skeleton by hand.
   muted mono before it. Nowhere too narrow to show more than a few letters of it.
 - **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you, and
   attention; the spend is in the rail) and the worktrees page (working, held, needs a look, free, across every pool).
+  The line under the value is cut to fit, and whole on hover, since it grows with the workspace (`4 pools unread`).
   Each is a label, the value, and one line under it, with a 2px top rule in the state color it counts:
   `status-running`, `status-stopped` for held, `status-blocked`, `status-failed` while something is broken. The
   same color washes down from the rule at 12%, fading out by 70% of the counter's height; a plain counter has none.
@@ -445,12 +448,21 @@ list, an empty state, or a skeleton by hand.
   holds the same numbers for a screen reader, each a `Cost`. A week names every day on the axis; 30 days every fifth,
   back from today. The window is a segmented control (`ToggleGroup`) in the totals' panel header, kept in `?days=`.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
-  idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`.
+  idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
+  wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.
 - **A slot is one line** in our state words, never treehouse's (its word is on hover, as the path is on the slot's
   number). An idle slot shows its state and number alone, muted; only a note or an unreadable branch takes a second
   line, from the holder's column. The branch and the processes treehouse found share the free column, each cut to fit
   with the whole on hover: an agent can start a dozen, and the line still ends at the age. A pool treehouse could not
   read says why as a `Notice`.
+- **Idle slots fold**: three or more in a row (`IDLE_RUN`, `slotGroups` in `src/lib/worktree-state.ts`) are one line,
+  their state and then `37 slots, #4 to #40`, a toggle in the accent (as `N earlier runs` is) that opens each slot's
+  own line under it. A pool of many slots is mostly idle ones, which say nothing but their number; folded, those
+  with work in them stay in reach. One or two in a row show as they are, since a toggle would save no room.
+- **The worktrees filter** is the runs page's, by worktree state, in the Pools panel's header before Read again:
+  `?state=` keeps the slots in that state and the pools with one (`poolShown`), under `broken` the pools treehouse
+  could not read too, since Needs a look counts them. A pool's header still counts all its slots. Idle slots fold as
+  they lie in the whole pool, so a filtered line never spans a slot in another state.
 - **The attention list is an inbox**: one list, most severe first, beside the selected item. Severity
   (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
   `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer (`awaiting_reply`,
@@ -567,7 +579,11 @@ list, an empty state, or a skeleton by hand.
   label the address or, for a PR, its name, and what it opens on hover.
   The tracker's comes first, when `tracker.ticket_url` is set (`useTicketUrl`), then each repository's PR, then the
   ticket's branch in each repository that has a branch link (`useBranchUrls`, design §18); an unknown ticket's
-  page shows the tracker's alone. The Work panel keeps each repository's PR, a `PullRequestLink`, beside its phase.
+  page shows the tracker's alone. A kind with one link is its button; with more (a ticket across many repositories
+  has a PR and a branch in each), one button says how many (`3 PRs`) and opens them as a menu (`DropdownMenu`), a PR by
+  its name and a branch by its repository, so the links stay one line however many repositories. The Work panel keeps
+  each repository's PR, a `PullRequestLink`, beside its phase; those lines scroll inside the panel past `15rem`
+  (`PanelScroll`), so its total cost, its actions, and the reply stay in reach.
   A worktree's branch links the same way, its name in the accent with its `LinkOutIcon`, when its repository has a
   branch link.
 - **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch on a ticket's, run's,

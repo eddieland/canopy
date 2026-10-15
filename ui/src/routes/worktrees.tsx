@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { RotateCw } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
@@ -15,23 +15,37 @@ import type { Tone } from '@/components/counter'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
-import { ListRow, RowLine } from '@/components/rows'
+import { ListRow, RowGrid, RowLine } from '@/components/rows'
 import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useWholePath } from '@/hooks/use-whole-path'
 import { runRef } from '@/lib/refs'
-import { overSize, slotsRoot, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
+import { overSize, poolShown, slotGroups, slotsRoot, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
 
-/** Each repository's treehouse pool: its slots, their states, and what holds each one. */
+interface WorktreesSearch {
+    state?: WorktreeState | undefined
+}
+
+/**
+ * Each repository's treehouse pool: its slots, their states, and what holds each one. `?state=` keeps the slots in
+ * that state, and the pools that have one.
+ */
 export const Route = createFileRoute('/worktrees')({
+    // Typed search params, as the runs page's: every key returned, undefined when it is not a state.
+    validateSearch: (search: Record<string, unknown>): WorktreesSearch => ({
+        state: WORKTREE_STATES.find((s) => s === search['state']),
+    }),
     component: WorktreesPage,
 })
 
 function WorktreesPage() {
+    const { state } = Route.useSearch()
     const { data, error, refetch } = useQuery(worktreesQuery)
+    const shown = data?.filter((pool) => poolShown(pool, state))
     // Only a read the operator asked for shows on the button: the timed one would make it flicker.
     const [reading, setReading] = useState(false)
     const readAgain = async () => {
@@ -53,7 +67,17 @@ function WorktreesPage() {
             {/* One panel of every pool, so the read that covers them all sits in its header, as Open all does. */}
             <Panel data-testid="pools">
                 <PanelHeader label="Pools">
-                    <span className="flex items-center gap-2">
+                    <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                        {/* A workspace of many repositories is mostly idle slots: this finds the few that are not. */}
+                        <nav aria-label="Filter by state" className="flex flex-wrap items-center gap-1">
+                            <FilterLink search={{ state: undefined }}>all</FilterLink>
+                            {WORKTREE_STATES.map((s) => (
+                                <FilterLink key={s} search={{ state: s }}>
+                                    <WorktreeDot state={s} />
+                                    {s}
+                                </FilterLink>
+                            ))}
+                        </nav>
                         <Button
                             variant="ghost"
                             size="xs"
@@ -65,21 +89,42 @@ function WorktreesPage() {
                             <RotateCw />
                             {reading ? 'Reading' : 'Read again'}
                         </Button>
-                        <span className="readout text-xs text-muted-foreground">{data?.length}</span>
+                        <span className="readout text-xs text-muted-foreground">{shown?.length}</span>
                     </span>
                 </PanelHeader>
                 <Notice error={error} className="border-b px-3 py-2" />
-                {data === undefined ? (
+                {shown === undefined ? (
                     <PanelSkeleton className="min-h-40" />
+                ) : shown.length === 0 && state !== undefined ? (
+                    <Empty>no {state} slots now: no pool has one</Empty>
                 ) : (
                     <div className="divide-y">
-                        {data.map((pool) => (
-                            <PoolSection key={pool.repo} pool={pool} />
+                        {shown.map((pool) => (
+                            <PoolSection key={pool.repo} pool={pool} state={state} />
                         ))}
                     </div>
                 )}
             </Panel>
         </>
+    )
+}
+
+/** A filter chip, selected when it matches the validated search: an unknown `?state=` selects `all`. */
+function FilterLink({ search, children }: { search: WorktreesSearch; children: ReactNode }) {
+    const { state } = Route.useSearch()
+    return (
+        <Link
+            to="/worktrees"
+            search={search}
+            data-selected={search.state === state}
+            className={cn(
+                'flex h-6 items-center gap-1.5 rounded-sm px-2 font-mono text-xs text-muted-foreground',
+                'hover:bg-surface-raised hover:text-foreground',
+                'data-[selected=true]:bg-accent/16 data-[selected=true]:text-foreground',
+            )}
+        >
+            {children}
+        </Link>
     )
 }
 
@@ -117,8 +162,11 @@ function looked(dirty: number, broken: number, unread: number): string {
     return `${dirty} dirty · ${broken} broken${pools}`
 }
 
-/** One pool in the Pools panel: its header, any slots past its size, and a line per slot. */
-function PoolSection({ pool }: { pool: Pool }) {
+/**
+ * One pool in the Pools panel: its header, any slots past its size, and a line per slot, or per run of idle ones. With
+ * a `state`, the lines of the slots in it alone; the header still counts every slot.
+ */
+function PoolSection({ pool, state }: { pool: Pool; state: WorktreeState | undefined }) {
     const counts = WORKTREE_STATES.map((s) => [s, pool.worktrees.filter((w) => w.state === s).length] as const)
     const over = overSize(pool)
     const root = slotsRoot(pool.worktrees)
@@ -142,10 +190,10 @@ function PoolSection({ pool }: { pool: Pool }) {
                 >
                     {counts
                         .filter(([, n]) => n > 0)
-                        .map(([state, n]) => (
-                            <span key={state} className="flex items-center gap-1.5">
-                                <WorktreeDot state={state} />
-                                <span className="readout">{n}</span> {state}
+                        .map(([counted, n]) => (
+                            <span key={counted} className="flex items-center gap-1.5">
+                                <WorktreeDot state={counted} />
+                                <span className="readout">{n}</span> {counted}
                             </span>
                         ))}
                     {pool.size !== null && (
@@ -167,9 +215,23 @@ function PoolSection({ pool }: { pool: Pool }) {
                     <Empty>no worktrees yet: treehouse makes one when a run or review leases a slot</Empty>
                 ) : (
                     <ul className="divide-y" data-testid="worktrees">
-                        {pool.worktrees.map((w) => (
-                            <WorktreeRow key={w.path} worktree={w} repo={pool.repo} shared={root !== null} />
-                        ))}
+                        {slotGroups(pool.worktrees, state).map((group) =>
+                            group.kind === 'slot' ? (
+                                <WorktreeRow
+                                    key={group.worktree.path}
+                                    worktree={group.worktree}
+                                    repo={pool.repo}
+                                    shared={root !== null}
+                                />
+                            ) : (
+                                <IdleSlots
+                                    key={`idle ${group.worktrees[0]?.path}`}
+                                    worktrees={group.worktrees}
+                                    repo={pool.repo}
+                                    shared={root !== null}
+                                />
+                            ),
+                        )}
                     </ul>
                 )
             ) : (
@@ -189,13 +251,16 @@ function PoolHeader({ repo, children }: { repo: string; children: ReactNode }) {
     )
 }
 
-/** One square per slot, in slot order, in its state's color: the pool's occupancy at a glance. */
+/**
+ * One square per slot, in slot order, in its state's color: the pool's occupancy at a glance. A pool of many slots
+ * wraps its squares onto more lines rather than pushing past the panel's edge.
+ */
 function SlotStrip({ worktrees }: { worktrees: Worktree[] }) {
     if (worktrees.length === 0) {
         return null
     }
     return (
-        <span aria-hidden className="flex shrink-0 items-center gap-1" data-testid="slot-strip">
+        <span aria-hidden className="flex min-w-0 flex-wrap items-center gap-1 py-1" data-testid="slot-strip">
             {worktrees.map((w) => (
                 <span
                     key={w.path}
@@ -205,6 +270,47 @@ function SlotStrip({ worktrees }: { worktrees: Worktree[] }) {
                 />
             ))}
         </span>
+    )
+}
+
+/**
+ * A run of idle slots in a row, folded into one line: the state, then how many and which, a toggle in the accent that
+ * opens each slot's own line under it. A pool of many slots is mostly idle ones; folded, those with work stay in reach.
+ */
+function IdleSlots({ worktrees, repo, shared }: { worktrees: Worktree[]; repo: string; shared: boolean }) {
+    const [open, setOpen] = useState(false)
+    const first = worktrees[0]?.name
+    const last = worktrees.at(-1)?.name
+    return (
+        <Collapsible asChild open={open} onOpenChange={setOpen}>
+            <li data-testid={`idle-slots-${first}`} data-state="idle">
+                <RowGrid kind="worktree" className="items-center py-2">
+                    <span className={cn('flex h-5 items-center gap-1.5 font-mono text-xs', WORKTREE_TEXT.idle)}>
+                        <WorktreeDot state="idle" />
+                        idle
+                    </span>
+                    <RowLine from="slot" className="flex items-center">
+                        <CollapsibleTrigger
+                            className={cn(
+                                'rounded-sm font-mono text-xs text-accent underline-offset-4 outline-none',
+                                'hover:underline focus-visible:ring-3 focus-visible:ring-ring/50',
+                            )}
+                        >
+                            {open
+                                ? `hide ${worktrees.length} idle slots`
+                                : `${worktrees.length} slots, #${first} to #${last}`}
+                        </CollapsibleTrigger>
+                    </RowLine>
+                </RowGrid>
+                <CollapsibleContent asChild>
+                    <ul className="divide-y border-t">
+                        {worktrees.map((w) => (
+                            <WorktreeRow key={w.path} worktree={w} repo={repo} shared={shared} />
+                        ))}
+                    </ul>
+                </CollapsibleContent>
+            </li>
+        </Collapsible>
     )
 }
 

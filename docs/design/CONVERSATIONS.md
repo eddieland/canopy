@@ -720,7 +720,8 @@ slots as `treehouse status --json` reports them, read when the page asks. Each s
 treehouse's own status on hover), its number (its path on hover), its lease holder, the branch it has checked out (or
 detached; a run's slot is detached, D109, and shows the run's branch), linking to its page on the host when the
 repository has a branch link (§18), the processes treehouse found running in it,
-and since when; an idle slot is its state and number alone, and a note gets a second line. A lease is matched to a
+and since when; an idle slot is its state and number alone, three or more in a row fold into one line that opens
+them, and a note gets a second line. A lease is matched to a
 running run or review by its lease id, as reconcile matches them, so a slot names the ticket, run kind, and run that
 hold it. The page groups slots in five states it colors: `working` (held by a run or review the journal shows
 running), `held` (leased or in use by anything else: the operator's own shell,
@@ -734,7 +735,9 @@ pasted into need not be in the workspace; until that root is read there is no bu
 directory, the pool's header names it once. The pool's declared size (`capacity`, §18) is shown with its slot
 count, and a pool holding more slots than that says how many, and that `canopy workspace sync` removes idle ones. Above
 the pools, counters of every pool's slots working, held, needing a look (dirty or broken, and any pool it could not
-read), and free; each pool's header has a square per slot in its state's color.
+read), and free; each pool's header has a square per slot in its state's color. A filter by state (`?state=`) keeps
+the slots in that state and the pools that have one, and under `broken` the pools it could not read: in a workspace of
+many repositories most slots are idle, and the few that are not are what the operator came for.
 
 The pools are read at once, a thread each and at most 8, so a workspace of many repositories waits on its slowest pool
 rather than on all of them in turn. `treehouse status` changes no lease, but it takes the pool's state lock and may
