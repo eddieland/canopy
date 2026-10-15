@@ -8,6 +8,10 @@ import { settled, signIn } from './helpers.ts'
 
 const POOLS = 40
 const SLOTS = 60
+// Slot #N of a busy pool: working, idle, broken, idle, idle, idle, then held, over again. None is dirty.
+const BUSY = ['working', 'idle', 'broken', 'idle', 'idle', 'idle', 'held']
+// How many slots of a busy pool are broken.
+const BROKEN = Array.from({ length: SLOTS }, (_, s) => BUSY[s % BUSY.length]).filter((s) => s === 'broken').length
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -58,8 +62,9 @@ test('the worktrees filter keeps the slots in a state, and the pools that have o
     // Every busy pool has broken slots; the idle ones are gone.
     await expect(panel.getByRole('region')).toHaveCount(POOLS / 2)
     await expect(page.getByTestId('pool-repo-00')).toHaveCount(0)
+    // Every broken slot of every busy pool, and nothing else.
     const rows = panel.getByTestId(/^(?:worktree-\d+|idle-slots-\d+)$/u)
-    await expect(rows.first()).toBeVisible()
+    await expect(rows).toHaveCount((POOLS / 2) * BROKEN)
     for (const state of await rows.evaluateAll((els) => els.map((el) => (el as HTMLElement).dataset['state']))) {
         expect(state).toBe('broken')
     }
@@ -123,10 +128,10 @@ test('a run holding a slot in many repositories names a few of them in its row',
     await settled(page)
     const row = page.getByTestId('ticket-runs').getByTestId('run-41')
     await expect(row).toContainText('.treehouse/repo-0-abc/1/repo-0')
-    await expect(row).toContainText('.treehouse/repo-1-abc/1/repo-1')
-    await expect(row).not.toContainText('.treehouse/repo-2-abc/1/repo-2')
+    await expect(row).toContainText('.treehouse/repo-2-abc/1/repo-2')
+    await expect(row).not.toContainText('.treehouse/repo-3-abc/1/repo-3')
     const more = row.getByTestId('run-worktrees-more')
-    await expect(more).toHaveText('+10 more worktrees')
+    await expect(more).toHaveText('+9 more worktrees')
     await expect(more).toHaveAttribute('title', /repo-11-abc\/1\/repo-11$/u)
 })
 
@@ -146,14 +151,12 @@ async function manyPools(page: Page): Promise<void> {
             }
             return found
         }
-        // Slot #N of a busy pool: working, idle, broken, idle, idle, idle, then held, over again. None is dirty.
-        const busy = ['working', 'idle', 'broken', 'idle', 'idle', 'idle', 'held']
         const pools = Array.from({ length: POOLS }, (_, p) => ({
             repo: `repo-${String(p).padStart(2, '0')}`,
             size: SLOTS,
             error: null,
             worktrees: Array.from({ length: SLOTS }, (__, s) => {
-                const state = p % 2 === 0 ? 'idle' : (busy[s % busy.length] ?? 'idle')
+                const state = p % 2 === 0 ? 'idle' : (BUSY[s % BUSY.length] ?? 'idle')
                 // The mock has no broken slot: a dirty one renamed, as treehouse's `missing` would read.
                 const slot = state === 'broken' ? { ...like('dirty'), state, status: 'missing' } : like(state)
                 const name = String(s + 1)

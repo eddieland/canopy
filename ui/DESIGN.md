@@ -406,9 +406,9 @@ list, an empty state, or a skeleton by hand.
   not two. The state
   filter goes by each ticket's latest run, and so do the rail's working runs and the Running counter's `N blocked`: a
   blocked run a later one followed waits on nothing. A ticket's page lists its runs flat (`RunsTable`), since every row
-  there is the same ticket's. A run's line of links names its first worktrees, three at most, then `+N more
-  worktrees` with every one on hover: a ticket across many repositories holds a slot in each, and its run's page
-  lists them all.
+  there is the same ticket's. A run's line of links names its first three worktrees, then `+N more worktrees` with
+  every one on hover, never `+1 more`, which would take the room the fourth's path does: a ticket across many
+  repositories holds a slot in each, and its run's page lists them all.
 - **A total cost** (`CostTotalRow`) is the last row of a ticket's Work panel and a PR's Pull request panel: the total
   as a `readout` (`costText`, a dash when nothing reported one), then, muted, what it counted
   (`over 3 runs and 1 review, 1 unpriced`; `countedText`), since the page lists only the recent ones.

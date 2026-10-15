@@ -17,7 +17,7 @@ import { RUN_TEXT } from '@/lib/run-state'
 import type { TicketRuns } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
-// A run's worktrees listed in its row before `+N more`: three repositories' worth, on one line in most panels.
+// A run's worktrees named in its row before `+N more`: three repositories' worth, on one line in most panels.
 const WORKTREES_SHOWN = 3
 
 /**
@@ -150,11 +150,12 @@ function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
 }
 
 /**
- * The worktrees a run holds, one per repository it works in: the first few, then how many more, every one on hover. A
- * ticket across many repositories holds a slot in each, and its run's page lists them all.
+ * The worktrees a run holds, one per repository it works in: the first three, then how many more, every one on hover.
+ * A ticket across many repositories holds a slot in each, and its run's page lists them all. One more is named rather
+ * than counted, since `+1 more` would take the room its path does.
  */
 function RunWorktrees({ paths }: { paths: string[] }) {
-    const shown = paths.length > WORKTREES_SHOWN ? paths.slice(0, WORKTREES_SHOWN - 1) : paths
+    const shown = paths.length > WORKTREES_SHOWN + 1 ? paths.slice(0, WORKTREES_SHOWN) : paths
     const more = paths.length - shown.length
     return (
         <>
