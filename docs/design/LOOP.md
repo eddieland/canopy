@@ -629,7 +629,8 @@ so a repository whose push needs one (Git LFS's `pre-push`) depends on the worke
 The object directory is for a sandboxed worker (HOST_ISOLATION §4.2), which cannot write the git directory its slot
 shares, objects included. `_run` passes it as `CANOPY_GIT_OBJECTS` and never sets git's own variables for the worker:
 those reach every git its tools run, so a commit in any other repository would land there and break that repository
-once the directory goes. A sandbox wrapper, which knows its worker is sandboxed, points git at it. An unsandboxed
+once the directory goes. A sandbox wrapper, which knows its worker is sandboxed, points git at it, in the run's
+worktrees only (HOST_ISOLATION §4.2). An unsandboxed
 worker ignores it, the directory stays empty, and steps 5 and 6 run as if it did not exist. Rejected: deleting the
 directory without tidying the slots (git in the slot, and `gc` in the primary clone, then fail); letting a sandboxed
 worker write the shared object directory (it could delete objects other slots need); a temporary directory (reconcile

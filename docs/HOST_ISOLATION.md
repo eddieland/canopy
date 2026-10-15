@@ -108,8 +108,9 @@ branch committed. It runs in the worker's cwd, which `_run` sets to the slot or 
    `/tmp/claude`, shared by every sandboxed process, so the wrapper sets that to the run's temp directory. It sets
    `srt`'s own `TMPDIR` there too, so what `srt` makes for the run goes when the run's directory does. On Linux that
    includes the Unix sockets that carry the sandbox's network, whose path holds at most 107 bytes, so the wrapper
-   refuses a system temp directory too long to leave room for them; `srt` says only that it could not make them. It
-   turns `CANOPY_GIT_OBJECTS` into git's variables (§4.2).
+   refuses a system temp directory too long to leave room for them; `srt` says only that it could not make them. For
+   a worker or setup, it puts a `git` of its own first on the command's `PATH`, which sets git's variables from
+   `CANOPY_GIT_OBJECTS` in the run's worktrees only (§4.2).
 5. Runs the sandbox with that policy and the rest of its arguments unchanged, after a `--`: `srt --settings <policy> --
    "$@"`. Without it, `srt` reads its own options (`-c`, `-s`, `-d`, combined short forms too) anywhere in its
    arguments, and `-c` takes its value as a shell command, unquoted. It waits rather than `exec`, so that it can remove
@@ -218,15 +219,23 @@ The per-run object directory needs two things the first draft of this section mi
   file (§5 item 2), and for a run killed with SIGKILL reconcile does it, from the `.git` link `_run` recorded in
   `run_slots`, so the directory lives where reconcile finds it from the run, `<state_dir>/runs/<id>.objects/`, which the
   policy re-allows as it does a chore's `cwd`.
-- The variables reach every git the worker's process tree runs, not only git in the slot. A commit in any other
-  repository lands in the per-run directory, so that repository reads `bad object HEAD` once it is gone, and a
-  repository made with `git init` then `git fetch` (how Go fetches modules into its cache) gets no `objects/` at all.
-  `git clone` is unaffected. So `_run` must not set them for an unsandboxed worker, whose tools write the operator's
-  real caches. `_run` passes the directory as `CANOPY_GIT_OBJECTS`, and the wrapper (§4.1), which knows it is
-  sandboxing, turns it into `GIT_OBJECT_DIRECTORY` and lists each slot's shared object directory, colon-separated, in
-  `GIT_ALTERNATE_OBJECT_DIRECTORIES`. Inside the sandbox the worker can write only its temp directory and the sandbox's
-  own caches, so the leak reaches those; a cache a tool builds with `git init` and `git fetch` breaks after the run.
-  Giving such tools a per-run cache, or keeping them out of sandboxed builds, is open (§7).
+- git's variables (`GIT_OBJECT_DIRECTORY`, and each slot's shared object directory, colon-separated, in
+  `GIT_ALTERNATE_OBJECT_DIRECTORIES`) apply to every repository, not only the slot. Set for a whole process tree, a
+  commit in any other repository lands in the per-run directory, so that repository reads `bad object HEAD` once it
+  is gone, and a repository made with `git init` gets no `objects/` at all. That is how tools keep caches: Go fetches a
+  module it cannot get from a proxy into a bare repository in its module cache, and OpenCode keeps each worktree's
+  snapshots in a git directory under its data directory, which the templates keep writable from run to run (checked
+  in OpenCode's source, 2026-10-14). pre-commit is unaffected: it drops `GIT_*` variables when it clones a hook's
+  repository. So `_run` passes the directory only as `CANOPY_GIT_OBJECTS`, and the wrapper (§4.1) puts a `git` of its
+  own first on the command's `PATH`, in the run's directory, readable and not writable. It finds the repository git
+  would act on, from the cwd and any `-C`, `--git-dir`, and `--work-tree` before the subcommand, with one `git
+  rev-parse --git-common-dir`, and sets the variables only when that is a common directory of the run's worktrees,
+  never for `init` or `clone`; elsewhere it drops them if they are the run's, as a git under `git rebase --exec`
+  inherits them. A git run by its absolute path gets no variables: elsewhere that is right, and in a slot it cannot
+  write objects at all, so it fails rather than writing where it should not. Checked with git 2.43, through the
+  wrapper and a fake `srt`, for a commit in a fresh repository, Go's bare repository and fetch, OpenCode's
+  `--git-dir`/`--work-tree` form, and inherited variables: each repository's objects stay in its own directory, and
+  the worker's commit in the run's. The canary checks the first under `srt`.
 
 A chore gets the same policy. Its default `cwd` is inside the workspace's `.canopy/`, so its policy re-allows that one
 directory: read-only by default, since a chore's only output is its result line, and writable for a chore whose
@@ -361,8 +370,9 @@ gives it (§4.1 step 4): under pytest's own temp directory the path is too long,
   fails. `_run` fetches just before the worker starts, and the only prompt that fetched (resume, for a PR that
   conflicts with its base) now merges `origin/<base>` instead. A fetch that writes only `FETCH_HEAD`, which is per
   worktree, works under the policy (`git fetch --refmap= origin <ref>`), for a worker that needs something newer.
-- Tools that keep git repositories in a cache (Go's module cache, pre-commit) under the per-run object directory
-  (§4.2).
+- Tools that keep git repositories in a cache under the per-run object directory: answered. git's variables reached
+  every git in the run, so Go's module sources and OpenCode's snapshots lost their objects when the run's directory
+  went; pre-commit was never affected. The wrapper's own `git` sets them in the run's worktrees only (§4.2).
 - Git push credentials. HTTPS with a credential helper works through the proxy. SSH does not work out of the box on
   Linux: `srt`'s seccomp filter blocks creating Unix sockets, which includes the agent socket. Its per-path
   `allowUnixSockets` is macOS-only; on Linux the only switch is `allowAllUnixSockets`, which lifts the block entirely.
