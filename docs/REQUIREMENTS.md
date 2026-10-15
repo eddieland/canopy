@@ -1,9 +1,9 @@
 # canopy requirements
 
 The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 to R17
-on 2026-10-14), and where canopy stands on each. The design (`design/`) is how canopy meets them; this file is what it
-must meet. Where the two disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry
-settles it, and the design doc stays normative until then (AGENTS.md).
+on 2026-10-14, R18 on 2026-10-15), and where canopy stands on each. The design (`design/`) is how canopy meets them;
+this file is what it must meet. Where the two disagree, the conflict is listed under [Conflicts](#conflicts) until a
+`DECISIONS.md` entry settles it, and the design doc stays normative until then (AGENTS.md).
 
 A bare § is a section of the design (`design/`). Status words:
 
@@ -221,6 +221,18 @@ its current commit, or watched, reviewed again at each new commit until it merge
 only as the loop's own (`review.agent_prs`) or as a match of `review.query`, a standing search in the user file, so
 one PR means editing config and editing it back. The review is what any canopy review is: findings in the journal for
 the operator, posted nowhere (D114), with no worker and no ticket.
+
+### R18. Plan a ticket before implementing it, and keep the plan
+
+Gap (M44). Written down 2026-10-15. Planning should be a step canopy can take for a ticket: a run that reads the
+ticket and the code and writes down how it will do the work, before any `implement` starts. Two reasons. A worker
+that starts from an explicit plan should do better than one that plans as it goes. And the plan should stay in the
+journal, so the operator can read it later for any ticket, as they read its conversation and runs today.
+
+Whether a ticket is planned is a config default the operator can change for one ticket. When a ticket is planned, the
+operator reads the plan before work starts: nothing is implemented until they approve it, and a reply asking for
+changes makes a new plan. The plan stays in canopy and is posted nowhere, so a private ticket is planned the same way.
+Today the `implement` worker plans inside its own session, and nothing of it survives but its summary.
 
 ## Nice to have
 
