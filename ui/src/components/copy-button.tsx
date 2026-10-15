@@ -69,9 +69,9 @@ export function CopyablePath({
 /**
  * A ghost icon button that puts `text` on the clipboard: a branch, a path, a session id, a commit. It shows a check in
  * the accent once copied, or a cross in `status-failed` if the browser refused, then its copy icon again, and a toast
- * says so with the text it copied, which a screen reader announces. The page
- * can reach the clipboard only in a secure context (https, or localhost), so elsewhere it renders nothing, the same on
- * every render, and the text beside it stays selectable.
+ * says so with the text it copied, which a screen reader announces. The page can reach the clipboard only in a secure
+ * context (https, or localhost), so elsewhere it renders nothing, the same on every render, and the text beside it
+ * stays selectable.
  */
 export function CopyButton({
     text,
