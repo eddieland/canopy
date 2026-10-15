@@ -155,7 +155,7 @@ test('the settings page asks the loop to read its config again and says what it 
     await page.getByTestId('config-reload').click()
     // The mock runs no loop, so its config never changes.
     await expect(page.getByRole('status').filter({ hasText: 'Nothing changed' })).toContainText(
-        'The loop runs on it from now on.',
+        'the config files say what the loop already runs on.',
     )
 })
 
