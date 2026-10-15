@@ -52,7 +52,10 @@ test('a long conversation scrolls in its panel, opening at its newest end, which
     const reply = page.getByTestId('ticket-conversation').getByRole('textbox')
     // It scrolls on its own, at its end, and the newest message shows on one screen with the reply form under it.
     expect(await region.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
-    await expect(region).toHaveJSProperty('scrollTop', await region.evaluate((el) => el.scrollHeight - el.clientHeight))
+    // Within a pixel: scrollTop can be fractional where the heights are whole.
+    await expect
+        .poll(() => region.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop))
+        .toBeLessThanOrEqual(1)
     await reply.scrollIntoViewIfNeeded()
     await expect(reply).toBeInViewport()
     await expect(page.getByTestId('message-1029')).toBeInViewport()
