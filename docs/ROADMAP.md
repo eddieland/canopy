@@ -485,29 +485,14 @@ analysis session; M13's budget can read the same breakdown.
 
 ## M34. A cacheable overseer prompt
 
-MEASUREMENTS 2026-10-13, F11 and F12. Needs M13's recorded cost. Taken before M36, which needs it. The first step was
-41% of the first day's overseer spend, because the fixed prompt travels in the same message as the state block, which
-changes every tick, and so is written to the cache fresh on every tick.
+The overseer's fixed prompt and its tracker's skill are the body of its agent definition in canopy's snapshot, where
+the runtime caches them across ticks, and a tick's message is the state block alone; a prompt override gets a snapshot
+of its own (DESIGN §6 step 4, §13).
 
-- Measured first: two dry ticks a minute apart, before and after, comparing the first step's cache write and cache
-  read. The change is kept only if the fixed prompt moves from one to the other. Each tick is its own session; the
-  provider's cache is by content and lasts minutes, so only a tick that starts soon after another gains, which the
-  first day's ticks mostly did (2026-10-13: 103 of 158 gaps under 2 minutes).
-- The fixed prompt reaches the runtime where it caches across ticks, such as the overseer's agent definition body
-  in canopy's definitions snapshot (D040), and the message carries only the state block. A prompt override (§12)
-  still works and still wins. The provider skill goes the same way, instead of a tool call on most ticks.
-- The order of what changes inside the state block: what changes rarely (config, the workspace, repositories) before
-  what changes every tick (time, tick id, running runs), if the runtime caches part of a message.
-- DESIGN §6 step 4 and §13, with the operator's approval note in the PR for the agent definition and the prompt.
-- Tests with the fakes: the overseer's message is the state block alone, the snapshot carries the prompt, and an
-  override reaches the snapshot.
-
-Accept: the tests above pass. Live: a re-measurement (MEASUREMENTS) shows the first step's fresh cache write at the
-state block's size, not the prompt's plus the state block's, on ticks that start within the cache's lifetime of the
-one before, and a median such tick at least 15% cheaper at the same price, with no change in what the ticks decided.
-
-Status: in progress. Built and tested with the fakes (DESIGN §6 step 4, §13); the before and after measurement, and
-the re-measurement Accept asks for, are the operator's (SCENARIOS S33).
+Status: done 2026-10-15.
+Learned: closed on the operator's request with the tests with the fakes passing, before the live measurement; the
+before and after cache check and the 15% re-measurement are SCENARIOS S33.
+Next: M37's state block grows with the connectors' facts, so S33 is worth running again once it lands.
 
 ## M35. Temporary notices to workers
 
