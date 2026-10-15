@@ -287,7 +287,14 @@ def test_grant_from_the_web_raises_a_prs_review_limit_as_canopy_grant_review_doe
     db.set_unit(ctx.conn, KEY, ctx.repo, "repo", pr_url=pr, phase="in_review")
     tick_id = db.start_tick(ctx.conn, dry_run=False)
     db.insert_review_run(
-        ctx.conn, tick_id=tick_id, pr_url=pr, sha="a" * 40, ticket=KEY, repo="repo", logs_dir=ctx.state_dir / "reviews"
+        ctx.conn,
+        tick_id=tick_id,
+        pr_url=pr,
+        sha="a" * 40,
+        ticket=KEY,
+        repo="repo",
+        purpose="own",
+        logs_dir=ctx.state_dir / "reviews",
     )
     db.finish_tick(ctx.conn, tick_id, "ok", "test")
     review = {"kind": "review", "repo": "repo", "pr_url": pr, "runs": 1, "granted": 0, "limit": 3}
@@ -493,6 +500,7 @@ def test_a_tickets_cost_is_every_run_of_it_and_every_review_naming_it(ctx: Conte
         sha="a" * 40,
         ticket=KEY,
         repo=None,
+        purpose="own",
         logs_dir=ctx.workspace.root,
     )
     for table, row_id, cost in (("runs", first, 1.25), ("runs", second, None), ("review_runs", review, 0.5)):

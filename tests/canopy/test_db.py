@@ -38,6 +38,7 @@ SHIPPED = {
     19: "df22e157b9cd5981c11536a7787e7ada6e0cd4d5d9715c261d4a3c45b3cf4927",
     20: "00382891c078ea709d9987a62de8d5cfc493e6985abdf8ccc7884b778366bd46",
     21: "58c9215c4a5ebe34410cc620a9feeb8f7b8fb60a9cb23fdced184000ee5b6fdc",
+    22: "1717b06f27da7836c7d2a0a682fa2e8ecad89536fb05547dc9f02b596cb8c4ef",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -335,3 +336,30 @@ def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: 
     assert (tick["session_id"], tick["cost_usd"], tick["tokens_input"]) == (None, None, None)
     # Nor did the loop say whether it was idle or what woke it.
     assert (tick["idle"], tick["woken_by"]) == (None, None)
+
+
+def test_review_runs_from_before_their_purpose_are_own_only_where_their_tickets_unit_has_their_pr(
+    tmp_path: Path, journals: Journals
+) -> None:
+    """0022 settles the purpose of runs recorded before it: `own` for their ticket's unit's PR, `query` otherwise."""
+    conn = journal_at(journals, tmp_path, 21)
+    conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
+    conn.execute(
+        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, phase) VALUES ('OLD-1', '/r', 'x', 'y', 'ci_red')"
+    )
+    conn.execute(
+        "INSERT INTO ticket_units (ticket_key, repo, branch, phase, pr_url) "
+        "VALUES ('OLD-1', 'api', 'b', 'ci_red', 'https://e.test/pr/7')"
+    )
+    for pr, ticket in [
+        ("https://e.test/pr/7", "OLD-1"),
+        ("https://e.test/pr/8", "OLD-1"),
+        ("https://e.test/pr/7", None),
+    ]:
+        conn.execute(
+            "INSERT INTO review_runs (tick_id, pr_url, sha, ticket_key, started_at, status, log_path) "
+            "VALUES (1, ?, 'abc', ?, 'x', 'done', 'l')",
+            (pr, ticket),
+        )
+    assert db.migrate(conn, resources.migrations_dir()) == versions_after(21)
+    assert [r[0] for r in conn.execute("SELECT purpose FROM review_runs ORDER BY id")] == ["own", "query", "query"]

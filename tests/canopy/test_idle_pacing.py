@@ -67,7 +67,9 @@ def recorded(env: CanopyEnv) -> list[tuple[object, object]]:
 
 def review_run(conn: sqlite3.Connection, tick_id: int) -> int:
     """A review run whose `_review` is this process, so reconcile leaves it running."""
-    run_id = db.insert_review_run(conn, tick_id=tick_id, pr_url=PR, sha="a" * 40, ticket=None, repo=None, logs_dir=LOGS)
+    run_id = db.insert_review_run(
+        conn, tick_id=tick_id, pr_url=PR, sha="a" * 40, ticket=None, repo=None, purpose="query", logs_dir=LOGS
+    )
     assert db.claim_review_run(conn, run_id, os.getpid())
     return run_id
 

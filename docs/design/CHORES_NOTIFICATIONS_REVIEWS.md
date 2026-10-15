@@ -587,13 +587,17 @@ that `query` matches is reviewed like any other match: a review in the journal, 
 
 `canopy review run --pr URL --sha SHA [--ticket KEY] [--repo NAME] [--context '<text>']` requires `CANOPY_TICK_ID` like
 `dispatch` (D020). `URL` is the PR's `https://` URL, an opaque string the harness never parses. `SHA` is the full head
-commit the overseer read. `--ticket` links an agent PR to its ticket. Under the dispatch lock, it refuses, recording
-`refused:<guard>`, on the first of:
+commit the overseer read. `--ticket` links an agent PR to its ticket. The run records its purpose: `own` with
+`--ticket`, one of the loop's own PRs, and `query` without, a `review.query` match (ROADMAP M42 adds `request`). Under
+the dispatch lock, it refuses, recording `refused:<guard>`, on the first of:
 
 - `reviews_off`: see above.
 - `bad_pr`: `URL` is not a plain `https://` URL of at most 300 characters, `SHA` is not 40 or 64 lowercase hex
   characters, or `--ticket` is not a valid key (§17).
 - `unknown_repo`: no `--repo`, or one not in the map or with no clone. The slot comes from that repository's pool.
+- `not_ours`: `--ticket` names a ticket whose unit in that repository did not open `URL` (`ticket_units.pr_url`,
+  recorded from the worker that opened it). The overseer's ticket link is a claim, checked once here, so an `own`
+  review is of a PR the loop opened.
 - `running`: a review of this PR is running, or, with `--ticket`, a worker run for that ticket is.
 - `reviewed`: a review of this PR at this commit ended `done`. The refusal names its verdict and impact.
 - `review_limit`: this PR has had `policy.max_reviews_per_pr` review runs, plus any the operator granted it with
@@ -739,12 +743,11 @@ is wrong often enough that the operator wants to rule a finding out before a wor
 
 `canopy send review:<ID> <N>...`, or ticking findings in a review's findings list in the web UI and `send to a worker`
 (§22), is the operator's go-ahead on those findings of review run `ID` (asked for by the operator, 2026-10-13, with
-ROADMAP M32). Only for a review of one of the loop's own PRs: the run names a ticket, and one of that ticket's units
-opened the PR it reviewed (`ticket_units.pr_url`). The ticket link alone is the overseer's claim when it ran the review;
-the unit's PR is the journal's record of what the loop opened and pushes to. A review of any other PR, such as one
-`review.query` matched, offers no send: no worker may push to it, and what the operator may do with such a review
-instead, publish it on the PR after iterating on it, is ROADMAP M43. It is a reply, not a new channel: it records an
-operator message on the review's ticket, as `canopy reply KEY` would, in the operator's words:
+ROADMAP M32). Only for a review whose purpose is `own` (Running a review, above), and whose ticket's unit still has
+the PR it reviewed: `canopy forget` clears a unit's PR, and the ticket's next one is another PR. A review of any other
+PR, such as one `review.query` matched, offers no send: no worker may push to it, and what the operator may do with
+such a review instead, publish it on the PR after iterating on it, is ROADMAP M43. It is a reply, not a new channel: it
+records an operator message on the review's ticket, as `canopy reply KEY` would, in the operator's words:
 
 ```text
 Address findings 1 and 3 of canopy's review run 12, of commit 9b2f4c6e1a7d. Leave its finding 2 alone.
@@ -813,7 +816,8 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
 
 ### Journal
 
-- `review_runs`: id, tick id, PR URL, commit, ticket key (nullable), slot, lease id and holder, the base branch it was
+- `review_runs`: id, tick id, PR URL, commit, ticket key (nullable), its purpose (`own` or `query`, 0022; runs from
+  before are `own` where their ticket's unit had their PR), slot, lease id and holder, the base branch it was
   leased on (nullable, 0016), pid of `_review`, pid of
   the agent, started and ended times, status, `result_json` (validated, text cut to its limits), log path, and what
   the runtime reported (§13): `session_id`, `cost_usd`, and tokens by kind, as `runs` has them, NULL when it reported
