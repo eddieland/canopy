@@ -86,3 +86,26 @@ test("30 days' table scrolls in its panel under its column names, and a week's s
     await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(7)
     expect(await scrolls()).toBe(false)
 })
+
+test("each ticket's and PR's own runs, the costliest first, open their pages beside the tickets done", async ({
+    page,
+}) => {
+    await page.goto('spend')
+    await settled(page)
+    // The mock journal marks no ticket done, so there is nothing to divide the spend by.
+    await expect(page.getByTestId('spend-done')).toHaveText('0')
+    await expect(page.getByTestId('spend-per-done')).toHaveText('–')
+    await expect(page.getByTestId('spend-day-2026-10-08').locator('td').last()).toHaveText('0')
+
+    const tickets = page.getByTestId('spend-ticket-table').locator('tbody tr')
+    await expect(tickets).toHaveCount(6)
+    // ABC-099's run and the two reviews of its PR.
+    await expect(tickets.first()).toHaveAttribute('data-testid', 'spend-ticket-ABC-099')
+    await expect(tickets.first().locator('td').nth(1)).toHaveText('$2.76')
+
+    const prs = page.getByTestId('spend-pull-request-table').getByTestId('spend-pull-request')
+    await expect(prs).toHaveCount(4)
+    await expect(prs.last()).toContainText('none')
+    await prs.first().getByRole('link', { name: 'acme/web#88', exact: true }).click()
+    await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
+})

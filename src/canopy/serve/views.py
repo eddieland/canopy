@@ -55,6 +55,8 @@ from canopy.serve.schema import (
     SpendBreakdown,
     SpendCosts,
     SpendDay,
+    SpendPullRequest,
+    SpendTicket,
     SpendTicks,
     SpendUnpriced,
     SpendWindow,
@@ -173,7 +175,7 @@ def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown
     return SpendBreakdown(
         since=db.parse_time(found.since),
         days=found.days,
-        per_day=[SpendDay(day=d.day, costs=_spend_costs(d.costs)) for d in found.per_day],
+        per_day=[SpendDay(day=d.day, costs=_spend_costs(d.costs), done=d.done) for d in found.per_day],
         totals=_spend_costs(found.totals),
         ticks=[SpendTicks(group=g.group, ticks=g.ticks, cost_usd=g.cost_usd) for g in found.ticks],
         woken=[SpendWoken(by=w.by, ticks=w.ticks, cost_usd=w.cost_usd) for w in found.woken],
@@ -181,6 +183,26 @@ def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown
         idle_share=found.idle_share,
         idle_ticks=[
             tick_of(row, int(row["decisions"])) for row in spending.idle_ticks(ctx.conn, found.since, found.until)
+        ],
+        done=found.done,
+        per_done=found.per_done,
+        tickets=[
+            SpendTicket(
+                key=t.key,
+                title=t.title,
+                runs=t.runs,
+                reviews=t.reviews,
+                cost_usd=t.cost_usd,
+                done=t.done,
+                done_at=db.parse_time(t.done_at) if t.done_at is not None else None,
+            )
+            for t in found.tickets
+        ],
+        pull_requests=[
+            SpendPullRequest(
+                url=p.url, ticket_key=p.ticket, phase=p.phase, runs=p.runs, reviews=p.reviews, cost_usd=p.cost_usd
+            )
+            for p in found.pull_requests
         ],
     )
 
