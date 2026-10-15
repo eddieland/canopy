@@ -55,7 +55,6 @@ summary = "The web app."
 
 [tracker]
 provider = "jira"
-query = "project = ABC"
 ticket_url = "https://jira.example/browse/{key}"
 
 [policy]
@@ -66,6 +65,9 @@ max_reviews_per_pr = 2
 _USER_TOML = """\
 [tracker]
 labels = ["agent-ready-mock"]
+
+[tracker.queries]
+{root} = "project = ABC"
 
 [capacity]
 slots_per_repo = 2
@@ -217,7 +219,7 @@ def seed(directory: Path) -> Backend:
     chores.mkdir(parents=True)
     for name in (CHORE, "build-health"):
         (chores / f"{name}.md").write_text(f"Check {name} for the mock workspace.\n")
-    user_file.write_text(_USER_TOML.replace("{chores}", str(chores)))
+    user_file.write_text(_USER_TOML.replace("{chores}", str(chores)).replace("{root}", json.dumps(str(root))))
     ws = workspace.load(root)
     cfg = config.load(root, user_file)
     workspace.ensure_state_dir(ws.state_dir)

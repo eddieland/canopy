@@ -1,14 +1,12 @@
 # ~/.config/canopy/config.toml ($XDG_CONFIG_HOME/canopy/config.toml) - personal, never committed.
 # Overrides each workspace's canopy-workspace.toml key by key, in every workspace. Keys marked user-only in DESIGN
-# §12 may be set only here. Every key, most at its default. `canopy init` writes only tracker.labels and the trust
-# lists: set the rest only to change them.
+# §12 may be set only here. Every key, most at its default. `canopy init` writes only tracker.labels, the workspace's
+# query, and the trust lists: set the rest only to change them.
 
 [tracker]
 # Your queue. A ticket is yours if it carries any of these labels. Never share a
 # label with another operator: both loops would work the same tickets.
 labels = ["agent-ready-yourname"]
-# Optional: narrow the workspace's query to your labels to save the overseer reads. It applies in every workspace.
-# query = 'project = PROJ AND labels in (agent-ready-yourname) AND statusCategory != Done'
 # Optional: your own needs-human label, if it differs from the workspace's.
 # needs_human_label = "needs-human"
 # For tickets you work privately with `canopy start` (DESIGN §22): the tracker's MCP server, as your OpenCode config
@@ -18,6 +16,13 @@ labels = ["agent-ready-yourname"]
 # denied.
 # mcp_server = "atlassian"
 # read_tools = ["getJiraIssue", "searchJiraIssuesUsingJql", "listJiraIssueComments"]
+
+[tracker.queries]
+# How each workspace's loop finds candidate tickets: the tracker's own search syntax, or plain language. Keyed by the
+# workspace's root, absolute or from ~, since this one file serves every workspace: a line for each. Yours alone,
+# because the overseer reads every ticket a query returns before it checks your labels (TRUST_MODEL T7). Narrowing it
+# to your labels saves the overseer reads.
+"~/work/acme" = 'project = ACME AND labels in (agent-ready-yourname) AND statusCategory != Done'
 
 [capacity]
 max_workers = 2

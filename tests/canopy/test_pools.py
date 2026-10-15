@@ -460,6 +460,7 @@ def test_init_with_clone_urls_sets_up_a_workspace_ready_to_run(
         declare(canopy_env, "slots_per_repo = 2")
         root = tmp_path / "acme"
         root.mkdir()
+        canopy_env.add_query_root(root)
         with contextlib.chdir(root):
             assert main(["init", "--workspace", "--provider", "github", *map(str, origins)]) == 0
             out = capsys.readouterr().out
@@ -492,6 +493,7 @@ def test_sync_warns_about_an_origin_rewritten_to_push_over_ssh(
         git("config", "--file", str(global_config), *pushes_over_ssh, cwd=tmp_path)
         root = tmp_path / "acme"
         root.mkdir()
+        canopy_env.add_query_root(root)
         with mock.patch.dict(os.environ, {"GIT_CONFIG_GLOBAL": str(global_config)}), contextlib.chdir(root):
             assert main(["init", "--provider", "github", str(origin)]) == 0
             assert "api: warning: origin pushes over SSH (git@example.test:acme/api.git)" in capsys.readouterr().out

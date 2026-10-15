@@ -27,6 +27,7 @@ from canopy.core import config
 from canopy.infra.procs import SubprocessRunner
 from canopy.runs import dispatch
 from canopy.setup import init
+from tests.conftest import queries_toml
 
 # Characters that mean something to a shell, a path, a glob, or a git ref.
 UNSAFE = set(" \t\n\r\x0b\x0c/\\;$`&|<>()'\"*?#~!{}[]=:^@,.%+")
@@ -157,12 +158,12 @@ def test_the_prompt_survives_quoting_in_the_template(prompt: str) -> None:
 @given(attempts=st.integers(min_value=0, max_value=10**6), cooldown=st.integers(min_value=0, max_value=10**6))
 def test_workspace_policy_never_loosens_the_defaults(tmp_path: Path, attempts: int, cooldown: int) -> None:
     (tmp_path / config.WORKSPACE_FILE_NAME).write_text(
-        '[tracker]\nprovider = "jira"\nquery = "q"\n'
+        '[tracker]\nprovider = "jira"\n'
         f"[policy]\nmax_fix_ci_attempts = {attempts}\nfix_ci_cooldown_minutes = {cooldown}\n"
         f"max_implement_attempts = {attempts}\n"
     )
     user = tmp_path / "config.toml"
-    user.write_text('[tracker]\nlabels = ["mine"]\n')
+    user.write_text(queries_toml(tmp_path) + '[tracker]\nlabels = ["mine"]\n')
     policy = config.load(tmp_path, user).policy
     assert policy.max_fix_ci_attempts == min(attempts, 2)
     assert policy.max_implement_attempts == min(attempts, 2)
@@ -183,6 +184,7 @@ def test_every_config_key_declares_a_scope() -> None:
         "paths.worker_instructions",
         "capacity.max_workers",
         "tracker.labels",
+        "tracker.queries",
         "trust.authorized_repliers",
         "trust.trusted_reviewers",
         "trust.comment_prefix",
@@ -202,7 +204,7 @@ def test_workspace_file_cannot_set_user_only_keys(tmp_path: Path, name: str) -> 
     else:
         section, key = name.split(".")
         extra = f'{key} = "x"\n' if section == "tracker" else f'[{section}]\n{key} = "x"\n'
-    (tmp_path / config.WORKSPACE_FILE_NAME).write_text(f'[tracker]\nprovider = "jira"\nquery = "q"\n{extra}')
+    (tmp_path / config.WORKSPACE_FILE_NAME).write_text(f'[tracker]\nprovider = "jira"\n{extra}')
     user = tmp_path / "config.toml"
     user.write_text('[tracker]\nlabels = ["mine"]\n')
     with pytest.raises(config.ConfigError, match="user-only"):

@@ -8,7 +8,7 @@ import pytest
 
 from canopy.core import config, workspace
 from canopy.core.config import ConfigError, load, render_command
-from tests.conftest import CanopyEnv
+from tests.conftest import QUERY, CanopyEnv
 
 EXAMPLES = Path(__file__).parents[2] / "examples"
 
@@ -41,13 +41,49 @@ def test_trusted_reviewers_take_logins_and_canopys_reviewer(canopy_env: CanopyEn
 
 
 def test_user_file_wins_over_the_workspace_file_for_shared_keys(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_shared('[tracker]\nprovider = "jira"\nquery = "project = A"\n[trust]\npr_label = "bot"\n')
+    canopy_env.write_shared('[tracker]\nprovider = "jira"\n[trust]\npr_label = "bot"\n')
     canopy_env.write_user(
         canopy_env.user_file.read_text().replace("[runtime]", '[trust]\npr_label = "mine"\n\n[runtime]', 1)
     )
     cfg = load(canopy_env.root, canopy_env.user_file)
-    assert cfg.tracker.query == "project = A"
+    assert cfg.tracker.provider == "jira"
     assert cfg.trust.pr_label == "mine"
+
+
+def test_a_workspace_file_query_says_where_it_moved(canopy_env: CanopyEnv) -> None:
+    # A widened query would put tickets nobody labeled in front of the overseer (TRUST_MODEL T7).
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + 'query = "project = ALL"\n')
+    with pytest.raises(
+        ConfigError, match=r"tracker\.query was removed: move it to the user config, under \[tracker\.queries\]"
+    ):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_each_workspace_finds_its_own_query_by_its_root(canopy_env: CanopyEnv, tmp_path: Path) -> None:
+    other = tmp_path / "other"
+    other.mkdir()
+    (other / config.WORKSPACE_FILE_NAME).write_text('[tracker]\nprovider = "github"\n')
+    text = canopy_env.user_file.read_text().split("\n\n", 1)[1]
+    queries = f'[tracker.queries]\n"{canopy_env.root}" = "project = A"\n"~/b" = "is:open"\n\n'
+    canopy_env.write_user(queries + text)
+    assert load(canopy_env.root, canopy_env.user_file).tracker.query_for(canopy_env.root) == "project = A"
+    # `~` is the operator's home, and a path that resolves to the root is the root.
+    (canopy_env.home / "b").mkdir()
+    (canopy_env.home / "b" / config.WORKSPACE_FILE_NAME).write_text('[tracker]\nprovider = "github"\n')
+    assert load(canopy_env.home / "b" / ".", canopy_env.user_file).tracker.query_for(canopy_env.home / "b") == "is:open"
+    # One the user file has no query for does not load, and the error says the line to add.
+    with pytest.raises(ConfigError) as exc:
+        load(other, canopy_env.user_file)
+    assert f'no tracker query for the workspace at {other}; add "{other}" = <the query> under [tracker.queries]' in str(
+        exc.value
+    )
+
+
+def test_a_query_is_keyed_by_an_absolute_root(canopy_env: CanopyEnv) -> None:
+    text = canopy_env.user_file.read_text().split("\n\n", 1)[1]
+    canopy_env.write_user(f'[tracker.queries]\n"ws" = "{QUERY}"\n\n' + text)
+    with pytest.raises(ConfigError, match="absolute path or one starting with ~"):
+        load(canopy_env.root, canopy_env.user_file)
 
 
 def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(canopy_env: CanopyEnv) -> None:
@@ -152,7 +188,6 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
         load(canopy_env.root, canopy_env.user_file)
     files = f"{canopy_env.shared_file} or {canopy_env.user_file}"
     assert f"missing required key tracker.provider; set it in {files}" in str(exc.value)
-    assert "missing required key tracker.query" in str(exc.value)
 
 
 @pytest.mark.parametrize(
@@ -328,9 +363,14 @@ def test_xdg_config_home(tmp_path: Path) -> None:
 def test_examples_are_valid(tmp_path: Path) -> None:
     (tmp_path / config.WORKSPACE_FILE_NAME).write_text((EXAMPLES / config.WORKSPACE_FILE_NAME).read_text())
     assert [r.name for r in workspace.load(tmp_path).repos] == ["api", "web"]
-    cfg = load(tmp_path, EXAMPLES / "config.toml")
+    # The example's query is for a workspace at ~/work/acme; this one is at tmp_path.
+    user = tmp_path / "config.toml"
+    user.write_text((EXAMPLES / "config.toml").read_text().replace('"~/work/acme"', f'"{tmp_path}"'))
+    cfg = load(tmp_path, user)
     with (EXAMPLES / "config.toml").open("rb") as f:
-        assert list(cfg.tracker.labels) == tomllib.load(f)["tracker"]["labels"]
+        example = tomllib.load(f)
+    assert list(cfg.tracker.labels) == example["tracker"]["labels"]
+    assert cfg.tracker.query_for(tmp_path) == example["tracker"]["queries"]["~/work/acme"]
 
 
 def test_empty_prompt_overrides_means_the_default(canopy_env: CanopyEnv) -> None:

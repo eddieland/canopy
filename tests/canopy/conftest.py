@@ -23,7 +23,6 @@ name = "acme"
 {tables}
 [tracker]
 provider = "github"
-query = "is:issue is:open"
 {extra}"""
 
 
@@ -69,6 +68,8 @@ def ws(canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path) -> Iterator
         for name, origin in origins.items():
             git("clone", "--quiet", str(origin), str(root / "repos" / name), cwd=tmp_path)
         (root / config.WORKSPACE_FILE_NAME).write_text(map_text(*((n, str(o)) for n, o in origins.items())))
+        # One user file serves every workspace; this one needs its own tracker query (DESIGN §12).
+        canopy_env.add_query_root(root)
         with contextlib.chdir(root):
             yield Ws(root, origins, root / ".canopy", canopy_env.journals)
 
