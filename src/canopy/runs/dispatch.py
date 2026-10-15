@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, outbox, prompts, treehouse
+from canopy.core import conversation, db, notice, outbox, prompts, treehouse
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
@@ -670,7 +670,9 @@ def _spawn(
     if review is not None:
         required = (*required, *prompts.REQUIRED_REVIEW)
     try:
-        prompt = prompts.render_worker(cfg, kind, values, required=required, private=plan.private)
+        prompt = prompts.render_worker(
+            cfg, kind, values, required=required, private=plan.private, notice=notice.for_prompt(ctx.conn)
+        )
     except (OSError, prompts.PromptError) as e:
         raise Refusal("bad_prompt", str(e)) from e
 

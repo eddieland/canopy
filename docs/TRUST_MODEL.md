@@ -110,7 +110,14 @@ Controls:
   dismiss one could hide what it was steered to hide from the operator, or spare its own change a reviewer's finding.
   So does `send`, which sends a review's findings to a worker as an operator message on its ticket (§21): an agent
   that could send them could start work in the operator's name. The message names findings by number and never quotes
-  them, so the reviewer's text stays data.
+  them, so the reviewer's text stays data. So does `notice`, when it sets or clears the operator's notice to workers
+  (DESIGN §8): a notice reaches every later worker's, review's, and chore's prompt as the operator's words, so an agent
+  steered by one ticket's text that could set one would write instructions into every other ticket's runs, and one
+  that could clear it could drop the operator's warning and send `fix-ci` at an outage's failures. Reading it refuses
+  nothing. Its text is bounded at 1 KiB when it is set, it lapses within seven days, and a run's prompt says that the
+  prompt's obligations come before it, as they do before the standing instructions. The overseer reads it as the
+  operator's word about the world, to hold a failed check the notice explains: that changes when `fix-ci` runs, never
+  what a worker may do.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
   and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
   (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
@@ -425,14 +432,17 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   reply to, and forget tickets, end a stopped ticket's run, grant a unit or a PR one more run as `canopy grant` does,
   note something to a chore as `canopy reply chore:NAME` does, dismiss a chore's or a review's finding or take that
   back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, pause and resume the loop
-  as `canopy pause` and `canopy resume` do, and ask the loop
+  as `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, and ask the
+  loop
   to read its config files again as SIGHUP does, nothing else. It cannot write config: a reload reads only the
   operator's own files, and a `serve.*` change waits for a restart, so the listener's bind and port never change under
   it. A forget must carry the ticket's key typed out, checked in code. A grant allows one more run a request, with
   `canopy grant`'s guards. It cannot run a chore.
 
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
-credentials. Binding to a private address rather than loopback relies on the network for the rest. A local user on a
+credentials. A notice set that way reaches every run's prompt, every ticket's, until it lapses, at most seven days, or
+the operator clears it, and it outlives a new secret; the banner on every page and `canopy status` show it while it is
+in force. Binding to a private address rather than loopback relies on the network for the rest. A local user on a
 shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port
 on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
 read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session

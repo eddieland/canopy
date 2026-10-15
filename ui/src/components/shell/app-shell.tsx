@@ -26,6 +26,7 @@ import { RailFooter, RailSpend, RailWorking } from './rail'
 import { SearchBox } from './search-box'
 import { ThemeToggle } from './theme-toggle'
 import { Ticker } from './ticker'
+import { NoticeBanner } from './worker-notice'
 
 /**
  * The scroll restoration id of the element the page scrolls in, everything under the header: the router restores it
@@ -144,6 +145,7 @@ export function AppShell() {
                         </aside>
                     )}
                     <main className="min-w-0 p-6">
+                        <NoticeBanner />
                         <ViewTransition>
                             <div className="stagger mx-auto flex max-w-[112rem] flex-col gap-6">
                                 <Outlet />

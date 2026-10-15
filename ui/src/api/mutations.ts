@@ -9,6 +9,7 @@ import type {
     Granted,
     Limit,
     LoopState,
+    NoticeChanged,
     PauseChanged,
     Replied,
     ReviewDismissed,
@@ -20,9 +21,9 @@ import type {
 
 /**
  * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, dismissing a finding,
- * sending a review's findings to a worker, granting a run past a limit, and pausing the loop. Each goes through the
- * same function on the server as `canopy start`, `stop`, `reply`, `forget`, `dismiss`, `send`, `grant`, `pause`, and
- * `resume`, with the same guards; a refusal is an ApiError naming its guard.
+ * sending a review's findings to a worker, granting a run past a limit, pausing the loop, and a notice to workers.
+ * Each goes through the same function on the server as `canopy start`, `stop`, `reply`, `forget`, `dismiss`, `send`,
+ * `grant`, `pause`, `resume`, and `notice`, with the same guards; a refusal is an ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -133,6 +134,19 @@ export async function resumeLoop(): Promise<PauseChanged> {
 }
 
 /**
+ * `canopy notice TEXT --for DURATION`: every run dispatched until it lapses hears it (DESIGN §8). It replaces the
+ * notice in force. A blank text is refused (`empty`), and one over 1024 bytes (`too_long`).
+ */
+export async function setNotice(text: string, minutes: number): Promise<NoticeChanged> {
+    return unwrap(await api.POST('/api/loop/notice', { body: { text, minutes } }))
+}
+
+/** `canopy notice --clear`: runs dispatched from now on hear no notice. */
+export async function clearNotice(): Promise<NoticeChanged> {
+    return unwrap(await api.POST('/api/loop/notice/clear'))
+}
+
+/**
  * Ask the loop to read its config files again, as SIGHUP does (DESIGN §6). A file that does not load is refused
  * (`config_invalid`) and the loop keeps the config it has.
  */
@@ -140,7 +154,7 @@ export async function reloadConfig(): Promise<ConfigReload> {
     return unwrap(await api.POST('/api/loop/reload'))
 }
 
-/** After a pause or a resume: show the state it left now, rather than wait for the stream. */
+/** After a pause, a resume, or a notice set or cleared: show the state it left now, rather than wait for the stream. */
 export function showLoop(client: QueryClient, loop: LoopState): void {
     client.setQueryData(keys.loop, loop)
 }

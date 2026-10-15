@@ -190,6 +190,48 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/loop/notice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a notice to workers
+         * @description `canopy notice TEXT --for DURATION`: every run dispatched from now on hears it until it lapses.
+         *
+         *     It replaces the notice in force. A blank text is refused `empty`, and one over the bound `too_long`.
+         */
+        post: operations["setNotice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/loop/notice/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear the notice to workers
+         * @description `canopy notice --clear`: runs dispatched from now on hear none.
+         */
+        post: operations["clearNotice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/loop/pause": {
         parameters: {
             query?: never;
@@ -1610,17 +1652,25 @@ export type components = {
         LimitKind: "implement" | "fix-ci" | "resume" | "review";
         /**
          * LoopState
-         * @description Whether the loop is paused: no tick starts until the operator resumes it. A tick running when paused finishes.
+         * @description Whether the loop is paused, and the notice to workers in force.
+         *
+         *     While paused, no tick starts until the operator resumes it; a tick running when paused finishes.
          */
         LoopState: {
+            /** @description The notice to workers in force; None without one. */
+            notice: components["schemas"]["WorkerNotice"] | null;
             /** @description The pause; None when the loop is not paused. */
             paused: components["schemas"]["Pause"] | null;
         };
         /**
          * LoopUpdated
-         * @description The loop was paused or resumed. The payload is what `GET /loop` returns.
+         * @description The loop was paused or resumed, or a notice to workers was set, cleared, or lapsed.
+         *
+         *     The payload is what `GET /loop` returns.
          */
         LoopUpdated: {
+            /** @description The notice to workers in force; None without one. */
+            notice: components["schemas"]["WorkerNotice"] | null;
             /** @description The pause; None when the loop is not paused. */
             paused: components["schemas"]["Pause"] | null;
             /**
@@ -1722,6 +1772,40 @@ export type components = {
              * @description The workspace's root, absolute: a path a page shows from it is joined to it to copy it whole.
              */
             workspace_root: string;
+        };
+        /**
+         * NoticeChanged
+         * @description What setting or clearing a notice did, and the state it left.
+         */
+        NoticeChanged: {
+            /**
+             * Already
+             * @description For a clear, whether no notice was in force, so nothing changed; always false for a set.
+             */
+            already: boolean;
+            /** @description The state it left. */
+            loop: components["schemas"]["LoopState"];
+        };
+        /**
+         * @description How the operator set the notice.
+         * @enum {string}
+         */
+        NoticeChannel: "cli" | "web";
+        /**
+         * NoticeRequest
+         * @description A notice to set, as `canopy notice TEXT --for DURATION` sets it, replacing the one in force.
+         */
+        NoticeRequest: {
+            /**
+             * Minutes
+             * @description How long it lasts, in minutes; four hours when None.
+             */
+            minutes?: number | null;
+            /**
+             * Text
+             * @description What to tell the workers. Bounded again in code at 1024 bytes, after stripping (DESIGN §8).
+             */
+            text: string;
         };
         /**
          * Pause
@@ -3284,6 +3368,33 @@ export type components = {
             type: string;
         };
         /**
+         * WorkerNotice
+         * @description The operator's notice to workers in force (`canopy notice`, DESIGN §8).
+         *
+         *     Every run dispatched while it is in force hears it, and the overseer holds a failed check it explains.
+         */
+        WorkerNotice: {
+            /** @description How it was set. */
+            channel: components["schemas"]["NoticeChannel"];
+            /**
+             * Lapses At
+             * Format: date-time
+             * @description When it lapses, unless the operator clears it or sets another first.
+             */
+            lapses_at: string;
+            /**
+             * Since
+             * Format: date-time
+             * @description When it was set.
+             */
+            since: string;
+            /**
+             * Text
+             * @description What the operator told the workers: the operator's own words.
+             */
+            text: string;
+        };
+        /**
          * Worktree
          * @description One slot of a treehouse pool, as `treehouse status --json` reports it, with what in the journal holds it.
          */
@@ -3888,6 +3999,122 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LoopState"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    setNotice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoticeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoticeChanged"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    clearNotice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoticeChanged"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

@@ -115,10 +115,16 @@ describe('applyStreamEvent', () => {
         const client = new QueryClient()
         const paused = { since: '2026-10-08T11:50:00Z', channel: 'loop' } as const
 
-        applyStreamEvent(client, { type: 'loop.updated', paused })
-        expect(client.getQueryData(keys.loop)).toEqual({ paused })
-        applyStreamEvent(client, { type: 'loop.updated', paused: null })
-        expect(client.getQueryData(keys.loop)).toEqual({ paused: null })
+        applyStreamEvent(client, { type: 'loop.updated', paused, notice: null })
+        expect(client.getQueryData(keys.loop)).toEqual({ paused, notice: null })
+        const notice = {
+            text: 'CI is down.',
+            since: '2026-10-08T11:50:00Z',
+            lapses_at: '2026-10-08T15:50:00Z',
+            channel: 'web',
+        } as const
+        applyStreamEvent(client, { type: 'loop.updated', paused: null, notice })
+        expect(client.getQueryData(keys.loop)).toEqual({ paused: null, notice })
     })
 
     it('marks the ticks and the tickets stale when the latest tick changes', () => {
@@ -241,13 +247,20 @@ describe('parseStreamEvent', () => {
         expect(parseStreamEvent(tick)).toEqual({ type: 'tick.updated', tick: null, acknowledged: 7 })
         expect(parseStreamEvent('{"type":"tick.updated"}')).toBeNull()
         expect(parseStreamEvent('{"type":"tick.updated","tick":null,"acknowledged":"7"}')).toBeNull()
-        const paused = { type: 'loop.updated', paused: { since: '2026-10-08T11:50:00Z', channel: 'web' } }
+        const paused = {
+            type: 'loop.updated',
+            paused: { since: '2026-10-08T11:50:00Z', channel: 'web' },
+            notice: { text: 'CI is down.', since: '2026-10-08T11:50:00Z', lapses_at: '2026-10-08T15:50:00Z' },
+        }
         expect(parseStreamEvent(JSON.stringify(paused))).toEqual(paused)
-        expect(parseStreamEvent('{"type":"loop.updated","paused":null}')).toEqual({
+        expect(parseStreamEvent('{"type":"loop.updated","paused":null,"notice":null}')).toEqual({
             type: 'loop.updated',
             paused: null,
+            notice: null,
         })
         expect(parseStreamEvent('{"type":"loop.updated"}')).toBeNull()
+        expect(parseStreamEvent('{"type":"loop.updated","paused":null}')).toBeNull()
+        expect(parseStreamEvent('{"type":"loop.updated","paused":null,"notice":"CI is down."}')).toBeNull()
         expect(parseStreamEvent('{"type":"loop.updated","paused":"yes"}')).toBeNull()
         expect(parseStreamEvent('null')).toBeNull()
     })

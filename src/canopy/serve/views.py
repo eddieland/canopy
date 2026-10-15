@@ -11,7 +11,18 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_result, chore_view, contract, conversation, db, items, pause, search, transcript
+from canopy.core import (
+    chore_result,
+    chore_view,
+    contract,
+    conversation,
+    db,
+    items,
+    notice,
+    pause,
+    search,
+    transcript,
+)
 from canopy.core import spend as spending
 from canopy.core.items import fingerprint
 from canopy.serve.schema import (
@@ -33,6 +44,7 @@ from canopy.serve.schema import (
     Message,
     MessageKind,
     MessageSource,
+    NoticeChannel,
     Pause,
     PauseChannel,
     Run,
@@ -62,6 +74,7 @@ from canopy.serve.schema import (
     TranscriptTokens,
     TranscriptTool,
     Unit,
+    WorkerNotice,
 )
 
 if TYPE_CHECKING:
@@ -94,6 +107,7 @@ _STATES: dict[str, RunState] = {"running": "running", "blocked": "blocked", "don
 _CHORE_STATES: dict[str, RunState] = {"running": "running", "ok": "done"}
 _SOURCES: dict[str, MessageSource] = {"worker": "worker", "operator": "operator", "tracker": "tracker"}
 _PAUSE_CHANNELS: dict[str, PauseChannel] = {"loop": "loop", "cli": "cli", "web": "web"}
+_NOTICE_CHANNELS: dict[str, NoticeChannel] = {"cli": "cli", "web": "web"}
 _KINDS: dict[str, MessageKind] = {"report": "report", "question": "question", "reply": "reply", "comment": "comment"}
 
 
@@ -190,15 +204,26 @@ def last_tick(ctx: Context) -> LastTick:
 
 
 def loop_state(ctx: Context) -> LoopState:
-    """Whether the operator paused the loop, since when, and through which channel.
+    """Whether the operator paused the loop, since when, and through which channel, and the notice to workers in force.
 
     Returns:
-        No pause while the loop runs. A channel the schema does not know reads as `loop`.
+        No pause while the loop runs, and no notice without one in force. A pause's channel the schema does not know
+        reads as `loop`, and a notice's as `cli`.
     """
     held = pause.paused(ctx.conn)
-    if held is None:
-        return LoopState()
-    return LoopState(paused=Pause(since=db.parse_time(held.since), channel=_PAUSE_CHANNELS.get(held.channel, "loop")))
+    paused = None
+    if held is not None:
+        paused = Pause(since=db.parse_time(held.since), channel=_PAUSE_CHANNELS.get(held.channel, "loop"))
+    told = notice.current(ctx.conn)
+    if told is None:
+        return LoopState(paused=paused)
+    worker_notice = WorkerNotice(
+        text=told.text,
+        since=db.parse_time(told.set_at),
+        lapses_at=db.parse_time(told.lapses_at),
+        channel=_NOTICE_CHANNELS.get(told.channel, "cli"),
+    )
+    return LoopState(paused=paused, notice=worker_notice)
 
 
 def tick(ctx: Context) -> Tick | None:

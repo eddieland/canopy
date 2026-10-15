@@ -57,7 +57,8 @@ in order:
    needs-human label); trust config (authorized repliers, branch prefix, PR label); policy (limits and stacking); the
    repositories (name, path, summary, whether cloned, its pool's leased slots, §18); the `tickets` rows not marked done,
    except those the operator stopped; `stopped`; split children (§18); chores and reviews when configured; the
-   overseer's open attention items (below); then capacity, running workers and their repositories, the mirror limit and
+   operator's notices to workers in force or lately ended (§8), when there are any; the overseer's open attention items
+   (below); then capacity, running workers and their repositories, the mirror limit and
    delimiter, tick id, current time, and whether it is a dry run. Each ticket has its phase, branch, and comment,
    message, and mirror cursors (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors,
    runs so far of each kind, the runs of each kind the operator granted past the policy's limit if any (`granted`, §8),
@@ -66,7 +67,9 @@ in order:
    started, its message cursor, the operator's messages newer than it, and the question awaiting a reply, if any.
    `stopped` names the tickets the operator stopped, by key alone: none is a candidate, whatever its labels, and the
    overseer records nothing for one, so a ticket stopped for weeks adds no decision to every tick. `chores` (§19) is
-   present only when chores are configured. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter
+   present only when chores are configured. `notices` (§8) is present only when the operator set one in the last
+   seven days: each one's text, when it was set, until when it was or is in force, and whether it is now, newest first,
+   at most five. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter
    (§22).
 
    `attention` lists the open items the overseer recorded (§14): each one's ticket, or `pr` for a PR with no ticket,
@@ -261,7 +264,8 @@ A tick is **idle** when all of these hold, each read from the journal by the loo
 - The attention list after it is the list before it, compared as the loop's per-tick block already compares them.
 - No ticket or unit changed its phase, branch, a cursor, or `done`, and no ticket was seen for the first time.
 - No run, chore run, or review run started or ended, and the operator recorded no message, started or stopped no ticket
-  (`starts`), and granted no attempts or reviews, after the previous tick read the journal for the overseer's state
+  (`starts`), granted no attempts or reviews, and set or cleared no notice to workers (§8), after the previous tick read
+  the journal for the overseer's state
   (`ticks.read_at` and `ticks.message_id`, §6 step 3). Something the previous tick could not have seen keeps this one
   from counting as idle, even when it happened while the previous tick was still running. The previous tick is the
   journal's, whatever ran it; one that never read the journal, such as a `reconcile_failed` tick or the first tick of
@@ -282,7 +286,8 @@ starts at `base`, and a hand-run `canopy tick` between the loop's ticks counts l
 is built, the wait is the longer of the two rules' waits, and what follows bounds that combined wait.
 
 Whatever pacing chose, the wait ends no later than the earliest harness gate still ahead when the tick ends, both what
-the state block shows: a `fix-ci` cooldown's end (§8) and a configured chore's `due_at` (§19). A gate opening is acted
+the state block shows: a `fix-ci` cooldown's end (§8), a configured chore's `due_at` (§19), and the lapse of the notice
+to workers in force (§8), so a check held for the notice is looked at again when it lapses. A gate opening is acted
 on when it opens, even sooner than `base`. One already open, such as a chore the overseer passed over because its `when`
 says not now, sets no deadline, so it cannot make the loop spin.
 
@@ -306,7 +311,7 @@ idle, so it resets idle pacing's count (MEASUREMENTS 2026-10-12 F5, 2026-10-13 F
 the `loop waits` line's `churn` lists, for an `ok` tick, each ticket's or unit's phase it changed
 (`PROJ-1 (api) phase ci_running -> ci_red`) and each attention item it added (`+PROJ-1 needs_reviewer`) or dropped
 (`-`), when, since the previous tick read the journal, no run, chore run, or review run started or ended, the operator
-recorded no message, start, stop, or grant, and no gate came due (the earliest gate ahead of that read is not before
+recorded no message, start, stop, grant, or notice, and no gate came due (the earliest gate ahead of that read is not before
 this tick's). Otherwise, and on a tick that changed neither, it is empty. A ticket seen for the first time is new, not
 churn. The list cannot tell a flap from the world or the config changing (a review the tracker's MCP read, CI going
 red): the `decisions` table can, by the rationales either side, and prompt changes follow only when it shows a pattern.
@@ -315,7 +320,8 @@ The journal records the same on each tick the loop ran, for spend (ROADMAP M33; 
 spend page, §22, read it): `ticks.idle`, whether the tick was idle
 by the rule above, and `ticks.woken_by`, what ended the wait before it: `start` (the loop's first tick, after any
 `--defer` ran its length), `timer` (the wait ran its length), `gate` (a gate shortened it and it ran out), `message`,
-`starts` (a ticket started or stopped), `grant`, `run`, or `key`. A pause does not change it: a tick held past its
+`starts` (a ticket started or stopped), `grant`, `notice` (a notice to workers set or cleared, §8), `run`, or `key`. A
+pause does not change it: a tick held past its
 deadline until the operator resumed records what it would have without the pause, and one the operator ran during the
 pause records `key`. The loop classifies every tick with idle pacing off too, though only pacing counts them, so the
 journal says what the overseer's spend bought whatever the pacing; a `loop waits` line's `idle` is then the tick's
@@ -350,7 +356,7 @@ model-written text, and the Slack sink escapes it. It stays out of `attention.md
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |
 | `conflicted` | PR open, GitHub reports it conflicts with its base | dispatch `resume` to bring the base in |
 | `ci_running` | PR open, checks pending | wait |
-| `ci_red` | PR open, checks failed, newer than cursor | dispatch `fix-ci`; at the attempt limit, attention; in cooldown, wait |
+| `ci_red` | PR open, checks failed, newer than cursor | dispatch `fix-ci`; at the attempt limit, attention; in cooldown, wait; held for a notice, wait (§8) |
 | `review_pending` | with `review.agent_prs`: checks pass, no approval, head commit not reviewed (§21) | review it |
 | `review_findings` | with `review.agent_prs` and `canopy:review` trusted: findings on the head's review, newer than the cursor | as comments (§7) |
 | `changes_requested` | a trusted reviewer's comments or requested changes newer than cursor | dispatch `resume` with the comments; if the overseer judges a comment needs a human (design pushback, scope), attention instead |
@@ -529,6 +535,8 @@ dispatch names at least one, in a workspace of one repository too.
      cannot drop it, and so is a file that is missing, not UTF-8, or over 4 KiB: every run's prompt carries it, and a
      worker without it would work as if the operator had never written it. It is the operator's own text, an
      instruction like their messages, and the prompt's obligations come before it.
+   - Every prompt but a split's carries `{{NOTICE}}`, the operator's notice in force (Notices to workers, below), or
+     `None.` without one. While one is in force, a prompt without the placeholder is `bad_prompt`.
    - Every `implement`, `fix-ci`, and `resume` prompt carries `{{COMMIT_ATTRIBUTION}}`, the instruction for its
      commits' attribution: keep the runtime's trailer, or add the one rendered from `trust.commit_trailer_name` and
      `trust.commit_trailer_email` (§12); with `trust.commit_trailer` off, keep the runtime's and add none.
@@ -703,6 +711,50 @@ goes in the result's `prs`. The overseer and later workers still read the PR thr
 that server can read. `fix-ci` and `split` open no PRs and ignore the key. Updating an existing PR, such as retargeting
 a stacked
 one, stays with the MCP.
+
+### Notices to workers
+
+A notice (ROADMAP M35, REQUIREMENTS R15) tells every run that builds, tests, or reads CI about something passing
+outside the work, such as "Artifactory is down: CI builds will likely fail", for as long as it lasts. The standing
+instructions (§12) carry text to workers too, but they never lapse, the overseer never reads them, and nothing shows
+they are in force, so a line about an outage outlives it or is forgotten.
+
+- A notice is a journal fact, like the pause (§6): its text, when and through which channel it was set, and when it
+  lapses (`notices`, §11; `core/notice.py`). One is in force at a time: setting another ends the one before it, and
+  `canopy notice --clear` ends it early. A lapsed notice reads as none, so nothing deletes it, and the rows stay for
+  the overseer's look back (below).
+- `canopy notice 'TEXT' [--for DURATION]` sets it, for `90m`, `4h`, `2d`, or any whole number of minutes, hours, or
+  days up to seven days; four hours without `--for`. `canopy notice` alone prints the one in force, and `canopy status`
+  names it after the pause. The web UI sets it from Settings and clears it from the banner every page shows while one
+  is in force (§22). Setting or clearing one refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set,
+  as `pause` and `reply` do: a notice reaches every later run's prompt, so an agent steered by one ticket's text could
+  otherwise write instructions into every other ticket's runs (TRUST_MODEL T1). Reading it refuses nothing.
+- Its text is bounded when it is set, at 1 KiB of UTF-8 after trimming, apart from the standing instructions' 4 KiB, so
+  no dispatch fails on a notice's size: the operator hears `too_long` at once, not from a refused run later. A blank
+  text is `empty`; a duration out of range or of another form is `bad_duration`.
+- Who hears it: `implement`, `fix-ci`, and `resume` workers, public and private, through `{{NOTICE}}`, under its own
+  heading beside the standing instructions; reviews (§21), through the reviewer's `{{NOTICE}}`; and chores (§19),
+  as `notice` in the generated `## Run` object, which the operator's file cannot drop. A split hears none: it reads
+  and writes the ticket and builds nothing. The prompt is rendered at dispatch, so a run already running keeps the
+  prompt it started with. A worker leaves a failure the notice explains alone and says so in its summary; a reviewer
+  does not count one as a finding.
+- An override written before notices existed still serves while none is in force. While one is, a prompt without
+  `{{NOTICE}}` is `bad_prompt`, as one without `{{STANDING_INSTRUCTIONS}}` is once that file is set, so an old
+  override cannot drop a notice silently. `canopy notice` names each such override when it sets one, with the kinds
+  that will refuse until the override gains the placeholder or the notice ends.
+- The overseer reads the notices in force or ended in the last seven days (§6 step 4). A failed check whose run started
+  while a notice was in force, and that the notice explains, is held: the overseer records `wait`, sends no `fix-ci`,
+  whose attempts never reset (D030), and leaves the `ci` cursor. It stays held after the notice ends until a newer run
+  of that check exists, so an ending alone never sends `fix-ci` at the outage's failure. Once the notice has ended and
+  no newer run exists, the overseer records `notice_rerun` (§14) for the operator to rerun the check; with M25 built,
+  `triage-ci` reruns it where triage is on. No guard in code: whether a failure is the one the notice names is
+  judgment, read from the check's output and the notice's words.
+- Setting or clearing a notice is an operator act, like a message: it wakes the loop's wait, keeps the next tick from
+  counting as idle, and is recorded as `woken_by` `notice` (§6). Its lapse is a gate the wait ends at, like a `fix-ci`
+  cooldown's end, so held work is looked at again when the notice lapses, not up to `loop.idle_max_minutes` later.
+
+Open: whether a notice should name repositories, so an outage in one repository's CI does not reach runs in another.
+Every notice reaches every run until real use shows the need.
 
 ## 9. Aggressive release
 

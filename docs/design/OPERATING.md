@@ -79,6 +79,9 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   which channel. Never deleted: a stopped ticket stays private.
 - `pause`: at most one row, present while the operator has paused the loop (§6), with when and through which channel.
   A resume deletes it.
+- `notices`: one row per notice to workers the operator set (§8): its text, when and through which channel it was set,
+  when it lapses, and when and through which channel it was cleared or replaced, if it was. At most one is in force;
+  rows are never deleted.
 
 Rules: the DB never stores credentials or raw CI logs (token counts are usage, not credentials). `result_json` is a
 summary.
@@ -311,7 +314,8 @@ keep, such as how to commit review fixes. canopy renders it into every worker pr
 prompts without copying them, so prefer it to an override for anything a few lines can say; a skill is still the place
 for know-how a worker loads when it needs it (§13). It is at most 4 KiB of UTF-8, and a file canopy cannot use refuses
 the dispatch as `bad_prompt` rather than running a worker without it. Like every `paths.*` key it is user-only and
-serves every workspace the user file does.
+serves every workspace the user file does. A passing condition, such as a CI outage, belongs in a notice to workers
+(§8) instead: it lapses on its own, the overseer and reviews hear it too, and the web UI shows it while it lasts.
 
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
 skill, and every shipped skill is in the definitions directory (§13). The one use canopy makes of it is to look up that
@@ -473,7 +477,8 @@ bash rules apply either way.
 After every tick the list is rendered to `<state_dir>/attention.md` (`.canopy/attention.md` in the workspace), readable
 only by the operator: grouped by reason, one line per item with ticket key, age, and detail (usually a link).
 `canopy status` prints it too, after a line for the last tick: its status, how long ago it started, its summary, and
-its overseer's cost when the runtime reported it. Items disappear when their cause is gone; there is no manual
+its overseer's cost when the runtime reported it, and a line each for a pause and the notice to workers in force (§6,
+§8). Items disappear when their cause is gone; there is no manual
 dismissal.
 
 `canopy status` also lists the tickets the operator started (§22), each with its title (§7), status, phase, and the
@@ -486,7 +491,9 @@ Reasons are exactly the attention rows in the phase table plus `crashed`, `unpus
 `attempt_limit`, a private ticket's `awaiting_reply` (§22), `canopy_unavailable` (§6 step 5), and in a workspace
 `repo_missing` and the overseer's `multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18). Chores add
 `chore_failed` and their findings, listed by chore after the ticket items (§19). Reviews add `review_failed` and
-`review_limit`, about a PR (§21). An item about one unit of a ticket names its repository and is shown as `KEY (repo)`.
+`review_limit`, about a PR (§21). A notice to workers adds the overseer's `notice_rerun`: a check failed while a notice
+was in force, the notice has ended, and no newer run of the check exists, so the operator reruns it (§8). An item about
+one unit of a ticket names its repository and is shown as `KEY (repo)`.
 
 The harness raises the run reasons itself, every tick, after reconcile. For a ticket not marked done, its latest
 run's status maps to a reason: `crashed` to `crashed`, `unpushed` to `unpushed`, `unknown` or `timeout` to

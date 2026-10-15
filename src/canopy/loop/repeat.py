@@ -7,11 +7,12 @@ loops on one state dir would run the overseer twice as often.
 How long to wait after a tick is `pacing`'s decision: the configured interval, longer after idle ticks in a row, and
 never past a harness gate (DESIGN §6, Idle pacing); pacing by what a tick cost will join it (ROADMAP M13). The
 operator's acts since the last tick read the journal end the wait early, at most once a minute (DESIGN §22): a message
-to a ticket, such as a `canopy reply`; a ticket started or stopped; attempts or reviews granted. With idle pacing on, a
-run ending after the tick read the journal does too. A config reload does not: it applies at the wait's next step and
-leaves its deadline as it was. On a terminal, pressing `TICK_NOW_KEY` ends it at once. A deferred start waits the same
-way before the first tick, from when the loop started. Each tick's row records whether it was idle and what ended the
-wait before it (`ticks.idle`, `ticks.woken_by`), so spend can be split by what it bought (ROADMAP M33).
+to a ticket, such as a `canopy reply`; a ticket started or stopped; attempts or reviews granted; a notice to workers set
+or cleared. With idle pacing on, a run ending after the tick read the journal does too. A config reload does not: it
+applies at the wait's next step and leaves its deadline as it was. On a terminal, pressing `TICK_NOW_KEY` ends it at
+once. A deferred start waits the same way before the first tick, from when the loop started. Each tick's row records
+whether it was idle and what ended the wait before it (`ticks.idle`, `ticks.woken_by`), so spend can be split by what it
+bought (ROADMAP M33).
 
 While the operator has paused the loop (`core.pause`), the wait does not end at its deadline: it holds until they
 resume, then ticks at once if the deadline has passed. `PAUSE_KEY` pauses and resumes from the terminal; the web UI and
@@ -43,7 +44,7 @@ from rich.spinner import Spinner
 from rich.table import Table
 from rich.text import Text
 
-from canopy.core import config, db, pause
+from canopy.core import config, db, notice, pause
 from canopy.infra import lock, logs, resources
 from canopy.loop import attention, pacing, reread, tick
 
@@ -84,9 +85,9 @@ _STATUS_STYLES = {
 }
 
 
-# What ended a wait before its deadline: the operator's act (a message, a ticket started or stopped, a grant), a run
-# ending, or the operator pressing `TICK_NOW_KEY`.
-type Woken = Literal["message", "starts", "grant", "run", "key"]
+# What ended a wait before its deadline: the operator's act (a message, a ticket started or stopped, a grant, a notice
+# set or cleared), a run ending, or the operator pressing `TICK_NOW_KEY`.
+type Woken = Literal["message", "starts", "grant", "notice", "run", "key"]
 # What started a tick, recorded on its row (`ticks.woken_by`): the loop starting, a wait that ran its length, one a gate
 # shortened, or what ended one early.
 type WokenBy = Woken | Literal["start", "timer", "gate"]
@@ -94,6 +95,7 @@ _WOKEN_NOTES: dict[Woken | None, str] = {
     "message": "operator message; next tick in ",
     "starts": "a ticket started or stopped; next tick in ",
     "grant": "a grant; next tick in ",
+    "notice": "a notice to workers set or cleared; next tick in ",
     "run": "a run ended; next tick in ",
 }
 
@@ -418,8 +420,9 @@ def _ticks(
 def _operator_acted(settings: _Settings, seen: int, since: str) -> Woken | None:
     """What the operator did that ends a wait, if anything: every channel records it the same way (DESIGN §22).
 
-    A message to a ticket newer than `seen`; a ticket started or stopped, or attempts or reviews granted, after
-    `since`. A note to a chore waits for the chore's next run, and a config reload waits for the next tick.
+    A message to a ticket newer than `seen`; a ticket started or stopped, attempts or reviews granted, or a notice to
+    workers set or cleared, after `since`. A note to a chore waits for the chore's next run, and a config reload waits
+    for the next tick.
 
     Returns:
         The first of those that happened, or None.
@@ -429,7 +432,9 @@ def _operator_acted(settings: _Settings, seen: int, since: str) -> Woken | None:
         return "message"
     if db.starts_moved_after(conn, since):
         return "starts"
-    return "grant" if db.granted_after(conn, since) else None
+    if db.granted_after(conn, since):
+        return "grant"
+    return "notice" if notice.moved_after(conn, since) else None
 
 
 def _defer(
@@ -481,6 +486,8 @@ def _log_woken(
         log.info("a ticket started or stopped ended the wait", extra={"after": since})
     elif woken == "grant":
         log.info("a grant ended the wait", extra={"after": since})
+    elif woken == "notice":
+        log.info("a notice to workers set or cleared ended the wait", extra={"after": since})
     elif woken == "run":
         log.info("a run ending ended the wait", extra={"after": read_at})
     elif woken == "key":

@@ -135,6 +135,7 @@ on their own; anyone else's comments wait on the attention list as `untrusted_re
 | To | Run |
 | --- | --- |
 | Tick now, or pause and resume the loop | `t` or `p` in its terminal; `canopy pause`, `canopy resume` |
+| Tell every run about a CI outage until it is over | `canopy notice 'TEXT' --for 4h`, or the web UI's settings |
 | Read your config again after editing it | Reload in the web UI's settings, or `kill -HUP` the loop |
 | Read the attention list | `canopy status`, or `.canopy/attention.md` |
 | Read a ticket's conversation, or answer canopy there | `canopy show KEY`, `canopy reply KEY 'text'` |

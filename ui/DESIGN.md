@@ -151,6 +151,11 @@ Rules:
   from where on hover) and a Resume button. The button keeps one width in both states. It has no `Notice`: what it
   did is the state it shows, which the stream also sends when the loop's terminal or the CLI pauses. A failure colors
   the button `status-failed`, with the reason on hover and in an `sr-only` alert.
+- **The notice to workers** (`NoticeBanner`, `canopy notice`) heads the content column, above every page, only while
+  one is in force: a band on a `status-blocked` tint with its border, since every run waits on what the operator said,
+  the notice's words through `LinkedText`, until when runs hear it (when and from where on hover), and a ghost Clear.
+  It is not in the header, which has no room for a sentence, and it leaves with the stream's word when it lapses.
+  Settings sets one, in its own panel, with how long it lasts as a toggle group; any other duration is the CLI's.
 - **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
   (`NewerBuild`): an accent button, the action to take, saying on hover why and that unsent text is lost. It never
   reloads on its own, since the operator may be typing. The page knows its build from the `canopy-build` meta tag the
