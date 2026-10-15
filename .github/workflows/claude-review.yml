@@ -47,6 +47,16 @@ jobs:
         # has neither. Without socat Claude Code starts, but every Bash command fails, `gh pr diff` included.
         run: sudo apt-get update && sudo apt-get install -y bubblewrap socat
 
+      - name: Let bwrap create user namespaces
+        # Ubuntu 24.04's AppArmor denies unprivileged user namespaces, so bwrap fails with "setting up uid map:
+        # Permission denied". Ubuntu's own bwrap-userns-restrict profile grants them to /usr/bin/bwrap alone and moves
+        # every command bwrap starts into a profile that denies all capabilities, even inside a namespace it makes.
+        # Every other process stays restricted, unlike the CI canary's sysctl, since this job holds the subscription
+        # token.
+        run: |
+          sudo apt-get install -y apparmor-profiles
+          sudo apparmor_parser -r /usr/share/apparmor/extra-profiles/bwrap-userns-restrict
+
       - name: Review with Claude
         # Pinned to a commit, not the movable v1 tag, because this step holds the subscription token.
         uses: anthropics/claude-code-action@a26b07d8c778b0c43f64618e5fd29fd0f8af72e8 # v1
