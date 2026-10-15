@@ -26,6 +26,7 @@ import { useTicketUrl } from '@/hooks/use-ticket-url'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
 import { phaseLabel, phaseWord } from '@/lib/phase'
+import { None } from '@/components/none'
 
 /** One ticket: its work and the operator's actions, its conversation and the reply, then its runs and decisions. */
 export const Route = createFileRoute('/tickets/$key')({
@@ -119,7 +120,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                             {ticket.done ? ', done' : ''}
                         </Field>
                         <Field label="branch" mono>
-                            {ticket.branch === null ? 'none yet' : <Copyable text={ticket.branch} label="branch" />}
+                            {ticket.branch === null ? <None /> : <Copyable text={ticket.branch} label="branch" />}
                         </Field>
                     </Fields>
                     {units.length > 0 && (
@@ -207,7 +208,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
 function Unit({ repo, pr, phase }: { repo: string | null; pr: string | null; phase: string | null }) {
     return (
         <Field label={repo ? `PR in ${repo}` : 'PR'} mono className="flex items-baseline gap-3">
-            {pr ? <PullRequestLink url={pr} className="text-sm" /> : 'none recorded'}
+            {pr ? <PullRequestLink url={pr} className="text-sm" /> : <None />}
             {phase && <Word word={phase} className="text-muted-foreground" />}
         </Field>
     )

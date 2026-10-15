@@ -1,5 +1,24 @@
-import type { ChoreSpendWindow, ChoreSummary, Message } from '@/api/types'
+import type { ChoreSpendWindow, ChoreSummary, Message, RunState } from '@/api/types'
 import { age } from '@/lib/time'
+
+/**
+ * How often a chore may start, as `canopy chore run` says it when it refuses one too soon: `every 360 minutes`. In
+ * minutes, as `every_minutes` in the config, so it reads as the operator wrote it.
+ */
+export function cadenceText(minutes: number): string {
+    return minutes === 1 ? 'every minute' : `every ${minutes} minutes`
+}
+
+/**
+ * A chore run's state from its status, as the server groups it: one that checked is done, one still going is running,
+ * and every other ending is failed, since it raises `chore_failed` (DESIGN §19).
+ */
+export function choreRunState(status: string): RunState {
+    if (status === 'running') {
+        return 'running'
+    }
+    return status === 'ok' ? 'done' : 'failed'
+}
 
 /** When a chore may start, as `canopy chore run` names it when it refuses: `mon,tue 08:00-18:00 UTC`. */
 export function windowText(chore: Pick<ChoreSummary, 'days' | 'hours' | 'timezone'>): string {

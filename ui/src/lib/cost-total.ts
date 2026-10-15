@@ -1,8 +1,13 @@
 import type { CostTotal } from '@/api/types'
 
-/** A cost in dollars, as every cost in the UI is shown, or a dash when nothing reported one. */
+// Dollars to the cent, grouped by thousands (`$1,234.50`), the same in every browser's locale. It rounds what it is
+// given from its shortest decimal form, so `costText` rounds to the cent first, as the CLI's `.2f` does: 0.235 is
+// $0.23 in both.
+const DOLLARS = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+
+/** A cost in dollars, as every cost in the UI is shown (`$1,234.50`), or a dash when nothing reported one. */
 export function costText(cost: number | null): string {
-    return cost === null ? '–' : `$${cost.toFixed(2)}`
+    return cost === null ? '–' : DOLLARS.format(Number(cost.toFixed(2)))
 }
 
 /**

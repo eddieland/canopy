@@ -242,7 +242,7 @@ def test_invalid_children_are_recorded_nowhere(
         assert pool_statuses(treehouse_state) == ["available", "available"]
         [item] = [i for i in attention.from_runs(conn) if i.ticket_key == "PROJ-12"]
         assert item.reason == "unknown_result"
-        assert item.detail.startswith("run 2 (split) ended unknown: children not recorded: ")
+        assert item.detail.startswith("run:2 (split) ended unknown: children not recorded: ")
 
 
 def test_a_blocked_or_missing_split_result_is_unknown() -> None:

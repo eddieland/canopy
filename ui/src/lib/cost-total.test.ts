@@ -7,6 +7,15 @@ describe('costText', () => {
         expect(costText(0.4)).toBe('$0.40')
         expect(costText(null)).toBe('–')
     })
+
+    it('groups the dollars by thousands', () => {
+        expect(costText(1234.5)).toBe('$1,234.50')
+        expect(costText(25_000)).toBe('$25,000.00')
+    })
+
+    it('rounds to the cent as the CLI does', () => {
+        expect(costText(0.47 / 2)).toBe('$0.23')
+    })
 })
 
 describe('countedText', () => {
