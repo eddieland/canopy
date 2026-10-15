@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 
 from pydantic import BaseModel, ConfigDict, StrictStr
 
-from canopy.core import agent_output, contract, conversation, db, definitions, hostgit, treehouse
+from canopy.core import agent_output, contract, conversation, db, definitions, hostgit, transcript, treehouse
 from canopy.core.config import render_command, setup_words
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
@@ -329,6 +329,8 @@ def _run_agent(
         extra={"run_id": run["id"], "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": timeout_minutes},
     )
     run_id = int(run["id"])
+    out.write("--- worker stdout ---\n")
+    out.flush()
     result = ctx.runner.run(
         argv,
         cwd=cwd,
@@ -337,8 +339,9 @@ def _run_agent(
         env={conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))},
         timeout=timeout_minutes * 60,
         on_start=lambda pid: db.set_agent_pid(ctx.conn, "runs", run_id, pid),
+        on_line=_Progress(ctx, run_id, out, log),
     )
-    out.write(f"--- worker stdout ---\n{result.stdout}\n--- worker stderr ---\n{result.stderr}\n")
+    out.write(f"\n--- worker stderr ---\n{result.stderr}\n")
     out.write(f"--- worker exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
     out.flush()
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
@@ -348,6 +351,44 @@ def _run_agent(
         spent = output.usage.spent() if output.usage else {}
         log.info("worker reported", extra={"run_id": run_id, "session_id": output.session_id, **spent})
     return result, output.text
+
+
+class _Progress:
+    """Each line the worker prints, as it prints it: written to the run log, and its events read (DESIGN §8).
+
+    What they say so far is recorded on the run, so a running run shows its session, what it has spent, and its latest
+    tool call. A line comes on `_run`'s own thread, so this may use the journal connection. A journal write that fails
+    is logged, not raised: raising would kill the worker, and the session and spend are recorded again when it ends.
+    """
+
+    def __init__(self, ctx: Context, run_id: int, out: TextIO, log: logs.TickAdapter) -> None:
+        self.ctx = ctx
+        self.run_id = run_id
+        self.out = out
+        self.log = log
+        self.tally = agent_output.Tally()
+
+    def __call__(self, line: str) -> None:
+        self.out.write(line)
+        self.out.flush()
+        event = agent_output.parse_event(line)
+        if event is None:
+            return
+        seen = self.tally.session_id
+        self.tally.add(event)
+        session = self.tally.session_id
+        if session is None:
+            return
+        usage = self.tally.usage if event["type"] == "step_finish" else None
+        did = transcript.did(event)
+        if session == seen and usage is None and did is None:
+            return
+        try:
+            db.set_run_progress(self.ctx.conn, self.run_id, session, usage=usage, did=did)
+        except sqlite3.Error as e:
+            self.log.warning("worker progress not recorded", extra={"run_id": self.run_id, "error": str(e)})
+        if seen is None:
+            self.log.info("worker session started", extra={"run_id": self.run_id, "session_id": session})
 
 
 def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:

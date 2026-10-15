@@ -10,6 +10,7 @@ export const ROUTES = [
     'attention',
     'runs',
     'runs/39',
+    'runs/41',
     'worktrees',
     'tickets',
     'tickets/ABC-102',

@@ -435,9 +435,10 @@ transcript shows each call's (§22). A run recorded before the peak was kept pri
 `peak_context` are the same two counts, their names unchanged.
 
 The default `overseer_cmd`, `worker_cmd`, `split_cmd`, `chore_cmd`, and `review_cmd` ask for events. A tick records
-what its overseer reports on the tick (§6), `_run` what a worker or split reports on the run (§8, §11), `_chore` what a
-chore reports on its chore run (§19), and `_review` what a reviewer reports on its review run (§21). So every agent run
-canopy starts records what it cost, and the web UI's spend (§22) sums them all. A template of the operator's that asks
+what its overseer reports on the tick (§6), `_run` what a worker or split reports on the run, as it prints it (§8,
+§11), `_chore` what a chore reports on its chore run (§19), and `_review` what a reviewer reports on its review run
+(§21). So every agent run canopy starts records what it cost, and the web UI's spend (§22) sums them all, a running
+worker's so far. A template of the operator's that asks
 for no events records nothing, and its runs are missing from the spend. A tick's output file and a run log hold the
 events as printed, and the web UI reads one session's back from them as its transcript (§22).
 

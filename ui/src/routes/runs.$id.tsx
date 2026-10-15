@@ -11,6 +11,7 @@ import { Field, Fields } from '@/components/fields'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
+import { RunDoing } from '@/components/run-doing'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
@@ -63,7 +64,7 @@ function Loaded({ id }: { id: number }) {
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <RunPanel run={data} />
-                <TranscriptPanel transcript={transcript} running={data.state === 'running'} />
+                <TranscriptPanel transcript={transcript} running={data.state === 'running'} live />
             </div>
         </>
     )
@@ -110,6 +111,11 @@ function RunPanel({ run }: { run: Run }) {
                 <Field label="ended" mono>
                     {run.ended_at === null ? 'still running' : <Timestamp at={run.ended_at} />}
                 </Field>
+                {run.activity && (
+                    <Field label="last call">
+                        <RunDoing activity={run.activity} />
+                    </Field>
+                )}
                 <Field label="summary">{run.summary ? <RichText text={run.summary} /> : <None />}</Field>
                 {run.prs.length > 0 && (
                     <Field label="pull requests" mono>

@@ -9,7 +9,8 @@ found the advisory the attention list shows and which has a note from the operat
 ticks recorded decisions about tickets, a unit, a repository, a chore, and a PR (§6). The workspace's policy allows one
 fix-ci and two reviews, so ABC-100 is at its fix-ci limit in web and PR 88 at its review limit (§22's grants). Runs 39
 and 40, tick 2, and chore run 2 left their sessions' events in their logs, as `--format json` prints them, for their
-transcripts (DESIGN §22).
+transcripts (DESIGN §22), and the running runs 41 and 43 the events their workers printed so far, with the latest tool
+call on each one's row (§8).
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -36,6 +37,8 @@ if TYPE_CHECKING:
 T0 = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
 # The run whose cost `changes` moves.
 LIVE_RUN = 41
+# The running runs, whose logs hold their workers' stdout so far.
+RUNNING_LOGS = ("41", "43")
 
 _MAP_TOML = """\
 [workspace]
@@ -520,6 +523,16 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
                 int(cost * 60_000),
             ),
         )
+    # What each running run's worker did last, as `_run` records it from the events its log holds (_transcripts).
+    activities = (
+        (LIVE_RUN, "bash", "npm test -- login", 27),
+        (43, "bash", "cat /home/op/acme/.treehouse/web-3f9c2a1b/2/web/.github/workflows/ci.yml", 29),
+    )
+    for run_id, tool, did, minutes in activities:
+        conn.execute(
+            "UPDATE runs SET activity_tool = ?, activity = ?, activity_at = ? WHERE id = ?",
+            (tool, did, at(minutes), run_id),
+        )
     run_slots = (
         # run, repo, slot, lease, holder: run 43 is joint, a slot in web and one in mobile; 37 and 40 ended long ago
         (37, "web", 4, "lease-37", "canopy:ABC-100"),
@@ -841,10 +854,11 @@ WARN  2026-10-08T11:00:01 +1043ms service=mcp key=jira error=timed out after 100
 
 
 def _transcripts(state_dir: Path) -> None:
-    """Write the events of run 39's, run 40's, tick 2's, and chore run 2's sessions where the loop would write them."""
+    """Write the events of runs 39 to 43's, tick 2's, and chore run 2's sessions where the loop would write them."""
     # The worktree run 39 worked in, as the operator's machine names it: the same on every start, for screenshots.
     web = "/home/op/acme/.treehouse/web-3f9c2a1b/3/web"
-    s39, s40, s2, c2 = "ses_mock39", "ses_mock40", "ses_tick2", "ses_chore2"
+    s39, s40, s41, s43 = "ses_mock39", "ses_mock40", "ses_mock41", "ses_mock43"
+    s2, c2 = "ses_tick2", "ses_chore2"
     run_39 = [
         _start(s39, -90),
         _text(s39, -89.9, "I'll read the ticket, then the search box."),
@@ -946,6 +960,33 @@ def _transcripts(state_dir: Path) -> None:
         _start(s40, -72.4),
         _event("error", s40, -70.1, error={"name": "APIError", "data": {"message": "Rate limited: retry after 60s"}}),
     ]
+    # The running runs print as they go (DESIGN §8): what each has done so far, its cost the seeded run's.
+    w41, w43 = "/home/op/acme/.treehouse/web-3f9c2a1b/1/web", "/home/op/acme/.treehouse/web-3f9c2a1b/2/web"
+    run_41 = [
+        _start(s41, 0.5),
+        _text(s41, 0.6, "I'll read the login form first, then its tests."),
+        _tool(
+            s41,
+            1,
+            "read",
+            {
+                "status": "completed",
+                "input": {"filePath": f"{w41}/src/login/LoginForm.tsx"},
+                "output": "export function LoginForm() {}",
+                "title": "src/login/LoginForm.tsx",
+            },
+        ),
+        _step(s41, 1.1, 0.2),
+        _start(s41, 1.2),
+        _done(s41, 27, "Run the login tests", "npm test -- login", "Tests: 4 passed, 4 total\n", seconds=12),
+        _step(s41, 27.1, 0.22),
+    ]
+    run_43 = [
+        _start(s43, 5.5),
+        _text(s43, 5.6, "The retry test fails on mobile only. Reading the workflow both repositories run."),
+        _done(s43, 29, "Read the CI workflow", f"cat {w43}/.github/workflows/ci.yml", "name: ci\n", seconds=1),
+        _step(s43, 29.1, 0.12),
+    ]
     chore_2 = [
         _start(c2, -240),
         _text(c2, -239.9, "Checking each repository's lockfile against the advisories."),
@@ -1001,13 +1042,13 @@ def _transcripts(state_dir: Path) -> None:
         _text(s2, -59.1, '{"status": "ok", "summary": "mock tick"}'),
         _step(s2, -59, 0.31, reason="stop"),
     ]
-    # The running runs' logs exist, as `canopy dispatch` opens them, and hold no events until their runs end.
+    # The running chore run's log exists, as `canopy chores run` opens it, and holds no events until it ends.
     none: list[str] = []
     written = (
         ("runs", "39", run_39),
         ("runs", "40", run_40),
-        ("runs", "41", none),
-        ("runs", "43", none),
+        ("runs", "41", run_41),
+        ("runs", "43", run_43),
         ("ticks", "2", tick_2),
         ("chore-runs/deps", "2", chore_2),
         ("chore-runs/build-health", "4", none),
@@ -1017,6 +1058,9 @@ def _transcripts(state_dir: Path) -> None:
         stdout = "\n".join(lines)
         if not lines:
             text = ""
+        elif directory == "runs" and name in RUNNING_LOGS:
+            # A running worker's stdout so far: no stderr or exit until it ends.
+            text = f"--- worker stdout ---\n{stdout}\n"
         elif directory == "runs":
             text = f"--- worker stdout ---\n{stdout}\n--- worker stderr ---\n\n--- worker exit 0 ---\n"
         elif directory.startswith("chore-runs/"):

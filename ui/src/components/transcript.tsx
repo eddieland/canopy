@@ -53,10 +53,18 @@ const NO_WORDS: readonly string[] = []
  * its input and output open on a click), each model call's cost, and the runtime's errors, in the order the runtime
  * printed them. By call, the same entries are grouped by the model call they came from, each opening to what it was
  * sent and what it did. In order, a search keeps the rows with a line that holds it, its matches marked, and opens a
- * tool call whose input or output holds it. All of it is agent output, rendered as text. `running` says the session's
- * events have not reached the log yet: they do when its run or tick ends.
+ * tool call whose input or output holds it. All of it is agent output, rendered as text. `running` says the session
+ * has not ended: its events reach the log when it does, or with `live`, a worker run's, as the runtime prints them.
  */
-export function TranscriptPanel({ transcript, running }: { transcript: Transcript | undefined; running: boolean }) {
+export function TranscriptPanel({
+    transcript,
+    running,
+    live = false,
+}: {
+    transcript: Transcript | undefined
+    running: boolean
+    live?: boolean
+}) {
     const [grouped, setGrouped] = useState(false)
     const [typed, setTyped] = useState('')
     // A long transcript is searched behind the field, so typing never waits on it.
@@ -138,7 +146,7 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
             {transcript === undefined ? (
                 <PanelSkeleton />
             ) : entries.length === 0 ? (
-                <Empty>{empty(transcript, running)}</Empty>
+                <Empty>{empty(transcript, running, live)}</Empty>
             ) : (
                 <>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-3 py-1.5">
@@ -218,7 +226,11 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
     )
 }
 
-function empty(transcript: Transcript, running: boolean): string {
+function empty(transcript: Transcript, running: boolean, live: boolean): string {
+    if (running && live) {
+        // Its session is recorded at its first event, so before then there is none.
+        return 'no events yet: they show here as the worker prints them'
+    }
     switch (transcript.status) {
         case 'no_session': {
             return 'the runtime reported no session: a template without --format json prints no events'

@@ -18,6 +18,8 @@ from canopy.loop import attention, repeat, reread, tick
 from canopy.notify import deliver
 
 if TYPE_CHECKING:
+    import sqlite3
+
     from canopy.core.context import Context
 
 # `canopy status` lists this many runs that ended.
@@ -185,11 +187,26 @@ def _print_workers(ctx: Context) -> None:
         click.echo(
             f"  {named(r['ticket_key'], r['ticket_title'])}  {r['kind']}  {attention.age(r['started_at'])}  {where}"
         )
+        # What its worker reported so far (DESIGN §8): nothing until its first event, or ever without `--format json`.
+        if r["session_id"]:
+            click.echo(f"    session {r['session_id']}{spent(r)}{_doing(r)}")
     # A review holds a slot and counts toward max_workers (DESIGN §21).
     for r in db.running_runs(ctx.conn, "review_runs"):
         click.echo(f"  review  {r['pr_url']}  {attention.age(r['started_at'])}  {r['slot_path'] or ''}".rstrip())
     if not running and not db.running_runs(ctx.conn, "review_runs"):
         click.echo("  none")
+
+
+def _doing(run: sqlite3.Row) -> str:
+    """A running run's latest tool call, as `  last bash: make check 12s ago`, or empty before its first.
+
+    Returns:
+        The tool, what it did, and how long ago, fit for the end of a line; empty when no call is recorded.
+    """
+    if run["activity_tool"] is None or run["activity_at"] is None:
+        return ""
+    did = f"{run['activity_tool']}: {run['activity']}" if run["activity"] else str(run["activity_tool"])
+    return f"  last {one_line(did)} {attention.age(str(run['activity_at']))} ago"
 
 
 def _print_recent_runs(ctx: Context) -> None:

@@ -149,7 +149,7 @@ test('by call, each model call opens to what it was sent and what it did, as tex
     await expect(transcript.getByTestId('transcript-entries')).toBeVisible()
 })
 
-test("a failed run's transcript ends in the runtime's error, and a running one's waits for it to end", async ({
+test("a failed run's transcript ends in the runtime's error, and a running one's is what it printed so far", async ({
     page,
 }) => {
     await page.goto('runs/40')
@@ -160,7 +160,11 @@ test("a failed run's transcript ends in the runtime's error, and a running one's
 
     await page.goto('runs/41')
     await settled(page)
-    await expect(page.getByTestId('transcript')).toContainText('the session’s events reach the log when it ends')
+    // Its latest tool call is on its row, and the calls so far in its transcript.
+    await expect(page.getByTestId('run-doing')).toContainText('bashnpm test -- login')
+    const tools = page.getByTestId('transcript').getByTestId('transcript-tool')
+    await expect(tools).toHaveCount(2)
+    await expect(tools.last()).toContainText('npm test -- login')
 })
 
 test("a tick's page shows its overseer's session under its decisions", async ({ page }) => {

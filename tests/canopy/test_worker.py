@@ -582,6 +582,48 @@ def test_a_worker_records_the_session_and_cost_it_reported(
     assert f"\n    did it\n    session ses_w1  $0.25, 3.5k tokens, 5.5k peak context  log {run['log_path']}\n" in out
 
 
+def test_a_running_worker_shows_its_session_spend_and_latest_tool_call(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """What the worker reports is on its row as it prints it, so its second command sees what its first did."""
+    status = ["sh", "-c", f"cd {canopy_env.root} && canopy status"]
+    with report_events(canopy_env), worker_does(["true"], status):
+        run = dispatch_and_run(conn)
+
+    [agent] = agent_runs(agent_log)
+    commands = agent["commands"]
+    assert isinstance(commands, list)
+    _, shown = commands
+    # One model call so far, and `true` was its last tool call: `canopy status` itself has not ended yet.
+    line = r"\n    session ses_w1  \$0\.12, 1\.7k tokens, 5\.5k peak context  last bash: true \d+s ago\n"
+    assert re.search(line, shown["stdout"])
+
+    # Once it ends, its row has its whole report, and its log what it printed in the same shape as ever.
+    assert (run["status"], run["session_id"], run["cost_usd"]) == ("done", "ses_w1", 0.25)
+    assert (run["activity_tool"], run["activity"]) == ("bash", f"sh -c cd {canopy_env.root} && canopy status")
+    out = capsys.readouterr().out
+    assert re.search(r"--- worker stdout ---\n(\{.*\}\n)+\n--- worker stderr ---\n\n--- worker exit 0 ---\n", out)
+
+
+def test_a_journal_that_refuses_a_progress_write_does_not_stop_the_worker(
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
+) -> None:
+    refused = sqlite3.OperationalError("database is locked")
+    with (
+        report_events(canopy_env),
+        worker_does(*commit_and_push("agent/PROJ-1-work")),
+        mock.patch.object(db, "set_run_progress", autospec=True, side_effect=refused) as progress,
+    ):
+        run = dispatch_and_run(conn)
+    assert progress.called
+    # Recorded once it ended, as ever.
+    assert (run["status"], run["session_id"], run["cost_usd"]) == ("done", "ses_w1", 0.25)
+
+
 def test_a_timed_out_worker_records_what_it_reported_before_the_kill(
     canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
 ) -> None:
