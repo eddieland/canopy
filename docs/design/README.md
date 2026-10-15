@@ -41,6 +41,8 @@ not go in the middle of the sequence.
   - [22. Conversations](CONVERSATIONS.md#22-conversations)
 - [Flaky CI](FLAKY_CI.md): triage of a CI failure before a fix-ci worker is sent.
   - [23. Flaky CI (M25)](FLAKY_CI.md#23-flaky-ci-m25)
+- [Sandboxed runs](SANDBOXING.md): the opt-in OS sandbox around every agent run but the overseer's.
+  - [24. Sandboxed runs (M26)](SANDBOXING.md#24-sandboxed-runs-m26)
 
 ## 1. Problem
 
@@ -68,7 +70,8 @@ cannot reach internal systems and require handing a vendor write access.
   secret (TRUST_MODEL T8, D055); none is built yet.
 - Tracker-specific code. Any issue tracker with an MCP server works; provider differences live in config and optional
   provider skills (§17). A second VCS host is likewise a prompt and config concern, not code.
-- Sandboxing agents (deferred; see TRUST_MODEL and ROADMAP).
+- A sandbox the harness knows about. Sandboxing is an opt-in prefix on the command templates (§24), and the harness
+  never learns whether a run is sandboxed (D118).
 
 ## 4. Principles
 
@@ -240,7 +243,7 @@ operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessio
 migrations/      NNNN_name.sql
 packages/        uv workspace members: separate programs canopy ships, run only as commands
   canopy-notify-slack/  the Slack sink (§20); stdlib only, imports nothing from canopy
-  canopy-sandbox/  the sandbox wrapper, its policy templates, and srt's lockfile (HOST_ISOLATION §4, D117)
+  canopy-sandbox/  the sandbox wrapper, its policy templates, and srt's lockfile (§24, D117)
 ui/              the web UI (D079): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
 hatch_build.py   the wheel's build hook: builds ui/ with npm and bundles ui/dist as canopy/_data/ui
 ```

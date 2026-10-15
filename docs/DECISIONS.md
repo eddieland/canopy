@@ -357,7 +357,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 - `_run` checks out `origin/<branch>` or `origin/<base>` detached; workers and the fallback push use
   `git push origin HEAD:refs/heads/<branch>`.
 - Why: a pool's slots share branch refs, so a run's local branch is state other slots see and a sandboxed worker
-  cannot write (HOST_ISOLATION §4.2).
+  cannot write (DESIGN §24).
 - Rejected: `checkout -B` (git 2.43 lets two worktrees hold one branch, so a commit in either moves both).
 - Revisit: if an operator's `runtime.pr_skill` tool needs a local branch.
 

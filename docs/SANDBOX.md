@@ -4,11 +4,11 @@ How to run canopy's workers, setup commands, chores, and reviews inside an OS sa
 in a ticket cannot read your secrets, rewrite canopy's config, or reach hosts you did not list. Everything here is your
 own config and what `canopy sandbox setup` installs: the loop sees only the command templates, and none of this is
 required to run it.
-For why it works this way and what it was checked against, see [HOST_ISOLATION.md](HOST_ISOLATION.md); for what it
-does and does not defend against, TRUST_MODEL T4 and T6.
+For why it works this way and what it was checked against, see DESIGN §24, [Sandboxed
+runs](design/SANDBOXING.md); for what it does and does not defend against, TRUST_MODEL T4 and T6.
 
-The sandbox is opt-in and not yet proven: ROADMAP M26 is open. The canary that checks every property (HOST_ISOLATION
-§6) runs in CI on Linux and macOS; it has yet to pass on the operator's own machines. Try it on yours with the check below
+The sandbox is opt-in and not yet proven: ROADMAP M26 is open. The canary that checks every property (DESIGN §24)
+runs in CI on Linux and macOS; it has yet to pass on the operator's own machines. Try it on yours with the check below
 before you rely on it.
 
 ## What a sandboxed run can do
@@ -29,7 +29,7 @@ directory, and what is written there is gone when the run ends. Nothing reaches 
 
 What it does not cover: a worker can still send anything to a host you allowed, with the credentials it has, such as
 your GitHub token; the overseer is not wrapped; and the sandbox shares the kernel,
-so it is no defense against an exploit written to escape it (HOST_ISOLATION §2, §4.3, §4.4).
+so it is no defense against an exploit written to escape it (DESIGN §24).
 
 ## 1. Run `canopy sandbox setup`
 
@@ -90,8 +90,8 @@ first on `PATH`. It drops every relative entry from `PATH`, so `git`, and any ot
 an absolute one. `srt` runs its seccomp helper inside the sandbox, so the wrapper lets each run read `srt`'s own
 `vendor/` directory, wherever `srt` is installed.
 
-`srt` is a beta. canopy pins the version HOST_ISOLATION was checked against; to try another, install it on `PATH`
-and remove canopy's, and re-read HOST_ISOLATION's claims first.
+`srt` is a beta. canopy pins the version DESIGN §24 was checked against; to try another, install it on `PATH`
+and remove canopy's, and re-read DESIGN §24's claims first.
 
 ## 3. Fill in the templates
 
@@ -212,7 +212,7 @@ use its name in the branch line. Then run `canopy loop --ticks 1` on a ticket an
 `.canopy/runs/<id>.log`: the worker should push and open its PR as before.
 
 From a checkout of canopy, `make sandbox-canary` runs the whole canary against what `canopy sandbox setup` installed:
-every denial and positive control HOST_ISOLATION §6 lists, with the shipped templates unchanged. It needs to reach
+every denial and positive control DESIGN §24 lists, with the shipped templates unchanged. It needs to reach
 github.com.
 
 ## Troubleshooting
@@ -237,5 +237,5 @@ github.com.
 - **Bazel:** put the disk and repository caches and `--output_user_root` from [BAZEL.md](BAZEL.md) in `allowWrite`
   of `worker.json` and `setup.json`. Expect each run's Bazel server to end with its sandbox, so a run starts its own.
 - **A tool's git cannot write objects in the slot:** inside the sandbox, `git` on `PATH` is the wrapper's own, which
-  points git at the run's object directory in the run's worktrees (HOST_ISOLATION §4.2). A tool that runs git by its
+  points git at the run's object directory in the run's worktrees (DESIGN §24, Git state). A tool that runs git by its
   absolute path skips it, and the slot's shared object directory is read-only. Have the tool find `git` on `PATH`.

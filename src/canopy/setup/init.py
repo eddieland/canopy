@@ -40,7 +40,7 @@ Branch protection canopy relies on (TRUST_MODEL §7). Configure it on the reposi
   - Workers push only to branches under {prefix}; nothing else should be pushable by the loop.
 """
 
-# The wrapper canopy installs beside itself, and the prefix it gives a worker's template (HOST_ISOLATION §4.1).
+# The wrapper canopy installs beside itself, and the prefix it gives a worker's template (DESIGN §24).
 SANDBOX_WRAPPER = "canopy-sandbox"
 SANDBOX_PREFIX = f"{SANDBOX_WRAPPER} worker --read {config.DEFINITIONS_DIR} --"
 SANDBOX_SUGGESTION = """\
@@ -93,7 +93,7 @@ def sandbox_suggestion(worker_cmd: str, user_file: Path, *, text: str = SANDBOX_
 
     `text` says it, with `{user_file}` and `{line}` in it: `canopy init`'s, by default.
 
-    Printed, never written: the sandbox is opt-in, and needs `canopy sandbox setup` run first (HOST_ISOLATION §5).
+    Printed, never written: the sandbox is opt-in, and needs `canopy sandbox setup` run first (DESIGN §24).
 
     Returns:
         The text to print, or "" when `worker_cmd` already runs through `canopy-sandbox`.

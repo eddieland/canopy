@@ -1,4 +1,4 @@
-"""The canary (HOST_ISOLATION §6): the shipped wrapper and policy templates hold under the real `srt`.
+"""The canary (DESIGN §24, The canary): the shipped wrapper and policy templates hold under the real `srt`.
 
 Opt-in with `CANOPY_SANDBOX_CANARY=1`, since it needs what `canopy sandbox setup` installs and checks: the pinned
 `srt` (or one on PATH), bubblewrap, socat, and ripgrep on Linux, and unprivileged user namespaces. It needs to reach
@@ -327,7 +327,7 @@ def test_a_worker_cannot_reach_a_unix_socket_on_the_host(canary: Canary) -> None
     """Such as the Docker daemon's or the SSH agent's: on Linux, srt refuses the run any Unix socket of its own, and on
     macOS any not allowed by path. The socket here is in the slot, which the run may read and write, so only that
     refusal stands in the way. A local MCP server started with `docker run` cannot work in the sandbox for the same
-    reason (HOST_ISOLATION §7)."""
+    reason (DESIGN §24)."""
     # Bound by a relative name, in the slot: the slot's full path is longer than a Unix socket's.
     with contextlib.chdir(canary.slot), socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
         server.bind("host.sock")
@@ -363,7 +363,7 @@ def test_a_worker_commits_in_its_slot(canary: Canary) -> None:
 
 
 def test_a_repository_a_tool_makes_keeps_its_own_objects(canary: Canary) -> None:
-    """A positive control for the run's git (HOST_ISOLATION §4.2): a repository a tool keeps as a cache, here in the
+    """A positive control for the run's git (DESIGN §24): a repository a tool keeps as a cache, here in the
     run's temp directory, gets its objects in its own directory, while the worker's commit goes to the run's."""
     cache = '"$TMPDIR/cache"'
     script = (
@@ -384,7 +384,7 @@ def test_a_repository_a_tool_makes_keeps_its_own_objects(canary: Canary) -> None
 def test_a_worker_runs_under_the_system_temp_directory(canary: Canary) -> None:
     """A positive control: the wrapper's run directory, under the TMPDIR canopy runs with, leaves srt room for its
     sockets. The rest of the canary runs under a short one of its own, so that this is the only test that depends on it
-    (HOST_ISOLATION §7, the temp directory on macOS)."""
+    (DESIGN §24, the temp directory on macOS)."""
     done = canary.run("true", tmpdir=SYSTEM_TMP)
 
     assert done.ok, done.stderr
@@ -400,7 +400,7 @@ def test_a_worker_reaches_an_allowed_host(canary: Canary) -> None:
 @settings(max_examples=25, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
 @given(prompt=st.text(st.characters(blacklist_categories=["Cs"], blacklist_characters="\x00")))
 def test_a_worker_receives_its_prompt_byte_for_byte(canary: Canary, prompt: str) -> None:
-    """Through the wrapper, srt, and the shell srt runs the command in (HOST_ISOLATION §5.3)."""
+    """Through the wrapper, srt, and the shell srt runs the command in (DESIGN §24)."""
     out = canary.slot / "prompt.out"
 
     done = canary.run('printf %s "$1" > prompt.out', prompt)

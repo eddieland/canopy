@@ -1,4 +1,4 @@
-"""git the harness runs on the host, and a slot's `.git` link (DESIGN §8, HOST_ISOLATION §5).
+"""git the harness runs on the host, and a slot's `.git` link (DESIGN §8, §24).
 
 The pool here is what treehouse makes: slots that are worktrees of one primary clone, sharing its git directory.
 """

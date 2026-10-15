@@ -119,8 +119,8 @@ A bare § is a section of the design (`design/`); other documents are named, as 
   records what was thrown away. An open Hermes issue asks for reclaim to notice uncommitted work
   ([#101788](https://github.com/NousResearch/hermes-agent/issues/101788)); recording paths, never contents, is enough.
 - **Child processes inherit the operator's whole environment**, tokens included (`infra/procs._child_env`), and
-  HOST_ISOLATION allowlists files but not variables. Symphony found tracker tokens in env aliases crossing its boundary
-  ([#119](https://github.com/openai/symphony/pull/119)).
+  the sandbox (DESIGN §24) allowlists files but not variables. Symphony found tracker tokens in env aliases crossing its
+  boundary ([#119](https://github.com/openai/symphony/pull/119)).
 - **Spend per run.** A looping agent-orchestrator worker used 45M tokens in 45 minutes, canopy's default worker timeout
   ([#6032](https://github.com/Untrivial-ai/agent-orchestrator/issues/6032)). Symphony counts absolute totals, not
   deltas, and has an open PR to persist them ([#60](https://github.com/openai/symphony/pull/60)). Input for M13.

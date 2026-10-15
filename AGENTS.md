@@ -162,7 +162,7 @@ If code and the design disagree, the design doc wins until a decision entry says
   tick after another (D042). A milestone that adds a listener follows TRUST_MODEL T8 (D055).
 - A tracker adapter interface. The tracker is a prompt and config concern.
 - A runtime plugin interface. The agent runtime is a command template in config.
-- Sandboxing beyond what ROADMAP M26 lists. It plugs into the command template; see HOST_ISOLATION.
+- Sandboxing beyond what ROADMAP M26 lists. It plugs into the command template; see DESIGN §24.
 - A bot identity. MVP runs as the operator.
 - Anything that approves or merges PRs, or transitions tickets to Done.
 - Retry logic inside the worker. A worker may push again for a fix it finds (D116), but never polls CI or retries a

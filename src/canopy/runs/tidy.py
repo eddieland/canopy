@@ -1,4 +1,4 @@
-"""Put a run's slot back the way treehouse expects it, before it is returned (DESIGN §8, HOST_ISOLATION §4.2).
+"""Put a run's slot back the way treehouse expects it, before it is returned (DESIGN §8, §24).
 
 A run can leave two things in a slot that host-side git must not meet: a `.git` file that points somewhere new, and a
 HEAD, index, ref, or reflog that names objects only the run's object directory holds. `_run` undoes both on every exit

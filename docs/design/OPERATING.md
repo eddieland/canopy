@@ -268,8 +268,7 @@ Rules:
   `{definitions_dir}`), it prints the error. It warns about copies of canopy's agent definitions in the OpenCode config
   of the workspace root and of each cloned repository, which stop runs (§13). Unless `worker_cmd` already starts with
   `canopy-sandbox`, it prints that template behind the wrapper's prefix as a line for the user file, pointing to
-  `docs/SANDBOX.md`, and writes nothing: the sandbox is opt-in and needs `canopy sandbox setup` first (HOST_ISOLATION
-  §5).
+  `docs/SANDBOX.md`, and writes nothing: the sandbox is opt-in and needs `canopy sandbox setup` first (§24).
 - `canopy sandbox setup` needs no workspace. It copies `canopy-sandbox`'s policy templates to
   `<user config dir>/sandbox/` (0700), never over one that is there; installs `srt` with
   `npm ci --ignore-scripts --engine-strict` from the lockfile the wrapper ships, into
@@ -279,7 +278,7 @@ Rules:
   namespace (naming the AppArmor sysctl when that is why not), on macOS ripgrep, and that canopy is not root. On Linux
   it also checks what `srt` only warns about, with `--debug`, and runs without: bubblewrap 0.5.0 or later, and a
   machine `srt` ships its seccomp filter for (x86_64, aarch64), without which a sandboxed command can connect to any
-  Unix socket it sees. Either missing would leave a sandbox weaker than HOST_ISOLATION says, so each is a thing to do.
+  Unix socket it sees. Either missing would leave a sandbox weaker than §24 says, so each is a thing to do.
   It prints each thing left to do and exits 1 while there is one; it writes no config, and prints the `worker_cmd`
   line `canopy init` does (D117).
 - `capacity.slots_per_repo` and `[capacity.repo_slots]` declare each repository's pool size in a workspace (§18).
