@@ -208,7 +208,7 @@ def test_each_tick_block_shows_what_its_overseer_cost(
         )
 
         tick1, tick2 = out.getvalue().split("tick 1  ok")[1].split("tick 2  ok")
-        assert "attention 0  ·  cost $0.25, 11.5k tokens  ·  next tick in 1m at" in tick1
+        assert "attention 0  ·  cost $0.25, 3.5k new tokens, 5.5k peak context  ·  next tick in 1m at" in tick1
         assert "cost" not in tick2
 
 

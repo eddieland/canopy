@@ -168,7 +168,8 @@ good. It is never removed earlier: a `running` row with no file would be asked a
    the row left `running` as `abandoned`.
 4. Print the tick's status, duration, and summary; each decision except `wait` and attention items, with its
    rationale; attention items added (`+`) and resolved (`-`); running workers, the list's size, what the tick's
-   overseer cost in dollars and tokens when the runtime reported it, and the wait that follows.
+   overseer cost in dollars, new tokens, and peak context when the runtime reported it (§13), and the wait that
+   follows.
 5. Wait, measured from the end of the tick, for `--every`, else `loop.interval_minutes`, whatever the tick's status,
    lengthened after idle ticks and ended at a gate (Idle pacing, below). This pacing rule is `pacing.wait`; it does
    not read tick cost (ROADMAP M13, deferred). An operator message recorded since the tick began, such as a

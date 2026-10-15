@@ -490,21 +490,23 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
         prs=contract.stored_prs(result),
         session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
-        tokens=tokens(row),
+        new_tokens=new_tokens(row),
+        peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
         worktrees=worktrees or [],
         log_path=shown_path(str(row["log_path"]), root),
     )
 
 
-def tokens(row: sqlite3.Row) -> int | None:
-    """A run's or a chore run's tokens of every kind, or None when the runtime reported none.
+def new_tokens(row: sqlite3.Row) -> int | None:
+    """A run's or a chore run's new tokens, every kind but cache reads, or None when the runtime reported none.
+
+    Cache reads are left out: each model call reads again what the calls before it were sent, so their sum grows with
+    the number of calls. The peak context says how large that grew.
 
     Returns:
         The sum of the counts the runtime reported, a missing one counting as none.
     """
-    found = [
-        row[c] for c in ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
-    ]
+    found = [row[c] for c in ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_write")]
     return sum(int(t) for t in found if t is not None) if any(t is not None for t in found) else None
 
 
@@ -778,7 +780,8 @@ def chore_run(row: sqlite3.Row, root: Path) -> ChoreRun:
         findings=len(parsed.findings) if parsed is not None else 0,
         session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
-        tokens=tokens(row),
+        new_tokens=new_tokens(row),
+        peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
         log_path=shown_path(str(row["log_path"]), root),
     )
 

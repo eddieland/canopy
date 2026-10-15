@@ -571,12 +571,15 @@ def test_a_worker_records_the_session_and_cost_it_reported(
     assert run["cost_usd"] == 0.25
     tokens = ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
     assert tuple(run[c] for c in tokens) == (2000, 400, 60, 8000, 1000)
+    assert run["tokens_peak_context"] == 1000 + 4000 + 500  # one call's input, cache read, and cache write
 
     capsys.readouterr()
     assert main(["status"]) == 0
     out = capsys.readouterr().out
     assert re.search(r"\nRecent runs \(1\):\n  PROJ-1  implement  done  \d+s ago  https://example.test/pr/1\n", out)
-    assert f"\n    did it\n    session ses_w1  $0.25, 11.5k tokens  log {run['log_path']}\n" in out
+    assert (
+        f"\n    did it\n    session ses_w1  $0.25, 3.5k new tokens, 5.5k peak context  log {run['log_path']}\n" in out
+    )
 
 
 def test_a_timed_out_worker_records_what_it_reported_before_the_kill(
