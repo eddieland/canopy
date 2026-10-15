@@ -511,7 +511,7 @@ its overseer's cost when the runtime reported it, and a line each for a pause an
 dismissal.
 
 `canopy status` also lists the tickets the operator started (§22), each with its title (§7), status, phase, and the
-message it awaits a reply to, running workers, and the ten runs that ended most recently, newest first: ticket and its
+message it awaits a reply to, running workers, and the ten runs that ended most recently, the last first: ticket and its
 title, kind, status, how long ago it ended, and each PR it reported; its harness note or else its summary, on one line
 with control characters dropped and cut at 160 characters; and its session id, its cost, new tokens, and peak context
 when the runtime reported them (§13), and its run log.

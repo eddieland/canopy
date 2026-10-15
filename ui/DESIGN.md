@@ -411,10 +411,12 @@ list, an empty state, or a skeleton by hand.
   in time order, which is a conversation, a chore's notes, a transcript, the runs page and a ticket's, chore's, or
   PR's runs, a ticket's, tick's, or PR's decisions, the ticks, the tickets, the PRs, and the reviews and a PR's. The
   toggle is a ghost button before the count, an up-down arrow and the order it is in, in words (`newest first`); a
-  click shows the other. Each list starts in the order the server sends it and keeps the operator's choice for that
-  list alone, wherever it appears: a conversation flipped on a ticket's page is flipped in the inbox too. It shows only
-  when the list has two items or more. Search has none: its hits are each source's newest few, so flipped they would
-  read as its oldest.
+  click shows the other. A list sorted by each row's latest activity rather than by when it began, which is the
+  tickets, the PRs, and the runs page, says so (`recently updated first`, `least recently updated first`, after
+  GitHub's sorts): its first row may be its oldest, so `newest` would mislead. Each list starts in the order the
+  server sends it and keeps the operator's choice for that list alone, wherever it appears: a conversation flipped on
+  a ticket's page is flipped in the inbox too. It shows only when the list has two items or more. Search has none: its
+  hits are each source's newest few, so flipped they would read as its oldest.
 - **A list that grows without bound scrolls inside its panel** (`PanelScroll`) when other panels sit under it in the
   same column: a ticket's recent runs and decisions, a chore's open findings and recent runs, the spend page's days
   (past `15rem`, under its pinned column names, so a week shows whole and 30 days scroll). Past `28rem` the rows
