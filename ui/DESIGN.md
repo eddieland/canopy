@@ -577,10 +577,11 @@ list, an empty state, or a skeleton by hand.
   label the address or, for a PR, its name, and what it opens on hover.
   The tracker's comes first, when `tracker.ticket_url` is set (`useTicketUrl`), then each repository's PR, then the
   ticket's branch in each repository that has a branch link (`useBranchUrls`, design §18); an unknown ticket's
-  page shows the tracker's alone. Past six, the first five show and `N more` opens the rest in place: a ticket across
-  many repositories has a PR and a branch in each, and all of them under the title would push its Work panel out of
-  the window. The Work panel keeps each repository's PR, a `PullRequestLink`, beside its phase; those lines scroll
-  inside the panel past `15rem` (`PanelScroll`), so its total cost, its actions, and the reply stay in reach.
+  page shows the tracker's alone. A kind with one link is its button; with more (a ticket across many repositories
+  has a PR and a branch in each), one button says how many (`3 PRs`) and opens them as a menu (`DropdownMenu`), a PR by
+  its name and a branch by its repository, so the links stay one line however many repositories. The Work panel keeps
+  each repository's PR, a `PullRequestLink`, beside its phase; those lines scroll inside the panel past `15rem`
+  (`PanelScroll`), so its total cost, its actions, and the reply stay in reach.
   A worktree's branch links the same way, its name in the accent with its `LinkOutIcon`, when its repository has a
   branch link.
 - **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch on a ticket's, run's,

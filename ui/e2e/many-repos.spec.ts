@@ -86,13 +86,19 @@ test('a ticket across many repositories keeps its Work panel and reply in reach'
     await page.goto('tickets/ABC-102')
     await settled(page)
 
-    // The tracker's link and four PRs, then the rest behind a toggle.
+    // The tracker's link, then every PR in one menu.
     const links = page.getByRole('navigation', { name: 'Links out' })
-    await expect(links.getByRole('link')).toHaveCount(5)
-    await links.getByRole('button', { name: `${repos - 4} more` }).click()
-    await expect(links.getByRole('link')).toHaveCount(repos + 1)
-    await links.getByRole('button', { name: 'fewer' }).click()
-    await expect(links.getByRole('link')).toHaveCount(5)
+    await expect(links.getByRole('link')).toHaveCount(1)
+    const prs = links.getByRole('button', { name: `${repos} PRs` })
+    await prs.click()
+    const menu = page.getByRole('menu')
+    await expect(menu.getByRole('menuitem')).toHaveCount(repos)
+    const first = menu.getByRole('menuitem', { name: 'acme/repo-0#100' })
+    await expect(first).toHaveAttribute('href', 'https://github.com/acme/repo-0/pull/100')
+    await expect(first).toHaveAttribute('target', '_blank')
+    await page.keyboard.press('Escape')
+    await expect(menu).toHaveCount(0)
+    await expect(prs).toBeFocused()
 
     // Every repository's PR is in the Work panel, scrolling in place under its branch.
     const units = page.getByRole('region', { name: 'Repositories' })
