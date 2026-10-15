@@ -27,6 +27,10 @@ def main(argv: Sequence[str] | None = None, runner: procs.Runner | None = None) 
     args = list(argv) if argv is not None else sys.argv[1:]
     try:
         result = cli.main(args=args, prog_name="canopy", standalone_mode=False, obj=obj)
+    except click.exceptions.NoArgsIsHelpError as e:
+        # A group named without a command prints its help, as a bare `canopy` does: asking is not misuse.
+        click.echo(e.ctx.get_help())
+        return 0
     except click.ClickException as e:
         e.show()
         return e.exit_code

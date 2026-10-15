@@ -17,8 +17,8 @@ from typing import TYPE_CHECKING
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.cli.loop import chore_line, named, one_line, phase_of, prs_of, result_of, spent
 from canopy.cli.params import REPO
+from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, spent
 from canopy.core import chore_view, conversation, db, notice, pause, prompts
 from canopy.infra import logs
 from canopy.loop import attention
@@ -253,8 +253,8 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
     )
     click.echo(f"{subject} is forgotten: its next implement starts over on a new branch.")
     if forgot.branch is not None or forgot.prs:
-        named = [*([f"branch {forgot.branch}"] if forgot.branch is not None else []), *forgot.prs]
-        click.echo(f"canopy no longer tracks {', '.join(named)}.")
+        untracked = [*([f"branch {forgot.branch}"] if forgot.branch is not None else []), *forgot.prs]
+        click.echo(f"canopy no longer tracks {', '.join(untracked)}.")
         click.echo(
             "Close its PRs and delete its branch on origin yourself: until you do, the overseer still finds them and "
             "the ticket cannot start over."
@@ -399,14 +399,14 @@ def cmd_send(click_ctx: click.Context, ref: str, findings: tuple[int, ...]) -> i
             "channel": CLI,
         },
     )
-    named = ", ".join(str(n) for n in sorted(set(findings)))
+    numbers = ", ".join(str(n) for n in sorted(set(findings)))
     if sent.replied.new:
         click.echo(
-            f"{subject} findings {named} went to {sent.ticket} as message {sent.replied.message_id}: "
+            f"{subject} findings {numbers} went to {sent.ticket} as message {sent.replied.message_id}: "
             "the next tick reads it as your go-ahead."
         )
     else:
-        click.echo(f"{subject} findings {named} already went to {sent.ticket} as message {sent.replied.message_id}.")
+        click.echo(f"{subject} findings {numbers} already went to {sent.ticket} as message {sent.replied.message_id}.")
     return 0
 
 
