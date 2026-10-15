@@ -114,6 +114,7 @@ to do instead.
 | `tracker.ticket_url` | shared | the tracker's address is the team's; a link runs nothing |
 | `tracker.labels` | user-only | defines this operator's queue |
 | `tracker.mcp_server`, `tracker.read_tools` | user-only | what a private ticket's worker may call (§22) |
+| `tracker.query_every_minutes` | user-only | how often the overseer pays to run the query (§7): the operator's spend |
 | `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
 | `trust.branch_prefix`, `trust.pr_label` | shared | team conventions for spotting agent work |
 | `trust.authorized_repliers` | user-only | who may steer this operator's workers |
@@ -162,6 +163,7 @@ User file, personal:
 labels = ["agent-ready-yourname"]
 mcp_server = ""         # optional; the tracker's MCP server as OpenCode names it; default by provider (§22)
 # read_tools = [...]    # optional; the only tools of it a private ticket's worker may call; default by provider
+query_every_minutes = 0 # the least time between ticks that run the query; 0 runs it every tick (§7)
 
 [capacity]
 max_workers = 2
@@ -486,6 +488,16 @@ help no run, so a `$HOME` copy,
 which canopy's own runs also load, never meets a same-named skill. It opens by telling an agent started by canopy
 (`CANOPY_TICK_ID` set, or a canopy prompt) to follow its prompt instead. It grants nothing: the overseer's and worker's
 bash rules apply either way.
+
+### Shell completion
+
+`canopy completion SHELL` prints the script that completes canopy in bash (4.4 or newer), zsh, or fish; the operator
+loads it from their shell's startup file, as its help shows. The script is click's: on Tab it runs `canopy` with
+`_CANOPY_COMPLETE` set, which click answers before any command runs. Commands, options, and choices complete from the
+CLI's definition. Repository names complete from the map of the workspace the shell is in, and chore names from its
+config; outside a workspace, or when its config does not load, they complete to nothing rather than fail. Ticket keys
+do not complete: that would mean opening the journal on every Tab. The command prints click's template itself rather
+than calling its `source()`, whose bash version check runs bash outside `canopy.infra.procs`.
 
 ## 14. Attention list
 

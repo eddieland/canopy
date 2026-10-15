@@ -1,16 +1,20 @@
 """Validated click parameter types for what the overseer passes in: ticket keys, reasons, slugs, cursors, and text.
 
 Keys, slugs, and cursor ids reach branch names, paths, argv, and prompts, so they are checked before any command runs.
+Repository and chore names also complete in the shell, from the config of the workspace the shell is in.
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Callable, Iterable
+from pathlib import Path
 from typing import override
 
 import click
+from click.shell_completion import CompletionItem
 
-from canopy.core import config, contract, db
+from canopy.core import config, contract, db, workspace
 from canopy.runs import dispatch
 
 KEY_RE = dispatch.KEY_RE
@@ -60,17 +64,29 @@ def truncate(value: str) -> str:
 class PatternType(click.ParamType[str, object]):
     """A string that must match a pattern: ticket keys and attention reasons."""
 
-    def __init__(self, name: str, pattern: re.Pattern[str], what: str) -> None:
-        """Name the type for help text, and say what `pattern` validates for error messages."""
+    def __init__(
+        self, name: str, pattern: re.Pattern[str], what: str, names: Callable[[], Iterable[str]] | None = None
+    ) -> None:
+        """Name the type for help text, and say what `pattern` validates for error messages.
+
+        `names`, when given, lists the values the shell offers to complete.
+        """
         self.name = name
         self.pattern = pattern
         self.what = what
+        self.names = names
 
     @override
     def convert(self, value: object, param: click.Parameter | None, ctx: click.Context | None) -> str:
         if not isinstance(value, str) or not self.pattern.fullmatch(value):
             self.fail(f"invalid {self.what} {value!r}: must match {self.pattern.pattern}", param, ctx)
         return value
+
+    @override
+    def shell_complete(self, ctx: click.Context, param: click.Parameter, incomplete: str) -> list[CompletionItem]:
+        if self.names is None:
+            return []
+        return [CompletionItem(name) for name in self.names() if name.startswith(incomplete)]
 
 
 class PrUrlType(click.ParamType[str, object]):
@@ -138,11 +154,36 @@ class TitleType(click.ParamType[str, object]):
         return title if len(title) <= MAX_TITLE else title[: MAX_TITLE - 3] + "..."
 
 
+def repo_names() -> list[str]:
+    """Complete a repository's name from the map of the workspace the shell is in.
+
+    Returns:
+        Each repository's name, or none outside a workspace or when its map does not load: completion never fails.
+    """
+    try:
+        return [repo.name for repo in workspace.find(Path.cwd()).repos]
+    except (config.ConfigError, OSError):
+        return []
+
+
+def chore_names() -> list[str]:
+    """Complete a chore's name from the config of the workspace the shell is in.
+
+    Returns:
+        Each chore's name, or none outside a workspace or when the config does not load: completion never fails.
+    """
+    try:
+        root = workspace.find_root(Path.cwd())
+        return [] if root is None else sorted(config.load(root).chores)
+    except (config.ConfigError, OSError):
+        return []
+
+
 TICKET_KEY = PatternType("KEY", KEY_RE, "ticket key")
 REASON = PatternType("REASON", REASON_RE, "reason")
 SLUG = PatternType("SLUG", dispatch.SLUG_RE, "slug")
-REPO = PatternType("NAME", config.REPO_NAME_RE, "repository name")
-CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name")
+REPO = PatternType("NAME", config.REPO_NAME_RE, "repository name", repo_names)
+CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name", chore_names)
 PR_URL = PrUrlType()
 # A tracker's comment id, as a cursor id is: it reaches the worker's prompt and the journal.
 COMMENT_ID = PatternType("COMMENT_ID", CURSOR_VALUE_RE, "comment id")
