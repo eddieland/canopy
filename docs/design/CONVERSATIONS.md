@@ -601,8 +601,10 @@ rather than from a one-off analysis of the log.
   of the live overseer's, each day as a stacked bar of the kinds with idle overseer spend its own series on the
   baseline, the same numbers as a table, the ticks by group and by what woke them, and the idle ticks. A window the
   page does not offer reads as the week. Reads only.
-- The rail's two spend figures open it, the 24 hours' on the week and the 30 days' on the month: a link from them
-  rather than a nav item, since spend is a question the operator asks now and then, not a place they work.
+- The nav has it, between Chores and Ticks, opening on the week; the rail's two spend figures open it too, the 24
+  hours' on the week and the 30 days' on the month. It was at first only a link from the figures, as a question the
+  operator asks now and then rather than a place they work, but the operator, who asked for the page, did not find it
+  there (2026-10-15).
 - `spend.updated`, `tick.updated`, and a run starting or ending on `runs.updated` mark the breakdown stale, so a page
   left open follows the loop. Each tick carries `idle` and `woken_by`, so the loop recording them after the tick
   closes sends `tick.updated` again, and the page never keeps the tick as no loop's.
