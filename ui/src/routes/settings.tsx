@@ -6,6 +6,7 @@ import { useState } from 'react'
 
 import { reloadConfig, signOut } from '@/api/mutations'
 import { keys, sessionQuery, spendQuery } from '@/api/queries'
+import { ConfigForm } from '@/components/config-form'
 import { Cost } from '@/components/cost'
 import { HatPreview } from '@/components/hat'
 import { Input } from '@/components/input'
@@ -30,7 +31,10 @@ import type { ThemePreference } from '@/theme/store'
 import { switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
-/** What this browser keeps (the theme, the send key, the fun, the session), and reloading the loop's config. */
+/**
+ * What this browser keeps (the theme, the send key, the fun, the session), the limits and trust settings of the user
+ * config, and reloading the loop's config.
+ */
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
 })
@@ -65,7 +69,7 @@ function SettingsPage() {
         <>
             <PageHeader title="Settings">
                 The theme, the send key, and the fun are kept in this browser. Everything else canopy reads from its
-                config files.
+                config files, whose limits and trust settings can be changed here.
             </PageHeader>
             <Panel>
                 <PanelHeader label="Theme" />
@@ -90,6 +94,7 @@ function SettingsPage() {
                 </div>
             </Panel>
             <SendKeyPanel />
+            <ConfigForm />
             <ConfigPanel />
             {/* Second to last: below what changes how canopy works, above signing out. */}
             <FunPanel />

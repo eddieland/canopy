@@ -152,6 +152,36 @@ test('the settings page asks the loop to read its config again and says what it 
     )
 })
 
+test('the settings page saves a limit and drops a trusted reviewer, but raises nothing past its ceiling', async ({
+    page,
+}) => {
+    await page.goto('settings')
+    const form = page.getByTestId('config-form')
+    const workers = form.getByTestId('capacity.max_workers')
+    await expect(workers).toHaveValue('2')
+    await expect(form.getByTestId('config-save')).toBeDisabled()
+
+    await workers.fill('many')
+    await expect(form.getByRole('alert')).toHaveText('capacity.max_workers: a whole number')
+    await expect(form.getByTestId('config-save')).toBeDisabled()
+    await workers.fill('9')
+    await form.getByTestId('config-save').click()
+    await expect(form.getByRole('alert')).toContainText('refused (past_bound): capacity.max_workers may be at most 8')
+
+    await workers.fill('3')
+    await form.getByTestId('trust.trusted_reviewers-lint-bot').click()
+    await form.getByTestId('config-save').click()
+    await expect(form.getByRole('status')).toContainText(
+        'Saved capacity.max_workers, trust.trusted_reviewers to your config.',
+    )
+    // Read again from the file: the reviewer is gone, and only the stricter side of a trust switch is offered.
+    await expect(workers).toHaveValue('3')
+    await expect(form.getByTestId('trust.trusted_reviewers-lint-bot')).toHaveCount(0)
+    await expect(form.getByTestId('trust.trusted_reviewers-canopy:review')).toBeChecked()
+    await expect(form.getByTestId('trust.rebase')).toBeDisabled()
+    await expect(form.getByTestId('trust.commit_trailer')).toBeDisabled()
+})
+
 test('under Ctrl+Enter, Enter starts a new line and Ctrl+Enter sends', async ({ page }) => {
     await page.goto('settings')
     await page.getByTestId('send-key-mod-enter').click()

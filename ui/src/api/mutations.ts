@@ -4,6 +4,8 @@ import { api, unwrap } from './client'
 import { keys } from './queries'
 import type {
     ConfigReload,
+    ConfigSaved,
+    ConfigValue,
     Dismissed,
     Forgot,
     Granted,
@@ -138,6 +140,15 @@ export async function resumeLoop(): Promise<PauseChanged> {
  */
 export async function reloadConfig(): Promise<ConfigReload> {
     return unwrap(await api.POST('/api/loop/reload'))
+}
+
+/**
+ * Writes the changed limits and trust settings to the user config, then asks the loop to read it again. Refused,
+ * writing nothing, past a limit's bound (`past_bound`), for a trust setting loosened (`not_stricter`), or when the
+ * file changed since `hash` was read (`stale`).
+ */
+export async function saveConfig(hash: string, changes: Record<string, ConfigValue>): Promise<ConfigSaved> {
+    return unwrap(await api.PATCH('/api/config', { body: { hash, changes } }))
 }
 
 /** After a pause or a resume: show the state it left now, rather than wait for the stream. */

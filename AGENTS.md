@@ -64,8 +64,8 @@ If code and the design disagree, the design doc wins until a decision entry says
   stdlib makes the code materially worse, and record why. Adopted so far: `click` for the CLI (D025), `pydantic` for
   validating config and anything parsed from another program's output (D026), `hypothesis` for property tests of input
   validators (dev only), `pytest-xdist` to run the tests in parallel (dev only), `rich` for terminal output
-  (D043), `fastapi` and `uvicorn` for the web UI's server (D074, only in `canopy.serve`), and `httpx2` for its test
-  client (D079, dev only).
+  (D043), `fastapi` and `uvicorn` for the web UI's server (D074, only in `canopy.serve`), `tomlkit` for its edits to
+  the user config (D119, only in `canopy.serve`), and `httpx2` for its test client (D079, dev only).
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
   and npm; `make check` runs its checks, and `make ui-e2e` its Playwright tests.
 - Nothing tracker- or VCS-API-specific is ever imported. No Jira client, no GitHub client. Connectivity to those

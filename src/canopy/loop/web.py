@@ -40,10 +40,11 @@ class Serving:
     backend: Backend | None = None
 
 
-def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload) -> Serving:
+def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload, every: int | None = None) -> Serving:
     """Start the web UI's server for the loop, or say why it serves nothing. Never raises: the loop goes on.
 
-    The UI's reload asks through `reload`, as SIGHUP does.
+    The UI's reload asks through `reload`, as SIGHUP does. `every` is `--every`'s minutes, which the settings page
+    names beside `loop.interval_minutes`.
 
     Returns:
         The note for the loop's header, with the URL, server, and backend when the server started.
@@ -60,7 +61,7 @@ def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload) -> Serving
         return Serving(f"not served: cannot read the listener secret: {e}")
 
     sessions = Sessions(key, port=options.port, base_path=options.base_path, hosts=options.hosts)
-    served = backend(ctx, reload)
+    served = backend(ctx, reload, every)
     server = WebServer(create_app(options, served, sessions), options, log)
     server.start()
     url = options.url()
@@ -69,11 +70,11 @@ def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload) -> Serving
     return Serving(f"{url}  sign in with the secret `canopy secret` prints{built}", url, server, served)
 
 
-def backend(ctx: Context, reload: reread.Reload) -> Backend:
+def backend(ctx: Context, reload: reread.Reload, every: int | None = None) -> Backend:
     """The server's view of the loop's journal: the config, the attention list, `halt.end`, reload, and grants.
 
     Returns:
-        The backend the server calls into, bound to `ctx` and `reload`.
+        The backend the server calls into, bound to `ctx` and `reload`, editing the user config the loop read.
     """
 
     def end_run(run_ctx: Context, run: sqlite3.Row) -> bool:
@@ -94,6 +95,7 @@ def backend(ctx: Context, reload: reread.Reload) -> Backend:
         review_limit=review_limit,
         grant=grant,
         write_attention=lambda current: attention.write(current, logs.for_tick(None)),
+        every=every,
     )
 
 

@@ -40,6 +40,7 @@ export const keys = {
     pullRequests: ['pull-requests'] as const,
     pullRequest: (url: string) => ['pull-requests', url] as const,
     loop: ['loop'] as const,
+    config: ['config'] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -145,6 +146,15 @@ export const tickQuery = queryOptions({
 export const loopQuery = queryOptions({
     queryKey: keys.loop,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/loop', { signal })),
+})
+
+/**
+ * The limits and trust settings the settings page edits, as the config files say now, and the user file's hash a save
+ * carries. Not on the stream: read when the page opens, and again after a save.
+ */
+export const configQuery = queryOptions({
+    queryKey: keys.config,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/config', { signal })),
 })
 
 /** Every ticket canopy has worked or been asked to. The stream sends the list again whenever it changes. */

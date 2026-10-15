@@ -400,3 +400,19 @@ such as a shipped migration, may still cite one, and git history has its text.
   cannot write. A new `srt` is a lockfile change. Root-only steps are printed, never run.
 - Rejected: `npm install -g` (unpinned, shared with the operator's own); bundling `srt` (it needs Node regardless).
 - Revisit: if `srt` ships a standalone binary, or the sandbox stops being opt-in.
+
+## D118. The web channel writes only named config keys: limits within ceilings, trust only stricter
+
+- An allowlist by key name in `serve/config_edit.py`, never a section; a new key is not writable until named. Only the
+  user file, never the workspace file. Settled by the operator (ROADMAP M41).
+- Why: a config write outlives the listener secret. A raised limit is spend, bounded by a ceiling; an added replier or
+  reviewer would steer workers after a new secret, so trust settings only tighten.
+- Nothing that runs a command, picks a prompt, is read as words, or moves the listener. No CLI verb: it would be in
+  reach of the overseer's `canopy *` rule.
+
+## D119. tomlkit edits the user config in place
+
+- `tomllib` only reads. tomlkit keeps the operator's comments and layout through a write; only `canopy.serve` imports
+  it (`tests/canopy/test_layers.py`).
+- Rejected: writing the file anew with the stdlib (comments lost); a file of canopy's own layered after the user file
+  (a hand edit to the user file would be silently overridden).

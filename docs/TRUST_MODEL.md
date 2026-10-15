@@ -383,9 +383,10 @@ Controls:
   or prompts, and never reaches an agent's environment except the server that checks it.
 - Whoever holds the secret acts as the operator: they can prompt a worker directly, outside the authorized-replier
   check (T1). That is the point, and it is why the secret is an operator credential.
-- A listener only reads state and passes the operator's own input to agents. It does not lift any guard in §6: a
-  worker prompted through it still cannot merge, approve, or push outside its branch, and capacity and attempt limits
-  still hold.
+- A listener only reads state, passes the operator's own input to agents, and changes the few config keys the web UI
+  may, within bounds in code (below). It does not lift any guard in §6: a worker prompted through it still cannot
+  merge, approve, or push outside its branch, and capacity and attempt limits still hold, at whatever value the config
+  then gives them.
 
 The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 
@@ -425,18 +426,34 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   reply to, and forget tickets, end a stopped ticket's run, grant a unit or a PR one more run as `canopy grant` does,
   note something to a chore as `canopy reply chore:NAME` does, dismiss a chore's or a review's finding or take that
   back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, pause and resume the loop
-  as `canopy pause` and `canopy resume` do, and ask the loop
-  to read its config files again as SIGHUP does, nothing else. It cannot write config: a reload reads only the
-  operator's own files, and a `serve.*` change waits for a restart, so the listener's bind and port never change under
-  it. A forget must carry the ticket's key typed out, checked in code. A grant allows one more run a request, with
-  `canopy grant`'s guards. It cannot run a chore.
+  as `canopy pause` and `canopy resume` do, ask the loop
+  to read its config files again as SIGHUP does, and change the limits and trust settings below in the user file,
+  nothing else. A reload reads only the operator's own files, and a `serve.*` change waits for a restart, so the
+  listener's bind and port never change under it. A forget must carry the ticket's key typed out, checked in code. A
+  grant allows one more run a request, with `canopy grant`'s guards. It cannot run a chore.
+- Its config writes (DESIGN §12, §22, D118) are an allowlist in code, by key name, never a section's wildcard, so a key
+  added later is not writable until it is named. Limits may be raised or lowered, but not past a bound in code (a
+  count's ceiling, such as `capacity.max_workers` at 8, or a pace's floor): the counts in `capacity`, the attempt
+  limits and the fix-CI cooldown in `policy`, and `loop.interval_minutes` and `loop.idle_max_minutes`. Trust settings
+  move only toward stricter: `policy.stacking` to `"never"`, an entry removed from `trust.authorized_repliers` or
+  `trust.trusted_reviewers` (never added), `trust.rebase` to false, and `trust.commit_trailer` to true. Nothing that
+  runs a command, chooses a prompt, is read as words, or moves the listener: no `runtime.*`, `notify.*`, `chores`,
+  `paths.*`, `review.*`, `serve.*`, or `tracker.*`, and no comment mark or trailer name. A config write outlives the
+  secret, which is why trust only tightens: a replier added through a stolen session would go on steering workers
+  after a new secret ended it. It writes the user file alone, never the workspace file (T7); refuses a user file that
+  is a symlink or not the operator's (D053's check), and one that changed since the page read it; validates the
+  result as any `canopy` command would load it; and refuses inside a tick or run (`inside_run`). Each change is
+  logged with its old and new values. A running run keeps the prompt and permissions it started with, so a stricter
+  setting reaches only runs started after it.
 
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
 credentials. Binding to a private address rather than loopback relies on the network for the rest. A local user on a
 shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port
 on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
 read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session
-cannot be ended alone before its 30 days: a new secret ends them all. Plain HTTP on a private address can be read on
+cannot be ended alone before its 30 days: a new secret ends them all. Whoever holds a session can raise the limits up
+to their ceilings, and that outlives a new secret until the operator reads the file or the log: the residual is spend,
+bounded by the ceilings, never authority. Plain HTTP on a private address can be read on
 the network (D076), transcripts included: a secret a worker's tool printed into its log is then on the network too.
 
 ## 6. What canopy must never do

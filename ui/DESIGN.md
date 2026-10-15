@@ -600,6 +600,13 @@ list, an empty state, or a skeleton by hand.
   (`ToggleGroup`, `src/components/ui/toggle-group.tsx`): the options in a well on the canvas, the picked one raised on
   `surface-raised` with `shadow-xs`. It is a radio group, so one option is always picked: the arrow keys move between
   them, Space picks one, and Tab leaves the group.
+- **A settings form** (`ConfigForm`, Settings' Limits and trust): a row per config key, its name in monospace over
+  where its value comes from and how far the page may take it, and its control at the row's end: a numeric field in
+  `readout` type, one per repository for `capacity.repo_slots` (an unset one shows the default count as its
+  placeholder), a checkbox for a switch, and a list's entries as checkboxes to clear. A switch already on its stricter
+  side is disabled, not hidden, so the page still says what it is. One Save in the panel's foot, disabled until
+  something changed; a field that is not a whole number is named in the `Notice` and keeps Save disabled. A save reads
+  the file again, and the `Notice` keeps what the save did over the fresh form.
 - **An action** is a button in the foot of its subject's identity panel (the detail skeleton, above) or under its
   form, with one line under it (`Notice`): what the action did, in the CLI's words, or its refusal in
   `status-failed`, naming the guard. An action that kills something asks

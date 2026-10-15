@@ -234,6 +234,55 @@ worker's definition allows that one force and no other, and `canopy _run`'s own 
 run started from (§8, TRUST_MODEL T1). It applies to every repository the operator works on. It is user-only because
 it lets a worker replace a branch's history: a shared file must not decide that.
 
+**From the web UI.** The settings page (§22) edits a few keys of the user file in place, and no others (D118,
+TRUST_MODEL T8). They are named one by one in `canopy/serve/config_edit.py`, never by section, so a key added to a
+section later is not editable until it is named there. A limit may be raised or lowered, but the page cannot loosen
+it past its bound; the file can set any value, and the page may still tighten a value the file set past the bound.
+A trust key moves only toward stricter: a config write outlives the listener secret, and a replier added through a
+stolen session would go on steering workers after a new secret ended it.
+
+| Key | From the page |
+|---|---|
+| `capacity.max_workers` | at most 8 |
+| `capacity.max_chores`, `capacity.max_reviews` | at most 4 |
+| `capacity.max_reviews_per_day` | at most 100 |
+| `capacity.slots_per_repo`, each `capacity.repo_slots` entry | at most 8; an unmanaged pool's count is new, so bounded too |
+| `policy.max_implement_attempts`, `policy.max_fix_ci_attempts` | at most 5 |
+| `policy.max_resume_attempts` | at most 6 |
+| `policy.max_split_attempts` | at most 3 |
+| `policy.max_reviews_per_pr` | at most 10 |
+| `policy.fix_ci_cooldown_minutes` | at least 10 |
+| `loop.interval_minutes`, `loop.idle_max_minutes` | at least 5 |
+| `policy.stacking` | to `"never"` only |
+| `trust.authorized_repliers`, `trust.trusted_reviewers` | entries removed, never added |
+| `trust.rebase` | to `false` only |
+| `trust.commit_trailer` | to `true` only |
+
+The bounds are what one operator's machine and spend plausibly want; a raise within them outlives a new secret, and
+that residual is spend, which the page and the log show. A save:
+
+- writes the user file only, never the workspace file (T7), a shared `policy.*` key included: the user file wins;
+- is edited in place with tomlkit (D119), so the operator's comments, order, and layout stay; a list loses its removed
+  entries where they stand, keeping the rest and their comments;
+- carries the hash of the user file as the page read it, and holds a lock beside the file (`config.toml.lock`) from
+  reading the file to replacing it, so two saves made on one read cannot both pass; a file whose hash differs is
+  refused `stale`, checked again just before the replace, so a hand edit is lost only if it lands in that last moment;
+- applies the change to a copy beside the file, which `config.load` validates as any `canopy` command would read it,
+  and checks every bound on the values the copy loads to, so the rules hold whatever the request's shape; a refusal
+  writes nothing and gives the loader's message, naming the user file;
+- replaces the file atomically, keeping its mode, and refuses one that is a symlink or not the operator's (D053's
+  check, `unsafe_file`), and inside a tick or run (`inside_run`), as the CLI's verbs do;
+- logs each change with channel `web`, the key, and its old and new values, then asks the loop to read its config
+  again through the same path as Reload (§6). A save whose reload is refused, or never asked for because the server
+  stopped between the two, takes effect at the next reload.
+
+There is no CLI verb for it: the operator's editor is the CLI's way, and a `canopy config set` would be in reach of
+the overseer's `canopy *` bash rule. Pools: a changed `capacity.slots_per_repo` or `capacity.repo_slots` bounds leases
+from the next tick; making or removing slots is still `canopy workspace sync`, which the page does not run.
+
+Rejected: a file of canopy's own layered after the user file (a hand edit to the user file would be silently
+overridden), and writing the user file anew with the stdlib (its comments lost).
+
 Rules:
 
 - **Queues are per operator.** `tracker.labels` is a non-empty list; a ticket carrying any of them is in this

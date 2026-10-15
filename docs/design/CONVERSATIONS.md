@@ -309,7 +309,7 @@ tick. Before M28 only a message woke it, so a start from the web UI waited for t
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
 | cli | `canopy start`, `stop`, `reply` (public tickets too), `forget`, `grant`, `dismiss`, `send` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
-| web (M20) | reply, start, stop, forget, grant; notes to chores (M23), dismissing chores' and reviews' findings, sending reviews' findings to a worker (M32); pause, resume | pages | the listener secret (TRUST_MODEL T8) |
+| web (M20) | reply, start, stop, forget, grant; notes to chores (M23), dismissing chores' and reviews' findings, sending reviews' findings to a worker (M32); pause, resume; limits and trust settings (M41) | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
 Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
@@ -329,8 +329,10 @@ Served by `canopy loop` from a thread (D073):
   ticket, §21), for a stop with `now`, the same `runs.halt.end` as
   `canopy stop --now`, for a grant `runs.policy.grant` and `reviews.grants.grant` as `canopy grant`, one run each,
   and `pause.pause` and `pause.resume` as `canopy pause` and `canopy resume` (§6). Reload on
-  the settings page asks the loop to read its config again, as SIGHUP does (§6); it writes nothing, and the files stay
-  the operator's to edit. A forget
+  the settings page asks the loop to read its config again, as SIGHUP does (§6); it writes nothing. The settings
+  page's limits and trust form writes the user file, only the keys §12 lists, within their bounds, and trust only
+  toward stricter (`serve.config_edit`, TRUST_MODEL T8), then asks for the same reload; every other key stays the
+  operator's to edit in the file. A forget
   cannot be undone from the UI, so its request carries the ticket's key as the operator typed it, and the server refuses
   `not_confirmed` before reading anything when it does not match, so no client skips the challenge; one more click, as
   Stop now asks, is too easy to give by mistake. Its outcome
@@ -355,10 +357,14 @@ Served by `canopy loop` from a thread (D073):
   Actions: the CLI's verbs, reply, start, and stop (with or without `now`), granting one more run to what is at its
   limit (below), a note to a chore, dismissing a chore's finding or listing it again, dismissing a review's finding or
   sending some to a worker (§21), and pausing and resuming
-  the loop from the header on every page, which shows how long it has been paused, and reloading the loop's config
-  from the settings page. OpenCode's session attach (M15) is
-  not in the UI: a run's page shows its session id and, once it ends, its transcript (below), and attach joins once
-  M15 runs workers against OpenCode's server.
+  the loop from the header on every page, which shows how long it has been paused, and on the settings page changing
+  the limits and trust settings §12 lists and reloading the loop's config. The form shows each key's value as the
+  files say now, which file sets it, and its bound; a list's entries are boxes to clear, and a trust switch already
+  on its stricter side cannot be changed. A save names the keys it wrote apart from what the reload found, whether
+  it waits for a running tick to end, and that a run already running keeps the prompt and permissions it started
+  with; under `canopy loop --every`, that `--every` still sets the pace until the loop restarts. OpenCode's session
+  attach (M15) is not in the UI: a run's page shows its session id and, once it ends, its transcript (below), and
+  attach joins once M15 runs workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
   uvicorn's `Server` runs in the thread, installs no signal handlers there (the loop's own handle Ctrl-C, §6), logs
   nothing to the terminal, and stops when the loop sets its `should_exit`. Request bodies and path parameters are
@@ -442,6 +448,9 @@ The API, under `{base}/api`:
 | `GET /worktrees` | each pool's slots from `treehouse status --json`, with the running run or review holding each |
 | `GET /loop` | whether the loop is paused: since when, and through which channel (§6), or not |
 | `POST /loop/pause`, `POST /loop/resume` | `canopy pause`, `canopy resume`: whether it already was, and the state left |
+| `POST /loop/reload` | ask the loop to read its config again, as SIGHUP does (§6): the keys that differ, those that wait for a restart, and whether a tick is running |
+| `GET /config` | each key the settings page edits (§12): its value, the file it comes from, its bound; the user file's hash, the workspace's repositories, and `--every` |
+| `PATCH /config` | the changed keys and the hash the page read: written to the user file, then a reload asked for; refused `not_editable`, `past_bound`, `not_stricter`, `stale`, `unsafe_file`, `config_invalid`, or `inside_run`, writing nothing |
 | `GET /events` | the event stream, below |
 
 A message is acknowledged once a tick that read it closes `ok`: `GET /tick` and `tick.updated` carry the newest message

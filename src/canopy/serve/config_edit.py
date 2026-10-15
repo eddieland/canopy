@@ -1,0 +1,405 @@
+"""The keys the web UI's settings page edits in the operator's user config, and the save (DESIGN §12, §22, D118).
+
+Only the keys `EDITABLE` names, never a section's wildcard: a key added to a section later is not editable until it
+is named here. A limit may be raised or lowered, but the page cannot loosen one past its bound, a count's ceiling or a
+pace's floor; the file can set any value, and the page may still tighten one the file set past its bound. A trust key
+moves only toward stricter: a config write outlives the listener secret, so a replier added through a stolen session
+would go on steering workers after a new secret ended it (TRUST_MODEL T8).
+
+A save writes the user file only, never the workspace file (TRUST_MODEL T7), edited in place so that the operator's
+comments and layout stay. A lock beside the file is held from reading it to replacing it, so two saves made on the
+same read cannot both pass the hash check; the hash is checked again just before the replace, so a hand edit is lost
+only if it lands in that last moment. The edited copy is validated by `config.load`, as any `canopy` command would
+read it, before it replaces the file atomically, with the file's mode kept.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import stat
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING, Literal, get_args
+
+import tomlkit
+import tomlkit.items
+
+from canopy.core import config, conversation
+from canopy.infra import lock
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from canopy.core.config import Config
+
+type Value = int | bool | str | tuple[str, ...] | dict[str, int] | None
+type Source = Literal["user", "workspace", "default"]
+
+# Read by name from the request, so each guard's words are the operator's to act on.
+NOT_EDITABLE = "not_editable"
+PAST_BOUND = "past_bound"
+NOT_STRICTER = "not_stricter"
+STALE = "stale"
+UNSAFE_FILE = "unsafe_file"
+CONFIG_INVALID = "config_invalid"
+
+
+@dataclass(frozen=True)
+class Editable:
+    """A key the settings page may change, and how far."""
+
+    name: str
+    # `limit`: raised or lowered, within `bound`. `stricter`: only toward stricter.
+    kind: Literal["limit", "stricter"]
+    # A limit's loosest value from the page: a count's ceiling, or a pace's floor in minutes.
+    bound: int | None = None
+    # Which way loosens a limit: a count's higher spends more, a pace's lower does.
+    looser: Literal["higher", "lower"] | None = None
+
+
+def _count(name: str, ceiling: int) -> Editable:
+    return Editable(name, "limit", ceiling, "higher")
+
+
+def _pace(name: str, floor: int) -> Editable:
+    return Editable(name, "limit", floor, "lower")
+
+
+# In the order the page shows them. The bounds are what one operator's machine and spend plausibly want: a raise
+# within them outlives a new secret, so that residual is spend the page and the log show (TRUST_MODEL T8).
+EDITABLE: tuple[Editable, ...] = (
+    _count("capacity.max_workers", 8),
+    _count("capacity.max_chores", 4),
+    _count("capacity.max_reviews", 4),
+    _count("capacity.max_reviews_per_day", 100),
+    _count("capacity.slots_per_repo", 8),
+    # Each repository's entry is bounded alike; the request names only the repositories whose count changes.
+    _count("capacity.repo_slots", 8),
+    _count("policy.max_implement_attempts", 5),
+    _count("policy.max_fix_ci_attempts", 5),
+    _count("policy.max_resume_attempts", 6),
+    _count("policy.max_split_attempts", 3),
+    _count("policy.max_reviews_per_pr", 10),
+    _pace("policy.fix_ci_cooldown_minutes", 10),
+    _pace("loop.interval_minutes", 5),
+    _pace("loop.idle_max_minutes", 5),
+    Editable("policy.stacking", "stricter"),
+    Editable("trust.authorized_repliers", "stricter"),
+    Editable("trust.trusted_reviewers", "stricter"),
+    Editable("trust.rebase", "stricter"),
+    Editable("trust.commit_trailer", "stricter"),
+)
+BY_NAME = {e.name: e for e in EDITABLE}
+REPO_SLOTS = "capacity.repo_slots"
+# The trust switches, and the value each may move to from the page: the stricter one.
+_STRICTER_BOOL = {"trust.rebase": False, "trust.commit_trailer": True}
+
+
+@dataclass(frozen=True)
+class Setting:
+    """One editable key as the files say now: its value, and which file it comes from."""
+
+    key: Editable
+    value: Value
+    source: Source
+
+
+@dataclass(frozen=True)
+class Settings:
+    """Every editable key, the files they come from, and the user file's hash as read, which a save must carry."""
+
+    settings: tuple[Setting, ...]
+    user_file: Path
+    workspace_file: Path
+    hash: str
+
+
+@dataclass(frozen=True)
+class Change:
+    """A key a save changed, with its value before and after."""
+
+    name: str
+    old: Value
+    new: Value
+
+
+@dataclass(frozen=True)
+class Saved:
+    """What a save wrote: the keys it changed, none when every value was already so, and the file's hash now."""
+
+    changes: tuple[Change, ...]
+    hash: str
+
+
+def read(root: Path, user_file: Path) -> Settings:
+    """Every editable key's value as the workspace at `root` and `user_file` say now.
+
+    Returns:
+        Each key in `EDITABLE`'s order, with its source, and the user file's hash.
+
+    Raises:
+        ConfigError: the files do not load. The message names the file.
+    """
+    cfg = config.load(root, user_file)
+    origin = config.sources(root, user_file)
+    shared_file = root / config.WORKSPACE_FILE_NAME
+
+    def source(name: str) -> Source:
+        found = origin.get(name)
+        if found is None:
+            return "default"
+        return "workspace" if found == shared_file else "user"
+
+    return Settings(
+        settings=tuple(Setting(e, value(cfg, e.name), source(e.name)) for e in EDITABLE),
+        user_file=user_file,
+        workspace_file=shared_file,
+        hash=digest(user_file.read_bytes()),
+    )
+
+
+def save(root: Path, user_file: Path, expected: str, changes: Mapping[str, object]) -> Saved:
+    """Write `changes` to `user_file`, read with hash `expected`, if every one is allowed and the result loads.
+
+    A list's value is the entries to keep, in the file's order; `capacity.repo_slots`'s is the repositories whose count
+    changes. Nothing is written when every value is already so, or when anything is refused.
+
+    Returns:
+        The keys changed, with their values before and after, and the file's hash now.
+
+    Raises:
+        Refused: `inside_run` inside one of canopy's own ticks or runs; `not_editable` for a key `EDITABLE` does not
+            name; `unsafe_file` for a user file that is a symlink, not a regular file, or not the operator's (D053);
+            `stale` when the file's hash is not `expected`; `config_invalid` for a value of None, or when the files,
+            before or after, do not load; `past_bound` for a limit loosened past its bound; `not_stricter` for a
+            trust key loosened.
+    """
+    conversation.check_operator()
+    unknown = sorted(n for n in changes if n not in BY_NAME)
+    if unknown:
+        raise conversation.Refused(
+            NOT_EDITABLE, f"the web UI cannot change {', '.join(unknown)}; edit {user_file} for that"
+        )
+    unset = sorted(n for n, v in changes.items() if v is None)
+    if unset:
+        # Unsetting a key could loosen it to its default, as an unmanaged pool is: that is the file's to do.
+        raise conversation.Refused(
+            CONFIG_INVALID, f"{', '.join(unset)} needs a value; unset it in {user_file} if that is what you want"
+        )
+    with lock.hold(user_file.with_name(user_file.name + ".lock"), wait=True):
+        text, mode = _read_own(user_file)
+        _check_hash(user_file, text, expected)
+        old = _load(root, user_file, user_file)
+        doc = tomlkit.parse(text.decode())
+        for name, wanted in changes.items():
+            _set(doc, BY_NAME[name], wanted, old, user_file)
+        written = tomlkit.dumps(doc).encode()
+        fd, temp = tempfile.mkstemp(dir=user_file.parent, prefix=f".{user_file.name}.", suffix=".tmp")
+        copy = Path(temp)
+        try:
+            with os.fdopen(fd, "wb") as f:
+                os.fchmod(f.fileno(), mode)
+                f.write(written)
+            new = _load(root, copy, user_file)
+            _check_rest(old, new, changes, user_file)
+            found = tuple(Change(n, value(old, n), value(new, n)) for n in BY_NAME if value(old, n) != value(new, n))
+            for change in found:
+                _check(BY_NAME[change.name], change, old, user_file)
+            if not found:
+                return Saved((), expected)
+            # Again just before the replace: a hand edit since the first read is kept, and this save refused.
+            _check_hash(user_file, _read_own(user_file)[0], expected)
+            copy.replace(user_file)
+        finally:
+            copy.unlink(missing_ok=True)
+    return Saved(found, digest(written))
+
+
+def digest(text: bytes) -> str:
+    """The hash a save must carry: SHA-256 of the user file's bytes, in hex.
+
+    Returns:
+        The hex digest.
+    """
+    return hashlib.sha256(text).hexdigest()
+
+
+def value(cfg: Config, name: str) -> Value:
+    """The value `cfg` gives key `name`, as `section.key`.
+
+    Returns:
+        A count, a switch, a choice, a list's entries, or `capacity.repo_slots`'s counts by repository.
+
+    Raises:
+        TypeError: the key holds something else, such as a table of tables: no editable key does.
+    """
+    section, _, key = name.partition(".")
+    found: object = getattr(getattr(cfg, section), key)
+    if isinstance(found, dict):
+        return {str(k): int(v) for k, v in found.items()}
+    if isinstance(found, tuple):
+        return tuple(str(v) for v in found)
+    if found is None or isinstance(found, bool | int | str):
+        return found
+    raise TypeError(f"{name} is not a value the settings page shows")
+
+
+def _read_own(path: Path) -> tuple[bytes, int]:
+    """The user file's bytes and permission bits, once it is a regular file of the operator's (D053's check).
+
+    Returns:
+        Its bytes, and its mode's permission bits, which the replacement keeps.
+
+    Raises:
+        Refused: `config_invalid` when there is none; `unsafe_file` when it is a symlink, not a regular file, or
+            someone else's.
+    """
+    try:
+        st = path.lstat()
+    except FileNotFoundError:
+        raise conversation.Refused(CONFIG_INVALID, f"no user config at {path}; run `canopy init`") from None
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid():
+        raise conversation.Refused(
+            UNSAFE_FILE,
+            f"{path} is a symlink, not a regular file, or not yours; the web UI writes only a file of your own",
+        )
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(fd, "rb") as f:
+        return f.read(), stat.S_IMODE(st.st_mode)
+
+
+def _check_hash(path: Path, text: bytes, expected: str) -> None:
+    if digest(text) != expected:
+        raise conversation.Refused(STALE, f"{path} changed since the page read it; read it again and redo the change")
+
+
+def _load(root: Path, user_file: Path, shown: Path) -> Config:
+    """`config.load` of `user_file`, its errors naming `shown`, the file the operator knows.
+
+    Returns:
+        The config the workspace file and `user_file` make.
+
+    Raises:
+        Refused: `config_invalid`, with the loader's message.
+    """
+    try:
+        return config.load(root, user_file)
+    except config.ConfigError as e:
+        raise conversation.Refused(CONFIG_INVALID, str(e).replace(str(user_file), str(shown))) from None
+
+
+def _set(doc: tomlkit.TOMLDocument, key: Editable, wanted: object, old: Config, user_file: Path) -> None:
+    """Set `key` to `wanted` in `doc`, the user file's tree, keeping every comment and line around it.
+
+    Raises:
+        Refused: `not_stricter` for a list given an entry it does not have. A value of the wrong type is written as
+            it is, for `config.load` to refuse with the loader's message.
+    """
+    section, _, name = key.name.partition(".")
+    table = doc.get(section)
+    if not isinstance(table, tomlkit.items.Table | tomlkit.items.InlineTable):
+        table = tomlkit.table()
+        doc[section] = table
+    if key.name == REPO_SLOTS and isinstance(wanted, dict):
+        slots = table.get(name)
+        if not isinstance(slots, tomlkit.items.Table | tomlkit.items.InlineTable):
+            slots = tomlkit.inline_table()
+            table[name] = slots
+        for repo, count in wanted.items():
+            slots[str(repo)] = count
+        return
+    current = value(old, key.name)
+    if isinstance(current, tuple) and isinstance(wanted, list):
+        added = [str(v) for v in wanted if v not in current]
+        if added:
+            raise conversation.Refused(
+                NOT_STRICTER,
+                f"{key.name} may only lose entries from the web UI; add {', '.join(added)} in {user_file}",
+            )
+        entries = table.get(name)
+        if isinstance(entries, tomlkit.items.Array):
+            # Removed in place, so the entries kept keep their comments and the file's order.
+            for i in reversed(range(len(entries))):
+                if entries[i] not in wanted:
+                    del entries[i]
+            return
+    table[name] = wanted
+
+
+def _check_rest(old: Config, new: Config, changes: Mapping[str, object], user_file: Path) -> None:
+    """Refuse when the edit changed a key the request did not name: no key outside `EDITABLE` moves.
+
+    Raises:
+        Refused: `not_editable`, naming the keys that would have changed.
+    """
+    others = [n for n in config.changed(old, new) if n not in changes]
+    if others:
+        raise conversation.Refused(
+            NOT_EDITABLE, f"the change would also change {', '.join(others)}; edit {user_file} for that"
+        )
+
+
+def _check(key: Editable, change: Change, old: Config, user_file: Path) -> None:
+    """Refuse a change that loosens `key` further than the page may.
+
+    Raises:
+        Refused: `past_bound` for a limit past its bound and looser than before; `not_stricter` for a trust key
+            loosened.
+    """
+    if key.kind == "limit":
+        pairs: list[tuple[str, object, object]]
+        if isinstance(change.new, dict):
+            before = change.old if isinstance(change.old, dict) else {}
+            pairs = [
+                (f"{key.name}.{repo}", before.get(repo, old.capacity.slots_for(repo)), n)
+                for repo, n in change.new.items()
+                if before.get(repo) != n
+            ]
+        else:
+            pairs = [(key.name, change.old, change.new)]
+        for name, was, now in pairs:
+            if _past(key, was, now):
+                raise conversation.Refused(PAST_BOUND, _past_reason(key, name, user_file))
+        return
+    if not _stricter(key, change.old, change.new):
+        raise conversation.Refused(
+            NOT_STRICTER, f"{key.name} may only be made stricter from the web UI; loosen it in {user_file}"
+        )
+
+
+def _past(key: Editable, was: object, now: object) -> bool:
+    """Whether `now` is past `key`'s bound and looser than `was`.
+
+    Returns:
+        True when the page may not set `now`. An unmanaged pool (None) bounds nothing, so any count past the bound is.
+    """
+    if not isinstance(now, int) or key.bound is None:
+        return False
+    if key.looser == "higher":
+        return now > key.bound and (not isinstance(was, int) or now > was)
+    return now < key.bound and (not isinstance(was, int) or now < was)
+
+
+def _past_reason(key: Editable, name: str, user_file: Path) -> str:
+    if key.looser == "higher":
+        return f"{name} may be at most {key.bound} from the web UI; set more in {user_file}"
+    return f"{name} may be at least {key.bound} from the web UI; set less in {user_file}"
+
+
+def _stricter(key: Editable, was: Value, now: Value) -> bool:
+    """Whether `now` is `was` or stricter, for a key that may move only toward stricter.
+
+    Returns:
+        True for the same value, a switch moved to its stricter side, a list that only lost entries, or a later choice.
+    """
+    if now == was:
+        return True
+    if key.name in _STRICTER_BOOL:
+        return now is _STRICTER_BOOL[key.name]
+    if isinstance(was, tuple) and isinstance(now, tuple):
+        return set(now) <= set(was)
+    # A choice listed loosest first, as `policy.stacking`'s.
+    choices = get_args(config.SPECS[key.name].field.annotation)
+    return was in choices and now in choices and choices.index(now) > choices.index(was)

@@ -949,6 +949,86 @@ class ConfigReload(_Model):
     """A tick is running: it finishes on the config it started with, and the reload follows when it ends."""
 
 
+type ConfigValue = Annotated[
+    int | bool | str | list[str] | dict[str, int] | None,
+    Field(
+        description="A config key's value: a count or minutes, a switch, a choice, a list's entries, or "
+        "`capacity.repo_slots`'s counts by repository. None is a pool canopy does not manage."
+    ),
+]
+
+
+class ConfigKey(_Model):
+    """One user config key the settings page edits (DESIGN §12, §22): its value as the files say now, and how far."""
+
+    name: str
+    """The key, as `section.key`."""
+    value: ConfigValue
+    """Its value now, from whichever file sets it, else the default."""
+    source: Literal["user", "workspace", "default"]
+    """Which file the value comes from: the operator's own, the workspace file (a shared `policy.*` key), or none."""
+    kind: Literal["limit", "stricter"]
+    """`limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries)."""
+    bound: int | None
+    """A limit's loosest value from the page: a count's ceiling, or a pace's floor in minutes. The file can set any."""
+    looser: Literal["higher", "lower"] | None
+    """Which way loosens a limit: a count's higher, a pace's lower. None for a `stricter` key."""
+
+
+class ConfigSettings(_Model):
+    """The keys the settings page edits, and the files they come from (DESIGN §22, TRUST_MODEL T8)."""
+
+    keys: list[ConfigKey]
+    """Every key the page edits, in the order it shows them. No other key can be changed from the web UI."""
+    user_file: str
+    """The user config file a save writes, with comments and layout kept."""
+    workspace_file: str
+    """The workspace file, which the web UI never writes."""
+    hash: str
+    """The user file's SHA-256 as read: a save carries it, and is refused `stale` if the file changed since."""
+    repos: list[str]
+    """The workspace map's repositories, each of which `capacity.repo_slots` may give a count."""
+    every: int | None
+    """`canopy loop --every`'s minutes, which set the pace until the loop restarts whatever the file says, or None."""
+
+
+class ConfigPatch(_Model):
+    """A save from the settings page: the keys to change, and the user file's hash as the page read it."""
+
+    hash: str
+    """The `hash` the page read with `GET /config`."""
+    changes: Annotated[dict[str, ConfigValue], Field(min_length=1)]
+    """The new values by key. A list's are the entries to keep; `capacity.repo_slots`'s the repositories whose count
+    changes."""
+
+
+class ConfigChange(_Model):
+    """A key a save changed."""
+
+    name: str
+    """The key, as `section.key`."""
+    old: ConfigValue
+    """Its value before."""
+    new: ConfigValue
+    """Its value now."""
+
+
+class ConfigSaved(_Model):
+    """What a save wrote, apart from what the reload it asked for did (DESIGN §22)."""
+
+    changed: list[ConfigChange]
+    """The keys whose values changed; empty when each already had the value asked for, and nothing was written."""
+    hash: str
+    """The user file's SHA-256 now, for the next save."""
+    reload: ConfigReload | None
+    """What asking the loop to read its config again found; None when nothing changed or the reload was refused. A
+    run already running keeps the prompt and permissions it started with either way."""
+    reload_refused: str | None
+    """Why the reload was refused, when it was: the save stands, and takes effect at the next reload."""
+    every: int | None
+    """`canopy loop --every`'s minutes, which still set the pace until the loop restarts, or None."""
+
+
 class SpendWindow(_Model):
     """What the agent runtime reported spending in the last `hours` hours (DESIGN §13).
 

@@ -205,13 +205,13 @@ never read it, and nothing shows it is in force.
 
 ### R16. Change limits and tighten trust settings from the web UI
 
-Gap (M41). Written down 2026-10-14. The operator changes some settings often enough that opening the user config file
-is friction: a pool's slots, how many workers run at once, an attempt limit, how often the loop ticks. They should be
-able to change those from the web UI's settings page and have the loop take them up, as a reload does today. Trust
+Built (M41). Written down 2026-10-14. The operator changes some settings often enough that opening the user config
+file is friction: a pool's slots, how many workers run at once, an attempt limit, how often the loop ticks. They should
+be able to change those from the web UI's settings page and have the loop take them up, as a reload does. Trust
 settings may be changed from the page only toward stricter: removing an authorized replier or a trusted reviewer,
 turning `trust.rebase` off, turning the commit trailer on. Loosening one, or changing any key that runs a command,
-chooses a prompt, or moves the listener, stays an edit to the file. Today the web channel writes no config at all
-(TRUST_MODEL T8).
+chooses a prompt, or moves the listener, stays an edit to the file. The settings page's Limits and trust form does
+this, within ceilings in code (§12, TRUST_MODEL T8, D118).
 
 ### R17. Review a coworker's PR on request, once or for as long as it is open
 

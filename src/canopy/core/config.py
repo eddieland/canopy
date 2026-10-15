@@ -911,6 +911,24 @@ def load(root: Path, user_file: Path | None = None) -> Config:
         raise ConfigError(_describe(e, origin, shared_file, user_file)) from e
 
 
+def sources(root: Path, user_file: Path | None = None) -> dict[str, Path]:
+    """Which file each key's value comes from, for the keys either file sets and `load` keeps (DESIGN §12).
+
+    A workspace file's policy value that does not tighten the default is not kept, so it is not here.
+
+    Returns:
+        The workspace file or the user file, by `section.key` name; a key at its default is absent.
+
+    Raises:
+        ConfigError: A file cannot be read or is not valid TOML, or it has a key that is unknown or was removed.
+    """
+    user_file = user_file or user_config_path()
+    shared_file = root / WORKSPACE_FILE_NAME
+    shared: dict[str, object] = _read(shared_file, skip=WORKSPACE_MAP_TABLES) if shared_file.exists() else {}
+    user_values = _read(user_file) if user_file.exists() else {}
+    return _merge(((shared_file, shared), (user_file, user_values)), shared_file)[1]
+
+
 def _merge(
     layers: tuple[tuple[Path, dict[str, object]], ...], shared_file: Path
 ) -> tuple[dict[str, dict[str, object]], dict[str, Path]]:
