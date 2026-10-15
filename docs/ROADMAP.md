@@ -168,13 +168,14 @@ D042's pacing rule, fed by what ticks cost. Needs M12. Sketch only; the design c
 
 Accept: written with the design, before work starts.
 
-Status: in progress. Taken in part on request (2026-10-07, 2026-10-08, and 2026-10-13), with M15's session ids:
-worker, split, chore, and review runs and each tick's overseer record their cost in dollars and tokens, so every agent
-run canopy starts is in the spend, and the loop's per-tick block, `canopy tick`, `canopy status`, `canopy decisions`,
-and the web UI's attention page (the last 24 hours and 30 days) show it, and its chores pages each chore's. A tick's
-cost is its overseer's alone, so a worker's is not counted against the tick that dispatched it. An `overseer_cmd`,
-`review_cmd`, or chore `cmd` in a user file from before needs `--format json` added. What keeps it open: the budget
-and the pacing rule are not designed.
+Status: deferred 2026-10-15. The operator judged the budget and the pacing rule unneeded once M36 to M39 make the
+journal the source of truth for the world, so the overseer runs only when the journal leaves it something to judge.
+Taken in part before that (2026-10-07, 2026-10-08, and 2026-10-13), with M15's session ids: worker, split, chore, and
+review runs and each tick's overseer record their cost in dollars and tokens, so every agent run canopy starts is in
+the spend, and the loop's per-tick block, `canopy tick`, `canopy status`, `canopy decisions`, and the web UI's
+attention page (the last 24 hours and 30 days) show it, and its chores pages each chore's. A tick's cost is its
+overseer's alone, so a worker's is not counted against the tick that dispatched it. An `overseer_cmd`, `review_cmd`,
+or chore `cmd` in a user file from before needs `--format json` added.
 
 ## M14. PR-scoped work
 
@@ -897,6 +898,8 @@ Status: not started.
 
 ## Deferred, with the trigger that would unblock each
 
+- Spend-paced loop (M13): when, with M39 built, overseer spend per day still runs past what the operator will pay
+  (`canopy spend` shows it). The cost recording is in; the budget and the pacing rule are what remain.
 - PR-scoped work (M14): when the operator keeps fixing CI or answering review on their own hand-written PRs by hand,
   often enough to want canopy to do it.
 - Webhooks: when tick latency is measured as a real cost.

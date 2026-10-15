@@ -167,12 +167,12 @@ good. It is never removed earlier: a `running` row with no file would be asked a
    rationale; attention items added (`+`) and resolved (`-`); running workers, the list's size, what the tick's
    overseer cost in dollars and tokens when the runtime reported it, and the wait that follows.
 5. Wait, measured from the end of the tick, for `--every`, else `loop.interval_minutes`, whatever the tick's status,
-   lengthened after idle ticks and ended at a gate (Idle pacing, below). This pacing rule is `pacing.wait`; ROADMAP
-   M13 will lengthen it by tick cost. An operator message recorded since the tick began, such as a `canopy reply`, ends
-   the wait early, but no sooner than a minute after the tick began (`repeat.WAKE_MIN_SECONDS`; §22); so does a run
-   ending (below). On a terminal, pressing `t` (`repeat.TICK_NOW_KEY`, either case) ends it at once, with no floor
-   (the floor guards against bursts of messages; a keypress is deliberate); keys pressed during the tick are dropped,
-   but `p` (below). While the loop is paused, the wait does not end at its deadline (Pausing, below).
+   lengthened after idle ticks and ended at a gate (Idle pacing, below). This pacing rule is `pacing.wait`; it does
+   not read tick cost (ROADMAP M13, deferred). An operator message recorded since the tick began, such as a
+   `canopy reply`, ends the wait early, but no sooner than a minute after the tick began (`repeat.WAKE_MIN_SECONDS`;
+   §22); so does a run ending (below). On a terminal, pressing `t` (`repeat.TICK_NOW_KEY`, either case) ends it at
+   once, with no floor (the floor guards against bursts of messages; a keypress is deliberate); keys pressed during the
+   tick are dropped, but `p` (below). While the loop is paused, the wait does not end at its deadline (Pausing, below).
 6. Repeat from 3 until `--ticks N` ticks have run or the operator stops the loop.
 
 Pausing (taken on request, 2026-10-13): the operator can hold the loop's ticks without stopping it, so the web UI
@@ -278,8 +278,7 @@ The wait after a tick is then:
 
 `loop.idle_max_minutes` (user-only, default 120) is at least `loop.interval_minutes` when set; left unset under a
 longer interval, it is no error and idle pacing is off. The count lives in the loop, not the journal: a restarted loop
-starts at `base`, and a hand-run `canopy tick` between the loop's ticks counts like any other. When M13's cost pacing
-is built, the wait is the longer of the two rules' waits, and what follows bounds that combined wait.
+starts at `base`, and a hand-run `canopy tick` between the loop's ticks counts like any other.
 
 Whatever pacing chose, the wait ends no later than the earliest harness gate still ahead when the tick ends, both what
 the state block shows: a `fix-ci` cooldown's end (§8) and a configured chore's `due_at` (§19). A gate opening is acted
@@ -294,11 +293,11 @@ after that looks for the CI on a worker's push at today's pace. That holds at an
 canopy's own work.
 
 What idle pacing cannot see is the world: a teammate's review comment or a PR's CI going red is picked up at the next
-tick, up to `loop.idle_max_minutes` late, or later only when M13's budget asks for a longer wait. That cap is the
-trade, and the operator's knob. A sink's digest (§20) is due at a delivery, so it can lag by as much. The header names
-the cap, the per-tick block shows the count with the wait, as `idle 3, next tick in 1h at 03:41` (no count after a
-tick that was not idle), and the `loop started` log line records `idle_max_minutes`; each tick's `loop waits` line
-records whether it was idle, the count, the wait chosen, in seconds, and `churn`, below.
+tick, up to `loop.idle_max_minutes` late. That cap is the trade, and the operator's knob. A sink's digest (§20) is due
+at a delivery, so it can lag by as much. The header names the cap, the per-tick block shows the count with the wait,
+as `idle 3, next tick in 1h at 03:41` (no count after a tick that was not idle), and the `loop started` log line
+records `idle_max_minutes`; each tick's `loop waits` line records whether it was idle, the count, the wait chosen, in
+seconds, and `churn`, below.
 
 Churn (ROADMAP M28) is a tick that changes what the overseer records with nothing new to see: it relabels a phase, or
 adds or drops an attention item, when nothing reached the journal since the tick before read it. A churned tick is not
