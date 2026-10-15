@@ -19,6 +19,25 @@ test("a ticket's branch copies from beside it, and the button says it did", asyn
     await expect(copy).toBeVisible()
 })
 
+test('a copy shows a toast saying what it copied, which closes on its own', async ({ page }) => {
+    await page.goto('tickets/ABC-103')
+    await page.getByRole('button', { name: 'Copy branch' }).click()
+    const toast = page.getByTestId('toast')
+    await expect(toast).toContainText('Copied branch')
+    await expect(toast).toContainText('agent/ABC-103-billing-v2')
+    await expect(toast).toHaveCount(0, { timeout: 6000 })
+})
+
+test('a copy the browser refuses says so in its toast', async ({ page }) => {
+    await page.goto('tickets/ABC-103')
+    await page.evaluate(() => {
+        navigator.clipboard.writeText = () => Promise.reject(new Error('refused'))
+    })
+    await page.getByRole('button', { name: 'Copy branch' }).click()
+    await expect(page.getByTestId('toast')).toContainText('Could not copy branch')
+    await expect(page.getByRole('button', { name: 'Could not copy branch' })).toBeVisible()
+})
+
 test("a review's commit copies whole, though the page shows its first 7 characters", async ({ page }) => {
     await page.goto('reviews/4')
     const commit = page.getByRole('button', { name: 'Copy commit' })
