@@ -106,6 +106,18 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
         (1, False, "start"),
     ]
     assert [u["kind"] for u in found["unpriced"]] == ["overseer", "workers", "chores", "reviews"]
+    # What each ticket's and PR's own runs cost, the costliest first; the mock marked no ticket done.
+    assert [(t["key"], t["runs"], t["reviews"], t["cost_usd"]) for t in found["tickets"]][:2] == [
+        ("ABC-099", 1, 2, pytest.approx(2.76)),
+        ("ABC-103", 1, 1, pytest.approx(1.86)),
+    ]
+    assert (found["done"], found["per_done"], found["tickets"][0]["done"]) == (0, None, None)
+    assert [(p["url"], p["ticket_key"], p["phase"]) for p in found["pull_requests"]] == [
+        ("https://github.com/acme/web/pull/88", "ABC-099", "in_review"),
+        ("https://github.com/acme/web/pull/91", "ABC-103", "in_review"),
+        ("https://github.com/acme/web/pull/86", "ABC-100", None),
+        ("https://github.com/acme/api/pull/12", None, None),  # only reviewed
+    ]
 
     assert c.get("/api/spend/breakdown").json()["days"] == 7  # canopy spend's default
     assert c.get("/api/spend/breakdown", params={"days": 0}).status_code == 422

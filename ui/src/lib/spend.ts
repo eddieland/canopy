@@ -1,7 +1,7 @@
 // The spend page (ROADMAP M33): what each UTC day cost, by kind, and what the overseer's ticks bought. The numbers
 // are the server's (`canopy spend`); this lays them out.
 
-import type { SpendCosts, SpendDay, SpendGroup } from '@/api/types'
+import type { SpendCosts, SpendDay, SpendGroup, SpendTicket } from '@/api/types'
 import { costText } from '@/lib/cost-total'
 
 /** The windows the page offers, in days. The first is the default, as it is `canopy spend`'s. */
@@ -102,4 +102,11 @@ export function axisNames(index: number, count: number): boolean {
 /** A share, 0 to 1, as a whole percent: `41%`, or a dash when there is none. */
 export function shareText(share: number | null): string {
     return share === null ? '–' : `${Math.round(share * 100)}%`
+}
+
+/** When and how a ticket was marked done in the window, `Oct 7, merged`; empty when it was not. */
+export function doneText(ticket: Pick<SpendTicket, 'done' | 'done_at'>): string {
+    return ticket.done === null || ticket.done_at === null
+        ? ''
+        : `${dayLabel(ticket.done_at.slice(0, 10))}, ${ticket.done}`
 }
