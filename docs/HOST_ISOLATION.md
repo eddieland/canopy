@@ -280,8 +280,9 @@ running outside the sandbox on files a worker wrote. Five changes, in the same m
    exits, the run is `crashed` (an attention item) and no git runs in any of its slots. The file is put back before the
    slot is returned, since treehouse runs git there. The policy already denies writing it; this catches a policy that
    forgot. For a `_run` killed with SIGKILL, reconcile does the same from the link `_run` recorded in `run_slots`. The
-   check does not cover the slot's `commondir`, which redirects host-side git as surely (§4.2); only the policy
-   does (§7).
+   slot's `commondir` redirects host-side git as surely (§4.2), so it is checked too: it must name the directory that
+   holds the git directory the recorded link names, as git's `../..` does, and is written back as that if not. That
+   needs nothing recorded, so reconcile checks it as `_run` does.
 3. The prompt reaches the runtime byte for byte. D023 keeps ticket text out of a shell. `srt` joins its arguments into
    one `bash -c` string after single-quoting each one, and quotes again at each layer it adds (`sh -c` around
    bubblewrap on Linux, `env ... sandbox-exec` on macOS). That is the POSIX-safe form, but it is a second parser on
@@ -372,23 +373,23 @@ gives it (§4.1 step 4): under pytest's own temp directory the path is too long,
   stdio servers that read credentials from HOME need those paths allowed.
 - Build caches. DESIGN §9 wants caches shared across slots. Sharing them with the operator's own builds would let a
   worker poison what the operator runs later. Give sandboxed runs their own cache directories.
-- What treehouse runs in a slot: answered, from its source at the commit canopy pins. `return --force`, which `_run`
-  and reconcile call after the tidy step (DESIGN §8 step 6), ends the processes whose cwd is in the slot, then runs
-  plain git there: `rev-parse` to find the repository, the base, and HEAD, `remote`, `symbolic-ref`, and `config`
-  in the primary clone it finds from the slot for the default branch, `read-tree --reset -u` onto the base, and
-  `clean -fd`. Nothing of it reaches the network. Without `--force` it
-  would also run `status` and `checkout --detach`. None of D107's flags are set, so a hook in the common directory
-  (`post-index-change` on `read-tree`'s index write), the filesystem monitor, and a filter driver the config names all
-  run. Under the sandbox the worker writes none of those: not the common directory, and not where the slot finds it,
-  once `commondir` is protected (§4.2), which this question found open. A filter needs a driver in the config, so a
-  `.gitattributes` the worker leaves names none that runs. treehouse's own hooks, `post_create` on `get` and
-  `pre_destroy` on `destroy`, run only from the operator's user config: it ignores `[hooks]` in a repository's
-  `treehouse.toml`, and `~/.config/treehouse` is under the `$HOME` the templates deny. So nothing a sandboxed worker
-  wrote runs when its slot is returned, and canopy needs no flags it cannot pass. Without a sandbox, treehouse's git is
-  like any git on the host: the worker already ran as the operator. Still open: `_run`'s check of the `.git` link
-  (§5 item 2) does not cover `commondir`, so a template that drops `@GIT_PROTECTED@` from `denyWrite` leaves it to the
-  policy alone; the harness could set `GIT_COMMON_DIR`, which git reads before `commondir`, on every git it runs in
-  a slot.
+- What treehouse runs in a slot: answered, from its source at the commit canopy pins. `return --force`, which `_run` and
+  reconcile call after the tidy step (DESIGN §8 step 6), ends the processes whose cwd is in the slot, then runs plain
+  git there: `rev-parse` to find the repository, the base, and HEAD, `remote`, `symbolic-ref`, and `config` in the
+  primary clone it finds from the slot for the default branch, `read-tree --reset -u` onto the base, and `clean -fd`.
+  Nothing of it reaches the network. Without `--force` it would also run `status` and `checkout --detach`. None of
+  D107's flags are set, so a hook in the common directory (`post-index-change` on `read-tree`'s index write), the
+  filesystem monitor, and a filter driver the config names all run. Under the sandbox the worker writes none of those:
+  not the common directory, and not where the slot finds it, once `commondir` is protected (§4.2), which this question
+  found open. A filter needs a driver in the config, so a `.gitattributes` the worker leaves can select only a driver
+  the operator's own config defines, such as Git LFS's, which then runs the operator's program on the base's content, as
+  any checkout of a branch carrying that attribute would; a hostile attribute in a pushed branch reaches the operator's
+  checkouts the same way. treehouse's own hooks, `post_create` on `get` and `pre_destroy` on `destroy`, run only from
+  the operator's user config: it ignores `[hooks]` in a repository's `treehouse.toml`, and `~/.config/treehouse` is
+  under the `$HOME` the templates deny. So nothing a sandboxed worker wrote runs when its slot is returned, and canopy
+  needs no flags it cannot pass. Without a sandbox, treehouse's git is like any git on the host: the worker already ran
+  as the operator. A template that drops `@GIT_PROTECTED@` from `denyWrite` is caught by canopy's own check of
+  `commondir` before any git runs (§5 item 2).
 - The repository's OpenCode config (skills, MCP servers, plugins) comes from the checked-out branch (T7 residual).
   canopy's own agent definitions no longer do (D040, D044). The sandbox does not change that, but it does bound what a
   hostile config can reach.

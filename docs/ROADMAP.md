@@ -399,8 +399,8 @@ the canary fails every case but its positive controls. It passes in CI on Ubuntu
 lifted as docs/SANDBOX.md says, and on macOS, both with `srt` 0.0.79. What treehouse's `return` runs in a slot is
 settled from its source (HOST_ISOLATION §7): plain git, which reads only what a sandboxed worker cannot write. Tracing
 it found that the slot's own `commondir` and `gitdir` were writable, and a worker that rewrote `commondir` had every
-git on the host in its slot, canopy's included, read a config it wrote; the wrapper now denies writing both, and the
-canary checks it.
+git on the host in its slot, canopy's included, read a config it wrote; the wrapper now denies writing both, the
+canary checks it, and `_run` and reconcile check `commondir` as they do the `.git` link.
 Next: the other two questions Accept needs settled, TRUST_MODEL T4 and T6, and the canary on the operator's Linux and
 macOS machines.
 

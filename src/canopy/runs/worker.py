@@ -228,13 +228,22 @@ class _Slot:
     git: _Git
     link: bytes | None
 
-    def link_moved(self) -> bool:
-        """Whether the `.git` file no longer holds what it did when the run started.
+    def rewritten(self) -> Path | None:
+        """Return the file that says where the slot's git is, if the worker changed it: the `.git` file, or `commondir`.
 
         Returns:
-            True if it changed; always False when it was not a file at the start.
+            The `.git` file if it no longer holds what it did when the run started, else `commondir` in the slot's own
+            git directory if it no longer names the common directory, else None. Always None when `.git` was not a
+            file at the start.
         """
-        return self.link is not None and hostgit.read_link(self.path) != self.link
+        if self.link is None:
+            return None
+        if hostgit.read_link(self.path) != self.link:
+            return self.path / hostgit.LINK
+        if hostgit.commondir_moved(self.path, self.link):
+            own = hostgit.own_git_dir(self.path, self.link)
+            return (own or self.path) / hostgit.COMMONDIR
+        return None
 
     def reading(self, ctx: Context, objects: Path) -> _Slot:
         """The slot, with its git reading the run's object directory as well as the slot's own objects.
@@ -441,12 +450,10 @@ def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: 
     else:
         status, note = parsed.status, ""
 
-    moved = [slot for slot in slots if slot.link_moved()]
-    if moved:
+    rewritten = [(slot, path) for slot in slots if (path := slot.rewritten()) is not None]
+    if rewritten:
         # The slot's git directory may be one the worker made: canopy runs no git in any slot of this run.
-        notes = [
-            f"{s.git.where}the worker rewrote {s.path / hostgit.LINK}; nothing was checked or pushed" for s in moved
-        ]
+        notes = [f"{s.git.where}the worker rewrote {path}; nothing was checked or pushed" for s, path in rewritten]
         return Outcome("crashed", parsed, "; ".join(notes))
     objects = _objects(ctx, run)
     if tidy.used(objects):
