@@ -364,8 +364,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D113. The web UI links URLs in journal text, and only to themselves
 
 - An http or https URL in untrusted text becomes a link whose text is the URL as written; no other scheme, and no
-  Markdown or link syntax, so a link never shows one destination and opens another. A github.com URL in a
-  conversation or a chore's finding is a chip named from its own path (`acme/web#88`), which holds to the same rule.
+  Markdown or link syntax, so a link never shows one destination and opens another. A GitHub PR's address in a
+  conversation or a finding is its `PullRequestLink`, named from the URL alone (`acme/web#88`).
 - Why: workers and trackers write PR and CI URLs into their prose, and copying them out was the common next step.
 - Rejected: rendering Markdown (labelled links hide their target); a linkify library (a regex and `URL.canParse` do it).
 - Revisit: if journal text should link ticket keys or `repo#N` references to their pages as well.

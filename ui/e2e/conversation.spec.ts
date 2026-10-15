@@ -20,15 +20,18 @@ test("the operator's own words sit on the right of the thread, everyone else's o
     expect(Math.round(theirs.x)).toBe(Math.round(all.x + 12))
 })
 
-test("a GitHub URL in a worker's report is a chip naming it, opening it in a new tab", async ({ page }) => {
+test("a PR's URL in a worker's report is named as the PR is anywhere: its page, then GitHub", async ({ page }) => {
     await page.goto('tickets/ABC-103')
     await settled(page)
-    const link = page.getByTestId('conversation').getByRole('link', { name: 'acme/web#91 on GitHub' })
-    await expect(link).toHaveText('acme/web#91')
-    await expect(link).toHaveAttribute('href', 'https://github.com/acme/web/pull/91')
-    await expect(link).toHaveAttribute('title', 'https://github.com/acme/web/pull/91')
-    await expect(link).toHaveAttribute('target', '_blank')
-    await expect(link).toHaveAttribute('rel', 'noreferrer noopener')
+    const url = 'https://github.com/acme/web/pull/91'
+    const conversation = page.getByTestId('conversation')
+    const out = conversation.getByRole('link', { name: 'acme/web#91 on GitHub' })
+    await expect(out).toHaveAttribute('href', url)
+    await expect(out).toHaveAttribute('target', '_blank')
+    await expect(out).toHaveAttribute('rel', 'noreferrer noopener')
+    await conversation.getByRole('link', { name: 'acme/web#91', exact: true }).click()
+    await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#91')
 })
 
 test("a ticket's conversation ends on the run working it now, and only while one is", async ({ page }) => {

@@ -527,11 +527,9 @@ list, an empty state, or a skeleton by hand.
   runs on the stream, so it rises in when the run starts and leaves when it ends.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
-  new tab. In a conversation's bubble and a chore's finding, a github.com URL is a chip instead (`GitHubChip`):
-  inline, bordered `rounded-sm`, in the accent's monospace at `text-xs`, GitHub's mark first, then what the URL names,
-  read from the URL alone (`gitHubLabel`: `acme/web#88` for a PR or an issue, `acme/web@1a2b3c4` for a commit, an
-  advisory's id, else its address after `github.com/`), the whole URL on hover and its border in the accent. A PR
-  shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below).
+  new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below), and so is a GitHub
+  PR's address in a conversation's bubble or a chore's finding, its detail or its link, as in the harness's lines
+  (`InlineCode`).
 - **A chore's notes** are a conversation of the operator's words alone, between the chore's schedule and its findings
   and runs, with a note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the
   next run` in `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
@@ -621,9 +619,8 @@ list, an empty state, or a skeleton by hand.
 - **A link out** (a PR, a ticket in the tracker, a finding) opens in a new tab with `rel="noreferrer noopener"`,
   shows its address without `https://` (`addressOf`) when it shows one, and ends in one icon (`LinkOutIcon`): GitHub's
   mark for github.com, bundled since Lucide has no brand icons, and `ExternalLink` anywhere else. A link never wears
-  two icons. A finding's link to github.com is a `GitHubChip`, as a URL in its detail is, its mark first.
-  A ticket's links out sit in its page's header, under the title and its line, so they are the first thing found
-  (`TicketLinks`): an outline button per link, in the accent's monospace, its one icon first: GitHub's mark for
+  two icons. A ticket's links out sit in its page's header, under the title and its line, so they are the first thing
+  found (`TicketLinks`): an outline button per link, in the accent's monospace, its one icon first: GitHub's mark for
   github.com, else what it opens (`Ticket` for the tracker, `GitPullRequest` for a PR, `GitBranch` for a branch), its
   label the address or, for a PR, its name, and what it opens on hover.
   The tracker's comes first, when `tracker.ticket_url` is set (`useTicketUrl`), then each repository's PR, then the

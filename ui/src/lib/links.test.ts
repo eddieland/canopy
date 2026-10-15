@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { gitHubLabel, onGitHub, splitLinks } from './links'
+import { onGitHub, splitLinks } from './links'
 
 describe('splitLinks', () => {
     it('leaves text without a URL whole', () => {
@@ -52,30 +52,5 @@ describe('onGitHub', () => {
         expect(onGitHub('https://github.com.evil.test/acme/web')).toBe(false)
         expect(onGitHub('https://acme.atlassian.net/browse/ABC-1')).toBe(false)
         expect(onGitHub('not a url')).toBe(false)
-    })
-})
-
-describe('gitHubLabel', () => {
-    it('names a PR, an issue, and a commit as GitHub writes a reference', () => {
-        expect(gitHubLabel('https://github.com/acme/web/pull/88')).toBe('acme/web#88')
-        expect(gitHubLabel('https://github.com/acme/web/pull/88/')).toBe('acme/web#88')
-        expect(gitHubLabel('https://github.com/acme/web/issues/7')).toBe('acme/web#7')
-        expect(gitHubLabel('https://github.com/acme/web/commit/1a2b3c4d5e6f')).toBe('acme/web@1a2b3c4')
-    })
-
-    it('names an advisory by its id', () => {
-        expect(gitHubLabel('https://github.com/advisories/GHSA-35jh-r3h4-6jhm')).toBe('GHSA-35jh-r3h4-6jhm')
-    })
-
-    it('names anything else by its address after github.com', () => {
-        expect(gitHubLabel('https://github.com/acme/web')).toBe('acme/web')
-        expect(gitHubLabel('https://github.com/acme/web/pull/88/files')).toBe('acme/web/pull/88/files')
-        expect(gitHubLabel('https://github.com/acme/web/pull/88#issuecomment-1')).toBe(
-            'acme/web/pull/88#issuecomment-1',
-        )
-        expect(gitHubLabel('https://github.com/acme/web/pull/eight')).toBe('acme/web/pull/eight')
-        expect(gitHubLabel('https://github.com/acme/web/blob/main/a.ts')).toBe('acme/web/blob/main/a.ts')
-        expect(gitHubLabel('https://github.com/')).toBe('github.com')
-        expect(gitHubLabel('https://github.com')).toBe('github.com')
     })
 })

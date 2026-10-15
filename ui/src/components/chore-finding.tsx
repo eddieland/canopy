@@ -4,11 +4,12 @@ import { LinkOutIcon } from '@/components/link-out-icon'
 import type { ChoreFinding, ChoreRunFinding } from '@/api/types'
 import { Age } from '@/components/age'
 import { useDismissFinding } from '@/components/dismiss-finding'
-import { GitHubChip } from '@/components/github-chip'
 import { LinkedText } from '@/components/linked-text'
+import { PullRequestLink } from '@/components/pull-request-link'
 import { ListRow, RowLine } from '@/components/rows'
 import { Chip } from '@/components/status'
-import { addressOf, onGitHub } from '@/lib/links'
+import { addressOf } from '@/lib/links'
+import { isPullRequest } from '@/lib/pull-request-label'
 import { cn } from '@/lib/utils'
 
 /**
@@ -55,7 +56,7 @@ function FindingRow({
             </span>
             {finding.detail && (
                 <RowLine from="title" className="text-sm break-words whitespace-pre-wrap text-muted-foreground">
-                    <LinkedText text={finding.detail} chips />
+                    <LinkedText text={finding.detail} pullRequests />
                 </RowLine>
             )}
             {finding.link && (
@@ -81,7 +82,7 @@ export function ChoreFindingText({ finding }: { finding: ChoreFinding }) {
             <p className="text-sm font-semibold break-words">{finding.title}</p>
             {finding.detail && (
                 <p className="text-sm break-words whitespace-pre-wrap text-muted-foreground">
-                    <LinkedText text={finding.detail} chips />
+                    <LinkedText text={finding.detail} pullRequests />
                 </p>
             )}
             {finding.link && <FindingLink href={finding.link} />}
@@ -89,10 +90,10 @@ export function ChoreFindingText({ finding }: { finding: ChoreFinding }) {
     )
 }
 
-// On its own line, its own width: a chip on GitHub, as a URL in its detail is, else its address and an icon.
+// A PR as it is named anywhere; any other link as its address and its icon.
 function FindingLink({ href }: { href: string }) {
-    if (onGitHub(href)) {
-        return <GitHubChip href={href} className="self-start" />
+    if (isPullRequest(href)) {
+        return <PullRequestLink url={href} className="self-start" />
     }
     return (
         <a
