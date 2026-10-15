@@ -256,7 +256,7 @@ def _attention(ctx: Context) -> list[Item]:
     """
     dismissed = {
         (f"chore:{f.chore}", f.finding.id)
-        for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace)
+        for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace, starts=ctx.finding_starts)
         if f.dismissed
     }
     return [i for i in ATTENTION if (i.ticket_key, i.reason) not in dismissed]

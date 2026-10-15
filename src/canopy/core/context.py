@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import dataclasses
 import sqlite3
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db, treehouse
+from canopy.core import chore_view, db, treehouse
 from canopy.infra import lock, procs
 
 # Held by every command that may start a detached run, so two cannot both pass a capacity check (DESIGN §8, §19).
@@ -23,13 +23,17 @@ if TYPE_CHECKING:
 class Context:
     """Config, workspace, journal connection, and process runner for one command.
 
-    `ws` is the workspace the command runs in.
+    `ws` is the workspace the command runs in. `finding_starts` remembers when chores' findings started, from one
+    read of them to the next: the web UI's server hands every Context it opens its own (DESIGN §22).
     """
 
     config: Config
     conn: sqlite3.Connection
     runner: procs.Runner
     ws: Workspace
+    finding_starts: chore_view.FindingStarts = field(
+        default_factory=chore_view.FindingStarts, compare=False, repr=False
+    )
 
     @property
     def workspace(self) -> Workspace:
