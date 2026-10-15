@@ -6,8 +6,9 @@ github.com, the shipped template's first allowed host, and to run as the operato
 in, a missing piece fails the run instead of skipping it, so a CI job cannot pass without sandboxing anything.
 
 Each attempt below is a plain shell command run through `canopy-sandbox worker`, in a linked worktree under the HOME the
-template denies, as a treehouse slot is. The attempts on HOME and the state directory run as `setup` there too, and as
-`chore` in a chore's default directory under the state directory. Every attempt must fail, and a write is checked on
+template denies, as a treehouse slot is. The attempts on HOME and the state directory run as `setup` there too, as
+`chore` in a chore's default directory under the state directory, and as `review` in a reviewer's directory there,
+which links to the slot as its checkout. Every attempt must fail, and a write is checked on
 the host, never by the attempt's exit status: under a denied directory, `srt`'s tmpfs takes the write and drops it when
 the run ends. The positive controls must succeed, so a sandbox that refuses everything cannot pass.
 """
@@ -42,7 +43,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 WRAPPER = Path(sys.executable).parent / "canopy-sandbox"
-ROLES = ("worker", "setup", "chore")
+ROLES = ("worker", "setup", "chore", "review")
 # Where `canopy sandbox setup` put srt for the operator running the tests, found before a fixture moves HOME.
 PINNED_SRT = canopy_sandbox.runtime_dir() / "node_modules" / ".bin" / "srt"
 # Found before a fixture puts tests/fakes, and its fake srt, first on PATH.
@@ -98,7 +99,9 @@ class Canary:
     ) -> procs.Result:
         """Run `sh -c script` in the slot as `role`, through the wrapper and srt, and check that it started.
 
-        `tmpdir`, when given, is the TMPDIR the wrapper runs with, in place of the fixture's short one.
+        A chore runs in its default directory instead, and a review in its own directory, which links to the slot as
+        `checkout`, as canopy lays them out. `tmpdir`, when given, is the TMPDIR the wrapper runs with, in place of the
+        fixture's short one.
         """
         argv = [str(WRAPPER), role, "--", "sh", "-c", f"echo {RAN}\n{script}", "sh", *args]
         cwd = self.slot
@@ -107,6 +110,12 @@ class Canary:
             cwd = self.state_dir / "chores" / "canary"
             env = {}
             cwd.mkdir(parents=True, exist_ok=True)
+        if role == "review":
+            cwd = self.state_dir / "reviews" / "1"
+            env = {}
+            if not cwd.exists():
+                cwd.mkdir(parents=True, mode=0o700)
+                (cwd / "checkout").symlink_to(self.slot, target_is_directory=True)
         if tmpdir is not None:
             env["TMPDIR"] = tmpdir
         done = SubprocessRunner().run(argv, cwd=cwd, env=env, timeout=timeout)
@@ -262,6 +271,36 @@ def test_a_worker_cannot_write_what_runs_on_the_host_or_in_another_slot(
     canary.run(script, str(canary.common), str(canary.own))
 
     assert (path.read_bytes() if path.exists() else None) == before
+
+
+@pytest.mark.parametrize(
+    ("script", "target"),
+    [
+        pytest.param("echo pwned > checkout/README", "{slot}/README", id="a-file"),
+        pytest.param("echo pwned > checkout/planted", "{slot}/planted", id="a-new-file"),
+        pytest.param('echo 0000 > "$1/HEAD"', "{own}/HEAD", id="its-head"),
+        pytest.param('echo pwned > "$1/index"', "{own}/index", id="its-index"),
+        pytest.param("git -C checkout commit --quiet --allow-empty -m x", "{own}/HEAD", id="a-commit"),
+    ],
+)
+def test_a_review_cannot_write_its_checkout(canary: Canary, script: str, target: str) -> None:
+    """The reviewer reads what a PR's author wrote, and writes nothing: not the checkout, not its git directories."""
+    path = Path(target.replace("{slot}", str(canary.slot)).replace("{own}", str(canary.own)))
+    before = path.read_bytes() if path.exists() else None
+    shared = canary.shared()
+
+    canary.run(script, str(canary.own), role="review")
+
+    assert (path.read_bytes() if path.exists() else None) == before
+    assert canary.shared() == shared
+
+
+def test_a_review_reads_its_checkout(canary: Canary) -> None:
+    """A positive control: through its directory's link, the reviewer reads the checkout and git reads its HEAD."""
+    done = canary.run("cat checkout/README && git -C checkout rev-parse HEAD", role="review")
+
+    assert done.ok, done.stderr
+    assert done.stdout.splitlines()[1:] == ["canary", git("rev-parse", "HEAD", cwd=canary.slot)]
 
 
 @pytest.mark.parametrize("route", ROUTES)

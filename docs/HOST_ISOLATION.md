@@ -85,8 +85,8 @@ worker_cmd = '''canopy-sandbox worker --read {definitions_dir} -- env OPENCODE_C
 ```
 
 `canopy-sandbox` is a short program that canopy installs beside itself, a uv workspace member of its own, not harness
-code (D041, D117). Its first argument is a role, `worker`, `setup`, or `chore`, which picks the policy template
-`~/.config/canopy/sandbox/<role>.json`; `--read` names a path the command may read, which is how canopy's agent
+code (D041, D117). Its first argument is a role, `worker`, `setup`, `chore`, or `review`, which picks the policy
+template `~/.config/canopy/sandbox/<role>.json`; `--read` names a path the command may read, which is how canopy's agent
 definitions, `<state_dir>/runtime/<digest>/`, are re-allowed: pass it `{definitions_dir}`. Name the wrapper by its
 absolute path when `PATH` has a relative entry: canopy runs the template from the slot, where `.` finds what the
 branch committed. It runs in the worker's cwd, which `_run` sets to the slot or the desk (DESIGN §8, §18), and:
@@ -94,10 +94,12 @@ branch committed. It runs in the worker's cwd, which `_run` sets to the slot or 
 1. Drops from its environment, and so from the command's, what would point git at another repository (`GIT_DIR` and its
    kind), every relative `PATH` entry, so that neither its own `git` and `srt` nor git in the run is found through the
    checkout, and what the inner `bash -c` would act on, `BASH_ENV` and `ENV`.
-2. Resolves the paths the policy needs: the cwd, each worktree a desk links to, and each worktree's own and common git
-   directories (`git rev-parse --git-dir --git-common-dir`). A worker or setup outside a linked worktree is refused: a
-   clone's HEAD and index live in the directory every slot shares. A desk is a directory with canopy's marker and no
-   `.git`: a branch can commit the marker, and links to other slots beside it, but never a `.git`.
+2. Resolves the paths the policy needs: the cwd, each worktree a desk or a review's directory links to, and each
+   worktree's own and common git directories (`git rev-parse --git-dir --git-common-dir`). A worker or setup outside a
+   linked worktree is refused: a clone's HEAD and index live in the directory every slot shares. A desk is a directory
+   with canopy's marker and no `.git`: a branch can commit the marker, and links to other slots beside it, but never a
+   `.git`. A review's directory is canopy's, made private just before the reviewer starts (DESIGN §21), so its link to
+   the checkout is canopy's too; one with a `.git` is a checkout, and refused.
 3. Writes a per-run policy from the template, filling in those paths, into a directory of its own that is private to the
    operator, with the run's temp directory beside it. It adds to `denyRead` the directory holding every run's, since the
    system temp directory is outside `$HOME`, and the workspace's `.canopy/` when the run's object directory or a chore's
@@ -148,6 +150,7 @@ workspace to its template's `denyRead`.
 | Build and package caches | yes | yes | Separate from the operator's own caches (§7). |
 | A per-run temp directory, exported as `TMPDIR` | yes | yes | Scratch space. |
 | A chore's own `cwd` (default `<state_dir>/chores/<name>/`) | yes | only if it writes | Chores only (below). |
+| A review's directory (`<state_dir>/reviews/<id>/`) | yes | no | Reviews only (below). |
 | canopy's agent definitions (`<state_dir>/runtime/<digest>/`) | yes | no | The agent's own definition (D040). |
 | The rest of `~/.config/canopy` and the workspace's `.canopy/` | no | no | Config and journal belong to the harness. |
 | The rest of `$HOME` | no | no | Secrets, other repositories. |
@@ -241,6 +244,13 @@ A chore gets the same policy. Its default `cwd` is inside the workspace's `.cano
 directory: read-only by default, since a chore's only output is its result line, and writable for a chore whose
 own tooling writes there. The rest of `.canopy/` stays denied.
 
+A review gets it too, with nothing in the checkout writable. It starts in `<state_dir>/reviews/<id>/`, which the
+policy re-allows reading as it does a chore's `cwd`, and reads the checkout through the link there, so the checkout and
+its git directories are readable, as for a worker, and none of them writable: the reviewer writes nothing (DESIGN §21),
+and what it reads was written by the PR's author. So it gets no object directory and no `git` of the wrapper's, and
+git in the checkout reads and never writes. Its network allowlist leaves out `github.com`, since it neither fetches nor
+pushes.
+
 ### 4.3 Network policy
 
 Everything is denied except an allowlist in the operator's policy template:
@@ -264,7 +274,8 @@ worker can still push to any repository or post anywhere the operator can. That 
 - `worker_cmd`: yes.
 - `runtime.setup_cmd`: yes. It runs the branch's code in the slot just before the worker (DESIGN §9).
 - Chore `cmd`: yes.
-- `review_cmd`: open (§7).
+- `review_cmd`: yes, as `review` (§4.2). It reads the most hostile text the loop meets, a diff by anyone
+  `review.query` matches (TRUST_MODEL T1).
 - `overseer_cmd`: no. The overseer acts through the `canopy` CLI, which needs the journal, the lock, and the user
   config, so its sandbox would have to allow exactly what §4.2 denies. It has no edit or write tools, and its bash is
   limited to `canopy *` and `treehouse status*` (DESIGN §13). Revisit if that changes.
@@ -350,8 +361,10 @@ templates unchanged, and a primary clone and two slots under the fake `$HOME`, a
 template's denied `$HOME` and the binds that re-allow the slot are what is tested. Each case is its own run, and every
 run prints a marker first, so an attempt that failed because nothing ran fails the test. What the slots share is
 compared file by file on the host: `git pack-refs` and `git gc` change no ref a `for-each-ref` shows. The attempts on
-`$HOME` and the state directory run as `setup` and as `chore` too, a chore in its default directory under the state
-directory, which is how the wrapper finds the state directory for a workspace outside `$HOME`. A connection is tried
+`$HOME` and the state directory run as `setup`, `chore`, and `review` too, a chore in its default directory under the
+state directory, which is how the wrapper finds the state directory for a workspace outside `$HOME`, and a review in
+its directory there, linked to the slot; a review must also fail to write the checkout, its HEAD and index, and the
+shared git directory, and succeed in reading the checkout. A connection is tried
 both through `srt`'s proxy and around it, and must be refused the way that route refuses: through the proxy, with the
 `X-Proxy-Error: blocked-by-allowlist` header `srt` sends and no other proxy does; around it, with no route at all. So a
 certificate error, another proxy's 403, or a sandbox with no network passes nothing. `srt` sets `NO_PROXY` to loopback
@@ -425,8 +438,11 @@ gives it (§4.1 step 4): under pytest's own temp directory the path is too long,
   that a socket it makes there, with macOS's 103-byte limit, would not fit under the per-user temp directory macOS
   sets in `TMPDIR`. The canary's macOS CI job runs one case under the runner's own, `/var/folders/.../T` (48 bytes),
   and it passes with `srt` 0.0.79, so the wrapper's check stays Linux-only.
-- `review_cmd` (DESIGN §21) is not in §4.4. The reviewer reads a PR's diff and checkout, which an untrusted author
-  wrote, from `<state_dir>/reviews/<id>/`; whether it gets a role and a template of its own is open.
+- `review_cmd` (DESIGN §21): answered, it gets a role and a template of its own, `review` (§4.2, §4.4). The reviewer
+  reads a PR's diff and checkout, which an untrusted author wrote, through a link in `<state_dir>/reviews/<id>/`, and
+  writes nothing. The worker's policy would let it write the checkout and commit, and the wrapper's `worker` role
+  refuses it anyway, with no object directory; a chore's would not find the checkout. `canopy-reviewer` already
+  denies bash and edits, so the sandbox bounds what OpenCode itself and its local MCP servers reach.
 - Where this sits in the ROADMAP: the trigger says before a second team adopts canopy. It needs M2's real worker to be
   worth testing against.
 

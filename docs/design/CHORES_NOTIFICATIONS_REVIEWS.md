@@ -576,7 +576,9 @@ max_reviews_per_pr = 3     # shared; the repository may only lower it
   the operator's name; allowed, and the operator's choice (TRUST_MODEL §7).
 - `low_impact` is plain language for the reviewer, like a chore's `when`: which changes it may call `low`. Without it,
   the reviewer never reports `low`.
-- `review_cmd` follows the command template rules (§12). A different model from `worker_cmd` is recommended.
+- `review_cmd` follows the command template rules (§12). A different model from `worker_cmd` is recommended. To
+  sandbox it, prefix it with `canopy-sandbox review` (HOST_ISOLATION §4.4, docs/SANDBOX.md): that policy reads the
+  checkout through the run directory's link and writes none of it.
 
 ### Off unless configured
 

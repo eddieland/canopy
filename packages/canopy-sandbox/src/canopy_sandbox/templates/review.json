@@ -1,0 +1,50 @@
+{
+  "#": [
+    "canopy-sandbox's template for review_cmd, canopy's reviewer, which reads a PR's checkout and writes nothing",
+    "(HOST_ISOLATION §4.4). canopy sandbox setup copies it to ~/.config/canopy/sandbox/review.json; fill in your hosts",
+    "there. Keys starting with # are comments; @NAME@ strings are the paths canopy-sandbox fills in for each run."
+  ],
+  "network": {
+    "#": [
+      "Everything not listed is refused. Add your model provider's API host and the MCP services the reviewer reads",
+      "the PR and its ticket from. It pushes nothing and fetches nothing, so github.com itself is not listed."
+    ],
+    "allowedDomains": [
+      "api.anthropic.com",
+      "api.github.com",
+      "api.githubcopilot.com"
+    ],
+    "deniedDomains": []
+  },
+  "filesystem": {
+    "#": [
+      "The reviewer starts in <workspace>/.canopy/reviews/<id>/, which links to the checkout. The checkout and its git",
+      "directories are readable and not writable: the diff it reads was written by the PR's author. If your",
+      "workspace is outside HOME, add it to denyRead."
+    ],
+    "denyRead": ["~"],
+    "allowRead": [
+      "@CWD@",
+      "@WORKTREES@",
+      "@GIT_OWN@",
+      "@GIT_SHARED@",
+      "@TMPDIR@",
+      "@READ@",
+      "~/.gitconfig",
+      "~/.config/git",
+      "~/.config/opencode",
+      "~/.local/share/opencode",
+      "~/.local/state/opencode",
+      "~/.cache/opencode",
+      "~/.opencode",
+      "~/.local/bin"
+    ],
+    "allowWrite": [
+      "@TMPDIR@",
+      "~/.local/share/opencode",
+      "~/.local/state/opencode",
+      "~/.cache/opencode"
+    ],
+    "denyWrite": []
+  }
+}
