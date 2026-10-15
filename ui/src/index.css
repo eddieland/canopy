@@ -450,6 +450,28 @@
 }
 
 /*
+ * Sprig types on its keyboard in bursts: each key it presses (`--key`, its place in the burst) sinks and lights in the
+ * accent for a moment, a burst every 5 seconds. At rest, and under reduced motion, no key is pressed.
+ */
+@keyframes buddy-key {
+    1%,
+    3% {
+        fill: var(--color-accent);
+        transform: translateY(0.4px);
+    }
+    4% {
+        fill: var(--color-buddy-key);
+        transform: none;
+    }
+}
+
+@utility animate-buddy-key {
+    @media (prefers-reduced-motion: no-preference) {
+        animation: buddy-key 5s linear calc(1.5s + var(--key, 0) * 0.17s) infinite;
+    }
+}
+
+/*
  * The header ticker (src/components/shell/ticker.tsx). The window clips the line and fades it out at both ends; the
  * mask's gradient is alpha only, so its color is irrelevant. The line is padded by the window's width before its text
  * (`--ticker-start`, measured as the pass starts, so a window that resizes mid-pass does not move the headline) and

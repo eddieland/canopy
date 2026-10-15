@@ -45,6 +45,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
 | `buddy-eye`, `buddy-pupil` | Sprig's googly eyes: the white and the pupil, and its rim. |
 | `buddy-leaf` | The sprig on Sprig's head. A green of its own, never `status-done`'s. |
+| `buddy-keyboard`, `buddy-key` | Sprig's keyboard: its case and its keys. A key pressed lights in the accent. |
 
 Rules:
 
@@ -243,10 +244,12 @@ The ticker:
 
 Sprig:
 
-- Sprig (`Buddy`, `src/components/shell/buddy.tsx`) is a bent wire with a sprig on top and googly eyes, at the foot of
-  the side rail, under a speech bubble offering a tip about the page. It is off until Settings turns it on. Its tips
-  are by page (`TIPS` in `src/lib/buddy.ts`): a set for each nav section (`src/lib/sections.ts`, so a new section
-  must get its own) and for the search page, then ones for anywhere. Every one is a joke, and none opens with "Tip:",
+- Sprig (`Buddy`, `src/components/shell/buddy.tsx`) is a bent wire with a sprig on top and googly eyes, behind a
+  keyboard it vibe codes on (`Keyboard`), at the foot of the side rail, under a speech bubble offering a tip about
+  the page. The keyboard stands in front of the wire's foot, inside the figure's own box, so Sprig takes no more room
+  for it. It is off until Settings turns it on. Its tips are by page (`TIPS` in `src/lib/buddy.ts`): a set for each
+  nav section (`src/lib/sections.ts`, so a new section must get its own) and for the search page, then ones for
+  anywhere. Every one is a joke, and none opens with "Tip:",
   which on the ticker names something real; a joke dressed as a tip opens with "Unhelpful tip:". The jokes come in
   several voices (the paperclip's "It looks like you're...", a false "Fun fact:", a "Hot take:", a diary entry, a
   haiku, a riddle), mixed in each list so that no voice follows itself. Clicking Sprig, or the bubble's Another tip,
@@ -286,7 +289,8 @@ The empty inbox, and an item clearing:
 
 Motion says something arrived or changed, and gives the page some life without asking for attention. It is short
 (at most 700ms), eased out (`cubic-bezier(0.2, 0, 0, 1)`), and never loops on anything but the logo, a running run,
-a skeleton, the empty inbox, the header's ticker, and Sprig's blink. The keyframes and utilities are in `src/index.css`.
+a skeleton, the empty inbox, the header's ticker, and Sprig's blink and typing. The keyframes and utilities are in
+`src/index.css`.
 
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
   new one is ready, because navigations run inside React transitions.
@@ -311,15 +315,16 @@ a skeleton, the empty inbox, the header's ticker, and Sprig's blink. The keyfram
   below).
 - An item leaving the attention list fades and folds shut as a leaf tumbles off it (Fun, above). Its fold is the one
   animation that fills forwards: the row is let go once it has played.
-- Sprig's tip pops in a moment after a page arrives, its brows rise once with each new tip, and its eyes blink now and
-  then and look toward the pointer.
+- Sprig's tip pops in a moment after a page arrives, its brows rise once with each new tip, its eyes blink now and
+  then and look toward the pointer, and every 5 seconds it types a burst on its keyboard, each key it presses sinking
+  and lighting in the accent for a moment.
 - A toast rises in from below and fades out.
 - Only `running` runs pulse.
 - Every animation rests on the frame a still page shows (its last, or for a loop its first), so a screenshot with
   animations frozen is the page at rest.
 - Everything above is off under `prefers-reduced-motion: reduce`: the theme swaps instantly, values and rows appear
   in place, pulses, ripples, and the drifting leaf are hidden, a cleared item is simply gone, the ticker shows its
-  first headline in place, and Sprig's eyes hold still. New motion goes inside a `prefers-reduced-motion:
+  first headline in place, and Sprig's eyes and keys hold still. New motion goes inside a `prefers-reduced-motion:
   no-preference` block or a `motion-safe:` variant.
 
 ## No layout shift

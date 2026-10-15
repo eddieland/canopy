@@ -141,6 +141,7 @@ export const ANYWHERE: readonly string[] = [
     'Unhelpful tip: if in doubt, wiggle the pointer. I will look at it.',
     'Hot take: the best code is what a worker wrote while you got coffee.',
     'Fun fact: I am powered by being looked at. Thank you for your service.',
+    'Dear diary, they gave me a keyboard to help vibe code. I have no hands. The vibes are immaculate.',
 ]
 
 const PAGES = new Set<string>([...SECTIONS, '/search'])
