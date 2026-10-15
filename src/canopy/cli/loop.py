@@ -193,7 +193,7 @@ def _print_workers(ctx: Context) -> None:
 
 
 def _print_recent_runs(ctx: Context) -> None:
-    """Three lines per run that ended, newest first: what it was and its PRs, what it said, and where to look."""
+    """Three lines per run that ended, the last to end first: what it was and its PRs, what it said, where to look."""
     runs = db.recent_runs(ctx.conn, RECENT_RUNS)
     click.echo(f"\nRecent runs ({len(runs)}):")
     for r in runs:

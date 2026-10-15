@@ -87,20 +87,20 @@ class Usage:
         return self.input + self.cache_write + self.output + self.reasoning
 
     def describe(self) -> str:
-        """What it cost for a person, as `$0.25, 12.3k new tokens, 45.6k peak context`.
+        """What it cost for a person, as `$0.25, 12.3k tokens, 45.6k peak context`.
 
         Returns:
-            The cost to the cent, the new tokens, and the peak context when it is known, counts abbreviated with `k` or
-            `M` from a thousand up.
+            The cost to the cent, the tokens (`new_tokens`), and the peak context when it is known, counts abbreviated
+            with `k` or `M` from a thousand up.
         """
         peak = f", {_count(self.peak_context)} peak context" if self.peak_context is not None else ""
-        return f"${self.cost_usd:.2f}, {_count(self.new_tokens)} new tokens{peak}"
+        return f"${self.cost_usd:.2f}, {_count(self.new_tokens)} tokens{peak}"
 
     def spent(self) -> dict[str, object]:
         """What it cost as a log line's fields.
 
         Returns:
-            The cost in dollars, the new tokens, and the peak context.
+            The cost in dollars, the tokens (`new_tokens`), and the peak context.
         """
         return {"cost_usd": self.cost_usd, "new_tokens": self.new_tokens, "peak_context": self.peak_context}
 

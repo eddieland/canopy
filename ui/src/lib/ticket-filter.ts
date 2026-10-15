@@ -5,8 +5,11 @@ import type { TicketSummary } from '@/api/types'
  * title holds (`?q=`). Both go over the list the server sent, its newest by activity.
  */
 
-/** Where a ticket stands, as the page filters by it: not done, a run working it now, waiting on a reply, or done. */
-export const TICKET_SHOWS = ['open', 'working', 'waiting', 'done'] as const
+/**
+ * Where a ticket stands, as the page filters by it: not done, a run working it now, waiting on a reply, held by an open
+ * blocker ticket, or done.
+ */
+export const TICKET_SHOWS = ['open', 'working', 'waiting', 'blocked', 'done'] as const
 
 /** One of `TICKET_SHOWS`. */
 export type TicketShow = (typeof TICKET_SHOWS)[number]
@@ -16,6 +19,7 @@ export const TICKET_SHOW_LABEL: Record<TicketShow, string> = {
     open: 'open',
     working: 'working',
     waiting: 'waiting on you',
+    blocked: 'blocked',
     done: 'done',
 }
 
@@ -41,19 +45,23 @@ export function ticketQueryOf(raw: unknown): string | undefined {
  * `query`, in any case and anywhere in a word, so `abc-1` finds ABC-101 and `csv exp` finds Export reports as CSV.
  */
 export function ticketShown(
-    ticket: Pick<TicketSummary, 'key' | 'title' | 'done' | 'awaiting' | 'running_run'>,
+    ticket: Pick<TicketSummary, 'key' | 'title' | 'done' | 'awaiting' | 'running_run' | 'phase'>,
     show: TicketShow | undefined,
     query: string | undefined,
 ): boolean {
     return standsAt(ticket, show) && holdsEvery(`${ticket.key} ${ticket.title ?? ''}`, query)
 }
 
-type Standing = Pick<TicketSummary, 'done' | 'awaiting' | 'running_run'>
+type Standing = Pick<TicketSummary, 'done' | 'awaiting' | 'running_run' | 'phase'>
+
+// `blocked` is the overseer's phase for a ticket an open blocker ticket holds up (DESIGN §7), not a run that ended
+// `blocked`: that one asked a question, and `waiting` keeps it.
 
 const STANDS_AT: Record<TicketShow, (ticket: Standing) => boolean> = {
     open: (ticket) => !ticket.done,
     working: (ticket) => ticket.running_run !== null,
     waiting: (ticket) => ticket.awaiting !== null,
+    blocked: (ticket) => ticket.phase === 'blocked',
     done: (ticket) => ticket.done,
 }
 

@@ -846,7 +846,7 @@ def spent_ever(conn: sqlite3.Connection) -> float | None:
 
 
 def recent_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
-    """Return the `limit` runs that ended most recently, newest first."""
+    """Return the `limit` runs that ended most recently, the one that ended last first."""
     return conn.execute(
         f"{_RUNS} WHERE r.status != 'running' ORDER BY r.ended_at DESC, r.id DESC LIMIT ?",
         (limit,),
@@ -1080,7 +1080,7 @@ def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict
 
 
 def pull_requests(conn: sqlite3.Connection, limit: int, *, url: str | None = None) -> list[sqlite3.Row]:
-    """Return the `limit` PRs with the most recent activity, newest first; with `url`, only that one (DESIGN §22).
+    """Return the `limit` PRs with the most recent activity, most recently active first; with `url`, only it (§22).
 
     A PR is known by a ticket's unit, whose activity is the ticket's last sighting, or by a review run, whose activity
     is its start or end. Each row has `url` and `active_at`, and the unit's `ticket_key`, `repo`, `branch`, `phase`,
@@ -1441,7 +1441,7 @@ def ticket_cost(conn: sqlite3.Connection, key: str) -> sqlite3.Row:
 
 
 def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = None) -> list[sqlite3.Row]:
-    """Return the `limit` tickets with the most recent activity, newest first: each ticket row with `active_at`.
+    """Return the `limit` tickets with the most recent activity, most recently active first, each row with `active_at`.
 
     Activity is a message, a run starting or ending, a start or stop, or a tick seeing the ticket. Every one of those
     times is the journal's own format, so the newest is the greatest string. With `key`, only that ticket.

@@ -418,11 +418,11 @@ The API, under `{base}/api`:
 | `GET /runs/{id}` | one run, as `GET /runs` shows it; 404 for no such run |
 | `GET /runs/{id}/transcript` | its session's events, read back from its log (below); 404 for no such run |
 | `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none; and the acknowledged message |
-| `GET /ticks` | the latest 50 ticks, newest first: status, times, summary, overseer cost, how many decisions |
+| `GET /ticks` | the latest 50 ticks, newest first: status, times, summary, overseer cost and tokens, how many decisions |
 | `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
 | `GET /ticks/{id}/transcript` | its overseer's session, read back from its output (below); 404 for no such tick |
 | `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13); and what all of them ever cost |
-| `GET /spend/breakdown?days=` | what `canopy spend --days` prints (§11): each UTC day's cost by kind, the ticks by what they bought and by what woke them, the runs that reported no cost, and the newest 20 idle ticks; `days` 1 to 366, 7 by default |
+| `GET /spend/breakdown?days=` | what `canopy spend --days` prints (§11): each UTC day's cost by kind and tickets done, the ticks by what they bought and by what woke them, the runs that reported no cost, the tickets done and the spend per ticket done, each ticket's and PR's own cost, and the newest 20 idle ticks; `days` 1 to 366, 7 by default |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: title, phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, its limits (each kind of each unit it has had runs in, then its units' PRs' review limits), its latest 100 messages, its latest 20 decisions, and its total cost |
 | `POST /tickets/{key}/start` | `canopy start` |
@@ -573,9 +573,11 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
 The ticks pages (M24): the `decisions` table is the overseer's reasons for what the loop did and the evaluation corpus
 for prompt changes (§6), and "why has the loop not picked this up" is answered where the ticket is.
 
-- `GET /ticks` lists the latest 50 ticks, newest first, each as the header's tick is shown, with its overseer's
-  session and cost and how many decisions it recorded. `GET /ticks/{id}` is one tick and its decisions in the order
-  they were recorded; an id that is not a positive integer is refused (422), and no such tick is a 404.
+- `GET /ticks` lists the latest 50 ticks, newest first, each as the header's tick is shown, with its overseer's session,
+  its cost, tokens, and peak context as a run's (§13), and how many decisions it recorded. The ticks page shows each
+  as a column; on a narrow list the token counts give way first, since the cost says the same in dollars, and the tick's
+  page shows them after its cost as a run's page does. `GET /ticks/{id}` is one tick and its decisions in the order they
+  were recorded; an id that is not a positive integer is refused (422), and no such tick is a 404.
 - A decision names its subject as `canopy decisions` does: a ticket, a unit as its ticket and repository
   (`ABC-1 (web)`), a repository, `chore:NAME`, `pr:URL` for a PR no ticket owns, or `-` for the whole tick; with its
   ticket, repository, chore, and PR apart, and its action and rationale.
@@ -601,6 +603,12 @@ rather than from a one-off analysis of the log.
   of the live overseer's, each day as a stacked bar of the kinds with idle overseer spend its own series on the
   baseline, the same numbers as a table, the ticks by group and by what woke them, and the idle ticks. A window the
   page does not offer reads as the week. Reads only.
+- Beside the spend, what it got done (asked for by the operator, 2026-10-15: landing twice the tickets for half again
+  the spend is a good trade, and the page could not show it): the tickets marked done in the window and the spend per
+  ticket done under the totals, a done count on each day of the table, and two panels side by side, by ticket and by
+  pull request, each the costliest first and scrolling in its panel. A ticket's row names it and its title, its runs
+  and reviews, what they cost, and when and how it was marked done; a PR's row names it and its phase, its ticket,
+  and the same. What each counts is §11's `canopy spend`.
 - The nav has it, between Chores and Ticks, opening on the week; the rail's two spend figures open it too, the 24
   hours' on the week and the 30 days' on the month. It was at first only a link from the figures, as a question the
   operator asks now and then rather than a place they work, but the operator, who asked for the page, did not find it

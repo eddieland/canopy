@@ -40,6 +40,9 @@ _COLUMNS: tuple[tuple[str, str], ...] = (
 )
 _DAY_WIDTH = 10
 _COST_WIDTH = 9
+_KEY_WIDTH = 16
+# The costliest tickets the text lists; `--json` lists every one.
+_TICKETS = 10
 
 
 @click.command("spend")
@@ -54,10 +57,11 @@ _COST_WIDTH = 9
 @click.option("--json", "as_json", is_flag=True, help="Print the breakdown as one JSON object instead.")
 @click.pass_context
 def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
-    """Print what agent runs cost per day, by kind, and the ticks by what they bought.
+    """Print what agent runs cost per day, by kind, and the ticks by what they bought, beside what got done.
 
     The overseer, workers and splits, chores, and reviews, as the agent runtime reported each; dry runs apart from
-    the live ticks, and idle ticks' share of the overseer's spend.
+    the live ticks, and idle ticks' share of the overseer's spend. Then the tickets marked done, the spend for each,
+    and the costliest tickets; --json adds every ticket and PR.
     """
     ctx = open_context(click_ctx)
     found = spend.breakdown(ctx.conn, datetime.now(UTC), days)
@@ -96,6 +100,7 @@ def render(found: Breakdown) -> list[str]:
     ]
     lines.extend(_row(day.day, day.costs) for day in found.per_day)
     lines.append(_row("all", found.totals))
+    lines.extend(["", *_tickets(found)])
     lines.extend(["", f"{'ticks':<{_DAY_WIDTH}}{'count':>{_COST_WIDTH}}{'spent':>{_COST_WIDTH}}"])
     lines.extend(
         f"{GROUP_LABELS[g.group]:<{_DAY_WIDTH}}{g.ticks:>{_COST_WIDTH}}{cost_text(g.cost_usd):>{_COST_WIDTH}}"
@@ -121,6 +126,26 @@ def cost_text(usd: float | None) -> str:
         The text.
     """
     return "-" if usd is None else f"${usd:.2f}"
+
+
+# The tickets marked done, what the window cost for each, and the costliest tickets with what their own runs cost.
+def _tickets(found: Breakdown) -> list[str]:
+    if found.done:
+        each = f", {cost_text(found.per_done)} of all spend for each" if found.per_done is not None else ""
+        lines = [f"{found.done} ticket{'s' if found.done != 1 else ''} marked done{each}."]
+    else:
+        lines = ["No ticket marked done."]
+    if not found.tickets:
+        return lines
+    lines.append(f"{'ticket':<{_KEY_WIDTH}}{'runs':>{_COST_WIDTH}}{'spent':>{_COST_WIDTH}}  done")
+    lines.extend(
+        f"{t.key:<{_KEY_WIDTH}}{t.runs + t.reviews:>{_COST_WIDTH}}{cost_text(t.cost_usd):>{_COST_WIDTH}}"
+        + (f"  {t.done_at[:10]} {t.done}" if t.done_at is not None else "")
+        for t in found.tickets[:_TICKETS]
+    )
+    if len(found.tickets) > _TICKETS:
+        lines.append(f"and {len(found.tickets) - _TICKETS} more; --json lists every one")
+    return lines
 
 
 def _row(label: str, costs: Costs) -> str:

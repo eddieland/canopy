@@ -2313,6 +2313,12 @@ export type components = {
             verdict: components["schemas"]["ReviewVerdict"] | null;
             /** @description The severity of the worst finding it reported, which colors its verdict; None when it reported none. */
             worst: components["schemas"]["FindingSeverity"] | null;
+            /**
+             * Worst Count
+             * @description How many of its findings are of the worst severity, which its verdict says in words (`3 findings, 1 major`).
+             * @default 0
+             */
+            worst_count: number;
         };
         /**
          * @description A review run's verdict (DESIGN §21).
@@ -2561,6 +2567,12 @@ export type components = {
              */
             days: number;
             /**
+             * Done
+             * @description How many tickets the loop marked done in the window, merged or closed.
+             * @default 0
+             */
+            done: number;
+            /**
              * Idle Share
              * @description Idle ticks' share of what the live ticks that ended cost, from 0 to 1; None when they cost nothing, or reported
              *     no cost, so there is nothing to share.
@@ -2577,11 +2589,29 @@ export type components = {
              */
             per_day: components["schemas"]["SpendDay"][];
             /**
+             * Per Done
+             * @description The window's whole spend, the overseer's and chores' included, over the tickets marked done in it, in US
+             *     dollars; None when none was, or nothing reported a cost.
+             */
+            per_done: number | null;
+            /**
+             * Pull Requests
+             * @description Each PR a run that started in the window pushed to, or a review run of it started in it, the costliest first.
+             * @default []
+             */
+            pull_requests: components["schemas"]["SpendPullRequest"][];
+            /**
              * Since
              * Format: date-time
              * @description When the window starts: midnight UTC on its first day.
              */
             since: string;
+            /**
+             * Tickets
+             * @description Each ticket with a run or review run that started in the window, or marked done in it, the costliest first.
+             * @default []
+             */
+            tickets: components["schemas"]["SpendTicket"][];
             /**
              * Ticks
              * @description The ticks that ended in it, a row per group, in a fixed order: idle, busy, hand_run, not_ok, dry_run.
@@ -2653,6 +2683,12 @@ export type components = {
              * @description The day, `YYYY-MM-DD`, in UTC.
              */
             day: string;
+            /**
+             * Done
+             * @description How many tickets the loop marked done on it.
+             * @default 0
+             */
+            done: number;
         };
         /**
          * @description What a tick that ended bought (DESIGN §6, Idle pacing; §11): `idle` and `busy` are the loop's word on an `ok` tick, `hand_run` an `ok` tick no loop ran, `not_ok` a live one that closed otherwise, and `dry_run` a dry run, whatever the loop said of it.
@@ -2664,6 +2700,84 @@ export type components = {
          * @enum {string}
          */
         SpendKind: "overseer" | "workers" | "chores" | "reviews";
+        /**
+         * SpendPullRequest
+         * @description What the runs that pushed to one PR and the review runs of it, started in the window, cost.
+         */
+        SpendPullRequest: {
+            /**
+             * Cost Usd
+             * @description What those cost, in US dollars; None when none reported a cost.
+             */
+            cost_usd: number | null;
+            /**
+             * Phase
+             * @description Its unit's phase (DESIGN §7), `merged` once it merged; None for a PR no unit of the loop's has.
+             */
+            phase: string | null;
+            /**
+             * Reviews
+             * @description How many review runs of it started in the window.
+             */
+            reviews: number;
+            /**
+             * Runs
+             * @description How many runs that pushed to it started in the window: a run that pushed to two PRs counts on each.
+             */
+            runs: number;
+            /**
+             * Ticket Key
+             * @description The ticket that owns it: its unit's, else one a run or review named; None for a PR canopy only reviewed.
+             */
+            ticket_key: string | null;
+            /**
+             * Url
+             * @description The PR.
+             */
+            url: string;
+        };
+        /**
+         * SpendTicket
+         * @description What one ticket's own runs that started in the window cost, and whether it was marked done in the window.
+         */
+        SpendTicket: {
+            /**
+             * Cost Usd
+             * @description What those cost, in US dollars; None when none reported a cost. Not the overseer's, which is no ticket's.
+             */
+            cost_usd: number | null;
+            /**
+             * Done
+             * @description How the loop marked it done in the window (DESIGN §7): its PRs merged, or the tracker closed it, which a
+             *     tracker may do when its PR merges. None when it was not marked done in the window.
+             */
+            done: ("merged" | "closed") | null;
+            /**
+             * Done At
+             * @description When it was marked done; None when it was not, in the window.
+             */
+            done_at: string | null;
+            /**
+             * Key
+             * @description The ticket.
+             */
+            key: string;
+            /**
+             * Reviews
+             * @description How many review runs naming it started in the window.
+             */
+            reviews: number;
+            /**
+             * Runs
+             * @description How many of its worker and split runs started in the window, a running one included.
+             */
+            runs: number;
+            /**
+             * Title
+             * @description Its title, as the overseer named it; None before it did.
+             */
+            title: string | null;
+        };
         /**
          * SpendTicks
          * @description How many ended ticks of the window are in a group, and what their overseers cost.
@@ -2860,6 +2974,18 @@ export type components = {
              *     records it, just after the tick ends. Its change is sent on the stream, which marks the spend page stale.
              */
             idle: boolean | null;
+            /**
+             * New Tokens
+             * @description The tokens the runtime reported the overseer's model took in or wrote anew, every kind but cache reads; None
+             *     when it reported nothing.
+             */
+            new_tokens: number | null;
+            /**
+             * Peak Context
+             * @description The most tokens one of the overseer's model calls was sent, from the cache or not; None when the runtime
+             *     reported nothing, or recorded it before canopy kept it.
+             */
+            peak_context: number | null;
             /**
              * Session Id
              * @description The overseer's session, when the runtime reported it (§13).
