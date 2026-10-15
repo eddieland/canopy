@@ -803,6 +803,9 @@ How it serves, built in M20's foundation and true of every page:
 - The Host header must name a loopback host or the bind address, on any route: that stops DNS rebinding. An `Origin`
   header on an API route must name one of those too: that stops another site's page from calling the API or opening
   the stream. Ports are not compared, so an SSH forward to another local port works.
+- A request body over 256 KiB is refused 413, and a chunked one, with no Content-Length, 411, on any route. FastAPI
+  reads a body before the session check runs, so without this a client that never signed in could make the server hold
+  a body of any size. The largest body the API takes, a reply, is well under it.
 - The event stream is FastAPI's SSE: `Cache-Control: no-cache`, `X-Accel-Buffering: no` so a proxy or forward does not
   buffer it, and a keepalive comment after 15 idle seconds. Nothing compresses it.
 - The page makes no request to another origin: fonts and icons are bundled.

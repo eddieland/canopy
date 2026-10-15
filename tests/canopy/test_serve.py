@@ -33,7 +33,7 @@ from canopy.serve.api import session
 from canopy.serve.app import create_app
 from canopy.serve.auth import SESSION_SECONDS, Sessions
 from canopy.serve.backend import Backend
-from canopy.serve.guard import host_name
+from canopy.serve.guard import MAX_BODY_BYTES, host_name
 from canopy.serve.options import ServeOptions
 from canopy.serve.schema import (
     AttentionUpdated,
@@ -218,6 +218,27 @@ def test_a_foreign_origin_is_refused_on_the_api(ui: Path, backend: Backend) -> N
         assert c.get("/api/meta", headers={"origin": origin}).status_code == 403, origin
         assert c.get("/api/events", headers={"origin": origin}).status_code == 403, origin
     assert c.get("/api/meta", headers={"origin": "http://localhost:5173"}).status_code == 200
+
+
+def test_a_body_too_large_is_refused_before_the_session_check(ui: Path, backend: Backend) -> None:
+    # Not signed in: FastAPI would read the whole body before the session check refused it.
+    c = client(ui, backend, key=SECRET)
+    big = c.post("/api/session", content=b"x" * (MAX_BODY_BYTES + 1), headers={"content-type": "application/json"})
+    assert big.status_code == 413
+    chunked = c.post("/api/session", content=iter([b'{"secret": "x"}']), headers={"content-type": "application/json"})
+    assert chunked.status_code == 411
+
+
+def test_the_largest_reply_fits_the_body_limit(ui: Path, backend: Backend) -> None:
+    c = client(ui, backend, key=SECRET)
+    body = json.dumps({"body": "\x01" * 20_000, "submission": "abcdefgh"}).encode()
+    assert len(body) <= MAX_BODY_BYTES
+    response = c.post(
+        "/api/tickets/PROJ-1/replies",
+        content=body,
+        headers={**signed_in(c), "content-type": "application/json"},
+    )
+    assert response.status_code not in {411, 413, 422}
 
 
 def test_host_name_strips_the_port() -> None:
