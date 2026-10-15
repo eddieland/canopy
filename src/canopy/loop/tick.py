@@ -138,10 +138,10 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     prefix = "dry run; " if dry_run else ""
     # A tick-wide skip (mcp_unavailable, tracker_unsupported) means the overseer could not see the world. Closing it
     # `ok` would make its empty list the attention list and notify every open item as resolved.
-    skips = [str(d["rationale"]) for d in decisions if d["ticket_key"] is None and d["action"] == "skip"]
+    skips = [d.rationale for d in decisions if d.ticket_key is None and d.action == "skip"]
     if skips:
         return finish("skipped", f"{prefix}overseer skipped the tick: {'; '.join(skips)}", usage)
-    actions = Counter(str(d["action"]) for d in decisions)
+    actions = Counter(d.action for d in decisions)
     counts = ", ".join(f"{action}={n}" for action, n in sorted(actions.items())) or "none"
     return finish("ok", f"{prefix}{actions.total()} decisions: {counts}", usage)
 

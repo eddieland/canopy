@@ -76,7 +76,7 @@ def test_the_next_worker_hears_the_notice_in_force_and_no_other(
     elif then is not None:
         assert main(then) == 0
     code, decisions = dispatch(conn)
-    assert code == 0, [dict(d) for d in decisions]
+    assert code == 0, decisions
     assert notice_of(worker_prompt(canopy_env, conn)) == heard
 
 
@@ -144,12 +144,12 @@ def test_an_override_without_the_placeholder_refuses_only_while_a_notice_is_in_f
         assert "reviewer.md" not in err
     code, decisions = dispatch(conn)
     if not in_force:
-        assert code == 0, [dict(d) for d in decisions]
+        assert code == 0, decisions
         return
     assert code == 1
     [decision] = decisions
-    assert decision["action"] == "refused:bad_prompt"
-    assert "missing required placeholder {{NOTICE}}" in decision["rationale"]
+    assert decision.action == "refused:bad_prompt"
+    assert "missing required placeholder {{NOTICE}}" in decision.rationale
 
 
 @pytest.mark.parametrize(
@@ -377,4 +377,4 @@ def test_a_fix_ci_after_the_notice_moved_mid_tick_is_refused(
         args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "fix-ci"]
         assert main(args, runner=InlineRunner()) == 1
         [decision] = db.decisions_for_tick(conn, tick_id)
-    assert (decision["action"] == "refused:notice_changed") is moved
+    assert (decision.action == "refused:notice_changed") is moved
