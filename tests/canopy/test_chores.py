@@ -175,7 +175,7 @@ def test_chore_guards(canopy_env: CanopyEnv, chores: Path) -> None:
         assert main(["chore", "run", "build-health"], runner=runner) == 0
         assert main(["chore", "run", "build-health"], runner=runner) == 1
         assert main(["chore", "run", "queue-age"], runner=runner) == 1
-        assert db.finish_chore_run(conn, 1, "ok", json.dumps({"status": "ok"}))
+        assert db.finish_run(conn, "chore_runs", 1, "ok", json.dumps({"status": "ok"}))
         assert main(["chore", "run", "build-health"], runner=runner) == 1
         backdate(conn, 120)
         assert main(["chore", "run", "queue-age"], runner=runner) == 0
@@ -194,7 +194,7 @@ def test_chore_guards(canopy_env: CanopyEnv, chores: Path) -> None:
         assert found[2][2] == "1 of 1 chore runs are running"
         assert found[3][2].startswith("build-health runs at most every 120 minutes; next after ")
         # Chore runs are not workers: they take no worker capacity.
-        assert db.running_runs(conn) == []
+        assert db.running_runs(conn, "runs") == []
 
 
 def test_a_dry_run_checks_the_guards_and_starts_nothing(canopy_env: CanopyEnv, chores: Path) -> None:

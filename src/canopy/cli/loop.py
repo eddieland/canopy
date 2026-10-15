@@ -175,9 +175,9 @@ def _print_started(ctx: Context) -> None:
 
 
 def _print_workers(ctx: Context) -> None:
-    running = db.running_runs(ctx.conn)
+    running = db.running_runs(ctx.conn, "runs")
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
-    busy = len(running) + len(db.running_review_runs(ctx.conn))
+    busy = len(running) + len(db.running_runs(ctx.conn, "review_runs"))
     click.echo(f"\nRunning workers ({busy}/{ctx.config.capacity.max_workers}):")
     for r in running:
         # A joint run holds a slot in each of its repositories.
@@ -186,9 +186,9 @@ def _print_workers(ctx: Context) -> None:
             f"  {named(r['ticket_key'], r['ticket_title'])}  {r['kind']}  {attention.age(r['started_at'])}  {where}"
         )
     # A review holds a slot and counts toward max_workers (DESIGN §21).
-    for r in db.running_review_runs(ctx.conn):
+    for r in db.running_runs(ctx.conn, "review_runs"):
         click.echo(f"  review  {r['pr_url']}  {attention.age(r['started_at'])}  {r['slot_path'] or ''}".rstrip())
-    if not running and not db.running_review_runs(ctx.conn):
+    if not running and not db.running_runs(ctx.conn, "review_runs"):
         click.echo("  none")
 
 
@@ -215,7 +215,8 @@ def _print_chores(ctx: Context) -> None:
     states = chore_view.states(ctx.conn, ctx.config, ctx.workspace)
     if not states:
         return
-    click.echo(f"\nChores ({len(db.running_chore_runs(ctx.conn))}/{ctx.config.capacity.max_chores} running):")
+    chores = len(db.running_runs(ctx.conn, "chore_runs"))
+    click.echo(f"\nChores ({chores}/{ctx.config.capacity.max_chores} running):")
     now = datetime.now(UTC)
     for state in states:
         dismissed = sum(f.dismissed for f in state.findings())

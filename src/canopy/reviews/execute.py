@@ -70,7 +70,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     run = db.get_review_run(ctx.conn, run_id)
     if run is None:
         raise ReviewError(f"no review run {run_id}")
-    if not db.claim_review_run(ctx.conn, run_id, os.getpid()):
+    if not db.claim_run(ctx.conn, "review_runs", run_id, os.getpid()):
         raise ReviewError(f"review run {run_id} is not waiting to start: it is {run['status']} or another has it")
     log = logs.for_tick(int(run["tick_id"]))
     fields = {"review_run_id": run_id, "pr": run["pr_url"], "sha": run["sha"]}
@@ -94,7 +94,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             clean_up(ctx, run, log)
             stored = outcome.result_json()
             ended = outbox.review_ended(ctx.config, run, outcome.status, stored)
-            if not db.finish_review_run(ctx.conn, run_id, outcome.status, stored, event=ended):
+            if not db.finish_run(ctx.conn, "review_runs", run_id, outcome.status, stored, event=ended):
                 log.warning("review run was already closed; its outcome is not recorded", extra=fields)
             procs.drop_lifelock(Path(run["log_path"]))
             log.info("review run finished", extra={**fields, "status": outcome.status})
@@ -172,7 +172,7 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
         # The operator's commands refuse inside canopy's own runs (DESIGN §22).
         env={conversation.RUN_ID_ENV: f"review-{run_id}"},
         timeout=timeout_minutes * 60,
-        on_start=lambda pid: db.set_review_agent_pid(ctx.conn, run_id, pid),
+        on_start=lambda pid: db.set_agent_pid(ctx.conn, "review_runs", run_id, pid),
     )
     out.write(f"--- reviewer stdout ---\n{done.stdout}\n--- reviewer stderr ---\n{done.stderr}\n")
     out.write(f"--- reviewer exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
@@ -180,7 +180,7 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
     output = agent_output.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
-        db.set_review_run_report(ctx.conn, run_id, output.session_id, output.usage)
+        db.set_run_report(ctx.conn, "review_runs", run_id, output.session_id, output.usage)
         spent = output.usage.spent() if output.usage else {}
         log.info("reviewer reported", extra={"review_run_id": run_id, "session_id": output.session_id, **spent})
     if done.timed_out:

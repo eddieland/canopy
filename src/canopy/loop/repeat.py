@@ -713,7 +713,7 @@ def _report(
         console.print(rows)
 
     # Running reviews take worker capacity too (DESIGN §6).
-    running = len(db.running_runs(ctx.conn)) + len(db.running_review_runs(ctx.conn))
+    running = len(db.running_runs(ctx.conn, "runs")) + len(db.running_runs(ctx.conn, "review_runs"))
     footer = Text("  ", style="dim")
     footer.append(f"workers {running}/{ctx.config.capacity.max_workers}")
     footer.append("  ·  ")

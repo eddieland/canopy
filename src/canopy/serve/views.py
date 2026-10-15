@@ -467,7 +467,7 @@ def runs(ctx: Context) -> list[Run]:
     Returns:
         The running runs with the worktrees they hold, then at most `RECENT_RUNS` that ended.
     """
-    running = db.running_runs(ctx.conn)
+    running = db.running_runs(ctx.conn, "runs")
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
     root = ctx.workspace.root
     return [

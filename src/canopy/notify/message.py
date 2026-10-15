@@ -261,7 +261,7 @@ def digest(conn: sqlite3.Connection, items: list[Item], *, since: str, now: date
         blocked=blocked,
         attention=dict(Counter(i.reason for i in items)),
         oldest=age(oldest, now) if oldest is not None else None,
-        running=len(db.running_runs(conn)),
+        running=len(db.running_runs(conn, "runs")),
     )
 
 

@@ -132,11 +132,16 @@ def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Star
             pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run["log_path"]))
         except (OSError, procs.ProcError) as e:
             note = json.dumps({"harness": f"could not start the chore: {e}"})
-            db.finish_chore_run(
-                ctx.conn, run_id, "crashed", note, event=outbox.chore_ended(ctx.config, run, "crashed", note)
+            db.finish_run(
+                ctx.conn,
+                "chore_runs",
+                run_id,
+                "crashed",
+                note,
+                event=outbox.chore_ended(ctx.config, run, "crashed", note),
             )
             raise Refusal("spawn_failed", str(e)) from e
-        db.claim_chore_run(ctx.conn, run_id, pid)
+        db.claim_run(ctx.conn, "chore_runs", run_id, pid)
         return Started(run_id, pid)
 
 
@@ -155,7 +160,7 @@ def _guard(ctx: Context, name: str, *, planned: list[str] | None = None) -> Chor
     chore = configured.get(name)
     if chore is None:
         raise Refusal("unknown_chore", f"no chore named {name!r} is configured for this workspace")
-    running = db.running_chore_runs(ctx.conn)
+    running = db.running_runs(ctx.conn, "chore_runs")
     mine = next((r for r in running if r["chore"] == name), None)
     if mine is not None:
         raise Refusal("running", f"chore run {mine['id']} of {name} is running")

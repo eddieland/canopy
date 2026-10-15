@@ -102,7 +102,7 @@ def record(ctx: Context, prepared: Prepared) -> Recorded:
     """
     name = prepared.name
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        running = next((r for r in db.running_chore_runs(ctx.conn) if r["chore"] == name), None)
+        running = next((r for r in db.running_runs(ctx.conn, "chore_runs") if r["chore"] == name), None)
         if running is not None:
             raise RunningError(f"chore run {running['id']} of {name} is running")
         state = view.state_of(ctx.conn, name, prepared.chore)
@@ -116,7 +116,7 @@ def record(ctx: Context, prepared: Prepared) -> Recorded:
         except (OSError, lock.LockBusyError) as e:
             raise TrialError(_crash(ctx, run, e)) from e
         try:
-            db.claim_chore_run(ctx.conn, run_id, os.getpid())
+            db.claim_run(ctx.conn, "chore_runs", run_id, os.getpid())
             notes = conversation.chore_notes(ctx.conn, name)
             prompt = start.render(
                 prepared.body, state, run_id, prepared.context, notes, held=notice.for_prompt(ctx.conn)
@@ -174,5 +174,5 @@ def _crash(ctx: Context, run: sqlite3.Row, e: Exception) -> str:
     """
     note = json.dumps({"harness": f"could not start the try: {e}"})
     ended = outbox.chore_ended(ctx.config, run, "crashed", note)
-    db.finish_chore_run(ctx.conn, int(run["id"]), "crashed", note, event=ended)
+    db.finish_run(ctx.conn, "chore_runs", int(run["id"]), "crashed", note, event=ended)
     return f"chore run {run['id']} could not start: {e}"

@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db, outbox
-from canopy.infra import procs
+from canopy.core import dead_runs, outbox
 from canopy.reviews import execute
 
 if TYPE_CHECKING:
@@ -24,17 +22,13 @@ def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
         The ids of the review runs this call closed. A run another process closed first is not among them.
     """
     closed: list[int] = []
-    for row in db.running_review_runs(ctx.conn):
-        if procs.running(Path(row["log_path"]), row["pid"]):
-            continue
+    for row in dead_runs.find(ctx.conn, "review_runs"):
         fields = {"review_run_id": row["id"], "pr": row["pr_url"], "pid": row["pid"]}
-        if row["agent_pid"] is not None and procs.kill_group(int(row["agent_pid"])):
-            log.warning("killed the reviewer `_review` left behind", extra={**fields, "agent_pid": row["agent_pid"]})
+        dead_runs.kill_agent("review_runs", row, log, fields)
         execute.clean_up(ctx, row, log)
         note = json.dumps({"harness": "the review process is gone"})
         ended = outbox.review_ended(ctx.config, row, "crashed", note)
-        if db.finish_review_run(ctx.conn, int(row["id"]), "crashed", note, event=ended):
-            procs.drop_lifelock(Path(row["log_path"]))
+        if dead_runs.crash(ctx.conn, "review_runs", row, note, event=ended):
             closed.append(int(row["id"]))
             log.warning("review process is gone; review run marked crashed", extra=fields)
     return closed

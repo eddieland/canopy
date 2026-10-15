@@ -196,9 +196,11 @@ def _spawn(
         pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run["log_path"]))
     except (OSError, procs.ProcError) as e:
         note = json.dumps({"harness": f"could not start the reviewer: {e}"})
-        db.finish_review_run(ctx.conn, run_id, "crashed", note, event=outbox.review_ended(cfg, run, "crashed", note))
+        db.finish_run(
+            ctx.conn, "review_runs", run_id, "crashed", note, event=outbox.review_ended(cfg, run, "crashed", note)
+        )
         raise Refusal("spawn_failed", str(e)) from e
-    db.claim_review_run(ctx.conn, run_id, pid)
+    db.claim_run(ctx.conn, "review_runs", run_id, pid)
     return Started(run_id, pid, lease.path)
 
 
@@ -250,14 +252,14 @@ def _check_running(
     Raises:
         Refusal: (`running`) a review of the PR is running or planned, or a worker on its ticket is.
     """
-    running = next((r for r in db.running_review_runs(ctx.conn) if r["pr_url"] == request.pr), None)
+    running = next((r for r in db.running_runs(ctx.conn, "review_runs") if r["pr_url"] == request.pr), None)
     if running is not None:
         raise Refusal("running", f"review run {running['id']} of this PR is running")
     if any(d.pr == request.pr for d in planned_reviews):
         raise Refusal("running", "this dry run already reviewed this PR")
     if request.ticket is None:
         return
-    worker = next((r for r in db.running_runs(ctx.conn) if r["ticket_key"] == request.ticket), None)
+    worker = next((r for r in db.running_runs(ctx.conn, "runs") if r["ticket_key"] == request.ticket), None)
     if worker is not None or any(d.ticket_key == request.ticket for d in planned_runs):
         # A review must not race the push it is meant to judge.
         raise Refusal("running", f"a worker run for {request.ticket} is running; review its PR once it ends")
@@ -290,10 +292,10 @@ def _check_limits(
     if today >= cfg.capacity.max_reviews_per_day:
         per_day = cfg.capacity.max_reviews_per_day
         raise Refusal("daily_limit", f"{today} review runs started in the last 24 hours; the limit is {per_day}")
-    busy_reviews = len(db.running_review_runs(ctx.conn)) + len(planned_reviews)
+    busy_reviews = len(db.running_runs(ctx.conn, "review_runs")) + len(planned_reviews)
     if busy_reviews >= cfg.capacity.max_reviews:
         raise Refusal("review_capacity", f"{busy_reviews} of {cfg.capacity.max_reviews} review runs are running")
-    busy = len(db.running_runs(ctx.conn)) + busy_reviews + len(planned_runs)
+    busy = len(db.running_runs(ctx.conn, "runs")) + busy_reviews + len(planned_runs)
     if busy >= cfg.capacity.max_workers:
         raise Refusal("capacity", f"{busy} of {cfg.capacity.max_workers} workers and reviews are running")
 

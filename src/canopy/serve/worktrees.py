@@ -51,12 +51,12 @@ def pools(backend: Backend, ctx: Context) -> list[Pool]:
         One pool per repository in the map. One with no clone, or whose slots treehouse could not read, carries an
         error instead of worktrees.
     """
-    running = db.running_runs(ctx.conn)
+    running = db.running_runs(ctx.conn, "runs")
     by_lease: dict[str, sqlite3.Row] = {}
     for run_id, slots in db.all_run_slots(ctx.conn, [int(r["id"]) for r in running]).items():
         row = next(r for r in running if int(r["id"]) == run_id)
         by_lease |= {str(s["lease_id"]): row for s in slots}
-    reviews = {str(r["lease_id"]): r for r in db.running_review_runs(ctx.conn) if r["lease_id"]}
+    reviews = {str(r["lease_id"]): r for r in db.running_runs(ctx.conn, "review_runs") if r["lease_id"]}
     root = ctx.workspace.root
     repos = [(repo, ctx.pool(repo.name)) for repo in ctx.workspace.repos]
     cloned = [(repo, pool) for repo, pool in repos if repo.cloned]

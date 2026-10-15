@@ -102,7 +102,7 @@ def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> Re
                 "ticket": r["ticket_key"],
                 "started_at": r["started_at"],
             }
-            for r in db.running_review_runs(conn)
+            for r in db.running_runs(conn, "review_runs")
         ],
         "prs": prs,
     }

@@ -69,9 +69,9 @@ def add_run(
         runs_dir=Path("/state/runs"),
     )
     if pid is not None:
-        db.claim_run(conn, run_id, pid)
+        db.claim_run(conn, "runs", run_id, pid)
     if status != "running":
-        db.finish_run(conn, run_id, status, json.dumps({"summary": "gave up"}))
+        db.finish_run(conn, "runs", run_id, status, json.dumps({"summary": "gave up"}))
     return run_id
 
 
@@ -152,7 +152,7 @@ def test_old_definitions_snapshots_are_removed_only_when_no_run_is_live(
         assert main(["tick", "--dry-run"]) == 0
         assert old.is_dir()
 
-        db.finish_run(conn, live, "done", "{}")
+        db.finish_run(conn, "runs", live, "done", "{}")
         assert main(["tick", "--dry-run"]) == 0
         assert not old.exists()
         current = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))

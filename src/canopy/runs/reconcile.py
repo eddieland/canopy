@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, definitions, treehouse
+from canopy.core import conversation, db, dead_runs, definitions, treehouse
 from canopy.infra import logs, procs
 from canopy.runs import desks, dispatch, tidy
 
@@ -57,11 +57,11 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     ws = ctx.workspace
     pools = {repo.name: treehouse.status(ctx.runner, pool=ws.pool(repo.name)) for repo in ws.repos if repo.cloned}
     returned = _close_dead_runs(ctx, log)
-    running = db.running_runs(ctx.conn)
+    running = db.running_runs(ctx.conn, "runs")
     running_slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
     held = {str(s["lease_id"]) for slots in running_slots.values() for s in slots}
     # A running review holds a slot too (DESIGN §21); its own reconcile returns it if its `_review` is gone.
-    reviews = db.running_review_runs(ctx.conn)
+    reviews = db.running_runs(ctx.conn, "review_runs")
     held |= {str(r["lease_id"]) for r in reviews if r["lease_id"]}
     leased = {name: _return_stale(ctx, log, name, slots, held=held, returned=returned) for name, slots in pools.items()}
     for desk in desks.prune(ws.root, {str(r["ticket_key"]) for r in running}):
@@ -81,9 +81,7 @@ def _close_dead_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
         The lease ids returned, or kept for the operator.
     """
     returned: set[str] = set()
-    for run in db.running_runs(ctx.conn):
-        if procs.running(Path(run["log_path"]), run["pid"]):
-            continue
+    for run in dead_runs.find(ctx.conn, "runs"):
         returned |= end_run(ctx, run, "crashed", "the worker process is gone", log)
     return returned
 
@@ -111,10 +109,8 @@ def end_run(ctx: Context, run: sqlite3.Row, status: str, note: str, log: logs.Ti
         "slots": [s["slot_path"] for s in slots],
         "repos": [s["repo"] for s in slots],
     }
-    # `_run` is gone, but a worker it started may not be: it leads its own process group. Stop it before its slots go
-    # back to their pools.
-    if run["worker_pid"] is not None and procs.kill_group(int(run["worker_pid"])):
-        log.warning("killed the worker `_run` left behind", extra={**fields, "worker_pid": run["worker_pid"]})
+    # `_run` is gone, but a worker it started may not be. Stop it before its slots go back to their pools.
+    dead_runs.kill_agent("runs", run, log, fields)
     conversation.close_run(ctx.conn, ctx.config, run, status, json.dumps({"harness": note}))
     procs.drop_lifelock(Path(run["log_path"]))
     outcomes: list[str] = []

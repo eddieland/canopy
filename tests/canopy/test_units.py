@@ -165,7 +165,7 @@ def test_units_have_their_own_attempts_and_share_the_branch(ws: Ws, treehouse_st
                     assert runner.run(
                         ["treehouse", "return", "--force", s["slot_path"]], env={"TREEHOUSE_ROOT": str(ws.root)}
                     ).ok
-                assert db.finish_run(conn, run_id, "done", "{}")
+                assert db.finish_run(conn, "runs", run_id, "done", "{}")
             return code
 
         assert run("--repo", "api", "--slug", "login") == 0

@@ -480,9 +480,9 @@ def test_dry_run_refuses_what_a_live_dispatch_would(
                 runs_dir=canopy_env.state_dir / "runs",
             )
             if status == "running":
-                assert db.claim_run(conn, run_id, os.getpid())
+                assert db.claim_run(conn, "runs", run_id, os.getpid())
             else:
-                assert db.finish_run(conn, run_id, status, None)
+                assert db.finish_run(conn, "runs", run_id, status, None)
 
         past_run("LIMIT", "fix-ci", "done")
         past_run("LIMIT", "fix-ci", "done")

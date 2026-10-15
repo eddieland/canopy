@@ -317,7 +317,7 @@ def test_the_footer_counts_running_reviews_as_workers(
         purpose="query",
         logs_dir=canopy_env.state_dir,
     )
-    assert db.claim_review_run(conn, run_id, os.getpid())  # alive, so reconcile leaves it running
+    assert db.claim_run(conn, "review_runs", run_id, os.getpid())  # alive, so reconcile leaves it running
     with overseer_does():
         term, out = console()
         repeat.run(context(canopy_env), dry_run=True, interval_minutes=1, max_ticks=1, console=term, stop=repeat.Stop())
