@@ -182,6 +182,7 @@ setup_timeout_minutes = 30
 [loop]
 interval_minutes = 15   # `canopy loop` waits this long after each tick ends
 idle_max_minutes = 120  # and up to this long after idle ticks in a row (§6, Idle pacing)
+min_gap_minutes = 1     # and no tick starts sooner than this after the last one began (§6)
 
 [trust]
 authorized_repliers = ["tracker-account-id"]   # Jira accountId, GitHub login, ...

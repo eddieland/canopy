@@ -115,8 +115,8 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
     """The attention list, as `canopy status` shows it.
 
     Returns:
-        One item per entry, its subject split into a ticket key or a chore name and its detail without control
-        characters.
+        One item per entry, its subject split into a ticket key or a chore name, with the ticket's title, and its
+        detail without control characters.
     """
     found: list[AttentionItem] = []
     for item in backend.attention(ctx):
@@ -124,11 +124,13 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
         chore = key.removeprefix(_CHORE) if key is not None and key.startswith(_CHORE) else None
         pr = key.removeprefix(_PR) if key is not None and key.startswith(_PR) else None
         ticket = key if key is not None and chore is None and pr is None else None
+        row = db.get_ticket(ctx.conn, ticket) if ticket is not None else None
         found.append(
             AttentionItem(
                 id=fingerprint(item.ticket_key, item.reason, item.repo),
                 subject=item.subject,
                 ticket_key=ticket,
+                ticket_title=_title(row["title"]) if row is not None else None,
                 chore=chore,
                 repo=item.repo,
                 reason=item.reason,

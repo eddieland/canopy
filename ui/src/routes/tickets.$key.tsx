@@ -12,7 +12,7 @@ import { Decisions } from '@/components/decisions'
 import { Field, Fields } from '@/components/fields'
 import { GrantLimits } from '@/components/grant-limits'
 import { OrderToggle } from '@/components/order-toggle'
-import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton, ThreadScroll } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReplyForm } from '@/components/reply-form'
 import { RunsTable } from '@/components/runs-table'
@@ -111,7 +111,9 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                             active <Age at={ticket.active_at} variant="ago" />
                         </span>
                     </PanelHeader>
-                    <Fields>
+                    {/* Three field lists spaced as one: a ticket across many repositories scrolls its units in */}
+                    {/* place, so its total and actions stay in reach. */}
+                    <Fields className="pb-0">
                         <Field label="phase" mono>
                             <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} />
                             {ticket.done ? ', done' : ''}
@@ -119,9 +121,17 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         <Field label="branch" mono>
                             {ticket.branch === null ? 'none yet' : <Copyable text={ticket.branch} label="branch" />}
                         </Field>
-                        {units.map((unit) => (
-                            <Unit key={unit.repo ?? ''} repo={unit.repo} pr={unit.pr_url} phase={unit.phase} />
-                        ))}
+                    </Fields>
+                    {units.length > 0 && (
+                        <PanelScroll label="Repositories" className="max-h-60" data-testid="ticket-units">
+                            <Fields className="pt-1.5 pb-0">
+                                {units.map((unit) => (
+                                    <Unit key={unit.repo ?? ''} repo={unit.repo} pr={unit.pr_url} phase={unit.phase} />
+                                ))}
+                            </Fields>
+                        </PanelScroll>
+                    )}
+                    <Fields className="pt-1.5">
                         <CostTotalRow cost={cost} />
                     </Fields>
                     <div className="border-t" data-testid="ticket-actions">
@@ -136,17 +146,23 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                             <span className="readout text-xs text-muted-foreground">{messages.length}</span>
                         </span>
                     </PanelHeader>
-                    {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
-                    {conversationOrder === 'newest' && <WorkingNow ticketKey={ticket.key} />}
-                    {messages.length === 0 ? (
-                        <Empty>no messages yet: what you and its workers say shows here</Empty>
-                    ) : (
-                        <Conversation
-                            messages={ordered('conversation', conversationOrder, messages)}
-                            waiting={ticket.awaiting}
-                        />
-                    )}
-                    {conversationOrder === 'oldest' && <WorkingNow ticketKey={ticket.key} />}
+                    <ThreadScroll
+                        key={ticket.key}
+                        label="Conversation"
+                        end={conversationOrder === 'oldest' ? 'bottom' : 'top'}
+                    >
+                        {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
+                        {conversationOrder === 'newest' && <WorkingNow ticketKey={ticket.key} />}
+                        {messages.length === 0 ? (
+                            <Empty>no messages yet: what you and its workers say shows here</Empty>
+                        ) : (
+                            <Conversation
+                                messages={ordered('conversation', conversationOrder, messages)}
+                                waiting={ticket.awaiting}
+                            />
+                        )}
+                        {conversationOrder === 'oldest' && <WorkingNow ticketKey={ticket.key} />}
+                    </ThreadScroll>
                     <ReplyForm
                         key={ticket.key}
                         target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}

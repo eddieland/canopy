@@ -23,7 +23,7 @@ from canopy.core.context import Context
 from canopy.infra import resources
 from canopy.loop import pacing, repeat, tick
 from tests.canopy.test_chores import chore_toml
-from tests.canopy.test_loop import FakeTime, canopy, console, context, overseer_does
+from tests.canopy.test_loop import FakeKeys, FakeTime, canopy, console, context, overseer_does
 from tests.conftest import CanopyEnv
 
 KEY = "PROJ-1"
@@ -575,7 +575,7 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
             assert not log_lines(canopy_env, "a run ending ended the wait")
             return
         # Woken at once, but no sooner than a minute after the tick began, not fifteen.
-        assert sum(time.slept) == pytest.approx(repeat.WAKE_MIN_SECONDS)
+        assert sum(time.slept) == pytest.approx(60)  # loop.min_gap_minutes, by default
         message = (
             "an operator message ended the wait" if when == "an operator message" else "a run ending ended the wait"
         )
@@ -642,7 +642,7 @@ def test_the_operators_acts_end_the_wait(
 
     # Woken at once, but no sooner than a minute after the tick began, whatever the pacing; and the tick it woke is
     # not idle.
-    assert sum(time.slept) == pytest.approx(repeat.WAKE_MIN_SECONDS)
+    assert sum(time.slept) == pytest.approx(60)  # loop.min_gap_minutes, by default
     assert recorded(canopy_env) == [(0, "start"), (0, woken)]
     assert len(log_lines(canopy_env, message)) == 1
     assert "next tick in 15m at" in out.getvalue()
@@ -703,6 +703,91 @@ def test_a_tick_after_a_wait_a_gate_shortened_records_the_gate(
         assert sum(time.slept) == pytest.approx(300, abs=5)
         # The hand-made tick that ran the chore, the loop's first, then the one the gate started.
         assert [w for _, w in recorded(canopy_env)] == [None, "start", "gate"]
+
+
+def loop_ticks(ctx: Context, time: FakeTime, *, interval_minutes: int | None = 15) -> None:
+    """Two ticks of the loop on `time`, against the fakes."""
+    term, _ = console()
+    repeat.run(
+        ctx,
+        dry_run=True,
+        interval_minutes=interval_minutes,
+        max_ticks=2,
+        console=term,
+        stop=repeat.Stop(),
+        sleep=time.sleep,
+        clock=time.clock,
+    )
+
+
+def test_a_gate_opening_just_after_a_tick_waits_for_the_gap(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    (canopy_env.home / "chores").mkdir()
+    (canopy_env.home / "chores" / "build-health.md").write_text("# Build health\n")
+    canopy_env.write_user(canopy_env.user_file.read_text() + chore_toml())
+    ctx = context(canopy_env)
+    db.migrate(ctx.conn, resources.migrations_dir())
+    # Due 20 seconds after the tick: the gap holds the next tick to a minute after this one began.
+    chore_started(ctx.conn, datetime.now(UTC) - timedelta(minutes=120, seconds=-20))
+    with overseer_does():
+        time = FakeTime()
+        loop_ticks(ctx, time)
+    assert sum(time.slept) == pytest.approx(60)
+    assert [w for _, w in recorded(canopy_env)] == [None, "start", "gate"]
+    assert [seconds for _, seconds in waits(canopy_env)] == [60]
+
+
+def test_a_configured_gap_holds_an_early_wake(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
+    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[loop]\nmin_gap_minutes = 5\n")
+    ctx = context(canopy_env)
+    time = FakeTime()
+
+    def reply_once() -> None:
+        if len(time.slept) == 1:
+            assert main(["reply", KEY, "Go ahead."]) == 0
+
+    time.on_sleep = reply_once
+    db.migrate(ctx.conn, resources.migrations_dir())
+    db.touch_ticket(ctx.conn, KEY, "/r")
+    with overseer_does():
+        loop_ticks(ctx, time)
+    assert sum(time.slept) == pytest.approx(300)
+    assert [w for _, w in recorded(canopy_env)] == ["start", "message"]
+
+
+def test_a_gap_longer_than_the_interval_lengthens_the_wait(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[loop]\nmin_gap_minutes = 3\n")
+    ctx = context(canopy_env)
+    with overseer_does():
+        time = FakeTime()
+        loop_ticks(ctx, time, interval_minutes=1)
+    assert sum(time.slept) == pytest.approx(180)
+    assert [w for _, w in recorded(canopy_env)] == ["start", "timer"]
+
+
+def test_the_tick_now_key_is_not_held_by_the_gap(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
+    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[loop]\nmin_gap_minutes = 5\n")
+    ctx = context(canopy_env)
+    keys = FakeKeys()
+    time = FakeTime(on_sleep=lambda: keys.type(repeat.TICK_NOW_KEY))
+    term, _ = console()
+    with overseer_does():
+        repeat.run(
+            ctx,
+            dry_run=True,
+            interval_minutes=15,
+            max_ticks=2,
+            console=term,
+            stop=repeat.Stop(),
+            keys=keys.pressed,
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+    assert time.slept == [0.5]
+    assert [w for _, w in recorded(canopy_env)] == ["start", "key"]
 
 
 def test_a_tick_run_by_hand_records_nothing_of_the_loop(

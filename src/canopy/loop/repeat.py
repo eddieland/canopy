@@ -6,13 +6,13 @@ loops on one state dir would run the overseer twice as often.
 
 How long to wait after a tick is `pacing`'s decision: the configured interval, longer after idle ticks in a row, and
 never past a harness gate (DESIGN §6, Idle pacing); pacing by what a tick cost will join it (ROADMAP M13). The
-operator's acts since the last tick read the journal end the wait early, at most once a minute (DESIGN §22): a message
-to a ticket, such as a `canopy reply`; a ticket started or stopped; attempts or reviews granted; a notice to workers set
-or cleared. With idle pacing on, a run ending after the tick read the journal does too. A config reload does not: it
-applies at the wait's next step and leaves its deadline as it was. On a terminal, pressing `TICK_NOW_KEY` ends it at
-once. A deferred start waits the same way before the first tick, from when the loop started. Each tick's row records
-whether it was idle and what ended the wait before it (`ticks.idle`, `ticks.woken_by`), so spend can be split by what it
-bought (ROADMAP M33).
+operator's acts since the last tick read the journal end the wait early (DESIGN §22): a message to a ticket, such as a
+`canopy reply`; a ticket started or stopped; attempts or reviews granted; a notice to workers set or cleared. With idle
+pacing on, a run ending after the tick read the journal does too. A config reload does not: it applies at the wait's
+next step and leaves its deadline as it was. Nothing but the operator pressing `TICK_NOW_KEY` on a terminal starts a
+tick sooner than `loop.min_gap_minutes` after the last one began: not a gate, not an early wake. A deferred start waits
+the same way before the first tick, from when the loop started. Each tick's row records whether it was idle and what
+ended the wait before it (`ticks.idle`, `ticks.woken_by`), so spend can be split by what it bought (ROADMAP M33).
 
 While the operator has paused the loop (`core.pause`), the wait does not end at its deadline: it holds until they
 resume, then ticks at once if the deadline has passed. `PAUSE_KEY` pauses and resumes from the terminal; the web UI and
@@ -61,8 +61,6 @@ if TYPE_CHECKING:
 LOCK_FILE_NAME = "loop.lock"
 # How often the wait wakes to redraw the countdown and to notice a stop or an operator message.
 _WAIT_STEP_SECONDS = 0.5
-# An operator message or a run ending starts the next tick early, but no sooner than this after the last one began.
-WAKE_MIN_SECONDS = 60.0
 # A second stop signal this soon after the first is the same Ctrl-C, not a second one. `uv run` forwards the
 # SIGINT it gets to its child about 200 ms after the terminal already sent it to the child; a person reading "Ctrl-C
 # again aborts it" and pressing it again takes longer than this.
@@ -211,6 +209,7 @@ def run(
                 "dry_run": dry_run,
                 "interval_minutes": round(settings.pace.base_seconds / 60),
                 "idle_max_minutes": ctx.config.loop.idle_max_minutes,
+                "min_gap_minutes": ctx.config.loop.min_gap_minutes,
                 "defer_minutes": defer_minutes,
                 "repo": ctx.repo,
                 "pid": os.getpid(),
@@ -379,7 +378,7 @@ def _ticks(
         if outcome.tick_id is not None:
             db.set_tick_loop(ctx.conn, outcome.tick_id, idle=idle, woken_by=woken_by)
         last = max_ticks is not None and statuses.total() >= max_ticks
-        wait = None if last or stop.requested else pacing.wait(ctx, pace, idle_count, datetime.now(UTC))
+        wait = None if last or stop.requested else _wait_after(ctx, pace, idle_count, ended - started)
         if wait is not None:
             logs.for_tick(outcome.tick_id).info(
                 "loop waits",
@@ -408,13 +407,31 @@ def _ticks(
             sleep=sleep,
             clock=clock,
             wake=wake,
-            earliest=started + WAKE_MIN_SECONDS,
+            earliest=started + _gap_seconds(ctx),
             keys=keys,
             log=log,
             each_step=settings.apply,
         )
         _log_woken(log, woken, seen=seen, since=since, read_at=read_at)
         woken_by = woken or ("gate" if wait < pace.after(idle_count) else "timer")
+
+
+def _wait_after(ctx: Context, pace: pacing.Pace, idle_count: int, elapsed: float) -> float:
+    """Seconds to wait after a tick that ran `elapsed`: `pacing`'s, but at least what is left of `loop.min_gap_minutes`.
+
+    Returns:
+        The longer of `pacing.wait` and what is left of the gap.
+    """
+    return max(pacing.wait(ctx, pace, idle_count, datetime.now(UTC)), _gap_seconds(ctx) - elapsed)
+
+
+def _gap_seconds(ctx: Context) -> float:
+    """The least time from one tick's start to the next's, `loop.min_gap_minutes`.
+
+    Returns:
+        The gap in seconds.
+    """
+    return ctx.config.loop.min_gap_minutes * 60.0
 
 
 def _operator_acted(settings: _Settings, seen: int, since: str) -> Woken | None:
@@ -467,7 +484,7 @@ def _defer(
         sleep=sleep,
         clock=clock,
         wake=lambda: _operator_acted(settings, seen, since),
-        earliest=started + WAKE_MIN_SECONDS,
+        earliest=started + _gap_seconds(ctx),
         keys=keys,
         log=log,
         note="first tick in ",

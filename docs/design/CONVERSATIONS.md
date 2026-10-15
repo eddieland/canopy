@@ -297,11 +297,11 @@ During the wait (§6, the loop), each step checks the journal for the operator's
 since the last tick began; a ticket started or stopped (`starts`), attempts or a PR's reviews granted (`canopy grant`),
 or a notice to workers set or cleared (`canopy notice`, §8), since the last tick read the journal (or began, when it
 read nothing). A note to a chore (§19) does not wake it: the chore's next run reads it. Nor does a config reload (§6).
-Any of those acts ends the wait and runs the next tick, at most once a minute, whether idle pacing is on or not; the
-tick records what woke it in `ticks.woken_by` (`message`, `starts`, `grant`, `notice`) and is not idle. Every channel
-wakes it the same way, whether the act came from another process (`canopy start`) or the loop's own server thread
-(D073). Capacity, attempt limits, and cooldowns hold as for any
-tick. Before M28 only a message woke it, so a start from the web UI waited for the timer or a "tick now" (MEASUREMENTS
+Any of those acts ends the wait and runs the next tick, no sooner than `loop.min_gap_minutes` after the last one began,
+whether idle pacing is on or not; the tick records what woke it in `ticks.woken_by` (`message`, `starts`, `grant`,
+`notice`) and is not idle. Every channel wakes it the same way, whether the act came from another process
+(`canopy start`) or the loop's own server thread (D073). Capacity, attempt limits, and cooldowns hold as for any tick.
+Before M28 only a message woke it, so a start from the web UI waited for the timer or a "tick now" (MEASUREMENTS
 2026-10-12, F3).
 
 ### Channels
@@ -348,9 +348,10 @@ Served by `canopy loop` from a thread (D073):
   conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
   and the list, `ui/DESIGN.md`), runs (running, then the 50 that ended last, each with a page and its session's
   transcript, below), worktrees (each pool's slots, below), tickets, each with its conversation and the decisions about
-  it, pull requests (below), chores (below), ticks (below), search (below), and spend (below). The side rail shows the
-  runs working now and the spend of the last 24 hours and the last 30 days on every page, under the nav, so what the
-  loop is doing and what it costs stay in view wherever the operator is; either figure opens the spend page. In a
+  it, the list filtered by where each stands and by words in its key or title, pull requests (below), chores (below),
+  ticks (below), search (below), and spend (below). The side rail shows the runs working now and the spend of the last
+  24 hours and the last 30 days on every page, under the nav, so what the loop is doing and what it costs stay in view
+  wherever the operator is; either figure opens the spend page. In a
   window narrower than 1024px, as half of a second monitor is, the rail is a strip of the nav's icons whose button
   opens it whole over the page, and each list shows the columns its width has room for, its title always
   (`ui/DESIGN.md`).
@@ -725,7 +726,8 @@ slots as `treehouse status --json` reports them, read when the page asks. Each s
 treehouse's own status on hover), its number (its path on hover), its lease holder, the branch it has checked out (or
 detached; a run's slot is detached, D109, and shows the run's branch), linking to its page on the host when the
 repository has a branch link (§18), the processes treehouse found running in it,
-and since when; an idle slot is its state and number alone, and a note gets a second line. A lease is matched to a
+and since when; an idle slot is its state and number alone, three or more in a row fold into one line that opens
+them, and a note gets a second line. A lease is matched to a
 running run or review by its lease id, as reconcile matches them, so a slot names the ticket, run kind, and run that
 hold it. The page groups slots in five states it colors: `working` (held by a run or review the journal shows
 running), `held` (leased or in use by anything else: the operator's own shell,
@@ -739,7 +741,9 @@ pasted into need not be in the workspace; until that root is read there is no bu
 directory, the pool's header names it once. The pool's declared size (`capacity`, §18) is shown with its slot
 count, and a pool holding more slots than that says how many, and that `canopy workspace sync` removes idle ones. Above
 the pools, counters of every pool's slots working, held, needing a look (dirty or broken, and any pool it could not
-read), and free; each pool's header has a square per slot in its state's color.
+read), and free; each pool's header has a square per slot in its state's color. A filter by state (`?state=`) keeps
+the slots in that state and the pools that have one, and under `broken` the pools it could not read: in a workspace of
+many repositories most slots are idle, and the few that are not are what the operator came for.
 
 The pools are read at once, a thread each and at most 8, so a workspace of many repositories waits on its slowest pool
 rather than on all of them in turn. `treehouse status` changes no lease, but it takes the pool's state lock and may
@@ -808,6 +812,10 @@ How it serves, built in M20's foundation and true of every page:
 - The Host header must name a loopback host or the bind address, on any route: that stops DNS rebinding. An `Origin`
   header on an API route must name one of those too: that stops another site's page from calling the API or opening
   the stream. Ports are not compared, so an SSH forward to another local port works.
+- A request body over 256 KiB is refused 413, and a chunked one, with no Content-Length, 411, on any route. FastAPI
+  reads a body before the session check runs, so without this a client that never signed in could make the server hold
+  a body of any size. The largest body the API takes, a reply of 20,000 characters, fits under it even when every one is
+  escaped as a surrogate pair (240,000 bytes).
 - The event stream is FastAPI's SSE: `Cache-Control: no-cache`, `X-Accel-Buffering: no` so a proxy or forward does not
   buffer it, and a keepalive comment after 15 idle seconds. Nothing compresses it.
 - The page makes no request to another origin: fonts and icons are bundled.

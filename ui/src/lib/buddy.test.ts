@@ -35,6 +35,27 @@ describe('TIPS', () => {
         }
     })
 
+    it('never says the same thing twice, on any page', () => {
+        const all = [...Object.values(TIPS).flat(), ...ANYWHERE]
+        expect(new Set(all).size).toBe(all.length)
+    })
+
+    it('never follows a voice with itself in a list, the last round to the first', () => {
+        for (const tips of [...Object.values(TIPS), ANYWHERE]) {
+            const voices = tips.map((tip) => tip.split(' ').slice(0, 2).join(' '))
+            for (const [n, voice] of voices.entries()) {
+                expect(voice).not.toBe(voices[(n + 1) % voices.length])
+            }
+        }
+    })
+
+    it('keeps every tip short enough for the bubble', () => {
+        // A longer tip makes the bubble taller, which the rail's slot must hold whole (src/components/shell/buddy.tsx).
+        for (const tip of [...Object.values(TIPS).flat(), ...ANYWHERE]) {
+            expect(tip.length).toBeLessThanOrEqual(100)
+        }
+    })
+
     it('never opens a line with "Tip:", which is for the ticker\'s real tips', () => {
         for (const tip of [...Object.values(TIPS).flat(), ...ANYWHERE]) {
             expect(tip).not.toMatch(/^Tip:/u)

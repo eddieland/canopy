@@ -168,13 +168,14 @@ D042's pacing rule, fed by what ticks cost. Needs M12. Sketch only; the design c
 
 Accept: written with the design, before work starts.
 
-Status: in progress. Taken in part on request (2026-10-07, 2026-10-08, and 2026-10-13), with M15's session ids:
-worker, split, chore, and review runs and each tick's overseer record their cost in dollars and tokens, so every agent
-run canopy starts is in the spend, and the loop's per-tick block, `canopy tick`, `canopy status`, `canopy decisions`,
-and the web UI's attention page (the last 24 hours and 30 days) show it, and its chores pages each chore's. A tick's
-cost is its overseer's alone, so a worker's is not counted against the tick that dispatched it. An `overseer_cmd`,
-`review_cmd`, or chore `cmd` in a user file from before needs `--format json` added. What keeps it open: the budget
-and the pacing rule are not designed.
+Status: deferred 2026-10-15. The operator judged the budget and the pacing rule unneeded once M36 to M39 make the
+journal the source of truth for the world, so the overseer runs only when the journal leaves it something to judge.
+Taken in part before that (2026-10-07, 2026-10-08, and 2026-10-13), with M15's session ids: worker, split, chore, and
+review runs and each tick's overseer record their cost in dollars and tokens, so every agent run canopy starts is in
+the spend, and the loop's per-tick block, `canopy tick`, `canopy status`, `canopy decisions`, and the web UI's
+attention page (the last 24 hours and 30 days) show it, and its chores pages each chore's. A tick's cost is its
+overseer's alone, so a worker's is not counted against the tick that dispatched it. An `overseer_cmd`, `review_cmd`,
+or chore `cmd` in a user file from before needs `--format json` added.
 
 ## M14. PR-scoped work
 
@@ -405,9 +406,12 @@ lifted as docs/SANDBOX.md says, and on macOS, both with `srt` 0.0.79. What treeh
 settled from its source (HOST_ISOLATION §7): plain git, which reads only what a sandboxed worker cannot write. Tracing
 it found that the slot's own `commondir` and `gitdir` were writable, and a worker that rewrote `commondir` had every
 git on the host in its slot, canopy's included, read a config it wrote; the wrapper now denies writing both, the
-canary checks it, and `_run` and reconcile check `commondir` as they do the `.git` link.
-Next: the other two questions Accept needs settled, TRUST_MODEL T4 and T6, and the canary on the operator's Linux and
-macOS machines.
+canary checks it, and `_run` and reconcile check `commondir` as they do the `.git` link. Caches that tools keep as git
+repositories are settled too: git's variables, set for the whole run, sent the objects of Go's module sources and of
+OpenCode's snapshots, which persist under its data directory, to the run's directory, so the wrapper now puts a `git`
+of its own first on `PATH` that sets them in the run's worktrees only; pre-commit was never affected.
+Next: the last question Accept needs settled, OpenCode's MCP servers, TRUST_MODEL T4 and T6, and the canary on the
+operator's Linux and macOS machines.
 
 ## M27. Session transcripts in the web UI
 
@@ -863,6 +867,8 @@ Status: not started.
 
 ## Deferred, with the trigger that would unblock each
 
+- Spend-paced loop (M13): when, with M39 built, overseer spend per day still runs past what the operator will pay
+  (`canopy spend` shows it). The cost recording is in; the budget and the pacing rule are what remain.
 - PR-scoped work (M14): when the operator keeps fixing CI or answering review on their own hand-written PRs by hand,
   often enough to want canopy to do it.
 - Webhooks: when tick latency is measured as a real cost.

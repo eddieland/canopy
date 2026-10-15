@@ -226,6 +226,6 @@ github.com.
   the worktree needs its directory in `allowWrite`.
 - **Bazel:** put the disk and repository caches and `--output_user_root` from [BAZEL.md](BAZEL.md) in `allowWrite`
   of `worker.json` and `setup.json`. Expect each run's Bazel server to end with its sandbox, so a run starts its own.
-- **A Go module cache or pre-commit breaks after a sandboxed run:** a tool that keeps a git repository in its cache
-  writes that repository's objects to the run's object directory, which is deleted when the run ends. Give the
-  sandbox a cache of its own, or keep such tools out of sandboxed builds (HOST_ISOLATION §7, open).
+- **A tool's git cannot write objects in the slot:** inside the sandbox, `git` on `PATH` is the wrapper's own, which
+  points git at the run's object directory in the run's worktrees (HOST_ISOLATION §4.2). A tool that runs git by its
+  absolute path skips it, and the slot's shared object directory is read-only. Have the tool find `git` on `PATH`.
