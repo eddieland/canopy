@@ -38,6 +38,7 @@ class OverseerState(TypedDict):
     repositories: list[RepositoryState]
     tickets: list[TicketState]
     stopped: list[str]
+    recently_done: list[DoneTicket]
     split_children: list[SplitChild]
     chores: NotRequired[list[ChoreSummary]]
     reviews: NotRequired[ReviewsSection]
@@ -156,6 +157,13 @@ class LeasedSlot(TypedDict):
     leased_at: str | None
 
 
+class DoneTicket(TypedDict):
+    """A ticket marked done lately, and when (DESIGN §7): one the query may still find open, since humans close it."""
+
+    key: str
+    done_at: str
+
+
 class SplitChild(TypedDict):
     """A child of a split not yet done, with its split run's end (DESIGN §18)."""
 
@@ -213,6 +221,7 @@ def state_block(
     running: list[sqlite3.Row],
     tickets: list[sqlite3.Row],
     stopped: Sequence[str],
+    recently_done: Sequence[sqlite3.Row] = (),
     units: Mapping[str, list[sqlite3.Row]],
     last_runs: Mapping[str, sqlite3.Row],
     run_slots: Mapping[int, list[sqlite3.Row]],
@@ -232,7 +241,9 @@ def state_block(
 ) -> str:
     """Render the `## State` section the harness sends the overseer as its message, after its prompt.
 
-    `tickets` leave out the tickets the operator stopped, which `stopped` names by key (DESIGN §22). `units` are each
+    `tickets` leave out the tickets the operator stopped, which `stopped` names by key (DESIGN §22), and the tickets
+    marked done; `recently_done` names those marked done lately, with when, so the overseer leaves out one the tracker
+    still shows open (DESIGN §7). `units` are each
     ticket's units and `run_slots` each running or latest run's slots, by run id. `attempts`, `grants`, and
     `fix_ci_cooldowns` are per unit (`policy.unit`); a unit the operator granted no runs has no `granted` key (DESIGN
     §22). `split_attempts` are per ticket, and `split_children` are the children of splits not yet done, with their
@@ -352,6 +363,8 @@ def state_block(
         "tickets": [ticket_summary(t) for t in tickets],
         # Tickets the operator stopped: not candidates, whatever their labels, and owed no decision (DESIGN §22).
         "stopped": list(stopped),
+        # Tickets marked done lately: owed no decision while the tracker still shows them open (DESIGN §7).
+        "recently_done": [{"key": str(t["key"]), "done_at": str(t["done_at"])} for t in recently_done],
         # A child is a candidate only with a queue label added after its split run ended (DESIGN §18).
         "split_children": [
             {

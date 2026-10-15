@@ -56,9 +56,9 @@ in order:
    message: workspace root; the workspace (name, the path of `MAP.md` if any); tracker config (provider, query, labels,
    needs-human label); trust config (authorized repliers, branch prefix, PR label); policy (limits and stacking); the
    repositories (name, path, summary, whether cloned, its pool's leased slots, §18); the `tickets` rows not marked done,
-   except those the operator stopped; `stopped`; split children (§18); chores and reviews when configured; the
-   operator's notices to workers in force or lately ended (§8), when there are any; the overseer's open attention items
-   (below); then capacity, running workers and their repositories, the mirror limit and
+   except those the operator stopped; `stopped`; `recently_done` (§7); split children (§18); chores and reviews when
+   configured; the operator's notices to workers in force or lately ended (§8), when there are any; the overseer's
+   open attention items (below); then capacity, running workers and their repositories, the mirror limit and
    delimiter, tick id, current time, and whether it is a dry run. Each ticket has its phase, branch, and comment,
    message, and mirror cursors (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors,
    runs so far of each kind, the runs of each kind the operator granted past the policy's limit if any (`granted`, §8),
@@ -66,7 +66,9 @@ in order:
    in with its starting base, start and end). A ticket the operator started has a `private` object (§22): when it was
    started, its message cursor, the operator's messages newer than it, and the question awaiting a reply, if any.
    `stopped` names the tickets the operator stopped, by key alone: none is a candidate, whatever its labels, and the
-   overseer records nothing for one, so a ticket stopped for weeks adds no decision to every tick. `chores` (§19) is
+   overseer records nothing for one, so a ticket stopped for weeks adds no decision to every tick. `recently_done`
+   names the tickets marked done in the last 30 days, each with the time of its newest `done` decision (§7). `chores`
+   (§19) is
    present only when chores are configured. `notices` (§8) is present only when the operator set one in the last
    seven days: each one's text, when it was set, until when it was or is in force, and whether it is now, newest first,
    at most five. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter
@@ -453,6 +455,20 @@ done, and every tick read it again and recorded a `skip` for it. A closed ticket
 the state block, gets no decision at all, so a query that matches closed tickets adds nothing to every tick. A PR
 still open on a closed ticket is the operator's, like the tracker transition. A reopened ticket is found again by the
 configured query; a private one (§22) comes back when the operator starts it again, which clears done.
+
+A ticket marked done is not in `tickets`, so the state block alone cannot tell the overseer that one the query returns
+is finished. A ticket whose PR merged is the common case: canopy marks it done, and a human has not yet moved it to
+done in the tracker, so the query still finds it open and labeled. The overseer read every such ticket again each
+tick, looked for its PRs, mirrored all its comments again (it has no mirror cursor in the block), and recorded `done`
+again. Those decisions are not waits, so no such tick was idle and idle pacing never backed off: over the first three
+days of live use, 176 repeated `done` decisions and 257 repeated mirrors in 152 ticks, with the loop at its base
+interval all night. The state block therefore names each ticket marked done in the last 30 days in `recently_done`,
+with the time of its newest `done` decision, and the overseer leaves such a ticket out of the union and records
+nothing for it, as for `stopped`. One the tracker shows was reopened after that time is read as a ticket
+the journal has not seen, as before. A ticket still open 30 days after its `done` decision drops out of the list; the
+next tick reads it, marks it done again, and that decision lists it for another 30 days. A ticket marked done with no
+`done` decision is never listed. The 30 days bound the list by the tickets a human might not have closed yet, not by
+every ticket the loop ever finished.
 
 ## 8. Dispatch and the worker contract
 

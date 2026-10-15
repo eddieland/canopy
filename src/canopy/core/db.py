@@ -510,6 +510,21 @@ def open_tickets(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute("SELECT * FROM tickets WHERE done = 0 ORDER BY key").fetchall()
 
 
+def recently_done(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
+    """Return the tickets marked done whose newest `done` decision is at or after `since`, by key.
+
+    Each row has `key` and `done_at`, that decision's time. A ticket marked done with no `done` decision is not one.
+    """
+    # Each done ticket's decisions by `decisions_ticket`, not a scan of every decision ever recorded.
+    return conn.execute(
+        "SELECT key, done_at FROM ("
+        "  SELECT t.key, (SELECT max(d.created_at) FROM decisions d WHERE d.ticket_key = t.key AND d.action = 'done')"
+        "  AS done_at FROM tickets t WHERE t.done = 1"
+        ") WHERE done_at >= ? ORDER BY key",
+        (since,),
+    ).fetchall()
+
+
 # Runs and decisions
 
 # A run with its ticket's title as `ticket_title`, for display (DESIGN §13). Every query a page or `canopy status` shows
