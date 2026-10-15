@@ -700,7 +700,8 @@ list, an empty state, or a skeleton by hand.
   the page has none to show.
 - **Search** sits atop the nav on every page (`SearchBox`): a magnifier, the field, and `/` in a keycap, its shortcut
   from anywhere but a text field. While the field holds text, a ghost clear button (`X`, on the keycap's `bg-muted`
-  when hovered) takes the keycap's place: it empties the field and keeps the focus there, leaving the page as it is.
+  when hovered) takes the keycap's place: it empties the field and keeps the focus there. An empty field, by the
+  button or by deleting its text, empties the search page if it is open, and leaves any other page as it is.
   The search page has a panel per source with hits, in the server's order, its count in the header (`newest 20` when
   the source has more). A hit is a row: where it opens (its ticket or chore with the run that said it, a chore run
   as itself, `chore:deps#2` opening its page, or the tick that decided it), its label as a chip (a chore run's status
