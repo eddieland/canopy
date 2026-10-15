@@ -1,11 +1,10 @@
 # Host isolation for agent runs
 
 Status: proposal, not normative, adopted as ROADMAP M26 (2026-10-12). `TRUST_MODEL.md` wins where the two disagree.
-Adopting any of this takes a ROADMAP milestone, a `DECISIONS.md` entry, and changes to TRUST_MODEL T4 and T6 with
-explicit human approval. §5 items 1 and 2, which hold with or without a sandbox, are built (DESIGN §8, D107), and
-so is the half of item 5 that does (D109). The wrapper of §4.1 and its policy templates ship with canopy, in
-`packages/canopy-sandbox` (D117); `canopy sandbox setup` installs them and the pinned `srt`, and `docs/SANDBOX.md` is
-the operator's guide.
+TRUST_MODEL T4 and T6 name the sandbox as an opt-in control, with what it does not cover (D118). §5 items 1 and 2,
+which hold with or without a sandbox, are built (DESIGN §8, D107), and so is the half of item 5 that does (D109).
+The wrapper of §4.1 and its policy templates ship with canopy, in `packages/canopy-sandbox` (D117); `canopy sandbox
+setup` installs them and the pinned `srt`, and `docs/SANDBOX.md` is the operator's guide.
 The claims about `srt` below were checked against its source at version 0.0.79 (2026-10-09); re-check them against
 the version the operator pins.
 
