@@ -558,7 +558,9 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
   list has a small `dismiss` beside its age; on the chore's page each open finding has one in its head line, or,
   dismissed, a mark and `undo`, as `--undo` takes it back.
 - A chore run's summary is the harness's note or the agent's summary, cut at 300 characters, and a finding's title and
-  detail are the agent's: untrusted text, rendered as text with control characters dropped.
+  detail are the agent's: untrusted text, rendered as text with control characters dropped. A finding's title shows
+  whole wherever the finding does, and a finding selected on the attention list shows its detail and link under it,
+  as the chore's page does, rather than the item's one line of title and link run together.
 - A chore run's page (asked for by the operator, 2026-10-13: a list's summary hid the rest of what a run said) is its
   row, the whole of its summary (a result bounds it at 2000 characters) and the harness's note apart from it, the
   findings an `ok` run reported, and its session's transcript (below). `GET /chores/{name}/runs/{id}` finds a run only

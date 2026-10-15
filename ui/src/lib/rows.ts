@@ -124,9 +124,12 @@ export const ROW_COLUMNS = {
         ['action', FREE],
         ['age', '4rem'],
     ],
-    /** A chore's finding: its id, its title, and what it says of itself at the end. Ids differ in length. */
+    /**
+     * A chore's finding: its id, its title, and what it says of itself at the end. Ids differ in length: a short one
+     * takes its own width, and a long one (up to 200 characters) wraps rather than squeeze the title to its floor.
+     */
     finding: [
-        ['id', 'auto'],
+        ['id', 'fit-content(12rem)'],
         ['title', FREE],
         ['facts', 'auto'],
     ],
