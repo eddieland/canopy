@@ -171,6 +171,8 @@ export function ThreadScroll({ label, end, children }: { label: string; end: 'to
         <PanelScroll
             label={label}
             className="max-h-[max(20rem,60dvh)]"
+            // The compiler keeps this callback until `end` changes, so a re-render leaves the operator's place alone
+            // and only a flip attaches it again, at the new end.
             ref={(region) => (region === null ? undefined : keepToEnd(region, end))}
             data-testid="thread-scroll"
         >
