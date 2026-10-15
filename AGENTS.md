@@ -98,6 +98,8 @@ If code and the design disagree, the design doc wins until a decision entry says
   features, and only `cli/` imports click; `tests/canopy/test_layers.py` fails otherwise. A new package gets a layer
   there and a line in DESIGN §5. A separate program (a notification sink) is a uv workspace member, not a package.
 - No global mutable state. Pass a `Context` (config, db connection, paths).
+- Config is not downgrade-compatible. An unknown key stays an error, so an older release rejects a key a newer one
+  added; that is expected, since a release already out cannot be fixed. A review finding about it needs no code.
 - Every module is in newspaper order, so it reads top-down from what to how: the docstring, then the public names
   other modules use, most important first, then the private helper functions, each below the first function that
   calls it. What Python needs at import time comes first regardless: constants, type aliases, and anything used as a
