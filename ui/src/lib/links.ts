@@ -57,6 +57,39 @@ export function onGitHub(href: string): boolean {
     return URL.canParse(href) && new URL(href).hostname === 'github.com'
 }
 
+// What follows github.com in a URL as written: dropped from a chip's label, which wears GitHub's mark instead.
+const GITHUB_PREFIX = /^https?:\/\/github\.com(?:\/|$)/iu
+
+/**
+ * What a github.com URL names, for its chip (`GitHubChip`), read from the URL alone: `acme/web#88` for a PR or an
+ * issue and `acme/web@1a2b3c4` for a commit, as GitHub writes a reference; an advisory's id; and anything else, a page
+ * within an issue's included, its address as written after `github.com/`.
+ */
+export function gitHubLabel(href: string): string {
+    const rest = href.replace(GITHUB_PREFIX, '')
+    if (rest === '') {
+        return 'github.com'
+    }
+    if (/[?#]/u.test(rest)) {
+        return rest
+    }
+    const parts = rest.replace(/\/$/u, '').split('/')
+    const [owner, repo, kind, id] = parts
+    if (parts.length === 2 && owner === 'advisories' && repo !== undefined) {
+        return repo
+    }
+    if (parts.length !== 4 || id === undefined) {
+        return rest
+    }
+    if ((kind === 'pull' || kind === 'issues') && /^\d+$/u.test(id)) {
+        return `${owner}/${repo}#${id}`
+    }
+    if (kind === 'commit' && /^[\da-f]{7,40}$/iu.test(id)) {
+        return `${owner}/${repo}@${id.slice(0, 7)}`
+    }
+    return rest
+}
+
 /** A link out's address as a page shows it: as written, without `https://`. */
 export function addressOf(href: string): string {
     return href.replace(/^https:\/\//u, '')

@@ -4,10 +4,11 @@ import { LinkOutIcon } from '@/components/link-out-icon'
 import type { ChoreFinding, ChoreRunFinding } from '@/api/types'
 import { Age } from '@/components/age'
 import { useDismissFinding } from '@/components/dismiss-finding'
+import { GitHubChip } from '@/components/github-chip'
 import { LinkedText } from '@/components/linked-text'
 import { ListRow, RowLine } from '@/components/rows'
 import { Chip } from '@/components/status'
-import { addressOf } from '@/lib/links'
+import { addressOf, onGitHub } from '@/lib/links'
 import { cn } from '@/lib/utils'
 
 /**
@@ -54,7 +55,7 @@ function FindingRow({
             </span>
             {finding.detail && (
                 <RowLine from="title" className="text-sm break-words whitespace-pre-wrap text-muted-foreground">
-                    <LinkedText text={finding.detail} />
+                    <LinkedText text={finding.detail} chips />
                 </RowLine>
             )}
             {finding.link && (
@@ -80,7 +81,7 @@ export function ChoreFindingText({ finding }: { finding: ChoreFinding }) {
             <p className="text-sm font-semibold break-words">{finding.title}</p>
             {finding.detail && (
                 <p className="text-sm break-words whitespace-pre-wrap text-muted-foreground">
-                    <LinkedText text={finding.detail} />
+                    <LinkedText text={finding.detail} chips />
                 </p>
             )}
             {finding.link && <FindingLink href={finding.link} />}
@@ -88,7 +89,11 @@ export function ChoreFindingText({ finding }: { finding: ChoreFinding }) {
     )
 }
 
+// On its own line, its own width: a chip on GitHub, as a URL in its detail is, else its address and an icon.
 function FindingLink({ href }: { href: string }) {
+    if (onGitHub(href)) {
+        return <GitHubChip href={href} className="self-start" />
+    }
     return (
         <a
             href={href}

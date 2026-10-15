@@ -20,11 +20,13 @@ test("the operator's own words sit on the right of the thread, everyone else's o
     expect(Math.round(theirs.x)).toBe(Math.round(all.x + 12))
 })
 
-test("a URL in a worker's report is a link to itself, opening in a new tab", async ({ page }) => {
+test("a GitHub URL in a worker's report is a chip naming it, opening it in a new tab", async ({ page }) => {
     await page.goto('tickets/ABC-103')
     await settled(page)
-    const link = page.getByTestId('conversation').getByRole('link', { name: 'https://github.com/acme/web/pull/91' })
+    const link = page.getByTestId('conversation').getByRole('link', { name: 'acme/web#91 on GitHub' })
+    await expect(link).toHaveText('acme/web#91')
     await expect(link).toHaveAttribute('href', 'https://github.com/acme/web/pull/91')
+    await expect(link).toHaveAttribute('title', 'https://github.com/acme/web/pull/91')
     await expect(link).toHaveAttribute('target', '_blank')
     await expect(link).toHaveAttribute('rel', 'noreferrer noopener')
 })
