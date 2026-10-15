@@ -25,3 +25,13 @@ export function choreRef(name: string): string {
 export function choreRunRef(name: string, id: number | string): string {
     return `${choreRef(name)}#${id}`
 }
+
+/** A message in a ticket's conversation, as its head line numbers it: `#5`. */
+export function messageRef(id: number | string): string {
+    return `#${id}`
+}
+
+/** A worktree slot, as treehouse numbers it in its pool: `#3`. */
+export function slotRef(name: string): string {
+    return `#${name}`
+}

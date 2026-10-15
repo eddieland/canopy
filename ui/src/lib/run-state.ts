@@ -20,6 +20,19 @@ export const RUN_TEXT: Record<RunState, string> = {
     failed: 'text-status-failed',
 }
 
+/**
+ * Each run state in the operator's words, wherever the UI names a state rather than a run's own status: a filter,
+ * a counter. `blocked` asked a question, so it reads `waiting on you`, as the rail, the tickets list, and the
+ * conversation say it. The URL and the journal keep `blocked`.
+ */
+export const RUN_WORD: Record<RunState, string> = {
+    running: 'running',
+    blocked: 'waiting on you',
+    stopped: 'stopped',
+    done: 'done',
+    failed: 'failed',
+}
+
 /** One ticket's runs on the runs page: the latest, which says where the ticket stands, over the ones before it. */
 export interface TicketRuns {
     /** The ticket's latest run: its running one, else the one that ended last. */

@@ -153,7 +153,7 @@ test('the keys scroll the page from a fresh load', async ({ page }) => {
 test('search params are typed: a known state filters, an unknown one is dropped', async ({ page }) => {
     await page.goto('runs?state=blocked')
     const filters = page.getByRole('navigation', { name: 'Filter by state' })
-    await expect(filters.getByRole('link', { name: 'blocked' })).toHaveAttribute('data-selected', 'true')
+    await expect(filters.getByRole('link', { name: 'waiting on you' })).toHaveAttribute('data-selected', 'true')
     await expect(filters.getByRole('link', { name: 'all' })).toHaveAttribute('data-selected', 'false')
     await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(1)
 

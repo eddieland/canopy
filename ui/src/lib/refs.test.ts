@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { choreRef, choreRunRef, reviewRef, runRef, tickRef } from './refs'
+import { choreRef, choreRunRef, messageRef, reviewRef, runRef, slotRef, tickRef } from './refs'
 
 describe('refs', () => {
     it('names each kind as KIND:ID, the grammar the CLI reads', () => {
@@ -13,5 +13,10 @@ describe('refs', () => {
     it("names a chore run by its chore's reference and its number", () => {
         expect(choreRunRef('deps', 2)).toBe('chore:deps#2')
         expect(choreRunRef('deps', '2')).toBe('chore:deps#2')
+    })
+
+    it('numbers a message and a slot as their lists do', () => {
+        expect(messageRef(5)).toBe('#5')
+        expect(slotRef('3')).toBe('#3')
     })
 })

@@ -110,7 +110,7 @@ ATTENTION: tuple[Item, ...] = (
     Item(
         "ABC-100",
         "worker_failed",
-        "run 40 (fix-ci, agent/ABC-100-flaky-test) ended failed: the worker exited 1 without a result line; "
+        "run:40 (fix-ci, agent/ABC-100-flaky-test) ended failed: the worker exited 1 without a result line; "
         "log /home/op/.canopy/runs/40.log",
         at(-70),
     ),

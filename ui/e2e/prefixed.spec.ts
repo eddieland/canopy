@@ -197,7 +197,7 @@ test('forget asks for the key typed out, then forgets the branch and PR', async 
             'agent/ABC-103-billing-v2, https://github.com/acme/web/pull/91.',
     )
     await expect(challenge).toHaveCount(0)
-    await expect(page.getByText('none yet')).toBeVisible()
+    await expect(page.locator('dt:text-is("branch") + dd')).toHaveText('none')
 })
 
 test('starting a ticket from the list opens it, private', async ({ page }) => {
@@ -310,10 +310,10 @@ test('a ticket at its attempt limit is granted one more run from its page, as ca
 
 test("a PR at its review limit is granted one more review from its ticket's attention item", async ({ page }) => {
     await page.goto('attention')
-    await page.getByTestId('attention-list').getByText('pull/88 waits on a reviewer').click()
+    await page.getByTestId('attention-list').getByText('acme/web#88 waits on a reviewer').click()
     const limits = page.getByTestId('attention-detail').getByTestId('grant-limits')
-    await expect(limits).toContainText('reviews of web#88')
-    await limits.getByTestId('grant-reviews of web#88').click()
+    await expect(limits).toContainText('reviews of acme/web#88')
+    await limits.getByTestId('grant-reviews of acme/web#88').click()
     await expect(limits.getByRole('status')).toHaveText(
         'https://github.com/acme/web/pull/88 has had 2 review runs, and may now have 3. ' +
             'The next tick decides whether to review it.',

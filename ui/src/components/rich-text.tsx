@@ -1,6 +1,10 @@
 import { Fragment, useState } from 'react'
 
 import { LinkedText } from '@/components/linked-text'
+import { PullRequestLink } from '@/components/pull-request-link'
+import { splitLinks } from '@/lib/links'
+import type { Piece } from '@/lib/links'
+import { isPullRequest, pullRequestLabel } from '@/lib/pull-request-label'
 import { clamp, codeSpans, parse } from '@/lib/rich-text'
 import type { Block, Inline, Line } from '@/lib/rich-text'
 import { cn } from '@/lib/utils'
@@ -45,16 +49,31 @@ export function RichText({ text, lines, className }: { text: string; lines?: num
 
 /**
  * A line the harness wrote, an attention item's detail, with its `code` spans set as code and nothing else read: the
- * rest stays text, its URLs linked unless `links` is false, as inside an element that is already a link.
+ * rest stays text, its URLs linked unless `links` is false, as inside an element that is already a link. A GitHub PR's
+ * address is named as the PR is anywhere (`acme/web#88`): a `PullRequestLink`, or its name alone without links.
  */
 export function InlineCode({ text, links = true }: { text: string; links?: boolean }) {
     return codeSpans(text).map((piece, i) =>
         piece.kind === 'code' ? (
             <Code key={i} text={piece.text} />
         ) : (
-            <Fragment key={i}>{links ? <LinkedText text={piece.text} /> : piece.text}</Fragment>
+            <Fragment key={i}>
+                {splitLinks(piece.text).map((part, j) => (
+                    <HarnessText key={j} part={part} links={links} />
+                ))}
+            </Fragment>
         ),
     )
+}
+
+function HarnessText({ part, links }: { part: Piece; links: boolean }) {
+    if (part.href === undefined) {
+        return part.text
+    }
+    if (isPullRequest(part.href)) {
+        return links ? <PullRequestLink url={part.href} /> : pullRequestLabel(part.href)
+    }
+    return links ? <LinkedText text={part.text} /> : part.text
 }
 
 function BlockView({ block }: { block: Block }) {
@@ -131,5 +150,5 @@ function InlineView({ piece }: { piece: Inline }) {
 }
 
 function Code({ text }: { text: string }) {
-    return <code className="rounded-sm bg-surface-raised px-1 py-px font-mono text-[0.85em]">{text}</code>
+    return <code className="rounded-sm bg-surface-raised px-1 py-px font-mono text-xs">{text}</code>
 }

@@ -7,6 +7,21 @@ describe('costText', () => {
         expect(costText(0.4)).toBe('$0.40')
         expect(costText(null)).toBe('–')
     })
+
+    it('groups the dollars by thousands', () => {
+        expect(costText(1234.5)).toBe('$1,234.50')
+        expect(costText(25_000)).toBe('$25,000.00')
+    })
+
+    it("rounds to the cent as the CLI's .2f does: from the exact value, a tie to even", () => {
+        expect(costText(0.47 / 2)).toBe('$0.23')
+        expect(costText(2.675)).toBe('$2.67')
+        expect(costText(1.125)).toBe('$1.12')
+        expect(costText(0.375)).toBe('$0.38')
+        expect(costText(0.126)).toBe('$0.13')
+        expect(costText(0)).toBe('$0.00')
+        expect(costText(-0.001)).toBe('$0.00')
+    })
 })
 
 describe('countedText', () => {

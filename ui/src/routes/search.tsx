@@ -4,14 +4,16 @@ import { createFileRoute } from '@tanstack/react-router'
 import { searchQuery } from '@/api/queries'
 import type { SearchHit, SearchSource } from '@/api/types'
 import { Age } from '@/components/age'
-import { ChoreLink } from '@/components/chore-link'
+import { ChoreLink, ChoreRunLink } from '@/components/chore-link'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { MarkedText } from '@/components/marked-text'
-import { Chip } from '@/components/status'
+import { Chip, RunDot, Word } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { TicketLink } from '@/components/ticket-link'
+import { choreRunState } from '@/lib/chores'
+import { RUN_TEXT } from '@/lib/run-state'
 import { bySource, SEARCH_MIN, searchQueryOf, SOURCE_LABEL } from '@/lib/search'
 import { cn } from '@/lib/utils'
 
@@ -103,7 +105,7 @@ function Row({ hit, words }: { hit: SearchHit; words: string[] }) {
                 <Where hit={hit} />
             </span>
             <span className="flex min-w-0">
-                {hit.label !== null && <Chip className="min-w-0 shrink" word={hit.label} />}
+                <Label hit={hit} />
             </span>
             {/* Text, never markup; its URLs are not linked, since a snippet may cut one short. */}
             <p className="text-sm break-words">
@@ -114,20 +116,42 @@ function Row({ hit, words }: { hit: SearchHit; words: string[] }) {
     )
 }
 
+/**
+ * A hit's fixed word: a chore run's status as a dot and its word in its state's color, as its chore's page lists it;
+ * anything else's as a chip.
+ */
+function Label({ hit }: { hit: SearchHit }) {
+    if (hit.label === null) {
+        return null
+    }
+    if (hit.source === 'chore_run') {
+        const state = choreRunState(hit.label)
+        return (
+            <span className={cn('flex min-w-0 items-center gap-1.5 font-mono text-xs', RUN_TEXT[state])}>
+                <RunDot state={state} />
+                <Word word={hit.label} className="truncate" />
+            </span>
+        )
+    }
+    return <Chip className="min-w-0 shrink" word={hit.label} />
+}
+
 const SUBJECT_FIRST: ReadonlySet<SearchSource> = new Set(['ticket', 'message', 'chore_run'])
 
 /** Where a hit opens: its ticket or chore, then the run that said it or the tick that decided it. */
 function Where({ hit }: { hit: SearchHit }) {
     const subject =
         hit.ticket_key === null ? (
-            hit.chore === null ? null : (
+            hit.chore === null ? null : hit.source === 'chore_run' && hit.run_id !== null ? (
+                <ChoreRunLink name={hit.chore} id={hit.run_id} />
+            ) : (
                 <ChoreLink name={hit.chore} />
             )
         ) : (
             <TicketLink ticketKey={hit.ticket_key} />
         )
     const tick = hit.tick_id === null ? null : <TickLink id={hit.tick_id} />
-    // A chore run has no `run:ID` page (DESIGN §22): its chore's page lists it.
+    // A chore run's own id names it (`chore:deps#2`) and opens its page; a message's is the run that reported it.
     const run = hit.run_id !== null && hit.source === 'message' ? <RunLink id={hit.run_id} /> : null
     if (SUBJECT_FIRST.has(hit.source)) {
         return (

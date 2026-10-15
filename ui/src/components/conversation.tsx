@@ -4,9 +4,11 @@ import { tickQuery } from '@/api/queries'
 import type { Message } from '@/api/types'
 import { Age } from '@/components/age'
 import { LinkedText } from '@/components/linked-text'
+import { RunLink } from '@/components/run-link'
 import { Chip } from '@/components/status'
 import { Timestamp } from '@/components/timestamp'
 import { awaitsTick } from '@/lib/acknowledged'
+import { messageRef } from '@/lib/refs'
 import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -95,7 +97,7 @@ function Head({ message, waiting, unread }: { message: Message; waiting: boolean
     const comment = message.comment
     return (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-muted-foreground">
-            <span className="readout">#{message.id}</span>
+            <span className="readout">{messageRef(message.id)}</span>
             <span className="text-foreground">{WHO[message.source]}</span>
             {comment ? (
                 <span>
@@ -105,8 +107,13 @@ function Head({ message, waiting, unread }: { message: Message; waiting: boolean
             ) : (
                 <span>
                     {message.kind}
-                    {message.run_id === null ? '' : ` (run:${message.run_id})`}
-                    {message.answers === null ? '' : ` answering #${message.answers}`}
+                    {message.run_id !== null && (
+                        <>
+                            {' ('}
+                            <RunLink id={message.run_id} />)
+                        </>
+                    )}
+                    {message.answers === null ? '' : ` answering ${messageRef(message.answers)}`}
                     {message.source === 'operator' ? ` via ${message.channel}` : ''}
                 </span>
             )}

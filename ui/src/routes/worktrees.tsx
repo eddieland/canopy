@@ -16,13 +16,14 @@ import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ListRow, RowGrid, RowLine } from '@/components/rows'
+import { RunLink } from '@/components/run-link'
 import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useWholePath } from '@/hooks/use-whole-path'
-import { runRef } from '@/lib/refs'
+import { slotRef } from '@/lib/refs'
 import { overSize, poolShown, slotGroups, slotsRoot, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
 
@@ -264,7 +265,7 @@ function SlotStrip({ worktrees }: { worktrees: Worktree[] }) {
             {worktrees.map((w) => (
                 <span
                     key={w.path}
-                    title={`#${w.name} ${w.status}`}
+                    title={`${slotRef(w.name)} ${w.status}`}
                     data-state={w.state}
                     className={cn('inline-flex size-2.5 rounded-[2px]', WORKTREE_DOT[w.state])}
                 />
@@ -298,7 +299,7 @@ function IdleSlots({ worktrees, repo, shared }: { worktrees: Worktree[]; repo: s
                         >
                             {open
                                 ? `hide ${worktrees.length} idle slots`
-                                : `${worktrees.length} slots, #${first} to #${last}`}
+                                : `${worktrees.length} slots, ${slotRef(first ?? '')} to ${slotRef(last ?? '')}`}
                         </CollapsibleTrigger>
                     </RowLine>
                 </RowGrid>
@@ -340,7 +341,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
             </span>
             <span className="flex items-center">
                 <span className="readout w-8 text-xs text-muted-foreground" title={w.path}>
-                    #{w.name}
+                    {slotRef(w.name)}
                 </span>
                 {whole && <CopyButton text={whole(w.path)} label={`slot ${w.name}'s path`} reveal />}
             </span>
@@ -397,7 +398,7 @@ function Holder({ worktree: w }: { worktree: Worktree }) {
             <span className="flex min-w-0 items-center gap-2">
                 <TicketLink ticketKey={w.run.ticket_key} className="truncate" />
                 <Chip word={w.run.kind} />
-                <span className="readout text-xs text-muted-foreground">{runRef(w.run.id)}</span>
+                <RunLink id={w.run.id} />
             </span>
         )
     }

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { mockChores } from '@/api/mocks'
 
-import { awaitsRun, choreLine, dueText, runsText, windowText } from './chores'
+import { awaitsRun, cadenceText, choreLine, choreRunState, dueText, runsText, windowText } from './chores'
 
 const [deps] = mockChores
 if (!deps?.latest) {
@@ -48,5 +48,21 @@ describe('chores', () => {
         const running = { ...latest, status: 'running', started_at: '2026-10-08T12:20:00Z' }
         expect(awaitsRun({ at: '2026-10-08T12:00:00Z' }, { ...deps, running })).toBe(false)
         expect(awaitsRun({ at: '2026-10-08T12:00:00Z' }, { running: null, latest: null })).toBe(true)
+    })
+})
+
+describe('cadenceText', () => {
+    it('says how often a chore may start in minutes, as the config and the CLI do', () => {
+        expect(cadenceText(360)).toBe('every 360 minutes')
+        expect(cadenceText(1)).toBe('every minute')
+    })
+})
+
+describe('choreRunState', () => {
+    it('groups a chore run by its status as the server does', () => {
+        expect(choreRunState('running')).toBe('running')
+        expect(choreRunState('ok')).toBe('done')
+        expect(choreRunState('crashed')).toBe('failed')
+        expect(choreRunState('failed')).toBe('failed')
     })
 })

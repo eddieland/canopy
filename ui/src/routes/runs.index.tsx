@@ -10,7 +10,7 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/componen
 import { TicketRunsTable } from '@/components/runs-table'
 import { RunDot } from '@/components/status'
 import { ordered, useListOrder } from '@/lib/list-order'
-import { byTicket } from '@/lib/run-state'
+import { byTicket, RUN_WORD } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
 interface RunsSearch {
@@ -50,7 +50,7 @@ function RunsPage() {
                             {RUN_STATES.map((s) => (
                                 <FilterLink key={s} search={{ state: s }}>
                                     <RunDot state={s} />
-                                    {s}
+                                    {RUN_WORD[s]}
                                 </FilterLink>
                             ))}
                         </nav>
@@ -62,7 +62,7 @@ function RunsPage() {
                 ) : shown.length === 0 ? (
                     <Empty size="panel">
                         {state
-                            ? `no ${state} runs now: no ticket's latest run is ${state}`
+                            ? `no runs ${RUN_WORD[state]} now: no ticket's latest run is ${RUN_WORD[state]}`
                             : 'no runs yet: the overseer starts one when a ticket is ready to work'}
                     </Empty>
                 ) : (

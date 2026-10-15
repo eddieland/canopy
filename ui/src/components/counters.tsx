@@ -4,9 +4,8 @@ import { attentionQuery, runsQuery, ticketsQuery } from '@/api/queries'
 import { Age } from '@/components/age'
 import { Counter } from '@/components/counter'
 import { answered } from '@/lib/acknowledged'
-import { countBySeverity } from '@/lib/attention'
-import type { Severity } from '@/lib/attention'
-import { latestRuns } from '@/lib/run-state'
+import { breakdown, breakdownText, countBySeverity } from '@/lib/attention'
+import { latestRuns, RUN_WORD } from '@/lib/run-state'
 
 /**
  * The loop at a glance, above the attention list: what runs, what waits on you, and what needs you. What it cost is
@@ -32,7 +31,7 @@ export function Counters() {
     return (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3" data-testid="counters">
             <Counter label="Running" value={running} tone="running">
-                {blocked === undefined ? null : `${blocked.length} blocked`}
+                {blocked === undefined ? null : `${blocked.length} ${RUN_WORD.blocked}`}
             </Counter>
             <Counter label="Waiting on you" value={waiting} tone="blocked">
                 {oldest === undefined ? (
@@ -44,18 +43,8 @@ export function Counters() {
                 )}
             </Counter>
             <Counter label="Attention" value={attention.data?.length} tone={broken ? 'failed' : 'plain'}>
-                {counts === undefined ? null : breakdown(counts)}
+                {counts === undefined ? null : breakdownText(breakdown(counts))}
             </Counter>
         </div>
     )
-}
-
-function breakdown(counts: Record<Severity, number>): string {
-    const rest = counts.other + counts.finding
-    const parts = [
-        counts.failed > 0 && `${counts.failed} failed`,
-        counts.waiting > 0 && `${counts.waiting} waiting`,
-        rest > 0 && `${rest} more`,
-    ].filter(Boolean)
-    return parts.length === 0 ? 'nothing' : parts.join(' · ')
 }

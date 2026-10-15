@@ -19,7 +19,7 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     await expect(ours).toContainText('Debounce search input')
     await expect(ours.getByTestId('pull-request-review')).toContainText('review:4')
     // A PR canopy only reviews has no ticket, whoever asked for the review.
-    await expect(rows.filter({ hasText: 'acme/api#12' })).toContainText('no ticket')
+    await expect(rows.filter({ hasText: 'acme/api#12' })).toContainText('none: canopy only reviews it')
 
     await ours.getByRole('link', { name: 'acme/web#88', exact: true }).click()
     await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)

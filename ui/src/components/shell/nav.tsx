@@ -15,11 +15,18 @@ import type { LucideIcon } from 'lucide-react'
 
 import { attentionQuery } from '@/api/queries'
 import { useSection } from '@/hooks/use-section'
-import { countBySeverity } from '@/lib/attention'
-import type { Severity } from '@/lib/attention'
+import { breakdown, breakdownText, countBySeverity } from '@/lib/attention'
+import type { BreakdownPart, Severity } from '@/lib/attention'
 import { SECTION_FILL, SECTION_LABEL, SECTION_TEXT, SECTION_TINT } from '@/lib/sections'
 import type { Section } from '@/lib/sections'
 import { cn } from '@/lib/utils'
+
+// Each part of the attention count's color: broken in the failure color, waiting on the operator's answer in theirs.
+const TONE: Record<BreakdownPart['kind'], string> = {
+    failed: 'text-status-failed',
+    waiting: 'text-status-blocked',
+    other: 'text-muted-foreground',
+}
 
 // Each item's hint is its tooltip: what the page holds, for an operator who does not know it yet.
 const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
@@ -131,20 +138,16 @@ export function Nav({ compact = false }: { compact?: boolean }) {
  * alone on the icon's corner, in the first part's color: the most severe.
  */
 function AttentionCount({ counts, compact }: { counts: Record<Severity, number>; compact: boolean }) {
-    const parts = [
-        { kind: 'failed', label: 'broken', count: counts.failed, tone: 'text-status-failed' },
-        { kind: 'waiting', label: 'waiting on you', count: counts.waiting, tone: 'text-status-blocked' },
-        { kind: 'other', label: 'other', count: counts.other + counts.finding, tone: 'text-muted-foreground' },
-    ].filter(({ count }) => count > 0)
+    const parts = breakdown(counts)
     if (parts.length === 0) {
         return null
     }
-    const said = parts.map(({ count, label }) => `${count} ${label}`).join(', ')
+    const said = breakdownText(parts)
     if (compact) {
         const total = parts.reduce((sum, { count }) => sum + count, 0)
         return (
             <span
-                className={cn('absolute top-0 right-0.5 readout text-2xs', parts[0]?.tone)}
+                className={cn('absolute top-0 right-0.5 readout text-2xs', parts[0] && TONE[parts[0].kind])}
                 title={said}
                 data-testid="nav-attention-count"
             >
@@ -155,8 +158,8 @@ function AttentionCount({ counts, compact }: { counts: Record<Severity, number>;
     }
     return (
         <span className="ml-auto flex gap-1.5 readout text-xs" title={said} data-testid="nav-attention-count">
-            {parts.map(({ kind, count, tone }) => (
-                <span key={kind} aria-hidden className={tone} data-testid={`nav-attention-${kind}`}>
+            {parts.map(({ kind, count }) => (
+                <span key={kind} aria-hidden className={TONE[kind]} data-testid={`nav-attention-${kind}`}>
                     {count}
                 </span>
             ))}

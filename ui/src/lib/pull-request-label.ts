@@ -15,3 +15,8 @@ export function pullRequestLabel(url: string): string {
     const [, owner, repo, number] = match
     return `${owner}/${repo}#${number}`
 }
+
+/** Whether a URL is a GitHub PR's own address, which `pullRequestLabel` names `org/repo#123`. */
+export function isPullRequest(url: string): boolean {
+    return GITHUB_PR.test(url)
+}

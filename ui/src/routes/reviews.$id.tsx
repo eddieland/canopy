@@ -29,6 +29,8 @@ import { findingAnchor, placeFindings, SEVERITY_TEXT, shortSha, verdictText, ver
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
 import { cn } from '@/lib/utils'
+import { None } from '@/components/none'
+import { NO_TICKET } from '@/lib/words'
 
 /** One review run: its fields, its findings, and the diff with each finding on the line it names. */
 export const Route = createFileRoute('/reviews/$id')({
@@ -129,7 +131,7 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
                 </Field>
                 <Field label="ticket">
                     {review.ticket_key === null ? (
-                        <span className="text-muted-foreground">none: a PR review.query matched</span>
+                        <None reason={NO_TICKET} />
                     ) : (
                         <TicketLink ticketKey={review.ticket_key} />
                     )}
