@@ -754,7 +754,9 @@ Address findings 1 and 3 of canopy's review run 12, of commit 9b2f4c6e1a7d. Leav
   the overseer dispatches `resume --review-run ID`, which hands the worker the run's findings that are not dismissed.
   The worker addresses the ones the message names, as an operator message says, and leaves the rest. So it works
   whether or not `trust.trusted_reviewers` lists `canopy:review`: untrusted, it is the go-ahead the findings wait for;
-  trusted, it narrows what the worker addresses.
+  trusted, it narrows what the worker addresses. A `resume` carries one review run's findings, so when the operator
+  sends from two runs before a tick, the overseer dispatches for the older message first, with the `message` cursor
+  at it, and the newer one is still new on the next tick.
 - The message names findings by number and never quotes them. A finding is the reviewer's text, which is data (T1);
   the message is the operator's, an instruction, so the reviewer's words never reach a prompt as the operator's.
 - Refused `bad_finding` for no number or one that is not 1 to 20, `unknown` as `dismiss` is for a run or finding that

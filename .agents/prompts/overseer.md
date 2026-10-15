@@ -324,7 +324,9 @@ message:
   items it covers, `--cursor message=<message id>`, and `--cursor review=<the newest covered item's time>`. When it
   names a canopy review run's findings (`canopy send` writes `Address findings 1 and 3 of canopy's review run 12`),
   add `--review-run <that run's id>`, so the worker has them, and `--cursor review=` takes that run's `reviewed_at`;
-  this holds whether or not `canopy:review` is trusted. The worker reads the message itself; never quote it into
+  this holds whether or not `canopy:review` is trusted. A resume carries one review run: when new messages name
+  findings of more than one, dispatch for the oldest such message, with `--cursor message=` at that message and no
+  later, so the next is still new next tick. The worker reads the message itself; never quote it into
   `--context`. The operator's words decide: even a comment you would classify as needing a human goes to the worker
   when the operator says so.
 - When it says to leave the feedback alone, advance `--cursor review=` past it and `--cursor message=` to the message
