@@ -129,7 +129,7 @@ detached, like `_run` (§8 step 4). `_chore` claims the run by pid, drops `CANOP
 with the timeout, records the agent's pid, parses the result, and closes the row. Output goes to
 `<state_dir>/chore-runs/<name>/<run_id>.log`. No lease, branch, or push, so nothing to return or verify. Run files are
 kept by chore, and out of `<state_dir>/chores/<name>/`: that is the agent's working directory, which a sandbox lets it
-write (HOST_ISOLATION), and its own log and prompt are not its to read back or rewrite. A run's prompt is found beside
+write (§24), and its own log and prompt are not its to read back or rewrite. A run's prompt is found beside
 the log its row names, so a run started before this layout reads its prompt where it was written.
 
 The prompt is the operator's file plus a generated `## Run` section holding one JSON object: chore name, current time,
@@ -600,7 +600,7 @@ max_reviews_per_pr = 3     # shared; the repository may only lower it
 - `low_impact` is plain language for the reviewer, like a chore's `when`: which changes it may call `low`. Without it,
   the reviewer never reports `low`.
 - `review_cmd` follows the command template rules (§12). A different model from `worker_cmd` is recommended. To
-  sandbox it, prefix it with `canopy-sandbox review` (HOST_ISOLATION §4.4, docs/SANDBOX.md): that policy reads the
+  sandbox it, prefix it with `canopy-sandbox review` (§24, docs/SANDBOX.md): that policy reads the
   checkout through the run directory's link and writes none of it.
 
 ### Off unless configured

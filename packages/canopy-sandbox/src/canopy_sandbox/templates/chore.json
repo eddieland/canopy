@@ -1,6 +1,6 @@
 {
   "#": [
-    "canopy-sandbox's template for chore commands: runtime.chore_cmd and a chore's own cmd (HOST_ISOLATION §4.2).",
+    "canopy-sandbox's template for chore commands: runtime.chore_cmd and a chore's own cmd (DESIGN §24).",
     "canopy sandbox setup copies it to ~/.config/canopy/sandbox/chore.json; fill in your hosts there. Keys starting",
     "with # are comments; @NAME@ strings are the paths canopy-sandbox fills in for each run."
   ],

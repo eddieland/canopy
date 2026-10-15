@@ -1,4 +1,4 @@
-"""`canopy sandbox setup`: what running agents in a sandbox needs on this machine (HOST_ISOLATION, docs/SANDBOX.md).
+"""`canopy sandbox setup`: what running agents in a sandbox needs on this machine (DESIGN §24, docs/SANDBOX.md).
 
 It copies `canopy-sandbox`'s policy templates to where the wrapper reads them, never over one already there; installs
 the `srt` that the wrapper's lockfile pins, with `npm ci`, into a directory of canopy's own, which no sandbox can
