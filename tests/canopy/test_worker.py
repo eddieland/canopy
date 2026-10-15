@@ -577,9 +577,7 @@ def test_a_worker_records_the_session_and_cost_it_reported(
     assert main(["status"]) == 0
     out = capsys.readouterr().out
     assert re.search(r"\nRecent runs \(1\):\n  PROJ-1  implement  done  \d+s ago  https://example.test/pr/1\n", out)
-    assert (
-        f"\n    did it\n    session ses_w1  $0.25, 3.5k new tokens, 5.5k peak context  log {run['log_path']}\n" in out
-    )
+    assert f"\n    did it\n    session ses_w1  $0.25, 3.5k tokens, 5.5k peak context  log {run['log_path']}\n" in out
 
 
 def test_a_timed_out_worker_records_what_it_reported_before_the_kill(

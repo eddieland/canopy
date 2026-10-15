@@ -351,7 +351,7 @@ def test_a_tick_records_and_prints_what_its_overseer_cost(
         tokens = ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
         assert tuple(tick[c] for c in tokens) == (2000, 400, 60, 8000, 1000)
         assert tick["tokens_peak_context"] == 5500
-        assert capsys.readouterr().out.rstrip().endswith("(cost $0.25, 3.5k new tokens, 5.5k peak context)")
+        assert capsys.readouterr().out.rstrip().endswith("(cost $0.25, 3.5k tokens, 5.5k peak context)")
 
 
 def test_a_running_tick_shows_its_overseer_session(

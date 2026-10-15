@@ -176,6 +176,8 @@ describe('applyStreamEvent', () => {
             summary: null,
             session_id: null,
             cost_usd: null,
+            new_tokens: null,
+            peak_context: null,
             decisions: 0,
             idle: null,
             woken_by: null,

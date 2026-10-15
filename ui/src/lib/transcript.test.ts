@@ -18,6 +18,7 @@ import {
     summary,
     tally,
     tokenCount,
+    tokensCell,
     wroteTokens,
 } from './transcript'
 
@@ -45,9 +46,16 @@ describe('duration and tokenCount', () => {
 
 describe('runTokens', () => {
     it('reads as the CLI says it, the peak only when it was recorded', () => {
-        expect(runTokens(3460, 9000)).toBe(', 3.5k new tokens, 9.0k peak context')
-        expect(runTokens(3460, null)).toBe(', 3.5k new tokens')
+        expect(runTokens(3460, 9000)).toBe(', 3.5k tokens, 9.0k peak context')
+        expect(runTokens(3460, null)).toBe(', 3.5k tokens')
         expect(runTokens(null, null)).toBe('')
+    })
+})
+
+describe('tokensCell', () => {
+    it('names what it counts, and is a dash when nothing reported one', () => {
+        expect([tokensCell(3460, 'tokens'), tokensCell(9000, 'peak')]).toEqual(['3.5k tokens', '9.0k peak'])
+        expect(tokensCell(null, 'peak')).toBe('–')
     })
 })
 

@@ -726,6 +726,12 @@ class Tick(_Model):
     """The overseer's session, when the runtime reported it (§13)."""
     cost_usd: float | None = None
     """What the overseer cost, in US dollars, when the runtime reported it (§13)."""
+    new_tokens: int | None = None
+    """The tokens the runtime reported the overseer's model took in or wrote anew, every kind but cache reads; None
+    when it reported nothing."""
+    peak_context: int | None = None
+    """The most tokens one of the overseer's model calls was sent, from the cache or not; None when the runtime
+    reported nothing, or recorded it before canopy kept it."""
     decisions: int = 0
     """How many decisions it recorded so far."""
     idle: bool | None = None

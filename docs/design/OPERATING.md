@@ -401,14 +401,16 @@ From events the harness also reads, each validated (D026):
 - the peak context: the most one `step_finish` was sent, its input, cache read, and cache write together, so how large
   the run's context grew. 0 when it made no model call.
 
-Wherever canopy prints what a run cost, the CLI (`Usage.describe`) and the web UI's run pages alike, it says it as
-`$0.25, 3.5k new tokens, 5.5k peak context`. New tokens are every kind but cache reads: input, cache write, output,
-and reasoning, summed over the calls. Cache reads are left out of the headline because each call reads again what the
+Wherever canopy prints what a run or a tick cost, the CLI (`Usage.describe`) and the web UI alike, it says it as
+`$0.25, 3.5k tokens, 5.5k peak context`. The tokens are every kind but cache reads: input, cache write, output, and
+reasoning, summed over the calls. Cache reads are left out of the headline because each call reads again what the
 calls before it were sent, so their sum grows with the square of a session's length and dwarfs the rest: a run of 40
 calls over a 50k context reads two million tokens from the cache, which says nothing about what it did. The peak
 context says what the sum hid, how large the context got. Each kind is still kept apart in the journal, and a
-transcript shows each call's (§22). A run recorded before the peak was kept prints its new tokens alone. A log line's
-`new_tokens` and `peak_context` are the same two counts.
+transcript shows each call's (§22). A run recorded before the peak was kept prints its tokens alone. It once said
+`new tokens`; the operator found the word drew a distinction that was no use to them (2026-10-15), so it is just
+`tokens`, and the hover on it in the web UI says what is left out. A log line's and the API's `new_tokens` and
+`peak_context` are the same two counts, their names unchanged.
 
 The default `overseer_cmd`, `worker_cmd`, `split_cmd`, `chore_cmd`, and `review_cmd` ask for events. A tick records
 what its overseer reports on the tick (§6), `_run` what a worker or split reports on the run (§8, §11), `_chore` what a
@@ -527,7 +529,7 @@ dismissal.
 `canopy status` also lists the tickets the operator started (§22), each with its title (§7), status, phase, and the
 message it awaits a reply to, running workers, and the ten runs that ended most recently, the last first: ticket and its
 title, kind, status, how long ago it ended, and each PR it reported; its harness note or else its summary, on one line
-with control characters dropped and cut at 160 characters; and its session id, its cost, new tokens, and peak context
+with control characters dropped and cut at 160 characters; and its session id, its cost, tokens, and peak context
 when the runtime reported them (§13), and its run log.
 
 Reasons are exactly the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`,

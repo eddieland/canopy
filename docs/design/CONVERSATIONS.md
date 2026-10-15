@@ -418,7 +418,7 @@ The API, under `{base}/api`:
 | `GET /runs/{id}` | one run, as `GET /runs` shows it; 404 for no such run |
 | `GET /runs/{id}/transcript` | its session's events, read back from its log (below); 404 for no such run |
 | `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none; and the acknowledged message |
-| `GET /ticks` | the latest 50 ticks, newest first: status, times, summary, overseer cost, how many decisions |
+| `GET /ticks` | the latest 50 ticks, newest first: status, times, summary, overseer cost and tokens, how many decisions |
 | `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
 | `GET /ticks/{id}/transcript` | its overseer's session, read back from its output (below); 404 for no such tick |
 | `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13); and what all of them ever cost |
@@ -573,9 +573,11 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
 The ticks pages (M24): the `decisions` table is the overseer's reasons for what the loop did and the evaluation corpus
 for prompt changes (§6), and "why has the loop not picked this up" is answered where the ticket is.
 
-- `GET /ticks` lists the latest 50 ticks, newest first, each as the header's tick is shown, with its overseer's
-  session and cost and how many decisions it recorded. `GET /ticks/{id}` is one tick and its decisions in the order
-  they were recorded; an id that is not a positive integer is refused (422), and no such tick is a 404.
+- `GET /ticks` lists the latest 50 ticks, newest first, each as the header's tick is shown, with its overseer's session,
+  its cost, tokens, and peak context as a run's (§13), and how many decisions it recorded. The ticks page shows each
+  as a column; on a narrow list the token counts give way first, since the cost says the same in dollars, and the tick's
+  page shows them after its cost as a run's page does. `GET /ticks/{id}` is one tick and its decisions in the order they
+  were recorded; an id that is not a positive integer is refused (422), and no such tick is a 404.
 - A decision names its subject as `canopy decisions` does: a ticket, a unit as its ticket and repository
   (`ABC-1 (web)`), a repository, `chore:NAME`, `pr:URL` for a PR no ticket owns, or `-` for the whole tick; with its
   ticket, repository, chore, and PR apart, and its action and rationale.

@@ -46,12 +46,12 @@ def test_events_give_the_text_the_session_the_cost_and_the_peak_context() -> Non
     assert output.usage == Usage(1.25, 200, 40, 6, cache_read=1300, cache_write=100, peak_context=peak)
     assert output.usage is not None
     assert output.usage.new_tokens == 2 * (100 + 50 + 20 + 3)  # every kind but the cache reads
-    assert output.usage.describe() == "$1.25, 346 new tokens, 1.1k peak context"
+    assert output.usage.describe() == "$1.25, 346 tokens, 1.1k peak context"
 
 
 def test_a_cost_recorded_before_the_peak_context_was_kept_says_none() -> None:
     usage = Usage(0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0)
-    assert usage.describe() == "$0.50, 10.0k new tokens"
+    assert usage.describe() == "$0.50, 10.0k tokens"
     assert usage.spent() == {"cost_usd": 0.5, "new_tokens": 10_000, "peak_context": None}
 
 

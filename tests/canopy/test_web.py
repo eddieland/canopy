@@ -117,6 +117,21 @@ def test_a_runs_spend_is_its_new_tokens_and_its_peak_context(ctx: Context) -> No
     assert (run["new_tokens"], run["peak_context"]) == (10_000, None)
 
 
+def test_a_ticks_spend_is_its_overseers_new_tokens_and_peak_context(ctx: Context) -> None:
+    tick_id = db.start_tick(ctx.conn, dry_run=False)
+    c, _ = signed_in_client(ctx)
+    tick = c.get("/api/ticks").json()[0]
+    assert (tick["new_tokens"], tick["peak_context"]) == (None, None)  # nothing reported while it runs
+
+    usage = agent_output.Usage(0.25, input=3000, output=400, reasoning=100, cache_read=20_000, cache_write=500)
+    db.set_tick_report(ctx.conn, tick_id, "ses_o1", dataclasses.replace(usage, peak_context=12_000))
+    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    tick = c.get("/api/ticks").json()[0]
+    assert (tick["cost_usd"], tick["new_tokens"], tick["peak_context"]) == (0.25, 4000, 12_000)  # no cache reads
+    detail = c.get(f"/api/ticks/{tick_id}").json()["tick"]
+    assert (detail["new_tokens"], detail["peak_context"]) == (4000, 12_000)
+
+
 def test_meta_carries_each_repositorys_branch_url_when_set(canopy_env: CanopyEnv, ctx: Context) -> None:
     c, _ = signed_in_client(ctx)
     assert c.get("/api/meta").json()["branch_urls"] == {}
