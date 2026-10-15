@@ -829,6 +829,11 @@ How it serves, built in M20's foundation and true of every page:
   not cloned, with a run holding slots in two pools and a pool past its declared size. Writes go to that journal.
   Without `--secret-file` it signs nobody in and asks for no session; only mock mode allows that, and it binds loopback
   only.
+- The API documents itself: its OpenAPI schema at `api/openapi.json` and a Swagger UI page over it at `api/docs`
+  (`docs` redirects there), under the base path, behind the session like every other API route. FastAPI's stock page
+  loads Swagger UI from a CDN, which would run another origin's script beside the operator's journal and session, so
+  `api/docs.py` serves its own page instead: the copy of Swagger UI the UI's build carries in `api-docs/`, a CSP as
+  `index.html`'s, and the session's token added to a write, so "Try it out" works on every route.
 
 ### Trust model changes
 
