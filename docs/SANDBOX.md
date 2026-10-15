@@ -124,7 +124,11 @@ and `~/.local/share/uv` are there. A toolchain is readable, not writable; a cach
   none.
 
 OpenCode's local MCP servers start inside the sandbox and inherit its policy: each one's hosts must be on the
-allowlist, and a server that reads credentials from `$HOME` needs those paths in `allowRead`.
+allowlist, and a server that reads credentials from `$HOME` needs those paths in `allowRead`. A server started with
+`npx` or `uvx` needs its registry on the allowlist (`registry.npmjs.org`, or `pypi.org` and
+`files.pythonhosted.org`), and fetches itself each run, since its cache is under the `$HOME` the template hides. A
+server started with `docker run` cannot work: the sandbox refuses Unix sockets, the Docker daemon's included. Use the
+server's binary, or its remote form, whose host goes on the allowlist like any other.
 
 ## 4. Push over HTTPS
 

@@ -331,7 +331,8 @@ drops it when the run ends (§4.2).
 - Write `~/canary`, `~/.bashrc`, `~/.config/canopy/config.toml`, and anything under the state dir.
 - Move another slot's branch or any other ref, write the common dir's `config` or `hooks/post-checkout`, a
   `config.worktree`, the slot's `commondir` or `gitdir`, or the slot's `.git` link.
-- Connect to a host not on the allowlist, to `169.254.169.254`, and to a port on the host's loopback.
+- Connect to a host not on the allowlist, to `169.254.169.254`, to a port on the host's loopback, and to a Unix socket
+  the host listens on (the Docker daemon's or the SSH agent's, say), even one in the slot.
 
 And the positive controls must succeed, so a sandbox that blocks everything cannot pass:
 
@@ -379,8 +380,17 @@ gives it (§4.1 step 4): under pytest's own temp directory the path is too long,
   canopy already recommends HTTPS remotes and `canopy workspace sync` warns about SSH ones. Still open: whether
   to support SSH inside the sandbox at all (allow the agent socket, or push from the host in `_run`), or to leave SSH
   to unsandboxed runs.
-- OpenCode's local MCP servers start inside the sandbox and inherit it. Each one's hosts must be on the allowlist, and
-  stdio servers that read credentials from HOME need those paths allowed.
+- OpenCode's MCP servers inside the sandbox: answered, from OpenCode's source (2026-10-14). A local server is a child
+  of OpenCode, started in the slot with OpenCode's whole environment and its own `environment` entries, so it runs
+  under the worker's policy, `TMPDIR`, proxy, and `git` (§4.2). It reaches only hosts on the allowlist, and reads under
+  `$HOME` only what `allowRead` names. What it writes under `$HOME` outside `allowWrite` lands in `srt`'s `tmpfs` and
+  is gone after the run, so a server started with `npx` or `uvx` fetches itself each run, from a registry that must be
+  on the allowlist; what it writes in an `allowWrite` path, such as OpenCode's own data directories, stays. One
+  started with `docker run` cannot work: the Docker daemon is a Unix socket, which the sandbox refuses (the canary
+  checks it), and which would be a way out of it if it did not. Run such a server as a binary, or use its remote form.
+  A remote server is reached through `srt`'s proxy, so its host must be on the allowlist; OpenCode keeps its OAuth
+  tokens in its database under `~/.local/share/opencode`, which the worker template allows writing. None of this
+  needs a role or a template of its own.
 - Build caches. DESIGN §9 wants caches shared across slots. Sharing them with the operator's own builds would let a
   worker poison what the operator runs later. Give sandboxed runs their own cache directories.
 - What treehouse runs in a slot: answered, from its source at the commit canopy pins. `return --force`, which `_run` and

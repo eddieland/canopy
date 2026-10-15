@@ -409,9 +409,11 @@ git on the host in its slot, canopy's included, read a config it wrote; the wrap
 canary checks it, and `_run` and reconcile check `commondir` as they do the `.git` link. Caches that tools keep as git
 repositories are settled too: git's variables, set for the whole run, sent the objects of Go's module sources and of
 OpenCode's snapshots, which persist under its data directory, to the run's directory, so the wrapper now puts a `git`
-of its own first on `PATH` that sets them in the run's worktrees only; pre-commit was never affected.
-Next: the last question Accept needs settled, OpenCode's MCP servers, TRUST_MODEL T4 and T6, and the canary on the
-operator's Linux and macOS machines.
+of its own first on `PATH` that sets them in the run's worktrees only; pre-commit was never affected. OpenCode's MCP
+servers are settled from its source: a local one is OpenCode's child and runs under the worker's policy, and one
+started with `docker run` cannot work, since the sandbox refuses Unix sockets, which the canary now checks.
+Next: TRUST_MODEL T4 and T6, with the operator's approval note, and the canary on the operator's Linux and macOS
+machines.
 
 ## M27. Session transcripts in the web UI
 
