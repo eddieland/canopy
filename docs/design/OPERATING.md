@@ -114,6 +114,7 @@ to do instead.
 | `tracker.ticket_url` | shared | the tracker's address is the team's; a link runs nothing |
 | `tracker.labels` | user-only | defines this operator's queue |
 | `tracker.mcp_server`, `tracker.read_tools` | user-only | what a private ticket's worker may call (§22) |
+| `tracker.query_every_minutes` | user-only | how often the overseer pays to run the query (§7): the operator's spend |
 | `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
 | `trust.branch_prefix`, `trust.pr_label` | shared | team conventions for spotting agent work |
 | `trust.authorized_repliers` | user-only | who may steer this operator's workers |
@@ -162,6 +163,7 @@ User file, personal:
 labels = ["agent-ready-yourname"]
 mcp_server = ""         # optional; the tracker's MCP server as OpenCode names it; default by provider (§22)
 # read_tools = [...]    # optional; the only tools of it a private ticket's worker may call; default by provider
+query_every_minutes = 0 # the least time between ticks that run the query; 0 runs it every tick (§7)
 
 [capacity]
 max_workers = 2

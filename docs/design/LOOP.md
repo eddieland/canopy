@@ -59,7 +59,8 @@ in order:
    except those the operator stopped; `stopped`; `recently_done` (§7); split children (§18); chores and reviews when
    configured; the operator's notices to workers in force or lately ended (§8), when there are any; the overseer's
    open attention items (below); then capacity, running workers and their repositories, the mirror limit and
-   delimiter, tick id, current time, and whether it is a dry run. Each ticket has its phase, branch, and comment,
+   delimiter, whether this tick runs the tracker query (`query_due`, §7), tick id, current time, and whether it is a
+   dry run. Each ticket has its phase, branch, and comment,
    message, and mirror cursors (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors,
    runs so far of each kind, the runs of each kind the operator granted past the policy's limit if any (`granted`, §8),
    and when fix-ci may next run if still ahead; and its latest run (id, kind, status, branch, each repository it leased
@@ -450,6 +451,21 @@ becomes a candidate, and a tick that skips it reads the tickets it knows, finds 
 queue stalls with nothing failing. A cheaper model run as the overseer did that on the operator's queue (2026-10-15),
 reading the block's tickets and never the query. The prompt's step 1 says so, as its section on `review.query`
 already did for reviews. Nothing checks it in code until a connector runs the query (ROADMAP M36).
+
+**Spacing the query.** The query is one of a tick's dearest reads (tracker searches and issue reads were 28% of the tool
+results the overseer read, MEASUREMENTS 2026-10-13), and tickets enter the queue slowly: a human labels one and waits.
+So the operator may space it out with `tracker.query_every_minutes`. At 0, the default, every tick runs it, as above.
+Otherwise the harness sets the state block's `query_due` to true only when that long has passed since the newest live
+tick that closed `ok` with `query_due` true started, or when there is none, and records it on the tick
+(`ticks.query_due`). On a tick where it is false, the overseer does not run the query and works the tickets in the state
+block alone, by the same rules: it still reads each one, mirrors its comments, follows its PRs, and dispatches it. A dry
+run does not count as having run it, being a preview, and neither does a tick that skipped or failed, which may not have
+read the result to the end; a tick from before the column did run it. What the operator gives up is how soon a newly
+labeled ticket is found: up to `query_every_minutes`, plus the loop's wait, after it is labeled. Idle pacing does not
+treat the next query as a gate: the setting is the least time between queries, not a schedule, so the loop keeps backing
+off on idle ticks, and the first tick after the spacing has passed runs it. A private ticket the operator starts is in
+the state block already, so it never waits on the query. `review.query` is not spaced: it is the operator's own list of
+PRs, and its cost has not been measured apart.
 
 "Closed" means whatever the tracker calls finished: Jira status category Done, GitHub issue state closed, and so on. The
 provider skill says which.
