@@ -8,7 +8,7 @@ const KINDS = Object.keys(ROW_COLUMNS) as RowKind[]
 
 describe('rowTemplate', () => {
     it('names each column before its width, and the end after the last', () => {
-        expect(rowTemplate('chore', 'lg')).toBe(`[name] 10rem [state] ${FREE} [findings] 8rem [end]`)
+        expect(rowTemplate('chore', 'xl')).toBe(`[name] 10rem [state] ${FREE} [findings] 14rem [end]`)
     })
 
     it('lends a column it leaves out its name to the next one shown, or to the end', () => {
@@ -68,11 +68,11 @@ describe('rowTiers', () => {
 describe('rowLayout', () => {
     it("sets a template per tier the kind's columns change at, and hides each left-out column's cell", () => {
         const { className, style } = rowLayout('chore')
-        expect(style).toEqual({ '--row': rowTemplate('chore'), '--row-lg': rowTemplate('chore', 'lg') })
+        expect(style).toEqual({ '--row': rowTemplate('chore'), '--row-xl': rowTemplate('chore', 'xl') })
         expect(className.split(' ')).toEqual([
             'grid-cols-(--row)',
-            '@lg:grid-cols-(--row-lg)',
-            '@max-lg:[&>:nth-child(3)]:hidden',
+            '@xl:grid-cols-(--row-xl)',
+            '@max-xl:[&>:nth-child(3)]:hidden',
         ])
     })
 
