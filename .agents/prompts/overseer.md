@@ -74,8 +74,11 @@ a substitute for live state. Re-read the tracker and GitHub before every decisio
 
 ## Procedure
 
-1. Find tickets with the configured query. It is in the tracker's own search syntax, or in plain language if the tracker
-   has none. Union the result with tickets in the state block that are not `done`. Then read each ticket: it is a
+1. Find tickets with the configured query: run it first, every tick, before you read any ticket, even when the state
+   block already lists tickets. The state block holds only tickets the loop has seen, so the query is the only way a
+   newly labeled ticket becomes a candidate; a tick that skips it reads the known tickets, looks complete, and leaves
+   the queue unread. The query is in the tracker's own search syntax, or in plain language if the tracker has none.
+   Union the result with tickets in the state block that are not `done`. Then read each ticket: it is a
    candidate only if it carries one of the configured labels and is not closed. The query finds tickets; only the
    labels authorize them. Being in the state block authorizes nothing either: the journal remembers every ticket the
    loop has seen, including ones that never had a label and ones whose label was removed. A closed ticket is never a

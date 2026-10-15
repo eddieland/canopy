@@ -444,6 +444,13 @@ always comparable. A cursor an earlier canopy wrote is an id, or `run:<id>`; the
 time and write it, and to treat a cursor that names nothing as empty. Until it has, that unit's review state is as
 ambiguous as before.
 
+The overseer runs the configured query every tick, before it reads any ticket, even when the state block already
+lists tickets. The block holds only tickets the loop has seen, so the query is the only way a newly labeled ticket
+becomes a candidate, and a tick that skips it reads the tickets it knows, finds nothing wrong, and closes `ok`: the
+queue stalls with nothing failing. A cheaper model run as the overseer did that on the operator's queue (2026-10-15),
+reading the block's tickets and never the query. The prompt's step 1 says so, as its section on `review.query`
+already did for reviews. Nothing checks it in code until a connector runs the query (ROADMAP M36).
+
 "Closed" means whatever the tracker calls finished: Jira status category Done, GitHub issue state closed, and so on. The
 provider skill says which.
 
