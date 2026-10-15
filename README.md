@@ -15,8 +15,8 @@ repositories, your tracker, or your internal tools.
 ![The web UI's Attention page: what needs you, the selected item's conversation, and the working runs](ui/e2e/screenshots.spec.ts-snapshots/attention-dark-root-linux.png)
 
 **Status:** pre-alpha, in use by its operator since the first live session (2026-10-12). The loop, the web UI, chores,
-notifications, and private tickets are built. Sandboxed workers (M26) and cutting the overseer's spend (M28, M34,
-M36 to M39) are not yet.
+notifications, and private tickets are built. Sandboxed workers (M26) and cutting the overseer's spend further (M36
+to M39) are not yet.
 
 - Milestones: [docs/ROADMAP.md](docs/ROADMAP.md)
 - Live checks still to run: [docs/SCENARIOS.md](docs/SCENARIOS.md)
