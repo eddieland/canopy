@@ -588,8 +588,10 @@ that `query` matches is reviewed like any other match: a review in the journal, 
 `canopy review run --pr URL --sha SHA [--ticket KEY] [--repo NAME] [--context '<text>']` requires `CANOPY_TICK_ID` like
 `dispatch` (D020). `URL` is the PR's `https://` URL, an opaque string the harness never parses. `SHA` is the full head
 commit the overseer read. `--ticket` links an agent PR to its ticket. The run records its purpose: `own` with
-`--ticket`, one of the loop's own PRs, and `query` without, a `review.query` match (ROADMAP M42 adds `request`). Under
-the dispatch lock, it refuses, recording `refused:<guard>`, on the first of:
+`--ticket`, one of the loop's own PRs, and `query` without, a `review.query` match (ROADMAP M42 adds `request`). The
+harness cannot tell that a PR without a ticket matched the query, since the overseer runs the query; `query` means a
+review of a PR the loop does not own, which is all a purpose decides until M42. Under the dispatch lock, it refuses,
+recording `refused:<guard>`, on the first of:
 
 - `reviews_off`: see above.
 - `bad_pr`: `URL` is not a plain `https://` URL of at most 300 characters, `SHA` is not 40 or 64 lowercase hex
@@ -817,8 +819,8 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
 ### Journal
 
 - `review_runs`: id, tick id, PR URL, commit, ticket key (nullable), its purpose (`own` or `query`, 0022; runs from
-  before are `own` where their ticket's unit had their PR), slot, lease id and holder, the base branch it was
-  leased on (nullable, 0016), pid of `_review`, pid of
+  before are `own` where their ticket's unit in their repository had their PR), slot, lease id and holder, the base
+  branch it was leased on (nullable, 0016), pid of `_review`, pid of
   the agent, started and ended times, status, `result_json` (validated, text cut to its limits), log path, and what
   the runtime reported (§13): `session_id`, `cost_usd`, and tokens by kind, as `runs` has them, NULL when it reported
   nothing. A timed-out reviewer records what its finished calls cost. Separate from `runs`, which is keyed by ticket
