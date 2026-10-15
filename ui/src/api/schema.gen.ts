@@ -400,6 +400,28 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/reviews/{run_id}/sends": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a review's findings to a worker
+         * @description `canopy send review:ID N...`: a reply on the review's ticket, the operator's go-ahead on those findings.
+         *
+         *     Idempotent on the submission id: a retried submission records nothing new (DESIGN §21).
+         */
+        post: operations["sendReviewFindings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs": {
         parameters: {
             query?: never;
@@ -2077,6 +2099,53 @@ export type components = {
          * @enum {string}
          */
         ReviewImpact: "low" | "normal" | "high";
+        /**
+         * ReviewSendRequest
+         * @description Some of a review run's findings to send to a worker, by number, with the submission id the form drew.
+         */
+        ReviewSendRequest: {
+            /**
+             * Findings
+             * @description The findings' numbers in the review, from 1.
+             */
+            findings: number[];
+            /**
+             * Submission
+             * @description The id the form drew when the findings were picked, sent again unchanged on a retry.
+             */
+            submission: string;
+        };
+        /**
+         * ReviewSent
+         * @description What sending a review's findings recorded: the operator message on the review's ticket that names them.
+         */
+        ReviewSent: {
+            /**
+             * Findings
+             * @description The findings sent, by number.
+             */
+            findings: number[];
+            /**
+             * Message Id
+             * @description The message, the operator's go-ahead on the findings.
+             */
+            message_id: number;
+            /**
+             * New
+             * @description Whether it was recorded now, rather than by an earlier submission with the same id.
+             */
+            new: boolean;
+            /**
+             * Run
+             * @description The review run's id.
+             */
+            run: number;
+            /**
+             * Ticket Key
+             * @description The ticket the message went to.
+             */
+            ticket_key: string;
+        };
         /**
          * ReviewSummary
          * @description One review run of a PR at a commit (DESIGN §21): canopy's own review, which is never on the PR (D114).
@@ -4362,6 +4431,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReviewDismissed"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    sendReviewFindings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The review run's id. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewSendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewSent"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

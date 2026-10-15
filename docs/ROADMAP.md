@@ -497,25 +497,15 @@ Next: FTS5 when a real journal's empty search takes more than a quarter of a sec
 
 ## M32. Shadow PR reviews in the web UI
 
-REQUIREMENTS N1, DESIGN §21 and §22. Needs M11 and M20. Asked for by the operator (2026-10-13): canopy's reviews stay
-off the PR (D114), so canopy shows them itself, as a PR review of its own that only the operator sees.
+A review's page shows canopy's own review of a PR, never posted on it (D114): its findings on the diff `_review` keeps,
+each dismissed from its card (`canopy dismiss review:ID N`) or ticked and sent to a worker (`canopy send review:ID
+N...`), and the pull requests pages make the PR the subject (DESIGN §21, §22).
 
-- A PR's page: each review run at its commit, the verdict, and each finding with its detail, anchored on the diff at
-  its `path:line` where the line is in the diff.
-- What the operator does from there, such as dismissing a finding or sending some findings to a worker, through the
-  journal's existing channels (`canopy reply`, the overseer), never a write to the PR.
-- Settled: the diff is kept from the review run. `_review` writes `git diff` of the commit against where it leaves its
-  pool's base branch beside the run's log, since the harness cannot ask GitHub and the slot is gone afterwards
-  (DESIGN §21, The diff). Open: how a finding is followed from one commit's review to the next.
-
-Status: in progress. Migration 0016 records a review run's base branch, and `_review` keeps the diff, which
-`core/review_diff.py` reads back and anchors each finding on (2026-10-13). `GET /reviews` and `GET /reviews/{id}` serve
-them, over a mock of four review runs; TRUST_MODEL T8 gains the diff, waiting on the operator's approval note. The
-Reviews pages show them, findings on the diff. The pull requests pages make the PR the subject: each PR the journal
-knows, the loop's own included before any review, with its page of the runs that pushed to it, its reviews, and the
-decisions naming it. The operator dismisses a finding from its card or with `canopy dismiss review:ID N` (2026-10-13),
-which holds it back from a resume's worker and from the overseer, for that run only. Next: sending some findings to a
-worker from the page; then the live check, a real review's page against its PR's diff on GitHub.
+Status: done 2026-10-15.
+Learned: closed on the operator's request before the live check against a real PR, which is SCENARIOS S36. Sending
+findings needed no new channel: it is a reply on the review's ticket naming them by number, which the overseer already
+reads as the go-ahead on review feedback (D089), so the reviewer's text never reaches a prompt as the operator's words.
+Next: a finding still has no id that lasts across commits, so a dismissal or a send is one run's (DESIGN §21, Open).
 
 ## M33. Spend by what it bought
 

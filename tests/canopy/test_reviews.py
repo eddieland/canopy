@@ -14,7 +14,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, review_diff
+from canopy.core import conversation, db, review_diff
 from canopy.core import review_result as result
 from canopy.core.config import load
 from canopy.infra import procs
@@ -859,3 +859,60 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
         assert main(["dismiss", ref, "1", "--undo"]) == 0
         assert "is no longer dismissed: a resume hands it to the worker again." in capsys.readouterr().out
         assert db.review_dismissals(conn, review_id) == frozenset({2})
+
+
+def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
+    reviews: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """`canopy send review:ID N` replies on the review's ticket, naming findings by number only (DESIGN §21)."""
+    conn = journal(reviews)
+    sha = head(git_pool)
+    with reviewer_reports(TWO_FINDINGS):
+        review_id = run_inline(conn, "--ticket", "PROJ-1", sha=sha)
+        query_id = run_inline(conn, sha=sha, pr="https://github.com/acme/api/pull/9")
+    ref = f"review:{review_id}"
+    implemented(conn)
+
+    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "1"}):
+        assert main(["send", ref, "1"]) == 1
+        assert "send refused (inside_run)" in capsys.readouterr().err
+    assert main(["dismiss", ref, "2"]) == 0
+    for args, guard in [
+        ([ref, "3"], "unknown"),
+        ([ref, "0"], "bad_finding"),
+        ([ref, "2"], "dismissed"),
+        (["review:99", "1"], "unknown"),
+        ([f"review:{query_id}", "1"], "no_ticket"),
+        (["PROJ-1", "1"], "unsupported"),
+    ]:
+        assert main(["send", *args]) == 1
+        assert f"send refused ({guard})" in capsys.readouterr().err
+    assert main(["dismiss", ref, "2", "--undo"]) == 0
+    capsys.readouterr()
+
+    assert main(["send", ref, "1"]) == 0
+    out = capsys.readouterr().out
+    assert f"{ref} findings 1 went to PROJ-1 as message" in out
+    [message] = conversation.operator_messages_after(conn, "PROJ-1", 0)
+    body = f"Address finding 1 of canopy's review run {review_id}, of commit {sha[:12]}. Leave its finding 2 alone."
+    assert (message["body"], message["channel"]) == (body, "cli")
+    # The reviewer's words stay data: the operator's message names the finding and never quotes it.
+    assert "retry never stops" not in message["body"]
+    # The same command again records nothing new.
+    assert main(["send", ref, "1"]) == 0
+    assert "already went to PROJ-1" in capsys.readouterr().out
+
+    # The next tick reads it as the operator's go-ahead, and a resume for the review hears both.
+    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        assert main(["tick", "--dry-run"]) == 0
+    tickets = {t["key"]: t for t in state_block(agent_log)["tickets"]}
+    assert [m["body"] for m in tickets["PROJ-1"]["operator"]["new_operator_messages"]] == [body]
+    with in_tick(conn):
+        command = resume("--review-run", str(review_id), "--cursor", f"message={message['id']}")
+        assert main(command, runner=InlineRunner()) == 0
+    prompt = (reviews.state_dir / "runs" / "2.prompt").read_text()
+    assert body in prompt
+    assert "1. **blocking** `src/retry.py:42`: retry never stops" in prompt

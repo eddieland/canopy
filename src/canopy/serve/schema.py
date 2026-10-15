@@ -609,6 +609,30 @@ class ReviewDismissed(_Model):
     """Whether it is now dismissed: false after an `undo`."""
 
 
+class ReviewSendRequest(_Model):
+    """Some of a review run's findings to send to a worker, by number, with the submission id the form drew."""
+
+    findings: Annotated[list[Annotated[int, Field(ge=1, le=20)]], Field(min_length=1, max_length=20)]
+    """The findings' numbers in the review, from 1."""
+    submission: Annotated[str, Field(min_length=8, max_length=64, pattern=r"^[A-Za-z0-9_-]+$")]
+    """The id the form drew when the findings were picked, sent again unchanged on a retry."""
+
+
+class ReviewSent(_Model):
+    """What sending a review's findings recorded: the operator message on the review's ticket that names them."""
+
+    run: int
+    """The review run's id."""
+    findings: list[int]
+    """The findings sent, by number."""
+    ticket_key: str
+    """The ticket the message went to."""
+    message_id: int
+    """The message, the operator's go-ahead on the findings."""
+    new: bool
+    """Whether it was recorded now, rather than by an earlier submission with the same id."""
+
+
 class Process(_Model):
     """A process treehouse found running in a worktree."""
 

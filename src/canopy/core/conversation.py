@@ -1,6 +1,6 @@
 """Conversations (DESIGN §22): references to subjects, the operator's start records and messages, and runs' reports.
 
-Every channel the operator writes through (`canopy start`, `stop`, `reply`, `forget`, `dismiss`, and the web UI)
+Every channel the operator writes through (`canopy start`, `stop`, `reply`, `forget`, `dismiss`, `send`, and the web UI)
 calls the functions here, so the guards live in one place: the subject is valid and supports the verb, the command does
 not run inside one of canopy's own runs, the ticket was started (or, for a reply, is one canopy knows), and the body is
 within its bound. Agents never write a message: `_run` records a run's report and question from its result line
@@ -75,8 +75,9 @@ VERBS: Mapping[str, tuple[str, ...]] = {
     PR: ("grant",),
     CHORE: ("reply", "dismiss", "show"),
     RUN: ("show",),
-    # `canopy review show ID` shows one; a reference to it serves to dismiss its findings (DESIGN §21).
-    REVIEW: ("dismiss",),
+    # `canopy review show ID` shows one; a reference to it serves to dismiss its findings, or send some to a worker
+    # (DESIGN §21).
+    REVIEW: ("dismiss", "send"),
 }
 _PR_SHORT_RE = re.compile(rf"({REPO_NAME_RE.pattern})#([1-9][0-9]{{0,9}})")
 _PR_URL_RE = re.compile(r"https://[^\s/]+/[^\s/]+/[^\s/]+/pull/[1-9][0-9]{0,9}/?")
@@ -169,7 +170,7 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
             raise Refused(
                 "inside_run",
                 f"{name} is set: this runs inside one of canopy's own ticks or runs, and only the operator starts, "
-                "stops, replies, forgets, grants attempts, dismisses findings, pauses, or resumes",
+                "stops, replies, forgets, grants attempts, dismisses or sends findings, pauses, or resumes",
             )
 
 
@@ -394,6 +395,73 @@ def _dismiss_review(conn: sqlite3.Connection, ref: Ref, finding: str, *, channel
         if number > found:
             raise Refused("unknown", f"{ref} has no finding {number}: it reported {found}")
         db.set_review_dismissal(conn, run_id, number, channel=channel)
+
+
+@dataclass(frozen=True)
+class Sent:
+    """What `send` recorded: the ticket the message went to, and the reply it is."""
+
+    ticket: str
+    replied: Replied
+
+
+def send(
+    conn: sqlite3.Connection,
+    ref: Ref,
+    findings: Collection[int],
+    *,
+    channel: str,
+    submission: str | None = None,
+) -> Sent:
+    """Send some of a review run's findings to a worker: the operator's go-ahead on them, as a reply (DESIGN §21).
+
+    It records an operator message on the review's ticket that names the findings by number and the run by id, and
+    the ones it leaves alone. The message is the instruction, as any reply is: the next tick reads it as the operator's
+    go-ahead (DESIGN §7, D089) and resumes a worker with the run's findings, which addresses the ones it names. It names
+    them and never quotes them, since a finding is the reviewer's text and the message is the operator's.
+
+    Returns:
+        The ticket, and the reply it recorded.
+
+    Raises:
+        Refused: `unsupported` for a subject that is not a review, `bad_finding` for no findings or a number no
+            finding can have, `unknown` for a review run that does not exist or did not end `done` with findings, or a
+            finding it does not have, `dismissed` for a finding the operator dismissed, and `no_ticket` for a review of
+            a PR with no ticket, which no worker pushes to. As `reply`: `bad_submission`, and `unknown` for a ticket
+            canopy has no record of.
+    """
+    check_verb(ref, "send")
+    numbers = sorted(set(findings))
+    if not numbers or any(not 0 < n <= review_result.MAX_FINDINGS for n in numbers):
+        raise Refused("bad_finding", f"name one or more findings by number, from 1 to {review_result.MAX_FINDINGS}")
+    run_id = int(ref.id)
+    run = db.get_review_run(conn, run_id)
+    if run is None:
+        raise Refused("unknown", f"there is no review run {run_id}")
+    stored = review_result.stored(run["result_json"])
+    found = len(stored.findings) if stored is not None and run["status"] == "done" else 0
+    if numbers[-1] > found:
+        raise Refused("unknown", f"{ref} has no finding {numbers[-1]}: it reported {found}")
+    dismissed = db.review_dismissals(conn, run_id)
+    if held := [n for n in numbers if n in dismissed]:
+        raise Refused("dismissed", f"{ref} {_numbered(held)} dismissed; undo the dismissal to send it")
+    if run["ticket_key"] is None:
+        raise Refused("no_ticket", f"{ref} is of a PR with no ticket, which no worker pushes to")
+    left = tuple(n for n in range(1, found + 1) if n not in numbers and n not in dismissed)
+    body = f"Address {_numbered(numbers, verb=False)} of canopy's review run {run_id}, of commit {run['sha'][:12]}."
+    if left:
+        body += f" Leave its {_numbered(left, verb=False)} alone."
+    replied = reply(conn, Ref(TICKET, run["ticket_key"]), body, channel=channel, submission=submission)
+    return Sent(ticket=run["ticket_key"], replied=replied)
+
+
+def _numbered(numbers: Collection[int], *, verb: bool = True) -> str:
+    # `finding 2 is`, `findings 1 and 3 are`, `findings 1, 3, and 5`.
+    words = [str(n) for n in numbers]
+    if len(words) == 1:
+        return f"finding {words[0]}{' is' if verb else ''}"
+    listed = f"{words[0]} and {words[1]}" if len(words) == 2 else f"{', '.join(words[:-1])}, and {words[-1]}"  # noqa: PLR2004
+    return f"findings {listed}{' are' if verb else ''}"
 
 
 @dataclass(frozen=True)

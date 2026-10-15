@@ -246,7 +246,7 @@ A reference names a subject by its shape, so no kind needs a flag and no form ca
 | `api#42`, or the PR's URL | a PR | `grant` (its reviews, by URL); all, once PR-scoped work exists (M14) |
 | `chore:NAME` | a chore (§19) | `reply` (its notes), `dismiss` (one of its findings), `show` |
 | `run:ID` | a run | `show` |
-| `review:ID` | a review run (§21) | `dismiss` (one of its findings); `canopy review show ID` shows one |
+| `review:ID` | a review run (§21) | `dismiss` (one of its findings), `send` (some to a worker); `canopy review show ID` shows one |
 
 A verb a kind does not support is refused `unsupported`, naming the verbs it does. Messages and start records are keyed
 by subject (its kind and id), not by ticket key, so a new kind adds a row here, not a table. Every form is parsed and
@@ -308,8 +308,8 @@ tick. Before M28 only a message woke it, so a start from the web UI waited for t
 | Channel | In | Out | Proves the operator by |
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
-| cli | `canopy start`, `stop`, `reply` (public tickets too), `forget`, `grant`, `dismiss` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
-| web (M20) | reply, start, stop, forget, grant; notes to chores (M23), dismissing chores' and reviews' findings; pause, resume | pages | the listener secret (TRUST_MODEL T8) |
+| cli | `canopy start`, `stop`, `reply` (public tickets too), `forget`, `grant`, `dismiss`, `send` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
+| web (M20) | reply, start, stop, forget, grant; notes to chores (M23), dismissing chores' and reviews' findings, sending reviews' findings to a worker (M32); pause, resume | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
 Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
@@ -324,8 +324,9 @@ Served by `canopy loop` from a thread (D073):
   and serves nothing; the loop goes on. It serves plain HTTP, also on a private address: T8's "relies on the network"
   residual stands (D076).
 - Each request opens its own journal connection, never takes the tick lock, and writes only through the functions the
-  CLI uses: `conversation.start`, `stop`, `reply`, `forget`, and `dismiss` with channel `web` (a note to a chore is a
-  `reply` on its subject, as `canopy reply chore:NAME` is), for a stop with `now`, the same `runs.halt.end` as
+  CLI uses: `conversation.start`, `stop`, `reply`, `forget`, `dismiss`, and `send` with channel `web` (a note to a
+  chore is a `reply` on its subject, as `canopy reply chore:NAME` is, and sending a review's findings a `reply` on its
+  ticket, §21), for a stop with `now`, the same `runs.halt.end` as
   `canopy stop --now`, for a grant `runs.policy.grant` and `reviews.grants.grant` as `canopy grant`, one run each,
   and `pause.pause` and `pause.resume` as `canopy pause` and `canopy resume` (§6). Reload on
   the settings page asks the loop to read its config again, as SIGHUP does (§6); it writes nothing, and the files stay
@@ -352,7 +353,8 @@ Served by `canopy loop` from a thread (D073):
   opens it whole over the page, and each list shows the columns its width has room for, its title always
   (`ui/DESIGN.md`).
   Actions: the CLI's verbs, reply, start, and stop (with or without `now`), granting one more run to what is at its
-  limit (below), a note to a chore, dismissing a chore's finding or listing it again, and pausing and resuming
+  limit (below), a note to a chore, dismissing a chore's finding or listing it again, dismissing a review's finding or
+  sending some to a worker (§21), and pausing and resuming
   the loop from the header on every page, which shows how long it has been paused, and reloading the loop's config
   from the settings page. OpenCode's session attach (M15) is
   not in the UI: a run's page shows its session id and, once it ends, its transcript (below), and attach joins once
@@ -433,6 +435,7 @@ The API, under `{base}/api`:
 | `GET /reviews` | canopy's latest 100 review runs, newest first: PR, commit, ticket, status, verdict, impact, findings, cost (§21) |
 | `GET /reviews/{id}` | one review run: its summary, findings anchored on its diff, each marked whether dismissed, the diff, and the PR's other runs; 404 for no such run |
 | `POST /reviews/{id}/dismissals` | `canopy dismiss review:ID N`, or with `undo` its `--undo`: no worker or tick acts on finding `N` (§21) |
+| `POST /reviews/{id}/sends` | `canopy send review:ID N...`, with the form's submission id: a reply on the review's ticket, the operator's go-ahead on those findings (§21) |
 | `GET /pull-requests` | the PRs the journal knows, most recent activity first, at most 100: ticket, branch, phase, the run working it, its latest review |
 | `GET /pull-request?url=` | one PR: the runs that pushed to it, its review runs and limit, the latest 20 decisions naming it, and its total cost; 404 for one nothing names |
 | `POST /pull-request/grants?url=` | `canopy grant URL review`, for one review run |

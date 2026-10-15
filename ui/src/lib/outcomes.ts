@@ -1,4 +1,14 @@
-import type { ConfigReload, Dismissed, Forgot, Granted, Replied, ReviewDismissed, Started, Stopped } from '@/api/types'
+import type {
+    ConfigReload,
+    Dismissed,
+    Forgot,
+    Granted,
+    Replied,
+    ReviewDismissed,
+    ReviewSent,
+    Started,
+    Stopped,
+} from '@/api/types'
 
 // What each of the operator's actions did, in the words the CLI's verb prints (canopy/cli/conversation.py).
 
@@ -84,6 +94,16 @@ export function reviewDismissedText(dismissed: ReviewDismissed): string {
         return `${head} is dismissed: no worker or tick acts on it.`
     }
     return `${head} is no longer dismissed: a resume hands it to the worker again.`
+}
+
+/** What sending a review's findings did, as `canopy send review:ID N...` says it. */
+export function reviewSentText(sent: ReviewSent): string {
+    const head = `review:${sent.run} findings ${sent.findings.join(', ')}`
+    const to = `${sent.ticket_key} as message ${sent.message_id}`
+    if (sent.new) {
+        return `${head} went to ${to}: the next tick reads it as your go-ahead.`
+    }
+    return `${head} already went to ${to}.`
 }
 
 /** What a reply did, as `canopy reply` says it: the message it recorded, or the one that already said it. */

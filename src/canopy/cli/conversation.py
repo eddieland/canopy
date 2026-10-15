@@ -1,10 +1,10 @@
 """The operator's verbs (DESIGN §22, D075): on tickets, chores, and runs, and pausing and resuming the loop.
 
 `pause` and `resume` act on the loop (§6). The rest take a reference whose shape names its kind: a ticket key, `REPO#N`
-or a PR's URL, `chore:NAME`, or `run:ID`. A kind refuses a verb it does not take. `start`, `stop`, `reply`, `forget`,
-and `dismiss` write through `canopy.core.conversation`, which every channel shares, `grant` through
+or a PR's URL, `chore:NAME`, `run:ID`, or `review:ID`. A kind refuses a verb it does not take. `start`, `stop`, `reply`,
+`forget`, `dismiss`, and `send` write through `canopy.core.conversation`, which every channel shares, `grant` through
 `canopy.runs.policy`, or `canopy.reviews.grants` for a PR's reviews, and `pause` and `resume` through
-`canopy.core.pause`; all eight refuse inside canopy's own ticks and runs.
+`canopy.core.pause`; all nine refuse inside canopy's own ticks and runs.
 """
 
 from __future__ import annotations
@@ -311,6 +311,46 @@ def cmd_dismiss(click_ctx: click.Context, ref: str, finding: str, *, undo: bool)
         click.echo(
             f"{subject} {finding} is dismissed: it is off the attention list until the chore stops reporting it."
         )
+    return 0
+
+
+@click.command("send")
+@click.argument("ref", metavar="review:ID")
+@click.argument("findings", metavar="N...", nargs=-1, required=True, type=int)
+@click.pass_context
+def cmd_send(click_ctx: click.Context, ref: str, findings: tuple[int, ...]) -> int:
+    """Send findings N... of a review run (`review:ID`, by their numbers) to a worker.
+
+    It replies on the review's ticket for you, naming the findings by number and the ones it leaves alone, as you would
+    with `canopy reply KEY`: the next tick reads it as your go-ahead and resumes a worker with the review's findings,
+    which addresses the ones it names, whether or not `trust.trusted_reviewers` lists `canopy:review`. A review of a PR
+    with no ticket refuses, as does a dismissed finding.
+    """
+    _operator("send")
+    subject = _ref(ref, "send")
+    ctx = open_context(click_ctx)
+    try:
+        sent = conversation.send(ctx.conn, subject, findings, channel=CLI)
+    except conversation.Refused as r:
+        raise CliError(f"send refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info(
+        "findings sent",
+        extra={
+            "subject": str(subject),
+            "findings": sorted(set(findings)),
+            "ticket": sent.ticket,
+            "message_id": sent.replied.message_id,
+            "channel": CLI,
+        },
+    )
+    named = ", ".join(str(n) for n in sorted(set(findings)))
+    if sent.replied.new:
+        click.echo(
+            f"{subject} findings {named} went to {sent.ticket} as message {sent.replied.message_id}: "
+            "the next tick reads it as your go-ahead."
+        )
+    else:
+        click.echo(f"{subject} findings {named} already went to {sent.ticket} as message {sent.replied.message_id}.")
     return 0
 
 
