@@ -406,9 +406,12 @@ lifted as docs/SANDBOX.md says, and on macOS, both with `srt` 0.0.79. What treeh
 settled from its source (HOST_ISOLATION §7): plain git, which reads only what a sandboxed worker cannot write. Tracing
 it found that the slot's own `commondir` and `gitdir` were writable, and a worker that rewrote `commondir` had every
 git on the host in its slot, canopy's included, read a config it wrote; the wrapper now denies writing both, the
-canary checks it, and `_run` and reconcile check `commondir` as they do the `.git` link.
-Next: the other two questions Accept needs settled, TRUST_MODEL T4 and T6, and the canary on the operator's Linux and
-macOS machines.
+canary checks it, and `_run` and reconcile check `commondir` as they do the `.git` link. Caches that tools keep as git
+repositories are settled too: git's variables, set for the whole run, sent the objects of Go's module sources and of
+OpenCode's snapshots, which persist under its data directory, to the run's directory, so the wrapper now puts a `git`
+of its own first on `PATH` that sets them in the run's worktrees only; pre-commit was never affected.
+Next: the last question Accept needs settled, OpenCode's MCP servers, TRUST_MODEL T4 and T6, and the canary on the
+operator's Linux and macOS machines.
 
 ## M27. Session transcripts in the web UI
 
