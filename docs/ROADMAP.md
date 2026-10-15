@@ -747,9 +747,9 @@ Status: not started.
 
 ## M41. Limits and trust settings from the web UI
 
-REQUIREMENTS R16. The settings page changes the limits in `capacity`, `policy`, and `loop`, within ceilings in code,
-and makes trust settings stricter, writing the user file in place with its comments kept and then asking the loop to
-reload (DESIGN §12, §22, TRUST_MODEL T8, D118, D119).
+REQUIREMENTS R16. A Limits and trust page under Settings changes the limits in `capacity`, `policy`, and `loop`, within
+ceilings in code, and makes trust settings stricter, writing the user file in place with its comments kept and then
+asking the loop to reload (DESIGN §12, §22, TRUST_MODEL T8, D118, D119).
 
 Status: done 2026-10-15.
 Learned: checking each bound on the values the edited copy loads to, rather than on the request, keeps the rules

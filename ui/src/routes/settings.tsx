@@ -1,12 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
-import { LogOut, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { ChevronRight, LogOut, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 
 import { reloadConfig, signOut } from '@/api/mutations'
 import { keys, sessionQuery, spendQuery } from '@/api/queries'
-import { ConfigForm } from '@/components/config-form'
 import { Cost } from '@/components/cost'
 import { HatPreview } from '@/components/hat'
 import { Input } from '@/components/input'
@@ -94,7 +93,7 @@ function SettingsPage() {
                 </div>
             </Panel>
             <SendKeyPanel />
-            <ConfigForm />
+            <LimitsPanel />
             <ConfigPanel />
             {/* Second to last: below what changes how canopy works, above signing out. */}
             <FunPanel />
@@ -361,6 +360,27 @@ function SendKeyPanel() {
                         </ToggleGroupItem>
                     ))}
                 </ToggleGroup>
+            </div>
+        </Panel>
+    )
+}
+
+/** Where the limits and trust settings are changed: a page of their own, as many as they are. */
+function LimitsPanel() {
+    return (
+        <Panel>
+            <PanelHeader label="Limits and trust" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p className="text-sm text-muted-foreground">
+                    How many workers, chores, and reviews run, how often a ticket is tried, how often the loop ticks,
+                    and whose words it acts on. Changed in your config.toml, its comments kept.
+                </p>
+                <Button asChild variant="outline" data-testid="limits-open">
+                    <Link to="/settings/limits">
+                        Open
+                        <ChevronRight />
+                    </Link>
+                </Button>
             </div>
         </Panel>
     )

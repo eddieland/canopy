@@ -234,12 +234,12 @@ worker's definition allows that one force and no other, and `canopy _run`'s own 
 run started from (§8, TRUST_MODEL T1). It applies to every repository the operator works on. It is user-only because
 it lets a worker replace a branch's history: a shared file must not decide that.
 
-**From the web UI.** The settings page (§22) edits a few keys of the user file in place, and no others (D118,
-TRUST_MODEL T8). They are named one by one in `canopy/serve/config_edit.py`, never by section, so a key added to a
-section later is not editable until it is named there. A limit may be raised or lowered, but the page cannot loosen
-it past its bound; the file can set any value, and the page may still tighten a value the file set past the bound.
-A trust key moves only toward stricter: a config write outlives the listener secret, and a replier added through a
-stolen session would go on steering workers after a new secret ended it.
+**From the web UI.** The Limits and trust page under Settings (§22) edits a few keys of the user file in place, and no
+others (D118, TRUST_MODEL T8). They are named one by one in `canopy/serve/config_edit.py`, never by section, so a key
+added to a section later is not editable until it is named there. A limit may be raised or lowered, but the page cannot
+loosen it past its bound; the file can set any value, and the page may still tighten a value the file set past the
+bound. A trust key moves only toward stricter: a config write outlives the listener secret, and a replier added through
+a stolen session would go on steering workers after a new secret ended it.
 
 | Key | From the page |
 |---|---|

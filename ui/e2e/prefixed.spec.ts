@@ -156,11 +156,18 @@ test('the settings page saves a limit and drops a trusted reviewer, but raises n
     page,
 }) => {
     await page.goto('settings')
+    await page.getByTestId('limits-open').click()
+    await expect(page).toHaveURL(/\/canopy\/settings\/limits$/u)
     const form = page.getByTestId('config-form')
+    await expect(form.getByTestId('config-pending')).toHaveText('No unsaved changes')
     const workers = form.getByTestId('capacity.max_workers')
     await expect(workers).toHaveValue('2')
     await expect(form.getByTestId('config-save')).toBeDisabled()
 
+    await workers.fill('5')
+    await expect(form.getByTestId('config-pending')).toHaveText('1 unsaved change')
+    await form.getByTestId('config-discard').click()
+    await expect(workers).toHaveValue('2')
     await workers.fill('many')
     await expect(form.getByRole('alert')).toHaveText('capacity.max_workers: a whole number')
     await expect(form.getByTestId('config-save')).toBeDisabled()

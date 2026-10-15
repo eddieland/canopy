@@ -132,3 +132,113 @@ export function savedText(saved: ConfigSaved): string {
     }
     return parts.join(' ')
 }
+
+/** One of the limits page's panels: what its keys are about, and each key's name in words. */
+export interface ConfigGroup {
+    /** The panel's label. */
+    title: string
+    /** One line under the label on what the keys in it govern. */
+    blurb: string
+    /** The keys it shows, in order, by name, each with its label in words. */
+    keys: { name: string; label: string }[]
+}
+
+/**
+ * The limits page's panels, in order. A key the server lists that no panel names lands in `Other`, so a key added to
+ * the server's allowlist shows before a label is written for it.
+ */
+export const CONFIG_GROUPS: ConfigGroup[] = [
+    {
+        title: 'Capacity',
+        blurb: 'How much runs at once on this machine, and how many reviews a day.',
+        keys: [
+            { name: 'capacity.max_workers', label: 'Workers at once' },
+            { name: 'capacity.max_chores', label: 'Chore runs at once' },
+            { name: 'capacity.max_reviews', label: 'Review runs at once' },
+            { name: 'capacity.max_reviews_per_day', label: 'Reviews a day' },
+        ],
+    },
+    {
+        title: 'Pools',
+        blurb: "Each repository's worktree slots. canopy workspace sync makes or removes them; leases follow at once.",
+        keys: [
+            { name: 'capacity.slots_per_repo', label: 'Slots per repository' },
+            { name: REPO_SLOTS, label: 'Repositories with a count of their own' },
+        ],
+    },
+    {
+        title: 'Attempts',
+        blurb: 'How many runs a ticket or PR gets before it waits for you, and the pause between fix-CI runs.',
+        keys: [
+            { name: 'policy.max_implement_attempts', label: 'Implement runs per unit' },
+            { name: 'policy.max_fix_ci_attempts', label: 'Fix-CI runs per unit' },
+            { name: 'policy.max_resume_attempts', label: 'Resume runs per unit' },
+            { name: 'policy.max_split_attempts', label: 'Split runs per ticket' },
+            { name: 'policy.max_reviews_per_pr', label: 'Review runs per PR' },
+            { name: 'policy.fix_ci_cooldown_minutes', label: 'Minutes between fix-CI runs' },
+        ],
+    },
+    {
+        title: 'Pace',
+        blurb: "How often the loop ticks, which is most of the overseer's spend.",
+        keys: [
+            { name: 'loop.interval_minutes', label: 'Minutes between ticks' },
+            { name: 'loop.idle_max_minutes', label: 'Longest wait when idle, in minutes' },
+        ],
+    },
+    {
+        title: 'Trust',
+        blurb: 'Only stricter from here: loosening one, or adding a name, is an edit to the file.',
+        keys: [
+            { name: 'policy.stacking', label: 'Never stack a branch on another' },
+            { name: 'trust.authorized_repliers', label: 'Who may answer a worker' },
+            { name: 'trust.trusted_reviewers', label: 'Whose review a worker acts on unasked' },
+            { name: 'trust.rebase', label: 'Workers rebase and push with a lease' },
+            { name: 'trust.commit_trailer', label: 'Workers add a Co-authored-by trailer' },
+        ],
+    },
+]
+
+/** A key the server listed, with its label from `CONFIG_GROUPS`, or its name when no panel names it. */
+export interface LabelledKey {
+    /** The key as the server sent it. */
+    setting: ConfigKey
+    /** Its name in words. */
+    label: string
+}
+
+/**
+ * The server's keys, by `CONFIG_GROUPS`'s panels: each panel with the keys it names that the server sent, then
+ * `Other` with any it sent that no panel names. A panel left with no key is dropped.
+ */
+export function groupedKeys(keys: ConfigKey[]): { group: ConfigGroup; keys: LabelledKey[] }[] {
+    const byName = new Map(keys.map((k) => [k.name, k]))
+    const placed = new Set<string>()
+    const found: { group: ConfigGroup; keys: LabelledKey[] }[] = []
+    for (const group of CONFIG_GROUPS) {
+        const shown: LabelledKey[] = []
+        for (const { name, label } of group.keys) {
+            const setting = byName.get(name)
+            if (setting !== undefined) {
+                shown.push({ setting, label })
+                placed.add(name)
+            }
+        }
+        if (shown.length > 0) {
+            found.push({ group, keys: shown })
+        }
+    }
+    const rest = keys.filter((k) => !placed.has(k.name)).map((setting) => ({ setting, label: setting.name }))
+    if (rest.length > 0) {
+        found.push({ group: { title: 'Other', blurb: 'Keys this page has no words for yet.', keys: [] }, keys: rest })
+    }
+    return found
+}
+
+/** How many keys a save would change, in words for the save bar. */
+export function pendingText(count: number): string {
+    if (count === 0) {
+        return 'No unsaved changes'
+    }
+    return count === 1 ? '1 unsaved change' : `${count} unsaved changes`
+}

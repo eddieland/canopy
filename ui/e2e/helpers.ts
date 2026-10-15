@@ -24,6 +24,7 @@ export const ROUTES = [
     'ticks/2',
     'spend',
     'settings',
+    'settings/limits',
     'search?q=web',
 ] as const
 /** A page in ROUTES. */

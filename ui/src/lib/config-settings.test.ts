@@ -2,7 +2,15 @@ import { describe, expect, it } from 'vitest'
 
 import type { ConfigKey, ConfigSaved } from '@/api/types'
 
-import { boundText, configForm, savedText, sourceText } from './config-settings'
+import {
+    boundText,
+    CONFIG_GROUPS,
+    configForm,
+    groupedKeys,
+    pendingText,
+    savedText,
+    sourceText,
+} from './config-settings'
 
 const WORKERS: ConfigKey = {
     name: 'capacity.max_workers',
@@ -110,5 +118,27 @@ describe('config settings', () => {
         expect(savedText({ ...SAVED, changed: [], reload: null })).toBe(
             'Nothing changed: each setting already had that value, and nothing was written.',
         )
+    })
+})
+
+describe('config groups', () => {
+    it('put each key in its panel with its words, and a key no panel names in Other', () => {
+        const odd: ConfigKey = { ...WORKERS, name: 'capacity.max_something_new' }
+        const found = groupedKeys([REVIEWERS, WORKERS, odd, PACE])
+        expect(found.map((g) => g.group.title)).toEqual(['Capacity', 'Pace', 'Trust', 'Other'])
+        expect(found[0]?.keys).toEqual([{ setting: WORKERS, label: 'Workers at once' }])
+        expect(found[3]?.keys).toEqual([{ setting: odd, label: 'capacity.max_something_new' }])
+    })
+
+    it('name every key the server edits in some panel', () => {
+        const named = CONFIG_GROUPS.flatMap((g) => g.keys.map((k) => k.name))
+        expect(new Set(named).size).toBe(named.length)
+        expect(named).toHaveLength(19)
+    })
+
+    it('count the unsaved changes', () => {
+        expect(pendingText(0)).toBe('No unsaved changes')
+        expect(pendingText(1)).toBe('1 unsaved change')
+        expect(pendingText(3)).toBe('3 unsaved changes')
     })
 })

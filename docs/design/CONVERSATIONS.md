@@ -324,24 +324,22 @@ Served by `canopy loop` from a thread (D073):
   and serves nothing; the loop goes on. It serves plain HTTP, also on a private address: T8's "relies on the network"
   residual stands (D076).
 - Each request opens its own journal connection, never takes the tick lock, and writes only through the functions the
-  CLI uses: `conversation.start`, `stop`, `reply`, `forget`, `dismiss`, and `send` with channel `web` (a note to a
-  chore is a `reply` on its subject, as `canopy reply chore:NAME` is, and sending a review's findings a `reply` on its
-  ticket, §21), for a stop with `now`, the same `runs.halt.end` as
-  `canopy stop --now`, for a grant `runs.policy.grant` and `reviews.grants.grant` as `canopy grant`, one run each,
-  and `pause.pause` and `pause.resume` as `canopy pause` and `canopy resume` (§6). Reload on
-  the settings page asks the loop to read its config again, as SIGHUP does (§6); it writes nothing. The settings
-  page's limits and trust form writes the user file, only the keys §12 lists, within their bounds, and trust only
-  toward stricter (`serve.config_edit`, TRUST_MODEL T8), then asks for the same reload; every other key stays the
-  operator's to edit in the file. A forget
-  cannot be undone from the UI, so its request carries the ticket's key as the operator typed it, and the server refuses
-  `not_confirmed` before reading anything when it does not match, so no client skips the challenge; one more click, as
-  Stop now asks, is too easy to give by mistake. Its outcome
-  names the branch and PRs canopy no longer tracks, as the CLI's does; the attempt-limit note is the CLI's alone.
-  `serve` is a feature and cannot import `runs`, `reviews`, or `loop`, so the loop hands it that function and the
-  attention list's (`loop.attention.listed`), a way to ask for a reload (`loop.reread`), and the grants with the
-  limits they raise (`runs.policy`, `reviews.grants`), when it starts the server (`serve.backend`); a reload hands
-  the server the new config, which each request reads as it opens. The one process it runs is
-  `treehouse status --json`, for the worktrees page (below): it changes no lease, but it takes the pool's lock.
+  CLI uses: `conversation.start`, `stop`, `reply`, `forget`, `dismiss`, and `send` with channel `web` (a note to a chore
+  is a `reply` on its subject, as `canopy reply chore:NAME` is, and sending a review's findings a `reply` on its ticket,
+  §21), for a stop with `now`, the same `runs.halt.end` as `canopy stop --now`, for a grant `runs.policy.grant` and
+  `reviews.grants.grant` as `canopy grant`, one run each, and `pause.pause` and `pause.resume` as `canopy pause` and
+  `canopy resume` (§6). Reload on the settings page asks the loop to read its config again, as SIGHUP does (§6); it
+  writes nothing. The Limits and trust page under Settings (`/settings/limits`) writes the user file, only the keys §12
+  lists, within their bounds, and trust only toward stricter (`serve.config_edit`, TRUST_MODEL T8), then asks for the
+  same reload; every other key stays the operator's to edit in the file. A forget cannot be undone from the UI, so its
+  request carries the ticket's key as the operator typed it, and the server refuses `not_confirmed` before reading
+  anything when it does not match, so no client skips the challenge; one more click, as Stop now asks, is too easy to
+  give by mistake. Its outcome names the branch and PRs canopy no longer tracks, as the CLI's does; the attempt-limit
+  note is the CLI's alone. `serve` is a feature and cannot import `runs`, `reviews`, or `loop`, so the loop hands it
+  that function and the attention list's (`loop.attention.listed`), a way to ask for a reload (`loop.reread`), and the
+  grants with the limits they raise (`runs.policy`, `reviews.grants`), when it starts the server (`serve.backend`); a
+  reload hands the server the new config, which each request reads as it opens. The one process it runs is `treehouse
+  status --json`, for the worktrees page (below): it changes no lease, but it takes the pool's lock.
 - A server failure is logged and the server restarted after 1 second, doubling to at most 60; it never ends the loop.
   Stopping the loop stops it, waiting at most 2 seconds for open streams.
 - Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected item's
@@ -357,9 +355,11 @@ Served by `canopy loop` from a thread (D073):
   Actions: the CLI's verbs, reply, start, and stop (with or without `now`), granting one more run to what is at its
   limit (below), a note to a chore, dismissing a chore's finding or listing it again, dismissing a review's finding or
   sending some to a worker (§21), and pausing and resuming
-  the loop from the header on every page, which shows how long it has been paused, and on the settings page changing
-  the limits and trust settings §12 lists and reloading the loop's config. The form shows each key's value as the
-  files say now, which file sets it, and its bound; a list's entries are boxes to clear, and a trust switch already
+  the loop from the header on every page, which shows how long it has been paused, reloading the loop's config from
+  the settings page, and changing the limits and trust settings §12 lists on Limits and trust, a page under Settings
+  that the settings page links to, so Settings stays short. Its keys come in panels by what they govern (capacity,
+  pools, attempts, pace, trust), each in words over its name in the file, its value as the files say now, which file
+  sets it, and its bound; a list's entries are boxes to clear, and a trust switch already
   on its stricter side cannot be changed. A save names the keys it wrote apart from what the reload found, whether
   it waits for a running tick to end, and that a run already running keeps the prompt and permissions it started
   with; under `canopy loop --every`, that `--every` still sets the pace until the loop restarts. OpenCode's session
@@ -449,7 +449,7 @@ The API, under `{base}/api`:
 | `GET /loop` | whether the loop is paused: since when, and through which channel (§6), or not |
 | `POST /loop/pause`, `POST /loop/resume` | `canopy pause`, `canopy resume`: whether it already was, and the state left |
 | `POST /loop/reload` | ask the loop to read its config again, as SIGHUP does (§6): the keys that differ, those that wait for a restart, and whether a tick is running |
-| `GET /config` | each key the settings page edits (§12): its value, the file it comes from, its bound; the user file's hash, the workspace's repositories, and `--every` |
+| `GET /config` | each key the Limits and trust page edits (§12): its value, the file it comes from, its bound; the user file's hash, the workspace's repositories, and `--every` |
 | `PATCH /config` | the changed keys and the hash the page read: written to the user file, then a reload asked for; refused `not_editable`, `past_bound`, `not_stricter`, `stale`, `unsafe_file`, `not_roundtrip`, `config_invalid`, or `inside_run`, writing nothing; the file as it was is kept as `config.toml.bak` |
 | `GET /events` | the event stream, below |
 
