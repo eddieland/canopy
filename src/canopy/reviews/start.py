@@ -30,6 +30,9 @@ REVIEWS_DIR = "reviews"
 CHECKOUT_LINK = "checkout"
 DISPATCH_ACTION = "dispatch:review"
 HOLDER_KEY = "review:"
+# Why a review runs (DESIGN §21): one of the loop's own PRs, named by its ticket, or a `review.query` match.
+OWN = "own"
+QUERY = "query"
 SHA_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 MAX_PR_URL = 300
 KEY_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]*")
@@ -133,6 +136,7 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             sha=request.sha,
             ticket=request.ticket,
             repo=repo,
+            purpose=OWN if request.ticket is not None else QUERY,
             logs_dir=reviews_dir(ctx),
         )
         pool = ctx.pool(repo)
@@ -208,18 +212,35 @@ def _guard(ctx: Context, request: Request, *, planned: list[sqlite3.Row] | None 
         The name of the repository the review leases in.
 
     Raises:
-        Refusal: reviews are off, or one of the shape, repository, running, and limit checks refused.
+        Refusal: reviews are off, or one of the shape, repository, ownership, running, and limit checks refused.
     """
     if not ctx.config.reviews_on:
         raise Refusal("reviews_off", "reviews are off: no [review] agent_prs or query, or capacity.max_reviews is 0")
     _check_shape(request)
     repo = _check_repo(ctx, request.repo)
+    _check_ours(ctx, request, repo)
     planned = planned or []
     planned_reviews = [d for d in planned if d["action"] == DISPATCH_ACTION]
     planned_runs = [d for d in planned if str(d["action"]).startswith("dispatch:") and d["action"] != DISPATCH_ACTION]
     _check_running(ctx, request, planned_reviews, planned_runs)
     _check_limits(ctx, request, planned_reviews, planned_runs)
     return repo
+
+
+def _check_ours(ctx: Context, request: Request, repo: str) -> None:
+    """`not_ours`: a review names a ticket only for the PR that ticket's unit in `repo` opened.
+
+    The overseer's `--ticket` is a claim; the unit's PR is the journal's record of what the loop opened, from the worker
+    that opened it. Checked here, a review's purpose is settled once, as it starts.
+
+    Raises:
+        Refusal: (`not_ours`) `--ticket` names a ticket whose unit in `repo` has not opened the PR.
+    """
+    if request.ticket is not None and not db.is_unit_pr(ctx.conn, request.ticket, request.pr, repo=repo):
+        raise Refusal(
+            "not_ours",
+            f"{request.ticket}'s unit in {repo} did not open {request.pr}; --ticket is only for the loop's own PR",
+        )
 
 
 def _check_running(

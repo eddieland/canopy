@@ -43,10 +43,14 @@ CLEAN = {"status": "done", "verdict": "clean", "impact": "low", "summary": "Noth
 
 @pytest.fixture
 def reviews(canopy_env: CanopyEnv) -> CanopyEnv:
-    """Reviews on, for the loop's own PRs, with the reviewer command running the fake agent as `canopy-reviewer`."""
+    """Reviews on, for the loop's own PRs, with the reviewer command running the fake agent as `canopy-reviewer`.
+
+    PROJ-1's unit in `repo` has opened `PR`, as its worker's result records it, so a review may name PROJ-1 for it.
+    """
     template = "env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-reviewer {prompt}"
     user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\nreview_cmd = '{template}'\n", 1)
     canopy_env.write_user(user + "\n[review]\nagent_prs = true\n")
+    db.set_unit(canopy_env.journal(), "PROJ-1", str(canopy_env.root), "repo", pr_url=PR)
     return canopy_env
 
 
@@ -888,14 +892,15 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
         ([ref, "0"], "bad_finding"),
         ([ref, "2"], "dismissed"),
         (["review:99", "1"], "unknown"),
-        # A PR review.query matched, and one the overseer linked to PROJ-1 that PROJ-1's unit has not opened.
+        # A PR review.query matched; and PROJ-1's own review, now that its unit has the PR its implement's worker
+        # reported instead, as after a `canopy forget` and a new PR: no worker pushes to the reviewed one any more.
         ([f"review:{query_id}", "1"], "not_ours"),
         ([ref, "1"], "not_ours"),
         (["PROJ-1", "1"], "unsupported"),
     ]:
         assert main(["send", *args]) == 1
         assert f"send refused ({guard})" in capsys.readouterr().err
-    # Findings go only to the loop's own PRs: the one PROJ-1's unit opened.
+    # Back on the PR the review read, its findings go to PROJ-1's worker.
     db.set_unit(conn, "PROJ-1", str(reviews.root), "repo", pr_url=PR)
     assert main(["dismiss", ref, "2", "--undo"]) == 0
     capsys.readouterr()
@@ -923,3 +928,23 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
     prompt = (reviews.state_dir / "runs" / "2.prompt").read_text()
     assert body in prompt
     assert "1. **blocking** `src/retry.py:42`: retry never stops" in prompt
+
+
+def test_a_review_names_a_ticket_only_for_the_pr_its_unit_opened(
+    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path
+) -> None:
+    """A review's purpose is settled as it starts: `own` only for its ticket's unit's PR, else `query` (DESIGN §21)."""
+    conn = journal(reviews)
+    other = "https://github.com/acme/api/pull/8"
+    with in_tick(conn) as tick_id:
+        assert main(review("--ticket", "PROJ-1", sha=head(git_pool), pr=other)) == 1
+        assert main(review("--ticket", "PROJ-2", sha=head(git_pool))) == 1
+        assert [(d[2], d[3]) for d in decisions(conn, tick_id)] == [
+            ("refused:not_ours", f"PROJ-1's unit in repo did not open {other}; --ticket is only for the loop's own PR"),
+            ("refused:not_ours", f"PROJ-2's unit in repo did not open {PR}; --ticket is only for the loop's own PR"),
+        ]
+    with reviewer_reports(FINDINGS):
+        own = run_inline(conn, "--ticket", "PROJ-1", sha=head(git_pool))
+        query = run_inline(conn, sha=head(git_pool), pr=other)
+    purposes = {r["id"]: r["purpose"] for r in conn.execute("SELECT id, purpose FROM review_runs")}
+    assert purposes == {own: "own", query: "query"}

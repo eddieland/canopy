@@ -931,18 +931,21 @@ def insert_review_run(
     sha: str,
     ticket: str | None,
     repo: str | None,
+    purpose: str,
     logs_dir: Path,
 ) -> int:
     """Insert a `running` review run with no slot or pid yet, logging to `<logs_dir>/<id>.log`, and return its id.
+
+    `purpose` is why it runs (DESIGN §21): `own` for one of the loop's own PRs, `query` for a `review.query` match.
 
     Returns:
         The new review run's id.
     """
     with transaction(conn):
         cur = conn.execute(
-            "INSERT INTO review_runs (tick_id, pr_url, sha, ticket_key, repo, started_at, log_path) "
-            "VALUES (?, ?, ?, ?, ?, ?, '')",
-            (tick_id, pr_url, sha, ticket, repo, now()),
+            "INSERT INTO review_runs (tick_id, pr_url, sha, ticket_key, repo, purpose, started_at, log_path) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, '')",
+            (tick_id, pr_url, sha, ticket, repo, purpose, now()),
         )
         run_id = _rowid(cur)
         conn.execute("UPDATE review_runs SET log_path = ? WHERE id = ?", (str(logs_dir / f"{run_id}.log"), run_id))
@@ -1053,10 +1056,13 @@ def review_runs_since(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]
     return conn.execute("SELECT * FROM review_runs WHERE started_at >= ? ORDER BY id DESC", (since,)).fetchall()
 
 
-def is_unit_pr(conn: sqlite3.Connection, key: str, pr_url: str) -> bool:
-    """Return whether `pr_url` is the PR of one of ticket `key`'s units: one the loop opened, and pushes to."""
-    row = conn.execute("SELECT 1 FROM ticket_units WHERE ticket_key = ? AND pr_url = ?", (key, pr_url)).fetchone()
-    return row is not None
+def is_unit_pr(conn: sqlite3.Connection, key: str, pr_url: str, *, repo: str | None = None) -> bool:
+    """Return whether `pr_url` is the PR of one of ticket `key`'s units, or its unit in `repo`: one the loop opened."""
+    query = "SELECT 1 FROM ticket_units WHERE ticket_key = ? AND pr_url = ?"
+    params: tuple[str, ...] = (key, pr_url)
+    if repo is not None:
+        query, params = f"{query} AND repo = ?", (*params, repo)
+    return conn.execute(query, params).fetchone() is not None
 
 
 def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict[str, list[sqlite3.Row]]:

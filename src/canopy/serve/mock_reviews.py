@@ -146,15 +146,16 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
     for run_id, pr, sha, ticket, repo, started, ended, status, result, cost, diff in rows:
         log_path = reviews / f"{run_id}.log"
         conn.execute(
-            "INSERT INTO review_runs (id, tick_id, pr_url, sha, ticket_key, repo, started_at, ended_at, status, "
-            "result_json, log_path, base_branch, session_id, cost_usd) "
-            "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'main', ?, ?)",
+            "INSERT INTO review_runs (id, tick_id, pr_url, sha, ticket_key, repo, purpose, started_at, ended_at, "
+            "status, result_json, log_path, base_branch, session_id, cost_usd) "
+            "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'main', ?, ?)",
             (
                 run_id,
                 pr,
                 sha,
                 ticket,
                 repo,
+                "query" if ticket is None else "own",
                 at(started),
                 at(ended),
                 status,

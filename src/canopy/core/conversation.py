@@ -456,16 +456,20 @@ def send(
 
 
 def own_pr(conn: sqlite3.Connection, run: sqlite3.Row) -> bool:
-    """Whether review run `run` is of one of the loop's own PRs: its ticket's unit opened the PR it reviewed.
+    """Whether review run `run` is of one of the loop's own PRs, and its ticket's unit still has that PR.
 
-    Only such a review's findings can be sent to a worker (DESIGN §21). The ticket link alone is the overseer's claim;
-    the unit's PR is the journal's own record of what the loop opened.
+    Only such a review's findings can be sent to a worker (DESIGN §21). Its purpose was checked when it started; the
+    unit is checked again because `canopy forget` clears it, and a forgotten ticket's next PR is another PR.
 
     Returns:
-        True when the run names a ticket and one of that ticket's units has the run's PR.
+        True when the run's purpose is `own` and its ticket's unit in its repository has the run's PR.
     """
-    key = run["ticket_key"]
-    return key is not None and db.is_unit_pr(conn, str(key), str(run["pr_url"]))
+    key, repo = run["ticket_key"], run["repo"]
+    return (
+        run["purpose"] == "own"
+        and key is not None
+        and db.is_unit_pr(conn, str(key), str(run["pr_url"]), repo=str(repo) if repo is not None else None)
+    )
 
 
 def _numbered(numbers: Collection[int], *, verb: bool = True) -> str:

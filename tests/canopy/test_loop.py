@@ -314,6 +314,7 @@ def test_the_footer_counts_running_reviews_as_workers(
         sha="a" * 40,
         ticket=None,
         repo=None,
+        purpose="query",
         logs_dir=canopy_env.state_dir,
     )
     assert db.claim_review_run(conn, run_id, os.getpid())  # alive, so reconcile leaves it running
