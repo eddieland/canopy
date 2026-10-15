@@ -227,7 +227,7 @@ def listed(ctx: Context) -> list[Item]:
             f.since,
             finding=True,
         )
-        for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace)
+        for f in chore_view.open_findings(ctx.conn, ctx.config, ctx.workspace, starts=ctx.finding_starts)
         if not f.dismissed
     ]
     return items + findings

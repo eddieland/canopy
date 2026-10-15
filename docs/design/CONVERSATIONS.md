@@ -504,6 +504,30 @@ online or the page is shown with its stream down; and when the page is shown aft
 may have cut the stream without telling it. A new stream starts with every list, so nothing is lost but the ticket a
 page shows, which it reads again. An age on a page (`5m ago`) counts on a clock that ticks every second.
 
+A long history (asked for by the operator, 2026-10-14): a year of a busy loop is about a hundred thousand ticks, tens of
+thousands of runs, and hundreds of thousands of decisions, and every open stream reads its lists again on every commit.
+So no read a page or the stream makes costs more as the journal ages; each costs what the page shows.
+
+- Each list is read newest first from an index, most of them migration 0022's, and stops at its limit: the runs that
+  ended last, the newest ticks, a ticket's or a chore's newest runs, the decisions naming a PR, what was spent since a
+  time.
+- The tickets list and the PRs list are ordered by activity, the newest of several times, so only candidates are
+  weighed: from each source of activity (a tick seeing the ticket, a message, a run starting or ending, a start or
+  stop; a tick seeing a unit's ticket, a review starting or ending), its `limit` newest, ties included, read in order
+  from its index. A ticket among the `limit` with the newest activity is among the `limit` newest of the source its
+  activity comes from, so the list is the one weighing every ticket finds.
+- A chore's finding is aged from the first of the unbroken `ok` runs reporting it (§19), which for a finding open for
+  months is that many runs back. The server remembers, for each chore, its latest `ok` run and when each of that
+  run's findings started, and hands it to every request and stream; an ended run's result never changes, so a later
+  read walks back only as far as that run. The loop and the CLI remember nothing from one command to the next.
+- A ticket's limits count its own runs, not every unit's.
+- Two reads still grow with the journal. The spend's all-time total sums every agent run ever recorded, from an index
+  alone: about 6 ms for a year of a busy loop's history, on a synthetic journal. Search scans; why it has no index,
+  and when to revisit that, are under Search below.
+
+`tests/canopy/test_web_history.py` holds each read to this: given five times the history, all of it older than any row
+a page shows, each runs the same number of SQLite instructions, give or take a deeper index.
+
 The chores pages (M23): a chore's finding reaches the attention list, and the operator answers it in the browser as
 `canopy reply chore:NAME` does in the terminal.
 
@@ -584,7 +608,7 @@ gathered on its page.
   the PR's review runs' starts and ends. Each has its URL, the ticket that owns it (a unit's, or else the one a review
   named, as a forgotten ticket's review still does) with its title, its repository, the unit's branch and phase, the
   run of its ticket working now, how many review runs it had, and its latest. Decisions are not a source for the
-  list: they are many and not indexed by PR, and the list is read again on every tick and every ticket change.
+  list: they are many, and the list is read again on every tick and every ticket change.
 - `GET /pull-request?url=` is one PR, named by its URL as a query parameter, since the URL is opaque (§21) and holds
   slashes; only a plain `https://` URL of at most 300 characters is looked up, anything else is a 422. A PR only
   decisions name (a `review.query` match no review has run on yet) has a page too, so it shows why (`wait`, a refusal).

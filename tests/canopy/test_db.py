@@ -38,7 +38,8 @@ SHIPPED = {
     19: "df22e157b9cd5981c11536a7787e7ada6e0cd4d5d9715c261d4a3c45b3cf4927",
     20: "00382891c078ea709d9987a62de8d5cfc493e6985abdf8ccc7884b778366bd46",
     21: "58c9215c4a5ebe34410cc620a9feeb8f7b8fb60a9cb23fdced184000ee5b6fdc",
-    22: "321b5eeb0950f7a6dc158d2ec0a3e3f0a0e11bf143eb432936ec9f8bd6f2c8e8",
+    22: "089e023a4a03edec3e74abb101b22e5b1e54461350e31d5122323a23db227398",
+    23: "321b5eeb0950f7a6dc158d2ec0a3e3f0a0e11bf143eb432936ec9f8bd6f2c8e8",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -341,7 +342,7 @@ def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: 
 def test_review_runs_from_before_their_purpose_are_own_only_where_their_tickets_unit_has_their_pr(
     tmp_path: Path, journals: Journals
 ) -> None:
-    """0022 settles the purpose of runs recorded before it: `own` for their ticket's unit's PR, `query` otherwise."""
+    """0023 settles the purpose of runs recorded before it: `own` for their ticket's unit's PR, `query` otherwise."""
     conn = journal_at(journals, tmp_path, 21)
     conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
     conn.execute(

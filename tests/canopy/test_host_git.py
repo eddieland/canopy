@@ -12,6 +12,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db, hostgit
+from canopy.infra.procs import SubprocessRunner
 from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, slot_of, worker_does
 from tests.conftest import CanopyEnv, GitPool, git
 
@@ -124,6 +125,109 @@ def test_a_worker_that_rewrites_the_git_link_crashes_the_run_and_the_link_is_put
     assert hostgit.read_link(slot) == links[slot]
     assert git("log", "-1", "--format=%s", cwd=slot) == "PROJ-1: work"  # the slot's own git directory again
     assert all(s["status"] == "available" for s in pool(treehouse_state))
+
+
+def plant_common_dir(fired: Path) -> str:
+    """Return a script that points the slot's `commondir` at a copy of the common directory, whose config runs a
+    command on a fetch from origin."""
+    return (
+        "own=$(git rev-parse --path-format=absolute --git-dir) && common=$(git rev-parse --git-common-dir) && "
+        'mkdir planted && cp -R "$common/objects" "$common/refs" "$common/HEAD" "$common/config" planted/ && '
+        f'git config --file planted/config remote.origin.uploadpack "touch {fired}; git-upload-pack" && '
+        'echo "$PWD/planted" > "$own/commondir"'
+    )
+
+
+def test_a_planted_commondir_runs_its_config_for_host_git(
+    worktree_pool: tuple[Path, list[Path]], git_pool: GitPool, tmp_path: Path
+) -> None:
+    """The control for the test below: host git in a slot whose `commondir` was rewritten reads the planted config."""
+    _, slots = worktree_pool
+    fired = tmp_path / "fired"
+    assert SubprocessRunner().run(["sh", "-c", plant_common_dir(fired)], cwd=slots[0]).ok
+    SubprocessRunner().run(hostgit.argv("ls-remote", "origin"), cwd=slots[0], env=hostgit.ENV)
+    assert fired.exists()
+
+
+def test_a_worker_that_rewrites_commondir_crashes_the_run_and_commondir_is_put_back(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    worktree_pool: tuple[Path, list[Path]],
+    agent_log: Path,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
+    tmp_path: Path,
+) -> None:
+    _, slots = worktree_pool
+    fired = tmp_path / "fired"
+    commondirs = {slot: hostgit.own_git_dir(slot, (slot / ".git").read_bytes()) for slot in slots}
+    with worker_does(WORKER_COMMIT, ["sh", "-c", plant_common_dir(fired)]):
+        run = dispatch_and_run(conn)
+
+    assert run["status"] == "crashed"
+    slot = Path(slot_of(conn, run["id"])["slot_path"])
+    own = commondirs[slot]
+    assert own is not None
+    result = json.loads(run["result_json"])
+    assert result["harness"] == f"repo: the worker rewrote {own / 'commondir'}; nothing was checked or pushed"
+    assert not fired.exists()  # no git ran in the slot after the worker
+    assert git_pool.remote_head("agent/PROJ-1-work") is None
+    assert (own / "commondir").read_bytes() == hostgit.COMMONDIR_CONTENT
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
+
+
+@pytest.mark.parametrize(
+    ("content", "moved"),
+    [
+        pytest.param(b"../..\n", False, id="as-git-writes-it"),
+        pytest.param(b"{common}\n", False, id="absolute"),
+        pytest.param(b"../../worktrees/..", False, id="same-directory"),
+        pytest.param(b"/somewhere/else\n", True, id="elsewhere"),
+        pytest.param(b"..", True, id="worktrees"),
+        pytest.param(None, True, id="missing"),
+    ],
+)
+def test_commondir_must_name_the_directory_that_holds_the_slots_git_directory(
+    content: bytes | None,
+    moved: bool,  # noqa: FBT001  (a parameter)
+    worktree_pool: tuple[Path, list[Path]],
+) -> None:
+    primary, slots = worktree_pool
+    link = hostgit.read_link(slots[0])
+    assert link is not None
+    own = hostgit.own_git_dir(slots[0], link)
+    assert own is not None
+    if content is None:
+        (own / "commondir").unlink()
+    else:
+        (own / "commondir").write_bytes(content.replace(b"{common}", bytes(primary / ".git")))
+    assert hostgit.commondir_moved(slots[0], link) is moved
+
+
+def test_commondir_is_never_followed_and_is_put_back(worktree_pool: tuple[Path, list[Path]], tmp_path: Path) -> None:
+    _, slots = worktree_pool
+    link = hostgit.read_link(slots[0])
+    assert link is not None
+    own = hostgit.own_git_dir(slots[0], link)
+    assert own is not None
+    outside = tmp_path / "outside"
+    outside.write_bytes(b"../..\n")
+    (own / "commondir").unlink()
+    (own / "commondir").symlink_to(outside)
+    assert hostgit.commondir_moved(slots[0], link)
+
+    hostgit.restore_commondir(slots[0], link)
+
+    assert (own / "commondir").read_bytes() == b"../..\n"
+    assert not (own / "commondir").is_symlink()
+    assert outside.read_bytes() == b"../..\n"
+    assert not hostgit.commondir_moved(slots[0], link)
+    assert git("status", "--porcelain", cwd=slots[0]) == ""
+
+
+def test_a_clone_has_no_git_directory_named_by_a_link(git_pool: GitPool) -> None:
+    assert hostgit.own_git_dir(git_pool.slots[0], b"") is None
+    assert not hostgit.commondir_moved(git_pool.slots[0], b"")
 
 
 def test_a_clone_slot_has_no_link_to_check(git_pool: GitPool) -> None:

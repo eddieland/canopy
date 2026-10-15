@@ -818,7 +818,7 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
 
 ### Journal
 
-- `review_runs`: id, tick id, PR URL, commit, ticket key (nullable), its purpose (`own` or `query`, 0022; runs from
+- `review_runs`: id, tick id, PR URL, commit, ticket key (nullable), its purpose (`own` or `query`, 0023; runs from
   before are `own` where their ticket's unit in their repository had their PR), slot, lease id and holder, the base
   branch it was leased on (nullable, 0016), pid of `_review`, pid of
   the agent, started and ended times, status, `result_json` (validated, text cut to its limits), log path, and what

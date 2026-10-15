@@ -77,7 +77,7 @@ def tidy(
     log: logs.TickAdapter,
     fields: Mapping[str, object],
 ) -> bool:
-    """Put back the slot's `.git` file if it changed, then move the slot off objects only `objects` holds.
+    """Put back the slot's `.git` file and `commondir` if they changed, then move it off objects only `objects` holds.
 
     The slot is checked out detached at `origin/<base>`, which `_run` fetched into the shared directory before the
     worker started and a sandboxed worker cannot move. Its own refs, `ORIG_HEAD`, `FETCH_HEAD`, and its HEAD reflog,
@@ -95,6 +95,14 @@ def tidy(
             log.error("slot's .git link changed and was not put back; slot kept", extra=failed)  # noqa: TRY400
             return False
         log.warning("slot's .git link changed during the run; put back", extra=dict(fields))
+    if link is not None and hostgit.commondir_moved(slot, link):
+        try:
+            hostgit.restore_commondir(slot, link)
+        except OSError as e:
+            failed = {**fields, "error": str(e)}
+            log.error("slot's commondir changed and was not put back; slot kept", extra=failed)  # noqa: TRY400
+            return False
+        log.warning("slot's commondir changed during the run; put back", extra=dict(fields))
     if not used(objects):
         return True
     try:
