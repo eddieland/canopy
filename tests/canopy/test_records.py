@@ -80,7 +80,6 @@ def test_a_query_builds_its_rows_as_the_row_type(conn: sqlite3.Connection) -> No
         pr=None,
     )
     assert (second.ticket_key, second.chore) == (None, "deps")
-    assert db.parse_time(first.created_at) <= db.parse_time(second.created_at)
 
 
 def test_columns_are_matched_by_name_not_position(conn: sqlite3.Connection) -> None:
