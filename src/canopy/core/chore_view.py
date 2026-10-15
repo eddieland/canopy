@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Callable, Mapping
+import threading
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, TypedDict
@@ -66,7 +67,8 @@ class ChoreState:
     """One configured chore: its definition, its newest runs first, and what follows from them.
 
     `older` returns the page of runs before a run id, newest first, for a finding open longer than `runs` reaches.
-    `dismissals` is when the operator last dismissed each finding id it dismissed.
+    `dismissals` is when the operator last dismissed each finding id it dismissed. `starts`, when given, remembers
+    when its findings started from one read to the next.
     """
 
     name: str
@@ -74,6 +76,7 @@ class ChoreState:
     runs: list[sqlite3.Row]
     older: Callable[[int], list[sqlite3.Row]]
     dismissals: Mapping[str, str]
+    starts: FindingStarts | None = None
 
     @property
     def running(self) -> sqlite3.Row | None:
@@ -127,57 +130,130 @@ class ChoreState:
             Each finding, with when the unbroken sequence of `ok` runs reporting it started, and whether it is
             dismissed; none before an `ok` run.
         """
-        oks = _oks(self.runs)
-        if not oks:
+        latest = next(
+            ((r, parsed) for r in self.runs if r["status"] == "ok" and (parsed := result.stored(r["result_json"]))),
+            None,
+        )
+        if latest is None:
             return []
+        run, parsed = latest
+        since = self._since(run, parsed)
         found: list[OpenFinding] = []
-        for f in oks[0][1].findings:
-            since = self._since(f.id, oks)
+        for f in parsed.findings:
             at = self.dismissals.get(f.id)
-            dismissed = at is not None and db.parse_time(at) >= db.parse_time(since)
-            found.append(OpenFinding(self.name, f, since, dismissed=dismissed))
+            dismissed = at is not None and db.parse_time(at) >= db.parse_time(since[f.id])
+            found.append(OpenFinding(self.name, f, since[f.id], dismissed=dismissed))
         return found
 
-    def _since(self, finding_id: str, oks: list[tuple[sqlite3.Row, result.ChoreResult]]) -> str:
-        """When the unbroken sequence of `ok` runs reporting `finding_id` started, reading back page by page.
+    def _since(self, latest: sqlite3.Row, parsed: result.ChoreResult) -> dict[str, str]:
+        """When the unbroken sequence of `ok` runs reporting each of the latest `ok` run's findings started.
+
+        One walk back serves every finding, and stops once each one's sequence has, or at the run `starts` remembers
+        from an earlier read: a chore's findings are read on every journal commit the web UI's event stream sees
+        (DESIGN §22), and a finding open for a year would otherwise read a year of runs each time.
 
         Returns:
-            The start time, in the journal's format, of the oldest `ok` run in that sequence.
+            Each finding's id, and the start time, in the journal's format, of the oldest `ok` run in its sequence.
         """
-        since = str(oks[0][0]["started_at"])
-        page, rest = self.runs, oks[1:]
+        start = str(latest["started_at"])
+        since = {f.id: start for f in parsed.findings}
+        open_ids = set(since)
+        known = self.starts.of(self.name) if self.starts is not None else None
+        if known is not None and known.run == int(latest["id"]):
+            return dict(known.since)
+        if open_ids:
+            for run in self._older_oks(int(latest["id"])):
+                if known is not None and int(run["id"]) == known.run:
+                    # That run reported exactly what `known` holds: a finding it did not report ended its sequence.
+                    since.update((i, known.since[i]) for i in open_ids if i in known.since)
+                    break
+                found = result.stored(run["result_json"])
+                if found is None:
+                    continue
+                open_ids &= {f.id for f in found.findings}
+                if not open_ids:
+                    break
+                for finding_id in open_ids:
+                    since[finding_id] = str(run["started_at"])
+        if self.starts is not None:
+            self.starts.keep(self.name, Started(int(latest["id"]), since))
+        return since
+
+    def _older_oks(self, before: int) -> Iterator[sqlite3.Row]:
+        """Its `ok` runs before run id `before`, newest first, reading back page by page.
+
+        Yields:
+            Each run with status `ok`, its result not yet read.
+        """
+        page = self.runs
         while True:
-            for run, parsed in rest:
-                if not any(f.id == finding_id for f in parsed.findings):
-                    return since
-                since = str(run["started_at"])
+            yield from (r for r in page if r["status"] == "ok" and int(r["id"]) < before)
             if len(page) < _HISTORY_RUNS:
-                return since
+                return
             page = self.older(int(page[-1]["id"]))
-            rest = _oks(page)
 
 
-def _oks(runs: list[sqlite3.Row]) -> list[tuple[sqlite3.Row, result.ChoreResult]]:
-    return [(r, parsed) for r in runs if r["status"] == "ok" and (parsed := result.stored(r["result_json"]))]
+@dataclass(frozen=True)
+class Started:
+    """A chore's latest `ok` run, and when the unbroken sequence of `ok` runs reporting each of its findings started."""
+
+    run: int
+    since: Mapping[str, str]
 
 
-def states(conn: sqlite3.Connection, config: Config, workspace: Workspace) -> list[ChoreState]:
-    """Return every configured chore's state, by name."""
-    return [state_of(conn, name, chore) for name, chore in configured(config, workspace).items()]
+class FindingStarts:
+    """When each chore's open findings started, as a read last found them, so a later one reads back only to there.
+
+    An ended run's result never changes and no run is deleted, so what holds at a run holds for as long as the journal
+    does: a read that walks back to the run remembered takes its starts and reads no further. The web UI's server keeps
+    one for its journal and hands it to every Context it opens (DESIGN §22), from threads of its own, so it locks.
+    """
+
+    def __init__(self) -> None:
+        """Remember nothing yet."""
+        self._lock = threading.Lock()
+        self._started: dict[str, Started] = {}
+
+    def of(self, chore: str) -> Started | None:
+        """What a read last found for `chore`, or None.
+
+        Returns:
+            Its latest `ok` run then, with each of its findings' starts.
+        """
+        with self._lock:
+            return self._started.get(chore)
+
+    def keep(self, chore: str, started: Started) -> None:
+        """Remember what a read found for `chore`, in place of what it found before."""
+        with self._lock:
+            self._started[chore] = started
 
 
-def state_of(conn: sqlite3.Connection, name: str, chore: Chore) -> ChoreState:
-    """Return chore `name`'s state as the journal sees it."""
+def states(
+    conn: sqlite3.Connection, config: Config, workspace: Workspace, *, starts: FindingStarts | None = None
+) -> list[ChoreState]:
+    """Return every configured chore's state, by name, remembering its findings' starts in `starts` if given."""
+    return [state_of(conn, name, chore, starts=starts) for name, chore in configured(config, workspace).items()]
+
+
+def state_of(conn: sqlite3.Connection, name: str, chore: Chore, *, starts: FindingStarts | None = None) -> ChoreState:
+    """Return chore `name`'s state as the journal sees it, remembering its findings' starts in `starts` if given."""
 
     def older(before: int) -> list[sqlite3.Row]:
         return db.chore_runs(conn, name, _HISTORY_RUNS, before=before)
 
-    return ChoreState(name, chore, db.chore_runs(conn, name, _HISTORY_RUNS), older, db.dismissals(conn, name))
+    runs = db.chore_runs(conn, name, _HISTORY_RUNS)
+    return ChoreState(name, chore, runs, older, db.dismissals(conn, name), starts)
 
 
-def open_findings(conn: sqlite3.Connection, config: Config, workspace: Workspace) -> list[OpenFinding]:
-    """Return every configured chore's open findings, by chore and then as the chore listed them, dismissed or not."""
-    return [f for state in states(conn, config, workspace) for f in state.findings()]
+def open_findings(
+    conn: sqlite3.Connection, config: Config, workspace: Workspace, *, starts: FindingStarts | None = None
+) -> list[OpenFinding]:
+    """Return every configured chore's open findings, by chore and then as the chore listed them, dismissed or not.
+
+    `starts`, when given, remembers when they started from one call to the next.
+    """
+    return [f for state in states(conn, config, workspace, starts=starts) for f in state.findings()]
 
 
 @dataclass(frozen=True)

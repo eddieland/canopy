@@ -54,14 +54,20 @@ def unit(key: str, repo: str | None) -> Unit:
     return (key, repo)
 
 
-def attempts(conn: sqlite3.Connection) -> dict[Unit, dict[str, int]]:
-    """Return every unit's run count per kind. Kinds with no runs are 0; units with no runs are missing."""
+def attempts(conn: sqlite3.Connection, *, ticket: str | None = None) -> dict[Unit, dict[str, int]]:
+    """Return every unit's run count per kind, or only `ticket`'s units'.
+
+    Kinds with no runs are 0; units with no runs are missing. One ticket's are counted from its own runs, so a page
+    about it reads what it has run, not the journal's history.
+    """
     counts: dict[Unit, dict[str, int]] = {}
-    rows = conn.execute(
-        "SELECT r.ticket_key, s.repo, r.kind, count(DISTINCT r.id) FROM runs r JOIN run_slots s ON s.run_id = r.id "
-        "WHERE r.kind != ? GROUP BY r.ticket_key, s.repo, r.kind",
-        (SPLIT,),
-    )
+    query = "SELECT r.ticket_key, s.repo, r.kind, count(DISTINCT r.id) FROM runs r JOIN run_slots s ON s.run_id = r.id "
+    if ticket is None:
+        rows = conn.execute(f"{query}WHERE r.kind != ? GROUP BY r.ticket_key, s.repo, r.kind", (SPLIT,))
+    else:
+        rows = conn.execute(
+            f"{query}WHERE r.ticket_key = ? AND r.kind != ? GROUP BY r.ticket_key, s.repo, r.kind", (ticket, SPLIT)
+        )
     for row in rows:
         counts_of = counts.setdefault(unit(str(row[0]), row[1]), dict.fromkeys(KINDS, 0))
         counts_of[str(row[2])] += int(row[3])
@@ -107,7 +113,7 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
     if db.get_ticket(conn, key) is None:
         raise conversation.Refused("unknown", f"canopy has no record of {key}, so it has no attempts to grant past")
     # Every repository the ticket has had runs in, including those `canopy forget` dropped the units of.
-    worked = sorted(str(r) for k, r in attempts(conn) if k == key and r is not None)
+    worked = sorted(str(r) for k, r in attempts(conn, ticket=key) if k == key and r is not None)
     if repo is None:
         if len(worked) != 1:
             where = f"it has had runs in {', '.join(worked)}" if worked else "it has had no runs"
@@ -133,7 +139,7 @@ def split_attempts(conn: sqlite3.Connection) -> dict[str, int]:
 
 def unit_attempts(conn: sqlite3.Connection, key: str, repo: str | None) -> dict[str, int]:
     """Return one unit's run count per kind."""
-    return attempts(conn).get(unit(key, repo), dict.fromkeys(KINDS, 0))
+    return attempts(conn, ticket=key).get(unit(key, repo), dict.fromkeys(KINDS, 0))
 
 
 def fix_ci_cooldowns(conn: sqlite3.Connection, config: Config, now: datetime) -> dict[Unit, datetime]:

@@ -107,7 +107,7 @@ def limits(ctx: Context, key: str) -> list[Limit]:
     """
     granted = policy.grants(ctx.conn)
     found: list[Limit] = []
-    for (ticket, repo), counts in sorted(policy.attempts(ctx.conn).items(), key=lambda u: str(u[0][1])):
+    for (ticket, repo), counts in sorted(policy.attempts(ctx.conn, ticket=key).items(), key=lambda u: str(u[0][1])):
         # A slot with no repository name names no unit `canopy grant` can raise.
         if ticket != key or repo is None:
             continue

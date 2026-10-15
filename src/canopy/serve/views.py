@@ -650,7 +650,10 @@ def chores(backend: Backend, ctx: Context) -> list[ChoreSummary]:
     """
     now = backend.clock()
     root = ctx.workspace.root
-    return [chore_summary(ctx.conn, s, now, root) for s in chore_view.states(ctx.conn, ctx.config, ctx.workspace)]
+    return [
+        chore_summary(ctx.conn, s, now, root)
+        for s in chore_view.states(ctx.conn, ctx.config, ctx.workspace, starts=ctx.finding_starts)
+    ]
 
 
 def chore(backend: Backend, ctx: Context, name: str) -> ChoreDetail | None:
@@ -664,7 +667,7 @@ def chore(backend: Backend, ctx: Context, name: str) -> ChoreDetail | None:
     defined = chore_view.defined(ctx.config, ctx.workspace)
     if name not in defined:
         return None
-    state = chore_view.state_of(ctx.conn, name, defined[name])
+    state = chore_view.state_of(ctx.conn, name, defined[name], starts=ctx.finding_starts)
     return ChoreDetail(
         chore=chore_summary(ctx.conn, state, backend.clock(), ctx.workspace.root),
         runs=[chore_run(r, ctx.workspace.root) for r in state.runs[:CHORE_RUNS]],

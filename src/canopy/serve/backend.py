@@ -20,7 +20,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import db, treehouse
+from canopy.core import chore_view, db, treehouse
 from canopy.core.context import Context, db_path
 from canopy.infra import procs
 
@@ -107,6 +107,11 @@ class Backend:
     write_attention: Callable[[Context], object] = field(default=lambda _ctx: None)
     # Held while `config` and `workspace` are read or replaced, so a request never gets one of each.
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False, compare=False)
+    # When chores' findings started, as the last read found them, handed to every Context opened, so a request or a
+    # stream reads back only to there rather than through the whole history of a finding open for months.
+    _finding_starts: chore_view.FindingStarts = field(
+        default_factory=chore_view.FindingStarts, init=False, repr=False, compare=False
+    )
 
     @contextmanager
     def open(self) -> Iterator[Context]:
@@ -124,6 +129,7 @@ class Backend:
                 conn=conn,
                 runner=procs.SubprocessRunner(),
                 ws=ws,
+                finding_starts=self._finding_starts,
             )
         finally:
             conn.close()
