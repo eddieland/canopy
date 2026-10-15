@@ -7,10 +7,12 @@ moves only toward stricter: a config write outlives the listener secret, so a re
 would go on steering workers after a new secret ended it (TRUST_MODEL T8).
 
 A save writes the user file only, never the workspace file (TRUST_MODEL T7), edited in place so that the operator's
-comments and layout stay. A lock beside the file is held from reading it to replacing it, so two saves made on the
-same read cannot both pass the hash check; the hash is checked again just before the replace, so a hand edit is lost
-only if it lands in that last moment. The edited copy is validated by `config.load`, as any `canopy` command would
-read it, before it replaces the file atomically, with the file's mode kept.
+comments and layout stay: a file tomlkit would not write back byte for byte is refused before anything is changed, so
+only the values set differ, and the file as it was is kept beside it as `config.toml.bak`. A lock beside the file is
+held from reading it to replacing it, so two saves made on the same read cannot both pass the hash check; the hash is
+checked again just before the replace, so a hand edit is lost only if it lands in that last moment. The edited copy is
+validated by `config.load`, as any `canopy` command would read it, before it replaces the file atomically, with the
+file's mode kept.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal, get_args
 
 import tomlkit
+import tomlkit.exceptions
 import tomlkit.items
 
 from canopy.core import config, conversation
@@ -43,6 +46,7 @@ PAST_BOUND = "past_bound"
 NOT_STRICTER = "not_stricter"
 STALE = "stale"
 UNSAFE_FILE = "unsafe_file"
+NOT_ROUNDTRIP = "not_roundtrip"
 CONFIG_INVALID = "config_invalid"
 
 
@@ -67,24 +71,25 @@ def _pace(name: str, floor: int) -> Editable:
     return Editable(name, "limit", floor, "lower")
 
 
-# In the order the page shows them. The bounds are what one operator's machine and spend plausibly want: a raise
-# within them outlives a new secret, so that residual is spend the page and the log show (TRUST_MODEL T8).
+# In the order the page shows them. The bounds stop a stolen session from turning one operator's spend up without limit:
+# a raise within them outlives a new secret, a residual the page and the log show (TRUST_MODEL T8). They are set well
+# above what one machine runs today, so the page is for the operator's real changes and the file for the rest.
 EDITABLE: tuple[Editable, ...] = (
-    _count("capacity.max_workers", 8),
-    _count("capacity.max_chores", 4),
-    _count("capacity.max_reviews", 4),
-    _count("capacity.max_reviews_per_day", 100),
-    _count("capacity.slots_per_repo", 8),
+    _count("capacity.max_workers", 32),
+    _count("capacity.max_chores", 16),
+    _count("capacity.max_reviews", 16),
+    _count("capacity.max_reviews_per_day", 500),
+    _count("capacity.slots_per_repo", 32),
     # Each repository's entry is bounded alike; the request names only the repositories whose count changes.
-    _count("capacity.repo_slots", 8),
-    _count("policy.max_implement_attempts", 5),
-    _count("policy.max_fix_ci_attempts", 5),
-    _count("policy.max_resume_attempts", 6),
-    _count("policy.max_split_attempts", 3),
-    _count("policy.max_reviews_per_pr", 10),
-    _pace("policy.fix_ci_cooldown_minutes", 10),
-    _pace("loop.interval_minutes", 5),
-    _pace("loop.idle_max_minutes", 5),
+    _count("capacity.repo_slots", 32),
+    _count("policy.max_implement_attempts", 10),
+    _count("policy.max_fix_ci_attempts", 10),
+    _count("policy.max_resume_attempts", 10),
+    _count("policy.max_split_attempts", 5),
+    _count("policy.max_reviews_per_pr", 25),
+    _pace("policy.fix_ci_cooldown_minutes", 5),
+    _pace("loop.interval_minutes", 2),
+    _pace("loop.idle_max_minutes", 2),
     Editable("policy.stacking", "stricter"),
     Editable("trust.authorized_repliers", "stricter"),
     Editable("trust.trusted_reviewers", "stricter"),
@@ -92,6 +97,8 @@ EDITABLE: tuple[Editable, ...] = (
     Editable("trust.commit_trailer", "stricter"),
 )
 BY_NAME = {e.name: e for e in EDITABLE}
+# The file as it was before the latest save, beside it: `config.toml.bak`.
+BACKUP_SUFFIX = ".bak"
 REPO_SLOTS = "capacity.repo_slots"
 # The trust switches, and the value each may move to from the page: the stricter one.
 _STRICTER_BOOL = {"trust.rebase": False, "trust.commit_trailer": True}
@@ -171,7 +178,8 @@ def save(root: Path, user_file: Path, expected: str, changes: Mapping[str, objec
 
     Raises:
         Refused: `inside_run` inside one of canopy's own ticks or runs; `not_editable` for a key `EDITABLE` does not
-            name; `unsafe_file` for a user file that is a symlink, not a regular file, or not the operator's (D053);
+            name; `unsafe_file` for a user file that is a symlink, not a regular file, or not the operator's (D053),
+            or whose backup cannot be written; `not_roundtrip` for one tomlkit would not write back byte for byte;
             `stale` when the file's hash is not `expected`; `config_invalid` for a value of None, or when the files,
             before or after, do not load; `past_bound` for a limit loosened past its bound; `not_stricter` for a
             trust key loosened.
@@ -192,7 +200,7 @@ def save(root: Path, user_file: Path, expected: str, changes: Mapping[str, objec
         text, mode = _read_own(user_file)
         _check_hash(user_file, text, expected)
         old = _load(root, user_file, user_file)
-        doc = tomlkit.parse(text.decode())
+        doc = _parse_exactly(text, user_file)
         for name, wanted in changes.items():
             _set(doc, BY_NAME[name], wanted, old, user_file)
         written = tomlkit.dumps(doc).encode()
@@ -211,6 +219,7 @@ def save(root: Path, user_file: Path, expected: str, changes: Mapping[str, objec
                 return Saved((), expected)
             # Again just before the replace: a hand edit since the first read is kept, and this save refused.
             _check_hash(user_file, _read_own(user_file)[0], expected)
+            _back_up(user_file, text, mode)
             copy.replace(user_file)
         finally:
             copy.unlink(missing_ok=True)
@@ -268,6 +277,43 @@ def _read_own(path: Path) -> tuple[bytes, int]:
     fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
     with os.fdopen(fd, "rb") as f:
         return f.read(), stat.S_IMODE(st.st_mode)
+
+
+def _parse_exactly(text: bytes, path: Path) -> tomlkit.TOMLDocument:
+    """The user file's tree, once it is known to write back byte for byte, so a save changes only what it sets.
+
+    Returns:
+        The parsed document.
+
+    Raises:
+        Refused: `not_roundtrip` for a file that is not UTF-8, or that tomlkit would not write back exactly as it is.
+    """
+    try:
+        source = text.decode()
+        doc = tomlkit.parse(source)
+    except (UnicodeDecodeError, tomlkit.exceptions.TOMLKitError):
+        doc, source = None, None
+    if doc is None or tomlkit.dumps(doc) != source:
+        raise conversation.Refused(
+            NOT_ROUNDTRIP, f"{path} would not be written back exactly as it is; change it in the file instead"
+        )
+    return doc
+
+
+def _back_up(path: Path, text: bytes, mode: int) -> None:
+    """Keep the file as it was beside it, as `<name>.bak` with its mode, replacing the last save's.
+
+    Raises:
+        Refused: `unsafe_file` when the backup's path is a symlink or cannot be written.
+    """
+    backup = path.with_name(path.name + BACKUP_SUFFIX)
+    try:
+        fd = os.open(backup, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | os.O_NOFOLLOW, mode)
+    except OSError as e:
+        raise conversation.Refused(UNSAFE_FILE, f"cannot keep a backup at {backup}: {e.strerror}") from None
+    with os.fdopen(fd, "wb") as f:
+        os.fchmod(f.fileno(), mode)
+        f.write(text)
 
 
 def _check_hash(path: Path, text: bytes, expected: str) -> None:

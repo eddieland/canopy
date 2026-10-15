@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Save } from 'lucide-react'
+import { Plus, Save } from 'lucide-react'
 import { useState } from 'react'
 
 import { saveConfig } from '@/api/mutations'
@@ -79,26 +79,27 @@ function Form({
             }}
         >
             <ul className="divide-y">
-                {settings.keys.map((key) => (
-                    <li key={key.name} className="flex items-center justify-between gap-4 p-3">
-                        <div className="flex min-w-0 flex-col gap-0.5">
-                            <span className="font-mono text-xs text-foreground">{key.name}</span>
-                            <span className="text-2xs text-muted-foreground">
-                                {[sourceText(key), boundText(key)].filter(Boolean).join(' · ')}
-                                {key.name === 'loop.interval_minutes' && settings.every !== null
-                                    ? ` · --every ${settings.every} sets the pace until the loop restarts`
-                                    : null}
-                            </span>
-                        </div>
-                        <Control
+                {settings.keys.map((key) =>
+                    key.name === REPO_SLOTS ? (
+                        <RepoSlots
+                            key={key.name}
                             setting={key}
                             repos={settings.repos}
                             perRepo={typeof perRepo === 'number' ? perRepo : null}
                             draft={drafts[key.name]}
                             onDraft={(value) => draft(key.name, value)}
                         />
-                    </li>
-                ))}
+                    ) : (
+                        <li key={key.name} className="flex items-center justify-between gap-4 p-3">
+                            <KeyLabel setting={key} every={settings.every} />
+                            <Control
+                                setting={key}
+                                draft={drafts[key.name]}
+                                onDraft={(value) => draft(key.name, value)}
+                            />
+                        </li>
+                    ),
+                )}
             </ul>
             <div className="flex items-center justify-between gap-4 border-t p-3">
                 <div className="flex flex-col gap-1">
@@ -125,8 +126,26 @@ function Form({
     )
 }
 
-/** The control for one key: a number field, one per repository, a switch, or a list's entries to keep. */
-function Control({
+/** A key's name, where its value comes from, and how far the page may take it. */
+function KeyLabel({ setting, every }: { setting: ConfigKey; every: number | null }) {
+    return (
+        <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="font-mono text-xs text-foreground">{setting.name}</span>
+            <span className="text-2xs text-muted-foreground">
+                {[sourceText(setting), boundText(setting)].filter(Boolean).join(' · ')}
+                {setting.name === 'loop.interval_minutes' && every !== null
+                    ? ` · --every ${every} sets the pace until the loop restarts`
+                    : null}
+            </span>
+        </div>
+    )
+}
+
+/**
+ * `capacity.repo_slots`: a row per repository the file gives a count of its own, and a field to give one to another.
+ * A workspace of many repositories shows only the few that differ from `capacity.slots_per_repo`, not a field each.
+ */
+function RepoSlots({
     setting,
     repos,
     perRepo,
@@ -140,26 +159,95 @@ function Control({
     onDraft: (value: ConfigDrafts[string]) => void
 }) {
     const { name, value } = setting
-    if (name === REPO_SLOTS) {
-        const counts = typeof value === 'object' && value !== null && !Array.isArray(value) ? value : {}
-        const typed = typeof draft === 'object' && !Array.isArray(draft) ? draft : {}
-        const names = [...new Set([...repos, ...Object.keys(counts)])].toSorted()
-        return (
-            <span className="flex flex-wrap justify-end gap-3">
-                {names.map((repo) => (
-                    <label key={repo} className="inline-flex items-center gap-2 text-xs">
-                        {repo}
-                        <Count
-                            name={`${name}.${repo}`}
-                            text={typed[repo] ?? String(counts[repo] ?? '')}
-                            placeholder={perRepo === null ? 'unmanaged' : String(perRepo)}
-                            onText={(text) => onDraft({ ...typed, [repo]: text })}
-                        />
-                    </label>
-                ))}
-            </span>
-        )
+    const counts = typeof value === 'object' && value !== null && !Array.isArray(value) ? value : {}
+    const typed = typeof draft === 'object' && !Array.isArray(draft) ? draft : {}
+    const [adding, setAdding] = useState('')
+    const shown = [...new Set([...Object.keys(counts), ...Object.keys(typed)])].toSorted()
+    const add = () => {
+        const repo = adding.trim()
+        if (repo !== '' && !shown.includes(repo)) {
+            onDraft({ ...typed, [repo]: '' })
+        }
+        setAdding('')
     }
+    const fallback = perRepo === null ? 'unmanaged' : String(perRepo)
+    return (
+        <li className="flex flex-col gap-2 p-3" data-testid="repo-slots">
+            <div className="flex items-center justify-between gap-4">
+                <KeyLabel setting={setting} every={null} />
+                <span className="flex items-center gap-2">
+                    <Input
+                        list="repo-slots-repos"
+                        aria-label="Repository to give its own count"
+                        placeholder="repository"
+                        value={adding}
+                        className="h-8 w-40 font-mono text-xs"
+                        data-testid="repo-slots-add-name"
+                        onChange={(event) => setAdding(event.currentTarget.value)}
+                        onKeyDown={(event) => {
+                            // Enter adds the row rather than saving the form.
+                            if (event.key === 'Enter') {
+                                event.preventDefault()
+                                add()
+                            }
+                        }}
+                    />
+                    <datalist id="repo-slots-repos">
+                        {repos
+                            .filter((r) => !shown.includes(r))
+                            .map((r) => (
+                                <option key={r} value={r}>
+                                    {r}
+                                </option>
+                            ))}
+                    </datalist>
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        disabled={adding.trim() === ''}
+                        data-testid="repo-slots-add"
+                        onClick={add}
+                    >
+                        <Plus />
+                        Add
+                    </Button>
+                </span>
+            </div>
+            {shown.length === 0 ? (
+                <p className="text-xs text-muted-foreground">
+                    no repository has its own count yet: each pool has capacity.slots_per_repo&apos;s ({fallback})
+                </p>
+            ) : (
+                <ul className="flex flex-col gap-1">
+                    {shown.map((repo) => (
+                        <li key={repo} className="flex items-center justify-between gap-4">
+                            <span className="font-mono text-xs text-foreground">{repo}</span>
+                            <Count
+                                name={`${name}.${repo}`}
+                                text={typed[repo] ?? String(counts[repo] ?? '')}
+                                placeholder={fallback}
+                                onText={(text) => onDraft({ ...typed, [repo]: text })}
+                            />
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </li>
+    )
+}
+
+/** The control for one key: a number field, a switch, or a list's entries to keep. */
+function Control({
+    setting,
+    draft,
+    onDraft,
+}: {
+    setting: ConfigKey
+    draft: ConfigDrafts[string] | undefined
+    onDraft: (value: ConfigDrafts[string]) => void
+}) {
+    const { name, value } = setting
     if (Array.isArray(value)) {
         const kept = Array.isArray(draft) ? draft : value
         if (value.length === 0) {

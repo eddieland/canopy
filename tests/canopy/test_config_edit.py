@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 import httpx2
+import tomlkit
 from fastapi.testclient import TestClient
 
 from canopy.core import conversation
@@ -79,7 +80,7 @@ def test_the_page_lists_each_editable_key_with_its_value_source_and_bound(ctx: C
         "value": 2,
         "source": "user",
         "kind": "limit",
-        "bound": 8,
+        "bound": 32,
         "looser": "higher",
     }
     assert key(found, "policy.max_fix_ci_attempts")["source"] == "workspace"
@@ -186,10 +187,10 @@ def test_each_refusal_leaves_the_file_as_it_was(ctx: Context, canopy_env: Canopy
         ({"runtime.worker_cmd": "sh -c {prompt}"}, "not_editable"),
         ({"serve.port": 9000}, "not_editable"),
         ({"capacity": {"max_workers": 3}}, "not_editable"),
-        ({"capacity.max_workers": 9}, "past_bound"),
-        ({"capacity.repo_slots": {"repo": 9}}, "past_bound"),
-        ({"capacity.slots_per_repo": 20}, "past_bound"),
-        ({"loop.interval_minutes": 2}, "past_bound"),
+        ({"capacity.max_workers": 33}, "past_bound"),
+        ({"capacity.repo_slots": {"repo": 33}}, "past_bound"),
+        ({"capacity.slots_per_repo": 40}, "past_bound"),
+        ({"loop.interval_minutes": 1}, "past_bound"),
         ({"policy.fix_ci_cooldown_minutes": 0}, "past_bound"),
         ({"trust.rebase": True}, "not_stricter"),
         ({"trust.commit_trailer": False}, "not_stricter"),
@@ -205,7 +206,7 @@ def test_each_refusal_leaves_the_file_as_it_was(ctx: Context, canopy_env: Canopy
         before = canopy_env.user_file.read_text()
         assert refused(save(c, headers, changes)).startswith(f"{guard}: "), changes
         assert canopy_env.user_file.read_text() == before
-    assert "set more in" in refused(save(c, headers, {"capacity.max_workers": 9}))
+    assert "set more in" in refused(save(c, headers, {"capacity.max_workers": 33}))
     assert not reload.requested
     assert [p.name for p in canopy_env.user_file.parent.iterdir() if p.name.endswith(".tmp")] == []
 
@@ -244,11 +245,11 @@ def test_a_trust_setting_may_be_made_stricter(ctx: Context, canopy_env: CanopyEn
 
 
 def test_a_limit_the_file_set_past_its_bound_may_still_be_lowered(ctx: Context, canopy_env: CanopyEnv) -> None:
-    canopy_env.write_user(user_toml().replace("[paths]", "[capacity]\nmax_workers = 12\n\n[paths]"))
+    canopy_env.write_user(user_toml().replace("[paths]", "[capacity]\nmax_workers = 40\n\n[paths]"))
     c, headers = signed_in_client(ctx)
 
-    assert save(c, headers, {"capacity.max_workers": 10}).status_code == 200
-    assert refused(save(c, headers, {"capacity.max_workers": 11})).startswith("past_bound: ")
+    assert save(c, headers, {"capacity.max_workers": 35}).status_code == 200
+    assert refused(save(c, headers, {"capacity.max_workers": 36})).startswith("past_bound: ")
 
 
 def test_a_save_on_a_stale_hash_is_refused(ctx: Context, canopy_env: CanopyEnv) -> None:
@@ -350,3 +351,41 @@ def test_a_section_written_as_an_inline_table_is_edited_in_place(ctx: Context, c
 
     assert saved["changed"] == [{"name": "capacity.max_workers", "old": 3, "new": 4}]
     assert "max_chores = 2" in canopy_env.user_file.read_text()
+
+
+def test_a_save_keeps_the_file_as_it_was_beside_it(ctx: Context, canopy_env: CanopyEnv) -> None:
+    canopy_env.write_user(COMMENTED)
+    canopy_env.user_file.chmod(0o600)
+    c, headers = signed_in_client(ctx)
+    backup = canopy_env.user_file.with_name("config.toml.bak")
+
+    assert save(c, headers, {"capacity.max_workers": 3}).status_code == 200
+    assert backup.read_text() == COMMENTED
+    assert backup.stat().st_mode & 0o777 == 0o600
+
+    written = canopy_env.user_file.read_text()
+    assert save(c, headers, {"capacity.max_workers": 4}).status_code == 200
+    assert backup.read_text() == written  # the last save's, not the first
+
+
+def test_a_symlinked_backup_is_refused(ctx: Context, canopy_env: CanopyEnv, tmp_path: Path) -> None:
+    elsewhere = tmp_path / "elsewhere"
+    canopy_env.user_file.with_name("config.toml.bak").symlink_to(elsewhere)
+    c, headers = signed_in_client(ctx)
+
+    assert refused(save(c, headers, {"capacity.max_workers": 3})).startswith("unsafe_file: ")
+    assert not elsewhere.exists()
+    assert canopy_env.user_file.read_text() == user_toml()
+
+
+def test_a_file_that_would_not_write_back_exactly_is_refused(ctx: Context, canopy_env: CanopyEnv) -> None:
+    c, headers = signed_in_client(ctx)
+    real = tomlkit.dumps
+
+    def lossy(data: Mapping[str, object], sort_keys: bool = False) -> str:  # noqa: FBT001, FBT002  (tomlkit's own signature)
+        return real(data, sort_keys=sort_keys).replace("# ", "#")
+
+    canopy_env.write_user(user_toml() + "# a comment tomlkit would change\n")
+    with mock.patch.object(tomlkit, "dumps", autospec=True, side_effect=lossy):
+        assert refused(save(c, headers, {"capacity.max_workers": 3})).startswith("not_roundtrip: ")
+    assert canopy_env.user_file.read_text().endswith("# a comment tomlkit would change\n")

@@ -243,27 +243,31 @@ stolen session would go on steering workers after a new secret ended it.
 
 | Key | From the page |
 |---|---|
-| `capacity.max_workers` | at most 8 |
-| `capacity.max_chores`, `capacity.max_reviews` | at most 4 |
-| `capacity.max_reviews_per_day` | at most 100 |
-| `capacity.slots_per_repo`, each `capacity.repo_slots` entry | at most 8; an unmanaged pool's count is new, so bounded too |
-| `policy.max_implement_attempts`, `policy.max_fix_ci_attempts` | at most 5 |
-| `policy.max_resume_attempts` | at most 6 |
-| `policy.max_split_attempts` | at most 3 |
-| `policy.max_reviews_per_pr` | at most 10 |
-| `policy.fix_ci_cooldown_minutes` | at least 10 |
-| `loop.interval_minutes`, `loop.idle_max_minutes` | at least 5 |
+| `capacity.max_workers`, `capacity.slots_per_repo`, each `capacity.repo_slots` entry | at most 32; an unmanaged pool's first count is bounded too |
+| `capacity.max_chores`, `capacity.max_reviews` | at most 16 |
+| `capacity.max_reviews_per_day` | at most 500 |
+| `policy.max_implement_attempts`, `policy.max_fix_ci_attempts`, `policy.max_resume_attempts` | at most 10 |
+| `policy.max_split_attempts` | at most 5 |
+| `policy.max_reviews_per_pr` | at most 25 |
+| `policy.fix_ci_cooldown_minutes` | at least 5 |
+| `loop.interval_minutes`, `loop.idle_max_minutes` | at least 2 |
 | `policy.stacking` | to `"never"` only |
 | `trust.authorized_repliers`, `trust.trusted_reviewers` | entries removed, never added |
 | `trust.rebase` | to `false` only |
 | `trust.commit_trailer` | to `true` only |
 
-The bounds are what one operator's machine and spend plausibly want; a raise within them outlives a new secret, and
-that residual is spend, which the page and the log show. A save:
+The bounds sit well above what one machine runs today, so the page serves the operator's real changes; what they stop
+is a stolen session turning spend up without limit. A raise within them outlives a new secret, and that residual is
+spend, which the page and the log show. `capacity.repo_slots` is edited as its entries: the page lists the
+repositories with a count of their own and takes a name to give another one, so a workspace of many repositories
+shows the few that differ from `capacity.slots_per_repo`. A save:
 
 - writes the user file only, never the workspace file (T7), a shared `policy.*` key included: the user file wins;
 - is edited in place with tomlkit (D119), so the operator's comments, order, and layout stay; a list loses its removed
-  entries where they stand, keeping the rest and their comments;
+  entries where they stand, keeping the rest and their comments. A file tomlkit would not write back byte for byte, as
+  read, is refused `not_roundtrip` before anything changes, so a save differs from the file only in the values set;
+- keeps the file as it was beside it, `config.toml.bak` with the file's mode, replacing the previous save's: the way
+  back from a save is to move it over the file and Reload;
 - carries the hash of the user file as the page read it, and holds a lock beside the file (`config.toml.lock`) from
   reading the file to replacing it, so two saves made on one read cannot both pass; a file whose hash differs is
   refused `stale`, checked again just before the replace, so a hand edit is lost only if it lands in that last moment;
