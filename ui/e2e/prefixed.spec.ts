@@ -333,13 +333,14 @@ test('a long conversation scrolled away from its end stays put as a message arri
         const body = (await response.json()) as { messages: { id: number }[] }
         const seeded = (first ??= body.messages)
         const known = new Set(seeded.map((m) => m.id))
-        const padding = Array.from({ length: 30 }, (_, i) => ({ ...seeded[i % seeded.length], id: 1000 + i }))
+        // Ids past any reply the server will have taken, so a copy never shares one with a real message.
+        const padding = Array.from({ length: 30 }, (_, i) => ({ ...seeded[i % seeded.length], id: 1_000_000 + i }))
         body.messages = [...padding, ...body.messages.filter((m) => !known.has(m.id))]
         await route.fulfill({ response, json: body })
     })
     await page.goto('tickets/ABC-103')
     const region = page.getByRole('region', { name: 'Conversation' })
-    await expect(page.getByTestId('message-1029')).toBeAttached()
+    await expect(page.getByTestId('message-1000029')).toBeAttached()
     // Scrolled as a reader scrolls: the thread hears it on the next frame, so wait for that before anything grows.
     await region.evaluate(async (el) => {
         el.scrollTop = 100
