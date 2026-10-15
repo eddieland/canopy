@@ -57,6 +57,17 @@ test('a window the page does not offer reads as the week', async ({ page }) => {
     await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(7)
 })
 
+test('the nav opens the spend page on the week, its item marked', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const nav = page.getByRole('navigation', { name: 'Main' })
+    await nav.getByRole('link', { name: 'Spend' }).click()
+    await expect(page).toHaveURL(/\/spend$/u)
+    await expect(page.getByTestId('spend-window-7')).toHaveAttribute('data-state', 'on')
+    await expect(nav.getByRole('link', { name: 'Spend' })).toHaveAttribute('data-status', 'active')
+    await expect(page.getByTestId('nav-highlight')).toHaveClass(/\bbg-section-spend\/16\b/u)
+})
+
 test("30 days' table scrolls in its panel under its column names, and a week's shows whole", async ({ page }) => {
     await page.goto('spend?days=30')
     await settled(page)

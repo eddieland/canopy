@@ -37,7 +37,7 @@ const KIND_LABEL = {
 
 /**
  * What agent runs cost per UTC day, by kind, and what the overseer's ticks bought, as `canopy spend` prints it. The
- * window is `?days=`, a week or 30 days; the rail's Spent counters open it.
+ * window is `?days=`, a week or 30 days; the nav opens the week, and the rail's Spent counters their own window.
  */
 export const Route = createFileRoute('/spend')({
     // Typed search params: a window the page does not offer is dropped, which reads as the week.
@@ -51,7 +51,7 @@ function SpendPage() {
     const { data } = useQuery(spendBreakdownQuery(days))
     return (
         <>
-            <PageHeader root="Spend" title="Spend">
+            <PageHeader title="Spend">
                 What agent runs cost each UTC day, as the runtime reported it: the overseer, with idle ticks apart, and
                 the workers, chores, and reviews it started. As{' '}
                 <code className="font-mono text-xs">canopy spend --days {days}</code> prints it.

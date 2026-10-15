@@ -35,6 +35,7 @@ const TEXT = [
     'section-reviews',
     'section-chores',
     'section-ticks',
+    'section-spend',
     'section-settings',
     'diff-add',
     'diff-del',

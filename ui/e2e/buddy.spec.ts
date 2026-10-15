@@ -141,7 +141,7 @@ test.describe('turned on', () => {
     test("Sprig stands over the spend a little in a laptop's window, and tips there only when asked", async ({
         page,
     }) => {
-        await page.setViewportSize({ width: 1280, height: 820 })
+        await page.setViewportSize({ width: 1280, height: 854 })
         await page.goto('attention')
         await settled(page)
         await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'tight')
@@ -165,7 +165,7 @@ test.describe('turned on', () => {
 
     test('a tip waiting unseen in a tight rail still shows its full time once the rail has room', async ({ page }) => {
         await page.clock.install()
-        await page.setViewportSize({ width: 1280, height: 820 })
+        await page.setViewportSize({ width: 1280, height: 854 })
         await page.goto('attention')
         await settled(page)
         const tip = page.getByTestId('buddy-tip')

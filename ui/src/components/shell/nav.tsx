@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import {
     Activity,
     CalendarClock,
+    Coins,
     FileSearch,
     FolderTree,
     GitPullRequest,
@@ -28,15 +29,9 @@ const TONE: Record<BreakdownPart['kind'], string> = {
     other: 'text-muted-foreground',
 }
 
-// Each item's hint is its tooltip: what the page holds, for an operator who does not know it yet.
+// In `SECTIONS` order. Each item's hint is its tooltip: what the page holds, for an operator who does not know it yet.
 const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
     { to: '/attention', icon: Inbox, hint: 'What needs you, most severe first' },
-    { to: '/runs', icon: Activity, hint: 'Workers running now, then the ones that ended last' },
-    {
-        to: '/worktrees',
-        icon: FolderTree,
-        hint: "Each repository's pool: its slots and what holds them",
-    },
     {
         to: '/tickets',
         icon: MessagesSquare,
@@ -52,8 +47,15 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
         icon: FileSearch,
         hint: 'PR reviews canopy keeps instead of posting, with findings on the diff',
     },
+    { to: '/runs', icon: Activity, hint: 'Workers running now, then the ones that ended last' },
     { to: '/chores', icon: CalendarClock, hint: 'Scheduled chores, their runs, and their findings' },
+    { to: '/spend', icon: Coins, hint: 'What agent runs cost each day, and what idle ticks spent for nothing' },
     { to: '/ticks', icon: History, hint: "The overseer's latest ticks and what each decided" },
+    {
+        to: '/worktrees',
+        icon: FolderTree,
+        hint: "Each repository's pool: its slots and what holds them",
+    },
     {
         to: '/settings',
         icon: SlidersHorizontal,
