@@ -12,12 +12,12 @@ last phase, branch, and comment and mirror cursors, its units (one per repositor
 its PR, phase, review and ci cursors, runs so far of each kind, and fix-ci cooldown; see "Repositories and units"), its
 split runs so far, and its latest run, for a ticket the operator started privately its `private` state (see "Private
 tickets"), and for a public ticket the operator has written to in canopy its `operator` messages (see "Reviewers and the
-operator's go-ahead"), the tickets the operator stopped (`stopped`; see "Private tickets"), the tickets split runs
-created (`split_children`; see "Splitting"), what mirroring comments needs (`mirror`; see "Mirroring comments"), and, if
-the operator has any, their chores (`chores`; see "Chores"), if reviews are on, the PRs reviewed lately (`reviews`; see
-"Reviews"), and, if the operator set any lately, their notices to workers (`notices`; see "Notices"). The journal is a
-cache of what the loop did. It is never a substitute for live state. Re-read the tracker and GitHub before every
-decision that matters.
+operator's go-ahead"), the tickets the operator stopped (`stopped`; see "Private tickets"), the tickets marked done
+lately (`recently_done`; see "Procedure"), the tickets split runs created (`split_children`; see "Splitting"), what
+mirroring comments needs (`mirror`; see "Mirroring comments"), and, if the operator has any, their chores (`chores`;
+see "Chores"), if reviews are on, the PRs reviewed lately (`reviews`; see "Reviews"), and, if the operator set any
+lately, their notices to workers (`notices`; see "Notices"). The journal is a cache of what the loop did. It is never
+a substitute for live state. Re-read the tracker and GitHub before every decision that matters.
 
 ## Tools you have
 
@@ -88,8 +88,12 @@ decision that matters.
    branch, PR, or last run says. A ticket in `split_children` needs more than a label to be
    a candidate (see "Splitting"). A ticket with a `private` key in the state block is the exception: the operator
    started it, and its labels do not matter (see "Private tickets"). A ticket in `stopped` is never a candidate: leave
-   it out of the union and record nothing for it, whatever its labels. Use the tracker's short id as the ticket key
-   (the skill says which form). The CLI accepts keys matching `[A-Za-z0-9][A-Za-z0-9_-]*` only.
+   it out of the union and record nothing for it, whatever its labels. A ticket in `recently_done` was marked done at
+   its `done_at`, after its PRs merged. Humans close tickets in the tracker, so the query can still find one open and
+   labeled: leave it out of the union and record nothing for it, as for `stopped`, whatever the tracker says. Do not
+   read it, mirror its comments, or look for its PRs. The operator brings one back with `canopy forget`. Use the
+   tracker's short id as the ticket key (the skill says which form). The CLI accepts keys matching
+   `[A-Za-z0-9][A-Za-z0-9_-]*` only.
 2. For each candidate, mirror its comments newer than its `mirror` cursor (see "Mirroring comments"). Then derive its
    phase from live state using the table below. Use cursors from the state block to know what is new since last tick.
    Each unit's `attempts` count every run of each kind that covered it. A unit's limit for a kind is its limit in
