@@ -106,8 +106,7 @@ posture in [docs/TRUST_MODEL.md](docs/TRUST_MODEL.md).
    - writes the workspace's `canopy-workspace.toml`;
    - clones the repository under `repos/`.
 
-   Then edit this workspace's query under `[tracker.queries]` in your personal config. canopy writes nothing into your
-   repositories and installs
+   Then set `tracker.query` in `canopy-workspace.toml`. canopy writes nothing into your repositories and installs
    nothing else: agent runs load its agent definitions and skills from its own directory (D016, D040).
 
 5. **Run it.** Add your label (`agent-ready-<you>` by default) to a ticket, then run

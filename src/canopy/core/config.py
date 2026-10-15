@@ -15,7 +15,6 @@ direction is stricter. `load` enforces scopes and the tighten rule per file, mer
 from __future__ import annotations
 
 import ipaddress
-import json
 import os
 import re
 import shlex
@@ -51,9 +50,6 @@ WORKSPACE_MAP_TABLES = ("workspace", "repos")
 # Keys earlier canopy read, and what to do with one left in a file. Each is an error that says so, not "unknown key".
 REMOVED_KEYS = {
     "paths.state_dir": f"delete it; state is always in the workspace's {WORKSPACE_STATE_DIR}/ (D016)",
-    "tracker.query": (
-        'move it to the user config, under [tracker.queries] as "<this workspace\'s root>" = <the query> (DESIGN §12)'
-    ),
 }
 PROMPT = "{prompt}"
 # Replaced with the snapshot of canopy's agent definitions and skills (D040).
@@ -99,13 +95,6 @@ def _non_blank(value: str) -> str:
 # One or more plain ref components, each followed by "/". Branch names reach git's argv, so none may start with "-" or
 # hold anything git treats specially ("..", "@{", a leading "."). The workspace file can set this key (TRUST_MODEL T7).
 BRANCH_PREFIX_RE = re.compile(r"(?:[A-Za-z0-9][A-Za-z0-9_-]*/)+")
-
-
-def _workspace_root(value: str) -> str:
-    # A key of `tracker.queries`: the workspace's root, absolute or from `~`, so it never depends on where canopy runs.
-    if not Path(value).expanduser().is_absolute():
-        raise ValueError("must be a workspace's root, as an absolute path or one starting with ~")
-    return value
 
 
 def _branch_prefix(value: str) -> str:
@@ -400,12 +389,7 @@ class Tracker(Section):
     """The `[tracker]` table."""
 
     provider: Annotated[NonBlank, Scope.SHARED]
-    # How each workspace's loop finds candidate tickets, in the tracker's own search syntax or plain language, keyed
-    # by the workspace's root (DESIGN §12, §17). User-only: the overseer reads every ticket the query returns before it
-    # checks labels, so a workspace file that widened it would put tickets nobody labeled in front of the model
-    # (TRUST_MODEL T7). Per workspace, since one user file serves every workspace; keyed by path, not by the map's
-    # name, which the workspace file sets.
-    queries: Annotated[dict[Annotated[NonBlank, AfterValidator(_workspace_root)], NonBlank], Scope.USER] = {}
+    query: Annotated[NonBlank, Scope.SHARED]
     needs_human_label: Annotated[NonBlank, Scope.SHARED] = "needs-human"
     # A ticket's page in the tracker, with {key} where its key goes: the web UI links each ticket there (DESIGN §17).
     # Empty means no link. Shared: the tracker's address is the team's, and a link runs nothing.
@@ -416,11 +400,6 @@ class Tracker(Section):
     # write, which a shared workspace file must not (TRUST_MODEL T7).
     mcp_server: Annotated[StrictStr, Scope.USER, AfterValidator(_server_name)] = ""
     read_tools: Annotated[tuple[ToolPart, ...] | None, Scope.USER] = None
-
-    def query_for(self, root: Path) -> str | None:
-        """Return the query of the workspace at `root`, or None if `queries` has none for it."""
-        target = root.expanduser().resolve()
-        return next((q for key, q in self.queries.items() if Path(key).expanduser().resolve() == target), None)
 
     def tools(self) -> TrackerTools | None:
         """The server and tools a private worker gets, or None if neither config nor a default names any.
@@ -909,8 +888,7 @@ def load(root: Path, user_file: Path | None = None) -> Config:
 
     Raises:
         ConfigError: The workspace file sets a user-only key, the user file is missing, a file cannot be read or is not
-            valid TOML, a key is unknown or removed, a value does not validate, or the user file has no tracker query
-            for the workspace at `root`.
+            valid TOML, a key is unknown or removed, or a value does not validate.
     """
     user_file = user_file or user_config_path()
     shared_file = root / WORKSPACE_FILE_NAME
@@ -930,15 +908,9 @@ def load(root: Path, user_file: Path | None = None) -> Config:
         merged["paths"]["prompt_overrides"] = str(user_file.parent / "prompts")
 
     try:
-        cfg = Config.model_validate(merged)
+        return Config.model_validate(merged)
     except ValidationError as e:
         raise ConfigError(_describe(e, origin, shared_file, user_file)) from e
-    if cfg.tracker.query_for(root) is None:
-        entry = f"{json.dumps(str(root))} = <the query>"
-        raise ConfigError(
-            f"{user_file}: no tracker query for the workspace at {root}; add {entry} under [tracker.queries]"
-        )
-    return cfg
 
 
 def _merge(

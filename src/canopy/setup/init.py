@@ -127,8 +127,8 @@ def default_label() -> str:
     return "agent-ready-" + (re.sub(r"[^A-Za-z0-9_-]+", "-", user).strip("-").lower() or "me")
 
 
-def user_config_text(label: str, root: Path, query: str) -> str:
-    """Return the text of a new user config file with queue label `label`, and `query` for the workspace at `root`."""
+def user_config_text(label: str) -> str:
+    """Return the text of a new user config file with queue label `label`."""
     return f"""\
 # canopy user config: personal, never committed. Overrides each workspace's canopy-workspace.toml key by key.
 # Only what is yours to decide is here; every other key keeps its default, and gets new ones as canopy changes. Keys
@@ -139,12 +139,6 @@ def user_config_text(label: str, root: Path, query: str) -> str:
 # Your queue. A ticket is yours if it carries any of these labels. Never share a label with another operator:
 # both loops would work the same tickets.
 labels = [{json.dumps(label)}]
-
-[tracker.queries]
-# How each workspace's loop finds candidate tickets: the tracker's own search syntax, or plain language. Keyed by the
-# workspace's root, since this one file serves every workspace: add a line for each workspace you make. Edit this one.
-# Finding is not authorizing: your labels are checked on every ticket.
-{json.dumps(str(root))} = {json.dumps(query)}
 
 [trust]
 # Tracker account ids whose ticket comments may resume your blocked work: Jira accountId, GitHub login.

@@ -100,9 +100,8 @@ Work through these in order and stop at the first that explains it.
      "select tick_id, action, rationale from decisions where ticket_key = 'KEY' order by id desc limit 20"
    ```
 
-   No rows means the overseer never considered it: the ticket did not match the workspace's query (its entry in
-   `tracker.queries` in the user config), or it lacks one of `tracker.labels`, or it is closed. Only the labels
-   authorize work; the query only finds candidates.
+   No rows means the overseer never considered it: the ticket did not match `tracker.query`, or it lacks one of
+   `tracker.labels`, or it is closed. Only the labels authorize work; the query only finds candidates.
 3. Read the action:
    - `wait` or `skip`: the rationale says why. `blocked_by: <KEY>` means an open blocker.
    - `refused:<guard>`: the harness refused the dispatch. `unauthorized` (the overseer named no label from
@@ -231,8 +230,8 @@ When the operator asks you to look into findings or turn them into tickets:
 ## Getting a ticket worked
 
 Add the operator's queue label (`tracker.labels` in the user config, `agent-ready-<user>` by default) to an open ticket
-that the workspace's query finds (its entry in `tracker.queries`, keyed by the workspace's root). The next live tick
-with free capacity dispatches it. To preview, run `canopy tick --dry-run` and then `canopy decisions`.
+that `tracker.query` finds. The next live tick with free capacity dispatches it. To preview, run
+`canopy tick --dry-run` and then `canopy decisions`.
 
 Or start it privately: `canopy start KEY`. A started ticket needs no label, and its conversation stays in canopy's
 journal: workers read the ticket but never comment on, label, or edit it, and ask their questions through canopy. A

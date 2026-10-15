@@ -325,7 +325,7 @@ def state_block(
         },
         "tracker": {
             "provider": config.tracker.provider,
-            "query": config.tracker.query_for(repo_root) or "",
+            "query": config.tracker.query,
             "labels": list(config.tracker.labels),
             "needs_human_label": config.tracker.needs_human_label,
         },
