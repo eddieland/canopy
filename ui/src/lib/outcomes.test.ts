@@ -29,11 +29,15 @@ describe('outcomes', () => {
         expect(noticeSetText({ already: false, loop: { paused: null, notice: { ...notice, channel: 'web' } } })).toBe(
             'Notice set: runs dispatched from now on hear it until it lapses. The loop ticks soon.',
         )
-        expect(reloadedText({ changed: [], restart: [], after_tick: false })).toBe(
-            'Nothing changed. The loop runs on it from now on.',
+        const unchanged = 'Nothing changed: the config files say what the loop already runs on.'
+        expect(reloadedText({ changed: [], restart: [], after_tick: false })).toBe(unchanged)
+        // A running tick delays nothing when there is nothing to apply.
+        expect(reloadedText({ changed: [], restart: [], after_tick: true })).toBe(unchanged)
+        expect(reloadedText({ changed: ['capacity.max_workers'], restart: [], after_tick: false })).toBe(
+            'capacity.max_workers changed. The loop runs on the new config now.',
         )
         expect(reloadedText({ changed: ['capacity.max_workers'], restart: [], after_tick: true })).toBe(
-            'capacity.max_workers changed. The loop reads it again once the running tick ends.',
+            'capacity.max_workers changed. The loop runs on the new config once the running tick ends.',
         )
         expect(
             reloadedText({
