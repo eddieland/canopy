@@ -154,6 +154,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   tables.
 - Prompts are not unit-tested. `canopy tick --dry-run` writes the overseer's plan to the `decisions` table; that table
   is the evaluation corpus for prompt changes. Do not add prompt "tests" that assert on model output.
+- Their size is tested. Every file under `.agents/prompts/`, `.agents/agents/`, and `.agents/skills/` reaches the
+  model on every run that uses it, so `tests/prompt_sizes.py` records the most characters each may hold, and a PR that
+  grows one past it fails until it raises the number. `make prompt-sizes` prints each file's size and estimated tokens.
 
 ## Do not build (unless a ROADMAP milestone says so)
 
