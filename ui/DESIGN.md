@@ -68,10 +68,11 @@ Rules:
   pulse; the run it names does, on the runs page), `held` is `status-stopped`, `dirty` is `status-blocked`, `broken`
   is `status-failed`. An `idle` slot is a hollow ring in `muted-foreground`: nothing holds it, so no status color
   claims it.
-- **Section colors**, one per nav item: Attention rose, Runs violet, Worktrees teal, Tickets sky, Pull requests gold,
-  Reviews fuchsia, Chores orange, Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from
-  `useSection`). They go on the nav's icons and highlight, the first step of the page header's trail, and the header's
-  aurora, and nowhere in a page's data: there a color is a state's. A page in no section (the 404) takes the accent.
+- **Section colors**, one per nav item: Attention rose, Tickets sky, Pull requests gold, Reviews fuchsia, Runs violet,
+  Chores orange, Spend azure, Ticks lime, Worktrees teal, Settings lavender (`src/lib/sections.ts`; the current one
+  from `useSection`). They go on the nav's icons and highlight, the first step of the page header's trail, and the
+  header's aurora, and nowhere in a page's data: there a color is a state's. A page in no section (the 404) takes the
+  accent.
 - **Spend series** (`src/lib/spend.ts`) color a kind of agent run in the spend page's chart and its legend, and
   nowhere else: they are fills, never text, so the legend's words are `muted-foreground` beside a swatch. Idle overseer
   spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both themes, WCAG's
@@ -110,7 +111,9 @@ Rules:
   tall as the window under the header. Printed, the shell is not held to the window and shows the page whole; a
   screenshot test does the same by growing the window to the page (`growToPage` in `e2e/helpers.ts`).
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
-  (`src/components/shell/rail.tsx`). Each nav item says on hover what its page holds, and each spend window what it
+  (`src/components/shell/rail.tsx`). The nav lists the sections by how often the operator opens them (`SECTIONS` in
+  `src/lib/sections.ts`): what they work in first (Attention, Tickets, Pull requests, Reviews), then what they check
+  now and then, with Settings last. Each nav item says on hover what its page holds, and each spend window what it
   covers, as a native `title`; a spend window opens the spend page over its week or month. Each block under the nav
   is a hairline and a `panel-label` over its content. The working runs are those running first, then those waiting
   on the operator's answer, each oldest first, a ticket's latest run alone: a dot in its state's color, the ticket's
