@@ -8,6 +8,7 @@ import { Age } from '@/components/age'
 import { ChoreFindingRow } from '@/components/chore-finding'
 import { ChoreRunLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
+import { Copyable } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
 import { OrderToggle } from '@/components/order-toggle'
@@ -146,7 +147,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
 /** A chore run: its state, id (opening its page), findings, cost, and when; what it said; its session. */
 function RunRow({ name, run }: { name: string; run: ChoreRun }) {
     return (
-        <ListRow kind="own-run" data-testid={`chore-run-${run.id}`}>
+        <ListRow kind="own-run" className="group/copy" data-testid={`chore-run-${run.id}`}>
             <span className={cn('flex items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
                 <RunDot state={run.state} />
                 <Word word={run.status} />
@@ -167,7 +168,9 @@ function RunRow({ name, run }: { name: string; run: ChoreRun }) {
                 className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground"
             >
                 {run.session_id && (
-                    <span title="open its transcript with the runtime's tools">session {run.session_id}</span>
+                    <Copyable text={run.session_id} label="session id" reveal>
+                        <span title="open its transcript with the runtime's tools">session {run.session_id}</span>
+                    </Copyable>
                 )}
                 <span title="the run's output">log {run.log_path}</span>
             </RowLine>

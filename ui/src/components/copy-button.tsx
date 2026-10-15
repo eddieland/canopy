@@ -19,6 +19,7 @@ export function Copyable({
     text,
     label,
     children,
+    reveal = false,
     className,
 }: {
     /** What the button copies, exactly as written. */
@@ -27,13 +28,15 @@ export function Copyable({
     label: string
     /** What shows in place of `text`, when that is not the text itself. */
     children?: ReactNode
+    /** Show the button only while its row is hovered, as `CopyButton`'s `reveal` does. */
+    reveal?: boolean
     /** Classes for the whole, such as its font. */
     className?: string
 }) {
     return (
         <span className={cn('inline-flex max-w-full min-w-0 items-center gap-1', className)}>
             <span className="min-w-0 break-all">{children ?? text}</span>
-            <CopyButton text={text} label={label} />
+            <CopyButton text={text} label={label} reveal={reveal} />
         </span>
     )
 }
