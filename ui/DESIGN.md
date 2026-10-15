@@ -532,7 +532,9 @@ list, an empty state, or a skeleton by hand.
   runs on the stream, so it rises in when the run starts and leaves when it ends.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
-  new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below).
+  new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below), and so is a GitHub
+  PR's address in a conversation's bubble or a chore's finding, its detail or its link, as in the harness's lines
+  (`InlineCode`).
 - **A chore's notes** are a conversation of the operator's words alone, between the chore's schedule and its findings
   and runs, with a note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the
   next run` in `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
