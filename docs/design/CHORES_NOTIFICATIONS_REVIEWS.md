@@ -739,8 +739,12 @@ is wrong often enough that the operator wants to rule a finding out before a wor
 
 `canopy send review:<ID> <N>...`, or ticking findings in a review's findings list in the web UI and `send to a worker`
 (§22), is the operator's go-ahead on those findings of review run `ID` (asked for by the operator, 2026-10-13, with
-ROADMAP M32). It is a reply, not a new channel: it records an operator message on the review's ticket, as
-`canopy reply KEY` would, in the operator's words:
+ROADMAP M32). Only for a review of one of the loop's own PRs: the run names a ticket, and one of that ticket's units
+opened the PR it reviewed (`ticket_units.pr_url`). The ticket link alone is the overseer's claim when it ran the review;
+the unit's PR is the journal's record of what the loop opened and pushes to. A review of any other PR, such as one
+`review.query` matched, offers no send: no worker may push to it, and what the operator may do with such a review
+instead, publish it on the PR after iterating on it, is ROADMAP M43. It is a reply, not a new channel: it records an
+operator message on the review's ticket, as `canopy reply KEY` would, in the operator's words:
 
 ```text
 Address findings 1 and 3 of canopy's review run 12, of commit 9b2f4c6e1a7d. Leave its finding 2 alone.
@@ -754,8 +758,8 @@ Address findings 1 and 3 of canopy's review run 12, of commit 9b2f4c6e1a7d. Leav
 - The message names findings by number and never quotes them. A finding is the reviewer's text, which is data (T1);
   the message is the operator's, an instruction, so the reviewer's words never reach a prompt as the operator's.
 - Refused `bad_finding` for no number or one that is not 1 to 20, `unknown` as `dismiss` is for a run or finding that
-  does not exist, `dismissed` for a finding the operator dismissed (undo that first), `no_ticket` for a review of a
-  PR `review.query` matched, which no worker pushes to, and `inside_run` as `reply` is: an agent that could send
+  does not exist, `dismissed` for a finding the operator dismissed (undo that first), `not_ours` for a review of a
+  PR that is not one of the loop's own (above), and `inside_run` as `reply` is: an agent that could send
   findings could start work in the operator's name. The web form draws a submission id, as the reply form does (§22),
   drawn anew when the ticked findings change, so a retry records nothing new; the same command again in the shell
   records nothing new either.

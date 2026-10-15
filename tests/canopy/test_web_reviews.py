@@ -120,7 +120,13 @@ def test_findings_sent_from_the_web_reach_the_ticket_as_the_cli_sends_them(backe
 
     assert c.post(url, json=sent, headers={"origin": headers["origin"]}).status_code == 403
     assert c.post(url, json={**sent, "findings": []}, headers=headers).status_code == 422
-    for path, findings, guard in [(url, [4], "unknown"), ("/api/reviews/3/sends", [1], "unknown")]:
+    # Review 4 is of ABC-099's own PR; review 2 of a PR review.query matched, which the loop did not open.
+    assert c.get("/api/reviews/4").json()["sendable"] is True
+    assert c.get("/api/reviews/2").json()["sendable"] is False
+    for path, findings, guard in [
+        (url, [4], "unknown"),
+        ("/api/reviews/3/sends", [1], "unknown"),
+    ]:
         refused = c.post(path, json={**sent, "findings": findings}, headers=headers)
         assert (refused.status_code, refused.json()["detail"]["guard"]) == (409, guard)
 

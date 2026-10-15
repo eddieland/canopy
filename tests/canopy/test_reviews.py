@@ -867,7 +867,10 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
     agent_log: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """`canopy send review:ID N` replies on the review's ticket, naming findings by number only (DESIGN §21)."""
+    """`canopy send review:ID N` replies on the review's ticket, naming findings by number only (DESIGN §21).
+
+    Only for a review of one of the loop's own PRs: its ticket's unit opened the PR.
+    """
     conn = journal(reviews)
     sha = head(git_pool)
     with reviewer_reports(TWO_FINDINGS):
@@ -885,11 +888,15 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
         ([ref, "0"], "bad_finding"),
         ([ref, "2"], "dismissed"),
         (["review:99", "1"], "unknown"),
-        ([f"review:{query_id}", "1"], "no_ticket"),
+        # A PR review.query matched, and one the overseer linked to PROJ-1 that PROJ-1's unit has not opened.
+        ([f"review:{query_id}", "1"], "not_ours"),
+        ([ref, "1"], "not_ours"),
         (["PROJ-1", "1"], "unsupported"),
     ]:
         assert main(["send", *args]) == 1
         assert f"send refused ({guard})" in capsys.readouterr().err
+    # Findings go only to the loop's own PRs: the one PROJ-1's unit opened.
+    db.set_unit(conn, "PROJ-1", str(reviews.root), "repo", pr_url=PR)
     assert main(["dismiss", ref, "2", "--undo"]) == 0
     capsys.readouterr()
 

@@ -426,9 +426,9 @@ def send(
     Raises:
         Refused: `unsupported` for a subject that is not a review, `bad_finding` for no findings or a number no
             finding can have, `unknown` for a review run that does not exist or did not end `done` with findings, or a
-            finding it does not have, `dismissed` for a finding the operator dismissed, and `no_ticket` for a review of
-            a PR with no ticket, which no worker pushes to. As `reply`: `bad_submission`, and `unknown` for a ticket
-            canopy has no record of.
+            finding it does not have, `dismissed` for a finding the operator dismissed, and `not_ours` for a review of
+            a PR that is not one of the loop's own (`own_pr`), which no worker pushes to. As `reply`:
+            `bad_submission`, and `unknown` for a ticket canopy has no record of.
     """
     check_verb(ref, "send")
     numbers = sorted(set(findings))
@@ -445,14 +445,27 @@ def send(
     dismissed = db.review_dismissals(conn, run_id)
     if held := [n for n in numbers if n in dismissed]:
         raise Refused("dismissed", f"{ref} {_numbered(held)} dismissed; undo the dismissal to send it")
-    if run["ticket_key"] is None:
-        raise Refused("no_ticket", f"{ref} is of a PR with no ticket, which no worker pushes to")
+    if not own_pr(conn, run):
+        raise Refused("not_ours", f"{ref} is of a PR the loop did not open, which no worker pushes to")
     left = tuple(n for n in range(1, found + 1) if n not in numbers and n not in dismissed)
     body = f"Address {_numbered(numbers, verb=False)} of canopy's review run {run_id}, of commit {run['sha'][:12]}."
     if left:
         body += f" Leave its {_numbered(left, verb=False)} alone."
     replied = reply(conn, Ref(TICKET, run["ticket_key"]), body, channel=channel, submission=submission)
     return Sent(ticket=run["ticket_key"], replied=replied)
+
+
+def own_pr(conn: sqlite3.Connection, run: sqlite3.Row) -> bool:
+    """Whether review run `run` is of one of the loop's own PRs: its ticket's unit opened the PR it reviewed.
+
+    Only such a review's findings can be sent to a worker (DESIGN §21). The ticket link alone is the overseer's claim;
+    the unit's PR is the journal's own record of what the loop opened.
+
+    Returns:
+        True when the run names a ticket and one of that ticket's units has the run's PR.
+    """
+    key = run["ticket_key"]
+    return key is not None and db.is_unit_pr(conn, str(key), str(run["pr_url"]))
 
 
 def _numbered(numbers: Collection[int], *, verb: bool = True) -> str:

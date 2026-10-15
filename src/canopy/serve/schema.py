@@ -1238,6 +1238,8 @@ class ReviewDetail(_Model):
     """Its findings, each anchored on the diff where it can be."""
     diff: ReviewDiff | None = None
     """None when there is no diff: a review from before diffs were kept, or one whose base could not be read."""
+    sendable: bool = False
+    """Whether its findings can be sent to a worker: a `done` review of one of the loop's own PRs (DESIGN §21)."""
     runs: list[ReviewSummary]
     """Every review run of the same PR, newest first, this one included."""
 

@@ -1971,6 +1971,12 @@ export type components = {
              */
             runs: components["schemas"]["ReviewSummary"][];
             /**
+             * Sendable
+             * @description Whether its findings can be sent to a worker: a `done` review of one of the loop's own PRs (DESIGN §21).
+             * @default false
+             */
+            sendable: boolean;
+            /**
              * Summary
              * @description The reviewer's summary, line breaks kept: untrusted text.
              */

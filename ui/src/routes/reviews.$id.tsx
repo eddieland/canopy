@@ -194,9 +194,10 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
 }
 
 /**
- * Every finding in one list, each linking to its card on the diff. On a review of a ticket's PR, each finding the
- * operator has not dismissed has a box, and the ticked ones go to a worker together, as `canopy send review:ID N...`:
- * a reply on the ticket naming them, which the next tick reads as the operator's go-ahead (DESIGN §21).
+ * Every finding in one list, each linking to its card on the diff. On a review of one of the loop's own PRs, each
+ * finding the operator has not dismissed has a box, and the ticked ones go to a worker together, as
+ * `canopy send review:ID N...`: a reply on the ticket naming them, which the next tick reads as the operator's go-ahead
+ * (DESIGN §21).
  */
 function FindingsPanel({ detail }: { detail: ReviewDetail }) {
     const { review } = detail
@@ -214,7 +215,6 @@ function FindingsPanel({ detail }: { detail: ReviewDetail }) {
             void refreshTicket(client, sent.ticket_key)
         },
     })
-    const sendable = review.ticket_key !== null && review.status === 'done'
 
     function pick(n: number, on: boolean) {
         const next = new Set(picked)
@@ -236,7 +236,7 @@ function FindingsPanel({ detail }: { detail: ReviewDetail }) {
                 {detail.findings.map((f, i) => (
                     <ListRow key={i} kind="review-finding" className="py-2 text-sm">
                         <span className="flex items-center gap-1.5">
-                            {sendable && !f.dismissed && (
+                            {detail.sendable && !f.dismissed && (
                                 <Checkbox
                                     aria-label={`send finding ${i + 1} to a worker`}
                                     checked={picked.has(i + 1)}
@@ -265,7 +265,7 @@ function FindingsPanel({ detail }: { detail: ReviewDetail }) {
                     </ListRow>
                 ))}
             </ol>
-            {sendable && (
+            {detail.sendable && (
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t p-3">
                     <Button
                         size="sm"

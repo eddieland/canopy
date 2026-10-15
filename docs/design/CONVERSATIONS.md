@@ -435,7 +435,7 @@ The API, under `{base}/api`:
 | `GET /reviews` | canopy's latest 100 review runs, newest first: PR, commit, ticket, status, verdict, impact, findings, cost (§21) |
 | `GET /reviews/{id}` | one review run: its summary, findings anchored on its diff, each marked whether dismissed, the diff, and the PR's other runs; 404 for no such run |
 | `POST /reviews/{id}/dismissals` | `canopy dismiss review:ID N`, or with `undo` its `--undo`: no worker or tick acts on finding `N` (§21) |
-| `POST /reviews/{id}/sends` | `canopy send review:ID N...`, with the form's submission id: a reply on the review's ticket, the operator's go-ahead on those findings (§21) |
+| `POST /reviews/{id}/sends` | `canopy send review:ID N...`, with the form's submission id: a reply on the review's ticket, the operator's go-ahead on those findings; only for one of the loop's own PRs, which `GET /reviews/{id}` says as `sendable` (§21) |
 | `GET /pull-requests` | the PRs the journal knows, most recent activity first, at most 100: ticket, branch, phase, the run working it, its latest review |
 | `GET /pull-request?url=` | one PR: the runs that pushed to it, its review runs and limit, the latest 20 decisions naming it, and its total cost; 404 for one nothing names |
 | `POST /pull-request/grants?url=` | `canopy grant URL review`, for one review run |

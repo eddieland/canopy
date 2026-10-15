@@ -624,11 +624,11 @@ list, an empty state, or a skeleton by hand.
   `status-blocked`, as the attention list's reasons; `minor` plain), its title, its location, and its detail as rich
   text, with `dismiss` at the end of its head line (`useDismissReviewFinding`); a dismissed one has a `dismissed` chip,
   its title muted, `undo` in place of `dismiss` (as on a chore's finding, and as `canopy dismiss --undo`), and the
-  same chip in the findings list. On a review of a ticket's PR, each finding in that list the operator has not
-  dismissed has a checkbox before its number, and under the list `send to a worker` sends the ticked ones together, as
-  `canopy send review:ID N...` does, with a muted line saying what it does until it has said what it did. The list of
-  reviews is a `ReviewsTable`: the review's link, its run state's dot and
-  its verdict in its worst finding's color (`verdictTone`: a blocking one's `status-failed`, a major one's
+  same chip in the findings list. On a review of one of the loop's own PRs (`sendable`), each finding in that list
+  the operator has not dismissed has a checkbox before its number, and under the list `send to a worker` sends the
+  ticked ones together, as `canopy send review:ID N...` does, with a muted line saying what it does until it has said
+  what it did. The list of reviews is a `ReviewsTable`: the review's link, its run state's dot and its verdict in its
+  worst finding's color (`verdictTone`: a blocking one's `status-failed`, a major one's
   `status-blocked`, else plain), so a review with a blocking finding never reads as calm as a clean one; its ticket
   (or `review.query`, muted), the PR (`PullRequestLink`), the commit's first 7 characters, its impact, cost, and age.
   A review's page colors its verdict the same way.
