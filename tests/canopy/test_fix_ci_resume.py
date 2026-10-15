@@ -24,7 +24,7 @@ def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
 
 
 def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
-    return [(str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)]
+    return [(d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 def dispatch_and_run(conn: sqlite3.Connection, *args: str) -> sqlite3.Row:
@@ -266,7 +266,7 @@ def tick_decisions(conn: sqlite3.Connection) -> list[str]:
     tick = db.last_tick(conn)
     assert tick is not None
     assert tick["status"] == "ok", tick["summary"]
-    return [str(d["action"]) for d in db.decisions_for_tick(conn, int(tick["id"]))]
+    return [d.action for d in db.decisions_for_tick(conn, int(tick["id"]))]
 
 
 def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(

@@ -51,7 +51,7 @@ def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail 
     if rows:
         found = _pull_request(ctx.conn, rows[0], reviews)
     elif decisions:
-        found = PullRequest(url=url, active_at=db.parse_time(str(decisions[0]["created_at"])))
+        found = PullRequest(url=url, active_at=db.parse_time(decisions[0].created_at))
     else:
         return None
     runs: list[sqlite3.Row] = _runs(ctx.conn, found.ticket_key, url) if found.ticket_key is not None else []

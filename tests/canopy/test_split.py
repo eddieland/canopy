@@ -26,7 +26,7 @@ def split(key: str, *args: str) -> list[str]:
 
 
 def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
-    return [(str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)]
+    return [(d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 @contextmanager

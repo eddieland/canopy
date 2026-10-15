@@ -241,7 +241,7 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     [unit] = db.units(conn, "PROJ-1")
     assert (unit["repo"], unit["phase"], unit["last_ci_run_id"], unit["branch"]) == ("api", "ci_red", "run-7", None)
     [decision] = db.decisions_for_tick(conn, tick)
-    assert (decision["ticket_key"], decision["action"]) == ("PROJ-1", "wait")
+    assert (decision.ticket_key, decision.action) == ("PROJ-1", "wait")
     last = db.last_tick(conn)
     assert last is not None
     assert (last["id"], last["status"], last["dry_run"]) == (tick, "ok", 1)
