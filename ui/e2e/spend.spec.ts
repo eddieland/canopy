@@ -56,3 +56,22 @@ test('a window the page does not offer reads as the week', async ({ page }) => {
     await expect(page.getByTestId('spend-window-7')).toHaveAttribute('data-state', 'on')
     await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(7)
 })
+
+test("30 days' table scrolls in its panel under its column names, and a week's shows whole", async ({ page }) => {
+    await page.goto('spend?days=30')
+    await settled(page)
+    const region = page.getByTestId('spend-table-scroll')
+    await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(30)
+    const scrolls = () => region.evaluate((el) => el.scrollHeight > el.clientHeight)
+    expect(await scrolls()).toBe(true)
+
+    // Scrolled to the oldest day, the column names stay at the region's top.
+    await region.evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
+    const head = await page.getByTestId('spend-table').locator('thead').boundingBox()
+    const box = await region.boundingBox()
+    expect(head?.y).toBeCloseTo(box?.y ?? Number.NaN, 0)
+
+    await page.getByTestId('spend-window-7').click()
+    await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(7)
+    expect(await scrolls()).toBe(false)
+})
