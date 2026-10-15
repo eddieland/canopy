@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from canopy.chores import reconcile as chore_reconcile
@@ -28,6 +28,10 @@ DONE_LINE = "CANOPY_TICK_DONE"
 CANOPY_CHECK = ("canopy", "--version")
 CANOPY_CHECK_TIMEOUT_SECONDS = 60
 CANOPY_UNAVAILABLE = attention.UNAVAILABLE
+# How long a ticket marked done stays in the state block's `recently_done`, so the overseer leaves it out while a human
+# has yet to close it in the tracker (DESIGN §7). One still open after that is read again and marked done again, which
+# lists it for as long once more.
+RECENTLY_DONE_DAYS = 30
 
 
 @dataclass(frozen=True)
@@ -107,6 +111,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         running=running,
         tickets=tickets,
         stopped=stopped,
+        recently_done=db.recently_done(ctx.conn, db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS))),
         units=db.all_units(ctx.conn),
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, [int(r["id"]) for r in [*running, *last_runs.values()]]),
