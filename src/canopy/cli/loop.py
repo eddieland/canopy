@@ -329,14 +329,14 @@ def cmd_decisions(click_ctx: click.Context, tick_id: int | None, ticket_key: str
         click.echo(f"  overseer output: {output}")
     rows = db.decisions_for_tick(ctx.conn, int(row["id"]))
     if ticket_key is not None:
-        rows = [decision for decision in rows if decision["ticket_key"] == ticket_key]
+        rows = [decision for decision in rows if decision.ticket_key == ticket_key]
     click.echo(f"\nDecisions ({len(rows)}):")
     keys = [attention.decided_about(d) for d in rows]
     key_width = max((len(k) for k in keys), default=0)
-    action_width = max((len(str(d["action"])) for d in rows), default=0)
+    action_width = max((len(d.action) for d in rows), default=0)
     for key, d in zip(keys, rows, strict=True):
-        rationale = " ".join(str(d["rationale"]).split())
-        click.echo(f"  {key:<{key_width}}  {d['action']:<{action_width}}  {rationale}")
+        rationale = " ".join(d.rationale.split())
+        click.echo(f"  {key:<{key_width}}  {d.action:<{action_width}}  {rationale}")
     if not rows:
         click.echo(f"  none for ticket {ticket_key}" if ticket_key is not None else "  none")
     return 0

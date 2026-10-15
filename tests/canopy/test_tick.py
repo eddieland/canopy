@@ -75,7 +75,7 @@ def test_dry_run_tick_records_the_overseer_plan(
         [tick] = conn.execute("SELECT * FROM ticks").fetchall()
         assert (tick["status"], tick["dry_run"]) == ("ok", 1)
         assert tick["ended_at"] is not None
-        decisions = [(d["ticket_key"], d["action"]) for d in db.decisions_for_tick(conn, 1)]
+        decisions = [(d.ticket_key, d.action) for d in db.decisions_for_tick(conn, 1)]
         assert decisions == [
             ("PROJ-1", "wait"),
             ("PROJ-2", "dispatch:implement"),

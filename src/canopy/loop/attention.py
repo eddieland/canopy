@@ -29,6 +29,7 @@ from canopy.infra import logs
 from canopy.notify import deliver
 
 if TYPE_CHECKING:
+    from canopy.core import records
     from canopy.core.context import Context
 
 ACTION_PREFIX = "attention:"
@@ -70,18 +71,18 @@ __all__ = [
 ]
 
 
-def decided_about(decision: sqlite3.Row) -> str:
+def decided_about(decision: records.Decision) -> str:
     """Name what a decision is about, for display: its ticket, `chore:<name>`, its repository, or `-` for the tick.
 
     Returns:
         The chore with its prefix, else the PR with its prefix when there is no ticket, else the ticket key, else the
         repository, else `-`.
     """
-    if decision["chore"] is not None:
-        return f"{CHORE_PREFIX}{decision['chore']}"
-    if decision["ticket_key"] is None and decision["pr"] is not None:
-        return f"{PR_PREFIX}{decision['pr']}"
-    return str(decision["ticket_key"] or decision["repo"] or "-")
+    if decision.chore is not None:
+        return f"{CHORE_PREFIX}{decision.chore}"
+    if decision.ticket_key is None and decision.pr is not None:
+        return f"{PR_PREFIX}{decision.pr}"
+    return decision.ticket_key or decision.repo or "-"
 
 
 # An item is its ticket, its reason, and its repository if it has one.

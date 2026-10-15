@@ -31,7 +31,7 @@ def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
 
 
 def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
-    return [(str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)]
+    return [(d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 def test_dispatch_leases_records_and_spawns(
@@ -504,7 +504,7 @@ def test_dry_run_refuses_what_a_live_dispatch_would(
         ]:
             assert main(["dispatch", "--repo", "repo", *args], runner=runner) == code, args
 
-        assert [(d["ticket_key"], d["action"]) for d in db.decisions_for_tick(conn, tick_id)] == [
+        assert [(d.ticket_key, d.action) for d in db.decisions_for_tick(conn, tick_id)] == [
             ("LIMIT", "refused:attempt_limit"),
             ("LIMIT", "attention:attempt_limit"),
             ("COOL", "refused:cooldown"),

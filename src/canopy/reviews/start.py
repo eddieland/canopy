@@ -22,8 +22,7 @@ from canopy.infra import lock, logs, procs
 from canopy.reviews import grants
 
 if TYPE_CHECKING:
-    import sqlite3
-
+    from canopy.core import records
     from canopy.core.context import Context
 
 REVIEWS_DIR = "reviews"
@@ -203,7 +202,7 @@ def _spawn(
     return Started(run_id, pid, lease.path)
 
 
-def _guard(ctx: Context, request: Request, *, planned: list[sqlite3.Row] | None = None) -> str:
+def _guard(ctx: Context, request: Request, *, planned: list[records.Decision] | None = None) -> str:
     """Refuse unless a review of `request` may start now. Returns the repository it leases in.
 
     `planned` is a dry run's decisions this tick: its reviews and worker dispatches count as running.
@@ -220,8 +219,8 @@ def _guard(ctx: Context, request: Request, *, planned: list[sqlite3.Row] | None 
     repo = _check_repo(ctx, request.repo)
     _check_ours(ctx, request, repo)
     planned = planned or []
-    planned_reviews = [d for d in planned if d["action"] == DISPATCH_ACTION]
-    planned_runs = [d for d in planned if str(d["action"]).startswith("dispatch:") and d["action"] != DISPATCH_ACTION]
+    planned_reviews = [d for d in planned if d.action == DISPATCH_ACTION]
+    planned_runs = [d for d in planned if d.action.startswith("dispatch:") and d.action != DISPATCH_ACTION]
     _check_running(ctx, request, planned_reviews, planned_runs)
     _check_limits(ctx, request, planned_reviews, planned_runs)
     return repo
@@ -244,7 +243,7 @@ def _check_ours(ctx: Context, request: Request, repo: str) -> None:
 
 
 def _check_running(
-    ctx: Context, request: Request, planned_reviews: list[sqlite3.Row], planned_runs: list[sqlite3.Row]
+    ctx: Context, request: Request, planned_reviews: list[records.Decision], planned_runs: list[records.Decision]
 ) -> None:
     """`running`: a review of this PR, or a worker on its ticket, is running.
 
@@ -254,18 +253,18 @@ def _check_running(
     running = next((r for r in db.running_review_runs(ctx.conn) if r["pr_url"] == request.pr), None)
     if running is not None:
         raise Refusal("running", f"review run {running['id']} of this PR is running")
-    if any(d["pr"] == request.pr for d in planned_reviews):
+    if any(d.pr == request.pr for d in planned_reviews):
         raise Refusal("running", "this dry run already reviewed this PR")
     if request.ticket is None:
         return
     worker = next((r for r in db.running_runs(ctx.conn) if r["ticket_key"] == request.ticket), None)
-    if worker is not None or any(d["ticket_key"] == request.ticket for d in planned_runs):
+    if worker is not None or any(d.ticket_key == request.ticket for d in planned_runs):
         # A review must not race the push it is meant to judge.
         raise Refusal("running", f"a worker run for {request.ticket} is running; review its PR once it ends")
 
 
 def _check_limits(
-    ctx: Context, request: Request, planned_reviews: list[sqlite3.Row], planned_runs: list[sqlite3.Row]
+    ctx: Context, request: Request, planned_reviews: list[records.Decision], planned_runs: list[records.Decision]
 ) -> None:
     """`reviewed`, `review_limit`, `daily_limit`, `review_capacity`, and `capacity`, in that order.
 

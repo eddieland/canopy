@@ -61,7 +61,7 @@ def test_decide_records_and_touches_ticket(canopy_env: CanopyEnv, conn: sqlite3.
     with in_tick(conn) as tick_id:
         assert main(["decide", "PROJ-1", "skip", "--rationale", "  blocked by PROJ-0  "]) == 0
         assert main(["decide", "skip", "--rationale", "mcp_unavailable: tracker"]) == 0
-        rows = [(d["ticket_key"], d["action"], d["rationale"]) for d in db.decisions_for_tick(conn, tick_id)]
+        rows = [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
         assert rows == [("PROJ-1", "skip", "blocked by PROJ-0"), (None, "skip", "mcp_unavailable: tracker")]
         ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
         assert ticket["repo"] == str(canopy_env.root)
@@ -79,7 +79,7 @@ def test_long_text_is_truncated(canopy_env: CanopyEnv, conn: sqlite3.Connection)
     with in_tick(conn) as tick_id:
         assert main(["decide", "PROJ-1", "wait", "--rationale", "x" * 5000]) == 0
         [row] = db.decisions_for_tick(conn, tick_id)
-        assert len(row["rationale"]) == 2000
+        assert len(row.rationale) == 2000
 
 
 def test_attention_reason_format(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
@@ -125,7 +125,7 @@ def test_dry_run_dispatch_records_branch_cursors_and_context(canopy_env: CanopyE
             )
             == 0
         )
-        rows = [(d["action"], d["rationale"]) for d in db.decisions_for_tick(conn, tick_id)]
+        rows = [(d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
         assert rows == [
             (
                 "dispatch:implement",

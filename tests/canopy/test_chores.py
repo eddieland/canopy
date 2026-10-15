@@ -60,7 +60,7 @@ def chore_reports(report: object) -> Iterator[None]:
 
 
 def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str | None, str, str]]:
-    return [(d["chore"], str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)]
+    return [(d.chore, d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 def run_inline(conn: sqlite3.Connection, report: object, *, close: bool = True) -> int:

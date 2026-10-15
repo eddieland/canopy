@@ -732,11 +732,11 @@ def _report(
 def _decision_rows(rows: Table, ctx: Context, tick_id: int, *, failed: bool) -> None:
     """The tick's decisions that change something. Attention items are shown as the list's change instead."""
     for d in db.decisions_for_tick(ctx.conn, tick_id):
-        action = str(d["action"])
+        action = d.action
         if action.startswith(attention.ACTION_PREFIX) or action in _QUIET_ACTIONS:
             continue
         style = "red" if action.startswith("refused:") else "green" if action.startswith("dispatch:") else ""
-        rationale = _detail(str(d["rationale"]))
+        rationale = _detail(d.rationale)
         rows.add_row("", Text(attention.decided_about(d)), Text(action, style=style), rationale)
     output = ctx.state_dir / "ticks" / f"{tick_id}.log"
     if failed and output.exists():

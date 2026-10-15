@@ -205,6 +205,7 @@ canopy (harness, Python)
     conversation.py references, start records, the operator's messages, runs' reports and questions, with the guards
                    every channel shares (§22)
     db.py          SQLite journal, migrations
+    records.py     typed journal rows: a frozen dataclass per table, built by a query and held to its schema
     items.py       the attention item: its subject, fingerprint, and age
     outbox.py      the events notification sinks receive, recorded with the fact they report (§20)
     pause.py       the loop's pause, which every channel writes: whether `canopy loop` starts another tick (§6)

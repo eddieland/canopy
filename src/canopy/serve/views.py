@@ -80,6 +80,7 @@ from canopy.serve.schema import (
 if TYPE_CHECKING:
     import sqlite3
 
+    from canopy.core import records
     from canopy.core.context import Context
     from canopy.serve import backend as served
     from canopy.serve.backend import Backend
@@ -410,33 +411,29 @@ def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
             return TranscriptError(at=entry.at, name=entry.name, message=entry.message, call=entry.call)
 
 
-def decision(row: sqlite3.Row) -> Decision:
+def decision(row: records.Decision) -> Decision:
     """One decision, named as `canopy decisions` names it, its rationale with its line breaks.
 
     Returns:
         The decision, its subject `chore:NAME` for a chore, `pr:URL` for a PR with no ticket, else the ticket's.
     """
-    chore = str(row["chore"]) if row["chore"] is not None else None
-    pr = str(row["pr"]) if row["pr"] is not None else None
-    key = str(row["ticket_key"]) if row["ticket_key"] is not None else None
-    repo = str(row["repo"]) if row["repo"] is not None else None
-    if chore is not None:
-        subject = f"{_CHORE}{chore}"
-    elif key is None and pr is not None:
-        subject = f"{_PR}{pr}"
+    if row.chore is not None:
+        subject = f"{_CHORE}{row.chore}"
+    elif row.ticket_key is None and row.pr is not None:
+        subject = f"{_PR}{row.pr}"
     else:
-        subject = items.subject(key, repo)
+        subject = items.subject(row.ticket_key, row.repo)
     return Decision(
-        id=int(row["id"]),
-        tick_id=int(row["tick_id"]),
-        at=db.parse_time(str(row["created_at"])),
+        id=row.id,
+        tick_id=row.tick_id,
+        at=db.parse_time(row.created_at),
         subject=subject,
-        ticket_key=key,
-        repo=repo,
-        chore=chore,
-        pr=pr,
-        action=str(row["action"]),
-        rationale=lines(str(row["rationale"])),
+        ticket_key=row.ticket_key,
+        repo=row.repo,
+        chore=row.chore,
+        pr=row.pr,
+        action=row.action,
+        rationale=lines(row.rationale),
     )
 
 

@@ -45,7 +45,7 @@ def mirrored(conn: sqlite3.Connection, key: str = KEY) -> list[sqlite3.Row]:
 
 
 def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str | None, str, str]]:
-    return [(d["ticket_key"], d["action"], d["rationale"]) for d in db.decisions_for_tick(conn, tick_id)]
+    return [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 def mirror_cursor(conn: sqlite3.Connection, key: str = KEY) -> str | None:

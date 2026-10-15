@@ -406,7 +406,7 @@ def test_ctrl_c_during_a_tick_lets_it_finish_then_stops(
         assert time.slept == []  # stopped without waiting
         assert tick_statuses(canopy_env) == ["ok"]
         conn = canopy_env.journal(migrate=False)
-        assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
+        assert [d.action for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
 
 
 def seconds_apart(seconds: float) -> Callable[[], float]:
@@ -449,7 +449,7 @@ def test_two_signals_from_one_ctrl_c_let_the_tick_finish(
             )
         assert statuses == {"ok": 1}
         conn = canopy_env.journal(migrate=False)
-        assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
+        assert [d.action for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
 
 
 @pytest.mark.parametrize(
@@ -958,7 +958,7 @@ def test_sighup_during_a_tick_lets_it_finish_on_the_config_it_started_with(
         assert statuses == {"ok": 2}
         assert reload.during_tick == [True, True]  # the web UI would have said: after the running tick
         conn = canopy_env.journal(migrate=False)
-        assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
+        assert [d.action for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
         assert sum(time.slept) == 600  # the wait after it was paced before the reload applied
         text = out.getvalue()
         assert text.index("tick 1  ok") < text.index("config reloaded") < text.index("tick 2  ok")

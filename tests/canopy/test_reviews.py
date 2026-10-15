@@ -63,9 +63,7 @@ def review(*args: str, sha: str, pr: str = PR) -> list[str]:
 
 
 def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str | None, str | None, str, str]]:
-    return [
-        (d["ticket_key"], d["pr"], str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)
-    ]
+    return [(d.ticket_key, d.pr, d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 @contextmanager

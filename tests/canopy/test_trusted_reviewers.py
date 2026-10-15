@@ -204,7 +204,7 @@ def test_an_override_without_the_operator_messages_fails_closed_once_there_are_s
             ["dispatch", KEY, "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
             runner=InlineRunner(),
         )
-        decisions = [(str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)]
+        decisions = [(d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
         if not replied:
             assert code == 0, decisions
             return
