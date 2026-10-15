@@ -29,9 +29,23 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   not close `ok`; an `ok` one the loop called idle; one it called not idle; one no loop ran, which a tick from before
   the loop recorded it also reads as), with the count and cost of each and idle ticks' share of what the live ticks
   that ended cost; the live ticks the loop ran by `woken_by`; and how many ended runs of each kind reported no cost.
-  Every figure is by start, within the window's days and none after, read in one transaction. `--json` prints the
-  same as one object, for a re-measurement (`docs/MEASUREMENTS.md`) to start from. The web UI's spend page shows it
-  (§22).
+  Beside what the window cost, what it got done (asked for by the operator, 2026-10-15, to weigh cost against value):
+  the tickets marked done in it, each day's and in all, and the window's whole spend over them; each ticket with a
+  run or review run in the window, or marked done in it, with what its own runs cost and when and how it was marked
+  done; and each PR a run in the window pushed to, or a review run of it, with what those cost. Every figure is by
+  start, within the window's days and none after, read in one transaction. The text lists the ten costliest
+  tickets; `--json` prints all of it as one object, for a re-measurement (`docs/MEASUREMENTS.md`) to start from. The
+  web UI's spend page shows it (§22).
+
+  Done is a ticket's newest `done` decision (§7) in the window, on a ticket still marked done and not forgotten since:
+  `merged`, and `closed` too, since a tracker that closes a ticket when its PR merges closes most tickets that landed
+  before the loop sees the merge, so leaving them out would undercount what landed. A ticket closed unworked is
+  counted as well; the per-ticket row says which it was. Spend per ticket done divides the window's whole spend, the
+  overseer's, chores', and the runs of tickets still open included, since that is what getting those tickets done
+  cost; comparing two windows' figures is what tells whether spending more bought more. A ticket's and a PR's own
+  cost is its worker, split, and review runs, as on its page, but within the window: the overseer's is no ticket's. A
+  PR's runs are those whose result names it, so a joint run counts on each of its PRs, and a run still running, with
+  no result yet, counts on its ticket and on none of its PRs.
   `canopy decisions [TICK]` prints a tick (the latest by default), its overseer's session and cost, and its decisions;
   `--ticket KEY` filters decisions by exact ticket key and reports when none match. This is the way to read a dry run's
   plan. The web UI shows the same: its ticks page lists the latest 50, a tick's page its decisions, and a ticket's page
