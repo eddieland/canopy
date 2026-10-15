@@ -63,6 +63,9 @@ interval_minutes = 15
 # After each tick that found nothing new, the wait doubles, up to this. It ends sooner when a run ends, a fix-ci
 # cooldown or a chore's due time comes, or you reply. Set it to interval_minutes to wait the same after every tick.
 # idle_max_minutes = 120
+# What the overseer may spend a day, in US dollars, at what the latest ticks cost: when they cost more, the wait grows
+# until they fit. It never stops the loop, and counts no worker's spend. 0, the default, is no budget.
+# daily_budget_usd = 20
 
 [trust]
 # Tracker account ids whose ticket comments may resume your blocked work. Use the

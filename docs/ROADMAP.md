@@ -155,26 +155,14 @@ Next: the closing line does not say a signal stopped it; a small follow-up, not 
 
 ## M13. Spend-paced loop
 
-D042's pacing rule, fed by what ticks cost. Needs M12. Sketch only; the design comes first.
+Every agent run canopy starts records its cost, shown in the loop's per-tick block, `canopy status`, and the web UI,
+and `loop.daily_budget_usd` spaces ticks so the overseer's recent cost per tick fits the day's budget; the loop waits
+the longer of that and idle pacing's wait (DESIGN §6, Spend pacing; `pacing.spent`).
 
-- Record what each overseer run and each worker run cost, in tokens and dollars, in the journal next to its tick or
-  run. Worker, split, chore, and review runs and each tick's overseer do.
-- A spend budget in the user config, and a pacing rule that lengthens the wait when recent ticks cost more and returns
-  to `loop.interval_minutes` when they cost less. Idle ticks are M21's: the loop waits the longer of the two rules,
-  within M21's gate deadlines.
-- Spend in the loop's per-tick block and in `canopy status`.
-- Open: what the budget's unit is (per day, per tick, or both); whether a worker's cost counts against the tick that
-  dispatched it. How the runtime reports cost is settled: OpenCode's JSON events on stdout.
-
-Accept: written with the design, before work starts.
-
-Status: in progress. Taken in part on request (2026-10-07, 2026-10-08, and 2026-10-13), with M15's session ids:
-worker, split, chore, and review runs and each tick's overseer record their cost in dollars and tokens, so every agent
-run canopy starts is in the spend, and the loop's per-tick block, `canopy tick`, `canopy status`, `canopy decisions`,
-and the web UI's attention page (the last 24 hours and 30 days) show it, and its chores pages each chore's. A tick's
-cost is its overseer's alone, so a worker's is not counted against the tick that dispatched it. An `overseer_cmd`,
-`review_cmd`, or chore `cmd` in a user file from before needs `--format json` added. What keeps it open: the budget
-and the pacing rule are not designed.
+Status: done 2026-10-15.
+Learned: closed on the operator's request with the tests against the fakes; the day-long live check is SCENARIOS S37.
+The open questions settled small: the budget is per day and a rate, never a stop, and only the overseer's spend is
+paced, since a tick's cost is its overseer's alone and capacity and attempt limits already bound workers'.
 
 ## M14. PR-scoped work
 

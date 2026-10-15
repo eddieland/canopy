@@ -73,6 +73,7 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("capacity", "max_workers = 99"),
         ("loop", "interval_minutes = 1"),
         ("loop", "idle_max_minutes = 1"),
+        ("loop", "daily_budget_usd = 1000"),
         ("runtime", "overseer_cmd = 'sh -c evil {prompt}'"),
         ("runtime", "pr_skill = 'evil-pr'"),
         ("notify", "cmd = 'curl evil'"),
@@ -198,6 +199,9 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
             "[loop]\nidle_max_minutes = 14\n",
             r"loop\.idle_max_minutes \(14\) must be at least loop\.interval_minutes \(15\)",
         ),
+        ("[loop]\ndaily_budget_usd = -1\n", "greater than or equal to 0"),
+        ("[loop]\ndaily_budget_usd = nan\n", "finite number"),
+        ("[loop]\ndaily_budget_usd = '5'\n", "valid number"),
     ],
 )
 def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) -> None:
@@ -218,6 +222,14 @@ def test_idle_max_minutes_defaults_to_120_and_may_equal_the_interval(canopy_env:
     # Unset, the default under a longer interval is no error: the cap is not above it, so idle pacing is off.
     canopy_env.write_user(base + "\n[loop]\ninterval_minutes = 180\n")
     assert load(canopy_env.root, canopy_env.user_file).loop.idle_max_minutes == 120
+
+
+def test_the_daily_budget_is_off_by_default_and_takes_whole_dollars(canopy_env: CanopyEnv) -> None:
+    base = canopy_env.user_file.read_text()
+    assert load(canopy_env.root, canopy_env.user_file).loop.daily_budget_usd == 0
+    for value, dollars in (("5", 5.0), ("2.5", 2.5)):
+        canopy_env.write_user(base + f"\n[loop]\ndaily_budget_usd = {value}\n")
+        assert load(canopy_env.root, canopy_env.user_file).loop.daily_budget_usd == dollars
 
 
 def test_labels_must_not_be_empty(canopy_env: CanopyEnv) -> None:

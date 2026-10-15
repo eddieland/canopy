@@ -209,6 +209,7 @@ def run(
                 "dry_run": dry_run,
                 "interval_minutes": round(settings.pace.base_seconds / 60),
                 "idle_max_minutes": ctx.config.loop.idle_max_minutes,
+                "daily_budget_usd": ctx.config.loop.daily_budget_usd,
                 "defer_minutes": defer_minutes,
                 "repo": ctx.repo,
                 "pid": os.getpid(),
@@ -257,14 +258,15 @@ def run(
 
 
 def _pace(cfg: Config, every: int | None) -> pacing.Pace:
-    """What the loop waits after a tick: `--every`, else `loop.interval_minutes`, and the idle cap.
+    """What the loop waits after a tick: `--every`, else `loop.interval_minutes`, the idle cap, and the daily budget.
 
     Returns:
-        The base wait and the idle cap, in seconds.
+        The base wait and the idle cap, in seconds, and the budget in US dollars.
     """
     return pacing.Pace(
         base_seconds=(every or cfg.loop.interval_minutes) * 60,
         cap_seconds=cfg.loop.idle_max_minutes * 60,
+        budget_usd_per_day=cfg.loop.daily_budget_usd,
     )
 
 
@@ -377,14 +379,31 @@ def _ticks(
         if outcome.tick_id is not None:
             db.set_tick_loop(ctx.conn, outcome.tick_id, idle=idle, woken_by=woken_by)
         last = max_ticks is not None and statuses.total() >= max_ticks
-        wait = None if last or stop.requested else pacing.wait(ctx, pace, idle_count, datetime.now(UTC))
+        # The longer of the two rules: idle pacing's, and what the daily budget allows the latest ticks' cost.
+        chosen = max(pace.after(idle_count), spend := pacing.spent(ctx, pace))
+        wait = None if last or stop.requested else pacing.wait(ctx, pace, chosen, datetime.now(UTC))
         if wait is not None:
             logs.for_tick(outcome.tick_id).info(
                 "loop waits",
-                extra={"idle": idle, "idle_count": idle_count, "wait_seconds": round(wait), "churn": churn},
+                extra={
+                    "idle": idle,
+                    "idle_count": idle_count,
+                    "spend_seconds": round(spend),
+                    "wait_seconds": round(wait),
+                    "churn": churn,
+                },
             )
         # The wait runs from the end of the tick, so reporting it is part of the wait, not added to it.
-        _report(console, ctx, outcome, before.attention, elapsed=ended - started, wait=wait, idle_count=idle_count)
+        _report(
+            console,
+            ctx,
+            outcome,
+            before.attention,
+            elapsed=ended - started,
+            wait=wait,
+            idle_count=idle_count,
+            budget=spend > pace.after(idle_count),
+        )
         if wait is None:
             break
         # The operator's starts, stops, and grants after the tick read the journal wake the wait, or after it began if
@@ -412,7 +431,7 @@ def _ticks(
             each_step=settings.apply,
         )
         _log_woken(log, woken, seen=seen, since=since, read_at=read_at)
-        woken_by = woken or ("gate" if wait < pace.after(idle_count) else "timer")
+        woken_by = woken or ("gate" if wait < chosen else "timer")
 
 
 def _operator_acted(settings: _Settings, seen: int, since: str) -> Woken | None:
@@ -643,7 +662,11 @@ def _header(
 def _pace_note(pace: pacing.Pace) -> str:
     base, cap = round(pace.base_seconds / 60), round(pace.cap_seconds / 60)
     note = f"wait {base} minute{'' if base == 1 else 's'} after each tick ends"
-    return f"{note}, up to {cap} minutes when idle" if pace.on else note
+    if pace.on:
+        note += f", up to {cap} minutes when idle"
+    if pace.budget_usd_per_day > 0:
+        note += f", longer if the overseer would spend over ${pace.budget_usd_per_day:.2f} a day"
+    return note
 
 
 def _report(
@@ -655,8 +678,12 @@ def _report(
     elapsed: float,
     wait: float | None,
     idle_count: int = 0,
+    budget: bool = False,
 ) -> None:
-    """Print what one tick did: its status, the decisions that change something, and how the attention list moved."""
+    """Print what one tick did: its status, the decisions that change something, and how the attention list moved.
+
+    `budget` says the daily budget, not idle pacing, chose the wait.
+    """
     label = f"tick {outcome.tick_id}" if outcome.tick_id is not None else "tick"
     console.print(
         Text.assemble(
@@ -700,7 +727,8 @@ def _report(
         footer.append("  ·  paused: no tick until resumed", style="yellow")
     elif wait is not None:
         idle = f"idle {idle_count}, " if idle_count else ""
-        footer.append(f"  ·  {idle}next tick in {duration(wait)} at {_clock_time(wait)}")
+        paced = "paced by budget, " if budget else ""
+        footer.append(f"  ·  {idle}{paced}next tick in {duration(wait)} at {_clock_time(wait)}")
     console.print(footer)
     console.print()
 

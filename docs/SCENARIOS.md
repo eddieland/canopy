@@ -148,6 +148,12 @@ relying on a permission they check.
   from a query on the journal over the same UTC days: `SELECT sum(cost_usd) FILTER (WHERE idle = 1) / sum(cost_usd)
   FROM ticks WHERE dry_run = 0 AND status != 'running' AND started_at >= date('now', '-6 days')`, the ticks that ended,
   as the share counts. Expect all three to agree, and each day's total on the page to match the CLI's.
+- **S37. A day paced by a budget** (M13). Set `loop.daily_budget_usd` to about half what a day of the live overseer
+  cost (`canopy spend`), and run `canopy loop` against the real queue for a day. Expect the per-tick block to say
+  `paced by budget` on most waits, each `loop waits` line's `spend_seconds` to be the latest five priced ticks' mean
+  cost over the budget, in days, and the day's overseer spend within a tick or two of the budget. Then lower the
+  budget during the wait and reload (SIGHUP): expect the next wait to lengthen, and setting it back to 0 to return the
+  pace to `loop.interval_minutes` and idle pacing.
 
 ## The web UI
 

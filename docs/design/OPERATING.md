@@ -179,6 +179,7 @@ setup_timeout_minutes = 30
 [loop]
 interval_minutes = 15   # `canopy loop` waits this long after each tick ends
 idle_max_minutes = 120  # and up to this long after idle ticks in a row (§6, Idle pacing)
+daily_budget_usd = 0    # optional; space ticks so the overseer spends at most this a day (§6, Spend pacing)
 
 [trust]
 authorized_repliers = ["tracker-account-id"]   # Jira accountId, GitHub login, ...

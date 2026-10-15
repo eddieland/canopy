@@ -393,9 +393,9 @@ def test_a_gate_still_ahead_ends_the_wait_and_one_already_open_does_not(
     if gate is not None:
         gate(ctx.conn, now - timedelta(minutes=minutes_ago))
     pace = pacing.Pace(base_seconds=900, cap_seconds=7200)
-    assert pacing.wait(ctx, pace, 2, now) == pytest.approx(expected, abs=0.01)
+    assert pacing.wait(ctx, pace, pace.after(2), now) == pytest.approx(expected, abs=0.01)
     # With idle pacing off, no gate shortens the wait: today's pacing.
-    assert pacing.wait(ctx, pacing.Pace(900, 900), 2, now) == 900
+    assert pacing.wait(ctx, pacing.Pace(900, 900), 900, now) == 900
 
 
 # The loop.

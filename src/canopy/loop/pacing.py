@@ -1,4 +1,4 @@
-"""How long `canopy loop` waits after a tick: longer after idle ticks in a row, never past a gate (DESIGN §6).
+"""How long `canopy loop` waits after a tick: longer after idle or costly ticks, never past a gate (DESIGN §6).
 
 A tick is idle when the journal shows it found nothing new and changed nothing (`idle`). After the n-th idle tick in a
 row the wait is `base * 2^n`, up to the cap and never below `base`; a `fix-ci` cooldown's end or a chore's `due_at`
@@ -6,12 +6,17 @@ still ahead ends it sooner (`gate`). While the loop waits, a run that ends after
 wakes it, as the operator's own acts do. With the cap not above `base`, idle pacing is off: the wait is `base`, no
 gate shortens it, and only the operator's acts wake it: a message, a start or stop, or a grant.
 
+With a daily budget, the wait is also at least what the latest ticks' overseer cost on average, as a share of a day
+at that budget (`spent`): ticks that cost more are spaced further apart, and cheaper ones bring the wait back to
+`base`. The loop waits the longer of the two rules, and a gate still ends either sooner.
+
 The count lives in the loop, not the journal, so a restarted loop starts at `base`.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from statistics import fmean
 from typing import TYPE_CHECKING
 
 from canopy.core import chore_view, db
@@ -34,14 +39,22 @@ QUIET_REFUSALS = frozenset(
 )
 # Decisions that change nothing: a wait, and a ticket's skip (a tick-wide skip closes the tick `skipped`).
 _QUIET_ACTIONS = frozenset({"wait", "skip"})
+# How many of the latest priced ticks the budget averages: enough that one costly tick does not set the pace alone, few
+# enough that the pace follows a change in what ticks cost within an hour or two.
+SPEND_TICKS = 5
+_DAY_SECONDS = 24 * 60 * 60
 
 
 @dataclass(frozen=True)
 class Pace:
-    """The pacing rule: `base` after a tick that is not idle, doubling per idle tick in a row up to `cap`."""
+    """The pacing rule: `base` after a tick that is not idle, doubling per idle tick in a row up to `cap`.
+
+    With `budget_usd_per_day` above 0, the wait is also at least what the budget allows the recent ticks (`spent`).
+    """
 
     base_seconds: float
     cap_seconds: float
+    budget_usd_per_day: float = 0.0
 
     @property
     def on(self) -> bool:
@@ -178,13 +191,29 @@ def gate(ctx: Context, now: datetime) -> datetime | None:
     return min((t for t in (*cooldowns, *dues) if t > now), default=None)
 
 
-def wait(ctx: Context, pace: Pace, idle_count: int, now: datetime) -> float:
-    """Seconds to wait after a tick ending at `now`: `pace` after `idle_count`, ended sooner by a gate when it is on.
+def spent(ctx: Context, pace: Pace) -> float:
+    """The wait the daily budget asks for: the latest priced ticks' mean overseer cost, as a share of a day's budget.
+
+    At $0.50 a tick and $24 a day, ticks are 30 minutes apart. Only the overseer's spend counts: a tick's cost is its
+    own (DESIGN §13), and workers are bounded by capacity and attempt limits, not by pacing.
 
     Returns:
-        The wait in seconds, at most `pace`'s and no later than the next gate opens when pacing is on.
+        Seconds; 0 with no budget or no tick that reported a cost.
     """
-    chosen = pace.after(idle_count)
+    if pace.budget_usd_per_day <= 0:
+        return 0.0
+    costs = db.recent_tick_costs(ctx.conn, SPEND_TICKS)
+    return fmean(costs) / pace.budget_usd_per_day * _DAY_SECONDS if costs else 0.0
+
+
+def wait(ctx: Context, pace: Pace, chosen: float, now: datetime) -> float:
+    """Seconds to wait after a tick ending at `now`: the `chosen` wait, ended sooner by a gate when idle pacing is on.
+
+    `chosen` is the longer of `pace.after(idle_count)` and `spent`.
+
+    Returns:
+        The wait in seconds, at most `chosen` and no later than the next gate opens when idle pacing is on.
+    """
     if not pace.on:
         return chosen
     opens = gate(ctx, now)

@@ -167,8 +167,8 @@ good. It is never removed earlier: a `running` row with no file would be asked a
    rationale; attention items added (`+`) and resolved (`-`); running workers, the list's size, what the tick's
    overseer cost in dollars and tokens when the runtime reported it, and the wait that follows.
 5. Wait, measured from the end of the tick, for `--every`, else `loop.interval_minutes`, whatever the tick's status,
-   lengthened after idle ticks and ended at a gate (Idle pacing, below). This pacing rule is `pacing.wait`; ROADMAP
-   M13 will lengthen it by tick cost. An operator message recorded since the tick began, such as a `canopy reply`, ends
+   lengthened after idle ticks or by the daily budget, and ended at a gate (Idle pacing and Spend pacing, below). This
+   pacing rule is `pacing.wait`. An operator message recorded since the tick began, such as a `canopy reply`, ends
    the wait early, but no sooner than a minute after the tick began (`repeat.WAKE_MIN_SECONDS`; §22); so does a run
    ending (below). On a terminal, pressing `t` (`repeat.TICK_NOW_KEY`, either case) ends it at once, with no floor
    (the floor guards against bursts of messages; a keypress is deliberate); keys pressed during the tick are dropped,
@@ -278,8 +278,8 @@ The wait after a tick is then:
 
 `loop.idle_max_minutes` (user-only, default 120) is at least `loop.interval_minutes` when set; left unset under a
 longer interval, it is no error and idle pacing is off. The count lives in the loop, not the journal: a restarted loop
-starts at `base`, and a hand-run `canopy tick` between the loop's ticks counts like any other. When M13's cost pacing
-is built, the wait is the longer of the two rules' waits, and what follows bounds that combined wait.
+starts at `base`, and a hand-run `canopy tick` between the loop's ticks counts like any other. With a daily budget, the
+wait is the longer of this rule's and Spend pacing's (below), and what follows bounds that combined wait.
 
 Whatever pacing chose, the wait ends no later than the earliest harness gate still ahead when the tick ends, both what
 the state block shows: a `fix-ci` cooldown's end (§8) and a configured chore's `due_at` (§19). A gate opening is acted
@@ -294,7 +294,7 @@ after that looks for the CI on a worker's push at today's pace. That holds at an
 canopy's own work.
 
 What idle pacing cannot see is the world: a teammate's review comment or a PR's CI going red is picked up at the next
-tick, up to `loop.idle_max_minutes` late, or later only when M13's budget asks for a longer wait. That cap is the
+tick, up to `loop.idle_max_minutes` late, or later only when the daily budget asks for a longer wait. That cap is the
 trade, and the operator's knob. A sink's digest (§20) is due at a delivery, so it can lag by as much. The header names
 the cap, the per-tick block shows the count with the wait, as `idle 3, next tick in 1h at 03:41` (no count after a
 tick that was not idle), and the `loop started` log line records `idle_max_minutes`; each tick's `loop waits` line
@@ -322,6 +322,38 @@ journal says what the overseer's spend bought whatever the pacing; a `loop waits
 classification, and its count stays 0. Both are NULL on a tick the loop did not run, such as a hand-run `canopy tick`:
 the rule compares the journal before and after the tick, and only the loop reads it before. A tick the loop has no id
 for (`lock_busy`, or `error`, where tick code raised) records nothing.
+
+### Spend pacing
+
+ROADMAP M13; `pacing.spent`. Every tick runs the overseer, and a tick's cost is its overseer's alone (§13). Idle
+pacing spaces ticks that buy nothing; a budget spaces ticks that cost too much, whatever they bought.
+
+`loop.daily_budget_usd` (user-only, US dollars, default 0, which is no budget) is what the overseer may spend in a day
+at its recent cost per tick. After each tick, the loop reads the overseer cost of the latest five ticks that reported
+one (`pacing.SPEND_TICKS`), whatever ran them, a hand-run `canopy tick` and a dry run included, and asks for a wait of
+at least their mean as a share of a day's budget: `mean / budget * 24h`. At $0.50 a tick and $24 a day, ticks are 30
+minutes apart. When ticks cost more the wait grows, and as cheaper ticks replace the costly ones it returns to `base`
+by itself. The wait is the longer of this one and idle pacing's, so a budget never shortens a wait, and with no tick
+priced yet (a runtime that reports no cost, or an `overseer_cmd` without `--format json`) it asks for nothing.
+
+- A rate, not a cap: nothing stops the loop when a day's spend passes the budget. Stopping would leave a human waiting
+  and red CI unseen for the rest of the day, for spend the operator can see and change; a slower pace keeps both
+  moving. The same holds for a budget set far below what a tick costs: the loop waits long, and says so.
+- Only the overseer's spend is paced. A worker's, chore's, or review's cost is not counted against the tick that
+  started it (§13): those are bounded by capacity, attempt limits, and each chore's and review's own limits, and
+  spacing ticks would slow the work the operator queued without lowering what each run costs.
+- The mean of the latest five, not one tick: one costly tick (a cold cache, a long ticket list) moves the pace by a
+  fifth of itself, and a change in what ticks cost shows in the pace within five ticks. Read from the journal each
+  time, so a restarted loop paces at once, unlike idle pacing's count.
+- A gate, a run ending, and the operator's acts end a budget wait as they end an idle one: gates and runs only while
+  idle pacing is on, as above. Rejected: a budget per tick (it is a dollar cap on one overseer run, which the runtime's
+  own limits and the overseer's timeout already bound, and it says nothing about how often to tick); counting the
+  day's actual spend (a costly morning would hold the loop all afternoon).
+
+The header names the budget (`longer if the overseer would spend over $6.00 a day`), the per-tick block says
+`paced by budget` before the wait when the budget chose it, the `loop started` log line records `daily_budget_usd`, and
+each `loop waits` line records `spend_seconds`, the budget's wait, 0 without one. A wait the budget chose that ran its
+length records `woken_by` `timer`; one a gate shortened, `gate`.
 
 ## 7. Ticket phases and next actions
 
