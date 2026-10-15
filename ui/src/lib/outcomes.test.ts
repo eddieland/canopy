@@ -8,6 +8,7 @@ import {
     reloadedText,
     repliedText,
     reviewDismissedText,
+    reviewSentText,
     startedText,
     stoppedText,
 } from './outcomes'
@@ -94,6 +95,16 @@ describe('outcomes', () => {
         )
         expect(reviewDismissedText({ run: 4, finding: 2, dismissed: false })).toBe(
             'review:4 finding 2 is no longer dismissed: a resume hands it to the worker again.',
+        )
+    })
+
+    it('say where sent findings went, as canopy send does', () => {
+        const sent = { run: 4, findings: [1, 3], ticket_key: 'ABC-099', message_id: 12, new: true }
+        expect(reviewSentText(sent)).toBe(
+            'review:4 findings 1, 3 went to ABC-099 as message 12: the next tick reads it as your go-ahead.',
+        )
+        expect(reviewSentText({ ...sent, new: false })).toBe(
+            'review:4 findings 1, 3 already went to ABC-099 as message 12.',
         )
     })
 

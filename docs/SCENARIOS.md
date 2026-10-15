@@ -95,6 +95,12 @@ relying on a permission they check.
   head commit in `canopy review show` and nothing else: no comment, no push, no ticket, no GitHub review.
 - **S21. A review killed, and the limit** (M11). Kill a review run mid-way: the next tick returns its slot and raises
   `review_failed`. A PR at `policy.max_reviews_per_pr` gets no more reviews.
+- **S36. A shadow review on its page, and findings sent from it** (M32). With `review.agent_prs` on and
+  `canopy:review` not in `trust.trusted_reviewers`, open a real review's page in the web UI beside its PR's diff on
+  GitHub: expect each finding on the line it names, and the diff to match the PR's (a stacked PR also shows its base
+  branch's commits). Dismiss one finding, tick another, and send it to a worker: expect the next tick to dispatch
+  `resume --review-run` for that run, the worker to address the sent finding and leave the rest, and nothing of the
+  review or the message on the PR or the ticket.
 
 ## Chores and notifications
 

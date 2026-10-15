@@ -1,6 +1,7 @@
 """The web UI's reviews (DESIGN §21, Reading reviews): canopy's shadow PR review, posted nowhere (D114).
 
-The findings and the diff are untrusted text. The one write is dismissing a finding, as `canopy dismiss review:ID`.
+The findings and the diff are untrusted text. The writes are dismissing a finding, as `canopy dismiss review:ID`, and
+sending some to a worker, as `canopy send review:ID`.
 """
 
 from pathlib import Path
@@ -109,3 +110,41 @@ def test_a_finding_dismissed_from_the_web_is_marked_as_the_cli_marks_it(backend:
 
     assert c.post(url, json={"finding": 2, "undo": True}, headers=headers).json()["dismissed"] is False
     assert not any(f["dismissed"] for f in c.get("/api/reviews/4").json()["findings"])
+
+
+def test_findings_sent_from_the_web_reach_the_ticket_as_the_cli_sends_them(backend: Backend) -> None:
+    c = client(None, backend, key=SECRET)
+    headers = signed_in(c)
+    url = "/api/reviews/4/sends"
+    sent = {"findings": [3, 1], "submission": "send-0001"}
+
+    assert c.post(url, json=sent, headers={"origin": headers["origin"]}).status_code == 403
+    assert c.post(url, json={**sent, "findings": []}, headers=headers).status_code == 422
+    # Review 4 is of ABC-099's own PR; review 2 of a PR review.query matched, which the loop did not open.
+    assert c.get("/api/reviews/4").json()["sendable"] is True
+    assert c.get("/api/reviews/2").json()["sendable"] is False
+    for path, findings, guard in [
+        (url, [4], "unknown"),
+        ("/api/reviews/3/sends", [1], "unknown"),
+    ]:
+        refused = c.post(path, json={**sent, "findings": findings}, headers=headers)
+        assert (refused.status_code, refused.json()["detail"]["guard"]) == (409, guard)
+
+    recorded = c.post(url, json=sent, headers=headers).json()
+    assert {k: recorded[k] for k in ("run", "findings", "ticket_key", "new")} == {
+        "run": 4,
+        "findings": [1, 3],
+        "ticket_key": "ABC-099",
+        "new": True,
+    }
+    with backend.open() as ctx:
+        message = db.get_message(ctx.conn, recorded["message_id"])
+        assert message is not None
+        assert (message["subject_id"], message["source"], message["channel"]) == ("ABC-099", "operator", "web")
+        assert message["body"] == (
+            f"Address findings 1 and 3 of canopy's review run 4, of commit {mock_reviews.SHA_88[:12]}. "
+            "Leave its finding 2 alone."
+        )
+    # A retry of the same submission records nothing new.
+    again = c.post(url, json=sent, headers=headers).json()
+    assert (again["message_id"], again["new"]) == (recorded["message_id"], False)

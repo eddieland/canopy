@@ -1,7 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { Send } from 'lucide-react'
+import { useState } from 'react'
 
 import { ApiError } from '@/api/client'
+import { newSubmission, refreshTicket, sendReviewFindings } from '@/api/mutations'
 import { reviewQuery } from '@/api/queries'
 import type { ReviewDetail } from '@/api/types'
 import { Age } from '@/components/age'
@@ -10,6 +13,7 @@ import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
+import { Notice } from '@/components/notice'
 import { FindingCard, ReviewDiffPanels } from '@/components/review-diff'
 import { RichText } from '@/components/rich-text'
 import { ReviewLink } from '@/components/review-link'
@@ -17,6 +21,9 @@ import { ListRow } from '@/components/rows'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Timestamp } from '@/components/timestamp'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { reviewSentText } from '@/lib/outcomes'
 import { reviewRef } from '@/lib/refs'
 import { findingAnchor, placeFindings, SEVERITY_TEXT, shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { RUN_TEXT } from '@/lib/run-state'
@@ -186,8 +193,40 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
     )
 }
 
-/** Every finding in one list, each linking to its card on the diff. */
+/**
+ * Every finding in one list, each linking to its card on the diff. On a review of one of the loop's own PRs, each
+ * finding the operator has not dismissed has a box, and the ticked ones go to a worker together, as
+ * `canopy send review:ID N...`: a reply on the ticket naming them, which the next tick reads as the operator's go-ahead
+ * (DESIGN §21).
+ */
 function FindingsPanel({ detail }: { detail: ReviewDetail }) {
+    const { review } = detail
+    const client = useQueryClient()
+    const [picked, setPicked] = useState<ReadonlySet<number>>(new Set())
+    // Drawn anew whenever the findings picked change, so a retry of the same ones records nothing new (DESIGN §22).
+    const [submission, setSubmission] = useState(newSubmission)
+    const [said, setSaid] = useState<string | null>(null)
+    const send = useMutation({
+        mutationFn: (findings: number[]) => sendReviewFindings(review.id, findings, submission),
+        onSuccess: (sent) => {
+            setSaid(reviewSentText(sent))
+            setPicked(new Set())
+            setSubmission(newSubmission())
+            void refreshTicket(client, sent.ticket_key)
+        },
+    })
+
+    function pick(n: number, on: boolean) {
+        const next = new Set(picked)
+        if (on) {
+            next.add(n)
+        } else {
+            next.delete(n)
+        }
+        setPicked(next)
+        setSubmission(newSubmission())
+    }
+
     return (
         <Panel>
             <PanelHeader label="Findings">
@@ -196,7 +235,17 @@ function FindingsPanel({ detail }: { detail: ReviewDetail }) {
             <ol className="divide-y">
                 {detail.findings.map((f, i) => (
                     <ListRow key={i} kind="review-finding" className="py-2 text-sm">
-                        <span className="readout text-xs text-muted-foreground">{i + 1}</span>
+                        <span className="flex items-center gap-1.5">
+                            {detail.sendable && !f.dismissed && (
+                                <Checkbox
+                                    aria-label={`send finding ${i + 1} to a worker`}
+                                    checked={picked.has(i + 1)}
+                                    onCheckedChange={(checked) => pick(i + 1, checked === true)}
+                                    data-testid={`pick-finding-${i + 1}`}
+                                />
+                            )}
+                            <span className="readout text-xs text-muted-foreground">{i + 1}</span>
+                        </span>
                         <Chip className={cn('justify-center', SEVERITY_TEXT[f.severity])}>{f.severity}</Chip>
                         <span className="flex min-w-0 items-center gap-3">
                             {/* A router link, not a bare `#` href, which the page's <base> would send to the root. */}
@@ -216,6 +265,27 @@ function FindingsPanel({ detail }: { detail: ReviewDetail }) {
                     </ListRow>
                 ))}
             </ol>
+            {detail.sendable && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t p-3">
+                    <Button
+                        size="sm"
+                        onClick={() => send.mutate([...picked].toSorted((a, b) => a - b))}
+                        disabled={picked.size === 0 || send.isPending}
+                        title="Reply on the ticket naming the ticked findings: the next tick reads it as your go-ahead"
+                        data-testid="send-findings"
+                    >
+                        <Send />
+                        send to a worker
+                    </Button>
+                    {said === null && send.error === null ? (
+                        <span className="text-xs text-muted-foreground">
+                            tick the findings a worker on {review.ticket_key} should address; it leaves the rest alone
+                        </span>
+                    ) : (
+                        <Notice error={send.error}>{said}</Notice>
+                    )}
+                </div>
+            )}
         </Panel>
     )
 }

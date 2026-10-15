@@ -1,4 +1,4 @@
-"""The reviews canopy keeps instead of posting them (DESIGN §21, D114), all untrusted, and dismissing a finding."""
+"""The reviews canopy keeps instead of posting them (DESIGN §21, D114), all untrusted; dismissing, sending findings."""
 
 from __future__ import annotations
 
@@ -9,7 +9,14 @@ from canopy.infra import logs
 from canopy.serve import reviews
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, ReviewId, not_found
-from canopy.serve.schema import ReviewDetail, ReviewDismissed, ReviewDismissRequest, ReviewSummary
+from canopy.serve.schema import (
+    ReviewDetail,
+    ReviewDismissed,
+    ReviewDismissRequest,
+    ReviewSendRequest,
+    ReviewSent,
+    ReviewSummary,
+)
 
 TAG = "reviews"
 router = APIRouter(tags=[TAG])
@@ -54,3 +61,36 @@ def dismiss(run_id: ReviewId, body: ReviewDismissRequest, backend: BackendDep) -
         extra={"subject": str(ref), "finding": body.finding, "channel": WEB},
     )
     return ReviewDismissed(run=run_id, finding=body.finding, dismissed=not body.undo)
+
+
+@router.post(
+    "/reviews/{run_id}/sends",
+    operation_id="sendReviewFindings",
+    summary="Send a review's findings to a worker",
+    responses=REFUSED,
+)
+def send(run_id: ReviewId, body: ReviewSendRequest, backend: BackendDep) -> ReviewSent:
+    """`canopy send review:ID N...`: a reply on the review's ticket, the operator's go-ahead on those findings.
+
+    Idempotent on the submission id: a retried submission records nothing new (DESIGN §21).
+    """
+    ref = conversation.Ref(conversation.REVIEW, str(run_id))
+    findings = sorted(set(body.findings))
+    with backend.open() as ctx:
+        try:
+            sent = conversation.send(ctx.conn, ref, findings, channel=WEB, submission=body.submission)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info(
+        "findings sent",
+        extra={
+            "subject": str(ref),
+            "findings": findings,
+            "ticket": sent.ticket,
+            "message_id": sent.replied.message_id,
+            "channel": WEB,
+        },
+    )
+    return ReviewSent(
+        run=run_id, findings=findings, ticket_key=sent.ticket, message_id=sent.replied.message_id, new=sent.replied.new
+    )

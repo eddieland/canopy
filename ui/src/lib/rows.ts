@@ -130,9 +130,9 @@ export const ROW_COLUMNS = {
         ['title', FREE],
         ['facts', 'auto'],
     ],
-    /** A review's finding in its list: its number, its severity, its title, and where it sits. */
+    /** A review's finding in its list: its number and its box to send it, its severity, its title, and where it is. */
     'review-finding': [
-        ['id', '1rem'],
+        ['id', '2.5rem'],
         ['severity', '4rem'],
         ['title', FREE],
         ['facts', 'auto'],

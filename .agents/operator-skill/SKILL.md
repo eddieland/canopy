@@ -47,6 +47,7 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy reply chore:NAME TEXT` | A note the chore's next runs follow, such as a finding to leave out until a date. |
 | `canopy dismiss chore:NAME ID` | Keeps a finding off the attention list until the chore stops reporting it; `--undo`. |
 | `canopy dismiss review:ID N` | Holds a review's finding N back from workers and the overseer; `--undo`. |
+| `canopy send review:ID N...` | Sends findings N... to a worker: a reply on the review's ticket, the operator's go-ahead. |
 | `canopy review show [ID]` | canopy's PR reviews of the last 14 days; with ID, one in full, each finding's detail too. |
 | `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
 | `canopy grant KEY KIND` | Lets a ticket at its attempt limit have one more run of KIND; `--runs N` for more. |

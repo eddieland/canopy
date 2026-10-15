@@ -12,6 +12,7 @@ import type {
     PauseChanged,
     Replied,
     ReviewDismissed,
+    ReviewSent,
     Session,
     Started,
     Stopped,
@@ -19,9 +20,9 @@ import type {
 
 /**
  * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, dismissing a finding,
- * granting a run past a limit, and pausing the loop. Each goes through the same function on the server as
- * `canopy start`, `stop`, `reply`, `forget`, `dismiss`, `grant`, `pause`, and `resume`, with the same guards; a
- * refusal is an ApiError naming its guard.
+ * sending a review's findings to a worker, granting a run past a limit, and pausing the loop. Each goes through the
+ * same function on the server as `canopy start`, `stop`, `reply`, `forget`, `dismiss`, `send`, `grant`, `pause`, and
+ * `resume`, with the same guards; a refusal is an ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -104,6 +105,19 @@ export async function dismissReviewFinding(run: number, finding: number, undo: b
         await api.POST('/api/reviews/{run_id}/dismissals', {
             params: { path: { run_id: run } },
             body: { finding, undo },
+        }),
+    )
+}
+
+/**
+ * `canopy send review:ID N...`: a reply on the review's ticket naming `findings` by number, which the next tick reads
+ * as the operator's go-ahead on them. Idempotent on `submission`, drawn when the findings were picked, as a reply is.
+ */
+export async function sendReviewFindings(run: number, findings: number[], submission: string): Promise<ReviewSent> {
+    return unwrap(
+        await api.POST('/api/reviews/{run_id}/sends', {
+            params: { path: { run_id: run } },
+            body: { findings, submission },
         }),
     )
 }

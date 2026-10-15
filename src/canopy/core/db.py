@@ -1053,6 +1053,12 @@ def review_runs_since(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]
     return conn.execute("SELECT * FROM review_runs WHERE started_at >= ? ORDER BY id DESC", (since,)).fetchall()
 
 
+def is_unit_pr(conn: sqlite3.Connection, key: str, pr_url: str) -> bool:
+    """Return whether `pr_url` is the PR of one of ticket `key`'s units: one the loop opened, and pushes to."""
+    row = conn.execute("SELECT 1 FROM ticket_units WHERE ticket_key = ? AND pr_url = ?", (key, pr_url)).fetchone()
+    return row is not None
+
+
 def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict[str, list[sqlite3.Row]]:
     """Return the review runs of each of `pr_urls` that has any, by URL, each list newest first."""
     found: dict[str, list[sqlite3.Row]] = {}

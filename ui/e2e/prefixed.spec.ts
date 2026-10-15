@@ -244,6 +244,23 @@ test("a review's finding is dismissed on its card, and kept again", async ({ pag
     await expect(card.getByTestId('dismiss-finding-2')).toBeVisible()
 })
 
+test("a review's findings are sent to a worker from its list, as a reply on its ticket", async ({ page }) => {
+    await page.goto('reviews/4')
+    const send = page.getByTestId('send-findings')
+    await expect(send).toBeDisabled()
+    await page.getByTestId('pick-finding-3').click()
+    await page.getByTestId('pick-finding-1').click()
+    await send.click()
+    await expect(page.getByRole('status').filter({ hasText: 'review:4' })).toHaveText(
+        /^review:4 findings 1, 3 went to ABC-099 as message \d+: the next tick reads it as your go-ahead\.$/u,
+    )
+    await expect(send).toBeDisabled()
+
+    // The ticket's conversation has it in the operator's words, naming the findings and never quoting them.
+    await page.goto('tickets/ABC-099')
+    await expect(page.getByText("Address findings 1 and 3 of canopy's review run 4")).toBeVisible()
+})
+
 test('a ticket at its attempt limit is granted one more run from its page, as canopy grant does', async ({ page }) => {
     await page.goto('tickets/ABC-100')
     const limits = page.getByTestId('grant-limits')
