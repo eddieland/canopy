@@ -600,8 +600,9 @@ This milestone adds the connectors and the derivation without changing what the 
   tickets the query returned, less the tickets marked done that DESIGN §7's `recently_done` names, and the overseer
   reads those instead of running the query. When that run failed or its result is older than `connect.max_age_minutes`,
   the block says so and the overseer runs the query itself that tick, as today. A cheaper overseer skipped the query and
-  read only the block's tickets, which stalls new work with no tick failing (2026-10-15 F31, DESIGN §7); a prompt that
-  says to run it every tick can still be skipped. TRUST_MODEL T1, with the approval note.
+  read only the block's tickets, which stalls new work with no tick failing (2026-10-15 F31, DESIGN §7). A tick whose
+  query was due now fails without `canopy queried` (DESIGN §6 step 5), which catches a skipped query but not a result
+  read short or named short. TRUST_MODEL T1, with the approval note.
 - Tests with the fakes: `tests/fakes/connector` prints configured lines; a line out of bounds is refused and the
   rest kept; a cut-off output keeps the previous observations; the derivation over journals written by hand, one
   case per row of the phase table.

@@ -202,6 +202,7 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(ws: Ws, treehous
             "attention:repo_missing",
             f"{ws.root / 'repos' / 'docs'} has no clone; run `canopy workspace sync` in {ws.root}",
         ),
+        ("queried", "the query returned no open ticket"),
         ("dispatch:implement", f"dry run: not dispatched; would work on agent/PROJ-1-work in api; label {LABEL}"),
         (
             "refused:unknown_repo",
@@ -331,7 +332,8 @@ def test_reconcile_returns_leases_in_each_pool(ws: Ws, treehouse_state: Path, ag
             env={"TREEHOUSE_ROOT": str(ws.root)},
         ).ok
         conn.execute("UPDATE runs SET pid = 999999999")  # _run is gone
-    with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+    wait = json.dumps([["canopy", "decide", "PROJ-1", "wait", "--rationale", "its run crashed"]])
+    with mock.patch.dict(os.environ, {"FAKE_AGENT_COMMANDS": wait, "FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
         assert main(["tick", "--dry-run"]) == 0
 
     run = db.get_run(conn, 1)

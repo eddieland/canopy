@@ -275,9 +275,9 @@ Roles:
 
 - **Harness**: schedules, locks, guards, journals, renders. Runs the overseer once per tick and workers on demand.
 - **Overseer**: an agent run with `overseer_cmd`. Reads the world through MCP and the state summary, decides one next
-  action per ticket, and acts only through `canopy dispatch`, `canopy decide`, `canopy attention`, `canopy chore run`,
-  `canopy chore wait` (§19), `canopy review run`, `canopy review wait` (§21), and `canopy mirror` (§22). Read-only
-  everywhere else.
+  action per ticket, and acts only through `canopy dispatch`, `canopy decide`, `canopy queried`, `canopy attention`,
+  `canopy chore run`, `canopy chore wait` (§19), `canopy review run`, `canopy review wait` (§21), and `canopy mirror`
+  (§22). Read-only everywhere else. What it owes every tick is checked when it ends (§6 step 5).
 - **Worker**: an agent run with `worker_cmd` in a leased worktree with a task prompt. Writes code, pushes a branch,
   opens or updates a PR, comments on the ticket, prints a result line, exits. Never merges, approves, or moves a ticket
   to Done. A private ticket's worker runs with `private_worker_cmd` and writes nothing to the ticket (§22).

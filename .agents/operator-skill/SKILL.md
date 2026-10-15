@@ -22,9 +22,9 @@ Everything below is for an agent helping the operator in their own session.
 - Read, explain, and suggest. Do not start ticks or loops yourself: `canopy loop` runs until Ctrl-C and would hang your
   session, and `canopy tick` runs the overseer, which spends money. Suggest the command and let the operator run it,
   unless they ask you to run a single `canopy tick --dry-run`.
-- `canopy dispatch`, `canopy decide`, `canopy attention`, `canopy ticket set`, and `canopy mirror` are the overseer's
-  tools. They refuse to run outside a tick, by design. There is no way to dispatch a ticket by hand; the way to get a
-  ticket worked is its queue label, or `canopy start` (below).
+- `canopy dispatch`, `canopy decide`, `canopy queried`, `canopy attention`, `canopy ticket set`, and `canopy mirror`
+  are the overseer's tools. They refuse to run outside a tick, by design. There is no way to dispatch a ticket by hand;
+  the way to get a ticket worked is its queue label, or `canopy start` (below).
 - `canopy start`, `stop`, `reply`, `forget`, `grant`, `pause`, `resume`, and `notice` are the operator's own: they
   authorize work, answer workers, hold the loop, and tell every later run about an outage. Suggest them; run one only
   when the operator asks you to, with the words they gave you.
@@ -92,7 +92,9 @@ Work through these in order and stop at the first that explains it.
 
 1. Did a recent tick run at all? `canopy status` shows the last tick. `skipped` usually means the overseer could not
    reach an MCP server (`mcp_unavailable: <which>`); `canopy_unavailable`, `overseer_failed`, and `reconcile_failed`
-   have a summary, and `ticks/<id>.log` has the detail. A failed or skipped tick decides nothing.
+   have a summary, and `ticks/<id>.log` has the detail. A failed or skipped tick decides nothing. An `overseer_failed`
+   summary that says `left duties undone` names what the overseer skipped (the query, a ticket, or a chore); what that
+   tick dispatched still runs.
 2. What did the overseer decide about KEY?
 
    ```sh

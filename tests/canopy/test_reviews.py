@@ -79,6 +79,16 @@ def reviewer_reports(report: object, *commands: list[str]) -> Iterator[None]:
         yield
 
 
+@contextmanager
+def overseer_waits(*keys: str) -> Iterator[None]:
+    """Until the block ends, the fake overseer waits on each of `keys` and ends the tick, finding nothing to do."""
+    commands = [["canopy", "decide", key, "wait", "--rationale", "nothing to do yet"] for key in keys]
+    with mock.patch.dict(
+        os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(commands), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
+    ):
+        yield
+
+
 def run_inline(
     conn: sqlite3.Connection,
     *args: str,
@@ -115,7 +125,7 @@ def test_with_reviews_off_nothing_about_them_reaches_the_overseer(
 
 def test_max_reviews_zero_turns_reviews_off(reviews: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
     reviews.write_user(reviews.user_file.read_text() + "\n[capacity]\nmax_reviews = 0\n")
-    with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_waits("PROJ-1"):
         assert main(["tick", "--dry-run"]) == 0
         assert "reviews" not in state_block(agent_log)
 
@@ -271,7 +281,7 @@ def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_s
     assert "has had 2 review runs, and may now have 4." in capsys.readouterr().out
 
     # The state block shows a granted PR's grants beside its review runs; a PR with none has no key.
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_waits("PROJ-1"):
         assert main(["tick", "--dry-run"]) == 0
     prs = {p["url"]: p for p in state_block(agent_log)["reviews"]["prs"]}
     assert (prs[PR]["review_runs"], prs[PR]["granted"]) == (2, 3)
@@ -490,7 +500,7 @@ def test_a_killed_review_is_crashed_on_the_next_tick(reviews: CanopyEnv, git_poo
         treehouse_state = Path(os.environ["FAKE_TREEHOUSE_STATE"])
         assert [s["status"] for s in pool(treehouse_state)] == ["leased", "available"]
 
-        with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        with overseer_waits("PROJ-1"):
             assert main(["tick"]) == 0
             crashed = db.get_review_run(conn, 1)
             assert crashed is not None
@@ -509,7 +519,7 @@ def test_reconcile_leaves_a_running_reviews_slot_alone(reviews: CanopyEnv, git_p
     with in_tick(conn) as tick_id:
         assert main(review(sha=head(git_pool)), runner=InlineRunner()) == 0  # claimed by this live process
         db.finish_tick(conn, tick_id, "ok", "test")
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_waits("PROJ-1"):
         assert main(["tick"]) == 0
         assert [s["status"] for s in pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))] == ["leased", "available"]
         row = db.get_review_run(conn, 1)
@@ -521,7 +531,7 @@ def test_the_state_block_shows_reviewed_prs(reviews: CanopyEnv, git_pool: GitPoo
     conn = journal(reviews)
     with reviewer_reports(FINDINGS):
         run_inline(conn, "--ticket", "PROJ-1", sha=head(git_pool))
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_waits("PROJ-1"):
         assert main(["tick", "--dry-run"]) == 0
     section = state_block(agent_log)["reviews"]
     assert section["agent_prs"] is True
@@ -597,7 +607,7 @@ def test_a_sink_that_takes_reviews_hears_when_one_ends(
         reviews.user_file.read_text()
         + f"\n[notify.sinks.s]\ncmd = '{script} {out}'\nformat = 'text'\nevents = ['reviews']\n"
     )
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_waits("PROJ-1"):
         assert main(["tick"]) == 0
         conn = journal(reviews)
         with reviewer_reports(FINDINGS):
@@ -855,7 +865,7 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
     assert "findings, 2 findings (1 dismissed), impact normal" in capsys.readouterr().out
 
     # The overseer reads only the findings the operator kept.
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_waits("PROJ-1"):
         assert main(["tick", "--dry-run"]) == 0
         latest = state_block(agent_log)["reviews"]["prs"][0]["latest"]
         assert (latest["findings"], latest["dismissed_findings"]) == (["retry never stops"], 1)
@@ -939,7 +949,7 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
     assert "already went to PROJ-1" in capsys.readouterr().out
 
     # The next tick reads it as the operator's go-ahead, and a resume for the review hears both.
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_waits("PROJ-1"):
         assert main(["tick", "--dry-run"]) == 0
     tickets = {t["key"]: t for t in state_block(agent_log)["tickets"]}
     assert [m["body"] for m in tickets["PROJ-1"]["operator"]["new_operator_messages"]] == [body]

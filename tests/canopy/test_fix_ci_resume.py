@@ -235,7 +235,7 @@ def test_state_block_shows_attempts_and_the_cooldown(
     with worker_does(*commit_and_push("agent/PROJ-1-work")):
         dispatch_and_run(conn, "--label", "agent-ready-tester", "--kind", "implement")
         fix = dispatch_and_run(conn, "--label", "agent-ready-tester", "--kind", "fix-ci")
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does(["decide", "PROJ-1", "wait", "--rationale", "the fix-ci cooldown holds"]):
         assert main(["tick"]) == 0
     prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
     state = json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])
@@ -301,21 +301,21 @@ def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(
     ]
     with worker_does(*commit_and_push("agent/PROJ-1-work")), overseer_does(fix):
         assert main(["tick"]) == 0
-        assert tick_decisions(conn) == ["dispatch:fix-ci"]
+        assert tick_decisions(conn) == ["queried", "dispatch:fix-ci"]
         assert wait_for_run(conn, 2)["status"] == "done"
         # Every further tick inside the window is refused, however often the overseer asks. The tick itself is fine.
         for _ in range(2):
             assert main(["tick"]) == 0
-            assert tick_decisions(conn) == ["refused:cooldown"]
+            assert tick_decisions(conn) == ["queried", "refused:cooldown"]
 
         cool_down(conn)
         assert main(["tick"]) == 0
-        assert tick_decisions(conn) == ["dispatch:fix-ci"]
+        assert tick_decisions(conn) == ["queried", "dispatch:fix-ci"]
         assert wait_for_run(conn, 3)["status"] == "done"
         # That was the last attempt: the limit refuses, whether or not the window has passed, and raises attention.
         for _ in range(2):
             assert main(["tick"]) == 0
-            assert tick_decisions(conn) == ["refused:attempt_limit", "attention:attempt_limit"]
+            assert tick_decisions(conn) == ["queried", "refused:attempt_limit", "attention:attempt_limit"]
             cool_down(conn)
 
     assert [r["kind"] for r in conn.execute("SELECT kind FROM runs ORDER BY id")] == ["implement", "fix-ci", "fix-ci"]

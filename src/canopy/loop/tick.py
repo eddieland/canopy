@@ -1,4 +1,4 @@
-"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, check `canopy`, run the overseer, close, publish."""
+"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, check `canopy`, run and check the overseer, publish."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from canopy.core import agent_output, chore_view, conversation, db, definitions,
 from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import attention, state
+from canopy.loop import attention, duties, state
 from canopy.reviews import reconcile as review_reconcile
 from canopy.reviews import view as review_view
 from canopy.runs import policy, reconcile
@@ -99,6 +99,8 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     stopped = conversation.stopped(ctx.conn)
     tickets = [t for t in db.open_tickets(ctx.conn) if str(t["key"]) not in stopped]
     private = {str(t["key"]): found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
+    recently_done = db.recently_done(ctx.conn, db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS)))
+    chores = chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now)
     operator = {
         str(t["key"]): found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None
     }
@@ -113,7 +115,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         running=running,
         tickets=tickets,
         stopped=stopped,
-        recently_done=db.recently_done(ctx.conn, db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS))),
+        recently_done=recently_done,
         units=db.all_units(ctx.conn),
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, [int(r["id"]) for r in [*running, *last_runs.values()]]),
@@ -123,7 +125,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         now=now,
         split_attempts=policy.split_attempts(ctx.conn),
         split_children=db.open_split_children(ctx.conn),
-        chores=chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now),
+        chores=chores,
         reviews=review_view.state_section(ctx.conn, ctx.config, now),
         notices=notice.recent(ctx.conn, now),
         private=private,
@@ -137,6 +139,15 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         detail = f"{unavailable}; the overseer did not run. Make `canopy --version` work where the loop runs"
         db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{CANOPY_UNAVAILABLE}", detail)
         return finish(CANOPY_UNAVAILABLE, unavailable)
+    owed = duties.owed(
+        ctx.conn,
+        tick_id,
+        query_due=query_due,
+        tickets=tickets,
+        stopped=stopped,
+        recently_done=recently_done,
+        chores=chores,
+    )
     # The state block is the whole message: the prompt is in the overseer's definition, cached across ticks (DESIGN §6).
     failure, usage = _run_overseer(ctx, tick_id, block, dry_run=dry_run, log=log)
     if failure is not None:
@@ -149,6 +160,12 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     skips = [d.rationale for d in decisions if d.ticket_key is None and d.action == "skip"]
     if skips:
         return finish("skipped", f"{prefix}overseer skipped the tick: {'; '.join(skips)}", usage)
+    # A duty left undone fails the tick as a missing done line does: closing it `ok` would resolve the items of every
+    # ticket it left out and count a query it never ran (DESIGN §6 step 5).
+    undone = duties.undone(ctx.conn, tick_id, owed)
+    if undone:
+        log.error("overseer left duties undone", extra={"undone": undone, "dry_run": dry_run})
+        return finish("overseer_failed", f"{prefix}overseer left duties undone: {'; '.join(undone)}", usage)
     actions = Counter(d.action for d in decisions)
     counts = ", ".join(f"{action}={n}" for action, n in sorted(actions.items())) or "none"
     return finish("ok", f"{prefix}{actions.total()} decisions: {counts}", usage)

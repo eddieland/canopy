@@ -101,9 +101,9 @@ in order:
    for the overseer, and costs a process start (about 0.4 seconds) per tick.
 
    Then run the overseer with `overseer_cmd`, cwd = the workspace root (§18), timeout
-   `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
-   `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
-   `<state_dir>/ticks/<tick id>.log`, readable only by the operator (and its end on the tick's page, §22), never to
+   `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `queried`,
+   `attention`, and `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go
+   to `<state_dir>/ticks/<tick id>.log`, readable only by the operator (and its end on the tick's page, §22), never to
    the journal. The session id goes on the `ticks` row at the first event of stdout that names one, read as the
    overseer prints it, so a running tick shows its session (§22) rather than none until the overseer ends. The session
    id and cost the runtime reported (§13) go there again when it ends, whether or not the run succeeded. The run
@@ -116,6 +116,33 @@ in order:
    check would find in a rationale; a line that only mentions it does not count. A successful run that recorded a
    tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`) closes the tick as `skipped`, which leaves the attention
    list standing, so an outage does not resolve and re-raise every item.
+
+   **The overseer's duties** (`loop/duties.py`). Any other successful run is then checked for the duties a tick owes,
+   from the decisions the overseer recorded after the harness's own: when `query_due` was true, a `queried` decision
+   (`canopy queried`, below); a decision of its own for every ticket in the state block's `tickets` and every ticket a
+   `queried` decision names, except those in `stopped` or `recently_done`, where a decision is any the overseer
+   records about the ticket (a `decide`, a dispatch, a review run or wait, an attention item, or a refusal), and a
+   mirror is not one; and a chore run, wait, or refusal for every chore due and not running. A duty left undone closes
+   the tick as `overseer_failed`, with a summary naming each one, as a missing done line does. Closing it `ok` would
+   make its list the attention list, so every item of a ticket it left out would read as resolved and be notified so,
+   and a query it never ran would count as run until the spacing passed again. Failed, it leaves the list standing,
+   the query stays due, and the next tick's block carries every ticket left out. Its dispatches stand, as any failed
+   tick's do. A ticket that came into the journal some other way while the overseer ran, such as one the operator
+   started, is owed nothing until the next tick shows it.
+
+   Taken on request (2026-10-15): the prompt alone did not hold a cheaper overseer to the procedure; it stopped running
+   the query and read only the block's tickets, which stalls new work with no tick failing (MEASUREMENTS 2026-10-15
+   F31). The check makes each duty a command the journal records, so leaving one out is seen. It holds the overseer to
+   doing each duty, not to doing it well: it cannot see whether a decision was right, whether the query was read to
+   the end, or whether `queried` names everything it returned. Those wait on a connector (ROADMAP M36, M37). The
+   duties it cannot see at all (mirroring, recording attention items again, titles, cursors, `review.query`) the
+   prompt lists beside the checked ones, as equally binding.
+
+   `canopy queried [KEY]...` records, as one tick-wide decision `queried`, that the tick ran the tracker query, and
+   each open ticket it returned, or none. It touches each one into the journal at once (§11), so a ticket the query
+   found is in the next block's `tickets` even if this tick ends without deciding it. The rationale names the keys in
+   a form `loop/duties.py` writes and reads back; a result that does not fit in one is refused, and recorded in
+   several calls. It is a quiet decision for idle pacing and the loop's output, as a wait is.
 
    In `--dry-run` (D036), the state block says so. `canopy dispatch` checks the live guards (§8), counting each
    dispatch this dry run already recorded as a running run, and records refusals the same way. An allowed dispatch
@@ -450,7 +477,9 @@ lists tickets. The block holds only tickets the loop has seen, so the query is t
 becomes a candidate, and a tick that skips it reads the tickets it knows, finds nothing wrong, and closes `ok`: the
 queue stalls with nothing failing. A cheaper model run as the overseer did that on the operator's queue (2026-10-15),
 reading the block's tickets and never the query. The prompt's step 1 says so, as its section on `review.query`
-already did for reviews. Nothing checks it in code until a connector runs the query (ROADMAP M36).
+already did for reviews. Once it has, it records the result with `canopy queried`, and a tick whose block said the
+query was due fails without one (§6 step 5); a connector running the query in code (ROADMAP M36) would also check that
+the result is complete.
 
 **Spacing the query.** The query is one of a tick's dearest reads (tracker searches and issue reads were 28% of the tool
 results the overseer read, MEASUREMENTS 2026-10-13), and tickets enter the queue slowly: a human labels one and waits.

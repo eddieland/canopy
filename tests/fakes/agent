@@ -11,6 +11,9 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
     FAKE_AGENT_SLEEP    seconds to sleep before printing the final line, to exercise timeouts. Default 0.
     FAKE_AGENT_COMMANDS a JSON list of argv lists, run in order before the final line, the way an agent runs
                         commands through its bash tool. Stands in for an overseer calling `canopy decide`. Default none.
+    FAKE_AGENT_QUERIED  for an overseer whose state block says `"query_due": true`: a JSON list of the ticket keys it
+                        records with `canopy queried` before its commands, as the prompt's step 1 does once it has run
+                        the query. Default `[]`, the query found nothing open. `skip` records no query.
     FAKE_AGENT_LOG      if set, one JSON line {"argv": [...], "cwd": "...", "env": {...}, "commands": [...]} is
                         appended to this file per run. `env` holds the CANOPY_* and OPENCODE_* variables the agent
                         saw; `commands` holds each command's argv, exit code, stdout, and stderr.
@@ -60,10 +63,17 @@ def setting(argv: list[str], name: str, default: str) -> str:
 
 def run_commands(argv: list[str]) -> list[dict[str, object]]:
     ran: list[dict[str, object]] = []
-    for command in json.loads(setting(argv, "COMMANDS", "[]")):
+    for command in [*queried(argv), *json.loads(setting(argv, "COMMANDS", "[]"))]:
         proc = subprocess.run(command, capture_output=True, text=True, check=False)  # noqa: S603  (argv from the test)
         ran.append({"argv": command, "returncode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr})
     return ran
+
+
+def queried(argv: list[str]) -> list[list[str]]:
+    found = setting(argv, "QUERIED", "[]")
+    if role(argv) != "OVERSEER" or found == "skip" or not argv or '"query_due": true' not in argv[-1]:
+        return []
+    return [["canopy", "queried", *json.loads(found)]]
 
 
 def events(argv: list[str]) -> bool:

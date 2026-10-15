@@ -129,7 +129,10 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(
         assert subjects(git_pool, "agent/PROJ-2-second")[:2] == ["PROJ-2: review fix", "PROJ-2: stacked"]
 
         # The overseer sees which base each ticket's latest run started from.
-        with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        waits = [["canopy", "decide", key, "wait", "--rationale", "PR open"] for key in ("PROJ-1", "PROJ-2")]
+        with mock.patch.dict(
+            os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(waits), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
+        ):
             os.environ.pop("CANOPY_TICK_ID", None)
             assert main(["tick"]) == 0
             prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
@@ -314,8 +317,8 @@ def test_two_linked_tickets_are_worked_in_order(
 
             ticks = [int(r["id"]) for r in conn.execute("SELECT id FROM ticks ORDER BY id")]
             assert [[a for a, _ in decisions(conn, t)] for t in ticks] == [
-                ["dispatch:implement", "wait"],
-                ["wait", "dispatch:implement"],
+                ["queried", "dispatch:implement", "wait"],
+                ["queried", "wait", "dispatch:implement"],
             ]
             assert git("merge-base", "--is-ancestor", FIRST, "agent/PROJ-2-second", cwd=git_pool.origin) == ""
             assert f": branch `agent/PROJ-2-second` from `{FIRST}`; PR: " in prompt_of(canopy_env, 2)

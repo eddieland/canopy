@@ -493,9 +493,9 @@ bash rules apply either way.
 `canopy completion SHELL` prints the script that completes canopy in bash (4.4 or newer), zsh, or fish; the operator
 loads it from their shell's startup file, as its help shows. The script is click's: on Tab it runs `canopy` with
 `_CANOPY_COMPLETE` set, which click answers before any command runs. Commands, options, and choices complete from the
-CLI's definition, less the commands only the overseer runs inside a tick (`dispatch`, `decide`, `attention`, `mirror`,
-`ticket set`, and `chore` and `review`'s `run` and `wait`): they would refuse the operator anyway, so Tab does not offer
-them, though `--help` still lists them and a command typed in full still completes its arguments. Repository names
+CLI's definition, less the commands only the overseer runs inside a tick (`dispatch`, `decide`, `queried`, `attention`,
+`mirror`, `ticket set`, and `chore` and `review`'s `run` and `wait`): they would refuse the operator anyway, so Tab does
+not offer them, though `--help` still lists them and a command typed in full still completes its arguments. Repository names
 complete from the map of the workspace the shell is in, and chore names from its config; outside a workspace, or when
 its config does not load, they complete to nothing rather than fail. Ticket keys do not complete: that would mean
 opening the journal on every Tab. The command prints click's template itself rather than calling its `source()`, whose
@@ -584,6 +584,9 @@ never notified twice, and an item that returns after going away is new again.
   consecutive ticks that end other than `ok` produce a `loop.failing` notification for sinks that take `loop`, once per
   streak, and `loop.recovered` at the next `ok` tick (§20). There is no attention item for this: the attention list is
   the latest `ok` tick's, so a failing loop cannot add to it; `canopy_unavailable`, above, is the one exception.
+- Overseer left a duty undone (the query when due, a ticket's decision, a due chore's): the tick closes with
+  `overseer_failed`, its summary naming each one (§6 step 5). What it dispatched stands; the attention list stays as it
+  was, and the next tick owes the same duties.
 - MCP unavailable: the overseer reports it with a tick-wide `skip`; the tick closes as `skipped` and `canopy tick`
   exits 1; no decisions are made on partial data, and the attention list stays as it was. The overseer prompt
   says so explicitly.
