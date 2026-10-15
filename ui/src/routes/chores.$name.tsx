@@ -15,7 +15,7 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } fro
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunDot, Word } from '@/components/status'
-import { cadenceText, choreLine, runsText, windowText } from '@/lib/chores'
+import { cadenceText, choreLine, findingsReadout, runsText, windowText } from '@/lib/chores'
 import { costText } from '@/lib/cost-total'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { choreRef } from '@/lib/refs'
@@ -95,7 +95,9 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                 </Panel>
                 <Panel className="2xl:col-start-1 2xl:row-start-2" data-testid="chore-findings">
                     <PanelHeader label="Open findings">
-                        <span className="readout text-xs text-muted-foreground">{chore.findings.length}</span>
+                        <span className="readout text-xs text-muted-foreground" data-testid="chore-findings-count">
+                            {findingsReadout(chore.findings)}
+                        </span>
                     </PanelHeader>
                     {chore.findings.length === 0 ? (
                         <Empty>no open findings now: its latest ok run found nothing</Empty>
