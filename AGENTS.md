@@ -111,6 +111,10 @@ If code and the design disagree, the design doc wins until a decision entry says
   squashed into `0001_init.sql` once, for v0.1 (D068); that is not a precedent for editing one.
   A new migration adds its hash to `SHIPPED` in `tests/canopy/test_db.py`, and a row to `SEED` for each table it
   creates; a test there applies every migration to a journal with data in it and fails on any row lost.
+- A query that returns a table's whole rows reads them as that table's row type in `core/records.py`
+  (`records.fetch_all`, `records.fetch_one`), not as `sqlite3.Row`. A new table gets its row type in the PR that adds
+  it, and an old one when a PR already changes its queries. `tests/canopy/test_records.py` holds each row type to its
+  table, so a migration that adds a column to a typed table adds the field too.
 - Hard guards live in code, judgment lives in prompts. Capacity limits, attempt limits, cooldowns, "never merge", and
   "one worker per ticket" are enforced by the harness regardless of what the overseer asks for.
 - Log with `logging`, JSON lines to `.canopy/canopy.log` in the workspace. Every tick has an id that appears in every

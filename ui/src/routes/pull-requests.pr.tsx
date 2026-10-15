@@ -24,6 +24,8 @@ import { Button } from '@/components/ui/button'
 import { addressOf, onGitHub } from '@/lib/links'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { pullRequestLabel } from '@/lib/pull-request-label'
+import { None } from '@/components/none'
+import { NO_TICKET } from '@/lib/words'
 
 interface PullRequestSearch {
     url?: string | undefined
@@ -103,7 +105,7 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                     <Fields>
                         <Field label="ticket" className="flex items-baseline gap-2">
                             {pr.ticket_key === null ? (
-                                <span className="text-muted-foreground">none: canopy has only reviewed it</span>
+                                <None reason={NO_TICKET} />
                             ) : (
                                 <>
                                     <TicketLink ticketKey={pr.ticket_key} className="shrink-0" />

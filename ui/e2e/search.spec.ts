@@ -37,6 +37,14 @@ test('every source that holds a word has its panel, in the server order', async 
         .locator('> section')
         .evaluateAll((panels) => panels.map((p) => p.dataset['testid']))
     expect(order).toEqual(['search-ticket', 'search-message', 'search-chore_run', 'search-decision'])
+
+    // A chore run's hit is named as the run, and opens the run's page, not its chore's.
+    await page
+        .getByTestId('search-chore_run')
+        .getByRole('link', { name: /^chore:[\w-]+#\d+$/u })
+        .first()
+        .click()
+    await expect(page).toHaveURL(/\/chores\/[\w-]+\/runs\/\d+$/u)
 })
 
 test('slash focuses the box from anywhere but a text field, and Escape leaves it', async ({ page }) => {

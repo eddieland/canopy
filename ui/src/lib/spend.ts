@@ -2,6 +2,7 @@
 // are the server's (`canopy spend`); this lays them out.
 
 import type { SpendCosts, SpendDay, SpendGroup } from '@/api/types'
+import { costText } from '@/lib/cost-total'
 
 /** The windows the page offers, in days. The first is the default, as it is `canopy spend`'s. */
 export const SPEND_WINDOWS = [7, 30] as const
@@ -75,8 +76,8 @@ export function chartTop(days: SpendDay[]): number {
 export function dayHint(day: SpendDay): string {
     const parts = SERIES.map((series) => [series.label, seriesCost(day.costs, series.key)] as const)
         .filter(([, usd]) => usd > 0)
-        .map(([label, usd]) => `${label} $${usd.toFixed(2)}`)
-    const total = day.costs.total === null ? 'nothing reported' : `$${day.costs.total.toFixed(2)}`
+        .map(([label, usd]) => `${label} ${costText(usd)}`)
+    const total = day.costs.total === null ? 'nothing reported' : costText(day.costs.total)
     return parts.length === 0 ? `${dayLabel(day.day)}: ${total}` : `${dayLabel(day.day)}: ${total}, ${parts.join(', ')}`
 }
 

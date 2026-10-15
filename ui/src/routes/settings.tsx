@@ -328,7 +328,7 @@ function HatItem({
                     onClick={onBuy}
                     data-testid={`hat-${hat.id}-buy`}
                 >
-                    Buy <span className="readout">${hat.price}</span>
+                    Buy <Cost usd={hat.price} />
                 </Button>
             )}
         </li>

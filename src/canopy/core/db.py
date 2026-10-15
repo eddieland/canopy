@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import agent_output
+from canopy.core import agent_output, records
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -1218,21 +1218,25 @@ def has_runs(conn: sqlite3.Connection, key: str) -> bool:
     return conn.execute("SELECT 1 FROM runs WHERE ticket_key = ? LIMIT 1", (key,)).fetchone() is not None
 
 
-def decisions_for_tick(conn: sqlite3.Connection, tick_id: int) -> list[sqlite3.Row]:
+def decisions_for_tick(conn: sqlite3.Connection, tick_id: int) -> list[records.Decision]:
     """Return a tick's decisions in the order they were recorded."""
-    return conn.execute("SELECT * FROM decisions WHERE tick_id = ? ORDER BY id", (tick_id,)).fetchall()
+    return records.fetch_all(
+        conn, records.Decision, "SELECT * FROM decisions WHERE tick_id = ? ORDER BY id", (tick_id,)
+    )
 
 
-def decisions_about(conn: sqlite3.Connection, key: str, limit: int) -> list[sqlite3.Row]:
+def decisions_about(conn: sqlite3.Connection, key: str, limit: int) -> list[records.Decision]:
     """Return the latest `limit` decisions about ticket `key`, its units' included, across ticks, newest first."""
-    return conn.execute(
-        "SELECT * FROM decisions WHERE ticket_key = ? ORDER BY id DESC LIMIT ?", (key, limit)
-    ).fetchall()
+    return records.fetch_all(
+        conn, records.Decision, "SELECT * FROM decisions WHERE ticket_key = ? ORDER BY id DESC LIMIT ?", (key, limit)
+    )
 
 
-def decisions_about_pr(conn: sqlite3.Connection, url: str, limit: int) -> list[sqlite3.Row]:
+def decisions_about_pr(conn: sqlite3.Connection, url: str, limit: int) -> list[records.Decision]:
     """Return the latest `limit` decisions that name the PR at `url`, across ticks, newest first."""
-    return conn.execute("SELECT * FROM decisions WHERE pr = ? ORDER BY id DESC LIMIT ?", (url, limit)).fetchall()
+    return records.fetch_all(
+        conn, records.Decision, "SELECT * FROM decisions WHERE pr = ? ORDER BY id DESC LIMIT ?", (url, limit)
+    )
 
 
 def last_decision_of(conn: sqlite3.Connection, key: str) -> str | None:

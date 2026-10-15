@@ -7,7 +7,7 @@ import { ChoreLink } from '@/components/chore-link'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunDot } from '@/components/status'
-import { choreLine, windowText } from '@/lib/chores'
+import { cadenceText, choreLine, windowText } from '@/lib/chores'
 import { costText } from '@/lib/cost-total'
 import { RUN_TEXT } from '@/lib/run-state'
 import { useNow } from '@/lib/time'
@@ -78,7 +78,7 @@ function Row({ chore }: { chore: ChoreSummary }) {
                 className="flex flex-wrap items-center gap-x-3 font-mono text-xs text-muted-foreground"
             >
                 <span>
-                    at most every {chore.every_minutes}m · {windowText(chore)}
+                    at most {cadenceText(chore.every_minutes)} · {windowText(chore)}
                 </span>
                 <span
                     className="readout ml-auto"

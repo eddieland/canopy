@@ -16,6 +16,8 @@ import { TicketTitle } from '@/components/ticket-title'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { verdictText, verdictTone } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
+import { None } from '@/components/none'
+import { NO_TICKET } from '@/lib/words'
 
 /** Every PR the journal knows, most recent activity first, whoever's it is. */
 export const Route = createFileRoute('/pull-requests/')({
@@ -57,7 +59,7 @@ function PullRequestsPage() {
 }
 
 /**
- * A PR: the PR (`org/repo#123` for GitHub's), its ticket and title (or `no ticket`, for any PR canopy only reviews),
+ * A PR: the PR (`org/repo#123` for GitHub's), its ticket and title (or `none`, for any PR canopy only reviews),
  * its unit's phase, the run working it now, its latest review's verdict, and its age.
  */
 function Row({ pr }: { pr: PullRequest }) {
@@ -67,7 +69,7 @@ function Row({ pr }: { pr: PullRequest }) {
             <PullRequestLink url={pr.url} />
             <span className="flex min-w-0 items-center gap-3">
                 {pr.ticket_key === null ? (
-                    <span className="font-mono text-xs text-muted-foreground">no ticket</span>
+                    <None reason={NO_TICKET} className="truncate font-mono text-xs" />
                 ) : (
                     <span className="flex min-w-0 items-center gap-2">
                         <TicketLink ticketKey={pr.ticket_key} className="shrink-0" />
