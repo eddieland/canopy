@@ -297,6 +297,25 @@ def test_a_worker_commits_in_its_slot(canary: Canary) -> None:
     assert list(canary.runs_root.iterdir()) == []
 
 
+def test_a_repository_a_tool_makes_keeps_its_own_objects(canary: Canary) -> None:
+    """A positive control for the run's git (HOST_ISOLATION §4.2): a repository a tool keeps as a cache, here in the
+    run's temp directory, gets its objects in its own directory, while the worker's commit goes to the run's."""
+    cache = '"$TMPDIR/cache"'
+    script = (
+        "git commit --quiet --allow-empty -m work && "
+        f"git init --quiet {cache} && git -C {cache} commit --quiet --allow-empty -m cached && "
+        f"find {cache}/.git/objects -type f | grep -q . && git -C {cache} fsck --no-dangling"
+    )
+
+    done = canary.run(script)
+
+    assert done.ok, done.stderr
+    head = git("rev-parse", "HEAD", cwd=canary.slot)
+    assert not SubprocessRunner().run(["git", "cat-file", "-e", head], cwd=canary.primary).ok
+    in_objects = {"GIT_OBJECT_DIRECTORY": str(canary.objects)}
+    assert SubprocessRunner().run(["git", "cat-file", "-e", head], cwd=canary.slot, env=in_objects).ok
+
+
 def test_a_worker_runs_under_the_system_temp_directory(canary: Canary) -> None:
     """A positive control: the wrapper's run directory, under the TMPDIR canopy runs with, leaves srt room for its
     sockets. The rest of the canary runs under a short one of its own, so that this is the only test that depends on it

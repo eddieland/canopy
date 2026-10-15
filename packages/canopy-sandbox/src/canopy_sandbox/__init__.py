@@ -23,7 +23,12 @@ In order, it:
    another's temp directory, and the workspace's `.canopy/` when the run's directories name it, in case the workspace
    is outside the HOME the template denies. It allows reading `srt`'s own `vendor/`
    directory, whose seccomp helper runs inside the sandbox, wherever `srt` is installed.
-4. Points git at the run's object directory, `CANOPY_GIT_OBJECTS`, with each worktree's shared objects as alternates.
+4. For a worker or setup, puts a `git` of its own first on the command's PATH, in the run's directory, which the
+   command may read but not write. It runs the real git, pointed at the run's object directory, `CANOPY_GIT_OBJECTS`,
+   with each worktree's shared objects as alternates, when the repository git would act on is one of the run's
+   worktrees, and unchanged anywhere else. Exported to every process, git's variables would reach a repository a tool
+   keeps in a cache, such as OpenCode's snapshots or Go's module sources, whose objects would then go when the run's
+   directory does. A git run by its absolute path gets neither, and in a worktree cannot write objects at all.
 5. Runs `srt --settings POLICY -- COMMAND...`, waits for it, removes its directory, and exits with `srt`'s status.
    The `srt` is the one `canopy sandbox setup` installed, pinned by `runtime/package-lock.json`, in
    `$XDG_DATA_HOME/canopy/sandbox-runtime/` (`~/.local/share/canopy/sandbox-runtime/` when that is unset), or else
@@ -63,6 +68,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import stat
@@ -106,6 +112,55 @@ SAFE_GIT = (
 UNSAFE_PATH = re.compile(r'[:"\n\r\\]')
 # Read by the shell `srt` runs the command in: a non-interactive bash sources BASH_ENV, and sh in some modes ENV.
 SHELL_STARTUP = ("BASH_ENV", "ENV")
+# The `git` the command finds first on PATH, for a worker or setup (git_shim). POSIX sh, so that a git call costs one
+# more git to find the repository, not a Python start.
+GIT_SHIM = r"""#!/bin/sh
+# canopy-sandbox's git, first on PATH (HOST_ISOLATION §4.2). In the run's worktrees, git writes new objects to the
+# run's object directory and reads each worktree's shared ones as well. Any other repository, such as a cache a tool
+# keeps as a git repository, keeps its objects in its own directory, as it would without a sandbox.
+real=@REAL@
+objects=@OBJECTS@
+dir= gitdir= worktree= want= command=
+for arg do
+    case $want in
+        C) case $arg in /*) dir=$arg ;; ?*) dir=${dir:-.}/$arg ;; esac; want=; continue ;;
+        gitdir) gitdir=$arg; want=; continue ;;
+        worktree) worktree=$arg; want=; continue ;;
+        value) want=; continue ;;
+    esac
+    case $arg in
+        -C) want=C ;;
+        --git-dir) want=gitdir ;;
+        --git-dir=*) gitdir=${arg#--git-dir=} ;;
+        --work-tree) want=worktree ;;
+        --work-tree=*) worktree=${arg#--work-tree=} ;;
+        -c|--namespace|--config-env|--attr-source) want=value ;;
+        -*) ;;
+        *) command=$arg; break ;;
+    esac
+done
+case $command in
+    # Each makes a repository, not the one around it.
+    init|clone) common= ;;
+    *) common=$(cd "${dir:-.}" 2>/dev/null &&
+        "$real" ${gitdir:+"--git-dir=$gitdir"} ${worktree:+"--work-tree=$worktree"} \
+            rev-parse --path-format=absolute --git-common-dir 2>/dev/null) ;;
+esac
+case $common in
+    @COMMON@)
+        GIT_OBJECT_DIRECTORY=$objects
+        GIT_ALTERNATE_OBJECT_DIRECTORIES=@ALTERNATES@
+        export GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+        ;;
+    *)
+        # Inherited from a git in a worktree, as by `git rebase --exec`: not for this repository.
+        if [ "${GIT_OBJECT_DIRECTORY-}" = "$objects" ]; then
+            unset GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+        fi
+        ;;
+esac
+exec "$real" "$@"
+"""
 # Name a repository other than the one git finds from the cwd, for the wrapper's git and the command's alike.
 GIT_LOCATION = (
     "GIT_ALTERNATE_OBJECT_DIRECTORIES",
@@ -174,11 +229,13 @@ def run(argv: list[str]) -> int:
         tmp = run_dir / "tmp"
         check_socket_room(tmp)
         tmp.mkdir(mode=0o700)
+        bin_dir = git_shim(run_dir, trees, objects) if objects is not None else None
         policy = fill(template, placeholders(cwd, trees, objects, tmp, reads))
-        check(policy, [run_dir.parent, *state_dirs(objects, cwd)], vendor_dirs(srt))
+        readable = [*vendor_dirs(srt), *([bin_dir] if bin_dir is not None else [])]
+        check(policy, [run_dir.parent, *state_dirs(objects, cwd)], readable)
         settings = run_dir / "policy.json"
         settings.write_text(json.dumps(policy, indent=2) + "\n", encoding="utf-8")
-        return run_srt(srt, settings, command, environment(os.environ, trees, objects, tmp))
+        return run_srt(srt, settings, command, environment(os.environ, bin_dir, tmp))
     except SandboxError as e:
         print(f"canopy-sandbox: {e}", file=sys.stderr)
         return 2
@@ -435,7 +492,8 @@ def check(policy: object, denied: list[Path], readable: list[Path]) -> None:
     `denied` holds the directory of every run's directory: the system temp directory is outside HOME, so without it one
     run could read another's temp directory, a private ticket's included. It holds the workspace's `.canopy/` too, when
     known, for a workspace outside HOME. The run's own directories in them are re-allowed by the template. `readable`
-    holds what `srt` itself runs inside the sandbox, which may be under the HOME the template denies.
+    holds what runs inside the sandbox from a denied directory: `srt`'s own helper, under the HOME the template may
+    deny, and the run's `git`, in the run's directory.
 
     Raises:
         SandboxError: it denies no reads, has no network allowlist, or its allowRead is not a list.
@@ -484,26 +542,49 @@ def vendor_dirs(srt: Path) -> list[Path]:
     return [vendor] if name == SRT_PACKAGE and vendor.is_dir() else []
 
 
-def environment(current: Mapping[str, str], trees: list[Worktree], objects: Path | None, tmp: Path) -> dict[str, str]:
+def environment(current: Mapping[str, str], bin_dir: Path | None, tmp: Path) -> dict[str, str]:
     """Return the command's environment: the wrapper's, scrubbed at start, plus the run's directories.
 
     Returns:
-        The environment to run `srt` with.
-
-    Raises:
-        SandboxError: a shared object directory has a name git's list of alternates cannot hold.
+        The environment to run `srt` with: TMPDIR the run's, and `bin_dir`, which holds the run's git, first on PATH.
     """
     env = dict(current)
     env[SRT_TMPDIR] = str(tmp)
     env["TMPDIR"] = str(tmp)
-    if objects is not None:
-        shared = list(dict.fromkeys(str(t.shared / "objects") for t in trees))
-        unsafe = [p for p in shared if UNSAFE_PATH.search(p)]
-        if unsafe:
-            raise SandboxError(f"git cannot be given these object directories as alternates: {unsafe}")
-        env["GIT_OBJECT_DIRECTORY"] = str(objects)
-        env["GIT_ALTERNATE_OBJECT_DIRECTORIES"] = ":".join(shared)
+    if bin_dir is not None:
+        env["PATH"] = os.pathsep.join(p for p in (str(bin_dir), env.get("PATH", "")) if p)
     return env
+
+
+def git_shim(run_dir: Path, trees: list[Worktree], objects: Path) -> Path:
+    """Write the run's `git`, which points git at `objects` in the run's worktrees only, into `run_dir/bin`.
+
+    Returns:
+        The directory that holds it, to put first on the command's PATH.
+
+    Raises:
+        SandboxError: there is no git, or a shared object directory has a name git's list of alternates cannot hold.
+    """
+    real = shutil.which("git")
+    if real is None:
+        raise SandboxError("git is not on PATH")
+    shared = list(dict.fromkeys(str(t.shared / "objects") for t in trees))
+    unsafe = [p for p in shared if UNSAFE_PATH.search(p)]
+    if unsafe:
+        raise SandboxError(f"git cannot be given these object directories as alternates: {unsafe}")
+    values = {
+        "@REAL@": shlex.quote(str(Path(real).absolute())),
+        "@OBJECTS@": shlex.quote(str(objects)),
+        "@COMMON@": "|".join(shlex.quote(str(c)) for c in dict.fromkeys(t.shared for t in trees)),
+        "@ALTERNATES@": shlex.quote(":".join(shared)),
+    }
+    script = PLACEHOLDER.sub(lambda m: values[m.group()], GIT_SHIM)  # in one pass, so no path is read as a placeholder
+    bin_dir = run_dir / "bin"
+    bin_dir.mkdir(mode=0o700)
+    shim = bin_dir / "git"
+    shim.write_text(script, encoding="utf-8")
+    shim.chmod(0o500)
+    return bin_dir
 
 
 def run_srt(srt: Path, settings: Path, command: list[str], env: dict[str, str]) -> int:

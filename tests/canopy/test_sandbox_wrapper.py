@@ -88,6 +88,11 @@ def linked_worktree(tmp_path: Path, name: str) -> tuple[Path, Path]:
     return primary.resolve(), slot.resolve()
 
 
+def reading(objects: Path, primary: Path) -> dict[str, str]:
+    """git's variables that read a run's object directory as well as a slot's shared objects, as `_run` sets them."""
+    return {"GIT_OBJECT_DIRECTORY": str(objects), "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(primary / ".git" / "objects")}
+
+
 def objects_dir(tmp_path: Path) -> Path:
     objects = tmp_path / "runs" / "1.objects"
     objects.mkdir(parents=True)
@@ -122,13 +127,12 @@ def test_a_worker_runs_under_a_policy_made_for_its_slot(sandbox: Sandbox, tmp_pa
     assert filesystem["denyWrite"] == [str(p) for p in protected]
     assert "#" not in json.dumps(call["settings"])
     assert call["settings"]["network"]["allowedDomains"][0] == "api.anthropic.com"
-    assert call["env"] == {
-        "CANOPY_GIT_OBJECTS": str(objects),
-        "CLAUDE_CODE_TMPDIR": tmp,
-        "TMPDIR": tmp,
-        "GIT_OBJECT_DIRECTORY": str(objects),
-        "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(shared / "objects"),
-    }
+    # git's own variables are the run's git's to set, in the run's worktrees only; it is first on PATH, and readable.
+    bin_dir = str(Path(tmp).parent / "bin")
+    assert call["env"].pop("PATH").split(os.pathsep)[0] == bin_dir
+    assert bin_dir in filesystem["allowRead"]
+    assert bin_dir not in filesystem["allowWrite"]
+    assert call["env"] == {"CANOPY_GIT_OBJECTS": str(objects), "CLAUDE_CODE_TMPDIR": tmp, "TMPDIR": tmp}
     assert Path(tmp).parent.parent == sandbox.runs_root()
     assert list(sandbox.runs_root().iterdir()) == []  # the policy and the temp directory are gone
 
@@ -142,15 +146,66 @@ def test_a_joint_runs_desk_names_every_worktree_it_links_to(sandbox: Sandbox, tm
         (desk / name).symlink_to(slot, target_is_directory=True)
     objects = objects_dir(tmp_path)
 
-    done = wrap("worker", "true", cwd=desk, env={"CANOPY_GIT_OBJECTS": str(objects)})
+    commit = "git -C api commit --quiet --allow-empty -m api && git -C web commit --quiet --allow-empty -m web"
+
+    done = wrap("worker", "sh", "-c", commit, cwd=desk, env={"CANOPY_GIT_OBJECTS": str(objects)})
 
     assert done.ok, done.stderr
     call = sandbox.only_call()
     filesystem = call["settings"]["filesystem"]
     assert filesystem["allowRead"][:3] == [str(desk.resolve()), *map(str, slots)]
     assert filesystem["allowWrite"][:2] == [str(s) for s in slots]
-    alternates = ":".join(str(p / ".git" / "objects") for p in primaries)
-    assert call["env"]["GIT_ALTERNATE_OBJECT_DIRECTORIES"] == alternates
+    for primary, slot in zip(primaries, slots, strict=True):  # each worktree's commit, in the run's directory only
+        head = git("rev-parse", "HEAD", cwd=slot)
+        assert not SubprocessRunner().run(["git", "cat-file", "-e", head], cwd=primary).ok
+        assert SubprocessRunner().run(["git", "cat-file", "-e", head], cwd=slot, env=reading(objects, primary)).ok
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        pytest.param(
+            'git init --quiet "$1" && git -C "$1" commit --quiet --allow-empty -m cached', id="init-then-commit"
+        ),
+        pytest.param(
+            'mkdir "$1" && cd "$1" && git init --quiet --bare && git fetch --quiet "$2" HEAD && '
+            "git update-ref refs/heads/x FETCH_HEAD",
+            id="go-module-source",
+        ),
+        pytest.param(
+            'git --git-dir "$1" --work-tree . init --quiet && echo work > work.txt && '
+            'git --git-dir "$1" --work-tree . add work.txt && git --git-dir="$1" --work-tree=. commit --quiet -m snap',
+            id="opencode-snapshot",
+        ),
+        pytest.param(
+            'export GIT_OBJECT_DIRECTORY="$CANOPY_GIT_OBJECTS" && git init --quiet "$1" && '
+            'git -C "$1" commit --quiet --allow-empty -m inherited',
+            id="inherited-from-a-worktrees-git",
+        ),
+    ],
+)
+def test_a_repository_a_tool_keeps_outside_the_worktree_keeps_its_own_objects(
+    sandbox: Sandbox, tmp_path: Path, script: str
+) -> None:
+    """A cache a tool keeps as a git repository (HOST_ISOLATION §4.2): with git's variables set for every process, its
+    objects went to the run's directory and were gone with it. The worker's own commit still lands only there."""
+    primary, slot = linked_worktree(tmp_path, "repo")
+    objects = objects_dir(tmp_path)
+    cache = tmp_path / "cache"
+    work = f"git commit --quiet --allow-empty -m work && {script}"
+
+    done = wrap(
+        "worker", "sh", "-c", work, "sh", str(cache), str(primary), cwd=slot, env={"CANOPY_GIT_OBJECTS": str(objects)}
+    )
+
+    assert done.ok, done.stderr
+    head = git("rev-parse", "HEAD", cwd=slot)
+    assert not SubprocessRunner().run(["git", "cat-file", "-e", head], cwd=primary).ok
+    assert SubprocessRunner().run(["git", "cat-file", "-e", head], cwd=slot, env=reading(objects, primary)).ok
+    shutil.rmtree(objects)  # as `_run` does once the slot is tidied
+    fsck = SubprocessRunner().run(["git", "fsck", "--no-dangling"], cwd=cache)
+    assert fsck.ok, fsck.stderr
+    assert git("for-each-ref", cwd=cache)  # something was kept, and is whole
 
 
 def test_a_slot_that_commits_a_desk_marker_is_still_a_slot(sandbox: Sandbox, tmp_path: Path) -> None:
