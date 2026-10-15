@@ -24,12 +24,13 @@ from canopy.core import db
 from canopy.infra import procs
 from canopy.infra.procs import SubprocessRunner
 from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, slot_of, worker_does
+from tests.canopy.test_reviews import CLEAN, PR, reviewer_reports, run_inline
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, git, user_toml
 
 # The command the install puts beside python, which is how canopy runs it: never `python -m`, which would put the
 # slot's own directory first on the import path.
 WRAPPER = Path(sys.executable).parent / "canopy-sandbox"
-ROLES = ("worker", "setup", "chore")
+ROLES = ("worker", "setup", "chore", "review")
 FAKES = Path(__file__).resolve().parents[1] / "fakes"
 SRT_PACKAGE = "@anthropic-ai/sandbox-runtime"
 DEAD_PID = 4_194_305  # above Linux's largest pid_max
@@ -97,6 +98,14 @@ def objects_dir(tmp_path: Path) -> Path:
     objects = tmp_path / "runs" / "1.objects"
     objects.mkdir(parents=True)
     return objects
+
+
+def review_dir(parent: Path, checkout: Path) -> Path:
+    """A reviewer's directory as `_review` makes it, `<parent>/reviews/3/`, with its one link, to the checkout."""
+    cwd = parent / "reviews" / "3"
+    cwd.mkdir(parents=True, mode=0o700)
+    (cwd / "checkout").symlink_to(checkout, target_is_directory=True)
+    return cwd
 
 
 def test_a_worker_runs_under_a_policy_made_for_its_slot(sandbox: Sandbox, tmp_path: Path) -> None:
@@ -249,14 +258,15 @@ def test_neither_git_nor_srt_is_pointed_elsewhere_by_the_environment(sandbox: Sa
     assert str(other.resolve()) not in call["settings"]["filesystem"]["allowWrite"]
 
 
-@pytest.mark.parametrize("role", ["worker", "chore"])
+@pytest.mark.parametrize("role", ["worker", "chore", "review"])
 def test_the_workspaces_state_is_denied_even_outside_home(sandbox: Sandbox, tmp_path: Path, role: str) -> None:
     """The templates deny HOME; a workspace elsewhere would leave `.canopy/` readable without this."""
     state = tmp_path / "elsewhere" / ".canopy"
     objects = state / "runs" / "7.objects"
     objects.mkdir(parents=True)
     _, slot = linked_worktree(tmp_path, "repo")
-    cwd = slot if role == "worker" else state / "chores" / "build-health"
+    cwds = {"worker": slot, "chore": state / "chores" / "build-health"}
+    cwd = cwds[role] if role in cwds else review_dir(state, slot)
     cwd.mkdir(parents=True, exist_ok=True)
 
     done = wrap(role, "true", cwd=cwd, env={"CANOPY_GIT_OBJECTS": str(objects)} if role == "worker" else None)
@@ -300,6 +310,47 @@ def test_a_chore_reads_its_cwd_and_gets_no_git(sandbox: Sandbox, tmp_path: Path)
     assert str(cwd.resolve()) not in filesystem["allowWrite"]
     assert filesystem["denyWrite"] == []
     assert "GIT_OBJECT_DIRECTORY" not in call["env"]
+
+
+def test_a_review_reads_its_checkout_and_writes_none_of_it(sandbox: Sandbox, tmp_path: Path) -> None:
+    """The reviewer reads the PR's checkout through its directory's link, and writes nothing there: not the worktree,
+    not its git directories, and no objects, so it gets neither an object directory nor the run's git."""
+    primary, slot = linked_worktree(tmp_path, "repo")
+    cwd = review_dir(tmp_path, slot)
+
+    done = wrap("review", "--read", "/defs", "git", "-C", "checkout", "rev-parse", "HEAD", cwd=cwd)
+
+    assert done.ok, done.stderr
+    assert done.stdout.strip() == git("rev-parse", "HEAD", cwd=slot)
+    call = sandbox.only_call()
+    filesystem = call["settings"]["filesystem"]
+    tmp = call["env"]["TMPDIR"]
+    own, shared = primary / ".git" / "worktrees" / "slot", primary / ".git"
+    entries = sorted(p for p in shared.iterdir() if p.name != "worktrees")
+    paths = [str(p) for p in (cwd.resolve(), slot, own, *entries)]
+    assert filesystem["allowRead"][: len(paths) + 2] == [*paths, tmp, "/defs"]
+    assert not [p for p in filesystem["allowWrite"] if p.startswith(str(tmp_path))]
+    assert filesystem["allowWrite"][0] == tmp
+    assert filesystem["denyWrite"] == []
+    assert "github.com" not in call["settings"]["network"]["allowedDomains"]  # it pushes and fetches nothing
+    assert call["env"] == {"CLAUDE_CODE_TMPDIR": tmp, "PATH": os.environ["PATH"], "TMPDIR": tmp}
+
+
+@pytest.mark.parametrize("place", ["empty", "slot"])
+def test_a_review_outside_a_review_directory_runs_nothing(sandbox: Sandbox, tmp_path: Path, place: str) -> None:
+    """A review's directory links to its checkout. A slot is not one: a branch can commit a link to another slot."""
+    primary, slot = linked_worktree(tmp_path, "repo")
+    other = tmp_path / "repo" / "other"
+    git("worktree", "add", "--quiet", "--detach", str(other), cwd=primary)
+    (slot / "other").symlink_to(other, target_is_directory=True)
+    cwd = slot if place == "slot" else tmp_path / "reviews" / "3"
+    cwd.mkdir(parents=True, exist_ok=True)
+
+    done = wrap("review", "true", cwd=cwd)
+
+    assert done.returncode == 2
+    assert ("is a checkout" if place == "slot" else "links to no worktree") in done.stderr
+    assert not sandbox.log.exists()
 
 
 def test_the_srt_canopy_installed_runs_and_reads_its_own_vendor_directory(
@@ -464,4 +515,35 @@ def test_canopys_sandboxed_worker_commits_through_the_wrapper_and_is_pushed(
     slot = Path(slot_of(conn, run_id)["slot_path"])
     assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")
     assert not (canopy_env.state_dir / "runs" / f"{run_id}.objects").exists()
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
+
+
+def test_canopys_sandboxed_reviewer_reads_the_checkout_through_the_wrapper(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    worktree_pool: tuple[Path, list[Path]],
+    treehouse_state: Path,
+    sandbox: Sandbox,
+) -> None:
+    """`_review` with the wrapper as `review_cmd`'s prefix: the policy reads the slot it leased, and writes none."""
+    template = f"{WRAPPER} review --read {{definitions_dir}} -- env OPENCODE_CONFIG_DIR={{definitions_dir}} agent run"
+    review_cmd = f"review_cmd = '{template} --agent canopy-reviewer {{prompt}}'"
+    user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\n{review_cmd}\n", 1)
+    canopy_env.write_user(user + "\n[review]\nagent_prs = true\n")
+    conn: sqlite3.Connection = journal(canopy_env)
+    db.set_unit(conn, "PROJ-1", str(canopy_env.root), "repo", pr_url=PR)
+    sha = git("rev-parse", "main", cwd=git_pool.origin)
+
+    with reviewer_reports(CLEAN, ["git", "-C", "checkout", "rev-parse", "HEAD"]):
+        run_id = run_inline(conn, "--ticket", "PROJ-1", sha=sha)
+
+    row = db.get_review_run(conn, run_id)
+    assert row is not None
+    assert row["status"] == "done", Path(row["log_path"]).read_text()
+    call = sandbox.only_call()
+    assert call["cwd"] == str(canopy_env.state_dir / "reviews" / str(run_id))
+    filesystem = call["settings"]["filesystem"]
+    [slot] = [s for s in worktree_pool[1] if str(s.resolve()) in filesystem["allowRead"]]
+    assert not [p for p in filesystem["allowWrite"] if p.startswith(str(slot.parent))]
+    assert "CANOPY_GIT_OBJECTS" not in call["env"]
     assert all(s["status"] == "available" for s in pool(treehouse_state))

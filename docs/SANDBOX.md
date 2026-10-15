@@ -1,8 +1,8 @@
 # Running workers in a sandbox
 
-How to run canopy's workers, setup commands, and chores inside an OS sandbox, so that a worker steered by text in a
-ticket cannot read your secrets, rewrite canopy's config, or reach hosts you did not list. Everything here is your own
-config and what `canopy sandbox setup` installs: the loop sees only the command templates, and none of this is
+How to run canopy's workers, setup commands, chores, and reviews inside an OS sandbox, so that a worker steered by text
+in a ticket cannot read your secrets, rewrite canopy's config, or reach hosts you did not list. Everything here is your
+own config and what `canopy sandbox setup` installs: the loop sees only the command templates, and none of this is
 required to run it.
 For why it works this way and what it was checked against, see [HOST_ISOLATION.md](HOST_ISOLATION.md); for what it
 does and does not defend against, TRUST_MODEL T4 and T6.
@@ -28,7 +28,7 @@ A write the policy refuses under `$HOME` may look as if it worked: `srt` puts an
 directory, and what is written there is gone when the run ends. Nothing reaches the host.
 
 What it does not cover: a worker can still send anything to a host you allowed, with the credentials it has, such as
-your GitHub token; the overseer and the reviewer (`review_cmd`) are not wrapped; and the sandbox shares the kernel,
+your GitHub token; the overseer is not wrapped; and the sandbox shares the kernel,
 so it is no defense against an exploit written to escape it (HOST_ISOLATION §2, §4.3, §4.4).
 
 ## 1. Run `canopy sandbox setup`
@@ -83,6 +83,7 @@ template for its role from `$XDG_CONFIG_HOME/canopy/sandbox/` (`~/.config/canopy
 | `worker.json` | `worker_cmd`, `private_worker_cmd`, and `split_cmd` |
 | `setup.json` | `setup_cmd` |
 | `chore.json` | `chore_cmd` and each chore's own `cmd` |
+| `review.json` | `review_cmd` |
 
 It runs the `srt` in `~/.local/share/canopy/sandbox-runtime/` (under `$XDG_DATA_HOME` when that is set), or else the
 first on `PATH`. It drops every relative entry from `PATH`, so `git`, and any other `srt`, must be on `PATH` through
@@ -161,6 +162,8 @@ split_cmd = '''canopy-sandbox worker --read {definitions_dir} --
     env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json --title={title} {prompt}'''
 chore_cmd = '''canopy-sandbox chore --read {definitions_dir} --
     env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json --title={title} {prompt}'''
+review_cmd = '''canopy-sandbox review --read {definitions_dir} --
+    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json --title={title} {prompt}'''
 # setup_cmd takes no placeholders; give the wrapper no --read.
 setup_cmd = "canopy-sandbox setup -- sh -c 'pnpm install --frozen-lockfile'"
 ```
@@ -169,8 +172,9 @@ setup_cmd = "canopy-sandbox setup -- sh -c 'pnpm install --frozen-lockfile'"
   sandbox.
 - A chore with a `cmd` of its own (DESIGN §19) needs the prefix there too, with `--read {definitions_dir}` only if the
   command names it: `cmd = 'canopy-sandbox chore -- opencode run --agent build-health --format json {prompt}'`.
-- Leave `overseer_cmd` and `review_cmd` as they are. The overseer needs the journal and the config the sandbox
-  denies, and `canopy-sandbox worker` refuses a command canopy does not run as a worker.
+- Leave `overseer_cmd` as it is. The overseer needs the journal and the config the sandbox denies.
+- The reviewer reads the checkout and writes nothing in it, not even a commit, so `review.json` allows reading the
+  checkout and its git directories and writing none of them, and leaves `github.com` off the allowlist.
 - If your `PATH` has a relative entry, such as `.`, name the wrapper by its absolute path: canopy runs the template
   in the slot, where a relative entry finds what the branch committed.
 
@@ -215,7 +219,9 @@ github.com.
 
 - **`canopy-sandbox: no policy template at ...`** or **`srt is not installed`:** run `canopy sandbox setup`.
 - **`CANOPY_GIT_OBJECTS is not set`:** the wrapper's `worker` or `setup` role is on a command canopy does not run as
-  a worker or setup, such as `review_cmd`. Remove it there.
+  a worker or setup, such as `review_cmd` or a chore's. Use the `review` or `chore` role there.
+- **`... links to no worktree`:** the `review` role is on a command canopy does not run as a review, or a desk is
+  empty. Use the role the command's key names.
 - **`... is not a linked worktree`:** a worker or setup ran outside one of treehouse's slots. canopy always runs them
   in one; in the check above, run it in the worktree it makes.
 - **`... has too long a path for srt's sockets`**, or `srt`'s own **`Failed to create bridge sockets`**: on Linux,

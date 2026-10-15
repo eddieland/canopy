@@ -356,12 +356,12 @@ canopy, not built after an incident.
   leaves (HOST_ISOLATION §5 item 2).
 - `canopy-sandbox`, the wrapper HOST_ISOLATION §4.1 describes (resolve the cwd's worktrees and their git directories,
   write a per-run `srt` policy, drop `BASH_ENV`, map `CANOPY_GIT_OBJECTS` to git's variables,
-  `exec srt --settings <policy> -- "$@"`), taking a role (`worker`, `setup`, `chore`) that picks the policy; and the
-  policy template, §4.2's filesystem table and §4.3's network allowlist with the operator's hosts left to fill in. No
-  Unix sockets, so sandboxed runs push over HTTPS. Not harness code: the harness sees only the command template, as
-  today. First an example under `examples/sandbox/`; on the operator's request (2026-10-14) it ships with canopy, as
-  the workspace member `packages/canopy-sandbox` (D041), and `canopy sandbox setup` copies the templates, installs the
-  `srt` its lockfile pins with npm, and checks and prints what needs root (D117).
+  `exec srt --settings <policy> -- "$@"`), taking a role (`worker`, `setup`, `chore`, `review`) that picks the
+  policy; and the policy template, §4.2's filesystem table and §4.3's network allowlist with the operator's hosts
+  left to fill in. No Unix sockets, so sandboxed runs push over HTTPS. Not harness code: the harness sees only the
+  command template, as today. First an example under `examples/sandbox/`; on the operator's request (2026-10-14) it
+  ships with canopy, as the workspace member `packages/canopy-sandbox` (D041), and `canopy sandbox setup` copies the
+  templates, installs the `srt` its lockfile pins with npm, and checks and prints what needs root (D117).
 - `docs/SANDBOX.md`, an operator's guide like `docs/BAZEL.md`: `canopy sandbox setup` and what it cannot install, the
   prefixes for `worker_cmd`, `private_worker_cmd`, `split_cmd`, `setup_cmd`, and chore `cmd`, the allowlist, HTTPS
   remotes, and Ubuntu 24.04's restriction on unprivileged user namespaces. `canopy init` prints the suggested
@@ -412,6 +412,10 @@ OpenCode's snapshots, which persist under its data directory, to the run's direc
 of its own first on `PATH` that sets them in the run's worktrees only; pre-commit was never affected. OpenCode's MCP
 servers are settled from its source: a local one is OpenCode's child and runs under the worker's policy, and one
 started with `docker run` cannot work, since the sandbox refuses Unix sockets, which the canary now checks.
+`review_cmd`, HOST_ISOLATION §7's last open wrapping question, is settled as a role of its own, `review`, with a
+template that reads the checkout through the review directory's link and writes none of it, no object directory, and
+no `github.com`; the canary runs its HOME and state attempts as `review` too, and checks that a review writes nothing
+in the checkout. Run against the fake `srt`, every review denial fails and its positive control passes.
 Next: TRUST_MODEL T4 and T6, with the operator's approval note, and the canary on the operator's Linux and macOS
 machines.
 
