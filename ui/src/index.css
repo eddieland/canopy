@@ -308,14 +308,14 @@
 
 /* At rest a ripple is invisible, so the animation needs no fill after it ends. */
 /*
- * A toast (src/components/ui/toast.tsx) slides in from the right and fades out. Its exit fills forwards, as the fold
+ * A toast (src/components/ui/toast.tsx) rises in from below and fades out. Its exit fills forwards, as the fold
  * does: Radix unmounts it once the animation ends, and it must not flash back before then. Under reduced motion it
  * appears and goes in place.
  */
 @keyframes toast-in {
     from {
         opacity: 0;
-        transform: translateX(1rem);
+        transform: translateY(1rem);
     }
 }
 

@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils'
 const TOAST_MS = 3000
 
 /**
- * Gives `children` `useToast`, and shows the toasts it is asked for over the page's bottom right corner: at most
+ * Gives `children` `useToast`, and shows the toasts it is asked for at the bottom center of the window: at most
  * `MAX_TOASTS`, the newest last, each closing on its own after 3 seconds. `main.tsx` renders one around the router.
  */
 export function Toaster({

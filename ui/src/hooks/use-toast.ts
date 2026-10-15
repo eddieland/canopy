@@ -13,7 +13,7 @@ function ignore() {
  */
 export const ToastContext = createContext<(toast: NewToast) => void>(ignore)
 
-/** A function showing a toast over the page's bottom right corner, saying what an action did: `Copied branch`. */
+/** A function showing a toast at the bottom center of the window, saying what an action did: `Copied branch`. */
 export function useToast(): (toast: NewToast) => void {
     return use(ToastContext)
 }

@@ -310,7 +310,7 @@ a skeleton, the empty inbox, the header's ticker, and Sprig's blink. The keyfram
   animation that fills forwards: the row is let go once it has played.
 - Sprig's tip pops in a moment after a page arrives, its brows rise once with each new tip, and its eyes blink now and
   then and look toward the pointer.
-- A toast slides in from the right and fades out.
+- A toast rises in from below and fades out.
 - Only `running` runs pulse.
 - Every animation rests on the frame a still page shows (its last, or for a loop its first), so a screenshot with
   animations frozen is the page at rest.
@@ -643,10 +643,10 @@ list, an empty state, or a skeleton by hand.
   moves, and always on a touch screen. The clipboard needs a secure context (https or localhost), so elsewhere there
   is no button and the text stays selectable.
 - **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was
-  done shows too little of it: a copy names what it copied. It sits over the page's bottom right corner on `surface`
+  done shows too little of it: a copy names what it copied. It sits at the bottom center of the window on `surface`
   with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title in `text-sm`, and a line under it
   in muted monospace `text-xs`, cut to two lines. It closes on its own after 3 seconds, held while the pointer or the
-  focus is on it, or when swiped right; F8 reaches it from the keyboard and Escape closes it. At most three show,
+  focus is on it, or when swiped down; F8 reaches it from the keyboard and Escape closes it. At most three show,
   the newest last. A screen reader announces it. It never carries an action, and it is never the only place an
   outcome shows: the control that acted says so too, and a refusal is still a `Notice`. `main.tsx` renders the one
   `Toaster`, around the router, so a toast outlives the page it came from.
