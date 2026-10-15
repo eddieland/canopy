@@ -1,18 +1,19 @@
-"""The loop's pause (DESIGN §6), `canopy pause` and `canopy resume`, and asking it to read its config again.
+"""The loop's pause and the notice to workers, and asking the loop to read its config again.
 
-The loop reads both at every step of its wait.
+The pause is `canopy pause` and `canopy resume` (DESIGN §6), the notice `canopy notice` (§8). The loop reads the pause
+and the notice at every step of its wait.
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter
 
-from canopy.core import config, conversation, pause
+from canopy.core import config, conversation, notice, pause
 from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError
-from canopy.serve.schema import ConfigReload, LoopState, PauseChanged
+from canopy.serve.schema import ConfigReload, LoopState, NoticeChanged, NoticeRequest, PauseChanged
 
 TAG = "loop"
 router = APIRouter(tags=[TAG])
@@ -46,6 +47,33 @@ def resume_loop(backend: BackendDep) -> PauseChanged:
     if not already:
         _log.info("loop resumed", extra={"channel": WEB})
     return PauseChanged(already=already, loop=state)
+
+
+@router.post("/loop/notice", operation_id="setNotice", summary="Set a notice to workers", responses=REFUSED)
+def set_notice(body: NoticeRequest, backend: BackendDep) -> NoticeChanged:
+    """`canopy notice TEXT --for DURATION`: every run dispatched from now on hears it until it lapses.
+
+    It replaces the notice in force. A blank text is refused `empty`, and one over the bound `too_long`.
+    """
+    with backend.open() as ctx:
+        try:
+            held = notice.set_notice(ctx.conn, body.text, minutes=body.minutes, channel=WEB)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+        state = views.loop_state(ctx)
+    _log.info("notice set", extra={"channel": WEB, "notice": held.id, "lapses_at": held.lapses_at})
+    return NoticeChanged(already=False, loop=state)
+
+
+@router.post("/loop/notice/clear", operation_id="clearNotice", summary="Clear the notice to workers")
+def clear_notice(backend: BackendDep) -> NoticeChanged:
+    """`canopy notice --clear`: runs dispatched from now on hear none."""
+    with backend.open() as ctx:
+        ended = notice.clear(ctx.conn, channel=WEB)
+        state = views.loop_state(ctx)
+    if ended is not None:
+        _log.info("notice cleared", extra={"channel": WEB, "notice": ended.id})
+    return NoticeChanged(already=ended is None, loop=state)
 
 
 @router.post("/loop/reload", operation_id="reloadConfig", summary="Reload the config", responses=REFUSED)

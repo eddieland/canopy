@@ -14,9 +14,10 @@ split runs so far, and its latest run, for a ticket the operator started private
 tickets"), and for a public ticket the operator has written to in canopy its `operator` messages (see "Reviewers and the
 operator's go-ahead"), the tickets the operator stopped (`stopped`; see "Private tickets"), the tickets split runs
 created (`split_children`; see "Splitting"), what mirroring comments needs (`mirror`; see "Mirroring comments"), and, if
-the operator has any, their chores (`chores`; see "Chores"), and, if reviews are on, the PRs reviewed lately
-(`reviews`; see "Reviews"). The journal is a cache of what the loop did. It is never a substitute for live state.
-Re-read the tracker and GitHub before every decision that matters.
+the operator has any, their chores (`chores`; see "Chores"), if reviews are on, the PRs reviewed lately (`reviews`; see
+"Reviews"), and, if the operator set any lately, their notices to workers (`notices`; see "Notices"). The journal is a
+cache of what the loop did. It is never a substitute for live state. Re-read the tracker and GitHub before every
+decision that matters.
 
 ## Tools you have
 
@@ -151,7 +152,7 @@ ticket's one action from all of them: a unit whose PR needs work comes before on
 | `pushed_no_pr` | branch exists, no PR | `dispatch resume` with context "open the PR" |
 | `conflicted` | PR open, GitHub says it conflicts with its base | `dispatch resume` to merge the base in (below) |
 | `ci_running` | PR open, checks pending | `wait` |
-| `ci_red` | PR open, checks failed, failure newer than `ci` cursor | `dispatch fix-ci --cursor ci=<run>`; see step 2 |
+| `ci_red` | PR open, checks failed, failure newer than `ci` cursor | `dispatch fix-ci --cursor ci=<run>`; see step 2 and "Notices" |
 | `review_pending` | with `reviews.agent_prs`: checks pass, no approval, head not reviewed | review (see "Reviews") |
 | `review_findings` | with `reviews.agent_prs`: the head's review has findings newer than `review` cursor | classify |
 | `changes_requested` | a trusted reviewer's comments or requested changes newer than `review` cursor | classify |
@@ -537,6 +538,27 @@ already has a `done` review (`reviewed`), the PR is at its limit (`review_limit`
 item), the day's reviews are used up (`daily_limit`), or there is no review or worker capacity (`review_capacity`,
 `capacity`).
 
+## Notices
+
+If the state block has no `notices` key, skip this section: the operator set no notice lately.
+
+`notices` are the operator's notices to workers, newest first: each says something passing has gone wrong outside the
+work, such as an outage of an artifact registry or a service CI needs, with when it was set (`set_at`), until when it
+was or is in force (`until`), and whether it is in force now (`in_force`). Every worker, review, and chore dispatched
+while one is in force hears it in its own prompt, so you never pass it on in `--context`. A notice is the operator's
+word about the world: it changes how you read a failed check, and nothing else. A `ready` ticket is dispatched as usual.
+
+- A unit's failed check is held when its run started between a notice's `set_at` and `until`, and that notice explains
+  the failure. Whether it does is your judgment from the check's output and the notice's words: a dependency download
+  that timed out is explained by "Artifactory is down"; a failed assertion in a test the change touched is not. For a
+  held check, record `wait` with a rationale naming the notice and the check, do not dispatch `fix-ci`, whose attempts
+  never come back, and leave the `ci` cursor where it is. A failure no notice explains is `ci_red` as usual.
+- A held check stays held after its notice ends, until a newer run of that check exists, so a notice ending never sends
+  `fix-ci` at the failure the notice explained. Once there is a newer run, derive the phase from it.
+- Once the notice holding a check is no longer in force and no newer run of that check exists, the check needs a rerun,
+  which canopy cannot start: record `canopy attention <KEY> notice_rerun --repo <the unit> --detail '<the check, its run
+  link, and the notice>'`, every tick until a newer run exists (see "The attention list").
+
 ## Blockers and stacking
 
 Read each candidate's blockers through the tracker: the relations that say another ticket must be finished first (the
@@ -581,9 +603,11 @@ The CLI refuses dispatches of a public ticket that do not name a configured labe
 split's child one other than its own (`unknown_repo`), split fewer than two repositories, a
 started ticket, or a split's child, or dispatch for a ticket already split (`bad_split`), rename a ticket's branch with
 `--slug` (`bad_slug`), exceed capacity (`capacity`), target a ticket with a running worker (`running`), exceed the
-kind's attempt limit in any unit named (`attempt_limit`), are inside a unit's fix-ci cooldown (`cooldown`), or continue
-a branch the journal does not know in a unit named (`no_branch`). It records the refusal as a decision; an
-`attempt_limit` refusal also records the `attempt_limit` attention item. Do not work around a refusal; it is correct.
+kind's attempt limit in any unit named (`attempt_limit`), are inside a unit's fix-ci cooldown (`cooldown`), continue
+a branch the journal does not know in a unit named (`no_branch`), or are a `fix-ci` after the operator set or cleared a
+notice since this tick read the journal (`notice_changed`; the next tick decides with it). It records the refusal as a
+decision; an `attempt_limit` refusal also records the `attempt_limit` attention item. Do not work around a refusal; it
+is correct.
 
 `canopy mirror` refuses a malformed comment id (`bad_comment`), account id (`bad_author`), or time (`bad_time`), an
 empty text (`bad_body`), a reference that is not a ticket (`unsupported`), and mirrors past the tick's limit

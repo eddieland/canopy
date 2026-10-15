@@ -133,8 +133,10 @@ write (HOST_ISOLATION), and its own log and prompt are not its to read back or r
 the log its row names, so a run started before this layout reads its prompt where it was written.
 
 The prompt is the operator's file plus a generated `## Run` section holding one JSON object: chore name, current time,
-run id, the overseer's context, the operator's notes (below), the latest ended run (id, status, end time, summary), the
-latest `ok` run's open findings (id, title, link), so ids can be reused, and the result contract. It is written to
+run id, the overseer's context, the operator's notes (below), the operator's notice to workers in force (`notice`, null
+without one, §8), the latest ended run (id, status, end time, summary), the latest `ok` run's open findings (id, title,
+link), so ids can be reused, and the result contract. A chore hears the notice there, in the harness's section, which
+the operator's file cannot drop, so a chore needs no placeholder for it. It is written to
 `<state_dir>/chore-runs/<name>/<run_id>.prompt`, readable only by the operator.
 
 Result contract, one JSON line, last line of the agent's text (§13):
@@ -630,8 +632,9 @@ failed lease deletes the row and refuses as `no_slot`), renders the prompt (`bad
    `crashed`. A running review's lease is never returned as stale.
 
 The prompt is `prompts/reviewer.md` (or the override), with the PR URL, the commit, the checkout path, the ticket key
-and tracker provider for an agent PR, `review.low_impact`, the attempt number and limit, the overseer's context, and
-the result contract. The reviewer:
+and tracker provider for an agent PR, `review.low_impact`, the attempt number and limit, the overseer's context, the
+operator's notice to workers in force (`{{NOTICE}}`, `None.` without one; an override without it is `bad_prompt` while
+one is in force, §8), and the result contract. A failed check the notice explains is not a finding. The reviewer:
 
 - reads the PR's description and discussion, the diff, as much of the checkout as it needs, and for an agent PR the
   ticket;

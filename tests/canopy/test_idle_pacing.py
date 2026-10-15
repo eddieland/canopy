@@ -590,10 +590,12 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
         ("stop", "starts", "a ticket started or stopped ended the wait"),
         ("grant attempts", "grant", "a grant ended the wait"),
         ("grant reviews", "grant", "a grant ended the wait"),
+        ("set a notice", "notice", "a notice to workers set or cleared ended the wait"),
+        ("clear a notice", "notice", "a notice to workers set or cleared ended the wait"),
     ],
 )
 @pytest.mark.parametrize("pacing_on", [True, False], ids=["pacing on", "pacing off"])
-def test_the_operators_start_stop_and_grant_end_the_wait(
+def test_the_operators_acts_end_the_wait(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
     agent_log: Path,
@@ -606,6 +608,8 @@ def test_the_operators_start_stop_and_grant_end_the_wait(
     ctx = context(canopy_env)
     if act == "stop":
         assert main(["start", KEY]) == 0  # before the loop: its first tick sees it
+    elif act == "clear a notice":
+        assert main(["notice", "CI is down."]) == 0
     time = FakeTime()
 
     def at_first_wait() -> None:
@@ -615,6 +619,10 @@ def test_the_operators_start_stop_and_grant_end_the_wait(
             assert main([act, KEY]) == 0
         elif act == "grant attempts":
             attempts_granted(ctx.conn, 0)
+        elif act == "set a notice":
+            assert main(["notice", "CI is down."]) == 0
+        elif act == "clear a notice":
+            assert main(["notice", "--clear"]) == 0
         else:
             reviews_granted(ctx.conn, 0)
 

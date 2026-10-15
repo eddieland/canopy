@@ -319,7 +319,7 @@ def test_an_item_about_a_pr_no_ticket_owns_names_the_pr(ctx: Context) -> None:
 
 def test_the_web_channel_pauses_and_resumes_the_loop_as_canopy_pause_and_resume_do(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
-    assert c.get("/api/loop").json() == {"paused": None}
+    assert c.get("/api/loop").json() == {"paused": None, "notice": None}
     # A write without the session's token is refused, as every other write is.
     assert c.post("/api/loop/pause", headers={"origin": ORIGIN}).status_code == 403
     assert pause.paused(ctx.conn) is None
@@ -334,7 +334,10 @@ def test_the_web_channel_pauses_and_resumes_the_loop_as_canopy_pause_and_resume_
     assert again == {**paused, "already": True}
     assert c.get("/api/loop").json() == paused["loop"]
 
-    assert c.post("/api/loop/resume", headers=headers).json() == {"already": False, "loop": {"paused": None}}
+    assert c.post("/api/loop/resume", headers=headers).json() == {
+        "already": False,
+        "loop": {"paused": None, "notice": None},
+    }
     assert pause.paused(ctx.conn) is None
     assert c.post("/api/loop/resume", headers=headers).json()["already"] is True
 

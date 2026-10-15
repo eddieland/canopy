@@ -126,7 +126,7 @@ def test_the_shipped_reviewer_prompt_renders_completely(canopy_env: CanopyEnv) -
         "TIMEOUT_MINUTES": "20",
         "CONTRACT": "{}",
     }
-    text = prompts.render(cfg, prompts.REVIEWER, values, required=prompts.REQUIRED_REVIEWER)
+    text = prompts.render_reviewer(cfg, values)
     assert "{{" not in text
     assert "Post nothing anywhere" in text
 
@@ -138,7 +138,7 @@ def test_a_reviewer_override_must_name_the_commit(canopy_env: CanopyEnv) -> None
     cfg = load(canopy_env.root, canopy_env.user_file)
     values = {"PR_URL": "u", "CHECKOUT": "c", "SHA": "s", "RUN_ID": "1"}
     with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{SHA\}\}$"):
-        prompts.render(cfg, prompts.REVIEWER, values, required=prompts.REQUIRED_REVIEWER)
+        prompts.render_reviewer(cfg, values)
 
 
 @pytest.mark.parametrize(

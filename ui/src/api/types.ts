@@ -63,8 +63,12 @@ export type SpendGroup = Schemas['SpendGroup']
 export type Tick = Schemas['Tick']
 /** The latest tick, or none before the first, and the newest message a tick has acknowledged. */
 export type LastTick = Schemas['LastTick']
-/** Whether the operator paused the loop: no tick starts until it is resumed. */
+/** Whether the operator paused the loop (no tick starts until it is resumed), and the notice to workers in force. */
 export type LoopState = Schemas['LoopState']
+/** The operator's notice to workers in force (DESIGN §8): what it says, when it was set, and when it lapses. */
+export type WorkerNotice = Schemas['WorkerNotice']
+/** What setting or clearing a notice did, and the state it left. */
+export type NoticeChanged = Schemas['NoticeChanged']
 /** The operator paused the loop (DESIGN §6): since when, and through which channel. */
 export type Pause = Schemas['Pause']
 /** What a pause or a resume did: whether the loop was already so, and the state it left. */

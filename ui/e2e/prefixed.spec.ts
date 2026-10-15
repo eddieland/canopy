@@ -233,6 +233,38 @@ test('the header pauses the loop and resumes it, as canopy pause and resume do',
     await expect(control).not.toContainText('paused')
 })
 
+test('settings sets a notice to workers, every page shows it, and its banner clears it', async ({ page }) => {
+    await page.goto('settings')
+    await expect(page.getByTestId('worker-notice')).toHaveCount(0)
+    const set = page.getByTestId('notice-set')
+    await expect(set).toBeDisabled()
+    await page.getByTestId('notice-text').fill('Artifactory is down: CI builds will likely fail.')
+    await page.getByTestId('notice-lasts-1h').click()
+    await set.click()
+    await expect(page.getByText('Notice set: runs dispatched from now on hear it until it lapses.')).toBeVisible()
+    await expect(page.getByTestId('notice-text')).toHaveValue('')
+    const banner = page.getByTestId('worker-notice')
+    await expect(banner).toContainText('Notice to workers: Artifactory is down: CI builds will likely fail.')
+    await expect(banner.getByText(/^Every run dispatched until /u)).toHaveAttribute('title', /from the web UI$/u)
+
+    // The notice is the journal's: another page reads it back, as the next dispatch does.
+    await page.goto('runs')
+    await expect(banner).toBeVisible()
+    await banner.getByRole('button', { name: 'Clear' }).click()
+    await expect(banner).toHaveCount(0)
+    await page.reload()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
+    await expect(banner).toHaveCount(0)
+})
+
+test('an oversized notice is refused, naming its guard', async ({ page }) => {
+    await page.goto('settings')
+    await page.getByTestId('notice-text').fill('x'.repeat(1025))
+    await page.getByTestId('notice-set').click()
+    await expect(page.getByRole('alert')).toContainText('refused (too_long)')
+    await expect(page.getByTestId('worker-notice')).toHaveCount(0)
+})
+
 test("a review's finding is dismissed on its card, and kept again", async ({ page }) => {
     await page.goto('reviews/4')
     const card = page.locator('#finding-2')

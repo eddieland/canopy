@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, outbox, prompts, treehouse
+from canopy.core import contract, db, notice, outbox, prompts, treehouse
 from canopy.core import review_result as result
 from canopy.infra import lock, logs, procs
 from canopy.reviews import grants
@@ -185,7 +185,7 @@ def _spawn(
     if run is None:
         raise RuntimeError(f"review run {run_id} vanished")
     try:
-        prompt = prompts.render(cfg, prompts.REVIEWER, values, required=prompts.REQUIRED_REVIEWER)
+        prompt = prompts.render_reviewer(cfg, values, notice=notice.for_prompt(ctx.conn))
     except (OSError, prompts.PromptError) as e:
         # Nothing started, so it costs the PR none of its reviews; the caller returns the slot.
         db.delete_review_run(ctx.conn, run_id)

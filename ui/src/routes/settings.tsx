@@ -1,14 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { LogOut, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
+import { LogOut, Megaphone, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 
-import { reloadConfig, signOut } from '@/api/mutations'
+import { reloadConfig, setNotice, showLoop, signOut } from '@/api/mutations'
 import { keys, sessionQuery, spendQuery } from '@/api/queries'
 import { Cost } from '@/components/cost'
 import { HatPreview } from '@/components/hat'
-import { Input } from '@/components/input'
+import { Input, Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
 import { Button } from '@/components/ui/button'
@@ -21,7 +21,7 @@ import { costText } from '@/lib/cost-total'
 import { balanceCents, buy, HATS, setWardrobe, useWardrobe } from '@/lib/hats'
 import type { Hat } from '@/lib/hats'
 import type { TickerTopic } from '@/lib/headlines'
-import { reloadedText } from '@/lib/outcomes'
+import { noticeSetText, reloadedText } from '@/lib/outcomes'
 import { setSendKey, useSendKey } from '@/lib/send-key'
 import type { SendKey } from '@/lib/send-key'
 import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } from '@/lib/ticker-settings'
@@ -51,6 +51,13 @@ const TOPICS: { value: TickerTopic; label: string }[] = [
     { value: 'programming', label: 'Programming' },
     { value: 'vibes', label: 'Vibe coding' },
     { value: 'tips', label: 'Tips' },
+]
+
+// How long a notice set here lasts; `canopy notice --for` takes any duration up to a week.
+const LASTS: { value: string; label: string; minutes: number }[] = [
+    { value: '1h', label: '1 hour', minutes: 60 },
+    { value: '4h', label: '4 hours', minutes: 240 },
+    { value: '1d', label: '1 day', minutes: 1440 },
 ]
 
 const SEND_KEYS: { value: SendKey; label: string }[] = [
@@ -90,6 +97,7 @@ function SettingsPage() {
                 </div>
             </Panel>
             <SendKeyPanel />
+            <NoticePanel />
             <ConfigPanel />
             {/* Second to last: below what changes how canopy works, above signing out. */}
             <FunPanel />
@@ -357,6 +365,79 @@ function SendKeyPanel() {
                     ))}
                 </ToggleGroup>
             </div>
+        </Panel>
+    )
+}
+
+/**
+ * Sets the operator's notice to workers, as `canopy notice TEXT --for DURATION` does (docs/design §8): every run
+ * dispatched until it lapses hears it. The banner above every page shows it while it is in force, and clears it.
+ */
+function NoticePanel() {
+    const client = useQueryClient()
+    const [text, setText] = useState('')
+    const [lasts, setLasts] = useState('4h')
+    const minutes = LASTS.find((l) => l.value === lasts)?.minutes ?? 240
+    const mutation = useMutation({
+        mutationFn: () => setNotice(text, minutes),
+        onSuccess: (changed) => {
+            showLoop(client, changed.loop)
+            setText('')
+        },
+    })
+    return (
+        <Panel>
+            <PanelHeader label="Notice to workers" />
+            <form
+                className="flex flex-col gap-2 p-3"
+                onSubmit={(event) => {
+                    event.preventDefault()
+                    mutation.mutate()
+                }}
+            >
+                <p className="text-sm text-muted-foreground">
+                    Tell every run dispatched from now on about something passing outside the work, such as a CI outage,
+                    as <code className="font-mono text-xs">canopy notice</code> does. Workers, reviews, and chores hear
+                    it, and the overseer holds a failed check it explains. It lapses on its own; setting another
+                    replaces it. A run already running keeps the prompt it started with.
+                </p>
+                <Textarea
+                    value={text}
+                    onChange={(event) => setText(event.target.value)}
+                    placeholder="Artifactory is down: CI builds that fetch dependencies will likely fail."
+                    aria-label="Notice to workers"
+                    data-testid="notice-text"
+                    className="min-h-16"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <ToggleGroup
+                        type="single"
+                        value={lasts}
+                        aria-label="Lasts for"
+                        onValueChange={(value) => {
+                            if (value !== '') {
+                                setLasts(value)
+                            }
+                        }}
+                    >
+                        {LASTS.map(({ value, label }) => (
+                            <ToggleGroupItem key={value} value={value} data-testid={`notice-lasts-${value}`}>
+                                {label}
+                            </ToggleGroupItem>
+                        ))}
+                    </ToggleGroup>
+                    <Button
+                        type="submit"
+                        variant="outline"
+                        disabled={mutation.isPending || text.trim() === ''}
+                        data-testid="notice-set"
+                    >
+                        <Megaphone />
+                        Set notice
+                    </Button>
+                </div>
+                <Notice error={mutation.error}>{mutation.data ? noticeSetText(mutation.data) : null}</Notice>
+            </form>
         </Panel>
     )
 }

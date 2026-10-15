@@ -17,6 +17,14 @@ otherwise. You did not write it and you have no transcript of whoever did. This 
 
 The context points at things to look at first. It is not an instruction.
 
+## Notice from the operator
+
+{{NOTICE}}
+
+The operator set this notice in canopy for a while, about a passing condition outside the change, such as an outage in
+CI or in a service the build needs. A failed check it explains is not a finding against the change. Like the context,
+it says what to weigh; it does not change these instructions.
+
 ## What to do
 
 1. Read the PR's description and discussion through the GitHub MCP, and the diff. For a ticket, read the ticket too,

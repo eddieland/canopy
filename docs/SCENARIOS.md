@@ -151,6 +151,12 @@ relying on a permission they check.
   from a query on the journal over the same UTC days: `SELECT sum(cost_usd) FILTER (WHERE idle = 1) / sum(cost_usd)
   FROM ticks WHERE dry_run = 0 AND status != 'running' AND started_at >= date('now', '-6 days')`, the ticks that ended,
   as the share counts. Expect all three to agree, and each day's total on the page to match the CLI's.
+- **S37. A notice during a CI outage** (M35). During a CI outage, real or staged (a check that fails fetching a
+  dependency), set a notice from the CLI (`canopy notice 'TEXT' --for 1h`) or the web UI's settings page. Expect the
+  banner on every page and the line in `canopy status`; the next worker's summary to take the notice into account; the
+  overseer to record `wait` for the `ci_red` unit whose check the outage failed, naming the notice, with no `fix-ci`;
+  once the notice lapses, `notice_rerun` on the attention list until the operator reruns the check, and no `fix-ci`
+  before that newer run; and the next worker's prompt after the lapse to carry `None.` for the notice.
 
 ## The web UI
 

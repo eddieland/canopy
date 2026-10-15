@@ -25,9 +25,9 @@ Everything below is for an agent helping the operator in their own session.
 - `canopy dispatch`, `canopy decide`, `canopy attention`, `canopy ticket set`, and `canopy mirror` are the overseer's
   tools. They refuse to run outside a tick, by design. There is no way to dispatch a ticket by hand; the way to get a
   ticket worked is its queue label, or `canopy start` (below).
-- `canopy start`, `stop`, `reply`, `forget`, `grant`, `pause`, and `resume` are the operator's own: they authorize work,
-  answer workers, and hold the loop. Suggest them; run one only when the operator asks you to, with the words they gave
-  you.
+- `canopy start`, `stop`, `reply`, `forget`, `grant`, `pause`, `resume`, and `notice` are the operator's own: they
+  authorize work, answer workers, hold the loop, and tell every later run about an outage. Suggest them; run one only
+  when the operator asks you to, with the words they gave you.
 - Never edit the journal (`canopy.db`) or anything under the state directory. Read it with `sqlite3 -readonly`.
 - The journal is what the loop saw and did. The tracker and GitHub are the truth about tickets and PRs. When they
   disagree, the journal is stale, not wrong about the world.
@@ -53,6 +53,7 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy grant KEY KIND` | Lets a ticket at its attempt limit have one more run of KIND; `--runs N` for more. |
 | `canopy grant URL review` | Lets the PR at URL, at `max_reviews_per_pr`, have one more review; `--runs N` for more. |
 | `canopy pause`, `canopy resume` | The loop starts no tick until resumed; running workers keep going. `p` in the loop too. |
+| `canopy notice 'TEXT' [--for 4h]` | Every run dispatched until it lapses hears TEXT, such as a CI outage; `--clear` lifts it. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run; `--no-record` records nothing. |
@@ -145,6 +146,7 @@ no dismissing one, except a chore's finding (below). Reasons:
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong. Read the run log the detail names. |
 | `chore_failed` | A chore's latest run could not check (failed, timed out, crashed): read its log. |
 | `review_failed`, `review_limit` | A PR's review failed or hit its limit. `canopy review show` lists them; at the limit, `canopy grant URL review`. |
+| `notice_rerun` | A check failed during an outage your notice named, and the notice has ended: rerun the check. |
 | `repo_missing` | A repository in the workspace map has no clone: run `canopy workspace sync`. |
 | `canopy_unavailable` | `canopy --version` failed where the loop runs, so the overseer did not run: fix the install or PATH. |
 | `multi_repo` | Independent pieces in several repositories, or a split not done: decide. Ask for a split below. |

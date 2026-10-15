@@ -923,11 +923,53 @@ class Pause(_Model):
     """How it was paused."""
 
 
+type NoticeChannel = Annotated[Literal["cli", "web"], Field(description="How the operator set the notice.")]
+
+
+class WorkerNotice(_Model):
+    """The operator's notice to workers in force (`canopy notice`, DESIGN §8).
+
+    Every run dispatched while it is in force hears it, and the overseer holds a failed check it explains.
+    """
+
+    text: str
+    """What the operator told the workers: the operator's own words."""
+    since: datetime
+    """When it was set."""
+    lapses_at: datetime
+    """When it lapses, unless the operator clears it or sets another first."""
+    channel: NoticeChannel
+    """How it was set."""
+
+
 class LoopState(_Model):
-    """Whether the loop is paused: no tick starts until the operator resumes it. A tick running when paused finishes."""
+    """Whether the loop is paused, and the notice to workers in force.
+
+    While paused, no tick starts until the operator resumes it; a tick running when paused finishes.
+    """
 
     paused: Pause | None = None
     """The pause; None when the loop is not paused."""
+    notice: WorkerNotice | None = None
+    """The notice to workers in force; None without one."""
+
+
+class NoticeRequest(_Model):
+    """A notice to set, as `canopy notice TEXT --for DURATION` sets it, replacing the one in force."""
+
+    text: Annotated[str, Field(max_length=4096)]
+    """What to tell the workers. Bounded again in code at 1024 bytes, after stripping (DESIGN §8)."""
+    minutes: Annotated[int | None, Field(ge=1, le=10080)] = None
+    """How long it lasts, in minutes; four hours when None."""
+
+
+class NoticeChanged(_Model):
+    """What setting or clearing a notice did, and the state it left."""
+
+    already: bool
+    """For a clear, whether no notice was in force, so nothing changed; always false for a set."""
+    loop: LoopState
+    """The state it left."""
 
 
 class PauseChanged(_Model):
@@ -1354,12 +1396,17 @@ class TickUpdated(_Model):
 
 
 class LoopUpdated(_Model):
-    """The loop was paused or resumed. The payload is what `GET /loop` returns."""
+    """The loop was paused or resumed, or a notice to workers was set, cleared, or lapsed.
+
+    The payload is what `GET /loop` returns.
+    """
 
     type: Literal["loop.updated"] = "loop.updated"
     """What the event is."""
     paused: Pause | None = None
     """The pause; None when the loop is not paused."""
+    notice: WorkerNotice | None = None
+    """The notice to workers in force; None without one."""
 
 
 class StreamEvent(

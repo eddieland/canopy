@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from canopy.chores import reconcile as chore_reconcile
-from canopy.core import agent_output, chore_view, conversation, db, definitions, treehouse
+from canopy.core import agent_output, chore_view, conversation, db, definitions, notice, treehouse
 from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.infra import lock, logs, procs, resources
@@ -118,6 +118,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         split_children=db.open_split_children(ctx.conn),
         chores=chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now),
         reviews=review_view.state_section(ctx.conn, ctx.config, now),
+        notices=notice.recent(ctx.conn, now),
         private=private,
         operator=operator,
         mirror_delimiter=conversation.body_delimiter(),
