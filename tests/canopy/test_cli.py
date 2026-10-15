@@ -21,6 +21,15 @@ def test_help(capsys: pytest.CaptureFixture[str], argv: list[str]) -> None:
         assert f"  {command} " in out
 
 
+@pytest.mark.parametrize("group", ["chore", "review", "ticket", "workspace", "notify", "sandbox"])
+def test_a_group_without_a_command_prints_its_help(capsys: pytest.CaptureFixture[str], group: str) -> None:
+    assert main([group]) == 0
+    captured = capsys.readouterr()
+    assert captured.out.startswith(f"Usage: canopy {group} ")
+    assert "Commands:" in captured.out
+    assert captured.err == ""
+
+
 def test_the_cli_starts_without_the_web_server() -> None:
     # The overseer and workers run `canopy` many times a tick; fastapi and uvicorn would double each start-up.
     code = "import sys, canopy.cli.main; print(sorted({'fastapi', 'uvicorn'} & set(sys.modules)))"
