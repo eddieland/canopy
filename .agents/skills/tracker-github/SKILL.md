@@ -15,7 +15,7 @@ To call an issue tool, strip the prefix and use the number. Do not use `#123` as
 
 ## Finding tickets
 
-`tracker.query` is GitHub issue search syntax, for example `repo:owner/name is:issue is:open`, or
+The state block's `tracker.query` is GitHub issue search syntax, for example `repo:owner/name is:issue is:open`, or
 `repo:owner/name is:issue is:open label:agent-ready-yourname` when the operator narrows it to their own labels.
 Pull requests are issues in GitHub's API: skip any result that is a pull request, even if the query forgot `is:issue`.
 
