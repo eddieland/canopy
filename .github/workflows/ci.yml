@@ -98,7 +98,7 @@ jobs:
         if: needs.changes.outputs.code != 'false'
         run: make check
 
-  # The sandbox canary (HOST_ISOLATION §6): the shipped wrapper and policy templates under the real srt, with
+  # The sandbox canary (DESIGN §24, The canary): the shipped wrapper and policy templates under the real srt, with
   # bubblewrap on Linux and sandbox-exec on macOS, set up the way docs/SANDBOX.md tells the operator to.
   sandbox-canary:
     runs-on: ${{ matrix.os }}

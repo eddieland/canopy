@@ -237,7 +237,7 @@ the operator, posted nowhere (D114), with no worker and no ticket.
   directory, its permissions, and the D044 guard are written in OpenCode's terms, so a second runtime needs its own
   definitions set and its own shadowing check (ROADMAP's deferred list).
 - **N5. Docker or remote sandbox runtimes later.** Deferred. A local OS sandbox, opt-in, is ROADMAP M26
-  (`HOST_ISOLATION.md`). A remote sandbox runs agents off the operator's machine, so it would change H1 and needs its own
+  (DESIGN §24). A remote sandbox runs agents off the operator's machine, so it would change H1 and needs its own
   decision first.
 
 ## Non-goals for now

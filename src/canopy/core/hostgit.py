@@ -1,4 +1,4 @@
-"""git as the harness runs it on the host, and the `.git` link of a slot (DESIGN §8, HOST_ISOLATION §5).
+"""git as the harness runs it on the host, and the `.git` link of a slot (DESIGN §8, §24).
 
 Every slot of a pool shares one git directory with the others and with the primary clone, and a worker can write to it.
 git the harness runs there afterwards runs on the host, outside any worker: in `_run` after the worker, in the next run
@@ -6,7 +6,7 @@ or review on the pool, or in a sync. So every git the harness runs goes through 
 otherwise run from that directory unasked: hooks and the filesystem monitor. Submodule fetches and the `ext::` transport
 are off too, as a URL from that directory's config could name either. A command the config names for a filter driver
 or a transport (`remote.<name>.uploadpack`) still runs; only a git directory the worker cannot write closes that
-(HOST_ISOLATION §4.2).
+(DESIGN §24).
 
 A worktree slot's `.git` is a file naming its git directory. A worker that rewrites it points host-side git at a
 directory of its own, whose hooks and config the flags above do not cover, so `_run` reads it before the run and puts

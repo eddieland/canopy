@@ -1,4 +1,4 @@
-"""`canopy-sandbox`, the prefix a sandboxed run's command starts with (HOST_ISOLATION §4.1).
+"""`canopy-sandbox`, the prefix a sandboxed run's command starts with (DESIGN §24).
 
 The fake `srt` on PATH records the policy and environment the wrapper hands it, then runs the command unsandboxed.
 These tests check what the wrapper asks of the sandbox, not that the sandbox holds: that is the canary's job (§6).
@@ -196,7 +196,7 @@ def test_a_joint_runs_desk_names_every_worktree_it_links_to(sandbox: Sandbox, tm
 def test_a_repository_a_tool_keeps_outside_the_worktree_keeps_its_own_objects(
     sandbox: Sandbox, tmp_path: Path, script: str
 ) -> None:
-    """A cache a tool keeps as a git repository (HOST_ISOLATION §4.2): with git's variables set for every process, its
+    """A cache a tool keeps as a git repository (DESIGN §24): with git's variables set for every process, its
     objects went to the run's directory and were gone with it. The worker's own commit still lands only there."""
     primary, slot = linked_worktree(tmp_path, "repo")
     objects = objects_dir(tmp_path)

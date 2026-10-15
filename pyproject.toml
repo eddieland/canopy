@@ -46,7 +46,7 @@ canopy = "canopy.cli.main:main"
 canopy-notify-desktop = "canopy.notify.desktop:main"
 # Its own distribution, a workspace member (D041); listed so the install that puts canopy on PATH puts it there too.
 canopy-notify-slack = "canopy_notify_slack:main"
-# The sandbox wrapper, a workspace member too: the prefix on a sandboxed run's command template (HOST_ISOLATION §4.1).
+# The sandbox wrapper, a workspace member too: the prefix on a sandboxed run's command template (DESIGN §24).
 canopy-sandbox = "canopy_sandbox:main"
 
 [project.urls]
@@ -182,7 +182,7 @@ banned-from = ["unittest.mock"]
 "src/canopy/cli/*" = ["DOC201", "DOC501"]
 # The fakes are standalone scripts that talk on stdout and stderr.
 "tests/fakes/*" = ["T201"]
-# The sandbox wrapper is a separate program, not canopy (HOST_ISOLATION §4.1): it runs git and srt, and reports on
+# The sandbox wrapper is a separate program, not canopy (DESIGN §24): it runs git and srt, and reports on
 # stderr.
 "packages/canopy-sandbox/**" = ["T201", "TID251"]
 # The wheel's build hook runs npm (D079); it is part of packaging, not of canopy.

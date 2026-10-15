@@ -1,7 +1,7 @@
 {
   "#": [
     "canopy-sandbox's template for review_cmd, canopy's reviewer, which reads a PR's checkout and writes nothing",
-    "(HOST_ISOLATION §4.4). canopy sandbox setup copies it to ~/.config/canopy/sandbox/review.json; fill in your hosts",
+    "(DESIGN §24). canopy sandbox setup copies it to ~/.config/canopy/sandbox/review.json; fill in your hosts",
     "there. Keys starting with # are comments; @NAME@ strings are the paths canopy-sandbox fills in for each run."
   ],
   "network": {

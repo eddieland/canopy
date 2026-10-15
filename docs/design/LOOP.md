@@ -681,19 +681,18 @@ Every git the harness runs, here, in a review (§21), and in `canopy init` and `
 -c protocol.ext.allow=never` (D107). A slot shares its git directory with the pool and the primary clone, and a worker
 can write there, so without them a hook or monitor it planted would run on the host, outside the worker, in step 2 or
 5 or in a later run or review. A command named in that directory's config (a filter driver,
-`remote.<name>.uploadpack`) still runs; closing that takes a git directory the worker cannot write (HOST_ISOLATION
-§4.2). The worker's own git is unaffected, so its push runs the repository's hooks; step 5's fallback push runs none,
-so a repository whose push needs one (Git LFS's `pre-push`) depends on the worker pushing.
+`remote.<name>.uploadpack`) still runs; closing that takes a git directory the worker cannot write (§24, Git state).
+The worker's own git is unaffected, so its push runs the repository's hooks; step 5's fallback push runs none, so a
+repository whose push needs one (Git LFS's `pre-push`) depends on the worker pushing.
 
-The object directory is for a sandboxed worker (HOST_ISOLATION §4.2), which cannot write the git directory its slot
+The object directory is for a sandboxed worker (§24, Git state), which cannot write the git directory its slot
 shares, objects included. `_run` passes it as `CANOPY_GIT_OBJECTS` and never sets git's own variables for the worker:
 those reach every git its tools run, so a commit in any other repository would land there and break that repository
 once the directory goes. A sandbox wrapper, which knows its worker is sandboxed, points git at it, in the run's
-worktrees only (HOST_ISOLATION §4.2). An unsandboxed
-worker ignores it, the directory stays empty, and steps 5 and 6 run as if it did not exist. Rejected: deleting the
-directory without tidying the slots (git in the slot, and `gc` in the primary clone, then fail); letting a sandboxed
-worker write the shared object directory (it could delete objects other slots need); a temporary directory (reconcile
-could not find it after a SIGKILL).
+worktrees only. An unsandboxed worker ignores it, the directory stays empty, and steps 5 and 6 run as if it did not
+exist. Rejected: deleting the directory without tidying the slots (git in the slot, and `gc` in the primary clone, then
+fail); letting a sandboxed worker write the shared object directory (it could delete objects other slots need); a
+temporary directory (reconcile could not find it after a SIGKILL).
 
 Worker result contract, one JSON line, last line of the worker's text (§13):
 
@@ -841,7 +840,7 @@ Three steps, all the operator's, in the order they run:
 
 `setup_cmd` runs the branch's code (a lockfile's install scripts, a generator) on the operator's machine, outside the
 agent runtime's permissions. It is the code the worker's own shell runs a moment later, but outside any sandbox around
-`worker_cmd`, so it is wrapped the same way (HOST_ISOLATION §4.4, TRUST_MODEL T4). A broken setup crashes every run it
+`worker_cmd`, so it is wrapped the same way (§24, TRUST_MODEL T4). A broken setup crashes every run it
 meets, each spending an attempt (D030) and raising `crashed` (§14), whose note names it.
 
 ### Bazel
