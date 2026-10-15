@@ -161,6 +161,26 @@ export function PanelScroll({ label, className, ...props }: ComponentProps<'sect
 }
 
 /**
+ * A thread that grows without bound (a ticket's conversation, a chore's notes), scrolling inside its panel past most of
+ * the window's height, so its reply form stays in reach under it. It opens at `end`, the thread's newest end, and keeps
+ * to it as the thread grows, while the operator is there: scrolled away to read, it stays where they put it. Flipping
+ * the thread's order takes it to the new newest end; so does a new `key`, such as another ticket's.
+ */
+export function ThreadScroll({ label, end, children }: { label: string; end: 'top' | 'bottom'; children: ReactNode }) {
+    return (
+        <PanelScroll
+            label={label}
+            className="max-h-[max(20rem,60dvh)]"
+            ref={(region) => (region === null ? undefined : keepToEnd(region, end))}
+            data-testid="thread-scroll"
+        >
+            {/* One box around the thread, so a change to any part of it is a change to its size. */}
+            <div>{children}</div>
+        </PanelScroll>
+    )
+}
+
+/**
  * What a list or a page says when it has nothing to show, in muted text: `no X yet`, then one clause on why or what to
  * do. A `row` stands where a panel's list would be, as its one row; a `panel` fills a page's main panel. Never an
  * error: that is a `Notice`.
@@ -205,4 +225,35 @@ export function PanelSkeleton({ rows = 2, className }: { rows?: number; classNam
             ))}
         </div>
     )
+}
+
+// How near its end, in pixels, a thread counts as at it: a bubble's gap, so a scroll that stops just short still keeps.
+const NEAR_END = 16
+
+/** Scrolls `region` to `end` now and whenever what is in it changes size while it is there; returns the cleanup. */
+function keepToEnd(region: HTMLElement, end: 'top' | 'bottom'): () => void {
+    let atEnd = true
+    const toEnd = () => {
+        region.scrollTop = end === 'top' ? 0 : region.scrollHeight
+    }
+    const onScroll = () => {
+        const away = end === 'top' ? region.scrollTop : region.scrollHeight - region.clientHeight - region.scrollTop
+        atEnd = away <= NEAR_END
+    }
+    // It runs after layout and before paint, so a message that arrives at the end is never drawn out of view first.
+    const observer = new ResizeObserver(() => {
+        if (atEnd) {
+            toEnd()
+        }
+    })
+    observer.observe(region)
+    for (const child of region.children) {
+        observer.observe(child)
+    }
+    region.addEventListener('scroll', onScroll, { passive: true })
+    toEnd()
+    return () => {
+        observer.disconnect()
+        region.removeEventListener('scroll', onScroll)
+    }
 }

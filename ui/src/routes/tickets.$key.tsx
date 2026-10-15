@@ -12,7 +12,7 @@ import { Decisions } from '@/components/decisions'
 import { Field, Fields } from '@/components/fields'
 import { GrantLimits } from '@/components/grant-limits'
 import { OrderToggle } from '@/components/order-toggle'
-import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton, ThreadScroll } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReplyForm } from '@/components/reply-form'
 import { RunsTable } from '@/components/runs-table'
@@ -136,17 +136,19 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                             <span className="readout text-xs text-muted-foreground">{messages.length}</span>
                         </span>
                     </PanelHeader>
-                    {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
-                    {conversationOrder === 'newest' && <WorkingNow ticketKey={ticket.key} />}
-                    {messages.length === 0 ? (
-                        <Empty>no messages yet: what you and its workers say shows here</Empty>
-                    ) : (
-                        <Conversation
-                            messages={ordered('conversation', conversationOrder, messages)}
-                            waiting={ticket.awaiting}
-                        />
-                    )}
-                    {conversationOrder === 'oldest' && <WorkingNow ticketKey={ticket.key} />}
+                    <ThreadScroll label="Conversation" end={conversationOrder === 'oldest' ? 'bottom' : 'top'}>
+                        {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
+                        {conversationOrder === 'newest' && <WorkingNow ticketKey={ticket.key} />}
+                        {messages.length === 0 ? (
+                            <Empty>no messages yet: what you and its workers say shows here</Empty>
+                        ) : (
+                            <Conversation
+                                messages={ordered('conversation', conversationOrder, messages)}
+                                waiting={ticket.awaiting}
+                            />
+                        )}
+                        {conversationOrder === 'oldest' && <WorkingNow ticketKey={ticket.key} />}
+                    </ThreadScroll>
                     <ReplyForm
                         key={ticket.key}
                         target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}

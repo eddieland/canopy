@@ -397,6 +397,12 @@ list, an empty state, or a skeleton by hand.
   scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
   so the keyboard scrolls it too. A list that is its page's main content (the runs page, a tick's decisions) does
   not: the page scrolls instead.
+- **A thread scrolls inside its panel too** (`ThreadScroll`): a ticket's conversation, on its page and in the attention
+  item, and a chore's notes. Past 60% of the window's height (never less than `20rem`) the messages scroll between the
+  panel's header and the reply form, so a long thread never pushes the form a page away. It opens at its newest end,
+  the bottom oldest first and the top flipped, as a chat does, and keeps to it as messages and the working run arrive,
+  while the operator is within a bubble's gap of it; scrolled away to read, it stays where they put it. A flip, or
+  another ticket or chore in the inbox, opens it at the newest end again.
 - **The runs page is a row per ticket** (`TicketRunsTable`, `byTicket` in `src/lib/run-state.ts`): the ticket's latest
   run, which says where it stands, and under it `N earlier runs`, a toggle in the accent that opens the runs before it,
   newest first, each one line in the row's own columns (a `ListRow` of the same kind): its state, the first line of

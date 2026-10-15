@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { settled, signIn } from './helpers.ts'
+import { padMessages, settled, signIn } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -42,4 +42,23 @@ test("a ticket's conversation ends on the run working it now, and only while one
     await settled(page)
     await expect(page.getByTestId('conversation')).toBeVisible()
     await expect(page.getByTestId('working-now')).toBeHidden()
+})
+
+test('a long conversation scrolls in its panel, opening at its newest end, which a flip moves', async ({ page }) => {
+    await padMessages(page, 'ABC-102', 30)
+    await page.goto('tickets/ABC-102')
+    await settled(page)
+    const region = page.getByRole('region', { name: 'Conversation' })
+    const reply = page.getByTestId('ticket-conversation').getByRole('textbox')
+    // It scrolls on its own, at its end, and the newest message shows on one screen with the reply form under it.
+    expect(await region.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
+    await expect(region).toHaveJSProperty('scrollTop', await region.evaluate((el) => el.scrollHeight - el.clientHeight))
+    await reply.scrollIntoViewIfNeeded()
+    await expect(reply).toBeInViewport()
+    await expect(page.getByTestId('message-1029')).toBeInViewport()
+    await expect(page.getByTestId('message-1000')).not.toBeInViewport()
+
+    await page.getByTestId('order-conversation').click()
+    await expect(region).toHaveJSProperty('scrollTop', 0)
+    await expect(page.getByTestId('message-1029')).toBeInViewport()
 })
