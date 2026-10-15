@@ -77,6 +77,22 @@ def test_completion_completes_commands(capsys: pytest.CaptureFixture[str]) -> No
     assert complete(capsys, "canopy work") == ["plain,workspace"]
 
 
+def test_completion_leaves_out_the_overseers_commands(capsys: pytest.CaptureFixture[str]) -> None:
+    commands = complete(capsys, "canopy ")
+    assert "plain,status" in commands
+    for overseers in ("attention", "decide", "dispatch", "mirror", "ticket", "_run", "_chore", "_review"):
+        assert f"plain,{overseers}" not in commands
+    assert complete(capsys, "canopy chore ") == ["plain,try"]
+    assert complete(capsys, "canopy review ") == ["plain,show"]
+    assert complete(capsys, "canopy ticket ") == []
+
+
+def test_help_still_lists_the_overseers_commands(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["--help"]) == 0
+    listed = {line.split()[0] for line in capsys.readouterr().out.splitlines() if line.startswith("  ")}
+    assert {"attention", "decide", "dispatch", "mirror", "ticket"} <= listed
+
+
 def test_completion_completes_repository_names_from_the_workspace(
     canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
 ) -> None:

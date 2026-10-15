@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import click
 
-from canopy.cli.common import CliError, open_context, optional_tick, require_tick
+from canopy.cli.common import CliError, Group, OverseerCommand, open_context, optional_tick, require_tick
 from canopy.cli.params import (
     KEY_RE,
     REASON_RE,
@@ -49,7 +49,7 @@ PHASES = (
 DECIDE_ACTIONS = ("wait", "skip", "done")
 
 
-@click.command("decide")
+@click.command("decide", cls=OverseerCommand)
 # click has no optional positional before a required one, so `[KEY] ACTION` is parsed by hand.
 @click.argument("words", nargs=-1, required=True, metavar="[KEY] ACTION")
 @click.option("--rationale", required=True, type=TextType())
@@ -93,7 +93,7 @@ def _unit(ctx: Context, repo: str | None) -> str | None:
     return found.name
 
 
-@click.command("attention")
+@click.command("attention", cls=OverseerCommand)
 # click has no optional positional before a required one, so `[KEY] REASON` is parsed by hand.
 @click.argument("words", nargs=-1, required=True, metavar="[KEY] REASON")
 @click.option("--detail", required=True, type=TextType())
@@ -126,12 +126,12 @@ def cmd_attention(
     return 0
 
 
-@click.group("ticket")
+@click.group("ticket", cls=Group)
 def ticket_group() -> None:
     """Update the journal's view of a ticket (overseer only)."""
 
 
-@ticket_group.command("set")
+@ticket_group.command("set", cls=OverseerCommand)
 @click.argument("key", type=TICKET_KEY)
 @click.option(
     "--repo",
@@ -195,7 +195,7 @@ def cmd_ticket_set(
     return 0
 
 
-@click.command("mirror")
+@click.command("mirror", cls=OverseerCommand)
 @click.argument("ref", metavar="REF")
 @click.option("--comment", "comment_id", required=True, metavar="ID", help="The tracker's id of the comment.")
 @click.option("--author", required=True, metavar="ACCOUNT", help="Its author's account id on the tracker.")
