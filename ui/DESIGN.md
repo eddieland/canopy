@@ -451,9 +451,10 @@ list, an empty state, or a skeleton by hand.
   verdict; a PR's its working run, its age, then its review. Each kind's order is in `ROW_COLUMNS`.
 - **The tickets filters** narrow the list two ways at once (`src/lib/ticket-filter.ts`). Where a ticket stands is the
   runs page's chips, in the Tickets panel's header (`?show=`): `open` (not done), `working` (a run on it now) and
-  `waiting on you` (a question waiting), each with its run's dot, and `done`. Under the header, a text field
-  (`?q=`) keeps the tickets whose key or title holds every word, in any case: the search page does not read titles,
-  and in a list of a hundred tickets the operator knows the one by a word of its name. The list
+  `waiting on you` (a question waiting), each with its run's dot, `blocked` (the overseer's phase for a ticket an
+  open blocker ticket holds up, LOOP §7; no dot, since no run of it asked anything), and `done`. Under the header, a
+  text field (`?q=`) keeps the tickets whose key or title holds every word, in any case: the search page does not read
+  titles, and in a list of a hundred tickets the operator knows the one by a word of its name. The list
   narrows as they type, each keystroke replacing the history entry, so Back leaves the page. A filtered count says
   `6 of 41`, and an empty result says which filter left nothing. Both filter the list the server sends, its 200
   newest by activity, not the whole journal.
