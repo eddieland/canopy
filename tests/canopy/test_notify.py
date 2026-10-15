@@ -2,6 +2,7 @@
 
 import json
 import os
+import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -17,7 +18,7 @@ from canopy.core.config import ConfigError, load
 from canopy.core.items import fingerprint
 from canopy.notify import journal as notify_journal
 from canopy.notify import message
-from tests.canopy.helpers import InlineRunner, in_tick, journal, worker_does
+from tests.canopy.helpers import WORKER_DONE, InlineRunner, in_tick, journal, worker_does
 from tests.conftest import CanopyEnv, GitPool
 
 LABEL = "agent-ready-tester"
@@ -70,6 +71,8 @@ def tick(*, ok: bool = True) -> None:
         ("[notify.sinks.slack]\ncmd = ''\n", "must not be empty"),
         ("[notify.sinks.slack]\ncmd = 'x'\nevents = ['everything']\n", "events"),
         ("[notify.sinks.slack]\ncmd = 'x'\ndigest_every_minutes = 30\n", "greater than or equal to 60"),
+        ("[notify.sinks.slack]\ncmd = 'x'\nbatch_minutes = 0\n", "greater than or equal to 1"),
+        ("[notify.sinks.slack]\ncmd = 'x'\nbatch_minutes = 1441\n", "less than or equal to 1440"),
         ("[notify.sinks.Slack]\ncmd = 'x'\n", "sink name 'Slack'"),
         ("".join(f"[notify.sinks.s{i}]\ncmd = 'x'\n" for i in range(6)), "at most 5 sinks"),
     ],
@@ -326,6 +329,138 @@ def test_a_digest_arrives_on_its_interval_even_when_quiet(
     assert f"Digest since {earlier}: 3 ticks (ok 3)" in second
 
 
+def run_worker(conn: sqlite3.Connection, ticket: str, *, result: str = WORKER_DONE) -> None:
+    """Dispatch and run one implement worker on `ticket` in a tick of its own, recording its run's events."""
+    with in_tick(conn) as tick_id, worker_does(result=result):
+        runner = InlineRunner()
+        assert main(["dispatch", ticket, "--repo", "repo", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
+        run_id = conn.execute("SELECT max(id) FROM runs").fetchone()[0]
+        assert main(["_run", str(run_id)], runner=runner) == 0
+        db.finish_tick(conn, tick_id, "ok", "test")
+
+
+def test_a_batching_sink_holds_what_is_not_urgent_until_its_window_ends(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    sink_script: Path,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    out = tmp_path / "slack.txt"
+    add_sink(canopy_env, sink_script, "slack", out, extra='events = ["attention", "runs"]\nbatch_minutes = 30\n')
+    with overseer_records(("PROJ-9", "needs_reviewer")):
+        tick()  # the first delivery goes at once
+    assert len(messages(out)) == 1
+    conn = journal(canopy_env)
+    run_worker(conn, "PROJ-1")
+    with overseer_records(("PROJ-9", "needs_reviewer")):
+        tick()
+    assert len(messages(out)) == 1  # held: a run started and ended, and nothing needs the operator
+    capsys.readouterr()
+    assert main(["status"]) == 0
+    assert "  slack  last delivered " in capsys.readouterr().out
+
+    run_worker(conn, "PROJ-2")
+    earlier = db.format_time(datetime.now(UTC) - timedelta(minutes=31))
+    conn.execute("UPDATE notify_sinks SET last_delivery_at = ?", (earlier,))
+    with overseer_records():  # PROJ-9 resolved meanwhile: resolving is not urgent either, but the window is over
+        tick()
+    [_, batch] = json_messages(out)
+    assert [(e["kind"], e["ticket"]) for e in batch["events"]] == [
+        ("run.started", "PROJ-1"),
+        ("run.ended", "PROJ-1"),
+        ("run.started", "PROJ-2"),
+        ("run.ended", "PROJ-2"),
+    ]
+    assert [r["ticket"] for r in batch["attention"]["resolved"]] == ["PROJ-9"]
+    with overseer_records():
+        tick()
+    assert len(messages(out)) == 2  # nothing new, and the cursor moved past what the batch sent
+
+
+@pytest.mark.parametrize("urgent", ["attention", "blocked"])
+def test_a_batching_sink_sends_what_needs_the_operator_at_once_with_what_it_held(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    sink_script: Path,
+    tmp_path: Path,
+    urgent: str,
+) -> None:
+    out = tmp_path / "slack.txt"
+    add_sink(canopy_env, sink_script, "slack", out, extra='events = ["attention", "runs"]\nbatch_minutes = 30\n')
+    with overseer_records(("PROJ-9", "needs_reviewer")):
+        tick()
+    conn = journal(canopy_env)
+    run_worker(conn, "PROJ-1")
+    with overseer_records(("PROJ-9", "needs_reviewer")):
+        tick()
+    assert len(messages(out)) == 1
+    if urgent == "blocked":
+        blocked = json.dumps({"status": "blocked", "branch": "agent/PROJ-2-work", "summary": "x", "question": "Which?"})
+        run_worker(conn, "PROJ-2", result=blocked)
+        attention: tuple[tuple[str, str], ...] = (("PROJ-9", "needs_reviewer"),)
+    else:
+        run_worker(conn, "PROJ-2")
+        attention = (("PROJ-9", "needs_reviewer"), ("PROJ-8", "ready_to_merge"))
+    with overseer_records(*attention):
+        tick()
+    [_, sent] = json_messages(out)
+    assert [(e["kind"], e["ticket"]) for e in sent["events"]] == [
+        ("run.started", "PROJ-1"),
+        ("run.ended", "PROJ-1"),
+        ("run.started", "PROJ-2"),
+        ("run.ended", "PROJ-2"),
+    ]
+    assert [a["ticket"] for a in sent["attention"]["added"]] == ([] if urgent == "blocked" else ["PROJ-8"])
+
+
+def test_a_batching_sink_hears_the_loop_failing_at_once_with_what_it_held(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    out = tmp_path / "desk.txt"
+    add_sink(canopy_env, sink_script, "desk", out, extra='events = ["attention", "loop", "runs"]\nbatch_minutes = 30\n')
+    with overseer_records(("PROJ-9", "needs_reviewer")):
+        tick()
+    run_worker(journal(canopy_env), "PROJ-1")
+    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "gave up"}):
+        tick(ok=False)
+        tick(ok=False)
+        assert len(messages(out)) == 1  # the runs are held
+        tick(ok=False)
+    [_, sent] = json_messages(out)
+    assert [e["kind"] for e in sent["events"]] == ["run.started", "run.ended", "loop.failing"]
+
+
+def test_a_batching_sink_hears_another_sink_failing_at_once_with_what_it_held(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    sink_script: Path,
+    tmp_path: Path,
+) -> None:
+    down, desk = tmp_path / "alerts.txt", tmp_path / "desk.txt"
+    add_sink(canopy_env, sink_script, "alerts", down)  # before desk in name order, so desk hears it the same tick
+    add_sink(
+        canopy_env, sink_script, "desk", desk, extra='events = ["attention", "loop", "runs"]\nbatch_minutes = 30\n'
+    )
+    Path(f"{down}.exit").write_text("1")
+    with overseer_records(("PROJ-9", "needs_reviewer")):
+        tick()
+    run_worker(journal(canopy_env), "PROJ-1")
+    with overseer_records(("PROJ-9", "needs_reviewer")):
+        tick()
+        assert len(messages(desk)) == 1  # the runs are held
+        tick()  # alerts' third failure in a row
+    [_, sent] = json_messages(desk)
+    assert [e["kind"] for e in sent["events"]] == ["run.started", "run.ended", "loop.sink_failing"]
+
+
 def test_a_json_digest_names_each_ticket_by_its_title(
     canopy_env: CanopyEnv,
     git_pool: GitPool,
@@ -444,9 +579,12 @@ def test_notify_test_sends_now_and_changes_nothing(
     assert "no sink named 'nope'; configured: a, b" in capsys.readouterr().err
     conn = journal(canopy_env)
     assert conn.execute("SELECT count(*) FROM notify_sinks").fetchone()[0] == 0
-    with mock.patch.dict(os.environ, {"CANOPY_TICK_ID": "1"}):
-        assert main(["notify", "test"]) == 1
-        assert "refuses inside a tick" in capsys.readouterr().err
+    # Neither the overseer nor a worker, review, or chore it started may page the operator.
+    for name in ("CANOPY_TICK_ID", "CANOPY_RUN_ID"):
+        with mock.patch.dict(os.environ, {name: "1"}):
+            assert main(["notify", "test"]) == 1
+            assert f"notify test refused (inside_run): {name} is set" in capsys.readouterr().err
+    assert (len(messages(a)), len(messages(b))) == (2, 1)
 
 
 def test_chore_runs_reach_a_sink_that_takes_chores(

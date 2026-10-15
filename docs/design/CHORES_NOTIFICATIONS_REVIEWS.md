@@ -129,7 +129,7 @@ detached, like `_run` (§8 step 4). `_chore` claims the run by pid, drops `CANOP
 with the timeout, records the agent's pid, parses the result, and closes the row. Output goes to
 `<state_dir>/chore-runs/<name>/<run_id>.log`. No lease, branch, or push, so nothing to return or verify. Run files are
 kept by chore, and out of `<state_dir>/chores/<name>/`: that is the agent's working directory, which a sandbox lets it
-write (HOST_ISOLATION), and its own log and prompt are not its to read back or rewrite. A run's prompt is found beside
+write (§24), and its own log and prompt are not its to read back or rewrite. A run's prompt is found beside
 the log its row names, so a run started before this layout reads its prompt where it was written.
 
 The prompt is the operator's file plus a generated `## Run` section holding one JSON object: chore name, current time,
@@ -291,6 +291,7 @@ that reads one message on stdin. canopy ships a desktop sink and a Slack sink; o
 cmd = "canopy-notify-slack"            # the shipped sink; reads its webhook from a file of its own
 events = ["attention", "loop", "runs"]
 digest_every_minutes = 240
+batch_minutes = 15
 
 [notify.sinks.phone]
 cmd = "curl -sS --fail --data-binary @- https://ntfy.sh/my-private-topic"
@@ -306,8 +307,10 @@ format = "text"
 - `events` lists the groups the sink receives: `attention`, `loop`, `runs`, `chores`, `reviews`. Default
   `["attention", "loop"]`.
 - `digest_every_minutes` is optional and at least 60 (Digest, below).
+- `batch_minutes` is optional, from 1 to 1440 (Batching, below).
 - `notify.cmd = "X"` is shorthand for a sink named `default` with `cmd = "X"`, `format = "text"`,
-  `events = ["attention"]`, and no digest. Setting both `notify.cmd` and `[notify.sinks.default]` is a config error.
+  `events = ["attention"]`, no digest, and no batching. Setting both `notify.cmd` and `[notify.sinks.default]` is a
+  config error.
 
 An event is recorded only when some sink takes its group; with no `notify.cmd` and no sinks, publishing is §14
 without the notification.
@@ -351,6 +354,7 @@ its rows go at the first publish like any removed sink's, and each named sink he
 
 1. Gather the sink's attention diff if it takes `attention`, its events after its cursor in the groups it takes, and a
    digest if one is due. If there is nothing, skip the sink, moving its cursor past events of groups it does not take.
+   If the sink is batching and nothing gathered is urgent, hold it: change nothing, and go to the next sink.
 2. Render one message in the sink's format and run the command.
 3. On exit 0, record the diff in `notifications` for this sink, move the cursor to the newest event gathered, set the
    digest time, and reset the failure count. Otherwise change nothing else, log `notify command failed` with the
@@ -367,6 +371,23 @@ Bounds:
   are deleted after 7 days, except the newest `loop.failing` or `loop.recovered`, kept to tell a week-long streak from
   a new one. `loop.recovered` counts every failed tick of the streak.
 - Sinks run in turn under the tick lock: each hung sink delays the next tick by up to 60 seconds.
+
+### Batching
+
+A busy loop ticks often: a run ending wakes it `loop.min_gap_minutes` after the tick began (§6, default 1), so a burst
+of runs is a message every few minutes. A sink with `batch_minutes` sends at most one message per window, unless
+something needs the operator now:
+
+- After a delivery, the sink is batching for `batch_minutes`. What it gathers meanwhile is held: its cursor and the
+  attention it was told of stay where they were, so the first tick after the window gathers it all again, with what
+  happened since, and sends one message. A sink that has never delivered, or whose last delivery is older than the
+  window, sends at once, so the first message after a quiet spell is not late.
+- Urgent goes at once, with everything held: a new attention item, a `run.ended` whose status is `blocked` (its
+  question), `loop.failing`, and `loop.sink_failing`. A resolved item, a run started or ended otherwise, a chore or
+  review ended, `loop.recovered`, and a digest wait.
+- A held message waits for a tick: it goes at the first one after its window, up to `loop.interval_minutes` later,
+  or longer once idle pacing stretches the wait (§6). Holding does not wake the loop, since a tick runs the overseer.
+- A failed delivery starts no window, and what was urgent stays urgent, so a retry is never held.
 
 ### Digest
 
@@ -484,7 +505,8 @@ Slack sink only as a configured command.
 ### Commands
 
 - `canopy notify test [SINK]` sends a `test` message to every sink, or one, now, outside any tick, and prints each
-  result. It changes no cursor or table, and refuses when `CANOPY_TICK_ID` is set, so the overseer cannot page.
+  result. It changes no cursor or table, and refuses when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, so neither the
+  overseer nor a worker, review, or chore can page.
 - `canopy status` shows a line per sink: last delivery, consecutive failures and last error, events waiting.
 
 ### Two-way, later
@@ -521,6 +543,7 @@ Approved with M10:
 
 - Routing finer than groups, such as `crashed` to a phone and `needs_reviewer` to Slack only.
 - Digests at fixed times of day instead of an interval.
+- Batching that folds a run's `run.started` into its `run.ended` when both are held, one line instead of two.
 - Reminders for items open longer than some threshold.
 - Links to tickets. `tracker.ticket_url` (§17) links them in the web UI; a sink's message could link its ticket too.
 - A sink secret read from a command (a password manager's CLI) instead of a file.
@@ -576,7 +599,9 @@ max_reviews_per_pr = 3     # shared; the repository may only lower it
   the operator's name; allowed, and the operator's choice (TRUST_MODEL §7).
 - `low_impact` is plain language for the reviewer, like a chore's `when`: which changes it may call `low`. Without it,
   the reviewer never reports `low`.
-- `review_cmd` follows the command template rules (§12). A different model from `worker_cmd` is recommended.
+- `review_cmd` follows the command template rules (§12). A different model from `worker_cmd` is recommended. To
+  sandbox it, prefix it with `canopy-sandbox review` (§24, docs/SANDBOX.md): that policy reads the
+  checkout through the run directory's link and writes none of it.
 
 ### Off unless configured
 
@@ -700,7 +725,8 @@ For PRs from `review.query`, the overseer runs the query each tick and keeps onl
 PRs it reads for tickets); `_review` could not fetch another repository's commit from `origin`. The prompt says so; a
 `repo:` qualifier saves the reads. For each open match whose head commit has no `done` review, it runs a review or
 records `canopy review wait --pr URL --rationale "<text>"` (say, checks still running, or a draft). Nothing else is
-decided about these PRs.
+decided about these PRs. `review wait` and `attention --pr` take only a plain https:// URL of at most 300 characters,
+and refuse anything else as misuse, exit 2, recording nothing; `review run` records a malformed one as `refused:bad_pr`.
 
 Review decisions are `decisions` rows with the PR's URL in the `pr` column: `dispatch:review`, `wait`,
 `refused:<guard>`, and `attention:<reason>`. An agent PR's rows also carry its ticket key.

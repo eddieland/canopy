@@ -357,14 +357,15 @@ such as a shipped migration, may still cite one, and git history has its text.
 - `_run` checks out `origin/<branch>` or `origin/<base>` detached; workers and the fallback push use
   `git push origin HEAD:refs/heads/<branch>`.
 - Why: a pool's slots share branch refs, so a run's local branch is state other slots see and a sandboxed worker
-  cannot write (HOST_ISOLATION §4.2).
+  cannot write (DESIGN §24).
 - Rejected: `checkout -B` (git 2.43 lets two worktrees hold one branch, so a commit in either moves both).
 - Revisit: if an operator's `runtime.pr_skill` tool needs a local branch.
 
 ## D113. The web UI links URLs in journal text, and only to themselves
 
 - An http or https URL in untrusted text becomes a link whose text is the URL as written; no other scheme, and no
-  Markdown or link syntax, so a link never shows one destination and opens another.
+  Markdown or link syntax, so a link never shows one destination and opens another. A GitHub PR's address in a
+  conversation or a finding is its `PullRequestLink`, named from the URL alone (`acme/web#88`).
 - Why: workers and trackers write PR and CI URLs into their prose, and copying them out was the common next step.
 - Rejected: rendering Markdown (labelled links hide their target); a linkify library (a regex and `URL.canParse` do it).
 - Revisit: if journal text should link ticket keys or `repo#N` references to their pages as well.
@@ -401,7 +402,15 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Rejected: `npm install -g` (unpinned, shared with the operator's own); bundling `srt` (it needs Node regardless).
 - Revisit: if `srt` ships a standalone binary, or the sandbox stops being opt-in.
 
-## D118. Under `tracker.private`, a labeled ticket's first dispatch writes its start record
+## D118. The sandbox is an opt-in prefix on the command templates, and the boundary for the runs it wraps
+
+- The harness never learns whether a run is sandboxed; it passes only `CANOPY_GIT_OBJECTS`, which an unsandboxed run
+  ignores. Every agent command but the overseer's can be wrapped: the overseer needs the journal and config it denies.
+- What the harness runs on the host after a run (git, treehouse) reads nothing a sandboxed run can write (TRUST_MODEL
+  T4): a new step in a slot keeps D107's flags and runs after `_run`'s link and `commondir` check.
+- Revisit: making it the default, once the canary passes on the operator's machines and a day of sandboxed runs.
+
+## D119. Under `tracker.private`, a labeled ticket's first dispatch writes its start record
 
 - The loop writes a start record, which only the operator's commands wrote before, when the operator set the switch
   and a ticket canopy never ran is dispatched on a queue label. Settled by the operator.

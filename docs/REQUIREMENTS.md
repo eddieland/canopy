@@ -1,9 +1,9 @@
 # canopy requirements
 
 The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 to R17
-on 2026-10-14), and where canopy stands on each. The design (`design/`) is how canopy meets them; this file is what it
-must meet. Where the two disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry
-settles it, and the design doc stays normative until then (AGENTS.md).
+on 2026-10-14, R18 on 2026-10-15), and where canopy stands on each. The design (`design/`) is how canopy meets them;
+this file is what it must meet. Where the two disagree, the conflict is listed under [Conflicts](#conflicts) until a
+`DECISIONS.md` entry settles it, and the design doc stays normative until then (AGENTS.md).
 
 A bare § is a section of the design (`design/`). Status words:
 
@@ -160,7 +160,7 @@ workers can only read the tracker; questions reach the attention list (`awaiting
 operator answers with `canopy reply` or from the web UI. Its branch and PR title still name the ticket key, which a
 tracker's VCS integration may link to the ticket (DESIGN §22, Open).
 The PR still carries the commit attribution TRUST_MODEL T5 gives it: privacy covers the conversation, not authorship.
-With `tracker.private` set, a labeled ticket is started privately by its first dispatch (D118): the operator's queue
+With `tracker.private` set, a labeled ticket is started privately by its first dispatch (D119): the operator's queue
 label brings it in, and the label stays visible on the ticket.
 
 ### R12. One record of every ticket's conversation
@@ -224,6 +224,18 @@ only as the loop's own (`review.agent_prs`) or as a match of `review.query`, a s
 one PR means editing config and editing it back. The review is what any canopy review is: findings in the journal for
 the operator, posted nowhere (D114), with no worker and no ticket.
 
+### R18. Plan a ticket before implementing it, and keep the plan
+
+Gap (M44). Written down 2026-10-15. Planning should be a step canopy can take for a ticket: a run that reads the
+ticket and the code and writes down how it will do the work, before any `implement` starts. Two reasons. A worker
+that starts from an explicit plan should do better than one that plans as it goes. And the plan should stay in the
+journal, so the operator can read it later for any ticket, as they read its conversation and runs today.
+
+Whether a ticket is planned is a config default the operator can change for one ticket. When a ticket is planned, the
+operator reads the plan before work starts: nothing is implemented until they approve it, and a reply asking for
+changes makes a new plan. The plan stays in canopy and is posted nowhere, so a private ticket is planned the same way.
+Today the `implement` worker plans inside its own session, and nothing of it survives but its summary.
+
 ## Nice to have
 
 - **N1. Local web UI on localhost.** Built in M20, live acceptance pending. Allowed under TRUST_MODEL T8 (C2, D055),
@@ -239,7 +251,7 @@ the operator, posted nowhere (D114), with no worker and no ticket.
   directory, its permissions, and the D044 guard are written in OpenCode's terms, so a second runtime needs its own
   definitions set and its own shadowing check (ROADMAP's deferred list).
 - **N5. Docker or remote sandbox runtimes later.** Deferred. A local OS sandbox, opt-in, is ROADMAP M26
-  (`HOST_ISOLATION.md`). A remote sandbox runs agents off the operator's machine, so it would change H1 and needs its own
+  (DESIGN §24). A remote sandbox runs agents off the operator's machine, so it would change H1 and needs its own
   decision first.
 
 ## Non-goals for now

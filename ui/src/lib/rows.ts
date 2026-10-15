@@ -63,11 +63,14 @@ export const ROW_COLUMNS = {
         ['cost', '4rem', 1],
         ['age', '6rem', 3],
     ],
-    /** A chore: its name, its line in `canopy status`'s words, and its open findings. */
+    /**
+     * A chore: its name, its line in `canopy status`'s words, and its open findings, whose column holds
+     * `12 open findings · 10 dismissed` on one line.
+     */
     chore: [
         ['name', '10rem'],
         ['state', FREE],
-        ['findings', '8rem', 1],
+        ['findings', '14rem', 1],
     ],
     /** A review run on the reviews page: its id, verdict, ticket, PR and commit, impact, cost, and when. */
     review: [
@@ -124,9 +127,12 @@ export const ROW_COLUMNS = {
         ['action', FREE],
         ['age', '4rem'],
     ],
-    /** A chore's finding: its id, its title, and what it says of itself at the end. Ids differ in length. */
+    /**
+     * A chore's finding: its id, its title, and what it says of itself at the end. Ids differ in length: a short one
+     * takes its own width, and a long one (up to 200 characters) wraps rather than squeeze the title to its floor.
+     */
     finding: [
-        ['id', 'auto'],
+        ['id', 'fit-content(12rem)'],
         ['title', FREE],
         ['facts', 'auto'],
     ],

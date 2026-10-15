@@ -41,6 +41,8 @@ not go in the middle of the sequence.
   - [22. Conversations](CONVERSATIONS.md#22-conversations)
 - [Flaky CI](FLAKY_CI.md): triage of a CI failure before a fix-ci worker is sent.
   - [23. Flaky CI (M25)](FLAKY_CI.md#23-flaky-ci-m25)
+- [Sandboxed runs](SANDBOXING.md): the opt-in OS sandbox around every agent run but the overseer's.
+  - [24. Sandboxed runs (M26)](SANDBOXING.md#24-sandboxed-runs-m26)
 
 ## 1. Problem
 
@@ -68,7 +70,8 @@ cannot reach internal systems and require handing a vendor write access.
   secret (TRUST_MODEL T8, D055); none is built yet.
 - Tracker-specific code. Any issue tracker with an MCP server works; provider differences live in config and optional
   provider skills (§17). A second VCS host is likewise a prompt and config concern, not code.
-- Sandboxing agents (deferred; see TRUST_MODEL and ROADMAP).
+- A sandbox the harness knows about. Sandboxing is an opt-in prefix on the command templates (§24), and the harness
+  never learns whether a run is sandboxed (D118).
 
 ## 4. Principles
 
@@ -108,6 +111,7 @@ canopy (harness, Python)
     main.py        main(), the root group, exit codes
     common.py      opening the Context, refusals, the tick named by CANOPY_TICK_ID
     params.py      validated parameter types: ticket keys, reasons, slugs, cursors, bounded text
+    render.py      how status, show, and the other read-back commands name tickets, runs, costs, and chores
     setup.py       init, skill, secret (the web UI's listener secret, §22)
     loop.py        loop (serving the web UI unless --no-serve), tick, tick --dry-run, status, decisions
     spend.py       spend: each day's cost by kind, and the ticks by what they bought (§11)
@@ -165,7 +169,8 @@ canopy (harness, Python)
     app.py         create_app(): the guard, the API under {base}/api, the single-page app under {base}/
     api/           the JSON and SSE routes, a router per resource: session, tickets and the operator's verbs on
                    them, runs, ticks, chores, the loop, worktrees, events, search, reviews, pull requests; deps.py the backend
-                   and sessions each app binds for its routes, refs.py what the routes share
+                   and sessions each app binds for its routes, refs.py what the routes share, docs.py the schema and
+                   a Swagger UI page over it
     auth.py        sign-in with the listener secret, the signed session cookie, the per-session token on writes
     secret.py      the listener secret's file: read with its checks, written by `canopy secret`
     backend.py     what the loop hands the server: config, journal, the attention list, ending a run, a reload; a
@@ -240,7 +245,7 @@ operator-skill/  SKILL.md: the canopy skill, for the operator's own agent sessio
 migrations/      NNNN_name.sql
 packages/        uv workspace members: separate programs canopy ships, run only as commands
   canopy-notify-slack/  the Slack sink (§20); stdlib only, imports nothing from canopy
-  canopy-sandbox/  the sandbox wrapper, its policy templates, and srt's lockfile (HOST_ISOLATION §4, D117)
+  canopy-sandbox/  the sandbox wrapper, its policy templates, and srt's lockfile (§24, D117)
 ui/              the web UI (D079): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
 hatch_build.py   the wheel's build hook: builds ui/ with npm and bundles ui/dist as canopy/_data/ui
 ```

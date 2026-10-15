@@ -26,6 +26,8 @@ DB_FILE_NAME = "canopy.db"
 # How long a connection waits for another to release the write lock before its write fails as `database is locked`.
 BUSY_SECONDS = 10.0
 _MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
+# The rationale the overseer gives a `done` decision for a ticket the tracker reports closed (DESIGN §7).
+CLOSED_RATIONALE = "closed"
 
 # `canopy ticket set --cursor NAME=ID` names, and the column each one updates. The comment cursor is the ticket's; the
 # review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a private
@@ -286,6 +288,26 @@ def set_tick_loop(conn: sqlite3.Connection, tick_id: int, *, idle: bool, woken_b
     conn.execute("UPDATE ticks SET idle = ?, woken_by = ? WHERE id = ?", (int(idle), woken_by, tick_id))
 
 
+def set_tick_query(conn: sqlite3.Connection, tick_id: int, *, due: bool) -> None:
+    """Record whether a tick's state block told the overseer to run the tracker query (§7, Spacing the query)."""
+    conn.execute("UPDATE ticks SET query_due = ? WHERE id = ?", (int(due), tick_id))
+
+
+def last_query_at(conn: sqlite3.Connection) -> str | None:
+    """When the newest live `ok` tick that ran the tracker query started (§7, Spacing the query).
+
+    A tick from before `query_due` was recorded ran it. A dry run, and a tick that did not close `ok`, are not counted:
+    one that skipped or failed may not have read the query to the end.
+
+    Returns:
+        That tick's `started_at`, or None if no tick has run the query.
+    """
+    row = conn.execute(
+        "SELECT max(started_at) FROM ticks WHERE status = 'ok' AND dry_run = 0 AND coalesce(query_due, 1) = 1"
+    ).fetchone()
+    return None if row is None or row[0] is None else str(row[0])
+
+
 def previous_tick(conn: sqlite3.Connection, tick_id: int) -> sqlite3.Row | None:
     """Return the tick before `tick_id`, whatever its status, or None if it is the first."""
     row: sqlite3.Row | None = conn.execute(
@@ -508,6 +530,23 @@ def get_ticket(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
 def open_tickets(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     """Return the tickets not marked done, by key."""
     return conn.execute("SELECT * FROM tickets WHERE done = 0 ORDER BY key").fetchall()
+
+
+def recently_done(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
+    """Return the tickets marked done whose newest `done` decision is at or after `since`, by key (DESIGN §7).
+
+    Each row has `key` and `done_at`, that decision's time. Not one: a ticket marked done with no `done` decision since
+    the operator last forgot it, or whose newest one says `closed`, since the tracker reports a closed ticket closed,
+    and leaving it out lets the query find it again once it is reopened.
+    """
+    # Each done ticket's newest decision by `decisions_ticket`, not a scan of every decision ever recorded.
+    return conn.execute(
+        "SELECT t.key, d.created_at AS done_at FROM tickets t JOIN decisions d ON d.id = ("
+        "  SELECT max(id) FROM decisions WHERE ticket_key = t.key AND action = 'done'"
+        ") WHERE t.done = 1 AND d.created_at >= ? AND d.rationale != ? "
+        "AND (t.forgotten_at IS NULL OR d.created_at > t.forgotten_at) ORDER BY t.key",
+        (since, CLOSED_RATIONALE),
+    ).fetchall()
 
 
 # Runs and decisions

@@ -8,20 +8,20 @@ from datetime import UTC, datetime
 
 import click
 
-from canopy.cli.common import CliError, open_context, require_tick
-from canopy.cli.params import REPO, TICKET_KEY, TextType, truncate
+from canopy.cli.common import CliError, Group, OverseerCommand, open_context, require_tick
+from canopy.cli.params import PR_URL, REPO, TICKET_KEY, TextType, truncate
 from canopy.core import db
 from canopy.infra import logs
 from canopy.loop import attention, tick
 from canopy.reviews import execute, findings, grants, start, view
 
 
-@click.group("review")
+@click.group("review", cls=Group)
 def review_group() -> None:
     """Review PRs: `run` and `wait` are the overseer's; `show` is how you read what canopy's reviews found."""
 
 
-@review_group.command("run")
+@review_group.command("run", cls=OverseerCommand)
 @click.option("--pr", "pr", required=True, metavar="URL", help="The PR's https:// URL, as an opaque string.")
 @click.option("--sha", required=True, metavar="SHA", help="The full head commit you read on the PR just now.")
 @click.option("--ticket", type=TICKET_KEY, help="The ticket of one of the loop's own PRs.")
@@ -66,10 +66,12 @@ def cmd_review_run(
     return 0
 
 
-@review_group.command("wait")
-@click.option("--pr", "pr", required=True, metavar="URL", help="The PR's https:// URL.")
+@review_group.command("wait", cls=OverseerCommand)
+@click.option("--pr", "pr", required=True, type=PR_URL, help="The PR's https:// URL.")
 @click.option("--ticket", type=TICKET_KEY, help="The ticket of one of the loop's own PRs.")
-@click.option("--rationale", required=True, type=TextType())
+@click.option(
+    "--rationale", required=True, type=TextType(), help="Why not now, such as checks still running, or a draft."
+)
 @click.pass_context
 def cmd_review_wait(click_ctx: click.Context, *, pr: str, ticket: str | None, rationale: str) -> int:
     """Record that the PR at URL is not to be reviewed now, and why."""
@@ -77,7 +79,7 @@ def cmd_review_wait(click_ctx: click.Context, *, pr: str, ticket: str | None, ra
     current = require_tick(ctx)
     if not ctx.config.reviews_on:
         raise CliError("reviews are off in this configuration")
-    db.record_decision(ctx.conn, int(current["id"]), ticket, "wait", rationale, pr=pr[: start.MAX_PR_URL])
+    db.record_decision(ctx.conn, int(current["id"]), ticket, "wait", rationale, pr=pr)
     click.echo(f"recorded wait for {pr}")
     return 0
 

@@ -395,13 +395,17 @@ class Tracker(Section):
     # Empty means no link. Shared: the tracker's address is the team's, and a link runs nothing.
     ticket_url: Annotated[StrictStr, Scope.SHARED, link_template(TICKET_KEY)] = ""
     labels: Annotated[tuple[NonBlank, ...], Scope.USER, Field(min_length=1)]
+    # The least time between ticks that run `query` (DESIGN §7, Spacing the query): a tick sooner than that after the
+    # last live one that ran it works the tickets the journal knows and leaves the query out. 0 runs it every tick.
+    # User-only: it sets the operator's spend, and how long a newly labeled ticket can wait to be found.
+    query_every_minutes: Annotated[Count, Scope.USER] = 0
     # The tracker's MCP server, as the operator's OpenCode config names it, and the tools of it a private worker may
     # call (DESIGN §22). Empty and unset mean the provider's defaults. User-only: they decide what a private worker can
     # write, which a shared workspace file must not (TRUST_MODEL T7).
     mcp_server: Annotated[StrictStr, Scope.USER, AfterValidator(_server_name)] = ""
     read_tools: Annotated[tuple[ToolPart, ...] | None, Scope.USER] = None
     # Whether a labeled ticket canopy has never worked is started privately by its first dispatch, as if the operator
-    # had run `canopy start` (DESIGN §22, D118). User-only: it turns a label into a start record, which a shared file
+    # had run `canopy start` (DESIGN §22, D119). User-only: it turns a label into a start record, which a shared file
     # must not.
     private: Annotated[StrictBool, Scope.USER] = False
 
@@ -670,6 +674,8 @@ EventGroup = Literal["attention", "loop", "runs", "chores", "reviews"]
 # The sink `notify.cmd` stands for.
 DEFAULT_SINK = "default"
 MIN_DIGEST_MINUTES = 60
+# A sink batching for longer than a day would hold everything but what needs the operator now.
+MAX_BATCH_MINUTES = 1440
 
 
 def _sink_name(value: str) -> str:
@@ -691,6 +697,8 @@ class Sink(Section):
     format: Literal["json", "text"] = "json"
     events: tuple[EventGroup, ...] = ("attention", "loop")
     digest_every_minutes: Annotated[StrictInt, Field(ge=MIN_DIGEST_MINUTES)] | None = None
+    # After a delivery, what does not need the operator now waits this long, then goes out in one message.
+    batch_minutes: Annotated[StrictInt, Field(ge=1, le=MAX_BATCH_MINUTES)] | None = None
 
 
 SinkName = Annotated[str, AfterValidator(_sink_name)]

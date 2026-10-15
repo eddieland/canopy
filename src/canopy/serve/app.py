@@ -41,8 +41,8 @@ def create_app(options: ServeOptions, backend: Backend, sessions: Sessions) -> F
                 with contextlib.suppress(asyncio.CancelledError):
                     await task
 
-    # No docs pages: they load scripts from a CDN. The schema is served only with mock data; `python -m canopy.serve
-    # openapi` prints it without a server.
+    # FastAPI's own schema and docs routes are off: api/docs.py serves both behind the session, its page with no CDN.
+    # `python -m canopy.serve openapi` prints the schema without a server.
     app = FastAPI(
         title="canopy",
         summary="The web UI's API: what canopy's journal holds, and the operator's verbs on it.",
@@ -51,7 +51,7 @@ def create_app(options: ServeOptions, backend: Backend, sessions: Sessions) -> F
         openapi_tags=api.TAGS,
         docs_url=None,
         redoc_url=None,
-        openapi_url=f"{base}/api/openapi.json" if backend.mock else None,
+        openapi_url=None,
         lifespan=lifespan,
     )
     app.include_router(api.router, prefix=f"{base}/api")
@@ -63,6 +63,11 @@ def create_app(options: ServeOptions, backend: Backend, sessions: Sessions) -> F
         @app.get(base, include_in_schema=False)
         def to_base() -> RedirectResponse:
             return RedirectResponse(f"{base}/")
+
+    # Where FastAPI puts its docs page by default.
+    @app.get(f"{base}/docs", include_in_schema=False)
+    def to_docs() -> RedirectResponse:
+        return RedirectResponse(f"{base}/api/docs")
 
     # Last, so every API route, including an unknown one, is matched before it.
     app.add_route(f"{base}/{{path:path}}", spa.respond, methods=["GET", "HEAD"], include_in_schema=False)

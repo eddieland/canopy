@@ -8,7 +8,7 @@ from collections.abc import Sequence
 import click
 
 from canopy.cli import chores, conversation, journal, loop, notify, reviews, runs, setup, spend, workspace
-from canopy.cli.common import Obj
+from canopy.cli.common import Group, Obj
 from canopy.core import config, db
 from canopy.infra import procs
 
@@ -27,6 +27,10 @@ def main(argv: Sequence[str] | None = None, runner: procs.Runner | None = None) 
     args = list(argv) if argv is not None else sys.argv[1:]
     try:
         result = cli.main(args=args, prog_name="canopy", standalone_mode=False, obj=obj)
+    except click.exceptions.NoArgsIsHelpError as e:
+        # A group named without a command prints its help, as a bare `canopy` does: asking is not misuse.
+        click.echo(e.ctx.get_help())
+        return 0
     except click.ClickException as e:
         e.show()
         return e.exit_code
@@ -39,7 +43,7 @@ def main(argv: Sequence[str] | None = None, runner: procs.Runner | None = None) 
     return result if isinstance(result, int) else 0
 
 
-@click.group(invoke_without_command=True, context_settings={"help_option_names": ["-h", "--help"]})
+@click.group(cls=Group, invoke_without_command=True, context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(package_name="canopy", prog_name="canopy", message="%(prog)s %(version)s")
 @click.pass_context
 def cli(ctx: click.Context) -> None:
@@ -51,6 +55,7 @@ def cli(ctx: click.Context) -> None:
 for command in (
     setup.cmd_init,
     setup.cmd_skill,
+    setup.cmd_completion,
     setup.cmd_secret,
     setup.sandbox_group,
     loop.cmd_loop,

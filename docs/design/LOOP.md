@@ -56,17 +56,20 @@ in order:
    message: workspace root; the workspace (name, the path of `MAP.md` if any); tracker config (provider, query, labels,
    needs-human label); trust config (authorized repliers, branch prefix, PR label); policy (limits and stacking); the
    repositories (name, path, summary, whether cloned, its pool's leased slots, §18); the `tickets` rows not marked done,
-   except those the operator stopped; `stopped`; split children (§18); chores and reviews when configured; the
-   operator's notices to workers in force or lately ended (§8), when there are any; the overseer's open attention items
-   (below); then capacity, running workers and their repositories, the mirror limit and
-   delimiter, tick id, current time, and whether it is a dry run. Each ticket has its phase, branch, and comment,
+   except those the operator stopped; `stopped`; `recently_done` (§7); split children (§18); chores and reviews when
+   configured; the operator's notices to workers in force or lately ended (§8), when there are any; the overseer's
+   open attention items (below); then capacity, running workers and their repositories, the mirror limit and
+   delimiter, whether this tick runs the tracker query (`query_due`, §7), tick id, current time, and whether it is a
+   dry run. Each ticket has its phase, branch, and comment,
    message, and mirror cursors (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors,
    runs so far of each kind, the runs of each kind the operator granted past the policy's limit if any (`granted`, §8),
    and when fix-ci may next run if still ahead; and its latest run (id, kind, status, branch, each repository it leased
    in with its starting base, start and end). A ticket the operator started has a `private` object (§22): when it was
    started, its message cursor, the operator's messages newer than it, and the question awaiting a reply, if any.
    `stopped` names the tickets the operator stopped, by key alone: none is a candidate, whatever its labels, and the
-   overseer records nothing for one, so a ticket stopped for weeks adds no decision to every tick. `chores` (§19) is
+   overseer records nothing for one, so a ticket stopped for weeks adds no decision to every tick. `recently_done`
+   names the tickets marked done in the last 30 days, each with the time of its newest `done` decision (§7). `chores`
+   (§19) is
    present only when chores are configured. `notices` (§8) is present only when the operator set one in the last
    seven days: each one's text, when it was set, until when it was or is in force, and whether it is now, newest first,
    at most five. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter
@@ -442,6 +445,28 @@ always comparable. A cursor an earlier canopy wrote is an id, or `run:<id>`; the
 time and write it, and to treat a cursor that names nothing as empty. Until it has, that unit's review state is as
 ambiguous as before.
 
+The overseer runs the configured query every tick, before it reads any ticket, even when the state block already
+lists tickets. The block holds only tickets the loop has seen, so the query is the only way a newly labeled ticket
+becomes a candidate, and a tick that skips it reads the tickets it knows, finds nothing wrong, and closes `ok`: the
+queue stalls with nothing failing. A cheaper model run as the overseer did that on the operator's queue (2026-10-15),
+reading the block's tickets and never the query. The prompt's step 1 says so, as its section on `review.query`
+already did for reviews. Nothing checks it in code until a connector runs the query (ROADMAP M36).
+
+**Spacing the query.** The query is one of a tick's dearest reads (tracker searches and issue reads were 28% of the tool
+results the overseer read, MEASUREMENTS 2026-10-13), and tickets enter the queue slowly: a human labels one and waits.
+So the operator may space it out with `tracker.query_every_minutes`. At 0, the default, every tick runs it, as above.
+Otherwise the harness sets the state block's `query_due` to true only when that long has passed since the newest live
+tick that closed `ok` with `query_due` true started, or when there is none, and records it on the tick
+(`ticks.query_due`). On a tick where it is false, the overseer does not run the query and works the tickets in the state
+block alone, by the same rules: it still reads each one, mirrors its comments, follows its PRs, and dispatches it. A dry
+run does not count as having run it, being a preview, and neither does a tick that skipped or failed, which may not have
+read the result to the end; a tick from before the column did run it. What the operator gives up is how soon a newly
+labeled ticket is found: up to `query_every_minutes`, plus the loop's wait, after it is labeled. Idle pacing does not
+treat the next query as a gate: the setting is the least time between queries, not a schedule, so the loop keeps backing
+off on idle ticks, and the first tick after the spacing has passed runs it. A private ticket the operator starts is in
+the state block already, so it never waits on the query. `review.query` is not spaced: it is the operator's own list of
+PRs, and its cost has not been measured apart.
+
 "Closed" means whatever the tracker calls finished: Jira status category Done, GitHub issue state closed, and so on. The
 provider skill says which.
 
@@ -454,6 +479,28 @@ done, and every tick read it again and recorded a `skip` for it. A closed ticket
 the state block, gets no decision at all, so a query that matches closed tickets adds nothing to every tick. A PR
 still open on a closed ticket is the operator's, like the tracker transition. A reopened ticket is found again by the
 configured query; a private one (§22) comes back when the operator starts it again, which clears done.
+
+A ticket marked done is not in `tickets`, so the state block alone cannot tell the overseer that one the query returns
+is finished. A ticket whose PR merged is the common case: canopy marks it done, and a human has not yet moved it to
+done in the tracker, so the query still finds it open and labeled. The overseer read every such ticket again each
+tick, looked for its PRs, mirrored all its comments again (it has no mirror cursor in the block), and recorded `done`
+again. Those decisions are not waits, so no such tick was idle and idle pacing never backed off: over the first three
+days of live use, 176 repeated `done` decisions and 257 repeated mirrors in 152 ticks, with the loop at its base
+interval all night. The state block therefore names each ticket marked done in the last 30 days in `recently_done`,
+with the time of its newest `done` decision, and the overseer leaves such a ticket out of the union and records
+nothing for it, as for `stopped`, whatever the tracker says. A ticket still open 30 days after its `done` decision
+drops out of the list; the next tick reads it, marks it done again, and that decision lists it for another 30 days.
+The 30 days bound the list by the tickets a human might not have closed yet, not by every ticket the loop ever
+finished.
+
+Not listed: a ticket whose newest `done` decision has the rationale `closed`, since the tracker reports it closed and
+the rule above already records nothing for it, so once it is reopened the query finds it again as before; and a ticket
+marked done with no `done` decision since the operator last forgot it (§22), whose done mark the overseer has not
+explained. One cut off between `ticket set --done` and its decision is read again by the next tick, which marks it
+done again, as before this list. A merged ticket reopened in the tracker for follow-up was never worked again: the
+overseer found its merged PR and marked it done again each tick. Listed, it is left out instead, and the operator
+brings it back with `canopy forget`, which clears the done mark, so the query finds it as a ticket the journal has not
+seen.
 
 ## 8. Dispatch and the worker contract
 
@@ -635,19 +682,18 @@ Every git the harness runs, here, in a review (§21), and in `canopy init` and `
 -c protocol.ext.allow=never` (D107). A slot shares its git directory with the pool and the primary clone, and a worker
 can write there, so without them a hook or monitor it planted would run on the host, outside the worker, in step 2 or
 5 or in a later run or review. A command named in that directory's config (a filter driver,
-`remote.<name>.uploadpack`) still runs; closing that takes a git directory the worker cannot write (HOST_ISOLATION
-§4.2). The worker's own git is unaffected, so its push runs the repository's hooks; step 5's fallback push runs none,
-so a repository whose push needs one (Git LFS's `pre-push`) depends on the worker pushing.
+`remote.<name>.uploadpack`) still runs; closing that takes a git directory the worker cannot write (§24, Git state).
+The worker's own git is unaffected, so its push runs the repository's hooks; step 5's fallback push runs none, so a
+repository whose push needs one (Git LFS's `pre-push`) depends on the worker pushing.
 
-The object directory is for a sandboxed worker (HOST_ISOLATION §4.2), which cannot write the git directory its slot
+The object directory is for a sandboxed worker (§24, Git state), which cannot write the git directory its slot
 shares, objects included. `_run` passes it as `CANOPY_GIT_OBJECTS` and never sets git's own variables for the worker:
 those reach every git its tools run, so a commit in any other repository would land there and break that repository
 once the directory goes. A sandbox wrapper, which knows its worker is sandboxed, points git at it, in the run's
-worktrees only (HOST_ISOLATION §4.2). An unsandboxed
-worker ignores it, the directory stays empty, and steps 5 and 6 run as if it did not exist. Rejected: deleting the
-directory without tidying the slots (git in the slot, and `gc` in the primary clone, then fail); letting a sandboxed
-worker write the shared object directory (it could delete objects other slots need); a temporary directory (reconcile
-could not find it after a SIGKILL).
+worktrees only. An unsandboxed worker ignores it, the directory stays empty, and steps 5 and 6 run as if it did not
+exist. Rejected: deleting the directory without tidying the slots (git in the slot, and `gc` in the primary clone, then
+fail); letting a sandboxed worker write the shared object directory (it could delete objects other slots need); a
+temporary directory (reconcile could not find it after a SIGKILL).
 
 Worker result contract, one JSON line, last line of the worker's text (§13):
 
@@ -795,7 +841,7 @@ Three steps, all the operator's, in the order they run:
 
 `setup_cmd` runs the branch's code (a lockfile's install scripts, a generator) on the operator's machine, outside the
 agent runtime's permissions. It is the code the worker's own shell runs a moment later, but outside any sandbox around
-`worker_cmd`, so it is wrapped the same way (HOST_ISOLATION §4.4, TRUST_MODEL T4). A broken setup crashes every run it
+`worker_cmd`, so it is wrapped the same way (§24, TRUST_MODEL T4). A broken setup crashes every run it
 meets, each spending an attempt (D030) and raising `crashed` (§14), whose note names it.
 
 ### Bazel

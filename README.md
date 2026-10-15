@@ -148,6 +148,7 @@ on their own; anyone else's comments wait on the attention list as `untrusted_re
 | See what the last days cost, and how much of it idle ticks spent | `canopy spend [--days N]`, or the web UI's spend page |
 | Read a run's transcript | its page in the web UI, or `opencode export <session id>` |
 | Teach your own agent session canopy | save `canopy skill` as `~/.agents/skills/canopy/SKILL.md` |
+| Complete canopy's commands, repositories, and chores with Tab | `canopy completion bash` (or `zsh`, `fish`); its help says how to load it |
 
 Optional, in your user config:
 

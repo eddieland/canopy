@@ -127,10 +127,17 @@ test("a chore's finding takes a note its next run reads, and is dismissed and li
     await expect(list.getByRole('link').filter({ hasText: 'lodash-advisory' })).toHaveCount(0)
     await expect(leaving).toHaveCount(0)
 
+    // The chores list counts it apart, as canopy status does, so a chore whose findings are all dismissed reads so.
+    await page.goto('chores')
+    await expect(page.getByTestId('chore-deps').getByTestId('chore-findings')).toHaveText(
+        '0 open findings · 1 dismissed',
+    )
+
     await page.goto('chores/deps')
     await expect(page.getByTestId('chore-notes').locator('[data-source=operator]').last()).toContainText(
         'until 2026-10-15',
     )
+    await expect(page.getByTestId('chore-findings-count')).toHaveText('0 · 1 dismissed')
     const finding = page.getByTestId('finding-lodash-advisory')
     await expect(finding).toContainText('dismissed')
     await finding.getByTestId('undismiss-lodash-advisory').click()
@@ -148,7 +155,7 @@ test('the settings page asks the loop to read its config again and says what it 
     await page.getByTestId('config-reload').click()
     // The mock runs no loop, so its config never changes.
     await expect(page.getByRole('status').filter({ hasText: 'Nothing changed' })).toContainText(
-        'The loop runs on it from now on.',
+        'the config files say what the loop already runs on.',
     )
 })
 

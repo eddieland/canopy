@@ -91,7 +91,7 @@ separate `list`.
 - `start` is private by construction: canopy cannot label a ticket (D003), so a ticket started in canopy keeps its
   conversation in the journal. The command says so when it runs, and when the next tick will pick the ticket up. A
   later `--public` could start a ticket whose conversation stays on the tracker; none is planned.
-- `tracker.private` (user-only, off by default) starts labeled tickets privately (D118). The first dispatch of a ticket
+- `tracker.private` (user-only, off by default) starts labeled tickets privately (D119). The first dispatch of a ticket
   canopy never ran, authorized by its `--label` as any public ticket's, writes the start record in the transaction that
   inserts the run, with channel `label`, and the run is private. From then on it is an ordinary private ticket: no
   `--label`, no label check in its worker's prompt, and removing the label does not stop it; `canopy stop` does. The
@@ -569,7 +569,9 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
   list has a small `dismiss` beside its age; on the chore's page each open finding has one in its head line, or,
   dismissed, a mark and `undo`, as `--undo` takes it back.
 - A chore run's summary is the harness's note or the agent's summary, cut at 300 characters, and a finding's title and
-  detail are the agent's: untrusted text, rendered as text with control characters dropped.
+  detail are the agent's: untrusted text, rendered as text with control characters dropped. A finding's title shows
+  whole wherever the finding does, and a finding selected on the attention list shows its detail and link under it,
+  as the chore's page does, rather than the item's one line of title and link run together.
 - A chore run's page (asked for by the operator, 2026-10-13: a list's summary hid the rest of what a run said) is its
   row, the whole of its summary (a result bounds it at 2000 characters) and the harness's note apart from it, the
   findings an `ok` run reported, and its session's transcript (below). `GET /chores/{name}/runs/{id}` finds a run only
@@ -610,8 +612,10 @@ rather than from a one-off analysis of the log.
   of the live overseer's, each day as a stacked bar of the kinds with idle overseer spend its own series on the
   baseline, the same numbers as a table, the ticks by group and by what woke them, and the idle ticks. A window the
   page does not offer reads as the week. Reads only.
-- The rail's two spend figures open it, the 24 hours' on the week and the 30 days' on the month: a link from them
-  rather than a nav item, since spend is a question the operator asks now and then, not a place they work.
+- The nav has it, between Chores and Ticks, opening on the week; the rail's two spend figures open it too, the 24
+  hours' on the week and the 30 days' on the month. It was at first only a link from the figures, as a question the
+  operator asks now and then rather than a place they work, but the operator, who asked for the page, did not find it
+  there (2026-10-15).
 - `spend.updated`, `tick.updated`, and a run starting or ending on `runs.updated` mark the breakdown stale, so a page
   left open follows the loop. Each tick carries `idle` and `woken_by`, so the loop recording them after the tick
   closes sends `tick.updated` again, and the page never keeps the tick as no loop's.
@@ -836,6 +840,11 @@ How it serves, built in M20's foundation and true of every page:
   not cloned, with a run holding slots in two pools and a pool past its declared size. Writes go to that journal.
   Without `--secret-file` it signs nobody in and asks for no session; only mock mode allows that, and it binds loopback
   only.
+- The API documents itself: its OpenAPI schema at `api/openapi.json` and a Swagger UI page over it at `api/docs`
+  (`docs` redirects there), under the base path, behind the session like every other API route. FastAPI's stock page
+  loads Swagger UI from a CDN, which would run another origin's script beside the operator's journal and session, so
+  `api/docs.py` serves its own page instead: the copy of Swagger UI the UI's build carries in `api-docs/`, a CSP as
+  `index.html`'s, and the session's token added to a write, so "Try it out" works on every route.
 
 ### Trust model changes
 

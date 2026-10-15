@@ -100,6 +100,14 @@ export const TIPS: Record<Page, readonly string[]> = {
         'Haiku: the wise overseer / weighs each ticket, then decides / I just lean and stare',
         'Dear diary, read every reason in a tick. Felt seen. Was not mentioned.',
     ],
+    '/spend': [
+        "It looks like you're counting money. I'm counting too. I got to three.",
+        'Unhelpful tip: an idle tick costs money to decide nothing. I decide nothing for free.',
+        'Dear diary, saw the bars go up. Asked if the hats were in there. They were not.',
+        'Hot take: the cheapest run is the one I talked you out of.',
+        'Haiku: a bar for each day / stacked by who spent what on what / none of it was me',
+        'Fun fact: tokens are like leaves. You never notice them until they are on the bill.',
+    ],
     '/settings': [
         "It looks like you're in Settings. You can turn me off here. I'd rather you didn't.",
         'Unhelpful tip: the Spicy ticker is for professionals.',
@@ -133,6 +141,7 @@ export const ANYWHERE: readonly string[] = [
     'Unhelpful tip: if in doubt, wiggle the pointer. I will look at it.',
     'Hot take: the best code is what a worker wrote while you got coffee.',
     'Fun fact: I am powered by being looked at. Thank you for your service.',
+    'Dear diary, they gave me a keyboard to help vibe code. I have no hands. The vibes are immaculate.',
 ]
 
 const PAGES = new Set<string>([...SECTIONS, '/search'])

@@ -65,7 +65,8 @@ describe('TIPS', () => {
 
 describe('tipFor', () => {
     it("draws from the page's tips and the ones for anywhere", () => {
-        const tips = new Set(Array.from({ length: 20 }, (_, n) => tipFor('/chores/deps', n, 0)))
+        const length = TIPS['/chores'].length + ANYWHERE.length
+        const tips = new Set(Array.from({ length }, (_, n) => tipFor('/chores/deps', n, 0)))
         expect(tips).toEqual(new Set([...TIPS['/chores'], ...ANYWHERE]))
     })
 

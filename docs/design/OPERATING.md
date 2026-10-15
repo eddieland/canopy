@@ -115,6 +115,7 @@ to do instead.
 | `tracker.labels` | user-only | defines this operator's queue |
 | `tracker.mcp_server`, `tracker.read_tools` | user-only | what a private ticket's worker may call (§22) |
 | `tracker.private` | user-only | turns a queue label into a start record (§22) |
+| `tracker.query_every_minutes` | user-only | how often the overseer pays to run the query (§7): the operator's spend |
 | `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
 | `trust.branch_prefix`, `trust.pr_label` | shared | team conventions for spotting agent work |
 | `trust.authorized_repliers` | user-only | who may steer this operator's workers |
@@ -164,6 +165,7 @@ labels = ["agent-ready-yourname"]
 mcp_server = ""         # optional; the tracker's MCP server as OpenCode names it; default by provider (§22)
 # read_tools = [...]    # optional; the only tools of it a private ticket's worker may call; default by provider
 private = false         # optional; true starts a labeled ticket privately on its first dispatch (§22)
+query_every_minutes = 0 # the least time between ticks that run the query; 0 runs it every tick (§7)
 
 [capacity]
 max_workers = 2
@@ -268,8 +270,7 @@ Rules:
   `{definitions_dir}`), it prints the error. It warns about copies of canopy's agent definitions in the OpenCode config
   of the workspace root and of each cloned repository, which stop runs (§13). Unless `worker_cmd` already starts with
   `canopy-sandbox`, it prints that template behind the wrapper's prefix as a line for the user file, pointing to
-  `docs/SANDBOX.md`, and writes nothing: the sandbox is opt-in and needs `canopy sandbox setup` first (HOST_ISOLATION
-  §5).
+  `docs/SANDBOX.md`, and writes nothing: the sandbox is opt-in and needs `canopy sandbox setup` first (§24).
 - `canopy sandbox setup` needs no workspace. It copies `canopy-sandbox`'s policy templates to
   `<user config dir>/sandbox/` (0700), never over one that is there; installs `srt` with
   `npm ci --ignore-scripts --engine-strict` from the lockfile the wrapper ships, into
@@ -279,7 +280,7 @@ Rules:
   namespace (naming the AppArmor sysctl when that is why not), on macOS ripgrep, and that canopy is not root. On Linux
   it also checks what `srt` only warns about, with `--debug`, and runs without: bubblewrap 0.5.0 or later, and a
   machine `srt` ships its seccomp filter for (x86_64, aarch64), without which a sandboxed command can connect to any
-  Unix socket it sees. Either missing would leave a sandbox weaker than HOST_ISOLATION says, so each is a thing to do.
+  Unix socket it sees. Either missing would leave a sandbox weaker than §24 says, so each is a thing to do.
   It prints each thing left to do and exits 1 while there is one; it writes no config, and prints the `worker_cmd`
   line `canopy init` does (D117).
 - `capacity.slots_per_repo` and `[capacity.repo_slots]` declare each repository's pool size in a workspace (§18).
@@ -327,6 +328,8 @@ skill by name and give it to the overseer in its definition, so it need not be l
 `tracker.query` is how the overseer finds candidates: in the tracker's search syntax where it has one (JQL, GitHub issue
 search), otherwise plain language. It finds tickets; it does not authorize them (§17). The repository's query usually
 omits the label; an operator can override it in the user file to include their labels and save the overseer reads.
+It is shared though the overseer reads every ticket it returns before it checks labels: the operator's choice
+(2026-10-15), with that exposure stated in TRUST_MODEL T7's residual.
 
 ## 13. Agent runtime
 
@@ -486,6 +489,19 @@ help no run, so a `$HOME` copy,
 which canopy's own runs also load, never meets a same-named skill. It opens by telling an agent started by canopy
 (`CANOPY_TICK_ID` set, or a canopy prompt) to follow its prompt instead. It grants nothing: the overseer's and worker's
 bash rules apply either way.
+
+### Shell completion
+
+`canopy completion SHELL` prints the script that completes canopy in bash (4.4 or newer), zsh, or fish; the operator
+loads it from their shell's startup file, as its help shows. The script is click's: on Tab it runs `canopy` with
+`_CANOPY_COMPLETE` set, which click answers before any command runs. Commands, options, and choices complete from the
+CLI's definition, less the commands only the overseer runs inside a tick (`dispatch`, `decide`, `attention`, `mirror`,
+`ticket set`, and `chore` and `review`'s `run` and `wait`): they would refuse the operator anyway, so Tab does not offer
+them, though `--help` still lists them and a command typed in full still completes its arguments. Repository names
+complete from the map of the workspace the shell is in, and chore names from its config; outside a workspace, or when
+its config does not load, they complete to nothing rather than fail. Ticket keys do not complete: that would mean
+opening the journal on every Tab. The command prints click's template itself rather than calling its `source()`, whose
+bash version check runs bash outside `canopy.infra.procs`.
 
 ## 14. Attention list
 

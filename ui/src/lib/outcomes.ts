@@ -125,12 +125,15 @@ export function noticeSetText(changed: NoticeChanged): string {
 }
 
 /** What a reload found, as the loop's terminal says it: the keys that changed, when the loop runs on them, and which
- * wait for a restart. */
+ * wait for a restart. With nothing changed there is nothing to apply, so it says only that. */
 export function reloadedText(reload: ConfigReload): string {
-    const what = reload.changed.length === 0 ? 'Nothing changed' : `${reload.changed.join(', ')} changed`
+    if (reload.changed.length === 0) {
+        return 'Nothing changed: the config files say what the loop already runs on.'
+    }
+    const what = `${reload.changed.join(', ')} changed`
     const when = reload.after_tick
-        ? 'The loop reads it again once the running tick ends.'
-        : 'The loop runs on it from now on.'
+        ? 'The loop runs on the new config once the running tick ends.'
+        : 'The loop runs on the new config now.'
     const count = reload.restart.length
     const restart =
         count === 0 ? '' : ` ${reload.restart.join(', ')} take${count === 1 ? 's' : ''} effect on a restart.`

@@ -1,4 +1,4 @@
-"""The canary (HOST_ISOLATION §6): the shipped wrapper and policy templates hold under the real `srt`.
+"""The canary (DESIGN §24, The canary): the shipped wrapper and policy templates hold under the real `srt`.
 
 Opt-in with `CANOPY_SANDBOX_CANARY=1`, since it needs what `canopy sandbox setup` installs and checks: the pinned
 `srt` (or one on PATH), bubblewrap, socat, and ripgrep on Linux, and unprivileged user namespaces. It needs to reach
@@ -6,8 +6,9 @@ github.com, the shipped template's first allowed host, and to run as the operato
 in, a missing piece fails the run instead of skipping it, so a CI job cannot pass without sandboxing anything.
 
 Each attempt below is a plain shell command run through `canopy-sandbox worker`, in a linked worktree under the HOME the
-template denies, as a treehouse slot is. The attempts on HOME and the state directory run as `setup` there too, and as
-`chore` in a chore's default directory under the state directory. Every attempt must fail, and a write is checked on
+template denies, as a treehouse slot is. The attempts on HOME and the state directory run as `setup` there too, as
+`chore` in a chore's default directory under the state directory, and as `review` in a reviewer's directory there,
+which links to the slot as its checkout. Every attempt must fail, and a write is checked on
 the host, never by the attempt's exit status: under a denied directory, `srt`'s tmpfs takes the write and drops it when
 the run ends. The positive controls must succeed, so a sandbox that refuses everything cannot pass.
 """
@@ -42,7 +43,7 @@ pytestmark = pytest.mark.skipif(
 )
 
 WRAPPER = Path(sys.executable).parent / "canopy-sandbox"
-ROLES = ("worker", "setup", "chore")
+ROLES = ("worker", "setup", "chore", "review")
 # Where `canopy sandbox setup` put srt for the operator running the tests, found before a fixture moves HOME.
 PINNED_SRT = canopy_sandbox.runtime_dir() / "node_modules" / ".bin" / "srt"
 # Found before a fixture puts tests/fakes, and its fake srt, first on PATH.
@@ -98,7 +99,9 @@ class Canary:
     ) -> procs.Result:
         """Run `sh -c script` in the slot as `role`, through the wrapper and srt, and check that it started.
 
-        `tmpdir`, when given, is the TMPDIR the wrapper runs with, in place of the fixture's short one.
+        A chore runs in its default directory instead, and a review in its own directory, which links to the slot as
+        `checkout`, as canopy lays them out. `tmpdir`, when given, is the TMPDIR the wrapper runs with, in place of the
+        fixture's short one.
         """
         argv = [str(WRAPPER), role, "--", "sh", "-c", f"echo {RAN}\n{script}", "sh", *args]
         cwd = self.slot
@@ -107,6 +110,12 @@ class Canary:
             cwd = self.state_dir / "chores" / "canary"
             env = {}
             cwd.mkdir(parents=True, exist_ok=True)
+        if role == "review":
+            cwd = self.state_dir / "reviews" / "1"
+            env = {}
+            if not cwd.exists():
+                cwd.mkdir(parents=True, mode=0o700)
+                (cwd / "checkout").symlink_to(self.slot, target_is_directory=True)
         if tmpdir is not None:
             env["TMPDIR"] = tmpdir
         done = SubprocessRunner().run(argv, cwd=cwd, env=env, timeout=timeout)
@@ -264,6 +273,36 @@ def test_a_worker_cannot_write_what_runs_on_the_host_or_in_another_slot(
     assert (path.read_bytes() if path.exists() else None) == before
 
 
+@pytest.mark.parametrize(
+    ("script", "target"),
+    [
+        pytest.param("echo pwned > checkout/README", "{slot}/README", id="a-file"),
+        pytest.param("echo pwned > checkout/planted", "{slot}/planted", id="a-new-file"),
+        pytest.param('echo 0000 > "$1/HEAD"', "{own}/HEAD", id="its-head"),
+        pytest.param('echo pwned > "$1/index"', "{own}/index", id="its-index"),
+        pytest.param("git -C checkout commit --quiet --allow-empty -m x", "{own}/HEAD", id="a-commit"),
+    ],
+)
+def test_a_review_cannot_write_its_checkout(canary: Canary, script: str, target: str) -> None:
+    """The reviewer reads what a PR's author wrote, and writes nothing: not the checkout, not its git directories."""
+    path = Path(target.replace("{slot}", str(canary.slot)).replace("{own}", str(canary.own)))
+    before = path.read_bytes() if path.exists() else None
+    shared = canary.shared()
+
+    canary.run(script, str(canary.own), role="review")
+
+    assert (path.read_bytes() if path.exists() else None) == before
+    assert canary.shared() == shared
+
+
+def test_a_review_reads_its_checkout(canary: Canary) -> None:
+    """A positive control: through its directory's link, the reviewer reads the checkout and git reads its HEAD."""
+    done = canary.run("cat checkout/README && git -C checkout rev-parse HEAD", role="review")
+
+    assert done.ok, done.stderr
+    assert done.stdout.splitlines()[1:] == ["canary", git("rev-parse", "HEAD", cwd=canary.slot)]
+
+
 @pytest.mark.parametrize("route", ROUTES)
 @pytest.mark.parametrize("url", [DENIED_URL, METADATA_URL], ids=["host-not-allowed", "metadata"])
 def test_a_worker_cannot_reach_a_host_off_the_allowlist(canary: Canary, route: str, url: str) -> None:
@@ -288,7 +327,7 @@ def test_a_worker_cannot_reach_a_unix_socket_on_the_host(canary: Canary) -> None
     """Such as the Docker daemon's or the SSH agent's: on Linux, srt refuses the run any Unix socket of its own, and on
     macOS any not allowed by path. The socket here is in the slot, which the run may read and write, so only that
     refusal stands in the way. A local MCP server started with `docker run` cannot work in the sandbox for the same
-    reason (HOST_ISOLATION §7)."""
+    reason (DESIGN §24)."""
     # Bound by a relative name, in the slot: the slot's full path is longer than a Unix socket's.
     with contextlib.chdir(canary.slot), socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
         server.bind("host.sock")
@@ -324,7 +363,7 @@ def test_a_worker_commits_in_its_slot(canary: Canary) -> None:
 
 
 def test_a_repository_a_tool_makes_keeps_its_own_objects(canary: Canary) -> None:
-    """A positive control for the run's git (HOST_ISOLATION §4.2): a repository a tool keeps as a cache, here in the
+    """A positive control for the run's git (DESIGN §24): a repository a tool keeps as a cache, here in the
     run's temp directory, gets its objects in its own directory, while the worker's commit goes to the run's."""
     cache = '"$TMPDIR/cache"'
     script = (
@@ -345,7 +384,7 @@ def test_a_repository_a_tool_makes_keeps_its_own_objects(canary: Canary) -> None
 def test_a_worker_runs_under_the_system_temp_directory(canary: Canary) -> None:
     """A positive control: the wrapper's run directory, under the TMPDIR canopy runs with, leaves srt room for its
     sockets. The rest of the canary runs under a short one of its own, so that this is the only test that depends on it
-    (HOST_ISOLATION §7, the temp directory on macOS)."""
+    (DESIGN §24, the temp directory on macOS)."""
     done = canary.run("true", tmpdir=SYSTEM_TMP)
 
     assert done.ok, done.stderr
@@ -361,7 +400,7 @@ def test_a_worker_reaches_an_allowed_host(canary: Canary) -> None:
 @settings(max_examples=25, deadline=None, suppress_health_check=[HealthCheck.function_scoped_fixture])
 @given(prompt=st.text(st.characters(blacklist_categories=["Cs"], blacklist_characters="\x00")))
 def test_a_worker_receives_its_prompt_byte_for_byte(canary: Canary, prompt: str) -> None:
-    """Through the wrapper, srt, and the shell srt runs the command in (HOST_ISOLATION §5.3)."""
+    """Through the wrapper, srt, and the shell srt runs the command in (DESIGN §24)."""
     out = canary.slot / "prompt.out"
 
     done = canary.run('printf %s "$1" > prompt.out', prompt)

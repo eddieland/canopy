@@ -104,6 +104,22 @@ test.describe('turned on', () => {
         await expect(pupil).toHaveAttribute('transform', /^translate\(-[\d.]+ -[\d.]+\)$/u)
     })
 
+    test('Sprig types on its keyboard, and holds its keys still under reduced motion', async ({ page }) => {
+        const typing = () =>
+            page.evaluate(
+                () =>
+                    document.getAnimations().filter((a) => a instanceof CSSAnimation && a.animationName === 'buddy-key')
+                        .length,
+            )
+        await page.goto('attention')
+        await settled(page)
+        await expect(page.locator('[data-testid=buddy] [data-keyboard]')).toHaveCount(1)
+        expect(await typing()).toBe(6)
+
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        await expect.poll(typing).toBe(0)
+    })
+
     test('Sprig stands above the rail footer, never on the version', async ({ page }) => {
         await page.goto('settings')
         await settled(page)
@@ -141,7 +157,7 @@ test.describe('turned on', () => {
     test("Sprig stands over the spend a little in a laptop's window, and tips there only when asked", async ({
         page,
     }) => {
-        await page.setViewportSize({ width: 1280, height: 820 })
+        await page.setViewportSize({ width: 1280, height: 854 })
         await page.goto('attention')
         await settled(page)
         await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'tight')
@@ -165,7 +181,7 @@ test.describe('turned on', () => {
 
     test('a tip waiting unseen in a tight rail still shows its full time once the rail has room', async ({ page }) => {
         await page.clock.install()
-        await page.setViewportSize({ width: 1280, height: 820 })
+        await page.setViewportSize({ width: 1280, height: 854 })
         await page.goto('attention')
         await settled(page)
         const tip = page.getByTestId('buddy-tip')

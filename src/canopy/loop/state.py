@@ -38,6 +38,7 @@ class OverseerState(TypedDict):
     repositories: list[RepositoryState]
     tickets: list[TicketState]
     stopped: list[str]
+    recently_done: list[DoneTicket]
     split_children: list[SplitChild]
     chores: NotRequired[list[ChoreSummary]]
     reviews: NotRequired[ReviewsSection]
@@ -46,6 +47,7 @@ class OverseerState(TypedDict):
     capacity: CapacityState
     running_workers: list[RunningWorker]
     mirror: MirrorState
+    query_due: bool
     tick_id: int
     now: str
     dry_run: bool
@@ -156,6 +158,13 @@ class LeasedSlot(TypedDict):
     leased_at: str | None
 
 
+class DoneTicket(TypedDict):
+    """A ticket marked done lately, and when (DESIGN §7): one the query may still find open, since humans close it."""
+
+    key: str
+    done_at: str
+
+
 class SplitChild(TypedDict):
     """A child of a split not yet done, with its split run's end (DESIGN §18)."""
 
@@ -213,6 +222,7 @@ def state_block(
     running: list[sqlite3.Row],
     tickets: list[sqlite3.Row],
     stopped: Sequence[str],
+    recently_done: Sequence[sqlite3.Row] = (),
     units: Mapping[str, list[sqlite3.Row]],
     last_runs: Mapping[str, sqlite3.Row],
     run_slots: Mapping[int, list[sqlite3.Row]],
@@ -229,11 +239,14 @@ def state_block(
     operator: Mapping[str, conversation.OperatorSection] | None = None,
     mirror_delimiter: str,
     attention: list[OpenItem] | None = None,
+    query_due: bool,
 ) -> str:
     """Render the `## State` section the harness sends the overseer as its message, after its prompt.
 
-    `tickets` leave out the tickets the operator stopped, which `stopped` names by key (DESIGN §22). `units` are each
-    ticket's units and `run_slots` each running or latest run's slots, by run id. `attempts`, `grants`, and
+    `tickets` leave out the tickets the operator stopped, which `stopped` names by key (DESIGN §22), and the tickets
+    marked done; `recently_done` names those marked done lately, with when, so the overseer leaves out one the tracker
+    still shows open (DESIGN §7). `units` are each ticket's units and `run_slots` each running or latest run's slots,
+    by run id. `attempts`, `grants`, and
     `fix_ci_cooldowns` are per unit (`policy.unit`); a unit the operator granted no runs has no `granted` key (DESIGN
     §22). `split_attempts` are per ticket, and `split_children` are the children of splits not yet done, with their
     split run's end (DESIGN §18). `chores` are the configured chores (DESIGN §19); with none, the block has no `chores`
@@ -243,7 +256,8 @@ def state_block(
     operator messages newer than its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7,
     D089). `mirror_delimiter` ends the heredoc the overseer passes each mirrored comment's body in: the tick's own, so
     no comment can predict it. `attention` is the open items the overseer recorded (`attention.for_overseer`), so it
-    sees what leaving one out drops (ROADMAP M28).
+    sees what leaving one out drops (ROADMAP M28). `query_due` says whether the overseer runs the tracker query this
+    tick or works the tickets the block lists alone (DESIGN §7, Spacing the query).
 
     Returns:
         The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
@@ -352,6 +366,8 @@ def state_block(
         "tickets": [ticket_summary(t) for t in tickets],
         # Tickets the operator stopped: not candidates, whatever their labels, and owed no decision (DESIGN §22).
         "stopped": list(stopped),
+        # Tickets marked done lately: owed no decision while the tracker still shows them open (DESIGN §7).
+        "recently_done": [{"key": str(t["key"]), "done_at": str(t["done_at"])} for t in recently_done],
         # A child is a candidate only with a queue label added after its split run ended (DESIGN §18).
         "split_children": [
             {
@@ -391,6 +407,8 @@ def state_block(
         ],
         # Tracker comments the overseer copies into the journal (DESIGN §22).
         "mirror": {"max_per_tick": conversation.MIRRORS_PER_TICK, "body_delimiter": mirror_delimiter},
+        # Whether this tick runs the tracker query, or works the tickets above alone (DESIGN §7, Spacing the query).
+        "query_due": query_due,
         "tick_id": tick_id,
         "now": db.format_time(now),
         "dry_run": dry_run,

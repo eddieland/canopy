@@ -45,6 +45,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
 | `buddy-eye`, `buddy-pupil` | Sprig's googly eyes: the white and the pupil, and its rim. |
 | `buddy-leaf` | The sprig on Sprig's head. A green of its own, never `status-done`'s. |
+| `buddy-keyboard`, `buddy-key` | Sprig's keyboard: its case and its keys. A key pressed lights in the accent. |
 
 Rules:
 
@@ -67,10 +68,11 @@ Rules:
   pulse; the run it names does, on the runs page), `held` is `status-stopped`, `dirty` is `status-blocked`, `broken`
   is `status-failed`. An `idle` slot is a hollow ring in `muted-foreground`: nothing holds it, so no status color
   claims it.
-- **Section colors**, one per nav item: Attention rose, Runs violet, Worktrees teal, Tickets sky, Pull requests gold,
-  Reviews fuchsia, Chores orange, Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from
-  `useSection`). They go on the nav's icons and highlight, the first step of the page header's trail, and the header's
-  aurora, and nowhere in a page's data: there a color is a state's. A page in no section (the 404) takes the accent.
+- **Section colors**, one per nav item: Attention rose, Tickets sky, Pull requests gold, Reviews fuchsia, Runs violet,
+  Chores orange, Spend azure, Ticks lime, Worktrees teal, Settings lavender (`src/lib/sections.ts`; the current one
+  from `useSection`). They go on the nav's icons and highlight, the first step of the page header's trail, and the
+  header's aurora, and nowhere in a page's data: there a color is a state's. A page in no section (the 404) takes the
+  accent.
 - **Spend series** (`src/lib/spend.ts`) color a kind of agent run in the spend page's chart and its legend, and
   nowhere else: they are fills, never text, so the legend's words are `muted-foreground` beside a swatch. Idle overseer
   spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both themes, WCAG's
@@ -109,7 +111,9 @@ Rules:
   tall as the window under the header. Printed, the shell is not held to the window and shows the page whole; a
   screenshot test does the same by growing the window to the page (`growToPage` in `e2e/helpers.ts`).
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
-  (`src/components/shell/rail.tsx`). Each nav item says on hover what its page holds, and each spend window what it
+  (`src/components/shell/rail.tsx`). The nav lists the sections by how often the operator opens them (`SECTIONS` in
+  `src/lib/sections.ts`): what they work in first (Attention, Tickets, Pull requests, Reviews), then what they check
+  now and then, with Settings last. Each nav item says on hover what its page holds, and each spend window what it
   covers, as a native `title`; a spend window opens the spend page over its week or month. Each block under the nav
   is a hairline and a `panel-label` over its content. The working runs are those running first, then those waiting
   on the operator's answer, each oldest first, a ticket's latest run alone: a dot in its state's color, the ticket's
@@ -240,10 +244,12 @@ The ticker:
 
 Sprig:
 
-- Sprig (`Buddy`, `src/components/shell/buddy.tsx`) is a bent wire with a sprig on top and googly eyes, at the foot of
-  the side rail, under a speech bubble offering a tip about the page. It is off until Settings turns it on. Its tips
-  are by page (`TIPS` in `src/lib/buddy.ts`): a set for each nav section (`src/lib/sections.ts`, so a new section
-  must get its own) and for the search page, then ones for anywhere. Every one is a joke, and none opens with "Tip:",
+- Sprig (`Buddy`, `src/components/shell/buddy.tsx`) is a bent wire with a sprig on top and googly eyes, behind a
+  keyboard it vibe codes on (`Keyboard`), at the foot of the side rail, under a speech bubble offering a tip about
+  the page. The keyboard stands in front of the wire's foot, inside the figure's own box, so Sprig takes no more room
+  for it. It is off until Settings turns it on. Its tips are by page (`TIPS` in `src/lib/buddy.ts`): a set for each
+  nav section (`src/lib/sections.ts`, so a new section must get its own) and for the search page, then ones for
+  anywhere. Every one is a joke, and none opens with "Tip:",
   which on the ticker names something real; a joke dressed as a tip opens with "Unhelpful tip:". The jokes come in
   several voices (the paperclip's "It looks like you're...", a false "Fun fact:", a "Hot take:", a diary entry, a
   haiku, a riddle), mixed in each list so that no voice follows itself. Clicking Sprig, or the bubble's Another tip,
@@ -283,7 +289,8 @@ The empty inbox, and an item clearing:
 
 Motion says something arrived or changed, and gives the page some life without asking for attention. It is short
 (at most 700ms), eased out (`cubic-bezier(0.2, 0, 0, 1)`), and never loops on anything but the logo, a running run,
-a skeleton, the empty inbox, the header's ticker, and Sprig's blink. The keyframes and utilities are in `src/index.css`.
+a skeleton, the empty inbox, the header's ticker, and Sprig's blink and typing. The keyframes and utilities are in
+`src/index.css`.
 
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
   new one is ready, because navigations run inside React transitions.
@@ -308,14 +315,16 @@ a skeleton, the empty inbox, the header's ticker, and Sprig's blink. The keyfram
   below).
 - An item leaving the attention list fades and folds shut as a leaf tumbles off it (Fun, above). Its fold is the one
   animation that fills forwards: the row is let go once it has played.
-- Sprig's tip pops in a moment after a page arrives, its brows rise once with each new tip, and its eyes blink now and
-  then and look toward the pointer.
+- Sprig's tip pops in a moment after a page arrives, its brows rise once with each new tip, its eyes blink now and
+  then and look toward the pointer, and every 5 seconds it types a burst on its keyboard, each key it presses sinking
+  and lighting in the accent for a moment.
+- A toast rises in from below and fades out.
 - Only `running` runs pulse.
 - Every animation rests on the frame a still page shows (its last, or for a loop its first), so a screenshot with
   animations frozen is the page at rest.
 - Everything above is off under `prefers-reduced-motion: reduce`: the theme swaps instantly, values and rows appear
   in place, pulses, ripples, and the drifting leaf are hidden, a cleared item is simply gone, the ticker shows its
-  first headline in place, and Sprig's eyes hold still. New motion goes inside a `prefers-reduced-motion:
+  first headline in place, and Sprig's eyes and keys hold still. New motion goes inside a `prefers-reduced-motion:
   no-preference` block or a `motion-safe:` variant.
 
 ## No layout shift
@@ -407,7 +416,8 @@ list, an empty state, or a skeleton by hand.
   when the list has two items or more. Search has none: its hits are each source's newest few, so flipped they would
   read as its oldest.
 - **A list that grows without bound scrolls inside its panel** (`PanelScroll`) when other panels sit under it in the
-  same column: a ticket's recent runs and decisions, a chore's open findings and recent runs. Past `28rem` the rows
+  same column: a ticket's recent runs and decisions, a chore's open findings and recent runs, the spend page's days
+  (past `15rem`, under its pinned column names, so a week shows whole and 30 days scroll). Past `28rem` the rows
   scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
   so the keyboard scrolls it too. A list that is its page's main content (the runs page, a tick's decisions) does
   not: the page scrolls instead.
@@ -474,8 +484,9 @@ list, an empty state, or a skeleton by hand.
 - **The spend chart** (the spend page): a bar per UTC day, the series stacked bottom up in `SERIES` order, idle
   overseer spend on the baseline so it compares across days, each segment as tall as its share of the dearest day.
   A bar says its day and each series' cost on hover. The chart is `aria-hidden`: the table under it, newest day first,
-  holds the same numbers for a screen reader, each a `Cost`. A week names every day on the axis; 30 days every fifth,
-  back from today. The window is a segmented control (`ToggleGroup`) in the totals' panel header, kept in `?days=`.
+  holds the same numbers for a screen reader, each a `Cost`, and scrolls past a week (`PanelScroll`). A week names
+  every day on the axis; 30 days every fifth, back from today. The window is a segmented control (`ToggleGroup`) in
+  the totals' panel header, kept in `?days=`.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.
@@ -509,7 +520,9 @@ list, an empty state, or a skeleton by hand.
   `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows, under the item, the ticket's
   actions and what it is stuck at (below), then its conversation and the reply form, as a ticket's page orders them;
   an item about a PR no ticket owns, its review limit; a chore's item (a finding or `chore_failed`) shows the chore's
-  notes and the note form, and a finding a ghost `dismiss` beside its age (`useDismissFinding`); an item about neither
+  notes and the note form, and a finding a ghost `dismiss` beside its age (`useDismissFinding`) and, in place of its
+  detail, the finding as its chore's page has it (`ChoreFindingText`): the title whole, then what it says of itself,
+  then its link on its own line, where the item's detail runs title and link together; an item about neither
   shows its detail and nothing to answer. The page keeps no list of the runs working now: the rail's, on every page,
   is the one, so one count of them shows at a time.
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
@@ -525,7 +538,9 @@ list, an empty state, or a skeleton by hand.
   runs on the stream, so it rises in when the run starts and leaves when it ends.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
-  new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below).
+  new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below), and so is a GitHub
+  PR's address in a conversation's bubble or a chore's finding, its detail or its link, as in the harness's lines
+  (`InlineCode`).
 - **A chore's notes** are a conversation of the operator's words alone, between the chore's schedule and its findings
   and runs, with a note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the
   next run` in `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
@@ -584,14 +599,18 @@ list, an empty state, or a skeleton by hand.
   A conversation's bubbles keep their own `whitespace-pre-wrap`.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then how often it may start and its window (`cadenceText`: `every 360 minutes`, as
-  the config and the CLI say it; `windowText`), its open findings, and what its runs cost in the last
+  the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed
+  as `canopy status` counts them (`findingsText`: `1 open finding · 2 dismissed`; its page's findings panel the
+  same, `findingsReadout`: `1 · 2 dismissed`), and what its runs cost in the last
   24 hours and 30 days (`costText`, a dash when none reported a cost). Its page puts that spend in a table under its
   runs, a row a window: runs (`runsText`: `4, 1 unpriced`), total, average, p99, and max. A chore run is a row like a
   run's, its id as `chore:deps#2` (Names, below) linking to its page, with its findings as a chip on
   an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
   how long it has been open, and on the chore's page has `dismiss` after its age, or once dismissed a plain
   `dismissed` chip and `undo`: still reported, only off the attention list; its detail and link start under
-  its title. Its id leads the row in muted monospace. A row's own action is a ghost `xs`
+  its title. Its title is never cut: it is the finding's name and up to 200 characters, so it wraps, with the head
+  line on its first line's baseline. Its id leads the row in muted monospace, at most `12rem` wide; a longer one
+  wraps down beside the detail rather than squeeze the title. A row's own action is a ghost `xs`
   button in monospace in its head line, as the list-order toggle is, never a full button under the row; what it did
   goes under the row, once clicked.
 - **Names** (`src/lib/refs.ts`): what canopy keeps by id is named as the CLI reads a reference, `KIND:ID`, in rows,
@@ -630,10 +649,19 @@ list, an empty state, or a skeleton by hand.
   from the workspace root (`CopyablePath`), joined to `/meta`'s root; until that is read there is no button, so a copy
   is never the short path. The button is a ghost `icon-xs` with the
   `Copy` icon, muted until hovered; a click shows `Check` in the accent, or `X` in `status-failed` when the browser
-  refuses, for 1.5 seconds, and names what happened (`Copied branch`). In a dense list (a worktree slot's path and
-  branch) it shows only while its row (`group/copy`) is hovered or it has the focus, keeping its space so nothing
-  moves, and always on a touch screen. The clipboard needs a secure context (https or localhost), so elsewhere there
-  is no button and the text stays selectable.
+  refuses, for 1.5 seconds, and names what happened (`Copied branch`), and a toast says the same with the text it
+  copied, on one line. In a dense list (a worktree slot's path and branch) it shows only while its row (`group/copy`)
+  is hovered or it has the focus, keeping its space so nothing moves, and always on a touch screen. The clipboard
+  needs a secure context (https or localhost), so elsewhere there is no button and the text stays selectable.
+- **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was
+  done shows too little of it: a copy names what it copied. It sits at the bottom center of the window on `surface`
+  with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title in `text-sm`, and a line under it
+  in muted monospace `text-xs`, on one line with an ellipsis where it is cut: what it names is on the clipboard,
+  whole. It closes on its own after 3 seconds, held while the pointer or the focus is on it, or when swiped down; F8
+  reaches it from the keyboard and Escape closes it. At most three show, the newest last. A screen reader announces
+  it. It never carries an action, and it is never the only place an outcome shows: the control that acted says so
+  too, and a refusal is still a `Notice`. `main.tsx` renders the one `Toaster`, around the router, so a toast
+  outlives the page it came from.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
   a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
   composition only commits it (`src/lib/send-key.ts`). Its field is named for the form, as its panel is for its page:

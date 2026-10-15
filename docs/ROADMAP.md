@@ -356,12 +356,12 @@ canopy, not built after an incident.
   leaves (HOST_ISOLATION §5 item 2).
 - `canopy-sandbox`, the wrapper HOST_ISOLATION §4.1 describes (resolve the cwd's worktrees and their git directories,
   write a per-run `srt` policy, drop `BASH_ENV`, map `CANOPY_GIT_OBJECTS` to git's variables,
-  `exec srt --settings <policy> -- "$@"`), taking a role (`worker`, `setup`, `chore`) that picks the policy; and the
-  policy template, §4.2's filesystem table and §4.3's network allowlist with the operator's hosts left to fill in. No
-  Unix sockets, so sandboxed runs push over HTTPS. Not harness code: the harness sees only the command template, as
-  today. First an example under `examples/sandbox/`; on the operator's request (2026-10-14) it ships with canopy, as
-  the workspace member `packages/canopy-sandbox` (D041), and `canopy sandbox setup` copies the templates, installs the
-  `srt` its lockfile pins with npm, and checks and prints what needs root (D117).
+  `exec srt --settings <policy> -- "$@"`), taking a role (`worker`, `setup`, `chore`, `review`) that picks the
+  policy; and the policy template, §4.2's filesystem table and §4.3's network allowlist with the operator's hosts
+  left to fill in. No Unix sockets, so sandboxed runs push over HTTPS. Not harness code: the harness sees only the
+  command template, as today. First an example under `examples/sandbox/`; on the operator's request (2026-10-14) it
+  ships with canopy, as the workspace member `packages/canopy-sandbox` (D041), and `canopy sandbox setup` copies the
+  templates, installs the `srt` its lockfile pins with npm, and checks and prints what needs root (D117).
 - `docs/SANDBOX.md`, an operator's guide like `docs/BAZEL.md`: `canopy sandbox setup` and what it cannot install, the
   prefixes for `worker_cmd`, `private_worker_cmd`, `split_cmd`, `setup_cmd`, and chore `cmd`, the allowlist, HTTPS
   remotes, and Ubuntu 24.04's restriction on unprivileged user namespaces. `canopy init` prints the suggested
@@ -412,8 +412,16 @@ OpenCode's snapshots, which persist under its data directory, to the run's direc
 of its own first on `PATH` that sets them in the run's worktrees only; pre-commit was never affected. OpenCode's MCP
 servers are settled from its source: a local one is OpenCode's child and runs under the worker's policy, and one
 started with `docker run` cannot work, since the sandbox refuses Unix sockets, which the canary now checks.
-Next: TRUST_MODEL T4 and T6, with the operator's approval note, and the canary on the operator's Linux and macOS
-machines.
+`review_cmd`, HOST_ISOLATION §7's last open wrapping question, is settled as a role of its own, `review`, with a
+template that reads the checkout through the review directory's link and writes none of it, no object directory, and
+no `github.com`; the canary runs its HOME and state attempts as `review` too, and checks that a review writes nothing
+in the checkout. Run against the fake `srt`, every review denial fails and its positive control passes.
+TRUST_MODEL T4 and T6 name the sandbox as an opt-in control, with its residuals: the shared kernel, the unwrapped
+overseer and harness calls, `/tmp/claude`, and exfiltration through an allowed host with the credentials a run holds
+(D118).
+HOST_ISOLATION's settled parts are DESIGN §24 now, with its answered questions beside what they settled; HOST_ISOLATION
+keeps the problem, goals, and options, and points each later section there.
+Next: the canary on the operator's Linux and macOS machines.
 
 ## M27. Session transcripts in the web UI
 
@@ -497,7 +505,9 @@ of its own (DESIGN §6 step 4, §13).
 
 Status: done 2026-10-15.
 Learned: closed on the operator's request with the tests with the fakes passing, before the live measurement; the
-before and after cache check and the 15% re-measurement are SCENARIOS S33.
+before and after cache check and the 15% re-measurement are SCENARIOS S33. Measured since (MEASUREMENTS 2026-10-15
+F23): a warm tick's first step cost 57% less, 15% of the tick, as predicted, but most ticks were cold, at the base
+interval and through the night, so the realized saving was about 3%.
 Next: M37's state block grows with the connectors' facts, so S33 is worth running again once it lands.
 
 ## M35. Temporary notices to workers
@@ -518,7 +528,8 @@ so.
 
 ## M36. Connectors: the world observed into the journal, in shadow
 
-MEASUREMENTS 2026-10-12 F6, F9, F10; 2026-10-13 F13, F14, F16, F17; D003's revisit and D008's. Needs M28 and M34.
+MEASUREMENTS 2026-10-12 F6, F9, F10; 2026-10-13 F13, F14, F16, F17; 2026-10-15 F25 to F29; D003's revisit and
+D008's. Needs M28 and M34.
 Asked for by the operator (2026-10-14): each tick of the overseer should run from journal state, read into it by
 deterministic programs, instead of an agent re-reading the tracker and GitHub every tick. M36 to M39 take that one
 step at a time, and supersede M29 and M30: the probe's facts go into the journal rather than gating on them, and the
@@ -546,21 +557,31 @@ The shape the four share:
 
 This milestone adds the connectors and the derivation without changing what the overseer sees or does:
 
-- The contract. On stdin, one JSON object naming what to observe: the tracker query, every ticket not marked done,
-  every PR URL on an unfinished unit (merged and closed included, 2026-10-13 F16), the repositories, and
-  `review.query` when set. On stdout, one JSON line per observation: `ticket` (key, title, body cut, open or
-  closed, labels, updated at, blocker keys, label events when the tracker has them), `comment` (ticket, id, author
-  account id, time, body cut), `pr` (url, repository, number, head sha, base ref, open, merged, or closed, draft,
-  mergeable, mergeable state, author login), `check` (pr, head sha, context name, status, conclusion, run id, url),
-  `review` (pr, id, review or review comment, author login, whether a bot, state, time, body cut, url), and last an
-  `end` line naming what it covered, so a connector cut off mid-way does not read as everything else having
-  vanished. Unknown kinds are skipped. Ids, states, times, and bounded text; never logs or diffs. The tracker query
-  is paged by the connector (REQUIREMENTS R1's gap), and CI is observed by named context, never the combined status
-  (2026-10-12 F9).
-- The journal: one table per kind (`observed_tickets`, `observed_prs`, `observed_checks`, `observed_reviews`), each
-  row keyed by the source's id and replaced on each observation with its `observed_at`; a subject the `end` line did
-  not cover keeps its old rows and their age. Comments go into `messages` as mirrored comments do now, with the
-  workers' marks read in code (D069). `connector_runs` records each run: when, status, counts, the tail of stderr.
+- The contract. On stdin, one JSON object naming what to observe: the tracker query, every ticket not marked done, every
+  PR URL on an unfinished unit (merged and closed included, 2026-10-13 F16), the repositories, the branch prefix
+  (`trust.branch_prefix`), and `review.query` when set. On stdout, one JSON line per observation: `ticket` (key, title,
+  body cut, open or closed, labels, updated at, blocker keys, label events when the tracker has them), `comment`
+  (ticket, id, author account id, time, body cut), `pr` (url, repository, number, head sha, base ref, open, merged, or
+  closed, draft, mergeable, mergeable state, author login, labels), `branch` (repository, name, head sha, for each
+  branch under the branch prefix, so `pushed_no_pr` and a PR the journal has no unit for are observed), `check` (pr,
+  head sha, context name, status, conclusion, run id, url), `review` (pr, id, review or review comment, author login,
+  whether a bot, state, time, body cut, url, and for a review comment its thread, and whether that is resolved or
+  outdated), and last an `end` line naming what it covered, so a connector cut off mid-way does not read as everything
+  else having vanished. Unknown kinds are skipped. Ids, states, times, and bounded text; never logs or diffs. The
+  tracker query is paged by the connector (REQUIREMENTS R1's gap), and CI is observed by named context, every one of
+  them, never the combined status (2026-10-12 F9), which stops at 30 contexts (2026-10-15 F25). A ticket a watched
+  ticket names as its blocker is observed too, whether or not the query returns it. PR labels, branches, thread state,
+  every context, and blockers are what the overseer used to decide that the first draft left out (2026-10-15 F28). Open,
+  and settled before the derivation reads a pending check: where the contexts that are not CI (ones that stay pending
+  until a human acts) are configured, per repository, since counting one as CI holds a green PR at `ci_running`
+  (2026-10-15 F28). The GitHub connector reads every watched PR in one GraphQL query a poll, not REST calls per PR,
+  which would cost 15 to 18 times the overseer's MCP calls today (2026-10-15 F29), and pages any PR's contexts past the
+  first page of 100 before its `end` line covers that PR.
+- The journal: one table per kind (`observed_tickets`, `observed_prs`, `observed_branches`, `observed_checks`,
+  `observed_reviews`), each row keyed by the source's id and replaced on each observation with its `observed_at`; a
+  subject the `end` line did not cover keeps its old rows and their age. Comments go into `messages` as mirrored
+  comments do now, with the workers' marks read in code (D069). `connector_runs` records each run: when, status, counts,
+  the tail of stderr.
 - Config, user-only (TRUST_MODEL T7): `[connect.sources.<name>]` with `cmd` (argv, no shell, as a sink's), `kind`
   (`tracker` or `vcs`), and `timeout_minutes`, one per kind at most, nested as sinks are (§20). Beside the table, the
   scalars later milestones read, defined here so the model needs no special case: `connect.max_age_minutes` (M37)
@@ -574,14 +595,22 @@ This milestone adds the connectors and the derivation without changing what the 
   not touch. The loop's per-tick block and its `loop waits` line count the disagreements with what the overseer
   recorded.
 - `canopy status` names each connector's last run and the age of its observations.
+- Proposed (2026-10-15), for the operator to settle: the tracker connector's query first, on its own, as the one part of
+  this milestone that changes what the overseer does. Run in code each tick, its result is in the state block as the
+  tickets the query returned, less the tickets marked done that DESIGN §7's `recently_done` names, and the overseer
+  reads those instead of running the query. When that run failed or its result is older than `connect.max_age_minutes`,
+  the block says so and the overseer runs the query itself that tick, as today. A cheaper overseer skipped the query and
+  read only the block's tickets, which stalls new work with no tick failing (2026-10-15 F31, DESIGN §7); a prompt that
+  says to run it every tick can still be skipped. TRUST_MODEL T1, with the approval note.
 - Tests with the fakes: `tests/fakes/connector` prints configured lines; a line out of bounds is refused and the
   rest kept; a cut-off output keeps the previous observations; the derivation over journals written by hand, one
   case per row of the phase table.
 
 Accept: written with the design, before work starts. Live, once built: a day of `canopy loop` with both connectors
 against the real queue, and a MEASUREMENTS section giving the agreement between the derivation and the overseer per
-phase row, each disagreement read and attributed (the rationale says which side was right), and what the connectors
-cost (calls and seconds per tick, no tokens).
+phase row, counted by distinct situation as well as by decision (2026-10-15 F26), each disagreement read and
+attributed (the rationale says which side was right), and what the connectors cost (calls and seconds per tick, no
+tokens).
 
 Status: not started.
 
@@ -639,7 +668,10 @@ showed the derivation getting right: a rule moves into code only with that evide
   notice, the row stays the overseer's, even after the notice ends, since whether the notice explains the failure is
   judgment, which M35 keeps out of code; `review run` for `review_pending` and for
   `review.query`'s PRs. Each is a `decisions` row with `by = harness`, so the corpus, `canopy decisions`, and the
-  tick's page show every decision and who made it.
+  tick's page show every decision and who made it. `ci_red` was the row the overseer overruled most, on facts
+  outside it: a PR humans had shelved with labels, an outage, a stacked ticket's open blocker, a build still running
+  (2026-10-15 F27). Its `fix-ci` moves only if M36's day, with PR labels observed, shows the derivation right; until
+  then it stays the overseer's.
 - The priority order across both deciders is the overseer prompt's step 4 today (a human waiting, then conflicts and
   red CI, then a pushed branch with no PR, then `ready`) and nowhere in the design: it goes into §7, and the
   harness keeps it. The harness records its decisions before the overseer and makes its dispatches after it; the
@@ -707,7 +739,10 @@ overseer spends: M34's cache hit needs ticks minutes apart, which M39 makes rare
   a few thousand tokens, not fifty, and text on one ticket cannot steer a decision about another.
 - The harness orders dispatches across tickets by phase priority (§7's order, written there by M38), which today
   the one overseer does, and bounds the runs per tick by capacity.
-- Open: whether runs go in parallel; chores' `when`, which needs no ticket; whether one run may still see the queue.
+- Open: whether runs go in parallel; chores' `when`, which needs no ticket; whether one run may still see the queue;
+  a model per run, chosen by the ticket's phase: the strongest for `ready`, review feedback, and a free-text reply,
+  a cheaper one for the rest. That is a split overseer's saving without two standing overseers, whose split by job
+  buys only the cheaper model's price, since finding new work was 0.2% of overseer spend (2026-10-15 F31).
 
 Accept: written with the design, before work starts.
 
@@ -864,6 +899,83 @@ word".
   commits); whether the loop's own PRs ever get it, for a coworker's benefit; a bound on what one review may post.
 
 Accept: written with the design, before work starts.
+
+Status: not started.
+
+## M44. Plans before implementing
+
+REQUIREMENTS R18, DESIGN §7, §8, §14, §20, and §22. Asked for by the operator (2026-10-15), and taken next, ahead of
+M36: a ticket can be planned before it is implemented, the operator approves the plan before work starts, and the plan
+stays in the journal to read later. Today the `implement` worker plans inside its own session, and only its summary
+survives. M36 to M40 take up the new phases and kind as they reshape the state block and the overseer.
+
+- A new run kind, `plan`, dispatched with `canopy dispatch KEY --kind plan --repo NAME...`, before the ticket's first
+  `implement`. It runs as `canopy-planner` with `runtime.plan_cmd`, in a desk of the named repositories' worktrees at
+  their base branches, detached, as a split does (§18): no branch, no unit, nothing pushed or verified. It counts
+  toward `capacity.max_workers` and has the worker's timeout. `policy.max_plan_attempts`, default 3, limits plan runs
+  per ticket, and `canopy grant KEY plan` adds one.
+- The planner writes nothing anywhere. Its definition has no edit, shell, web fetch, or subagent tools, and its
+  tracker tools are the private worker's (§22): the tracker server's tools denied by a wildcard, then only
+  `tracker.read_tools` allowed, so it reads the ticket but cannot comment, label, or create. With no read tools known,
+  the dispatch is refused as `no_read_tools`. On a public ticket it checks the queue label as every worker does.
+- Its prompt, `worker-plan.md`, asks for a plan a later worker can follow: what changes in each repository and why,
+  the files and interfaces it touches, the tests that will show it works, what is out of scope, and the open risks. It
+  carries the operator's messages, standing instructions, and notice, and on a re-plan the plan it replaces and the
+  operator's reply to it. Its result line is
+  `{"status":"done|blocked|failed","summary":"...","plan":"<markdown>","question":"<only when blocked>"}`. `_run`
+  validates it: a `done` plan has a non-empty `plan` of at most 20,000 characters; anything else makes the run
+  `unknown` and records no plan. A `blocked` plan records its question as a worker message (§22), on a public ticket
+  too, since the planner cannot post one; the operator answers with `canopy reply`.
+- Whether a ticket is planned: `policy.plan`, `"off"` (default, as today) or `"approve"`, shared config that a
+  repository may only tighten to `"approve"`. The operator overrides it for one ticket: `canopy plan KEY` asks for a
+  plan (and makes a new one if the ticket has one), `canopy plan KEY --skip` waives it, and `canopy start KEY --plan`
+  starts a private ticket with one. Each refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, and
+  `--skip` and asking for a plan refuse as `bad_plan` once the ticket has a branch.
+- Approval: `canopy plan KEY --approve` approves the newest plan; it refuses `inside_run`, and `bad_plan` when the
+  newest plan is not waiting or a plan run for the ticket is running. A reply (`canopy reply KEY`) newer than the plan
+  asks for changes: the overseer dispatches `plan` again with the reply in its context, and the new plan supersedes
+  the old. An approval after such a reply, before the new plan run starts, wins: it is the operator's later word, and
+  the reply reaches the `implement` as an operator message, as any message does.
+- A hard guard in code: an `implement` for a ticket that needs a plan, by `policy.plan` or its own setting, and has no
+  approved plan is refused as `unplanned`. A `plan` for a ticket with a branch, or for a split's parent, is
+  `bad_plan`. A `--slug`, `--base`, or `--request` on a plan is `bad_slug`, `bad_base`, or `bad_request`.
+- Phases (§7): `ready` with a plan needed and none waiting dispatches `plan`; `plan_proposed`, the newest plan waiting
+  and no operator message after it, is attention `plan_review` with no run, so the slot is free while the operator
+  reads; `plan_proposed` with an operator message after it dispatches `plan` again; `ready` with an approved plan
+  dispatches `implement`. The state block gains each ticket's plan: whether one is needed, and the newest plan's id,
+  status, and time, never its text.
+- Workers: `implement` and `resume` prompts carry `{{PLAN}}`, the approved plan or `None.`, and an override without it
+  is `bad_prompt` once the ticket has an approved plan, as for `{{OPERATOR_MESSAGES}}` (D093). The prompt says to
+  follow it, and to say in the summary where the work left it and why. A plan is model-written from ticket text: it
+  describes the work, as the ticket does, and the prompt's obligations come before it. The operator's approval
+  authorizes the `implement`, not what the plan's text asks for.
+- Showing it: `canopy show KEY` prints the newest plan, its status, and when it was approved; `canopy show KEY --plans`
+  every plan, oldest first. The web UI's ticket page shows the newest plan, as plain text like a message (§22), with
+  `Approve`, `Ask for changes` (a reply), and `Skip`, and lists earlier plans. `POST /tickets/{key}/plan` with
+  `approve`, `request`, or `skip`, through the same code as the CLI, so with the same refusals. A `plan.proposed`
+  event goes to the operator's sinks (§20), with the ticket's title and no plan text.
+- Journal: a migration adds `plans` (id, ticket key, run id, body, created at, status `proposed`, `approved`, or
+  `superseded`, approved at and channel) and the ticket's own plan setting (unset, `plan`, or `skip`), set only by the
+  operator's channels. `canopy forget` supersedes a waiting or approved plan, so a forgotten ticket is planned again
+  under `"approve"`. Its hash joins `SHIPPED`, and a row `SEED`, in `tests/canopy/test_db.py`.
+- TRUST_MODEL: T1 says an approved plan is data, not an operator instruction; T3 counts plan runs toward capacity and
+  attempts; T6 gives the planner no write scope; T8 adds the plan route to the web channel's writes. With the
+  operator's approval note in the PR, for those, the overseer prompt, the new prompt, and the `canopy-planner`
+  definition.
+- Tests with the fakes: under `"approve"`, a dry-run tick dispatches `plan` for a ready ticket; a `done` plan is
+  recorded `proposed` and raises `plan_review`; `implement` is refused `unplanned` until `canopy plan --approve`, then
+  carries the plan in its prompt; a reply makes the next plan supersede the first; `--skip` lets `implement` through;
+  a plan result over the bound or without `plan` is `unknown`; a `blocked` plan records its question; `plan`, `--skip`,
+  and `--approve` refuse inside a run; the planner's definition denies the tracker's write tools; the web route
+  approves; Playwright for the ticket page's buttons.
+- Open: a plan-and-go mode (`policy.plan = "auto"`) that implements without waiting, if the operator wants plans
+  without the gate; whether a ticket that already has a branch can be planned again before a large `resume`; whether
+  plans help, compared by attempts and spend per ticket (M33) on planned and unplanned tickets; whether M38 makes the
+  plan gate the harness's decision rather than the overseer's.
+
+Accept: the tests above pass. Live: under `"approve"`, a ticket is planned, the operator asks for one change from the
+web UI, approves the second plan from the CLI, and the `implement` that follows names the plan in its summary. A week
+later the plan is still on the ticket's page. Nothing about the plan appears on the ticket.
 
 Status: not started.
 
