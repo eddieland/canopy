@@ -493,10 +493,13 @@ bash rules apply either way.
 `canopy completion SHELL` prints the script that completes canopy in bash (4.4 or newer), zsh, or fish; the operator
 loads it from their shell's startup file, as its help shows. The script is click's: on Tab it runs `canopy` with
 `_CANOPY_COMPLETE` set, which click answers before any command runs. Commands, options, and choices complete from the
-CLI's definition. Repository names complete from the map of the workspace the shell is in, and chore names from its
-config; outside a workspace, or when its config does not load, they complete to nothing rather than fail. Ticket keys
-do not complete: that would mean opening the journal on every Tab. The command prints click's template itself rather
-than calling its `source()`, whose bash version check runs bash outside `canopy.infra.procs`.
+CLI's definition, less the commands only the overseer runs inside a tick (`dispatch`, `decide`, `attention`, `mirror`,
+`ticket set`, and `chore` and `review`'s `run` and `wait`): they would refuse the operator anyway, so Tab does not offer
+them, though `--help` still lists them and a command typed in full still completes its arguments. Repository names
+complete from the map of the workspace the shell is in, and chore names from its config; outside a workspace, or when
+its config does not load, they complete to nothing rather than fail. Ticket keys do not complete: that would mean
+opening the journal on every Tab. The command prints click's template itself rather than calling its `source()`, whose
+bash version check runs bash outside `canopy.infra.procs`.
 
 ## 14. Attention list
 

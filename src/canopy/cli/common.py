@@ -6,6 +6,7 @@ import os
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, override
 
 import click
 
@@ -14,9 +15,40 @@ from canopy.core.context import Context, db_path
 from canopy.infra import logs, procs, resources
 from canopy.loop import tick
 
+if TYPE_CHECKING:
+    from click.shell_completion import CompletionItem
+
 
 class CliError(click.ClickException):
     """A refusal or failure, reported on stderr, exit 1. Misuse is a click.UsageError instead, exit 2."""
+
+
+class OverseerCommand(click.Command):
+    """A command only the overseer runs, inside a tick: `--help` lists it, but Tab does not offer it (DESIGN §13)."""
+
+
+class Group(click.Group):
+    """A command group whose shell completion offers the operator's subcommands, and leaves out the overseer's.
+
+    A group counts as the overseer's when every subcommand in it is, so `canopy ticket` goes with `ticket set`.
+    """
+
+    @override
+    def shell_complete(self, ctx: click.Context, incomplete: str) -> list[CompletionItem]:
+        """Complete as click does, without the overseer's subcommands.
+
+        Returns:
+            The completions click offers, less each subcommand only the overseer runs.
+        """
+        return [
+            item for item in super().shell_complete(ctx, incomplete) if not _overseers(self.commands.get(item.value))
+        ]
+
+
+def _overseers(command: click.Command | None) -> bool:
+    if isinstance(command, click.Group):
+        return bool(command.commands) and all(_overseers(sub) for sub in command.commands.values())
+    return isinstance(command, OverseerCommand)
 
 
 @dataclass(frozen=True)
