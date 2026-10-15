@@ -55,13 +55,18 @@ export const ROW_COLUMNS = {
         ['cost', '4rem', 1],
         ['age', '6rem', 2],
     ],
-    /** A tick: its id, its status, how many decisions, its cost, and when. */
+    /**
+     * A tick: its id, its status, how many decisions, its overseer's cost, tokens, and peak context, and when. The
+     * token counts give way before the cost, which says the same in dollars.
+     */
     tick: [
         ['id', '5rem'],
         ['state', FREE],
-        ['decisions', '6rem', 2],
-        ['cost', '4rem', 1],
-        ['age', '6rem', 3],
+        ['decisions', '6rem', 4],
+        ['cost', '4rem', 3],
+        ['tokens', '6rem', 1],
+        ['peak', '5rem', 2],
+        ['age', '6rem', 5],
     ],
     /**
      * A chore: its name, its line in `canopy status`'s words, and its open findings, whose column holds
@@ -279,6 +284,7 @@ const FROM: Record<RowColumn, string> = {
     label: 'col-[label/end]',
     mark: 'col-[mark/end]',
     name: 'col-[name/end]',
+    peak: 'col-[peak/end]',
     phase: 'col-[phase/end]',
     pr: 'col-[pr/end]',
     review: 'col-[review/end]',
@@ -290,6 +296,7 @@ const FROM: Record<RowColumn, string> = {
     text: 'col-[text/end]',
     time: 'col-[time/end]',
     title: 'col-[title/end]',
+    tokens: 'col-[tokens/end]',
     verdict: 'col-[verdict/end]',
 }
 
