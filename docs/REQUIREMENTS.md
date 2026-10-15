@@ -127,9 +127,10 @@ or turns it off with `policy.stacking` (C1).
 
 ### R9. PR-scoped workspaces for "address feedback" and "fix CI on my PR"
 
-Gap; sketched as M14. All of canopy's work is keyed by ticket. M11's `review.query` reviews the operator's own PRs
-without a ticket, but never pushes to them (§21). Fixing CI or addressing review on a hand-written PR needs a PR-keyed
-unit of work, and pushing to the PR's own branch, which D056 now allows (C4).
+Gap; sketched as M14, which the operator deferred on 2026-10-15: real use has not needed it. All of canopy's work is
+keyed by ticket. M11's `review.query` reviews the operator's own PRs without a ticket, but never pushes to them (§21).
+Fixing CI or addressing review on a hand-written PR needs a PR-keyed unit of work, and pushing to the PR's own branch,
+which D056 now allows (C4).
 
 ### R10. Worktree setup hooks that cope with the Bazel monorepo
 
@@ -261,7 +262,7 @@ DESIGN §10).
   server, and the operator prompts a running session with `opencode attach` (M15).
 - **C4. Pushing to the operator's own PR branches vs `trust.branch_prefix` (R9).** Settled by D056: a worker may push
   to the head branch of an open, non-fork PR the operator authored and labeled with a queue label, never with force
-  (TRUST_MODEL T1, §6; built in M14).
+  (TRUST_MODEL T1, §6; to be built in M14, now deferred).
 - **C5. The web UI as the operator's main surface vs "daily surface is labels, ticket comments, PR review, and one
   attention list" (DESIGN §4 principle 6, N1).** Settled by the operator on 2026-10-08 (D072, D073): the operator's
   own surface moves to the web UI once M20 is built, and private tickets (R11) are answered there or with the CLI.

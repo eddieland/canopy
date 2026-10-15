@@ -16,6 +16,9 @@ Next: how that changes later milestones, docs, or open questions.
 A milestone a later one absorbs ends `Status: superseded by MN (YYYY-MM-DD).`, `MN` a milestone or a range, followed
 by one sentence saying how.
 
+A milestone the operator puts off ends `Status: deferred YYYY-MM-DD.`, followed by one sentence saying why, and gets a
+line on the deferred list naming the trigger that would bring it back. Later milestones do not wait for it.
+
 A done milestone is collapsed: one line on what it delivered replaces its bullets and Accept, and `Learned` and `Next`
 keep only what a later milestone needs, a sentence or two each. Leave `Next` out when nothing changes. The detail lives
 where it lasts: a behavior and its rationale in the design (`design/`), a choice every future developer must know in
@@ -192,7 +195,8 @@ REQUIREMENTS R9 and D056. Needs M3's `fix-ci` and `resume`. Sketch only; the des
 
 Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
 
-Status: not started.
+Status: deferred 2026-10-15. The operator judged it YAGNI once canopy was in real use; the sketch stays for when the
+deferred list's trigger fires.
 
 ## M15. Sessions and recent runs
 
@@ -923,6 +927,8 @@ Status: not started.
 
 ## Deferred, with the trigger that would unblock each
 
+- PR-scoped work (M14): when the operator keeps fixing CI or answering review on their own hand-written PRs by hand,
+  often enough to want canopy to do it.
 - Webhooks: when tick latency is measured as a real cost.
 - Bot identity: when audit requirements demand it, or when a repository wants to trust review verdicts.
 - Second runtime (Copilot CLI, Claude Code): when a coworker asks. More than a config change: canopy's definitions,
