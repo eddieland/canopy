@@ -425,71 +425,24 @@ Status: done 2026-10-14.
 Learned: closed on the operator's request before the live re-measurement, which is SCENARIOS S34. A check beat putting
 canopy's launcher first on PATH, which misses a launcher whose environment is gone (DESIGN §6 step 5). The first day's
 churn was the overseer dropping items it could not see, fixed in the prompt (DESIGN §6 step 4).
-Next: M29 waits on S34's re-measurement and S27's overnight run.
+Next: M39 waits on S27's overnight run.
 
 ## M29. Probe-gated overseer
 
-MEASUREMENTS 2026-10-12, F7 to F10; D003's revisit. Needs M28 and M21's overnight run (SCENARIOS S27). Sketch only;
-the design comes first. Taken only if a re-measurement after both shows that the steady state's spend or its latency
-(up to `loop.idle_max_minutes` on a teammate's comment or a CI result) is still worth the trust change. The first
-session says a gate saves little while the operator is active (F8), and the first day agrees: 6 to 9% (2026-10-13
-F13). The day's case for a probe is as M30's source of facts, not as a gate; take M34 first, which changes both
-milestones' arithmetic. M36 to M39 absorb this milestone: the probe's facts go into the journal as observations, and
-the overseer runs only when they leave it something to judge, the gate this one wanted. M39 marks it superseded once
-built; until then it stays open, so the series can stop after M36's shadow measurement.
+A `probe_cmd` that fingerprinted tickets and PRs, so the overseer ran only when one changed, the loop was woken, a gate
+came due, or `loop.idle_max_minutes` passed (MEASUREMENTS 2026-10-12 F7 to F10).
 
-- A `probe_cmd` command template, run through `procs`, prints one JSON line of fingerprints. Per ticket: updated
-  time, latest comment id, labels, open or closed, and the keys the tracker query returns. Per PR: head SHA, the
-  result and latest build or check-run id of each named CI context (a re-run at the same head, 2026-10-13 F16), latest
-  review or review-comment id, mergeable, draft, and open, merged, or closed.
-  canopy validates the line, keeps the last one per subject in the journal, and runs the overseer only when a
-  fingerprint changed, a harness wake event happened, a gate came due, or `loop.idle_max_minutes` passed since the
-  last overseer run. In between, the loop polls the probe, not the overseer.
-- The probe fails open: an error, a timeout, or output that does not validate runs the overseer as today. With no
-  `probe_cmd`, nothing changes.
-- The probe's output never reaches the overseer's prompt, so a wrong or steered probe can cost a missed or an extra
-  overseer run and nothing else. canopy still imports no tracker or GitHub client and reads no token: the probe holds
-  its own credentials (`gh`'s login, or an operator-only file as the Slack sink does).
-- CI is fingerprinted by contexts the repository's config names, never by GitHub's combined status, which some
-  repositories hold at `pending` forever (F9). PR issue comments are not fingerprinted.
-- An example GitHub probe: one GraphQL query through `gh` for every PR the journal records on an unfinished unit,
-  merged and closed included, never a list of open PRs, which drops a merged one (2026-10-13 F16). A Jira one if the
-  operator's setup allows it without a new token. A reload that changes the tracker query changes what it lists.
-- TRUST_MODEL T2 with the operator's approval note, D003, and DESIGN §6 and §12.
-- Open: how the probe learns which subjects to watch (argv, stdin, or reading nothing and listing by query); how often
-  it polls (2 minutes matched the first session's median latency, F10); whether a cold-cache overseer run after a
-  long gap changes the arithmetic (MEASUREMENTS: Spend).
-
-Accept: written with the design, before work starts.
-
-Status: not started.
+Status: superseded by M36 to M39 (2026-10-15). M36's connectors observe into the journal every fact the probe would
+have fingerprinted, and M39 runs the overseer only when those observations leave it something to judge.
 
 ## M30. Fewer re-reads per tick
 
-MEASUREMENTS 2026-10-12, F6; 2026-10-13, F14. Needs M29's probe and M34. Sketch only; the design comes first.
-Re-reading the tracker and GitHub was 29% of every tick's cost in the first session, productive ticks included, and
-most of it was things that had not changed: over the first day, one approved PR was read 170 times and a stopped
-ticket was in the search on 92 ticks. The day's analysis models this milestone at up to 40% of overseer spend, an
-upper bound until measured. M36 to M39 absorb this milestone: M37 takes the cut from the journal's observations
-instead of a probe's output, and M38 moves the derivation that needs no judgment into code. M39 marks it superseded
-once built; until then it stays open, as M29 does.
+The probe's facts in the state block, so the overseer read a PR or a ticket in full only when one changed
+(MEASUREMENTS 2026-10-12 F6; 2026-10-13 F14).
 
-- The probe's facts in the state block: per unit, head SHA, named CI results, latest review id, mergeable, and draft;
-  per ticket, labels, state, and latest comment id with its author's account id. Ids, states, and account ids only; no
-  comment, review, or PR text enters the state block.
-- The overseer prompt reads a PR or a ticket in full only when a fact changed since its cursor, with the operator's
-  approval note in the PR.
-- A ticket the operator stopped is not read: the state block says it is stopped, and the overseer records its wait
-  from that.
-- TRUST_MODEL T1 and T2: what canopy now asserts about the world, and that the tracker and GitHub stay the source of
-  authority (DESIGN §22), with the operator's approval note.
-- Open: whether canopy should then check `trust.authorized_repliers` against comment authors in code, which would close
-  D003's "cannot verify who wrote a comment".
-
-Accept: written with the design, before work starts. Live, once built: a re-measurement shows tool-result tokens per
-tick at half the first session's (about 19k) or less, with no action missed.
-
-Status: not started.
+Status: superseded by M37 (2026-10-15). M37 puts the connectors' observations in the state block instead of a probe's
+facts and drops the overseer's reads, so an unchanged PR or a stopped ticket is read only while its observations are
+stale, and it checks authorized repliers against comment authors in code, the question this milestone left open.
 
 ## M31. Search in the web UI
 
@@ -537,9 +490,9 @@ analysis session; M13's budget can read the same breakdown.
 
 ## M34. A cacheable overseer prompt
 
-MEASUREMENTS 2026-10-13, F11 and F12. Needs M13's recorded cost. Taken before M29 and M30, whose arithmetic it
-changes. The first step was 41% of the first day's overseer spend, because the fixed prompt travels in the same
-message as the state block, which changes every tick, and so is written to the cache fresh on every tick.
+MEASUREMENTS 2026-10-13, F11 and F12. Needs M13's recorded cost. Taken before M36, which needs it. The first step was
+41% of the first day's overseer spend, because the fixed prompt travels in the same message as the state block, which
+changes every tick, and so is written to the cache fresh on every tick.
 
 - Measured first: two dry ticks a minute apart, before and after, comparing the first step's cache write and cache
   read. The change is kept only if the fixed prompt moves from one to the other. Each tick is its own session; the
@@ -781,8 +734,10 @@ trust change: the overseer runs when the journal leaves it something to judge, n
 - The overseer's definition loses the tracker and GitHub MCP servers: it has `bash` for `canopy` and nothing else,
   since a `stale` subject now gets `wait` instead of a live read. TRUST_MODEL T1: the overseer can be steered only by
   text the journal holds, bounded and labeled by source, and can call no tracker or VCS tool at all. Approval note.
-- M29 and M30 are marked superseded, in the form the top of this file gives, once this is built; their open questions
-  are answered here or in M36's design.
+- M29's open questions are answered by M36's contract (which subjects to watch), `connect.every_minutes` (how often),
+  and M40 (a cold overseer run after a long gap). If M36's measurement leaves the derivation untrusted, the series
+  need not stop there for want of M29: a gate on the observations alone, running the overseer only when one changed
+  since its last run, a gate came due, or the operator acted, can be taken from M36 without M37 or M38.
 
 Accept: written with the design, before work starts. Live, once built: S27 re-measured (MEASUREMENTS) with most ticks
 running no overseer, overseer spend per day at a quarter of the first day's for the same queue, median latency from
