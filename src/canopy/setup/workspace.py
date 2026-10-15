@@ -46,7 +46,6 @@ text: it helps choose a repository and authorizes nothing.
 
 def workspace_file_text(name: str, provider: str) -> str:
     """Return the text of a new `canopy-workspace.toml` named `name`, for tracker `provider`."""
-    query = init.EXAMPLE_QUERIES.get(provider, "describe which tickets to look at, in plain language")
     return f"""\
 # canopy-workspace.toml: the workspace map, and the config shared by everyone who runs canopy on this workspace.
 # Commit it if the workspace is shared. Shared keys only; personal ones go in the user config (DESIGN §12, §18).
@@ -63,9 +62,7 @@ name = {json.dumps(name)}
 
 [tracker]
 provider = {json.dumps(provider)}
-# How to find candidate tickets: the tracker's own search syntax, or plain language. Edit this.
-# Finding is not authorizing: each operator's own labels are checked on every ticket.
-query = {json.dumps(query)}
+# How to find candidate tickets is each operator's own: their user config's [tracker.queries] has it (DESIGN §12).
 # A worker that needs an answer adds the label `needs-human`, and removes it when it resumes. Create it in your tracker,
 # since canopy does not create labels, or set needs_human_label to one you have.
 """
@@ -85,7 +82,7 @@ def run_init(root: Path, user_file: Path, provider: str | None) -> init.Report:
         report.kept.append(user_file)
     else:
         report.label = init.default_label()
-        init.write_if_missing(user_file, init.user_config_text(report.label), report)
+        init.write_if_missing(user_file, init.user_config_text(report.label, root, _example_query(provider)), report)
 
     workspace_file = root / WORKSPACE_FILE_NAME
     if workspace_file.exists():
@@ -98,6 +95,15 @@ def run_init(root: Path, user_file: Path, provider: str | None) -> init.Report:
     _ignore(root / GITIGNORE, report)
     report.shadowing = definitions.shadowing(root)
     return report
+
+
+def _example_query(provider: str | None) -> str:
+    """A query for a new user config to start from.
+
+    Returns:
+        The provider's example query, else one in plain language.
+    """
+    return init.EXAMPLE_QUERIES.get(provider or "", "describe which tickets to look at, in plain language")
 
 
 def _ignore(path: Path, report: init.Report) -> None:
