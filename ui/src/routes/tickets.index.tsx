@@ -35,8 +35,8 @@ interface TicketsSearch {
 
 /**
  * Every ticket canopy has worked or been asked to, most recent activity first, and a form to start one. `?show=` keeps
- * the tickets standing there (open, working, waiting on you, done), and `?q=` those whose key or title holds every
- * word.
+ * the tickets standing there (open, working, waiting on you, blocked, done), and `?q=` those whose key or title holds
+ * every word.
  */
 export const Route = createFileRoute('/tickets/')({
     // Typed search params, as the runs page's: every key returned, undefined when the page does not offer it.
