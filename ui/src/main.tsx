@@ -8,6 +8,7 @@ import { createRoot } from 'react-dom/client'
 import { api, writeToken } from '@/api/client'
 import { keys } from '@/api/queries'
 import { PAGE_SCROLLER } from '@/components/shell/app-shell'
+import { Toaster } from '@/components/toaster'
 import type { Session } from '@/api/types'
 import { basePath } from '@/lib/base'
 import { createQueryClient } from '@/lib/query-client'
@@ -44,7 +45,10 @@ if (!root) {
 createRoot(root).render(
     <StrictMode>
         <QueryClientProvider client={queryClient}>
-            <RouterProvider router={router} />
+            {/* Over every page, so a toast shown as a page leaves (a copy, then a link followed) stays. */}
+            <Toaster>
+                <RouterProvider router={router} />
+            </Toaster>
         </QueryClientProvider>
     </StrictMode>,
 )

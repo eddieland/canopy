@@ -313,6 +313,7 @@ a skeleton, the empty inbox, the header's ticker, and Sprig's blink. The keyfram
   animation that fills forwards: the row is let go once it has played.
 - Sprig's tip pops in a moment after a page arrives, its brows rise once with each new tip, and its eyes blink now and
   then and look toward the pointer.
+- A toast rises in from below and fades out.
 - Only `running` runs pulse.
 - Every animation rests on the frame a still page shows (its last, or for a loop its first), so a screenshot with
   animations frozen is the page at rest.
@@ -643,10 +644,19 @@ list, an empty state, or a skeleton by hand.
   from the workspace root (`CopyablePath`), joined to `/meta`'s root; until that is read there is no button, so a copy
   is never the short path. The button is a ghost `icon-xs` with the
   `Copy` icon, muted until hovered; a click shows `Check` in the accent, or `X` in `status-failed` when the browser
-  refuses, for 1.5 seconds, and names what happened (`Copied branch`). In a dense list (a worktree slot's path and
-  branch) it shows only while its row (`group/copy`) is hovered or it has the focus, keeping its space so nothing
-  moves, and always on a touch screen. The clipboard needs a secure context (https or localhost), so elsewhere there
-  is no button and the text stays selectable.
+  refuses, for 1.5 seconds, and names what happened (`Copied branch`), and a toast says the same with the text it
+  copied, on one line. In a dense list (a worktree slot's path and branch) it shows only while its row (`group/copy`)
+  is hovered or it has the focus, keeping its space so nothing moves, and always on a touch screen. The clipboard
+  needs a secure context (https or localhost), so elsewhere there is no button and the text stays selectable.
+- **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was
+  done shows too little of it: a copy names what it copied. It sits at the bottom center of the window on `surface`
+  with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title in `text-sm`, and a line under it
+  in muted monospace `text-xs`, on one line with an ellipsis where it is cut: what it names is on the clipboard,
+  whole. It closes on its own after 3 seconds, held while the pointer or the focus is on it, or when swiped down; F8
+  reaches it from the keyboard and Escape closes it. At most three show, the newest last. A screen reader announces
+  it. It never carries an action, and it is never the only place an outcome shows: the control that acted says so
+  too, and a refusal is still a `Notice`. `main.tsx` renders the one `Toaster`, around the router, so a toast
+  outlives the page it came from.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
   a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
   composition only commits it (`src/lib/send-key.ts`). Its field is named for the form, as its panel is for its page:
