@@ -33,7 +33,7 @@ from canopy.serve.api import session
 from canopy.serve.app import create_app
 from canopy.serve.auth import SESSION_SECONDS, Sessions
 from canopy.serve.backend import Backend
-from canopy.serve.guard import host_name
+from canopy.serve.guard import MAX_BODY_BYTES, host_name
 from canopy.serve.options import ServeOptions
 from canopy.serve.schema import (
     AttentionUpdated,
@@ -218,6 +218,34 @@ def test_a_foreign_origin_is_refused_on_the_api(ui: Path, backend: Backend) -> N
         assert c.get("/api/meta", headers={"origin": origin}).status_code == 403, origin
         assert c.get("/api/events", headers={"origin": origin}).status_code == 403, origin
     assert c.get("/api/meta", headers={"origin": "http://localhost:5173"}).status_code == 200
+
+
+def test_a_body_too_large_is_refused_before_the_session_check(ui: Path, backend: Backend) -> None:
+    # Not signed in: FastAPI would read the whole body before the session check refused it with a 401.
+    c = client(ui, backend, key=SECRET)
+    json_body = {"content-type": "application/json"}
+    for path in ("/api/session", "/api/tickets/PROJ-1/replies"):
+        big = c.post(path, content=b"x" * (MAX_BODY_BYTES + 1), headers=json_body)
+        assert big.status_code == 413, path
+        assert big.headers["x-frame-options"] == "DENY"
+        chunked = c.post(path, content=iter([b'{"secret": "x"}']), headers=json_body)
+        assert chunked.status_code == 411, path
+    # The route is a signed-in one: a body within the limit gets as far as the session check.
+    assert c.post("/api/tickets/PROJ-1/replies", json={"body": "hi", "submission": "abcdefgh"}).status_code == 401
+
+
+def test_the_largest_reply_fits_the_body_limit(ui: Path, backend: Backend) -> None:
+    c = client(ui, backend, key=SECRET)
+    # The worst case: a character outside the BMP, which `ensure_ascii` escapes as a surrogate pair, 12 bytes.
+    body = json.dumps({"body": "\U0001f600" * 20_000, "submission": "abcdefgh"}).encode()
+    assert len(body) > 240_000
+    assert len(body) <= MAX_BODY_BYTES
+    response = c.post(
+        "/api/tickets/PROJ-1/replies",
+        content=body,
+        headers={**signed_in(c), "content-type": "application/json"},
+    )
+    assert response.status_code not in {411, 413, 422}
 
 
 def test_host_name_strips_the_port() -> None:

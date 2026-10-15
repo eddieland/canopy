@@ -177,7 +177,7 @@ canopy (harness, Python)
     sse.py         an event stream whose client left ends without FastAPI's teardown error in the log
     schema.py      the API's pydantic models, the source of the UI's generated TypeScript types
     spa.py         the built app: hashed assets, index.html for routes with a <base href> and a CSP, never for /api
-    guard.py       Host and Origin checks, and security headers on every response
+    guard.py       Host, Origin, and body size checks, and security headers on every response
     options.py     ServeOptions: loopback or private host, port, base path, mock data
     server.py      the server's thread for canopy loop: uvicorn without signal handlers, restarted with a backoff
     mock.py        a journal seeded from fixtures, and the changes its stream shows
