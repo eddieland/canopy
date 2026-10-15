@@ -50,6 +50,7 @@ export const mockAttention: AttentionItem[] = [
         id: 'a1',
         subject: 'ABC-102',
         ticket_key: 'ABC-102',
+        ticket_title: 'Export reports as CSV',
         chore: null,
         repo: null,
         reason: 'awaiting_reply',

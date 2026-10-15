@@ -23,6 +23,7 @@ import { InlineCode } from '@/components/rich-text'
 import { Chip, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
 import { TicketLink } from '@/components/ticket-link'
+import { TicketTitle } from '@/components/ticket-title'
 import { WorkingNow } from '@/components/working-now'
 import { answered } from '@/lib/acknowledged'
 import { bySeverity, severity } from '@/lib/attention'
@@ -194,7 +195,7 @@ function Row({ item, selected, done }: { item: AttentionItem; selected: boolean;
     )
 }
 
-/** What a row of the list says: the item's reason, its subject and age, and its detail. */
+/** What a row of the list says: the item's reason, its subject and age, its ticket's title, and its detail. */
 function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
     return (
         <>
@@ -207,6 +208,7 @@ function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
                 </span>
                 <Age at={item.since} className="ml-auto" />
             </span>
+            {item.ticket_key !== null && <TicketTitle title={item.ticket_title} />}
             <span className="line-clamp-2 text-sm break-words">
                 <InlineCode text={item.detail} links={false} />
             </span>
@@ -290,7 +292,12 @@ function FindingHead({ item, chore, done }: { item: AttentionItem; chore: string
 
 function Subject({ item }: { item: AttentionItem }) {
     if (item.ticket_key !== null) {
-        return <TicketLink ticketKey={item.ticket_key} />
+        return (
+            <>
+                <TicketLink ticketKey={item.ticket_key} className="shrink-0" />
+                <TicketTitle title={item.ticket_title} />
+            </>
+        )
     }
     if (item.chore !== null) {
         return (

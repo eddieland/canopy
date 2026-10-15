@@ -475,6 +475,8 @@ list, an empty state, or a skeleton by hand.
   (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
   `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer (`awaiting_reply`,
   `untrusted_review`), then every other reason, then chores' findings; within each, the item open longest first. A
+  row reads as an inbox's: its reason, subject, and age, then its ticket's title (`TicketTitle`) when it is about a
+  ticket, as a message's subject, then its detail; the selected item's head puts the title after the key. A
   reason chip takes `status-failed` or `status-blocked` for the first two, plain otherwise. A finding's reason is its
   id, the agent's text, so its chip says `finding` and the id follows its chore in muted monospace. An item's detail
   is the harness's line, with its `code` spans set as code and nothing else read (`InlineCode`). The list is
