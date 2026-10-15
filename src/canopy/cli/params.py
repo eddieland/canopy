@@ -48,15 +48,6 @@ def valid_review_cursor(value: str) -> bool:
     return True
 
 
-def plain_pr_url(value: str) -> bool:
-    """A PR's URL as the overseer passes it: a plain https:// URL, at most 300 characters (DESIGN §21).
-
-    Returns:
-        True when `value` is a plain https:// URL within `MAX_PR_URL`.
-    """
-    return contract.plain_url(value, MAX_PR_URL)
-
-
 def truncate(value: str) -> str:
     """Bound free text the overseer writes to the journal.
 
@@ -79,6 +70,21 @@ class PatternType(click.ParamType[str, object]):
     def convert(self, value: object, param: click.Parameter | None, ctx: click.Context | None) -> str:
         if not isinstance(value, str) or not self.pattern.fullmatch(value):
             self.fail(f"invalid {self.what} {value!r}: must match {self.pattern.pattern}", param, ctx)
+        return value
+
+
+class PrUrlType(click.ParamType[str, object]):
+    """A PR's URL as the overseer passes it: a plain https:// URL, at most `MAX_PR_URL` characters (DESIGN §21).
+
+    It reaches the journal's `pr` column, the state block, and the web UI's links.
+    """
+
+    name = "URL"
+
+    @override
+    def convert(self, value: object, param: click.Parameter | None, ctx: click.Context | None) -> str:
+        if not isinstance(value, str) or not contract.plain_url(value, MAX_PR_URL):
+            self.fail(f"must be a plain https:// URL of at most {MAX_PR_URL} characters", param, ctx)
         return value
 
 
@@ -137,5 +143,6 @@ REASON = PatternType("REASON", REASON_RE, "reason")
 SLUG = PatternType("SLUG", dispatch.SLUG_RE, "slug")
 REPO = PatternType("NAME", config.REPO_NAME_RE, "repository name")
 CHORE = PatternType("NAME", config.CHORE_NAME_RE, "chore name")
+PR_URL = PrUrlType()
 # A tracker's comment id, as a cursor id is: it reaches the worker's prompt and the journal.
 COMMENT_ID = PatternType("COMMENT_ID", CURSOR_VALUE_RE, "comment id")

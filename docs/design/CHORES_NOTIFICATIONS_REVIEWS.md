@@ -724,7 +724,8 @@ For PRs from `review.query`, the overseer runs the query each tick and keeps onl
 PRs it reads for tickets); `_review` could not fetch another repository's commit from `origin`. The prompt says so; a
 `repo:` qualifier saves the reads. For each open match whose head commit has no `done` review, it runs a review or
 records `canopy review wait --pr URL --rationale "<text>"` (say, checks still running, or a draft). Nothing else is
-decided about these PRs.
+decided about these PRs. `review wait` and `attention --pr` take only a plain https:// URL of at most 300 characters,
+and refuse anything else as misuse, exit 2, recording nothing; `review run` records a malformed one as `refused:bad_pr`.
 
 Review decisions are `decisions` rows with the PR's URL in the `pr` column: `dispatch:review`, `wait`,
 `refused:<guard>`, and `attention:<reason>`. An agent PR's rows also carry its ticket key.
