@@ -238,9 +238,11 @@ Sprig:
   the side rail, under a speech bubble offering a tip about the page. It is off until Settings turns it on. Its tips
   are by page (`TIPS` in `src/lib/buddy.ts`): a set for each nav section (`src/lib/sections.ts`, so a new section
   must get its own) and for the search page, then ones for anywhere. Every one is a joke, and none opens with "Tip:",
-  which on the ticker names something real; a joke dressed as a tip opens with "Unhelpful tip:". Clicking Sprig, or
-  the bubble's Another tip, offers the next; the bubble closes with its button or after 20 seconds, and "Don't show
-  me tips again" turns Sprig off.
+  which on the ticker names something real; a joke dressed as a tip opens with "Unhelpful tip:". The jokes come in
+  several voices (the paperclip's "It looks like you're...", a false "Fun fact:", a "Hot take:", a diary entry, a
+  haiku, a riddle), mixed in each list so that no voice follows itself. Clicking Sprig, or the bubble's Another tip,
+  offers the next; the bubble closes with its button or after 20 seconds, and "Don't show me tips again" turns Sprig
+  off.
 - Its place is the rail's column, between the blocks and the footer: the room left there is its slot, and it stands
   at the slot's foot. A slot with room for Sprig and its bubble (with the mock's three working runs, a window about
   1100px tall) covers nothing. A laptop's window never leaves that much, and the operator would rather see Sprig
