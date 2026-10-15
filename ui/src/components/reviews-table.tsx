@@ -41,9 +41,11 @@ function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
         >
             <ReviewLink id={review.id} />
             {/* The dot is how its run ended; the verdict's color, its worst finding. */}
-            <span className={cn('flex items-center gap-1.5 font-mono text-xs', verdictTone(review))}>
+            <span className={cn('flex min-w-0 items-center gap-1.5 font-mono text-xs', verdictTone(review))}>
                 <RunDot state={review.state} />
-                {verdictText(review)}
+                <span className="truncate" title={verdictText(review)}>
+                    {verdictText(review)}
+                </span>
             </span>
             {pr ? (
                 <>

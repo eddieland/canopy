@@ -75,7 +75,8 @@ export const ROW_COLUMNS = {
     /** A review run on the reviews page: its id, verdict, ticket, PR and commit, impact, cost, and when. */
     review: [
         ['id', '5rem'],
-        ['verdict', '7rem', 5],
+        // `3 findings, 1 blocking` on one line, with its dot.
+        ['verdict', '12rem', 5],
         ['key', '6rem', 3],
         ['pr', FREE],
         ['impact', '7rem', 2],
@@ -85,7 +86,7 @@ export const ROW_COLUMNS = {
     /** A review run on its PR's page: as on the reviews page, without the ticket and the PR. */
     'own-review': [
         ['id', '5rem'],
-        ['verdict', '7rem', 4],
+        ['verdict', '12rem', 4],
         ['commit', FREE],
         ['impact', '7rem', 2],
         ['cost', '3.5rem', 1],
@@ -96,7 +97,8 @@ export const ROW_COLUMNS = {
         ['pr', '11rem'],
         ['key', FREE],
         ['run', '5rem', 1],
-        ['review', '11rem', 3],
+        // `review:4 3 findings, 1 blocking` on one line, with its dot.
+        ['review', '16rem', 3],
         ['age', '5rem', 2],
     ],
     /** A ticket: its key, its title, public or private, its phase, its run or `waiting on you`, and its age. */
