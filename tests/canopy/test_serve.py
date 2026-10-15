@@ -231,7 +231,9 @@ def test_a_body_too_large_is_refused_before_the_session_check(ui: Path, backend:
 
 def test_the_largest_reply_fits_the_body_limit(ui: Path, backend: Backend) -> None:
     c = client(ui, backend, key=SECRET)
-    body = json.dumps({"body": "\x01" * 20_000, "submission": "abcdefgh"}).encode()
+    # The worst case: a character outside the BMP, which `ensure_ascii` escapes as a surrogate pair, 12 bytes.
+    body = json.dumps({"body": "\U0001f600" * 20_000, "submission": "abcdefgh"}).encode()
+    assert len(body) > 240_000
     assert len(body) <= MAX_BODY_BYTES
     response = c.post(
         "/api/tickets/PROJ-1/replies",

@@ -28,8 +28,8 @@ SECURITY_HEADERS: tuple[tuple[bytes, bytes], ...] = (
     (b"x-frame-options", b"DENY"),
     (b"referrer-policy", b"no-referrer"),
 )
-# The largest body a request may carry. The largest the API takes is a reply's 20,000 characters, at most 120,000 bytes
-# of JSON when every one is escaped as `\u0001`.
+# The largest body a request may carry. The largest the API takes is a reply's 20,000 characters: at most 240,000 bytes
+# of JSON when every one is outside the BMP and escaped as a surrogate pair, `\ud83d\ude00`, 12 bytes each.
 MAX_BODY_BYTES = 256 * 1024
 
 
