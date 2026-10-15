@@ -692,8 +692,9 @@ showed the derivation getting right: a rule moves into code only with that evide
   `split_unlabeled`, `split_self_labeled`, `review_failed`, and `review_limit` are the harness's, open while their
   cause holds in the journal, like the run reasons (§14). No re-recording rule, which M28's prompt fix (the
   overseer's open items in its state block) works around and this removes, so an item cannot flap (2026-10-13 F17)
-  or go because the overseer left it out on partial data. Issue #219's harness half, a ticket-keyed
-  `mcp_unavailable` skip closing the tick `ok`, is a `loop/tick.py` fix of its own, not this milestone's. The
+  or go because the overseer left it out on partial data. This is the fix for issue #219, an outage tick that closed
+  `ok` and resolved items it could not read: no item hangs on the overseer recording it again, so nothing in `tick.py`
+  needs to tell a partial tick from a whole one, and a tick that did work during an outage keeps it. The
   overseer keeps the two that are judgment, `needs_author` and
   `multi_repo`: it records each once, naming the item it is about, and the harness holds it until the cursor passes
   that item or the cause is gone.
