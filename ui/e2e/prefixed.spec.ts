@@ -325,19 +325,22 @@ test("a PR at its review limit is granted one more review from its ticket's atte
 
 test('a long conversation scrolled away from its end stays put as a message arrives', async ({ page }) => {
     // Thirty copies of its first messages, then any added since, so the reply arrives at the end of a long thread.
-    let first: number | undefined
+    // The first ones kept, and new ones told apart by id: the server sends only the latest 100, so after many runs a
+    // reply pushes the oldest out, and neither a count nor what it sends now stays the same.
+    let first: { id: number }[] | undefined
     await page.route('**/api/tickets/ABC-103', async (route) => {
         const response = await route.fetch()
         const body = (await response.json()) as { messages: { id: number }[] }
-        first ??= body.messages.length
-        const seeded = body.messages.slice(0, first)
-        const padding = Array.from({ length: 30 }, (_, i) => ({ ...seeded[i % seeded.length], id: 1000 + i }))
-        body.messages = [...padding, ...body.messages.slice(first)]
+        const seeded = (first ??= body.messages)
+        const known = new Set(seeded.map((m) => m.id))
+        // Ids past any reply the server will have taken, so a copy never shares one with a real message.
+        const padding = Array.from({ length: 30 }, (_, i) => ({ ...seeded[i % seeded.length], id: 1_000_000 + i }))
+        body.messages = [...padding, ...body.messages.filter((m) => !known.has(m.id))]
         await route.fulfill({ response, json: body })
     })
     await page.goto('tickets/ABC-103')
     const region = page.getByRole('region', { name: 'Conversation' })
-    await expect(page.getByTestId('message-1029')).toBeAttached()
+    await expect(page.getByTestId('message-1000029')).toBeAttached()
     // Scrolled as a reader scrolls: the thread hears it on the next frame, so wait for that before anything grows.
     await region.evaluate(async (el) => {
         el.scrollTop = 100
@@ -357,4 +360,7 @@ test('a long conversation scrolled away from its end stays put as a message arri
     await form.getByRole('button', { name: 'Reply' }).click()
     await expect(page.getByTestId('conversation').getByText(text)).toBeAttached()
     await expect(region).toHaveJSProperty('scrollTop', 100)
+    // The reply's `ticket.changed` refetches the ticket, which can still be in the handler when the page closes and
+    // disposes its response: drop it, since it comes after everything this test checks.
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
 })
