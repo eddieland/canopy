@@ -11,6 +11,7 @@ export const SECTIONS = [
     '/reviews',
     '/chores',
     '/ticks',
+    '/spend',
     '/settings',
 ] as const
 
@@ -27,6 +28,7 @@ export const SECTION_LABEL: Record<Section, string> = {
     '/reviews': 'Reviews',
     '/chores': 'Chores',
     '/ticks': 'Ticks',
+    '/spend': 'Spend',
     '/settings': 'Settings',
 }
 
@@ -42,6 +44,7 @@ export const SECTION_TEXT: Record<Section, string> = {
     '/reviews': 'text-section-reviews',
     '/chores': 'text-section-chores',
     '/ticks': 'text-section-ticks',
+    '/spend': 'text-section-spend',
     '/settings': 'text-section-settings',
 }
 
@@ -55,6 +58,7 @@ export const SECTION_TINT: Record<Section, string> = {
     '/reviews': 'bg-section-reviews/16',
     '/chores': 'bg-section-chores/16',
     '/ticks': 'bg-section-ticks/16',
+    '/spend': 'bg-section-spend/16',
     '/settings': 'bg-section-settings/16',
 }
 
@@ -68,5 +72,6 @@ export const SECTION_FILL: Record<Section, string> = {
     '/reviews': 'bg-section-reviews',
     '/chores': 'bg-section-chores',
     '/ticks': 'bg-section-ticks',
+    '/spend': 'bg-section-spend',
     '/settings': 'bg-section-settings',
 }

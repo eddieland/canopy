@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import {
     Activity,
     CalendarClock,
+    Coins,
     FileSearch,
     FolderTree,
     GitPullRequest,
@@ -54,6 +55,7 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
     },
     { to: '/chores', icon: CalendarClock, hint: 'Scheduled chores, their runs, and their findings' },
     { to: '/ticks', icon: History, hint: "The overseer's latest ticks and what each decided" },
+    { to: '/spend', icon: Coins, hint: 'What agent runs cost each day, and what idle ticks spent for nothing' },
     {
         to: '/settings',
         icon: SlidersHorizontal,

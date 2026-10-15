@@ -68,9 +68,10 @@ Rules:
   is `status-failed`. An `idle` slot is a hollow ring in `muted-foreground`: nothing holds it, so no status color
   claims it.
 - **Section colors**, one per nav item: Attention rose, Runs violet, Worktrees teal, Tickets sky, Pull requests gold,
-  Reviews fuchsia, Chores orange, Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from
-  `useSection`). They go on the nav's icons and highlight, the first step of the page header's trail, and the header's
-  aurora, and nowhere in a page's data: there a color is a state's. A page in no section (the 404) takes the accent.
+  Reviews fuchsia, Chores orange, Ticks lime, Spend azure, Settings lavender (`src/lib/sections.ts`; the current one
+  from `useSection`). They go on the nav's icons and highlight, the first step of the page header's trail, and the
+  header's aurora, and nowhere in a page's data: there a color is a state's. A page in no section (the 404) takes the
+  accent.
 - **Spend series** (`src/lib/spend.ts`) color a kind of agent run in the spend page's chart and its legend, and
   nowhere else: they are fills, never text, so the legend's words are `muted-foreground` beside a swatch. Idle overseer
   spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both themes, WCAG's
