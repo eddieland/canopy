@@ -136,7 +136,11 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                             <span className="readout text-xs text-muted-foreground">{messages.length}</span>
                         </span>
                     </PanelHeader>
-                    <ThreadScroll label="Conversation" end={conversationOrder === 'oldest' ? 'bottom' : 'top'}>
+                    <ThreadScroll
+                        key={ticket.key}
+                        label="Conversation"
+                        end={conversationOrder === 'oldest' ? 'bottom' : 'top'}
+                    >
                         {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
                         {conversationOrder === 'newest' && <WorkingNow ticketKey={ticket.key} />}
                         {messages.length === 0 ? (
