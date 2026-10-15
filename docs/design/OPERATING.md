@@ -325,6 +325,8 @@ skill by name and give it to the overseer in its definition, so it need not be l
 `tracker.query` is how the overseer finds candidates: in the tracker's search syntax where it has one (JQL, GitHub issue
 search), otherwise plain language. It finds tickets; it does not authorize them (§17). The repository's query usually
 omits the label; an operator can override it in the user file to include their labels and save the overseer reads.
+It is shared though the overseer reads every ticket it returns before it checks labels: the operator's choice
+(2026-10-15), with that exposure stated in TRUST_MODEL T7's residual.
 
 ## 13. Agent runtime
 

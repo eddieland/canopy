@@ -5,6 +5,7 @@ import os
 import sqlite3
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
@@ -13,7 +14,8 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import config, db, definitions
 from canopy.infra import lock, procs
-from canopy.loop import attention
+from canopy.loop import attention, tick
+from tests.canopy.helpers import in_tick
 from tests.canopy.test_mirror import state_block
 from tests.conftest import CanopyEnv
 
@@ -137,6 +139,50 @@ def test_next_tick_sees_the_journal(canopy_env: CanopyEnv, treehouse_state: Path
         assert '"key": "PROJ-9"' in second[-1]
         assert '"phase": "needs_human"' in second[-1]
         assert '"tick_id": 2' in second[-1]
+
+
+def test_the_state_block_names_the_tickets_marked_done_lately(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    # A merged ticket stays open in the tracker until a human closes it, so the query keeps finding it: listed, the
+    # overseer leaves it alone instead of reading it, mirroring it, and marking it done again every tick (DESIGN §7).
+    conn = canopy_env.journal()
+    repo = str(canopy_env.root)
+    with in_tick(conn) as tick_id:
+        for key in ("PROJ-1", "PROJ-2", "PROJ-3", "PROJ-7"):
+            db.set_ticket(conn, key, repo, done=True)
+            db.record_decision(conn, tick_id, key, "done", "merged")
+        db.set_ticket(conn, "PROJ-4", repo, done=True)
+        db.set_ticket(conn, "PROJ-5", repo, phase="ci_running")
+        db.record_decision(conn, tick_id, "PROJ-5", "done", "merged")
+        # The tracker reports a closed ticket closed, so once it is reopened the query must find it again.
+        db.set_ticket(conn, "PROJ-6", repo, done=True)
+        db.record_decision(conn, tick_id, "PROJ-6", "done", db.CLOSED_RATIONALE)
+        db.finish_tick(conn, tick_id, "ok", "")
+    # Forgotten, then marked done again with no decision of its own: the earlier one does not count.
+    with db.transaction(conn):
+        db.forget_ticket(conn, "PROJ-7")
+    db.set_ticket(conn, "PROJ-7", repo, done=True)
+    long_ago = db.format_time(datetime.now(UTC) - timedelta(days=tick.RECENTLY_DONE_DAYS + 1))
+    with db.transaction(conn):
+        conn.execute("UPDATE decisions SET created_at = ? WHERE ticket_key = 'PROJ-2'", (long_ago,))
+        # Its newest `done` decision is the one that counts.
+        conn.execute("UPDATE decisions SET created_at = ? WHERE ticket_key = 'PROJ-3'", (long_ago,))
+    with in_tick(conn) as tick_id:
+        newest = db.record_decision(conn, tick_id, "PROJ-3", "done", "merged, still open")
+        db.finish_tick(conn, tick_id, "ok", "")
+    [done_at] = conn.execute("SELECT created_at FROM decisions WHERE ticket_key = 'PROJ-1'").fetchone()
+    [newest_at] = conn.execute("SELECT created_at FROM decisions WHERE id = ?", (newest,)).fetchone()
+    with overseer_does():
+        assert main(["tick", "--dry-run"]) == 0
+        state = state_block(agent_log)
+    # Not PROJ-2, done too long ago; not PROJ-4, with no `done` decision; not PROJ-5, which is not marked done; not
+    # PROJ-6, closed; not PROJ-7, whose decision came before it was forgotten.
+    assert state["recently_done"] == [
+        {"key": "PROJ-1", "done_at": done_at},
+        {"key": "PROJ-3", "done_at": newest_at},
+    ]
+    assert [t["key"] for t in state["tickets"]] == ["PROJ-5"]
 
 
 @pytest.mark.parametrize(

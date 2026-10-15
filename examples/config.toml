@@ -112,6 +112,7 @@ cmd = ""
 # cmd = "canopy-notify-slack --channel C0123ABCD"  # or a bot token, from ~/.config/canopy/slack-token, mode 600
 # events = ["attention", "loop", "runs"]
 # digest_every_minutes = 240
+# batch_minutes = 15                            # at most one message per 15 minutes, unless something needs you
 
 # Optional: recurring chores the overseer runs when due (DESIGN §19). The prompt is your own file. A chore that runs
 # your own tools sets `cmd` to an agent of yours, defined in ~/.config/opencode/agent/, that allows exactly those tools.

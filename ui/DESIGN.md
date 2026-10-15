@@ -67,10 +67,11 @@ Rules:
   pulse; the run it names does, on the runs page), `held` is `status-stopped`, `dirty` is `status-blocked`, `broken`
   is `status-failed`. An `idle` slot is a hollow ring in `muted-foreground`: nothing holds it, so no status color
   claims it.
-- **Section colors**, one per nav item: Attention rose, Runs violet, Worktrees teal, Tickets sky, Pull requests gold,
-  Reviews fuchsia, Chores orange, Ticks lime, Settings lavender (`src/lib/sections.ts`; the current one from
-  `useSection`). They go on the nav's icons and highlight, the first step of the page header's trail, and the header's
-  aurora, and nowhere in a page's data: there a color is a state's. A page in no section (the 404) takes the accent.
+- **Section colors**, one per nav item: Attention rose, Tickets sky, Pull requests gold, Reviews fuchsia, Runs violet,
+  Chores orange, Spend azure, Ticks lime, Worktrees teal, Settings lavender (`src/lib/sections.ts`; the current one
+  from `useSection`). They go on the nav's icons and highlight, the first step of the page header's trail, and the
+  header's aurora, and nowhere in a page's data: there a color is a state's. A page in no section (the 404) takes the
+  accent.
 - **Spend series** (`src/lib/spend.ts`) color a kind of agent run in the spend page's chart and its legend, and
   nowhere else: they are fills, never text, so the legend's words are `muted-foreground` beside a swatch. Idle overseer
   spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both themes, WCAG's
@@ -109,7 +110,9 @@ Rules:
   tall as the window under the header. Printed, the shell is not held to the window and shows the page whole; a
   screenshot test does the same by growing the window to the page (`growToPage` in `e2e/helpers.ts`).
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
-  (`src/components/shell/rail.tsx`). Each nav item says on hover what its page holds, and each spend window what it
+  (`src/components/shell/rail.tsx`). The nav lists the sections by how often the operator opens them (`SECTIONS` in
+  `src/lib/sections.ts`): what they work in first (Attention, Tickets, Pull requests, Reviews), then what they check
+  now and then, with Settings last. Each nav item says on hover what its page holds, and each spend window what it
   covers, as a native `title`; a spend window opens the spend page over its week or month. Each block under the nav
   is a hairline and a `panel-label` over its content. The working runs are those running first, then those waiting
   on the operator's answer, each oldest first, a ticket's latest run alone: a dot in its state's color, the ticket's
@@ -407,7 +410,8 @@ list, an empty state, or a skeleton by hand.
   when the list has two items or more. Search has none: its hits are each source's newest few, so flipped they would
   read as its oldest.
 - **A list that grows without bound scrolls inside its panel** (`PanelScroll`) when other panels sit under it in the
-  same column: a ticket's recent runs and decisions, a chore's open findings and recent runs. Past `28rem` the rows
+  same column: a ticket's recent runs and decisions, a chore's open findings and recent runs, the spend page's days
+  (past `15rem`, under its pinned column names, so a week shows whole and 30 days scroll). Past `28rem` the rows
   scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
   so the keyboard scrolls it too. A list that is its page's main content (the runs page, a tick's decisions) does
   not: the page scrolls instead.
@@ -474,8 +478,9 @@ list, an empty state, or a skeleton by hand.
 - **The spend chart** (the spend page): a bar per UTC day, the series stacked bottom up in `SERIES` order, idle
   overseer spend on the baseline so it compares across days, each segment as tall as its share of the dearest day.
   A bar says its day and each series' cost on hover. The chart is `aria-hidden`: the table under it, newest day first,
-  holds the same numbers for a screen reader, each a `Cost`. A week names every day on the axis; 30 days every fifth,
-  back from today. The window is a segmented control (`ToggleGroup`) in the totals' panel header, kept in `?days=`.
+  holds the same numbers for a screen reader, each a `Cost`, and scrolls past a week (`PanelScroll`). A week names
+  every day on the axis; 30 days every fifth, back from today. The window is a segmented control (`ToggleGroup`) in
+  the totals' panel header, kept in `?days=`.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.

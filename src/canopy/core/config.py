@@ -666,6 +666,8 @@ EventGroup = Literal["attention", "loop", "runs", "chores", "reviews"]
 # The sink `notify.cmd` stands for.
 DEFAULT_SINK = "default"
 MIN_DIGEST_MINUTES = 60
+# A sink batching for longer than a day would hold everything but what needs the operator now.
+MAX_BATCH_MINUTES = 1440
 
 
 def _sink_name(value: str) -> str:
@@ -687,6 +689,8 @@ class Sink(Section):
     format: Literal["json", "text"] = "json"
     events: tuple[EventGroup, ...] = ("attention", "loop")
     digest_every_minutes: Annotated[StrictInt, Field(ge=MIN_DIGEST_MINUTES)] | None = None
+    # After a delivery, what does not need the operator now waits this long, then goes out in one message.
+    batch_minutes: Annotated[StrictInt, Field(ge=1, le=MAX_BATCH_MINUTES)] | None = None
 
 
 SinkName = Annotated[str, AfterValidator(_sink_name)]

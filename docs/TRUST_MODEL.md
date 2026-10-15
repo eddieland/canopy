@@ -362,7 +362,12 @@ Residual: the repository still chooses the tracker provider, the query, `needs_h
 prefix, and `tracker.ticket_url`. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled PRs,
 agent branches under an unexpected prefix, which branch protection (§7) still governs, or the web UI's ticket links
 leading to an `https://` site other than the tracker: the UI shows each link's address, and following one runs
-nothing. The provider also picks the default tracker server and
+nothing. The query can still widen what the overseer reads: it reads every ticket a query returns, text and comments,
+before it checks for a label, so a widened query puts tickets nobody labeled, any the operator's tracker account can
+see, in front of the model, where their text can try to steer it (T1). It cannot make one a candidate. Settled
+(2026-10-15, the operator's choice): the query stays in the workspace file, beside the map it is about, and an operator
+who shares the workspace with people they do not trust overrides it in the user file. Checking labels in code before
+any ticket reaches the overseer closes this with ROADMAP M37. The provider also picks the default tracker server and
 tools a private ticket's worker gets (T6): a repository that names another provider leaves the real tracker's server
 undenied in that definition. An operator who works private tickets in a repository they do not control sets
 `tracker.mcp_server` and `tracker.read_tools`, which are user-only, to pin them. Through the runtime's own config it can
