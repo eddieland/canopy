@@ -547,28 +547,31 @@ The shape the four share:
 
 This milestone adds the connectors and the derivation without changing what the overseer sees or does:
 
-- The contract. On stdin, one JSON object naming what to observe: the tracker query, every ticket not marked done,
-  every PR URL on an unfinished unit (merged and closed included, 2026-10-13 F16), the repositories, and
-  `review.query` when set. On stdout, one JSON line per observation: `ticket` (key, title, body cut, open or
-  closed, labels, updated at, blocker keys, label events when the tracker has them), `comment` (ticket, id, author
-  account id, time, body cut), `pr` (url, repository, number, head sha, base ref, open, merged, or closed, draft,
-  mergeable, mergeable state, author login, labels), `branch` (repository, name, head sha, for each branch under the
-  branch prefix, so `pushed_no_pr` and a PR the journal has no unit for are observed), `check` (pr, head sha, context
-  name, status, conclusion, run id, url), `review` (pr, id, review or review comment, author login, whether a bot,
-  state, time, body cut, url, and for a review comment its thread, and whether that is resolved or outdated), and last
-  an `end` line naming what it covered, so a connector cut off mid-way does not read as everything else having
-  vanished. Unknown kinds are skipped. Ids, states, times, and bounded text; never logs or diffs. The tracker query
-  is paged by the connector (REQUIREMENTS R1's gap), and CI is observed by named context, every one of them, never
-  the combined status (2026-10-12 F9), which stops at 30 contexts (2026-10-15 F25). A ticket a watched ticket names
-  as its blocker is observed too, whether or not the query returns it. PR labels, branches, thread state, every
-  context, and blockers are what the overseer used to decide that the first draft left out (2026-10-15 F28). Open:
-  where the contexts that are not CI (ones that stay pending until a human acts) are configured, per repository. The
-  GitHub connector reads every watched PR in one GraphQL query a poll, not REST calls per PR, which would cost 15 to
-  18 times the overseer's MCP calls today (2026-10-15 F29).
-- The journal: one table per kind (`observed_tickets`, `observed_prs`, `observed_checks`, `observed_reviews`), each
-  row keyed by the source's id and replaced on each observation with its `observed_at`; a subject the `end` line did
-  not cover keeps its old rows and their age. Comments go into `messages` as mirrored comments do now, with the
-  workers' marks read in code (D069). `connector_runs` records each run: when, status, counts, the tail of stderr.
+- The contract. On stdin, one JSON object naming what to observe: the tracker query, every ticket not marked done, every
+  PR URL on an unfinished unit (merged and closed included, 2026-10-13 F16), the repositories, the branch prefix
+  (`trust.branch_prefix`), and `review.query` when set. On stdout, one JSON line per observation: `ticket` (key, title,
+  body cut, open or closed, labels, updated at, blocker keys, label events when the tracker has them), `comment`
+  (ticket, id, author account id, time, body cut), `pr` (url, repository, number, head sha, base ref, open, merged, or
+  closed, draft, mergeable, mergeable state, author login, labels), `branch` (repository, name, head sha, for each
+  branch under the branch prefix, so `pushed_no_pr` and a PR the journal has no unit for are observed), `check` (pr,
+  head sha, context name, status, conclusion, run id, url), `review` (pr, id, review or review comment, author login,
+  whether a bot, state, time, body cut, url, and for a review comment its thread, and whether that is resolved or
+  outdated), and last an `end` line naming what it covered, so a connector cut off mid-way does not read as everything
+  else having vanished. Unknown kinds are skipped. Ids, states, times, and bounded text; never logs or diffs. The
+  tracker query is paged by the connector (REQUIREMENTS R1's gap), and CI is observed by named context, every one of
+  them, never the combined status (2026-10-12 F9), which stops at 30 contexts (2026-10-15 F25). A ticket a watched
+  ticket names as its blocker is observed too, whether or not the query returns it. PR labels, branches, thread state,
+  every context, and blockers are what the overseer used to decide that the first draft left out (2026-10-15 F28). Open,
+  and settled before the derivation reads a pending check: where the contexts that are not CI (ones that stay pending
+  until a human acts) are configured, per repository, since counting one as CI holds a green PR at `ci_running`
+  (2026-10-15 F28). The GitHub connector reads every watched PR in one GraphQL query a poll, not REST calls per PR,
+  which would cost 15 to 18 times the overseer's MCP calls today (2026-10-15 F29), and pages any PR's contexts past the
+  first page of 100 before its `end` line covers that PR.
+- The journal: one table per kind (`observed_tickets`, `observed_prs`, `observed_branches`, `observed_checks`,
+  `observed_reviews`), each row keyed by the source's id and replaced on each observation with its `observed_at`; a
+  subject the `end` line did not cover keeps its old rows and their age. Comments go into `messages` as mirrored
+  comments do now, with the workers' marks read in code (D069). `connector_runs` records each run: when, status, counts,
+  the tail of stderr.
 - Config, user-only (TRUST_MODEL T7): `[connect.sources.<name>]` with `cmd` (argv, no shell, as a sink's), `kind`
   (`tracker` or `vcs`), and `timeout_minutes`, one per kind at most, nested as sinks are (§20). Beside the table, the
   scalars later milestones read, defined here so the model needs no special case: `connect.max_age_minutes` (M37)
@@ -582,12 +585,13 @@ This milestone adds the connectors and the derivation without changing what the 
   not touch. The loop's per-tick block and its `loop waits` line count the disagreements with what the overseer
   recorded.
 - `canopy status` names each connector's last run and the age of its observations.
-- Proposed (2026-10-15), for the operator to settle: the tracker connector's query first, on its own, as the one part
-  of this milestone that changes what the overseer does. Run in code each tick, its result is in the state block as
-  the tickets the query returned, and the overseer reads those instead of running the query. A cheaper overseer
-  skipped the query and read only the block's tickets, which stalls new work with no tick failing (2026-10-15 F31,
-  DESIGN §7); a prompt that says to run it every tick can still be skipped. TRUST_MODEL T1, with the approval
-  note.
+- Proposed (2026-10-15), for the operator to settle: the tracker connector's query first, on its own, as the one part of
+  this milestone that changes what the overseer does. Run in code each tick, its result is in the state block as the
+  tickets the query returned, less the tickets marked done that DESIGN §7's `recently_done` names, and the overseer
+  reads those instead of running the query. When that run failed or its result is older than `connect.max_age_minutes`,
+  the block says so and the overseer runs the query itself that tick, as today. A cheaper overseer skipped the query and
+  read only the block's tickets, which stalls new work with no tick failing (2026-10-15 F31, DESIGN §7); a prompt that
+  says to run it every tick can still be skipped. TRUST_MODEL T1, with the approval note.
 - Tests with the fakes: `tests/fakes/connector` prints configured lines; a line out of bounds is refused and the
   rest kept; a cut-off output keeps the previous observations; the derivation over journals written by hand, one
   case per row of the phase table.
