@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, review_diff
+from canopy.core import contract, conversation, db, review_diff
 from canopy.core import review_result as result
 from canopy.serve.schema import (
     DiffFile,
@@ -70,6 +70,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
         else [],
         diff=diff,
         runs=[summary(r) for r in db.review_runs_of(ctx.conn, str(row["pr_url"]))],
+        sendable=row["status"] == "done" and conversation.own_pr(ctx.conn, row),
     )
 
 

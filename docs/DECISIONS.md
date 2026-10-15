@@ -375,7 +375,7 @@ such as a shipped migration, may still cite one, and git history has its text.
   `canopy review show` and a worker through `resume --review-run`, never the PR or the ticket. Settled by the operator.
 - Why: a review on the PR speaks in the operator's name before they have seen it; kept local it needs no write grant.
 - Rejected: one identified comment per commit with a marker (the M11 design); repository automation on the verdict.
-- Revisit: with a bot identity, or once the operator wants the web UI's shadow review (ROADMAP M32) published.
+- Revisit: with a bot identity, or once the operator wants a shadow review published: asked for, ROADMAP M43.
 
 ## D115. The web UI's branch links default to the GitHub page a clone URL implies
 

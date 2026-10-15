@@ -41,6 +41,8 @@ export type Granted = Schemas['Granted']
 export type Dismissed = Schemas['Dismissed']
 /** What a dismissal of a review's finding left: the run, the finding's number, and whether it is now dismissed. */
 export type ReviewDismissed = Schemas['ReviewDismissed']
+/** What sending a review's findings recorded: the operator message on the review's ticket that names them. */
+export type ReviewSent = Schemas['ReviewSent']
 /** One message on the event stream, told apart by its `type` (`applyStreamEvent` in live.ts). */
 export type StreamEvent = Schemas['StreamEvent']
 /** One repository's treehouse pool, read when asked for. */

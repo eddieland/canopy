@@ -733,7 +733,40 @@ is wrong often enough that the operator wants to rule a finding out before a wor
 - Refused `unknown` for a review run that does not exist, did not end `done` with findings, or has no finding `N` (with
   `--undo`, one not dismissed), `bad_finding` for a number that is not 1 to 20, and `inside_run` as `reply` is: the
   overseer and agents cannot hold a finding back from a worker. A row in `review_dismissals` per run and number, with
-  its time and channel. A `review:ID` reference takes only `dismiss`; `canopy review show ID` shows one.
+  its time and channel. A `review:ID` reference takes `dismiss` and `send` (below); `canopy review show ID` shows one.
+
+### Sending findings to a worker
+
+`canopy send review:<ID> <N>...`, or ticking findings in a review's findings list in the web UI and `send to a worker`
+(§22), is the operator's go-ahead on those findings of review run `ID` (asked for by the operator, 2026-10-13, with
+ROADMAP M32). Only for a review of one of the loop's own PRs: the run names a ticket, and one of that ticket's units
+opened the PR it reviewed (`ticket_units.pr_url`). The ticket link alone is the overseer's claim when it ran the review;
+the unit's PR is the journal's record of what the loop opened and pushes to. A review of any other PR, such as one
+`review.query` matched, offers no send: no worker may push to it, and what the operator may do with such a review
+instead, publish it on the PR after iterating on it, is ROADMAP M43. It is a reply, not a new channel: it records an
+operator message on the review's ticket, as `canopy reply KEY` would, in the operator's words:
+
+```text
+Address findings 1 and 3 of canopy's review run 12, of commit 9b2f4c6e1a7d. Leave its finding 2 alone.
+```
+
+- The next tick reads it as any operator message about review feedback (§7, D089): the ticket is `human_replied`, and
+  the overseer dispatches `resume --review-run ID`, which hands the worker the run's findings that are not dismissed.
+  The worker addresses the ones the message names, as an operator message says, and leaves the rest. So it works
+  whether or not `trust.trusted_reviewers` lists `canopy:review`: untrusted, it is the go-ahead the findings wait for;
+  trusted, it narrows what the worker addresses. A `resume` carries one review run's findings, so when the operator
+  sends from two runs before a tick, the overseer dispatches for the older message first, with the `message` cursor
+  at it, and the newer one is still new on the next tick.
+- The message names findings by number and never quotes them. A finding is the reviewer's text, which is data (T1);
+  the message is the operator's, an instruction, so the reviewer's words never reach a prompt as the operator's.
+- Refused `bad_finding` for no number or one that is not 1 to 20, `unknown` as `dismiss` is for a run or finding that
+  does not exist, `dismissed` for a finding the operator dismissed (undo that first), `not_ours` for a review of a
+  PR that is not one of the loop's own (above), and `inside_run` as `reply` is: an agent that could send
+  findings could start work in the operator's name. The web form draws a submission id, as the reply form does (§22),
+  drawn anew when the ticked findings change, so a retry records nothing new; the same command again in the shell
+  records nothing new either.
+- Not settled, as for a dismissal: a finding has no id that lasts from one commit's review to the next, so what was
+  sent from one review is not carried to the next commit's.
 
 ### The diff
 
@@ -741,7 +774,8 @@ For the web UI's review page (ROADMAP M32), which shows each finding on the diff
 the reviewed commit's diff. `GET /reviews` lists the latest review runs, and `GET /reviews/{id}` serves one with its
 findings anchored on its diff and the diff itself (§22); both read only. The Reviews pages show them: the list, and
 a review's page with each finding's card under the line it names, under its file's header when the diff does not
-show the line, or in a panel of its own. The one thing they write is a finding's dismissal (above).
+show the line, or in a panel of its own. They write two things: a finding's dismissal, and findings sent to a worker
+(above).
 
 A review is also listed on its PR's page, in the web UI's pull requests pages (§22), which open it here; a review's
 page links back to its PR's.
@@ -803,8 +837,8 @@ marker, with the operator's approval.
 
 ### Open
 
-- What else the operator does from a review's page (ROADMAP M32): send some findings to a worker. And how a
-  finding is followed from one commit's review to the next, so a dismissal could outlast its run.
+- How a finding is followed from one commit's review to the next, so a dismissal, or findings sent to a worker,
+  could outlast its run.
 - A repository-offered review rubric, such as its own `low_impact`, that an operator opts into by name.
 - Whether OpenCode confines the reviewer to its `checkout` link. The opt-in reviewer canary
   (`tests/canopy/test_opencode_canary.py`) settles it. If not, the reviewer runs without a checkout and reads the PR
