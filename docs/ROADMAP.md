@@ -495,7 +495,9 @@ of its own (DESIGN §6 step 4, §13).
 
 Status: done 2026-10-15.
 Learned: closed on the operator's request with the tests with the fakes passing, before the live measurement; the
-before and after cache check and the 15% re-measurement are SCENARIOS S33.
+before and after cache check and the 15% re-measurement are SCENARIOS S33. Measured since (MEASUREMENTS 2026-10-15
+F23): a warm tick's first step cost 57% less, 15% of the tick, as predicted, but most ticks were cold, at the base
+interval and through the night, so the realized saving was about 3%.
 Next: M37's state block grows with the connectors' facts, so S33 is worth running again once it lands.
 
 ## M35. Temporary notices to workers
@@ -516,7 +518,8 @@ so.
 
 ## M36. Connectors: the world observed into the journal, in shadow
 
-MEASUREMENTS 2026-10-12 F6, F9, F10; 2026-10-13 F13, F14, F16, F17; D003's revisit and D008's. Needs M28 and M34.
+MEASUREMENTS 2026-10-12 F6, F9, F10; 2026-10-13 F13, F14, F16, F17; 2026-10-15 F25 to F29; D003's revisit and
+D008's. Needs M28 and M34.
 Asked for by the operator (2026-10-14): each tick of the overseer should run from journal state, read into it by
 deterministic programs, instead of an agent re-reading the tracker and GitHub every tick. M36 to M39 take that one
 step at a time, and supersede M29 and M30: the probe's facts go into the journal rather than gating on them, and the
@@ -549,12 +552,19 @@ This milestone adds the connectors and the derivation without changing what the 
   `review.query` when set. On stdout, one JSON line per observation: `ticket` (key, title, body cut, open or
   closed, labels, updated at, blocker keys, label events when the tracker has them), `comment` (ticket, id, author
   account id, time, body cut), `pr` (url, repository, number, head sha, base ref, open, merged, or closed, draft,
-  mergeable, mergeable state, author login), `check` (pr, head sha, context name, status, conclusion, run id, url),
-  `review` (pr, id, review or review comment, author login, whether a bot, state, time, body cut, url), and last an
-  `end` line naming what it covered, so a connector cut off mid-way does not read as everything else having
+  mergeable, mergeable state, author login, labels), `branch` (repository, name, head sha, for each branch under the
+  branch prefix, so `pushed_no_pr` and a PR the journal has no unit for are observed), `check` (pr, head sha, context
+  name, status, conclusion, run id, url), `review` (pr, id, review or review comment, author login, whether a bot,
+  state, time, body cut, url, and for a review comment its thread, and whether that is resolved or outdated), and last
+  an `end` line naming what it covered, so a connector cut off mid-way does not read as everything else having
   vanished. Unknown kinds are skipped. Ids, states, times, and bounded text; never logs or diffs. The tracker query
-  is paged by the connector (REQUIREMENTS R1's gap), and CI is observed by named context, never the combined status
-  (2026-10-12 F9).
+  is paged by the connector (REQUIREMENTS R1's gap), and CI is observed by named context, every one of them, never
+  the combined status (2026-10-12 F9), which stops at 30 contexts (2026-10-15 F25). A ticket a watched ticket names
+  as its blocker is observed too, whether or not the query returns it. PR labels, branches, thread state, every
+  context, and blockers are what the overseer used to decide that the first draft left out (2026-10-15 F28). Open:
+  where the contexts that are not CI (ones that stay pending until a human acts) are configured, per repository. The
+  GitHub connector reads every watched PR in one GraphQL query a poll, not REST calls per PR, which would cost 15 to
+  18 times the overseer's MCP calls today (2026-10-15 F29).
 - The journal: one table per kind (`observed_tickets`, `observed_prs`, `observed_checks`, `observed_reviews`), each
   row keyed by the source's id and replaced on each observation with its `observed_at`; a subject the `end` line did
   not cover keeps its old rows and their age. Comments go into `messages` as mirrored comments do now, with the
@@ -572,14 +582,21 @@ This milestone adds the connectors and the derivation without changing what the 
   not touch. The loop's per-tick block and its `loop waits` line count the disagreements with what the overseer
   recorded.
 - `canopy status` names each connector's last run and the age of its observations.
+- Proposed (2026-10-15), for the operator to settle: the tracker connector's query first, on its own, as the one part
+  of this milestone that changes what the overseer does. Run in code each tick, its result is in the state block as
+  the tickets the query returned, and the overseer reads those instead of running the query. A cheaper overseer
+  skipped the query and read only the block's tickets, which stalls new work with no tick failing (2026-10-15 F31,
+  DESIGN §7); a prompt that says to run it every tick can still be skipped. TRUST_MODEL T1, with the approval
+  note.
 - Tests with the fakes: `tests/fakes/connector` prints configured lines; a line out of bounds is refused and the
   rest kept; a cut-off output keeps the previous observations; the derivation over journals written by hand, one
   case per row of the phase table.
 
 Accept: written with the design, before work starts. Live, once built: a day of `canopy loop` with both connectors
 against the real queue, and a MEASUREMENTS section giving the agreement between the derivation and the overseer per
-phase row, each disagreement read and attributed (the rationale says which side was right), and what the connectors
-cost (calls and seconds per tick, no tokens).
+phase row, counted by distinct situation as well as by decision (2026-10-15 F26), each disagreement read and
+attributed (the rationale says which side was right), and what the connectors cost (calls and seconds per tick, no
+tokens).
 
 Status: not started.
 
@@ -637,7 +654,10 @@ showed the derivation getting right: a rule moves into code only with that evide
   notice, the row stays the overseer's, even after the notice ends, since whether the notice explains the failure is
   judgment, which M35 keeps out of code; `review run` for `review_pending` and for
   `review.query`'s PRs. Each is a `decisions` row with `by = harness`, so the corpus, `canopy decisions`, and the
-  tick's page show every decision and who made it.
+  tick's page show every decision and who made it. `ci_red` was the row the overseer overruled most, on facts
+  outside it: a PR humans had shelved with labels, an outage, a stacked ticket's open blocker, a build still running
+  (2026-10-15 F27). Its `fix-ci` moves only if M36's day, with PR labels observed, shows the derivation right; until
+  then it stays the overseer's.
 - The priority order across both deciders is the overseer prompt's step 4 today (a human waiting, then conflicts and
   red CI, then a pushed branch with no PR, then `ready`) and nowhere in the design: it goes into §7, and the
   harness keeps it. The harness records its decisions before the overseer and makes its dispatches after it; the
@@ -705,7 +725,10 @@ overseer spends: M34's cache hit needs ticks minutes apart, which M39 makes rare
   a few thousand tokens, not fifty, and text on one ticket cannot steer a decision about another.
 - The harness orders dispatches across tickets by phase priority (§7's order, written there by M38), which today
   the one overseer does, and bounds the runs per tick by capacity.
-- Open: whether runs go in parallel; chores' `when`, which needs no ticket; whether one run may still see the queue.
+- Open: whether runs go in parallel; chores' `when`, which needs no ticket; whether one run may still see the queue;
+  a model per run, chosen by the ticket's phase: the strongest for `ready`, review feedback, and a free-text reply,
+  a cheaper one for the rest. That is a split overseer's saving without two standing overseers, whose split by job
+  buys only the cheaper model's price, since finding new work was 0.2% of overseer spend (2026-10-15 F31).
 
 Accept: written with the design, before work starts.
 
