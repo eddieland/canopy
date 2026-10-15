@@ -194,14 +194,16 @@ def parse_duration(text: str) -> int:
 
 
 def describe(held: Notice, now: datetime) -> str:
-    """One line on a notice for `canopy status` and `canopy notice`: its text, who set it, and how long it has left.
+    """One terminal line on a notice for `canopy status` and `canopy notice`: its text, how set, and its time left.
 
     Returns:
         The line.
     """
     # Rounded up, so a notice just set for 4h says 4h left.
     left = max(0, math.ceil((db.parse_time(held.lapses_at) - now).total_seconds() / 60))
-    return f"Notice to workers ({held.channel}, {_duration(left)} left): {held.text}"
+    # Control characters become spaces: the text may come from the web channel, and goes to the operator's terminal.
+    text = " ".join("".join(c if c.isprintable() else " " for c in held.text).split())
+    return f"Notice to workers ({held.channel}, {_duration(left)} left): {text}"
 
 
 def _notice(row: sqlite3.Row) -> Notice:

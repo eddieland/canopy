@@ -18,7 +18,7 @@ from canopy.infra import resources
 from canopy.loop import pacing, reread, web
 from canopy.serve import live
 from canopy.serve.schema import LoopUpdated
-from tests.canopy.helpers import journal
+from tests.canopy.helpers import InlineRunner, in_tick, journal
 from tests.canopy.test_idle_pacing import Case, was_idle
 from tests.canopy.test_loop import context
 from tests.canopy.test_mirror import state_block
@@ -344,3 +344,37 @@ def test_the_stream_sends_a_notice_and_its_lapse_which_commits_nothing(ctx: Cont
             assert reader.read() == []
     finally:
         reader.close()
+
+
+def test_the_cli_line_drops_control_characters(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
+    # The text may come from the web channel; the operator's terminal reads it as text, never as escape sequences.
+    conn = journal(canopy_env)
+    notice.set_notice(conn, "\x1b[2J\x1b]0;owned\x07CI is\ndown.", minutes=60, channel="web")
+    assert main(["notice"]) == 0
+    out = capsys.readouterr().out
+    assert "\x1b" not in out
+    assert "\x07" not in out
+    assert out.endswith(": [2J ]0;owned CI is down.\n")
+    # The prompt keeps the operator's text as set.
+    assert notice.for_prompt(conn) == "\x1b[2J\x1b]0;owned\x07CI is\ndown."
+
+
+@pytest.mark.parametrize("moved", [True, False], ids=["set mid-tick", "set before the tick read"])
+def test_a_fix_ci_after_the_notice_moved_mid_tick_is_refused(
+    canopy_env: CanopyEnv,
+    conn: sqlite3.Connection,
+    moved: bool,  # noqa: FBT001  (a parametrized fixture)
+) -> None:
+    # The overseer decided from a state block without the notice; the tick the notice wakes decides with it.
+    if not moved:
+        notice.set_notice(conn, OUTAGE, minutes=60, channel="cli")
+    with in_tick(conn) as tick_id:
+        db.set_tick_read(conn, tick_id)
+        conn.execute("UPDATE ticks SET read_at = ? WHERE id = ?", (db.format_time(datetime.now(UTC)), tick_id))
+        if moved:
+            conn.execute("UPDATE ticks SET read_at = ? WHERE id = ?", ("2026-01-01T00:00:00.000Z", tick_id))
+            notice.set_notice(conn, OUTAGE, minutes=60, channel="cli")
+        args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "fix-ci"]
+        assert main(args, runner=InlineRunner()) == 1
+        [decision] = db.decisions_for_tick(conn, tick_id)
+    assert (decision["action"] == "refused:notice_changed") is moved

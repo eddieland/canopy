@@ -603,9 +603,11 @@ The CLI refuses dispatches of a public ticket that do not name a configured labe
 split's child one other than its own (`unknown_repo`), split fewer than two repositories, a
 started ticket, or a split's child, or dispatch for a ticket already split (`bad_split`), rename a ticket's branch with
 `--slug` (`bad_slug`), exceed capacity (`capacity`), target a ticket with a running worker (`running`), exceed the
-kind's attempt limit in any unit named (`attempt_limit`), are inside a unit's fix-ci cooldown (`cooldown`), or continue
-a branch the journal does not know in a unit named (`no_branch`). It records the refusal as a decision; an
-`attempt_limit` refusal also records the `attempt_limit` attention item. Do not work around a refusal; it is correct.
+kind's attempt limit in any unit named (`attempt_limit`), are inside a unit's fix-ci cooldown (`cooldown`), continue
+a branch the journal does not know in a unit named (`no_branch`), or are a `fix-ci` after the operator set or cleared a
+notice since this tick read the journal (`notice_changed`; the next tick decides with it). It records the refusal as a
+decision; an `attempt_limit` refusal also records the `attempt_limit` attention item. Do not work around a refusal; it
+is correct.
 
 `canopy mirror` refuses a malformed comment id (`bad_comment`), account id (`bad_author`), or time (`bad_time`), an
 empty text (`bad_body`), a reference that is not a ticket (`unsupported`), and mirrors past the tick's limit

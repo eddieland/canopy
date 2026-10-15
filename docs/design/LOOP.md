@@ -748,7 +748,9 @@ they are in force, so a line about an outage outlives it or is forgotten.
   of that check exists, so an ending alone never sends `fix-ci` at the outage's failure. Once the notice has ended and
   no newer run exists, the overseer records `notice_rerun` (§14) for the operator to rerun the check; with M25 built,
   `triage-ci` reruns it where triage is on. No guard in code: whether a failure is the one the notice names is
-  judgment, read from the check's output and the notice's words.
+  judgment, read from the check's output and the notice's words. What code does guard is the overseer deciding from a
+  stale state block: a `fix-ci` dispatched after the operator set or cleared a notice since its tick read the journal
+  is refused `notice_changed`, and the tick the notice wakes decides with it.
 - Setting or clearing a notice is an operator act, like a message: it wakes the loop's wait, keeps the next tick from
   counting as idle, and is recorded as `woken_by` `notice` (§6). Its lapse is a gate the wait ends at, like a `fix-ci`
   cooldown's end, so held work is looked at again when the notice lapses, not up to `loop.idle_max_minutes` later.
