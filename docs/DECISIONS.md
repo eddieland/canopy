@@ -400,3 +400,11 @@ such as a shipped migration, may still cite one, and git history has its text.
   cannot write. A new `srt` is a lockfile change. Root-only steps are printed, never run.
 - Rejected: `npm install -g` (unpinned, shared with the operator's own); bundling `srt` (it needs Node regardless).
 - Revisit: if `srt` ships a standalone binary, or the sandbox stops being opt-in.
+
+## D118. The sandbox is an opt-in prefix on the command templates, and the boundary for the runs it wraps
+
+- The harness never learns whether a run is sandboxed; it passes only `CANOPY_GIT_OBJECTS`, which an unsandboxed run
+  ignores. Every agent command but the overseer's can be wrapped: the overseer needs the journal and config it denies.
+- What the harness runs on the host after a run (git, treehouse) reads nothing a sandboxed run can write (TRUST_MODEL
+  T4): a new step in a slot keeps D107's flags and runs after `_run`'s link and `commondir` check.
+- Revisit: making it the default, once the canary passes on the operator's machines and a day of sandboxed runs.
