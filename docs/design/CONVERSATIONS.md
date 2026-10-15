@@ -601,7 +601,7 @@ rather than from a one-off analysis of the log.
   of the live overseer's, each day as a stacked bar of the kinds with idle overseer spend its own series on the
   baseline, the same numbers as a table, the ticks by group and by what woke them, and the idle ticks. A window the
   page does not offer reads as the week. Reads only.
-- The nav has it, between Ticks and Settings, opening on the week; the rail's two spend figures open it too, the 24
+- The nav has it, between Chores and Ticks, opening on the week; the rail's two spend figures open it too, the 24
   hours' on the week and the 30 days' on the month. It was at first only a link from the figures, as a question the
   operator asks now and then rather than a place they work, but the operator, who asked for the page, did not find it
   there (2026-10-15).

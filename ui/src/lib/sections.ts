@@ -1,17 +1,20 @@
 // The side nav's sections, each with a color of its own (ui/DESIGN.md, "Tokens"). A section's color is identity,
 // never state: it marks the nav's icons, its highlight, and the trail over each page, and nothing in the data.
 
-/** Every section, by its path, in the nav's order. */
+/**
+ * Every section, by its path, in the nav's order: by how often the operator opens it, so what they work in is at the
+ * top and what they check now and then is lower down, with Settings last.
+ */
 export const SECTIONS = [
     '/attention',
-    '/runs',
-    '/worktrees',
     '/tickets',
     '/pull-requests',
     '/reviews',
+    '/runs',
     '/chores',
-    '/ticks',
     '/spend',
+    '/ticks',
+    '/worktrees',
     '/settings',
 ] as const
 
