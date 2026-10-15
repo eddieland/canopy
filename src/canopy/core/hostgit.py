@@ -10,7 +10,8 @@ or a transport (`remote.<name>.uploadpack`) still runs; only a git directory the
 
 A worktree slot's `.git` is a file naming its git directory. A worker that rewrites it points host-side git at a
 directory of its own, whose hooks and config the flags above do not cover, so `_run` reads it before the run and puts
-it back if it changed.
+it back if it changed. The `commondir` file in the slot's own git directory does the same for the common directory;
+only the sandbox's policy keeps a worker from rewriting that one (HOST_ISOLATION §4.2).
 """
 
 from __future__ import annotations

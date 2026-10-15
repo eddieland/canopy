@@ -139,7 +139,7 @@ workspace to its template's `denyRead`.
 | The cwd and every worktree a desk links to | yes | yes | The work. |
 | Each worktree's `.git` link file | yes | no | Repointing it moves host-side git somewhere the worker owns (§5). |
 | The git common dir, except this slot's `worktrees/<slot>/` | yes | no | Shared by every slot; see below. |
-| This slot's `worktrees/<slot>/`, except `config.worktree` | yes | yes | Its own HEAD, index, and reflog. |
+| This slot's `worktrees/<slot>/`, except `config.worktree`, `commondir`, `gitdir` | yes | yes | Its own HEAD, index, and reflog. |
 | A per-run git object directory | yes | yes | New commits; see below. |
 | The runtime's config (`~/.config/opencode`) | yes | no | A worker must not rewrite its own permissions. |
 | The runtime's data and cache (`~/.local/share/opencode`, ...) | yes | yes | Sessions and token refresh. |
@@ -182,6 +182,14 @@ wrapper's `@GIT_SHARED@` therefore names what the common directory holds, entry 
 `packed-refs`, is not visible inside the sandbox. A `config.worktree` that does not exist yet is still denied: `srt`
 binds an empty file over it, which bubblewrap creates on the host and `srt` removes when the run ends (a run killed
 with SIGKILL leaves it empty, which git ignores without `extensions.worktreeConfig`).
+
+Two more files in the slot's own directory point git elsewhere, and the wrapper's `@GIT_PROTECTED@` denies writing
+them as it does `config.worktree` and the `.git` link. `commondir` names the common directory, so a worker that
+rewrites it to a directory of its own, holding a `config`, `objects/`, and `refs/`, makes every git on the host in the
+slot read that config and its hooks: `_run`'s step 5, the tidy step, and treehouse's `return` (§7). Checked with git
+2.43, a `remote.origin.uploadpack` in such a config ran on `_run`'s `ls-remote`, D107's flags notwithstanding (§5 item
+1). `gitdir` is the back link `git worktree` reads, which `prune` acts on. git writes neither in a slot's ordinary
+work. A file that exists is bound read-only, so a rename over it or its removal fails too (the canary checks each).
 
 Checked with `srt` 0.0.79, bubblewrap, and git 2.43, through `canopy-sandbox worker` and the shipped
 `worker.json` in a slot of a pool under a fake `$HOME`: a commit in the slot works, its objects only in the per-run
@@ -271,7 +279,9 @@ running outside the sandbox on files a worker wrote. Five changes, in the same m
 2. Built (DESIGN §8). `_run` reads each slot's `.git` file before any git step. If it changed by the time the worker
    exits, the run is `crashed` (an attention item) and no git runs in any of its slots. The file is put back before the
    slot is returned, since treehouse runs git there. The policy already denies writing it; this catches a policy that
-   forgot. Gap: a `_run` killed with SIGKILL leaves the slot to reconcile, which does not know what the file held.
+   forgot. For a `_run` killed with SIGKILL, reconcile does the same from the link `_run` recorded in `run_slots`. The
+   check does not cover the slot's `commondir`, which redirects host-side git as surely (§4.2); only the policy
+   does (§7).
 3. The prompt reaches the runtime byte for byte. D023 keeps ticket text out of a shell. `srt` joins its arguments into
    one `bash -c` string after single-quoting each one, and quotes again at each layer it adds (`sh -c` around
    bubblewrap on Linux, `env ... sandbox-exec` on macOS). That is the POSIX-safe form, but it is a second parser on
@@ -310,7 +320,7 @@ drops it when the run ends (§4.2).
 - Read the fake SSH key, and anything else under HOME outside the policy.
 - Write `~/canary`, `~/.bashrc`, `~/.config/canopy/config.toml`, and anything under the state dir.
 - Move another slot's branch or any other ref, write the common dir's `config` or `hooks/post-checkout`, a
-  `config.worktree`, or the slot's `.git` link.
+  `config.worktree`, the slot's `commondir` or `gitdir`, or the slot's `.git` link.
 - Connect to a host not on the allowlist, to `169.254.169.254`, and to a port on the host's loopback.
 
 And the positive controls must succeed, so a sandbox that blocks everything cannot pass:
@@ -362,8 +372,23 @@ gives it (§4.1 step 4): under pytest's own temp directory the path is too long,
   stdio servers that read credentials from HOME need those paths allowed.
 - Build caches. DESIGN §9 wants caches shared across slots. Sharing them with the operator's own builds would let a
   worker poison what the operator runs later. Give sandboxed runs their own cache directories.
-- treehouse runs git on returned slots (`return --force`) and runs `post_create` hooks. Check whether it runs anything
-  from the slot, and what it should turn off, before calling §5 complete.
+- What treehouse runs in a slot: answered, from its source at the commit canopy pins. `return --force`, which `_run`
+  and reconcile call after the tidy step (DESIGN §8 step 6), ends the processes whose cwd is in the slot, then runs
+  plain git there: `rev-parse` to find the repository, the base, and HEAD, `remote`, `symbolic-ref`, and `config`
+  in the primary clone it finds from the slot for the default branch, `read-tree --reset -u` onto the base, and
+  `clean -fd`. Nothing of it reaches the network. Without `--force` it
+  would also run `status` and `checkout --detach`. None of D107's flags are set, so a hook in the common directory
+  (`post-index-change` on `read-tree`'s index write), the filesystem monitor, and a filter driver the config names all
+  run. Under the sandbox the worker writes none of those: not the common directory, and not where the slot finds it,
+  once `commondir` is protected (§4.2), which this question found open. A filter needs a driver in the config, so a
+  `.gitattributes` the worker leaves names none that runs. treehouse's own hooks, `post_create` on `get` and
+  `pre_destroy` on `destroy`, run only from the operator's user config: it ignores `[hooks]` in a repository's
+  `treehouse.toml`, and `~/.config/treehouse` is under the `$HOME` the templates deny. So nothing a sandboxed worker
+  wrote runs when its slot is returned, and canopy needs no flags it cannot pass. Without a sandbox, treehouse's git is
+  like any git on the host: the worker already ran as the operator. Still open: `_run`'s check of the `.git` link
+  (§5 item 2) does not cover `commondir`, so a template that drops `@GIT_PROTECTED@` from `denyWrite` leaves it to the
+  policy alone; the harness could set `GIT_COMMON_DIR`, which git reads before `commondir`, on every git it runs in
+  a slot.
 - The repository's OpenCode config (skills, MCP servers, plugins) comes from the checked-out branch (T7 residual).
   canopy's own agent definitions no longer do (D040, D044). The sandbox does not change that, but it does bound what a
   hostile config can reach.
