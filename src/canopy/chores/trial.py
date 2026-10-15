@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.chores import execute, start
-from canopy.core import agent_output, conversation, db, outbox
+from canopy.core import agent_output, conversation, db, notice, outbox
 from canopy.core import chore_view as view
 from canopy.infra import lock, logs, procs
 
@@ -77,7 +77,9 @@ def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
     except OSError as e:
         raise TrialError(f"cannot read {chore.prompt}: {e.strerror}") from e
     state = view.state_of(ctx.conn, name, chore)
-    prompt = start.render(body, state, None, context, conversation.chore_notes(ctx.conn, name))
+    prompt = start.render(
+        body, state, None, context, conversation.chore_notes(ctx.conn, name), held=notice.for_prompt(ctx.conn)
+    )
     try:
         cwd, argv = execute.prepare(ctx, name, chore, prompt)
     except execute.SetupError as e:
@@ -116,7 +118,9 @@ def record(ctx: Context, prepared: Prepared) -> Recorded:
         try:
             db.claim_chore_run(ctx.conn, run_id, os.getpid())
             notes = conversation.chore_notes(ctx.conn, name)
-            prompt = start.render(prepared.body, state, run_id, prepared.context, notes)
+            prompt = start.render(
+                prepared.body, state, run_id, prepared.context, notes, held=notice.for_prompt(ctx.conn)
+            )
             logs.write_private(start.prompt_file(log_path), prompt)
         except OSError as e:
             os.close(held)

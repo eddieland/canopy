@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, outbox, prompts, treehouse
+from canopy.core import conversation, db, notice, outbox, prompts, treehouse
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
@@ -38,6 +38,8 @@ JOINT_PR_NOTE = "one per repository, listed under Repositories"
 # A prompt carries at most this much of `MAP.md`.
 MAX_MAP = 20_000
 RUNS_DIR = "runs"
+# The kind a notice to workers can hold (DESIGN §8): a dispatch of it refuses when the notice moved mid-tick.
+FIX_CI = "fix-ci"
 
 
 class Refusal(Exception):  # noqa: N818  (a refusal is an outcome the overseer is told about, not an error)
@@ -127,6 +129,7 @@ def start(
     # One dispatch at a time, so two cannot both pass the capacity check. Held from the plan, which reads the ticket's
     # branch, across the leases and the spawn: two first implements must not each name a branch.
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
+        _check_notice(ctx, tick_id, kind)
         plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base, request=request)
         attempt, limit = _guard(ctx, key, kind, plan.repos)
         leases = _lease_all(ctx, key, plan.repos)
@@ -181,6 +184,7 @@ def check(
         if str(d["action"]).startswith("dispatch:") and (d["ticket_key"] is not None or d["pr"] is not None)
     ]
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
+        _check_notice(ctx, tick_id, kind)
         plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base, request=request)
         _guard(ctx, key, kind, plan.repos, planned=planned)
     return plan
@@ -498,6 +502,27 @@ def _check_base(prefix: str, branch: str, base: str) -> None:
         raise Refusal("bad_base", f"{branch} cannot be stacked on itself")
 
 
+def _check_notice(ctx: Context, tick_id: int, kind: str) -> None:
+    """Refuse a `fix-ci` when the operator set or cleared a notice to workers after this tick read the journal.
+
+    The overseer decided from a state block without it, and a `fix-ci` at a failure the notice explains spends an
+    attempt that never resets (D030); the loop's next tick, which the notice wakes, decides with it (DESIGN §8).
+
+    Raises:
+        Refusal: (`notice_changed`) the notice moved after the tick's read.
+    """
+    if kind != FIX_CI:
+        return
+    tick = db.get_tick(ctx.conn, tick_id)
+    read = tick["read_at"] if tick is not None else None
+    if read is not None and notice.moved_after(ctx.conn, str(read)):
+        raise Refusal(
+            "notice_changed",
+            "the operator set or cleared a notice to workers after this tick read the journal; the next tick decides "
+            "fix-ci with it",
+        )
+
+
 def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: Sequence[str] = ()) -> tuple[int, int]:
     """Refuse unless a `kind` run for `key` over `repos` may start now. Returns the run's attempt number and limit.
 
@@ -670,7 +695,9 @@ def _spawn(
     if review is not None:
         required = (*required, *prompts.REQUIRED_REVIEW)
     try:
-        prompt = prompts.render_worker(cfg, kind, values, required=required, private=plan.private)
+        prompt = prompts.render_worker(
+            cfg, kind, values, required=required, private=plan.private, notice=notice.for_prompt(ctx.conn)
+        )
     except (OSError, prompts.PromptError) as e:
         raise Refusal("bad_prompt", str(e)) from e
 

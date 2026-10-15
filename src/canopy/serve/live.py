@@ -23,6 +23,7 @@ import asyncio
 from collections.abc import AsyncIterator, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor
 from contextlib import ExitStack, contextmanager
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from canopy.infra import logs
@@ -119,15 +120,17 @@ class _Reader:
     def read(self) -> list[StreamEvent]:
         """The events for whatever changed since the last read: none if neither the journal nor the config has.
 
+        A notice to workers lapses with no commit, so the notice this stream last sent lapsing is a change too.
+
         Returns:
             One event per list that differs from what this stream last sent; empty when neither the journal nor the
-            config the loop serves has changed.
+            config the loop serves has changed, and no notice it sent has lapsed.
         """
         if self._ctx is None:
             self._ctx = self._opened.enter_context(self._backend.open())
         current = _data_version(self._ctx)
         served = self._backend.current(self._ctx)
-        if current == self._version and served is self._ctx:
+        if current == self._version and served is self._ctx and not self._sent.notice_lapsed(datetime.now(UTC)):
             return []
         self._version, self._ctx = current, served
         return self._sent.changes(self._backend, self._ctx)
@@ -153,6 +156,15 @@ class _Sent:
         self.spend: Spend | None = None
         self.tick: LastTick | None = None
         self.loop: LoopState | None = None
+
+    def notice_lapsed(self, now: datetime) -> bool:
+        """Whether the notice to workers this stream last sent has lapsed by `now`.
+
+        Returns:
+            True if one was sent and its lapse is not after `now`.
+        """
+        sent = self.loop.notice if self.loop is not None else None
+        return sent is not None and sent.lapses_at <= now
 
     def changes(self, backend: Backend, ctx: Context) -> list[StreamEvent]:
         """Read the lists again, from one snapshot, and return an event for each that differs from what was sent.
@@ -198,7 +210,7 @@ class _Sent:
         loop = views.loop_state(ctx)
         if loop != self.loop:
             self.loop = loop
-            found.append(StreamEvent(LoopUpdated(paused=loop.paused)))
+            found.append(StreamEvent(LoopUpdated(paused=loop.paused, notice=loop.notice)))
         return found
 
 

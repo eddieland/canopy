@@ -62,6 +62,10 @@ REQUIRED_REVIEW = ("REVIEW_FINDINGS",)
 # instead of dropping them. They are in every run's prompt, so they are bounded.
 REQUIRED_STANDING = ("STANDING_INSTRUCTIONS",)
 MAX_STANDING_BYTES = 4096
+# The operator's notice to workers (`canopy notice`, DESIGN §8), in every prompt that builds, tests, or reads CI: every
+# worker's but a split's, and the reviewer's. An override written before notices existed still serves while none is in
+# force; while one is, it fails to render (`bad_prompt`) instead of dropping it, and `canopy notice` names it.
+REQUIRED_NOTICE = ("NOTICE",)
 # The kinds whose workers commit, and how their commits are attributed (TRUST_MODEL T5). The shipped prompts carry
 # `{{COMMIT_ATTRIBUTION}}`, the whole instruction; an older override may carry `{{COMMIT_TRAILER}}`, the trailer alone,
 # or neither. Neither still serves an operator who keeps the default trailer; once `trust.commit_trailer_name` or
@@ -75,6 +79,13 @@ REQUIRED_NO_TRAILER = ("COMMIT_ATTRIBUTION",)
 # default; once `trust.rebase` is set, it fails to render instead of making the merge commits the operator's
 # repositories refuse.
 REQUIRED_REBASE = ("BRANCH_UPDATE",)
+# The prompt files that carry `{{NOTICE}}`, and the run kinds each serves: every worker's but a split's, public and
+# private, and the reviewer's.
+_HEARS_NOTICE: dict[str, list[str]] = {
+    **{WORKER[k]: [k] for k in ("implement", "fix-ci", "resume")},
+    **{WORKER_PRIVATE[k]: [f"{k} (private)"] for k in ("implement", "fix-ci", "resume")},
+    REVIEWER: ["review"],
+}
 
 
 def worker_comment(prefix: str, suffix: str) -> str:
@@ -149,6 +160,27 @@ def open_pr(skill: str) -> str:
     )
 
 
+def missing_notice(config: Config) -> list[tuple[Path, list[str]]]:
+    """The operator's prompt overrides that lack `{{NOTICE}}`, with the kinds each refuses while a notice is in force.
+
+    Returns:
+        Each such override's path and the run kinds it serves (`review` for the reviewer's), in a fixed order.
+    """
+    found: list[tuple[Path, list[str]]] = []
+    for name, kinds in _HEARS_NOTICE.items():
+        override = config.paths.prompt_overrides / name
+        if not override.is_file():
+            continue
+        try:
+            used = set(_PLACEHOLDER_RE.findall(override.read_text(encoding="utf-8")))
+        except (OSError, UnicodeDecodeError):
+            # A file that cannot be read fails every render already, with its own error.
+            continue
+        if "NOTICE" not in used:
+            found.append((override, kinds))
+    return found
+
+
 def standing_instructions(config: Config) -> str:
     """Return the operator's standing instructions for `{{STANDING_INSTRUCTIONS}}`, or `None.` without any.
 
@@ -184,7 +216,13 @@ def prompt_path(config: Config, name: str) -> Path:
 
 
 def render_worker(
-    config: Config, kind: str, values: Mapping[str, str], *, required: Sequence[str] = (), private: bool = False
+    config: Config,
+    kind: str,
+    values: Mapping[str, str],
+    *,
+    required: Sequence[str] = (),
+    private: bool = False,
+    notice: str | None = None,
 ) -> str:
     """Return the worker prompt for `kind` with every `{{NAME}}` replaced from `values`.
 
@@ -197,12 +235,14 @@ def render_worker(
     `{{COMMIT_TRAILER}}` come from the config too: with `trust.commit_trailer_name` or `trust.commit_trailer_email`
     changed from the default every prompt for a kind that commits must carry one of them, and with
     `trust.commit_trailer` off it must carry `{{COMMIT_ATTRIBUTION}}`. So does `{{BRANCH_UPDATE}}`, which every such
-    prompt must carry with `trust.rebase` set.
+    prompt must carry with `trust.rebase` set. `notice` is the operator's notice in force (`core.notice`), for
+    `{{NOTICE}}`: with one, every prompt but a split's must carry it, and a split's hears none.
     """
     instructed = kind != "split"
     values = {
         **values,
         "STANDING_INSTRUCTIONS": standing_instructions(config) if instructed else "None.",
+        "NOTICE": notice if notice is not None and instructed else "None.",
         "COMMIT_ATTRIBUTION": commit_attribution(config),
         "COMMIT_TRAILER": commit_trailer(config),
         "BRANCH_UPDATE": branch_update(config, values.get("BRANCH", "")),
@@ -210,11 +250,26 @@ def render_worker(
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill and kind in OPENS_PRS else ()
     standing = REQUIRED_STANDING if config.paths.worker_instructions is not None and instructed else ()
     rebase = REQUIRED_REBASE if config.trust.rebase and kind in COMMITS else ()
-    required = (*pr_skill, *standing, *rebase, *required)
+    noticed = REQUIRED_NOTICE if notice is not None and instructed else ()
+    required = (*pr_skill, *standing, *rebase, *noticed, *required)
     one_of = _required_attribution(config) if kind in COMMITS else ()
     if private:
         return render(config, WORKER_PRIVATE[kind], values, required=(*REQUIRED_PRIVATE, *required), one_of=one_of)
     return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *required), one_of=one_of)
+
+
+def render_reviewer(config: Config, values: Mapping[str, str], *, notice: str | None = None) -> str:
+    """Return the reviewer's prompt (DESIGN §21) with every `{{NAME}}` replaced from `values`.
+
+    It must carry `REQUIRED_REVIEWER`. `notice` is the operator's notice in force (`core.notice`), for `{{NOTICE}}`:
+    a review reads CI too, so with one the prompt must carry it.
+
+    Returns:
+        The rendered prompt.
+    """
+    values = {**values, "NOTICE": notice if notice is not None else "None."}
+    noticed = REQUIRED_NOTICE if notice is not None else ()
+    return render(config, REVIEWER, values, required=(*REQUIRED_REVIEWER, *noticed))
 
 
 def render(

@@ -60,6 +60,7 @@ for command in (
     spend.cmd_spend,
     conversation.cmd_pause,
     conversation.cmd_resume,
+    conversation.cmd_notice,
     conversation.cmd_start,
     conversation.cmd_stop,
     conversation.cmd_reply,

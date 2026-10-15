@@ -113,7 +113,7 @@ canopy (harness, Python)
     spend.py       spend: each day's cost by kind, and the ticks by what they bought (§11)
     runs.py        dispatch, _run
     conversation.py start, stop, reply, forget, grant, show: the operator's verbs on a subject (§22); pause and
-                   resume, on the loop (§6)
+                   resume, on the loop (§6); notice, to every later run (§8)
     journal.py     decide, attention, ticket set
     workspace.py   workspace sync
     chores.py      chore run, chore wait, chore try, _chore
@@ -208,6 +208,7 @@ canopy (harness, Python)
     items.py       the attention item: its subject, fingerprint, and age
     outbox.py      the events notification sinks receive, recorded with the fact they report (§20)
     pause.py       the loop's pause, which every channel writes: whether `canopy loop` starts another tick (§6)
+    notice.py      the operator's notice to workers, which every channel writes: what every later run hears (§8)
     definitions.py the snapshot of agents/ and skills/ that agent runs load (§13), the private worker's rendered from
                    config; the guards against shadowing them and against naming the tracker's tools (§22)
     prompts.py     prompt files and overrides; rendering worker prompts

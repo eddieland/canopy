@@ -1,10 +1,11 @@
-"""The operator's verbs (DESIGN §22, D075): on tickets, chores, and runs, and pausing and resuming the loop.
+"""The operator's verbs (DESIGN §22, D075): on tickets, chores, and runs, pausing and resuming the loop, and notices.
 
-`pause` and `resume` act on the loop (§6). The rest take a reference whose shape names its kind: a ticket key, `REPO#N`
-or a PR's URL, `chore:NAME`, `run:ID`, or `review:ID`. A kind refuses a verb it does not take. `start`, `stop`, `reply`,
-`forget`, `dismiss`, and `send` write through `canopy.core.conversation`, which every channel shares, `grant` through
-`canopy.runs.policy`, or `canopy.reviews.grants` for a PR's reviews, and `pause` and `resume` through
-`canopy.core.pause`; all nine refuse inside canopy's own ticks and runs.
+`pause` and `resume` act on the loop (§6), and `notice` tells every later run about a passing condition (§8). The rest
+take a reference whose shape names its kind: a ticket key, `REPO#N` or a PR's URL, `chore:NAME`, `run:ID`, or
+`review:ID`. A kind refuses a verb it does not take. `start`, `stop`, `reply`, `forget`, `dismiss`, and `send` write
+through `canopy.core.conversation`, which every channel shares, `grant` through `canopy.runs.policy`, or
+`canopy.reviews.grants` for a PR's reviews, `pause` and `resume` through `canopy.core.pause`, and `notice` through
+`canopy.core.notice`; all ten refuse inside canopy's own ticks and runs, `notice` only when it sets or clears one.
 """
 
 from __future__ import annotations
@@ -18,7 +19,7 @@ import click
 from canopy.cli.common import CliError, open_context
 from canopy.cli.loop import chore_line, named, one_line, phase_of, prs_of, result_of, spent
 from canopy.cli.params import REPO
-from canopy.core import chore_view, conversation, db, pause
+from canopy.core import chore_view, conversation, db, notice, pause, prompts
 from canopy.infra import logs
 from canopy.loop import attention
 from canopy.reviews import grants
@@ -83,6 +84,61 @@ def cmd_resume(click_ctx: click.Context) -> int:
         return 0
     logs.for_tick(None).info("loop resumed", extra={"channel": CLI})
     click.echo("Resumed: the loop ticks when its wait runs out.")
+    return 0
+
+
+@click.command("notice")
+@click.argument("text", required=False, metavar="TEXT")
+@click.option(
+    "--for",
+    "duration",
+    metavar="DURATION",
+    help=f"How long it lasts, such as 90m, 4h, or 2d; {notice.DEFAULT_MINUTES // 60}h without it, at most "
+    f"{notice.MAX_MINUTES // (24 * 60)}d.",
+)
+@click.option("--clear", is_flag=True, help="Lift the notice in force before it lapses.")
+@click.pass_context
+def cmd_notice(click_ctx: click.Context, text: str | None, duration: str | None, *, clear: bool) -> int:
+    """Tell every run from now on about a passing condition, such as a CI outage, until it lapses.
+
+    Workers that build, fix CI, or resume, reviews, and chores hear it in their prompts, and the overseer holds a
+    failed check it explains rather than spending a fix-ci attempt on it. A run already running keeps the prompt it
+    started with. Setting a notice replaces the one in force. Without TEXT or --clear, prints the one in force.
+    """
+    if clear and (text is not None or duration is not None):
+        raise click.UsageError("--clear takes no TEXT or --for")
+    if text is None and not clear:
+        if duration is not None:
+            raise click.UsageError("--for needs TEXT")
+        ctx = open_context(click_ctx)
+        held = notice.current(ctx.conn)
+        click.echo("No notice to workers is in force." if held is None else notice.describe(held, datetime.now(UTC)))
+        return 0
+    _operator("notice")
+    ctx = open_context(click_ctx)
+    log = logs.for_tick(None)
+    if clear:
+        ended = notice.clear(ctx.conn, channel=CLI)
+        if ended is None:
+            click.echo("No notice to workers was in force.")
+            return 0
+        log.info("notice cleared", extra={"channel": CLI, "notice": ended.id})
+        click.echo("Notice cleared: runs dispatched from now on hear none. The loop ticks soon.")
+        return 0
+    try:
+        minutes = notice.parse_duration(duration) if duration is not None else None
+        held = notice.set_notice(ctx.conn, text or "", minutes=minutes, channel=CLI)
+    except conversation.Refused as r:
+        raise CliError(f"notice refused ({r.guard}): {r.reason}") from None
+    log.info("notice set", extra={"channel": CLI, "notice": held.id, "lapses_at": held.lapses_at})
+    click.echo(notice.describe(held, datetime.now(UTC)))
+    click.echo(f"Runs dispatched from now on hear it until {held.lapses_at}. The loop ticks soon.")
+    for path, kinds in prompts.missing_notice(ctx.config):
+        click.echo(
+            f"Warning: your override {path} has no {{{{NOTICE}}}}: {', '.join(kinds)} runs refuse (bad_prompt) until "
+            "it gains the placeholder or the notice ends.",
+            err=True,
+        )
     return 0
 
 

@@ -153,6 +153,18 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
         assert sorted(p.name for p in runs.iterdir()) == ["1.log", "1.prompt"]
 
 
+def test_the_run_object_carries_the_notice_in_force(canopy_env: CanopyEnv, chores: Path, agent_log: Path) -> None:
+    # In the harness's own section, which the operator's file cannot drop (DESIGN §8, §19).
+    conn = journal(canopy_env)
+    runs = canopy_env.state_dir / "chore-runs" / "build-health"
+    run_inline(conn, OK)
+    assert run_section((runs / "1.prompt").read_text())["notice"] is None
+    assert main(["notice", "CI is down."]) == 0
+    backdate(conn, 180)
+    run_inline(conn, OK)
+    assert run_section((runs / "2.prompt").read_text())["notice"] == "CI is down."
+
+
 def test_chore_guards(canopy_env: CanopyEnv, chores: Path) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text() + chore_toml("queue-age", every=30))
     (canopy_env.home / "chores" / "queue-age.md").write_text("Queue age.\n")

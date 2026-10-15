@@ -3,6 +3,7 @@ import type {
     Dismissed,
     Forgot,
     Granted,
+    NoticeChanged,
     Replied,
     ReviewDismissed,
     ReviewSent,
@@ -113,6 +114,14 @@ export function repliedText(key: string, replied: Replied): string {
         return `Recorded message ${replied.message_id} on ${key}${answered}. The next tick reads it.`
     }
     return `Message ${replied.message_id} on ${key} already says this${answered}; nothing new recorded.`
+}
+
+/** What setting a notice did, as `canopy notice` says it: the runs that hear it. The banner says until when. */
+export function noticeSetText(changed: NoticeChanged): string {
+    if (changed.loop.notice === null) {
+        return 'The notice lapsed already: runs dispatched from now on hear none.'
+    }
+    return 'Notice set: runs dispatched from now on hear it until it lapses. The loop ticks soon.'
 }
 
 /** What a reload found, as the loop's terminal says it: the keys that changed, when the loop runs on them, and which

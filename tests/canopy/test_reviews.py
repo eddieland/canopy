@@ -167,6 +167,16 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         assert prompt.rstrip().endswith(result.CONTRACT)
 
 
+def test_a_review_hears_the_notice_in_force(reviews: CanopyEnv, git_pool: GitPool, agent_log: Path) -> None:
+    # A review reads CI too, so the operator's notice about an outage reaches it (DESIGN §8, §21).
+    conn = journal(reviews)
+    assert main(["notice", "CI is down."]) == 0
+    with reviewer_reports(CLEAN):
+        run_id = run_inline(conn, sha=head(git_pool))
+    prompt = (reviews.state_dir / "reviews" / f"{run_id}.prompt").read_text()
+    assert "## Notice from the operator\n\nCI is down.\n" in prompt
+
+
 @pytest.mark.parametrize(
     ("args", "sha", "reason"),
     [

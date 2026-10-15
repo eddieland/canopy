@@ -196,12 +196,13 @@ the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, 
 
 ### R15. Tell every run that builds or reads CI about a passing condition, for as long as it lasts
 
-Gap (M35). Written down 2026-10-14. When something outside the work goes wrong for a while (an artifact registry
-outage, so CI builds will likely fail), the operator should be able to say so once and have every run that builds,
-tests, or reads CI hear it until it is over, without editing a file and remembering to edit it back. The overseer
-should hear it too, so it does not spend `fix-ci` attempts, which never reset (D030), on failures the notice explains.
-`paths.worker_instructions` (§12) carries text to workers today, but it never lapses, the overseer, reviews, and chores
-never read it, and nothing shows it is in force.
+Built in M35, live acceptance pending (SCENARIOS S37). Written down 2026-10-14. When something outside the work goes
+wrong for a while (an artifact registry outage, so CI builds will likely fail), the operator should be able to say so
+once and have every run that builds, tests, or reads CI hear it until it is over, without editing a file and remembering
+to edit it back. The overseer should hear it too, so it does not spend `fix-ci` attempts, which never reset (D030), on
+failures the notice explains. `paths.worker_instructions` (§12) carries text to workers, but it never lapses, the
+overseer, reviews, and chores never read it, and nothing shows it is in force; a notice to workers (`canopy notice`, or
+the web UI's settings page, §8) lapses, reaches all of them, and shows on every page while it lasts.
 
 ### R16. Change limits and tighten trust settings from the web UI
 

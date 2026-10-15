@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from canopy.core import treehouse
     from canopy.core.chore_view import ChoreSummary
     from canopy.core.config import Config
+    from canopy.core.notice import Notice
     from canopy.core.workspace import Workspace
     from canopy.loop.attention import OpenItem
     from canopy.reviews.view import ReviewsSection
@@ -25,7 +26,8 @@ if TYPE_CHECKING:
 class OverseerState(TypedDict):
     """The state block's JSON: what the journal knows, the config the overseer decides by, and this tick.
 
-    It has `chores` only when chores are configured, and `reviews` only when reviews are on.
+    It has `chores` only when chores are configured, `reviews` only when reviews are on, and `notices` only when the
+    operator set a notice lately.
     """
 
     repository: str
@@ -39,6 +41,7 @@ class OverseerState(TypedDict):
     split_children: list[SplitChild]
     chores: NotRequired[list[ChoreSummary]]
     reviews: NotRequired[ReviewsSection]
+    notices: NotRequired[list[NoticeState]]
     attention: list[OpenItem]
     capacity: CapacityState
     running_workers: list[RunningWorker]
@@ -182,6 +185,15 @@ class RunningWorker(TypedDict):
     started_at: str
 
 
+class NoticeState(TypedDict):
+    """An operator's notice to workers (DESIGN §8): its text, and from when until when it was or is in force."""
+
+    text: str
+    set_at: str
+    until: str
+    in_force: bool
+
+
 class MirrorState(TypedDict):
     """How many tracker comments one tick may mirror, and the heredoc delimiter for their bodies (DESIGN §22)."""
 
@@ -212,6 +224,7 @@ def state_block(
     split_children: list[sqlite3.Row],
     chores: list[ChoreSummary],
     reviews: ReviewsSection | None,
+    notices: Sequence[Notice] = (),
     private: Mapping[str, conversation.PrivateSection] | None = None,
     operator: Mapping[str, conversation.OperatorSection] | None = None,
     mirror_delimiter: str,
@@ -221,15 +234,16 @@ def state_block(
 
     `tickets` leave out the tickets the operator stopped, which `stopped` names by key (DESIGN §22). `units` are each
     ticket's units and `run_slots` each running or latest run's slots, by run id. `attempts`, `grants`, and
-    `fix_ci_cooldowns` are per unit (`policy.unit`); a unit the operator granted no runs has no `granted` key
-    (DESIGN §22). `split_attempts` are per ticket, and `split_children` are the children of splits not yet done, with
-    their split run's end (DESIGN §18). `chores` are the configured chores (DESIGN §19); with none, the block has no
-    `chores` key, exactly as before chores existed. `private` holds each private ticket's conversation state, by key
-    (DESIGN §22); a public ticket has no `private` key. `operator` holds a public ticket's operator messages newer than
-    its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7, D089). `mirror_delimiter` ends
-    the heredoc the overseer passes each mirrored comment's body in: the tick's own, so no comment can predict it.
-    `attention` is the open items the overseer recorded (`attention.for_overseer`), so it sees what leaving one out
-    drops (ROADMAP M28).
+    `fix_ci_cooldowns` are per unit (`policy.unit`); a unit the operator granted no runs has no `granted` key (DESIGN
+    §22). `split_attempts` are per ticket, and `split_children` are the children of splits not yet done, with their
+    split run's end (DESIGN §18). `chores` are the configured chores (DESIGN §19); with none, the block has no `chores`
+    key, exactly as before chores existed. `notices` are the operator's notices in force or ended lately
+    (`notice.recent`), newest first; with none, the block has no `notices` key. `private` holds each private ticket's
+    conversation state, by key (DESIGN §22); a public ticket has no `private` key. `operator` holds a public ticket's
+    operator messages newer than its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7,
+    D089). `mirror_delimiter` ends the heredoc the overseer passes each mirrored comment's body in: the tick's own, so
+    no comment can predict it. `attention` is the open items the overseer recorded (`attention.for_overseer`), so it
+    sees what leaving one out drops (ROADMAP M28).
 
     Returns:
         The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
@@ -352,6 +366,9 @@ def state_block(
         **({"chores": chores} if chores else {}),
         # With reviews off, nothing about them reaches the overseer (DESIGN §21).
         **({"reviews": reviews} if reviews is not None else {}),
+        # The operator's notices, in force or lately ended: a failed check that ran while one was in force, and that it
+        # explains, is held, not fixed (DESIGN §7).
+        **({"notices": [_notice(n, now) for n in notices]} if notices else {}),
         # What the overseer keeps on the attention list by recording it again: leaving one out resolves it (§14).
         "attention": attention or [],
         # What changes every tick comes last, after what changes rarely, for a runtime that caches part of a message
@@ -402,6 +419,10 @@ def state_block(
             "",
         ]
     )
+
+
+def _notice(held: Notice, now: datetime) -> NoticeState:
+    return {"text": held.text, "set_at": held.set_at, "until": held.until, "in_force": held.in_force(now)}
 
 
 def _stamp(moment: datetime | None) -> str | None:

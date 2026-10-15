@@ -294,22 +294,23 @@ place, public or private (D081).
 ### Waking the loop
 
 During the wait (§6, the loop), each step checks the journal for the operator's acts: a message to a ticket recorded
-since the last tick began; a ticket started or stopped (`starts`), or attempts or a PR's reviews granted
-(`canopy grant`), since the last tick read the journal (or began, when it read nothing). A note to a chore (§19) does
-not wake it: the chore's next run reads it. Nor does a config reload (§6). Any of those acts ends the wait and runs the
-next tick, no sooner than `loop.min_gap_minutes` after the last one began, whether idle pacing is on or not; the tick
-records what woke it in `ticks.woken_by` (`message`, `starts`, `grant`) and is not idle. Every channel wakes it the
-same way, whether the act came from another process (`canopy start`) or the loop's own server thread (D073).
-Capacity, attempt limits, and cooldowns hold as for any tick. Before M28 only a message woke it, so a start from the
-web UI waited for the timer or a "tick now" (MEASUREMENTS 2026-10-12, F3).
+since the last tick began; a ticket started or stopped (`starts`), attempts or a PR's reviews granted (`canopy grant`),
+or a notice to workers set or cleared (`canopy notice`, §8), since the last tick read the journal (or began, when it
+read nothing). A note to a chore (§19) does not wake it: the chore's next run reads it. Nor does a config reload (§6).
+Any of those acts ends the wait and runs the next tick, no sooner than `loop.min_gap_minutes` after the last one began,
+whether idle pacing is on or not; the tick records what woke it in `ticks.woken_by` (`message`, `starts`, `grant`,
+`notice`) and is not idle. Every channel wakes it the same way, whether the act came from another process
+(`canopy start`) or the loop's own server thread (D073). Capacity, attempt limits, and cooldowns hold as for any tick.
+Before M28 only a message woke it, so a start from the web UI waited for the timer or a "tick now" (MEASUREMENTS
+2026-10-12, F3).
 
 ### Channels
 
 | Channel | In | Out | Proves the operator by |
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
-| cli | `canopy start`, `stop`, `reply` (public tickets too), `forget`, `grant`, `dismiss`, `send` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
-| web (M20) | reply, start, stop, forget, grant; notes to chores (M23), dismissing chores' and reviews' findings, sending reviews' findings to a worker (M32); pause, resume | pages | the listener secret (TRUST_MODEL T8) |
+| cli | `canopy start`, `stop`, `reply` (public tickets too), `forget`, `grant`, `dismiss`, `send`, `notice` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
+| web (M20) | reply, start, stop, forget, grant; notes to chores (M23), dismissing chores' and reviews' findings, sending reviews' findings to a worker (M32); pause, resume; setting and clearing a notice to workers (M35) | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
 Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
@@ -328,7 +329,8 @@ Served by `canopy loop` from a thread (D073):
   chore is a `reply` on its subject, as `canopy reply chore:NAME` is, and sending a review's findings a `reply` on its
   ticket, §21), for a stop with `now`, the same `runs.halt.end` as
   `canopy stop --now`, for a grant `runs.policy.grant` and `reviews.grants.grant` as `canopy grant`, one run each,
-  and `pause.pause` and `pause.resume` as `canopy pause` and `canopy resume` (§6). Reload on
+  `pause.pause` and `pause.resume` as `canopy pause` and `canopy resume` (§6), and `notice.set_notice` and
+  `notice.clear` as `canopy notice` and `canopy notice --clear` (§8). Reload on
   the settings page asks the loop to read its config again, as SIGHUP does (§6); it writes nothing, and the files stay
   the operator's to edit. A forget
   cannot be undone from the UI, so its request carries the ticket's key as the operator typed it, and the server refuses
@@ -356,8 +358,9 @@ Served by `canopy loop` from a thread (D073):
   Actions: the CLI's verbs, reply, start, and stop (with or without `now`), granting one more run to what is at its
   limit (below), a note to a chore, dismissing a chore's finding or listing it again, dismissing a review's finding or
   sending some to a worker (§21), and pausing and resuming
-  the loop from the header on every page, which shows how long it has been paused, and reloading the loop's config
-  from the settings page. OpenCode's session attach (M15) is
+  the loop from the header on every page, which shows how long it has been paused, setting a notice to workers from
+  the settings page and clearing it from the banner every page shows while it is in force (§8), and reloading the
+  loop's config from the settings page. OpenCode's session attach (M15) is
   not in the UI: a run's page shows its session id and, once it ends, its transcript (below), and attach joins once
   M15 runs workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
@@ -441,8 +444,9 @@ The API, under `{base}/api`:
 | `GET /pull-request?url=` | one PR: the runs that pushed to it, its review runs and limit, the latest 20 decisions naming it, and its total cost; 404 for one nothing names |
 | `POST /pull-request/grants?url=` | `canopy grant URL review`, for one review run |
 | `GET /worktrees` | each pool's slots from `treehouse status --json`, with the running run or review holding each |
-| `GET /loop` | whether the loop is paused: since when, and through which channel (§6), or not |
+| `GET /loop` | whether the loop is paused: since when, and through which channel (§6), or not; and the notice to workers in force: its text, when and through which channel it was set, and when it lapses (§8), or none |
 | `POST /loop/pause`, `POST /loop/resume` | `canopy pause`, `canopy resume`: whether it already was, and the state left |
+| `POST /loop/notice`, `POST /loop/notice/clear` | `canopy notice TEXT --for DURATION` with the text and minutes, and `canopy notice --clear`: for a clear, whether none was in force, and the state left |
 | `GET /events` | the event stream, below |
 
 A message is acknowledged once a tick that read it closes `ok`: `GET /tick` and `tick.updated` carry the newest message
@@ -476,15 +480,16 @@ held up every other request while the overseer worked. The route closes the conn
 dependency's teardown, which FastAPI runs however the stream ended: a client leaving while the first events were sent
 left the stream's generator suspended, never finished, and the connection open until the server exited. When another
 connection has committed since, or the loop has read its config again (§6), it reads the attention list, the runs, the
-tickets, the chores, the spend, the latest tick, and the pause again, and sends each that changed, whole:
+tickets, the chores, the spend, the latest tick, and the pause and notice again, and sends each that changed, whole:
 `attention.updated`, `runs.updated`, `tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the
 windows move with the clock), `tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary
 changed. It reads them all in one read transaction, so they are one snapshot: a commit landing between two of its
 queries cannot send a ticket's new summary in a list still in the order from before it. A reload commits nothing, yet
 the chores and the attention list are read through the config, so the stream holds the loop's config as the server's
 requests do, taking the new one at its next read: a chore added and reloaded shows on an open page without a refresh.
-A new stream starts with every list, the spend, the latest
-tick, and the pause, so a pause from the loop's terminal or the CLI shows as one from
+A notice to workers lapses with no commit, so a stream also reads them again once the
+notice it last sent has lapsed, and the banner leaves when the notice does. A new stream starts with every list, the
+spend, the latest tick, and the pause and notice, so a pause from the loop's terminal or the CLI shows as one from
 the web does. The UI writes a list into its query with `setQueryData` and refetches a changed ticket
 only if a page shows it; a chore's page is read again on every `chores.updated`, whose list carries each chore's
 newest note, so a note changes it, and a chore run's page when that list moves the run's status. The latest tick
