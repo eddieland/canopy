@@ -42,7 +42,7 @@ export function tokenCount(n: number): string {
 }
 
 /**
- * A run's tokens after its cost, as the CLI says them (`agent_output.Usage.describe`): `, 12.3k new tokens, 45.6k peak
+ * A run's tokens after its cost, as the CLI says them (`agent_output.Usage.describe`): `, 12.3k tokens, 45.6k peak
  * context`, the peak only when it was recorded, and nothing when the runtime reported no tokens.
  */
 export function runTokens(newTokens: number | null, peakContext: number | null): string {
@@ -50,17 +50,17 @@ export function runTokens(newTokens: number | null, peakContext: number | null):
         return ''
     }
     const peak = peakContext === null ? '' : `, ${tokenCount(peakContext)} peak context`
-    return `, ${tokenCount(newTokens)} new tokens${peak}`
+    return `, ${tokenCount(newTokens)} tokens${peak}`
 }
 
-/** A token count in a list's column, with what it counts (`12.3k new`), or a dash when nothing reported one. */
+/** A token count in a list's column, with what it counts (`12.3k tokens`), or a dash when nothing reported one. */
 export function tokensCell(n: number | null, counts: string): string {
     return n === null ? '–' : `${tokenCount(n)} ${counts}`
 }
 
 /** What a run's or a tick's token counts mean, for the hover on them. */
 export const RUN_TOKENS_TITLE =
-    'new tokens: input, cache writes, output, and reasoning, summed over its model calls; cache reads are left out, ' +
+    'tokens: input, cache writes, output, and reasoning, summed over its model calls; cache reads are left out, ' +
     'since each call reads again what the calls before it were sent. peak context: the most one call was sent.'
 
 /** What a transcript holds, counted. */

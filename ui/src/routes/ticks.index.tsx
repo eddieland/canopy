@@ -18,7 +18,7 @@ function TicksPage() {
     return (
         <>
             <PageHeader title="Ticks">
-                The latest ticks, newest first: what each found, what its overseer cost in dollars, new tokens, and peak
+                The latest ticks, newest first: what each found, what its overseer cost in dollars, tokens, and peak
                 context, and how many decisions it recorded, as{' '}
                 <code className="font-mono text-xs">canopy decisions</code> prints them.
             </PageHeader>

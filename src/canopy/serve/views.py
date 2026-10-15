@@ -497,7 +497,7 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
 
 
 def new_tokens(row: sqlite3.Row) -> int | None:
-    """A run's, a chore run's, or a tick's new tokens, every kind but cache reads; None when the runtime reported none.
+    """A run's, a chore run's, or a tick's tokens, every kind but cache reads; None when the runtime reported none.
 
     Cache reads are left out: each model call reads again what the calls before it were sent, so their sum grows with
     the number of calls. The peak context says how large that grew.

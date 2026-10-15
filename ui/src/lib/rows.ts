@@ -56,7 +56,7 @@ export const ROW_COLUMNS = {
         ['age', '6rem', 2],
     ],
     /**
-     * A tick: its id, its status, how many decisions, its overseer's cost, new tokens, and peak context, and when. The
+     * A tick: its id, its status, how many decisions, its overseer's cost, tokens, and peak context, and when. The
      * token counts give way before the cost, which says the same in dollars.
      */
     tick: [
@@ -64,7 +64,7 @@ export const ROW_COLUMNS = {
         ['state', FREE],
         ['decisions', '6rem', 4],
         ['cost', '4rem', 3],
-        ['tokens', '4.5rem', 1],
+        ['tokens', '6rem', 1],
         ['peak', '5rem', 2],
         ['age', '6rem', 5],
     ],

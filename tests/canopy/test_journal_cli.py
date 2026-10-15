@@ -216,9 +216,9 @@ def test_decisions_and_status_print_what_a_tick_cost(
     db.finish_tick(conn, tick_id, "ok", "0 decisions: none")
 
     assert main(["decisions"]) == 0
-    assert "\n  overseer session ses_o1  $0.50, 10.0k new tokens, 26.0k peak context\n" in capsys.readouterr().out
+    assert "\n  overseer session ses_o1  $0.50, 10.0k tokens, 26.0k peak context\n" in capsys.readouterr().out
     assert main(["status"]) == 0
-    assert "Last tick: 1 ok, started 0s ago  $0.50, 10.0k new tokens, 26.0k peak context\n" in capsys.readouterr().out
+    assert "Last tick: 1 ok, started 0s ago  $0.50, 10.0k tokens, 26.0k peak context\n" in capsys.readouterr().out
 
 
 def test_decisions_filters_by_ticket_and_reports_no_match(

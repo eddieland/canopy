@@ -436,8 +436,8 @@ test('the ticks page lists the latest ticks, and a ticket page why the loop did 
     await settled(page)
     await expect(page.getByTestId('ticks').locator(':scope > li')).toHaveCount(2)
     await expect(page.getByTestId('tick-1').getByTestId('tick-decisions')).toHaveText('5 decisions')
-    // Its overseer's tokens beside its cost: the new ones, and the most one model call was sent.
-    await expect(page.getByTestId('tick-1').getByTestId('tick-new')).toHaveText('12.9k new')
+    // Its overseer's tokens beside its cost, and the most one model call was sent.
+    await expect(page.getByTestId('tick-1').getByTestId('tick-tokens')).toHaveText('12.9k tokens')
     await expect(page.getByTestId('tick-1').getByTestId('tick-peak')).toHaveText('16.8k peak')
     await expect(page.getByTestId('tick-1')).toContainText('dispatched 2, waiting on 1')
 

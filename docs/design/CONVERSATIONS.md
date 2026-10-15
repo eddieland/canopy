@@ -574,7 +574,7 @@ The ticks pages (M24): the `decisions` table is the overseer's reasons for what 
 for prompt changes (§6), and "why has the loop not picked this up" is answered where the ticket is.
 
 - `GET /ticks` lists the latest 50 ticks, newest first, each as the header's tick is shown, with its overseer's session,
-  its cost, new tokens, and peak context as a run's (§13), and how many decisions it recorded. The ticks page shows each
+  its cost, tokens, and peak context as a run's (§13), and how many decisions it recorded. The ticks page shows each
   as a column; on a narrow list the token counts give way first, since the cost says the same in dollars, and the tick's
   page shows them after its cost as a run's page does. `GET /ticks/{id}` is one tick and its decisions in the order they
   were recorded; an id that is not a positive integer is refused (422), and no such tick is a 404.

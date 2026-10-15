@@ -11,7 +11,7 @@ import { RUN_TOKENS_TITLE, tokensCell } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 
 /**
- * A tick in a list, as `canopy decisions` heads it: its link, status, decisions, its overseer's cost, new tokens, and
+ * A tick in a list, as `canopy decisions` heads it: its link, status, decisions, its overseer's cost, tokens, and
  * peak context, and when; its summary under.
  */
 export function TickRow({ tick }: { tick: Tick }) {
@@ -29,7 +29,7 @@ export function TickRow({ tick }: { tick: Tick }) {
                 {tick.decisions === 1 ? '1 decision' : `${tick.decisions} decisions`}
             </span>
             <Cost usd={tick.cost_usd} className="text-right text-xs text-muted-foreground" />
-            <TokensCell n={tick.new_tokens} counts="new" />
+            <TokensCell n={tick.new_tokens} counts="tokens" />
             <TokensCell n={tick.peak_context} counts="peak" />
             <Age variant="span" started={tick.started_at} ended={tick.ended_at} className="text-right" />
             {tick.summary && <RichText text={tick.summary} lines={SUMMARY_LINES} className={rowLineFrom('state')} />}
