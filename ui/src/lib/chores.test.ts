@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest'
 
 import { mockChores } from '@/api/mocks'
 
-import { awaitsRun, cadenceText, choreLine, choreRunState, dueText, findingsText, runsText, windowText } from './chores'
+import {
+    awaitsRun,
+    cadenceText,
+    choreLine,
+    choreRunState,
+    dueText,
+    findingsReadout,
+    findingsText,
+    runsText,
+    windowText,
+} from './chores'
 
 const [deps] = mockChores
 if (!deps?.latest) {
@@ -49,6 +59,8 @@ describe('chores', () => {
         const dismissed = { dismissed: true }
         expect(findingsText([waiting, dismissed, waiting])).toBe('2 open findings · 1 dismissed')
         expect(findingsText([dismissed, dismissed])).toBe('0 open findings · 2 dismissed')
+        expect(findingsReadout(deps.findings)).toBe('1')
+        expect(findingsReadout([dismissed, waiting, dismissed])).toBe('1 · 2 dismissed')
     })
 
     it('mark a note no run has read: one after the latest run started', () => {

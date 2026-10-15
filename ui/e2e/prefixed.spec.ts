@@ -137,6 +137,7 @@ test("a chore's finding takes a note its next run reads, and is dismissed and li
     await expect(page.getByTestId('chore-notes').locator('[data-source=operator]').last()).toContainText(
         'until 2026-10-15',
     )
+    await expect(page.getByTestId('chore-findings-count')).toHaveText('0 · 1 dismissed')
     const finding = page.getByTestId('finding-lodash-advisory')
     await expect(finding).toContainText('dismissed')
     await finding.getByTestId('undismiss-lodash-advisory').click()

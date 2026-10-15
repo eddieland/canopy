@@ -69,8 +69,18 @@ export function runsText(window: Pick<ChoreSpendWindow, 'runs' | 'priced'>): str
  * dismissed looking as if they waited.
  */
 export function findingsText(findings: readonly Pick<ChoreFinding, 'dismissed'>[]): string {
-    const dismissed = findings.filter((f) => f.dismissed).length
-    const waiting = findings.length - dismissed
+    const { waiting, dismissed } = countFindings(findings)
     const open = waiting === 1 ? '1 open finding' : `${waiting} open findings`
     return dismissed > 0 ? `${open} · ${dismissed} dismissed` : open
+}
+
+/** The same count as `findingsText`, for the chore page's findings panel, whose label names them: `0 · 2 dismissed`. */
+export function findingsReadout(findings: readonly Pick<ChoreFinding, 'dismissed'>[]): string {
+    const { waiting, dismissed } = countFindings(findings)
+    return dismissed > 0 ? `${waiting} · ${dismissed} dismissed` : String(waiting)
+}
+
+function countFindings(findings: readonly Pick<ChoreFinding, 'dismissed'>[]): { waiting: number; dismissed: number } {
+    const dismissed = findings.filter((f) => f.dismissed).length
+    return { waiting: findings.length - dismissed, dismissed }
 }

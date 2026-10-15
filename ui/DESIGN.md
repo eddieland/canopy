@@ -585,7 +585,8 @@ list, an empty state, or a skeleton by hand.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then how often it may start and its window (`cadenceText`: `every 360 minutes`, as
   the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed
-  as `canopy status` counts them (`findingsText`: `1 open finding · 2 dismissed`), and what its runs cost in the last
+  as `canopy status` counts them (`findingsText`: `1 open finding · 2 dismissed`; its page's findings panel the
+  same, `findingsReadout`: `1 · 2 dismissed`), and what its runs cost in the last
   24 hours and 30 days (`costText`, a dash when none reported a cost). Its page puts that spend in a table under its
   runs, a row a window: runs (`runsText`: `4, 1 unpriced`), total, average, p99, and max. A chore run is a row like a
   run's, its id as `chore:deps#2` (Names, below) linking to its page, with its findings as a chip on
