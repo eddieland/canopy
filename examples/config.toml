@@ -9,6 +9,10 @@
 labels = ["agent-ready-yourname"]
 # Optional: narrow the workspace's query to your labels to save the overseer reads. It applies in every workspace.
 # query = 'project = PROJ AND labels in (agent-ready-yourname) AND statusCategory != Done'
+# Optional: run the query at most this often, in minutes, to save its cost. A tick sooner than that after the last
+# one that ran it works the tickets canopy already knows, so a newly labeled ticket can wait this long to be found.
+# 0 runs it every tick (DESIGN §7, Spacing the query).
+# query_every_minutes = 0
 # Optional: your own needs-human label, if it differs from the workspace's.
 # needs_human_label = "needs-human"
 # For tickets you work privately with `canopy start` (DESIGN §22): the tracker's MCP server, as your OpenCode config

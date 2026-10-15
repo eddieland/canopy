@@ -288,6 +288,26 @@ def set_tick_loop(conn: sqlite3.Connection, tick_id: int, *, idle: bool, woken_b
     conn.execute("UPDATE ticks SET idle = ?, woken_by = ? WHERE id = ?", (int(idle), woken_by, tick_id))
 
 
+def set_tick_query(conn: sqlite3.Connection, tick_id: int, *, due: bool) -> None:
+    """Record whether a tick's state block told the overseer to run the tracker query (§7, Spacing the query)."""
+    conn.execute("UPDATE ticks SET query_due = ? WHERE id = ?", (int(due), tick_id))
+
+
+def last_query_at(conn: sqlite3.Connection) -> str | None:
+    """When the newest live `ok` tick that ran the tracker query started (§7, Spacing the query).
+
+    A tick from before `query_due` was recorded ran it. A dry run, and a tick that did not close `ok`, are not counted:
+    one that skipped or failed may not have read the query to the end.
+
+    Returns:
+        That tick's `started_at`, or None if no tick has run the query.
+    """
+    row = conn.execute(
+        "SELECT max(started_at) FROM ticks WHERE status = 'ok' AND dry_run = 0 AND coalesce(query_due, 1) = 1"
+    ).fetchone()
+    return None if row is None or row[0] is None else str(row[0])
+
+
 def previous_tick(conn: sqlite3.Connection, tick_id: int) -> sqlite3.Row | None:
     """Return the tick before `tick_id`, whatever its status, or None if it is the first."""
     row: sqlite3.Row | None = conn.execute(
