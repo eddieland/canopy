@@ -416,8 +416,10 @@ started with `docker run` cannot work, since the sandbox refuses Unix sockets, w
 template that reads the checkout through the review directory's link and writes none of it, no object directory, and
 no `github.com`; the canary runs its HOME and state attempts as `review` too, and checks that a review writes nothing
 in the checkout. Run against the fake `srt`, every review denial fails and its positive control passes.
-Next: TRUST_MODEL T4 and T6, with the operator's approval note, and the canary on the operator's Linux and macOS
-machines.
+TRUST_MODEL T4 and T6 name the sandbox as an opt-in control, with its residuals: the shared kernel, the unwrapped
+overseer and harness calls, `/tmp/claude`, and exfiltration through an allowed host with the credentials a run holds
+(D118).
+Next: the canary on the operator's Linux and macOS machines, and HOST_ISOLATION's settled parts moved to DESIGN.
 
 ## M27. Session transcripts in the web UI
 

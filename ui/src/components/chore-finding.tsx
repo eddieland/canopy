@@ -5,9 +5,11 @@ import type { ChoreFinding, ChoreRunFinding } from '@/api/types'
 import { Age } from '@/components/age'
 import { useDismissFinding } from '@/components/dismiss-finding'
 import { LinkedText } from '@/components/linked-text'
+import { PullRequestLink } from '@/components/pull-request-link'
 import { ListRow, RowLine } from '@/components/rows'
 import { Chip } from '@/components/status'
 import { addressOf } from '@/lib/links'
+import { isPullRequest } from '@/lib/pull-request-label'
 import { cn } from '@/lib/utils'
 
 /**
@@ -54,7 +56,7 @@ function FindingRow({
             </span>
             {finding.detail && (
                 <RowLine from="title" className="text-sm break-words whitespace-pre-wrap text-muted-foreground">
-                    <LinkedText text={finding.detail} />
+                    <LinkedText text={finding.detail} pullRequests />
                 </RowLine>
             )}
             {finding.link && (
@@ -80,7 +82,7 @@ export function ChoreFindingText({ finding }: { finding: ChoreFinding }) {
             <p className="text-sm font-semibold break-words">{finding.title}</p>
             {finding.detail && (
                 <p className="text-sm break-words whitespace-pre-wrap text-muted-foreground">
-                    <LinkedText text={finding.detail} />
+                    <LinkedText text={finding.detail} pullRequests />
                 </p>
             )}
             {finding.link && <FindingLink href={finding.link} />}
@@ -88,7 +90,11 @@ export function ChoreFindingText({ finding }: { finding: ChoreFinding }) {
     )
 }
 
+// A PR as it is named anywhere; any other link as its address and its icon.
 function FindingLink({ href }: { href: string }) {
+    if (isPullRequest(href)) {
+        return <PullRequestLink url={href} className="self-start" />
+    }
     return (
         <a
             href={href}

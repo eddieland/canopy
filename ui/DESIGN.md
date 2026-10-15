@@ -318,6 +318,7 @@ a skeleton, the empty inbox, the header's ticker, and Sprig's blink and typing. 
 - Sprig's tip pops in a moment after a page arrives, its brows rise once with each new tip, its eyes blink now and
   then and look toward the pointer, and every 5 seconds it types a burst on its keyboard, each key it presses sinking
   and lighting in the accent for a moment.
+- A toast rises in from below and fades out.
 - Only `running` runs pulse.
 - Every animation rests on the frame a still page shows (its last, or for a loop its first), so a screenshot with
   animations frozen is the page at rest.
@@ -537,7 +538,9 @@ list, an empty state, or a skeleton by hand.
   runs on the stream, so it rises in when the run starts and leaves when it ends.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
-  new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below).
+  new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below), and so is a GitHub
+  PR's address in a conversation's bubble or a chore's finding, its detail or its link, as in the harness's lines
+  (`InlineCode`).
 - **A chore's notes** are a conversation of the operator's words alone, between the chore's schedule and its findings
   and runs, with a note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the
   next run` in `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
@@ -646,10 +649,19 @@ list, an empty state, or a skeleton by hand.
   from the workspace root (`CopyablePath`), joined to `/meta`'s root; until that is read there is no button, so a copy
   is never the short path. The button is a ghost `icon-xs` with the
   `Copy` icon, muted until hovered; a click shows `Check` in the accent, or `X` in `status-failed` when the browser
-  refuses, for 1.5 seconds, and names what happened (`Copied branch`). In a dense list (a worktree slot's path and
-  branch) it shows only while its row (`group/copy`) is hovered or it has the focus, keeping its space so nothing
-  moves, and always on a touch screen. The clipboard needs a secure context (https or localhost), so elsewhere there
-  is no button and the text stays selectable.
+  refuses, for 1.5 seconds, and names what happened (`Copied branch`), and a toast says the same with the text it
+  copied, on one line. In a dense list (a worktree slot's path and branch) it shows only while its row (`group/copy`)
+  is hovered or it has the focus, keeping its space so nothing moves, and always on a touch screen. The clipboard
+  needs a secure context (https or localhost), so elsewhere there is no button and the text stays selectable.
+- **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was
+  done shows too little of it: a copy names what it copied. It sits at the bottom center of the window on `surface`
+  with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title in `text-sm`, and a line under it
+  in muted monospace `text-xs`, on one line with an ellipsis where it is cut: what it names is on the clipboard,
+  whole. It closes on its own after 3 seconds, held while the pointer or the focus is on it, or when swiped down; F8
+  reaches it from the keyboard and Escape closes it. At most three show, the newest last. A screen reader announces
+  it. It never carries an action, and it is never the only place an outcome shows: the control that acted says so
+  too, and a refusal is still a `Notice`. `main.tsx` renders the one `Toaster`, around the router, so a toast
+  outlives the page it came from.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
   a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
   composition only commits it (`src/lib/send-key.ts`). Its field is named for the form, as its panel is for its page:

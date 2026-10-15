@@ -395,6 +395,10 @@ class Tracker(Section):
     # Empty means no link. Shared: the tracker's address is the team's, and a link runs nothing.
     ticket_url: Annotated[StrictStr, Scope.SHARED, link_template(TICKET_KEY)] = ""
     labels: Annotated[tuple[NonBlank, ...], Scope.USER, Field(min_length=1)]
+    # The least time between ticks that run `query` (DESIGN §7, Spacing the query): a tick sooner than that after the
+    # last live one that ran it works the tickets the journal knows and leaves the query out. 0 runs it every tick.
+    # User-only: it sets the operator's spend, and how long a newly labeled ticket can wait to be found.
+    query_every_minutes: Annotated[Count, Scope.USER] = 0
     # The tracker's MCP server, as the operator's OpenCode config names it, and the tools of it a private worker may
     # call (DESIGN §22). Empty and unset mean the provider's defaults. User-only: they decide what a private worker can
     # write, which a shared workspace file must not (TRUST_MODEL T7).
