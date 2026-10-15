@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { Button } from '@/components/ui/button'
+import { useToast } from '@/hooks/use-toast'
 import { useWholePath } from '@/hooks/use-whole-path'
 import { cn } from '@/lib/utils'
 
@@ -67,7 +68,8 @@ export function CopyablePath({
 
 /**
  * A ghost icon button that puts `text` on the clipboard: a branch, a path, a session id, a commit. It shows a check in
- * the accent once copied, or a cross in `status-failed` if the browser refused, then its copy icon again. The page
+ * the accent once copied, or a cross in `status-failed` if the browser refused, then its copy icon again, and a toast
+ * says so with the text it copied, which a screen reader announces. The page
  * can reach the clipboard only in a secure context (https, or localhost), so elsewhere it renders nothing, the same on
  * every render, and the text beside it stays selectable.
  */
@@ -91,6 +93,7 @@ export function CopyButton({
     className?: string
 }) {
     const [shown, setShown] = useState<'copy' | 'copied' | 'failed'>('copy')
+    const toast = useToast()
     useEffect(() => {
         if (shown === 'copy') {
             return
@@ -100,6 +103,15 @@ export function CopyButton({
     }, [shown])
     if (!globalThis.isSecureContext) {
         return null
+    }
+    // What the click did: on the button until it reads Copy again, and in a toast with what it copied.
+    function report(outcome: 'copied' | 'failed') {
+        setShown(outcome)
+        toast(
+            outcome === 'copied'
+                ? { title: `Copied ${label}`, detail: text, tone: 'done' }
+                : { title: `Could not copy ${label}`, detail: 'The browser refused the clipboard.', tone: 'failed' },
+        )
     }
     const name = shown === 'copy' ? `Copy ${label}` : shown === 'copied' ? `Copied ${label}` : `Could not copy ${label}`
     return (
@@ -121,8 +133,8 @@ export function CopyButton({
             onClick={() => {
                 navigator.clipboard
                     .writeText(text)
-                    .then(() => setShown('copied'))
-                    .catch(() => setShown('failed'))
+                    .then(() => report('copied'))
+                    .catch(() => report('failed'))
             }}
         >
             {shown === 'copy' && <Copy />}
