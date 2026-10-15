@@ -16,7 +16,7 @@ import { useDismissFinding } from '@/components/dismiss-finding'
 import { GrantLimits } from '@/components/grant-limits'
 import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
-import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton, ThreadScroll } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReplyForm } from '@/components/reply-form'
 import { InlineCode } from '@/components/rich-text'
@@ -378,14 +378,16 @@ function Thread({ ticketKey }: { ticketKey: string }) {
                     </span>
                 </span>
             </PanelHeader>
-            {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
-            {order === 'newest' && <WorkingNow ticketKey={ticket.key} />}
-            {messages.length === 0 ? (
-                <Empty>no messages yet: what you and its workers say shows here</Empty>
-            ) : (
-                <Conversation messages={ordered('conversation', order, messages)} waiting={ticket.awaiting} />
-            )}
-            {order === 'oldest' && <WorkingNow ticketKey={ticket.key} />}
+            <ThreadScroll key={ticket.key} label="Conversation" end={order === 'oldest' ? 'bottom' : 'top'}>
+                {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
+                {order === 'newest' && <WorkingNow ticketKey={ticket.key} />}
+                {messages.length === 0 ? (
+                    <Empty>no messages yet: what you and its workers say shows here</Empty>
+                ) : (
+                    <Conversation messages={ordered('conversation', order, messages)} waiting={ticket.awaiting} />
+                )}
+                {order === 'oldest' && <WorkingNow ticketKey={ticket.key} />}
+            </ThreadScroll>
             <ReplyForm
                 key={ticket.key}
                 target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}

@@ -110,6 +110,17 @@ export async function padDecisions(page: Page, ticketKey: string, count: number)
     })
 }
 
+/** Makes a ticket's conversation `count` messages long, its recorded ones over and over, so it scrolls. */
+export async function padMessages(page: Page, ticketKey: string, count: number): Promise<void> {
+    await page.route(`**/api/tickets/${ticketKey}`, async (route) => {
+        const response = await route.fetch()
+        const body = (await response.json()) as { messages: { id: number }[] }
+        const recorded = body.messages
+        body.messages = Array.from({ length: count }, (_, i) => ({ ...recorded[i % recorded.length], id: 1000 + i }))
+        await route.fulfill({ response, json: body })
+    })
+}
+
 /**
  * Makes canopy's lifetime spend `usd`, as `GET /api/spend` and the event stream report it, for the hat shop: the mock
  * has spent too little to buy a hat. The stream's messages are rewritten in the page, as each is read, since a stream

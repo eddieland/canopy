@@ -2,7 +2,7 @@ import type { ChoreDetail } from '@/api/types'
 import { Conversation } from '@/components/conversation'
 import type { Pending } from '@/components/conversation'
 import { OrderToggle } from '@/components/order-toggle'
-import { Empty, PanelHeader } from '@/components/panel'
+import { Empty, PanelHeader, ThreadScroll } from '@/components/panel'
 import { ReplyForm } from '@/components/reply-form'
 import { awaitsRun } from '@/lib/chores'
 import { ordered, useListOrder } from '@/lib/list-order'
@@ -29,11 +29,13 @@ export function ChoreNotes({ detail }: { detail: ChoreDetail }) {
                     <span className="readout text-xs text-muted-foreground">{notes.length}</span>
                 </span>
             </PanelHeader>
-            {notes.length === 0 ? (
-                <Empty>no notes yet: its runs follow its prompt file alone</Empty>
-            ) : (
-                <Conversation messages={ordered('notes', order, notes)} pending={pending} />
-            )}
+            <ThreadScroll key={chore.name} label="Notes" end={order === 'oldest' ? 'bottom' : 'top'}>
+                {notes.length === 0 ? (
+                    <Empty>no notes yet: its runs follow its prompt file alone</Empty>
+                ) : (
+                    <Conversation messages={ordered('notes', order, notes)} pending={pending} />
+                )}
+            </ThreadScroll>
             <ReplyForm key={chore.name} target={{ kind: 'chore', name: chore.name }} />
         </>
     )

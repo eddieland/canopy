@@ -290,3 +290,39 @@ test("a PR at its review limit is granted one more review from its ticket's atte
     await expect(page.getByTestId('pull-request-reviews')).toBeVisible()
     await expect(page.getByTestId('grant-limits')).toHaveCount(0)
 })
+
+test('a long conversation scrolled away from its end stays put as a message arrives', async ({ page }) => {
+    // Thirty copies of its first messages, then any added since, so the reply arrives at the end of a long thread.
+    let first: number | undefined
+    await page.route('**/api/tickets/ABC-103', async (route) => {
+        const response = await route.fetch()
+        const body = (await response.json()) as { messages: { id: number }[] }
+        first ??= body.messages.length
+        const seeded = body.messages.slice(0, first)
+        const padding = Array.from({ length: 30 }, (_, i) => ({ ...seeded[i % seeded.length], id: 1000 + i }))
+        body.messages = [...padding, ...body.messages.slice(first)]
+        await route.fulfill({ response, json: body })
+    })
+    await page.goto('tickets/ABC-103')
+    const region = page.getByRole('region', { name: 'Conversation' })
+    await expect(page.getByTestId('message-1029')).toBeAttached()
+    // Scrolled as a reader scrolls: the thread hears it on the next frame, so wait for that before anything grows.
+    await region.evaluate(async (el) => {
+        el.scrollTop = 100
+        await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    resolve()
+                })
+            })
+        })
+    })
+    await expect(region).toHaveJSProperty('scrollTop', 100)
+    const form = page.getByRole('form', { name: 'Reply' })
+    // Its own text, since the server keeps every reply sent to it: a run before this one may have sent the same.
+    const text = `keep my place ${crypto.randomUUID()}`
+    await form.getByRole('textbox').fill(text)
+    await form.getByRole('button', { name: 'Reply' }).click()
+    await expect(page.getByTestId('conversation').getByText(text)).toBeAttached()
+    await expect(region).toHaveJSProperty('scrollTop', 100)
+})
