@@ -20,7 +20,6 @@ export function OrderToggle({ list }: { list: ListName }) {
             title={`Show ${other} first`}
             data-testid={`order-${list}`}
             data-order={order}
-            className="font-mono font-normal"
             onClick={() => setListOrder(list, other)}
         >
             <ArrowDownUp />

@@ -170,11 +170,11 @@ test('the runs page lists a ticket once, by its latest run, and opens its earlie
     await expect(rows.filter({ has: page.getByRole('link', { name: 'ABC-100', exact: true }) })).toHaveCount(1)
     const ticket = page.getByTestId('run-40')
     await expect(page.getByTestId('run-37')).toHaveCount(0)
-    await ticket.getByRole('button', { name: '1 earlier run' }).click()
+    await ticket.getByRole('button', { name: 'Show 1 earlier run' }).click()
     const earlier = ticket.getByTestId('earlier-runs-ABC-100')
     await expect(earlier.getByTestId('run-37')).toContainText('done')
     // Radix's Collapsible ties the toggle to what it opened, for assistive technology.
-    const hide = ticket.getByRole('button', { name: 'hide earlier runs' })
+    const hide = ticket.getByRole('button', { name: 'Hide 1 earlier run' })
     await expect(hide).toHaveAttribute('aria-expanded', 'true')
     await expect(hide).toHaveAttribute('aria-controls', (await earlier.getAttribute('id')) ?? 'no id')
     await hide.click()

@@ -36,11 +36,11 @@ test('a workspace of many pools keeps every slot strip inside the panel, and fol
     // A pool of idle slots alone is its header and one line, which opens each slot's own.
     const idle = page.getByTestId('pool-repo-00')
     await expect(idle.getByTestId(/^worktree-/u)).toHaveCount(0)
-    const fold = idle.getByRole('button', { name: `${SLOTS} slots, #1 to #${SLOTS}` })
+    const fold = idle.getByRole('button', { name: `Show ${SLOTS} slots, #1 to #${SLOTS}` })
     await expect(fold).toHaveAttribute('aria-expanded', 'false')
     await fold.click()
     await expect(idle.getByTestId(/^worktree-/u)).toHaveCount(SLOTS)
-    await expect(idle.getByRole('button', { name: `hide ${SLOTS} idle slots` })).toHaveAttribute(
+    await expect(idle.getByRole('button', { name: `Hide ${SLOTS} slots, #1 to #${SLOTS}` })).toHaveAttribute(
         'aria-expanded',
         'true',
     )

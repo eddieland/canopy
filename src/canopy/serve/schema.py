@@ -1201,6 +1201,8 @@ class ReviewSummary(_Model):
     """How many findings it reported."""
     worst: FindingSeverity | None = None
     """The severity of the worst finding it reported, which colors its verdict; None when it reported none."""
+    worst_count: int = 0
+    """How many of its findings are of the worst severity, which its verdict says in words (`3 findings, 1 major`)."""
     started_at: datetime
     """When it started."""
     ended_at: datetime | None = None

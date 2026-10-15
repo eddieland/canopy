@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { reviewSentText } from '@/lib/outcomes'
 import { reviewRef } from '@/lib/refs'
-import { findingAnchor, placeFindings, SEVERITY_TEXT, shortSha, verdictText, verdictTone } from '@/lib/reviews'
+import { findingAnchor, placeFindings, SEVERITY_TONE, shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
 import { cn } from '@/lib/utils'
@@ -248,7 +248,9 @@ function FindingsPanel({ detail }: { detail: ReviewDetail }) {
                             )}
                             <span className="readout text-xs text-muted-foreground">{i + 1}</span>
                         </span>
-                        <Chip className={cn('justify-center', SEVERITY_TEXT[f.severity])}>{f.severity}</Chip>
+                        <Chip tone={SEVERITY_TONE[f.severity]} className="justify-center">
+                            {f.severity}
+                        </Chip>
                         <span className="flex min-w-0 items-center gap-3">
                             {/* A router link, not a bare `#` href, which the page's <base> would send to the root. */}
                             <Link
