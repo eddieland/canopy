@@ -425,10 +425,12 @@ list, an empty state, or a skeleton by hand.
   in time order, which is a conversation, a chore's notes, a transcript, the runs page and a ticket's, chore's, or
   PR's runs, a ticket's, tick's, or PR's decisions, the ticks, the tickets, the PRs, and the reviews and a PR's. The
   toggle is a ghost button before the count, an up-down arrow and the order it is in, in words (`newest first`); a
-  click shows the other. Each list starts in the order the server sends it and keeps the operator's choice for that
-  list alone, wherever it appears: a conversation flipped on a ticket's page is flipped in the inbox too. It shows only
-  when the list has two items or more. Search has none: its hits are each source's newest few, so flipped they would
-  read as its oldest.
+  click shows the other. A list sorted by each row's latest activity rather than by when it began, which is the
+  tickets, the PRs, and the runs page, says so (`recently updated`, `least recently updated`, after
+  GitHub's sorts): its first row may be its oldest, so `newest` would mislead. Each list starts in the order the
+  server sends it and keeps the operator's choice for that list alone, wherever it appears: a conversation flipped on
+  a ticket's page is flipped in the inbox too. It shows only when the list has two items or more. Search has none: its
+  hits are each source's newest few, so flipped they would read as its oldest.
 - **A list that grows without bound scrolls inside its panel** (`PanelScroll`) when other panels sit under it in the
   same column: a ticket's recent runs and decisions, a chore's open findings and recent runs, the spend page's days
   (past `15rem`, under its pinned column names, so a week shows whole and 30 days scroll). Past `28rem` the rows
@@ -660,15 +662,16 @@ list, an empty state, or a skeleton by hand.
   reply stay in reach. A worktree's branch links the same way, its name in the accent with its `LinkOutIcon`, when its
   repository has a branch link.
 - **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch on a ticket's, run's,
-  or PR's page, a run's worktrees and log path, a session id on a tick's page and in a transcript's header, and a
-  review's commit, whole though the page shows its first 7 characters. A path copies whole though the page shows it
-  from the workspace root (`CopyablePath`), joined to `/meta`'s root; until that is read there is no button, so a copy
-  is never the short path. The button is a ghost `icon-xs` with the
+  or PR's page, a run's worktrees and log path, a session id wherever one shows (a tick's page, a transcript's header,
+  a run's row, a chore run's row), and a review's commit, whole though the page shows its first 7 characters. A path
+  copies whole though the page shows it from the workspace root (`CopyablePath`), joined to `/meta`'s root; until that
+  is read there is no button, so a copy is never the short path. The button is a ghost `icon-xs` with the
   `Copy` icon, muted until hovered; a click shows `Check` in the accent, or `X` in `status-failed` when the browser
   refuses, for 1.5 seconds, and names what happened (`Copied branch`), and a toast says the same with the text it
-  copied, on one line. In a dense list (a worktree slot's path and branch) it shows only while its row (`group/copy`)
-  is hovered or it has the focus, keeping its space so nothing moves, and always on a touch screen. The clipboard
-  needs a secure context (https or localhost), so elsewhere there is no button and the text stays selectable.
+  copied, on one line. In a dense list (a worktree slot's path and branch, a run's or chore run's session id) it shows
+  only while its row (`group/copy`) is hovered or it has the focus, keeping its space so nothing moves, and always on
+  a touch screen. The clipboard needs a secure context (https or localhost), so elsewhere there is no button and the
+  text stays selectable.
 - **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was
   done shows too little of it: a copy names what it copied. It sits at the bottom center of the window on `surface`
   with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title in `text-sm`, and a line under it

@@ -81,6 +81,27 @@ test("a run's paths have no copy button while the server's meta cannot be read, 
     await expect(page.getByRole('button', { name: 'Copy worktree path' })).toHaveCount(0)
 })
 
+test("a session id copies from its run's row, its button showing only while the row is hovered", async ({ page }) => {
+    await page.goto('runs')
+    await settled(page)
+    const row = page.getByTestId('run-41')
+    const copy = row.getByRole('button', { name: 'Copy session id' })
+    await expect(copy).toHaveCSS('opacity', '0')
+    await row.hover()
+    await expect(copy).toHaveCSS('opacity', '1')
+    await copy.click()
+    expect(await clipboard(page)).toBe('ses_mock41')
+})
+
+test("a chore run's session id copies from its row", async ({ page }) => {
+    await page.goto('chores/deps')
+    await settled(page)
+    const row = page.getByTestId('chore-run-2')
+    await row.hover()
+    await row.getByRole('button', { name: 'Copy session id' }).click()
+    expect(await clipboard(page)).toBe('ses_chore2')
+})
+
 /** The workspace root the server's meta gives, which a path shown from it is joined to when copied. */
 async function workspaceRoot(page: Page): Promise<string> {
     const meta = (await (await page.request.get('api/meta')).json()) as { workspace_root: string }

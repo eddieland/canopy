@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
+import { Copyable } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { Disclosure } from '@/components/disclosure'
 import { LinkedText } from '@/components/linked-text'
@@ -51,7 +52,7 @@ export function TicketRunsTable({ groups }: { groups: TicketRuns[] }) {
 
 function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
     return (
-        <ListRow kind={ticket ? 'run' : 'own-run'} data-testid={`run-${run.id}`}>
+        <ListRow kind={ticket ? 'run' : 'own-run'} className="group/copy" data-testid={`run-${run.id}`}>
             <RunBody run={run} ticket={ticket} />
         </ListRow>
     )
@@ -62,7 +63,7 @@ function TicketRow({ group }: { group: TicketRuns }) {
     const { latest, earlier } = group
     return (
         <Collapsible asChild open={open} onOpenChange={setOpen}>
-            <ListRow kind="run" data-testid={`run-${latest.id}`}>
+            <ListRow kind="run" className="group/copy" data-testid={`run-${latest.id}`}>
                 <RunBody run={latest} ticket />
                 {earlier.length > 0 && (
                     <>
@@ -136,9 +137,9 @@ function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
                     ))}
                     <RunWorktrees paths={run.worktrees} />
                     {run.session_id && (
-                        <span className="text-muted-foreground" title="its transcript is on the run's page">
-                            session {run.session_id}
-                        </span>
+                        <Copyable text={run.session_id} label="session id" reveal className="text-muted-foreground">
+                            <span title="its transcript is on the run's page">session {run.session_id}</span>
+                        </Copyable>
                     )}
                 </RowLine>
             )}
