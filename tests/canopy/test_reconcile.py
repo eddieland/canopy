@@ -199,7 +199,7 @@ def test_attention_from_the_latest_run(
         return
     [item] = items
     assert (item.ticket_key, item.reason) == ("PROJ-1", reason)
-    assert item.detail == f"run {run_id} (implement, agent/PROJ-1-work) ended {status}: gave up; log /state/runs/1.log"
+    assert item.detail == f"run:{run_id} (implement, agent/PROJ-1-work) ended {status}: gave up; log /state/runs/1.log"
 
 
 def test_attention_clears_with_a_newer_run_or_when_done(

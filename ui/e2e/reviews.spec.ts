@@ -12,8 +12,8 @@ test('a review opens from the nav and puts each finding on its line of the diff'
     const nav = page.getByRole('navigation', { name: 'Main' })
     await nav.getByRole('link', { name: 'Reviews' }).click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Reviews')
-    // The operator's own PR, matched by review.query, has no ticket.
-    await expect(page.getByTestId('review-2')).toContainText('review.query')
+    // The operator's own PR, matched by review.query, has no ticket: canopy only reviews it.
+    await expect(page.getByTestId('review-2').getByTitle('none: canopy only reviews it')).toHaveText('none')
 
     await page.getByTestId('review-4').getByRole('link', { name: 'review:4' }).click()
     await expect(page).toHaveURL(/\/reviews\/4$/u)

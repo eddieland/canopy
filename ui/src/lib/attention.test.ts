@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { AttentionItem } from '@/api/types'
 
-import { blocking, bySeverity, countBySeverity, severity } from './attention'
+import { blocking, breakdown, breakdownText, bySeverity, countBySeverity, severity } from './attention'
 
 const item = (id: string, reason: string, since: string, finding = false): AttentionItem => ({
     id,
@@ -66,5 +66,18 @@ describe('bySeverity', () => {
             item('older-failure', 'worker_failed', '2026-10-08T10:50:00Z'),
         ])
         expect(sorted.map((i) => i.id)).toEqual(['older-failure', 'newer-failure', 'question', 'review', 'finding'])
+    })
+})
+
+describe('breakdown', () => {
+    it('says the count in one set of words, most severe first, a finding as other', () => {
+        const parts = breakdown({ failed: 1, waiting: 1, other: 2, finding: 1 })
+        expect(parts.map((p) => p.kind)).toEqual(['failed', 'waiting', 'other'])
+        expect(breakdownText(parts)).toBe('1 broken, 1 waiting on you, 3 other')
+    })
+
+    it('leaves out a part with nothing in it, and says nothing for an empty list', () => {
+        expect(breakdownText(breakdown({ failed: 0, waiting: 2, other: 0, finding: 0 }))).toBe('2 waiting on you')
+        expect(breakdownText(breakdown({ failed: 0, waiting: 0, other: 0, finding: 0 }))).toBe('nothing')
     })
 })

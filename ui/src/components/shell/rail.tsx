@@ -7,6 +7,7 @@ import type { SpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
 import { Cost } from '@/components/cost'
 import { RunDot } from '@/components/status'
+import { TicketTitle } from '@/components/ticket-title'
 import { Skeleton } from '@/components/ui/skeleton'
 import { runRef } from '@/lib/refs'
 import { railRuns } from '@/lib/run-state'
@@ -27,7 +28,7 @@ export function RailWorking() {
             {runs === undefined ? (
                 <Skeleton className="mx-2.5 h-8" />
             ) : shown.length === 0 ? (
-                <p className="px-2.5 text-xs text-muted-foreground">nothing running</p>
+                <p className="px-2.5 text-xs text-muted-foreground">no runs now</p>
             ) : (
                 <ul className="flex flex-col gap-0.5">
                     {shown.map((run) => (
@@ -52,9 +53,10 @@ export function RailWorking() {
                                         )}
                                     </span>
                                 </span>
-                                <span className="truncate pl-4 text-xs text-muted-foreground">
-                                    {run.ticket_title ?? run.kind}
-                                </span>
+                                <TicketTitle
+                                    title={run.ticket_title}
+                                    className="pl-4 text-xs font-normal text-muted-foreground"
+                                />
                             </Link>
                         </li>
                     ))}
