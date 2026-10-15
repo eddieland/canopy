@@ -412,7 +412,7 @@ list, an empty state, or a skeleton by hand.
   PR's runs, a ticket's, tick's, or PR's decisions, the ticks, the tickets, the PRs, and the reviews and a PR's. The
   toggle is a ghost button before the count, an up-down arrow and the order it is in, in words (`newest first`); a
   click shows the other. A list sorted by each row's latest activity rather than by when it began, which is the
-  tickets, the PRs, and the runs page, says so (`recently updated first`, `least recently updated first`, after
+  tickets, the PRs, and the runs page, says so (`recently updated`, `least recently updated`, after
   GitHub's sorts): its first row may be its oldest, so `newest` would mislead. Each list starts in the order the
   server sends it and keeps the operator's choice for that list alone, wherever it appears: a conversation flipped on
   a ticket's page is flipped in the inbox too. It shows only when the list has two items or more. Search has none: its

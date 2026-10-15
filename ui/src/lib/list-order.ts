@@ -53,10 +53,10 @@ export type ListName = keyof typeof LISTS
  */
 const BY_ACTIVITY: ReadonlySet<ListName> = new Set(['runs', 'tickets', 'pull-requests'])
 
-/** Which end of `list` comes first in `order`, in words: `newest first`, or `recently updated first` by activity. */
+/** Which end of `list` comes first in `order`, in words: `newest first`, or `recently updated` by activity. */
 export function orderWords(list: ListName, order: Order): string {
     if (BY_ACTIVITY.has(list)) {
-        return order === 'newest' ? 'recently updated first' : 'least recently updated first'
+        return order === 'newest' ? 'recently updated' : 'least recently updated'
     }
     return `${order} first`
 }

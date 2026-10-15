@@ -59,8 +59,8 @@ describe('orderWords', () => {
     })
 
     it('names a list by activity by when its rows were last updated, not when they began', () => {
-        expect(orderWords('tickets', 'newest')).toBe('recently updated first')
-        expect(orderWords('pull-requests', 'oldest')).toBe('least recently updated first')
-        expect(orderWords('runs', 'newest')).toBe('recently updated first')
+        expect(orderWords('tickets', 'newest')).toBe('recently updated')
+        expect(orderWords('pull-requests', 'oldest')).toBe('least recently updated')
+        expect(orderWords('runs', 'newest')).toBe('recently updated')
     })
 })

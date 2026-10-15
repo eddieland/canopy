@@ -44,9 +44,9 @@ test('a list by latest activity says it runs by the most recently updated, not t
     await page.goto('tickets')
     await settled(page)
     const toggle = page.getByTestId('order-tickets')
-    await expect(toggle).toHaveText('recently updated first')
+    await expect(toggle).toHaveText('recently updated')
     await toggle.click()
-    await expect(toggle).toHaveText('least recently updated first')
+    await expect(toggle).toHaveText('least recently updated')
 })
 
 test("the reviews, and a PR's reviews, flip like any list in time", async ({ page }) => {
