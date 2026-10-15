@@ -49,8 +49,9 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   `failed` (the three the worker reports), `unknown`, `timeout`, `unpushed`, `crashed`, or `stopped` (§22); `private`
   marks a run on a started ticket. Source for capacity, crash
   detection, attempt counts, and the fix-ci cooldown. What the runtime reported (§13): the session id (`session_id`),
-  the dollar cost (`cost_usd`), and tokens by kind (`tokens_input`, `tokens_output`, `tokens_reasoning`,
-  `tokens_cache_read`, `tokens_cache_write`), all NULL when it reported nothing.
+  the dollar cost (`cost_usd`), tokens by kind (`tokens_input`, `tokens_output`, `tokens_reasoning`,
+  `tokens_cache_read`, `tokens_cache_write`), and the peak context (`tokens_peak_context`, §13), all NULL when it
+  reported nothing; the peak is NULL too on a run recorded before migration 0025.
 - `run_slots`: one row per slot a run leased; the repository whose pool it came from, slot path, lease id and holder,
   and the base branch the run started from there. A joint run has one per repository.
 - `review_runs`: one row per review run; the PR's URL, the commit, the ticket of an agent PR, the repository and slot,
@@ -380,6 +381,17 @@ From events the harness also reads, each validated (D026):
   does not validate, the run reports no cost rather than too little. Events with no model call cost nothing. A run
   killed mid-call (a timeout) reports what its finished calls cost, a lower bound. A subagent's calls are its own
   session's, and not counted.
+- the peak context: the most one `step_finish` was sent, its input, cache read, and cache write together, so how large
+  the run's context grew. 0 when it made no model call.
+
+Wherever canopy prints what a run cost, the CLI (`Usage.describe`) and the web UI's run pages alike, it says it as
+`$0.25, 3.5k new tokens, 5.5k peak context`. New tokens are every kind but cache reads: input, cache write, output,
+and reasoning, summed over the calls. Cache reads are left out of the headline because each call reads again what the
+calls before it were sent, so their sum grows with the square of a session's length and dwarfs the rest: a run of 40
+calls over a 50k context reads two million tokens from the cache, which says nothing about what it did. The peak
+context says what the sum hid, how large the context got. Each kind is still kept apart in the journal, and a
+transcript shows each call's (§22). A run recorded before the peak was kept prints its new tokens alone. A log line's
+`new_tokens` and `peak_context` are the same two counts.
 
 The default `overseer_cmd`, `worker_cmd`, `split_cmd`, `chore_cmd`, and `review_cmd` ask for events. A tick records
 what its overseer reports on the tick (§6), `_run` what a worker or split reports on the run (§8, §11), `_chore` what a
@@ -485,8 +497,8 @@ dismissal.
 `canopy status` also lists the tickets the operator started (§22), each with its title (§7), status, phase, and the
 message it awaits a reply to, running workers, and the ten runs that ended most recently, newest first: ticket and its
 title, kind, status, how long ago it ended, and each PR it reported; its harness note or else its summary, on one line
-with control characters dropped and cut at 160 characters; and its session id, its cost and tokens when the runtime
-reported them (§13), and its run log.
+with control characters dropped and cut at 160 characters; and its session id, its cost, new tokens, and peak context
+when the runtime reported them (§13), and its run log.
 
 Reasons are exactly the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
 `attempt_limit`, a private ticket's `awaiting_reply` (§22), `canopy_unavailable` (§6 step 5), and in a workspace

@@ -19,7 +19,7 @@ import { TranscriptPanel } from '@/components/transcript'
 import { runRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
-import { tokenCount } from '@/lib/transcript'
+import { RUN_TOKENS_TITLE, runTokens } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 import { None } from '@/components/none'
 
@@ -122,7 +122,7 @@ function RunPanel({ run }: { run: Run }) {
                 )}
                 <Field label="spent" mono>
                     <Cost usd={run.cost_usd} />
-                    {run.tokens === null ? '' : `, ${tokenCount(run.tokens)} tokens`}
+                    <span title={RUN_TOKENS_TITLE}>{runTokens(run.new_tokens, run.peak_context)}</span>
                 </Field>
                 {run.worktrees.length > 0 && (
                     <Field label="worktrees" mono>

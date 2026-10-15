@@ -181,7 +181,7 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     output = agent_output.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
         db.set_review_run_report(ctx.conn, run_id, output.session_id, output.usage)
-        spent = {"cost_usd": output.usage.cost_usd, "tokens": output.usage.tokens} if output.usage else {}
+        spent = output.usage.spent() if output.usage else {}
         log.info("reviewer reported", extra={"review_run_id": run_id, "session_id": output.session_id, **spent})
     if done.timed_out:
         return Outcome("timeout", None, f"the reviewer timed out after {timeout_minutes} minutes")

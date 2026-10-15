@@ -209,14 +209,16 @@ def test_decisions_and_status_print_what_a_tick_cost(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:
     tick_id = db.start_tick(conn, dry_run=False)
-    usage = agent_output.Usage(cost_usd=0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0)
+    usage = agent_output.Usage(
+        0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0, peak_context=26_000
+    )
     db.set_tick_report(conn, tick_id, "ses_o1", usage)
     db.finish_tick(conn, tick_id, "ok", "0 decisions: none")
 
     assert main(["decisions"]) == 0
-    assert "\n  overseer session ses_o1  $0.50, 50.0k tokens\n" in capsys.readouterr().out
+    assert "\n  overseer session ses_o1  $0.50, 10.0k new tokens, 26.0k peak context\n" in capsys.readouterr().out
     assert main(["status"]) == 0
-    assert "Last tick: 1 ok, started 0s ago  $0.50, 50.0k tokens\n" in capsys.readouterr().out
+    assert "Last tick: 1 ok, started 0s ago  $0.50, 10.0k new tokens, 26.0k peak context\n" in capsys.readouterr().out
 
 
 def test_decisions_filters_by_ticket_and_reports_no_match(
