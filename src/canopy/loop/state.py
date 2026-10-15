@@ -47,6 +47,7 @@ class OverseerState(TypedDict):
     capacity: CapacityState
     running_workers: list[RunningWorker]
     mirror: MirrorState
+    query_due: bool
     tick_id: int
     now: str
     dry_run: bool
@@ -238,6 +239,7 @@ def state_block(
     operator: Mapping[str, conversation.OperatorSection] | None = None,
     mirror_delimiter: str,
     attention: list[OpenItem] | None = None,
+    query_due: bool,
 ) -> str:
     """Render the `## State` section the harness sends the overseer as its message, after its prompt.
 
@@ -254,7 +256,8 @@ def state_block(
     operator messages newer than its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7,
     D089). `mirror_delimiter` ends the heredoc the overseer passes each mirrored comment's body in: the tick's own, so
     no comment can predict it. `attention` is the open items the overseer recorded (`attention.for_overseer`), so it
-    sees what leaving one out drops (ROADMAP M28).
+    sees what leaving one out drops (ROADMAP M28). `query_due` says whether the overseer runs the tracker query this
+    tick or works the tickets the block lists alone (DESIGN §7, Spacing the query).
 
     Returns:
         The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
@@ -404,6 +407,8 @@ def state_block(
         ],
         # Tracker comments the overseer copies into the journal (DESIGN §22).
         "mirror": {"max_per_tick": conversation.MIRRORS_PER_TICK, "body_delimiter": mirror_delimiter},
+        # Whether this tick runs the tracker query, or works the tickets above alone (DESIGN §7, Spacing the query).
+        "query_due": query_due,
         "tick_id": tick_id,
         "now": db.format_time(now),
         "dry_run": dry_run,

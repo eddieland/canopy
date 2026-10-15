@@ -91,6 +91,8 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     _record_harness_items(ctx, tick_id)
 
     now = datetime.now(UTC)
+    query_due = _query_due(ctx, now)
+    db.set_tick_query(ctx.conn, tick_id, due=query_due)
     running = db.running_runs(ctx.conn)
     last_runs = db.latest_runs(ctx.conn)
     # A stopped ticket waits on the operator alone: listed by key, it gets no decision every tick (DESIGN §22).
@@ -128,6 +130,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         operator=operator,
         mirror_delimiter=conversation.body_delimiter(),
         attention=attention.for_overseer(ctx.conn),
+        query_due=query_due,
     )
     unavailable = _check_canopy(ctx, tick_id, log)
     if unavailable is not None:
@@ -149,6 +152,22 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     actions = Counter(d.action for d in decisions)
     counts = ", ".join(f"{action}={n}" for action, n in sorted(actions.items())) or "none"
     return finish("ok", f"{prefix}{actions.total()} decisions: {counts}", usage)
+
+
+def _query_due(ctx: Context, now: datetime) -> bool:
+    """Whether this tick runs the tracker query (DESIGN §7, Spacing the query).
+
+    Every tick does with `tracker.query_every_minutes` at 0. Otherwise one does once that long has passed since the
+    newest live `ok` tick that ran it started, or when none has.
+
+    Returns:
+        True if the overseer runs the query this tick.
+    """
+    every = ctx.config.tracker.query_every_minutes
+    if every == 0:
+        return True
+    last = db.last_query_at(ctx.conn)
+    return last is None or now - db.parse_time(last) >= timedelta(minutes=every)
 
 
 def _record_harness_items(ctx: Context, tick_id: int) -> None:

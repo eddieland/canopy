@@ -230,8 +230,9 @@ When the operator asks you to look into findings or turn them into tickets:
 ## Getting a ticket worked
 
 Add the operator's queue label (`tracker.labels` in the user config, `agent-ready-<user>` by default) to an open ticket
-that `tracker.query` finds. The next live tick with free capacity dispatches it. To preview, run
-`canopy tick --dry-run` and then `canopy decisions`.
+that `tracker.query` finds. The next live tick with free capacity that runs the query dispatches it: every tick, unless
+`tracker.query_every_minutes` spaces the query out. To preview, run `canopy tick --dry-run` and then
+`canopy decisions`.
 
 Or start it privately: `canopy start KEY`. A started ticket needs no label, and its conversation stays in canopy's
 journal: workers read the ticket but never comment on, label, or edit it, and ask their questions through canopy. A
