@@ -579,9 +579,12 @@ def test_notify_test_sends_now_and_changes_nothing(
     assert "no sink named 'nope'; configured: a, b" in capsys.readouterr().err
     conn = journal(canopy_env)
     assert conn.execute("SELECT count(*) FROM notify_sinks").fetchone()[0] == 0
-    with mock.patch.dict(os.environ, {"CANOPY_TICK_ID": "1"}):
-        assert main(["notify", "test"]) == 1
-        assert "refuses inside a tick" in capsys.readouterr().err
+    # Neither the overseer nor a worker, review, or chore it started may page the operator.
+    for name in ("CANOPY_TICK_ID", "CANOPY_RUN_ID"):
+        with mock.patch.dict(os.environ, {name: "1"}):
+            assert main(["notify", "test"]) == 1
+            assert f"notify test refused (inside_run): {name} is set" in capsys.readouterr().err
+    assert (len(messages(a)), len(messages(b))) == (2, 1)
 
 
 def test_chore_runs_reach_a_sink_that_takes_chores(

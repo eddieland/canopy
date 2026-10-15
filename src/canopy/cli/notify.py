@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import os
-
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.loop import tick
+from canopy.core import conversation
 from canopy.notify import deliver
 
 
@@ -21,9 +19,11 @@ def notify_group() -> None:
 @click.pass_context
 def cmd_notify_test(click_ctx: click.Context, sink: str | None) -> int:
     """Send a test message to every sink, or to SINK, now, and print each result. Changes nothing in the journal."""
-    # The overseer must not be able to page the operator (DESIGN §20).
-    if os.environ.get(tick.TICK_ID_ENV):
-        raise CliError(f"canopy notify test is for the operator; it refuses inside a tick ({tick.TICK_ID_ENV} is set)")
+    # Neither the overseer nor a run it started may page the operator (DESIGN §20).
+    try:
+        conversation.check_operator()
+    except conversation.Refused as r:
+        raise CliError(f"notify test refused ({r.guard}): {r.reason}") from None
     ctx = open_context(click_ctx)
     sinks = ctx.config.notify.all_sinks()
     if not sinks:
