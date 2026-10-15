@@ -81,6 +81,9 @@
     --buddy-hat-gold: oklch(0.8 0.15 85);
     --buddy-hat-cloth: oklch(0.98 0.005 90);
     --buddy-hat-blue: oklch(0.5 0.17 265);
+    /* The keyboard Sprig vibe codes on: its case and its keys. A key it presses lights in the accent. */
+    --buddy-keyboard: oklch(0.42 0.03 275);
+    --buddy-key: oklch(0.97 0.006 275);
 
     --radius: 0.5rem;
 }
@@ -146,6 +149,8 @@
     --buddy-hat-gold: oklch(0.84 0.14 85);
     --buddy-hat-cloth: oklch(0.93 0.01 90);
     --buddy-hat-blue: oklch(0.6 0.15 265);
+    --buddy-keyboard: oklch(0.36 0.04 270);
+    --buddy-key: oklch(0.56 0.04 268);
 }
 
 /* Tailwind utilities for every token. `inline` so a utility reads the variable, and a theme switch needs no rebuild. */
@@ -207,6 +212,8 @@
     --color-buddy-hat-gold: var(--buddy-hat-gold);
     --color-buddy-hat-cloth: var(--buddy-hat-cloth);
     --color-buddy-hat-blue: var(--buddy-hat-blue);
+    --color-buddy-keyboard: var(--buddy-keyboard);
+    --color-buddy-key: var(--buddy-key);
 
     /*
      * shadcn/ui's names, aliased onto ours so `shadcn add` output renders without edits. New code uses the names
