@@ -487,6 +487,16 @@ which canopy's own runs also load, never meets a same-named skill. It opens by t
 (`CANOPY_TICK_ID` set, or a canopy prompt) to follow its prompt instead. It grants nothing: the overseer's and worker's
 bash rules apply either way.
 
+### Shell completion
+
+`canopy completion SHELL` prints the script that completes canopy in bash (4.4 or newer), zsh, or fish; the operator
+loads it from their shell's startup file, as its help shows. The script is click's: on Tab it runs `canopy` with
+`_CANOPY_COMPLETE` set, which click answers before any command runs. Commands, options, and choices complete from the
+CLI's definition. Repository names complete from the map of the workspace the shell is in, and chore names from its
+config; outside a workspace, or when its config does not load, they complete to nothing rather than fail. Ticket keys
+do not complete: that would mean opening the journal on every Tab. The command prints click's template itself rather
+than calling its `source()`, whose bash version check runs bash outside `canopy.infra.procs`.
+
 ## 14. Attention list
 
 After every tick the list is rendered to `<state_dir>/attention.md` (`.canopy/attention.md` in the workspace), readable
