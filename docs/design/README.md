@@ -108,6 +108,7 @@ canopy (harness, Python)
     main.py        main(), the root group, exit codes
     common.py      opening the Context, refusals, the tick named by CANOPY_TICK_ID
     params.py      validated parameter types: ticket keys, reasons, slugs, cursors, bounded text
+    render.py      how status, show, and the other read-back commands name tickets, runs, costs, and chores
     setup.py       init, skill, secret (the web UI's listener secret, §22)
     loop.py        loop (serving the web UI unless --no-serve), tick, tick --dry-run, status, decisions
     spend.py       spend: each day's cost by kind, and the ticks by what they bought (§11)
