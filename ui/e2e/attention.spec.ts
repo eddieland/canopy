@@ -20,10 +20,14 @@ test('the list is most severe first, and the most severe ticket opens beside it'
     await expect(rows.first().getByTitle('worker_failed')).toHaveText('worker failed')
     // A finding's id is the agent's text: its chip says `finding`, and the id sits beside its chore.
     await expect(rows.nth(4).getByText('finding', { exact: true })).toBeVisible()
+    // An item about a ticket names it by its title too; a repository's has none to name.
+    await expect(rows.first()).toContainText('Fix the flaky checkout test')
+    await expect(rows.nth(2).getByText('untitled')).toHaveCount(0)
 
     await expect(rows.first()).toHaveAttribute('aria-current', 'page')
     const detail = page.getByTestId('attention-detail')
     await expect(detail.getByRole('link', { name: 'ABC-100', exact: true })).toBeVisible()
+    await expect(detail.getByText('Fix the flaky checkout test')).toBeVisible()
     await expect(detail.getByRole('form', { name: 'Reply' })).toBeVisible()
 })
 

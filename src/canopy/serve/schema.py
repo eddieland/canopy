@@ -126,6 +126,8 @@ class AttentionItem(_Model):
     """How the CLI names it: `PROJ-1`, `api`, `PROJ-1 (api)`, `chore:deps`."""
     ticket_key: str | None = None
     """The ticket it is about, when it is about one; a chore's and a repository's items have none."""
+    ticket_title: str | None = None
+    """That ticket's title, as the overseer named it (DESIGN §13); None until it does, or when it is about none."""
     chore: str | None = None
     """The chore it is about, when it is about one."""
     repo: str | None = None

@@ -8,6 +8,7 @@ const item = (id: string, reason: string, since: string, finding = false): Atten
     id,
     subject: id,
     ticket_key: finding ? null : id,
+    ticket_title: null,
     chore: finding ? 'deps' : null,
     repo: null,
     reason,
