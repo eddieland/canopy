@@ -2861,6 +2861,18 @@ export type components = {
              */
             idle: boolean | null;
             /**
+             * New Tokens
+             * @description The tokens the runtime reported the overseer's model took in or wrote anew, every kind but cache reads; None
+             *     when it reported nothing.
+             */
+            new_tokens: number | null;
+            /**
+             * Peak Context
+             * @description The most tokens one of the overseer's model calls was sent, from the cache or not; None when the runtime
+             *     reported nothing, or recorded it before canopy kept it.
+             */
+            peak_context: number | null;
+            /**
              * Session Id
              * @description The overseer's session, when the runtime reported it (§13).
              */

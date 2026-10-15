@@ -53,7 +53,12 @@ export function runTokens(newTokens: number | null, peakContext: number | null):
     return `, ${tokenCount(newTokens)} new tokens${peak}`
 }
 
-/** What a run's token counts mean, for the hover on them. */
+/** A token count in a list's column, with what it counts (`12.3k new`), or a dash when nothing reported one. */
+export function tokensCell(n: number | null, counts: string): string {
+    return n === null ? '–' : `${tokenCount(n)} ${counts}`
+}
+
+/** What a run's or a tick's token counts mean, for the hover on them. */
 export const RUN_TOKENS_TITLE =
     'new tokens: input, cache writes, output, and reasoning, summed over its model calls; cache reads are left out, ' +
     'since each call reads again what the calls before it were sent. peak context: the most one call was sent.'
