@@ -88,6 +88,8 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
   `canopy/serve/mock.py`, a workspace of three repositories; the header shows `mock`. Its times are fixed around
   2026-10-08 12:00 UTC: a screenshot test freezes the browser's clock (`NOW` in `e2e/helpers.ts`). `src/api/mocks.ts`
   holds a few typed rows for unit tests.
+- **API docs.** The server serves Swagger UI at `/api/docs`, over the schema at `/api/openapi.json`, from the copy
+  `vite.config.ts` puts in the build's `api-docs/`: through the dev server too, once `npm run build` has run.
 
 ## Python side
 
