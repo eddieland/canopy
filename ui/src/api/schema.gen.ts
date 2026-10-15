@@ -905,6 +905,11 @@ export type components = {
              * @description The ticket it is about, when it is about one; a chore's and a repository's items have none.
              */
             ticket_key: string | null;
+            /**
+             * Ticket Title
+             * @description That ticket's title, as the overseer named it (DESIGN §13); None until it does, or when it is about none.
+             */
+            ticket_title: string | null;
         };
         /**
          * AttentionUpdated
