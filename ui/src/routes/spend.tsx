@@ -4,7 +4,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { spendBreakdownQuery } from '@/api/queries'
 import type { SpendBreakdown, SpendDay } from '@/api/types'
 import { Cost } from '@/components/cost'
-import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { TickRow } from '@/components/tick-row'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
@@ -152,7 +152,8 @@ function Totals({ found }: { found: SpendBreakdown }) {
 
 /**
  * Each day as a stacked bar, the series bottom up, with the legend under it, then the same numbers as a table: the
- * chart is for the eye, so a screen reader reads the table.
+ * chart is for the eye, so a screen reader reads the table. A week's table shows whole; 30 days' scrolls under its
+ * column names, so the panels below stay in reach.
  */
 function ByDay({ days }: { days: SpendDay[] }) {
     const top = chartTop(days)
@@ -183,9 +184,9 @@ function ByDay({ days }: { days: SpendDay[] }) {
                     </li>
                 ))}
             </ul>
-            <div className="overflow-x-auto">
+            <PanelScroll label="Spend by day" className="max-h-60 overflow-x-auto" data-testid="spend-table-scroll">
                 <table className="w-full border-collapse text-sm" data-testid="spend-table">
-                    <thead>
+                    <thead className="sticky top-0 bg-surface">
                         <tr className="text-right">
                             <th className="panel-label pb-1.5 text-left font-normal">day</th>
                             {SERIES.map((series) => (
@@ -214,7 +215,7 @@ function ByDay({ days }: { days: SpendDay[] }) {
                         ))}
                     </tbody>
                 </table>
-            </div>
+            </PanelScroll>
         </div>
     )
 }
