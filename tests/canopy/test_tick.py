@@ -185,6 +185,70 @@ def test_the_state_block_names_the_tickets_marked_done_lately(
     assert [t["key"] for t in state["tickets"]] == ["PROJ-5"]
 
 
+def query_every(env: CanopyEnv, minutes: int) -> None:
+    labels = 'labels = ["agent-ready-tester"]\n'
+    env.write_user(env.user_file.read_text().replace(labels, f"{labels}query_every_minutes = {minutes}\n"))
+
+
+def test_the_query_runs_every_tick_by_default(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
+    with overseer_does():
+        assert main(["tick"]) == 0
+        assert main(["tick"]) == 0
+        assert state_block(agent_log)["query_due"] is True
+    rows = journal(canopy_env).execute("SELECT query_due FROM ticks ORDER BY id").fetchall()
+    assert [r["query_due"] for r in rows] == [1, 1]
+
+
+def test_the_query_runs_again_once_its_spacing_has_passed(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    query_every(canopy_env, 30)
+    conn = journal(canopy_env)
+    due: list[bool] = []
+    with overseer_does():
+        for _ in range(2):
+            assert main(["tick"]) == 0
+            due.append(state_block(agent_log)["query_due"])
+        # The first tick ran it 31 minutes ago; the second, which left it out, does not count.
+        ago = db.format_time(datetime.now(UTC) - timedelta(minutes=31))
+        with db.transaction(conn):
+            conn.execute("UPDATE ticks SET started_at = ? WHERE id = 1", (ago,))
+        assert main(["tick"]) == 0
+        due.append(state_block(agent_log)["query_due"])
+    assert due == [True, False, True]
+    assert [r["query_due"] for r in conn.execute("SELECT query_due FROM ticks ORDER BY id")] == [1, 0, 1]
+
+
+def test_only_a_live_ok_tick_counts_as_having_run_the_query(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    query_every(canopy_env, 30)
+    due: list[bool] = []
+    with overseer_does():
+        assert main(["tick", "--dry-run"]) == 0
+        due.append(state_block(agent_log)["query_due"])
+        with mock.patch.dict(os.environ, {"FAKE_AGENT_EXIT": "3"}):
+            assert main(["tick"]) == 1
+        due.append(state_block(agent_log)["query_due"])
+        for _ in range(2):
+            assert main(["tick"]) == 0
+            due.append(state_block(agent_log)["query_due"])
+    assert due == [True, True, True, False]
+
+
+def test_a_tick_from_before_the_spacing_was_recorded_ran_the_query(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    query_every(canopy_env, 30)
+    conn = canopy_env.journal()
+    with in_tick(conn) as tick_id:
+        db.finish_tick(conn, tick_id, "ok", "")
+    assert conn.execute("SELECT query_due FROM ticks").fetchone()["query_due"] is None
+    with overseer_does():
+        assert main(["tick"]) == 0
+        assert state_block(agent_log)["query_due"] is False
+
+
 @pytest.mark.parametrize(
     "case",
     [
