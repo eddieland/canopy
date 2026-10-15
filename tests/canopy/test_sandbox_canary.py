@@ -292,19 +292,22 @@ def test_a_worker_cannot_reach_a_unix_socket_on_the_host(canary: Canary) -> None
     # Bound by a relative name, in the slot: the slot's full path is longer than a Unix socket's.
     with contextlib.chdir(canary.slot), socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as server:
         server.bind("host.sock")
-        server.listen()
-        server.setblocking(False)  # noqa: FBT003
+        try:
+            server.listen()
+            server.setblocking(False)  # noqa: FBT003
 
-        done = canary.run("curl -sS -m 5 -o /dev/null --unix-socket host.sock http://localhost/")
+            done = canary.run("curl -sS -m 5 -o /dev/null --unix-socket host.sock http://localhost/")
 
-        assert not done.ok
-        with pytest.raises(BlockingIOError):
-            server.accept()[0].close()
-        # The control: the host's own process reaches it.
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-            client.connect("host.sock")
-            server.accept()[0].close()
-        Path("host.sock").unlink()
+            # curl tried to connect and could not: not a curl without `--unix-socket`, which fails otherwise.
+            assert done.returncode == CURL_NO_CONNECTION, done.stderr
+            with pytest.raises(BlockingIOError):
+                server.accept()[0].close()
+            # The control: the host's own process reaches it.
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+                client.connect("host.sock")
+                server.accept()[0].close()
+        finally:
+            Path("host.sock").unlink()
 
 
 def test_a_worker_commits_in_its_slot(canary: Canary) -> None:

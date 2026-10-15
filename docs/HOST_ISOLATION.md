@@ -383,8 +383,9 @@ gives it (§4.1 step 4): under pytest's own temp directory the path is too long,
 - OpenCode's MCP servers inside the sandbox: answered, from OpenCode's source (2026-10-14). A local server is a child
   of OpenCode, started in the slot with OpenCode's whole environment and its own `environment` entries, so it runs
   under the worker's policy, `TMPDIR`, proxy, and `git` (§4.2). It reaches only hosts on the allowlist, and reads under
-  `$HOME` only what `allowRead` names; what it writes there lands in `srt`'s `tmpfs` and is gone after the run, so a
-  server started with `npx` or `uvx` fetches itself each run, from a registry that must be on the allowlist. One
+  `$HOME` only what `allowRead` names. What it writes under `$HOME` outside `allowWrite` lands in `srt`'s `tmpfs` and
+  is gone after the run, so a server started with `npx` or `uvx` fetches itself each run, from a registry that must be
+  on the allowlist; what it writes in an `allowWrite` path, such as OpenCode's own data directories, stays. One
   started with `docker run` cannot work: the Docker daemon is a Unix socket, which the sandbox refuses (the canary
   checks it), and which would be a way out of it if it did not. Run such a server as a binary, or use its remote form.
   A remote server is reached through `srt`'s proxy, so its host must be on the allowlist; OpenCode keeps its OAuth
