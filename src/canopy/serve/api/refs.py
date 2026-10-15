@@ -13,6 +13,7 @@ from fastapi.responses import JSONResponse
 
 from canopy.core import conversation, db
 from canopy.infra import logs
+from canopy.serve.guard import MAX_BODY_BYTES
 from canopy.serve.schema import ErrorResponse, RefusalResponse
 
 if TYPE_CHECKING:
@@ -32,13 +33,22 @@ ChoreRunId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The chore run's 
 ReviewId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The review run's id.")]
 TickId = Annotated[int, Path(ge=1, le=_MAX_ID, description="The tick's id.")]
 
-# Every API route's: the guard answers 403 before any route does (guard.py), and so does a session's check on a write.
+# Every API route's: the guard answers 403, 411, or 413 before any route does (guard.py), and a session's check on a
+# write answers 403.
 GUARDED: Responses = {
     403: {
         "model": ErrorResponse,
         "description": "Refused before the route ran: a Host or Origin header naming another host, or a write "
         "without the session's token or an Origin naming this server.",
-    }
+    },
+    411: {
+        "model": ErrorResponse,
+        "description": "Refused before the route ran: a chunked body, with no Content-Length.",
+    },
+    413: {
+        "model": ErrorResponse,
+        "description": f"Refused before the route ran: a body over {MAX_BODY_BYTES // 1024} KiB.",
+    },
 }
 # Every route's but the session's own (deps.signed_in).
 SIGNED_IN: Responses = {
