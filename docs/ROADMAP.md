@@ -930,8 +930,10 @@ survives. M36 to M40 take up the new phases and kind as they reshape the state b
   starts a private ticket with one. Each refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, and
   `--skip` and asking for a plan refuse as `bad_plan` once the ticket has a branch.
 - Approval: `canopy plan KEY --approve` approves the newest plan; it refuses `inside_run`, and `bad_plan` when the
-  newest plan is not waiting. A reply (`canopy reply KEY`) newer than the plan asks for changes: the overseer
-  dispatches `plan` again with the reply in its context, and the new plan supersedes the old.
+  newest plan is not waiting or a plan run for the ticket is running. A reply (`canopy reply KEY`) newer than the plan
+  asks for changes: the overseer dispatches `plan` again with the reply in its context, and the new plan supersedes
+  the old. An approval after such a reply, before the new plan run starts, wins: it is the operator's later word, and
+  the reply reaches the `implement` as an operator message, as any message does.
 - A hard guard in code: an `implement` for a ticket that needs a plan, by `policy.plan` or its own setting, and has no
   approved plan is refused as `unplanned`. A `plan` for a ticket with a branch, or for a split's parent, is
   `bad_plan`. A `--slug`, `--base`, or `--request` on a plan is `bad_slug`, `bad_base`, or `bad_request`.
