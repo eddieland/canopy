@@ -20,7 +20,7 @@ classifiers = [
 ]
 requires-python = ">=3.12"
 # Stdlib only, and nothing from canopy: it runs as its own process, as the prefix on a command template (D041,
-# HOST_ISOLATION §4.1).
+# DESIGN §24).
 dependencies = []
 
 [project.scripts]

@@ -60,7 +60,7 @@ install-check: ## Install canopy into an empty HOME and run it against the fakes
 	tests/install-check.sh $(INSTALL_SOURCE)
 
 # Not part of check: it needs what `canopy sandbox setup` installs and checks, and runs as you, not root. CI runs it as
-# its own job, on Linux (HOST_ISOLATION §6, docs/SANDBOX.md).
+# its own job, on Linux (DESIGN §24, The canary, docs/SANDBOX.md).
 sandbox-canary: ## Check that the sandbox holds: the shipped wrapper and templates under the real srt
 	CANOPY_SANDBOX_CANARY=1 uv run pytest -q -n auto tests/canopy/test_sandbox_canary.py
 

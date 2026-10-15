@@ -419,7 +419,9 @@ in the checkout. Run against the fake `srt`, every review denial fails and its p
 TRUST_MODEL T4 and T6 name the sandbox as an opt-in control, with its residuals: the shared kernel, the unwrapped
 overseer and harness calls, `/tmp/claude`, and exfiltration through an allowed host with the credentials a run holds
 (D118).
-Next: the canary on the operator's Linux and macOS machines, and HOST_ISOLATION's settled parts moved to DESIGN.
+HOST_ISOLATION's settled parts are DESIGN §24 now, with its answered questions beside what they settled; HOST_ISOLATION
+keeps the problem, goals, and options, and points each later section there.
+Next: the canary on the operator's Linux and macOS machines.
 
 ## M27. Session transcripts in the web UI
 

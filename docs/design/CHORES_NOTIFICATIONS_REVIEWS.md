@@ -129,7 +129,7 @@ detached, like `_run` (§8 step 4). `_chore` claims the run by pid, drops `CANOP
 with the timeout, records the agent's pid, parses the result, and closes the row. Output goes to
 `<state_dir>/chore-runs/<name>/<run_id>.log`. No lease, branch, or push, so nothing to return or verify. Run files are
 kept by chore, and out of `<state_dir>/chores/<name>/`: that is the agent's working directory, which a sandbox lets it
-write (HOST_ISOLATION), and its own log and prompt are not its to read back or rewrite. A run's prompt is found beside
+write (§24), and its own log and prompt are not its to read back or rewrite. A run's prompt is found beside
 the log its row names, so a run started before this layout reads its prompt where it was written.
 
 The prompt is the operator's file plus a generated `## Run` section holding one JSON object: chore name, current time,
@@ -505,7 +505,8 @@ Slack sink only as a configured command.
 ### Commands
 
 - `canopy notify test [SINK]` sends a `test` message to every sink, or one, now, outside any tick, and prints each
-  result. It changes no cursor or table, and refuses when `CANOPY_TICK_ID` is set, so the overseer cannot page.
+  result. It changes no cursor or table, and refuses when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, so neither the
+  overseer nor a worker, review, or chore can page.
 - `canopy status` shows a line per sink: last delivery, consecutive failures and last error, events waiting.
 
 ### Two-way, later
@@ -599,7 +600,7 @@ max_reviews_per_pr = 3     # shared; the repository may only lower it
 - `low_impact` is plain language for the reviewer, like a chore's `when`: which changes it may call `low`. Without it,
   the reviewer never reports `low`.
 - `review_cmd` follows the command template rules (§12). A different model from `worker_cmd` is recommended. To
-  sandbox it, prefix it with `canopy-sandbox review` (HOST_ISOLATION §4.4, docs/SANDBOX.md): that policy reads the
+  sandbox it, prefix it with `canopy-sandbox review` (§24, docs/SANDBOX.md): that policy reads the
   checkout through the run directory's link and writes none of it.
 
 ### Off unless configured
@@ -724,7 +725,8 @@ For PRs from `review.query`, the overseer runs the query each tick and keeps onl
 PRs it reads for tickets); `_review` could not fetch another repository's commit from `origin`. The prompt says so; a
 `repo:` qualifier saves the reads. For each open match whose head commit has no `done` review, it runs a review or
 records `canopy review wait --pr URL --rationale "<text>"` (say, checks still running, or a draft). Nothing else is
-decided about these PRs.
+decided about these PRs. `review wait` and `attention --pr` take only a plain https:// URL of at most 300 characters,
+and refuse anything else as misuse, exit 2, recording nothing; `review run` records a malformed one as `refused:bad_pr`.
 
 Review decisions are `decisions` rows with the PR's URL in the `pr` column: `dispatch:review`, `wait`,
 `refused:<guard>`, and `attention:<reason>`. An agent PR's rows also carry its ticket key.

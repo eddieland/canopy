@@ -41,7 +41,7 @@ for sink in canopy-notify-desktop canopy-notify-slack; do
     usage=$("$sink" --help </dev/null) || fail "$sink --help failed"
     echo "$usage" | grep -q "^usage: $sink " || fail "$sink --help did not print the sink's usage"
 done
-# The sandbox wrapper too (HOST_ISOLATION §4.1). It refuses to run without a role, naming itself.
+# The sandbox wrapper too (DESIGN §24). It refuses to run without a role, naming itself.
 [ "$(command -v canopy-sandbox)" = "$UV_TOOL_BIN_DIR/canopy-sandbox" ] || fail "canopy-sandbox was not installed"
 status=0
 usage=$(canopy-sandbox 2>&1 </dev/null) || status=$?

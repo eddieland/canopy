@@ -1,4 +1,4 @@
-"""Run an agent command inside `srt` with a policy made for this run (HOST_ISOLATION §4).
+"""Run an agent command inside `srt` with a policy made for this run (DESIGN §24).
 
 A prefix on a command template in canopy's user config:
 
@@ -101,9 +101,9 @@ RUN_PARENTS = ("runs", "chores", "reviews")
 PLACEHOLDER = re.compile(r"@[A-Z_]+@")
 # What a worktree's own git directory holds that git reads as config or as where the rest of the repository is. With
 # `commondir` rewritten, every git on the host in the slot, canopy's and treehouse's, reads a config and hooks the
-# worker wrote (HOST_ISOLATION §4.2).
+# worker wrote (DESIGN §24).
 GIT_OWN_PROTECTED = ("config.worktree", "commondir", "gitdir")
-# The git the wrapper runs reads a slot a worker had, on the host: nothing from it may run (HOST_ISOLATION §5 item 1).
+# The git the wrapper runs reads a slot a worker had, on the host: nothing from it may run (DESIGN §24).
 SAFE_GIT = (
     "git",
     "-c",
@@ -123,7 +123,7 @@ SHELL_STARTUP = ("BASH_ENV", "ENV")
 # The `git` the command finds first on PATH, for a worker or setup (git_shim). POSIX sh, so that a git call costs one
 # more git to find the repository, not a Python start.
 GIT_SHIM = r"""#!/bin/sh
-# canopy-sandbox's git, first on PATH (HOST_ISOLATION §4.2). In the run's worktrees, git writes new objects to the
+# canopy-sandbox's git, first on PATH (DESIGN §24). In the run's worktrees, git writes new objects to the
 # run's object directory and reads each worktree's shared ones as well. Any other repository, such as a cache a tool
 # keeps as a git repository, keeps its objects in its own directory, as it would without a sandbox.
 real=@REAL@
