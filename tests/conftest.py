@@ -129,8 +129,7 @@ class CanopyEnv:
 
     `repo` is the repository's primary clone, `repos/repo`: just a `.git` directory. `shared_file` is the workspace
     file, whose `[tracker]` table comes last so that a test can append tracker keys to it; the user file ends with an
-    empty `[paths]` table, for paths keys. `query_roots` are the workspaces the user file has a tracker query for:
-    `root`, and any a fixture adds.
+    empty `[paths]` table, for paths keys.
     """
 
     root: Path
@@ -139,7 +138,6 @@ class CanopyEnv:
     user_file: Path
     shared_file: Path
     journals: Journals
-    query_roots: list[Path] = field(default_factory=list)
 
     @property
     def state_dir(self) -> Path:
@@ -150,17 +148,8 @@ class CanopyEnv:
         return self.journals.open(self.state_dir / db.DB_FILE_NAME, migrate=migrate)
 
     def write_user(self, text: str) -> None:
-        """Write the user file, led by a tracker query for each of `query_roots` unless `text` has its own."""
-        if "[tracker.queries]" not in text:
-            text = queries_toml(*self.query_roots) + text
         self.user_file.parent.mkdir(parents=True, exist_ok=True)
         self.user_file.write_text(text)
-
-    def add_query_root(self, root: Path) -> None:
-        """Give the workspace at `root` a tracker query too, as an operator does for each workspace they add."""
-        text = self.user_file.read_text().removeprefix(queries_toml(*self.query_roots))
-        self.query_roots.append(root)
-        self.write_user(text)
 
     def write_shared(self, text: str) -> None:
         self.shared_file.write_text(text)
@@ -177,16 +166,8 @@ summary = "The only repository."
 
 [tracker]
 provider = "jira"
+query = "project = PROJ"
 """
-QUERY = "project = PROJ"
-
-
-def queries_toml(*roots: Path) -> str:
-    """A `[tracker.queries]` table giving each workspace in `roots` the query `QUERY`; empty without any."""
-    if not roots:
-        return ""
-    entries = "".join(f"{json.dumps(str(root))} = {json.dumps(QUERY)}\n" for root in roots)
-    return f"[tracker.queries]\n{entries}\n"
 
 
 def user_toml() -> str:
@@ -222,7 +203,6 @@ def canopy_env(tmp_path: Path, journals: Journals) -> Iterator[CanopyEnv]:
         user_file=home / ".config" / "canopy" / "config.toml",
         shared_file=root / "canopy-workspace.toml",
         journals=journals,
-        query_roots=[root],
     )
     env.write_shared(SHARED_TOML)
     env.write_user(user_toml())

@@ -12,7 +12,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import config, workspace
 from canopy.core.config import load
-from canopy.setup.init import EXAMPLE_QUERIES, is_ssh_url, sandbox_suggestion
+from canopy.setup.init import is_ssh_url, sandbox_suggestion
 from tests.conftest import CanopyEnv
 
 
@@ -54,13 +54,12 @@ def test_init_writes_only_keys_without_a_useful_default(canopy_env: CanopyEnv, e
     assert main(["init", "--provider", "jira"]) == 0
     user = tomllib.loads(canopy_env.user_file.read_text())
     shared = tomllib.loads((empty / config.WORKSPACE_FILE_NAME).read_text())
-    # The query is the operator's, per workspace: one user file serves every workspace (DESIGN §12).
     assert user == {
-        "tracker": {"labels": ["agent-ready-tester"], "queries": {str(empty): EXAMPLE_QUERIES["jira"]}},
+        "tracker": {"labels": ["agent-ready-tester"]},
         "trust": {"authorized_repliers": [], "trusted_reviewers": []},
     }
     assert sorted(shared) == ["tracker", "workspace"]
-    assert sorted(shared["tracker"]) == ["provider"]
+    assert sorted(shared["tracker"]) == ["provider", "query"]
 
 
 def test_init_in_a_workspace_never_overwrites_configs(
