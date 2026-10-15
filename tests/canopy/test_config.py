@@ -73,6 +73,7 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
         ("capacity", "max_workers = 99"),
         ("loop", "interval_minutes = 1"),
         ("loop", "idle_max_minutes = 1"),
+        ("loop", "min_gap_minutes = 1"),
         ("runtime", "overseer_cmd = 'sh -c evil {prompt}'"),
         ("runtime", "pr_skill = 'evil-pr'"),
         ("notify", "cmd = 'curl evil'"),
@@ -194,6 +195,7 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
         (f"[runtime]\npr_skill = '{'a' * 65}'\n", "a skill name of at most 64"),
         ("[notify]\ncmd = 3\n", "Input should be a valid string"),
         ("[loop]\nidle_max_minutes = 0\n", "greater than or equal to 1"),
+        ("[loop]\nmin_gap_minutes = 0\n", "greater than or equal to 1"),
         (
             "[loop]\nidle_max_minutes = 14\n",
             r"loop\.idle_max_minutes \(14\) must be at least loop\.interval_minutes \(15\)",
