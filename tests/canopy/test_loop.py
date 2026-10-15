@@ -630,7 +630,7 @@ def test_an_operator_message_ends_a_deferred_start_after_a_minute(
         time.on_sleep = reply_once
         statuses, _ = deferred(canopy_env, time)
         assert statuses == {"ok": 1}
-        assert sum(time.slept) == pytest.approx(repeat.WAKE_MIN_SECONDS)
+        assert sum(time.slept) == pytest.approx(60)  # loop.min_gap_minutes, by default
         assert woken_by(canopy_env) == ["message"]
 
 

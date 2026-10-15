@@ -173,7 +173,7 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(  # noqa: P
             )
             assert statuses == {"ok": 2}
             # Woken at once, but no sooner than a minute after the first tick began, not after 15 minutes.
-            assert sum(time.slept) == pytest.approx(repeat.WAKE_MIN_SECONDS)
+            assert sum(time.slept) == pytest.approx(60)  # loop.min_gap_minutes, by default
             resumed = wait_for_run(conn, int(last_run(conn)["id"]))
             assert (resumed["kind"], resumed["private"], resumed["status"]) == ("resume", 1, "done")
             prompt = (canopy_env.state_dir / "runs" / f"{resumed['id']}.prompt").read_text()
