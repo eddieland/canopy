@@ -268,7 +268,7 @@ Approved with M9:
   attention instead of dispatching `fix-ci`). Only to hold work back or raise attention, never to make a ticket a
   candidate, and opt-in per chore.
 - Whether `workspaces` should become a per-workspace table in the user file.
-- Whether a repository should offer chores operators opt into by name, as it offers its tracker query.
+- Whether a repository should offer chores operators opt into by name.
 - Whether a chore should get checkouts of the workspace's repositories, for a tool that reads files rather than
   GitHub (today the operator keeps a checkout current and points `cwd` at it). The parts exist: a review's detached
   checkout, linked from a private directory so no repository config loads (§21), and a desk for several (§18). Likely
@@ -572,7 +572,7 @@ max_reviews_per_pr = 3     # shared; the repository may only lower it
 
 - `agent_prs` defaults to false. `query` is the VCS host's PR search syntax, empty by default. Reviews are on when
   `max_reviews` is above 0 and either is set.
-- `review.query` authorizes, unlike `tracker.query` (§17). Without an author filter it reviews other people's PRs in
+- `review.query` authorizes, unlike the tracker query (§17). Without an author filter it reviews other people's PRs in
   the operator's name; allowed, and the operator's choice (TRUST_MODEL §7).
 - `low_impact` is plain language for the reviewer, like a chore's `when`: which changes it may call `low`. Without it,
   the reviewer never reports `low`.

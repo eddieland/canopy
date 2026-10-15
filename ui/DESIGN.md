@@ -410,7 +410,8 @@ list, an empty state, or a skeleton by hand.
   when the list has two items or more. Search has none: its hits are each source's newest few, so flipped they would
   read as its oldest.
 - **A list that grows without bound scrolls inside its panel** (`PanelScroll`) when other panels sit under it in the
-  same column: a ticket's recent runs and decisions, a chore's open findings and recent runs. Past `28rem` the rows
+  same column: a ticket's recent runs and decisions, a chore's open findings and recent runs, the spend page's days
+  (past `15rem`, under its pinned column names, so a week shows whole and 30 days scroll). Past `28rem` the rows
   scroll under the panel's header, with a thin scrollbar, so the panels below stay in reach. The region takes focus,
   so the keyboard scrolls it too. A list that is its page's main content (the runs page, a tick's decisions) does
   not: the page scrolls instead.
@@ -477,8 +478,9 @@ list, an empty state, or a skeleton by hand.
 - **The spend chart** (the spend page): a bar per UTC day, the series stacked bottom up in `SERIES` order, idle
   overseer spend on the baseline so it compares across days, each segment as tall as its share of the dearest day.
   A bar says its day and each series' cost on hover. The chart is `aria-hidden`: the table under it, newest day first,
-  holds the same numbers for a screen reader, each a `Cost`. A week names every day on the axis; 30 days every fifth,
-  back from today. The window is a segmented control (`ToggleGroup`) in the totals' panel header, kept in `?days=`.
+  holds the same numbers for a screen reader, each a `Cost`, and scrolls past a week (`PanelScroll`). A week names
+  every day on the axis; 30 days every fifth, back from today. The window is a segmented control (`ToggleGroup`) in
+  the totals' panel header, kept in `?days=`.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.
