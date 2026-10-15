@@ -158,8 +158,8 @@ good. It is never removed earlier: a `running` row with no file would be asked a
 2. Apply pending migrations before the first tick. Start the web UI's server in a thread, unless `--no-serve` or
    `serve.enabled = false`; without a usable listener secret, say why and serve nothing (§22). The header names its
    URL. With `--defer`, wait that many minutes from here before the first tick; the header says when it will run. The
-   wait ends early as the one in step 5 does, by an operator message (no sooner than a minute after the loop started)
-   or `t`, and a stop during it ends the loop with no tick.
+   wait ends early as the one in step 5 does, by an operator message (no sooner than `loop.min_gap_minutes` after the
+   loop started) or `t`, and a stop during it ends the loop with no tick.
 3. Run a tick exactly as `canopy tick` does, passing `--dry-run` through. An error the tick code does not handle ends
    that tick as `error` in the loop's output; the traceback goes to the log and the loop goes on. The next tick closes
    the row left `running` as `abandoned`.
@@ -169,10 +169,13 @@ good. It is never removed earlier: a `running` row with no file would be asked a
 5. Wait, measured from the end of the tick, for `--every`, else `loop.interval_minutes`, whatever the tick's status,
    lengthened after idle ticks and ended at a gate (Idle pacing, below). This pacing rule is `pacing.wait`; it does
    not read tick cost (ROADMAP M13, deferred). An operator message recorded since the tick began, such as a
-   `canopy reply`, ends the wait early, but no sooner than a minute after the tick began (`repeat.WAKE_MIN_SECONDS`;
-   §22); so does a run ending (below). On a terminal, pressing `t` (`repeat.TICK_NOW_KEY`, either case) ends it at
-   once, with no floor (the floor guards against bursts of messages; a keypress is deliberate); keys pressed during the
-   tick are dropped, but `p` (below). While the loop is paused, the wait does not end at its deadline (Pausing, below).
+   `canopy reply`, ends the wait early (§22); so does a run ending (below). The wait never ends sooner than
+   `loop.min_gap_minutes` (user-only, default 1) after the tick began, whatever ended it: the deadline, a gate, or an
+   early wake. Measured from the tick's start, it bounds how often the overseer runs: a burst of messages, runs ending
+   one after another, or a gate opening just after a tick would otherwise run ticks back to back. On a terminal,
+   pressing `t` (`repeat.TICK_NOW_KEY`, either case) ends it at once, with no floor (a keypress is deliberate, as a
+   `canopy tick` by hand is); keys pressed during the tick are dropped, but `p` (below). While the loop is paused, the
+   wait does not end at its deadline (Pausing, below).
 6. Repeat from 3 until `--ticks N` ticks have run or the operator stops the loop.
 
 Pausing (taken on request, 2026-10-13): the operator can hold the loop's ticks without stopping it, so the web UI
@@ -282,22 +285,23 @@ starts at `base`, and a hand-run `canopy tick` between the loop's ticks counts l
 
 Whatever pacing chose, the wait ends no later than the earliest harness gate still ahead when the tick ends, both what
 the state block shows: a `fix-ci` cooldown's end (§8) and a configured chore's `due_at` (§19). A gate opening is acted
-on when it opens, even sooner than `base`. One already open, such as a chore the overseer passed over because its `when`
-says not now, sets no deadline, so it cannot make the loop spin.
+on when it opens, even sooner than `base`, though no sooner than `loop.min_gap_minutes` after the tick began. One
+already open, such as a chore the overseer passed over because its `when` says not now, sets no deadline, so it cannot
+make the loop spin.
 
-Besides the operator's acts (§22), the wait ends early, with the same one-minute floor (`repeat.WAKE_MIN_SECONDS`), when
-a run, chore run, or review run ended after the tick read the journal for the overseer's state (`ticks.read_at`): after
-anything that tick could have seen. A run that ends while the overseer is running is picked up a minute after the tick
-began, not a full interval later. The tick that follows is not idle, so the wait after it is `base` again, and the tick
-after that looks for the CI on a worker's push at today's pace. That holds at any count, so a long wait never sits on
+Besides the operator's acts (§22), the wait ends early, with the same floor (`loop.min_gap_minutes`), when a run, chore
+run, or review run ended after the tick read the journal for the overseer's state (`ticks.read_at`): after anything
+that tick could have seen. A run that ends while the overseer is running is picked up that floor after the tick began,
+not a full interval later. The tick that follows is not idle, so the wait after it is `base` again, and the tick after
+that looks for the CI on a worker's push at today's pace. That holds at any count, so a long wait never sits on
 canopy's own work.
 
 What idle pacing cannot see is the world: a teammate's review comment or a PR's CI going red is picked up at the next
 tick, up to `loop.idle_max_minutes` late. That cap is the trade, and the operator's knob. A sink's digest (§20) is due
 at a delivery, so it can lag by as much. The header names the cap, the per-tick block shows the count with the wait,
 as `idle 3, next tick in 1h at 03:41` (no count after a tick that was not idle), and the `loop started` log line
-records `idle_max_minutes`; each tick's `loop waits` line records whether it was idle, the count, the wait chosen, in
-seconds, and `churn`, below.
+records `idle_max_minutes` and `min_gap_minutes`; each tick's `loop waits` line records whether it was idle, the
+count, the wait chosen, in seconds, and `churn`, below.
 
 Churn (ROADMAP M28) is a tick that changes what the overseer records with nothing new to see: it relabels a phase, or
 adds or drops an attention item, when nothing reached the journal since the tick before read it. A churned tick is not

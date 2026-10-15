@@ -297,11 +297,11 @@ During the wait (§6, the loop), each step checks the journal for the operator's
 since the last tick began; a ticket started or stopped (`starts`), or attempts or a PR's reviews granted
 (`canopy grant`), since the last tick read the journal (or began, when it read nothing). A note to a chore (§19) does
 not wake it: the chore's next run reads it. Nor does a config reload (§6). Any of those acts ends the wait and runs the
-next tick, at most once a minute, whether idle pacing is on or not; the tick records what woke it in `ticks.woken_by`
-(`message`, `starts`, `grant`) and is not idle. Every channel wakes it the same way, whether the act came from another
-process (`canopy start`) or the loop's own server thread (D073). Capacity, attempt limits, and cooldowns hold as for any
-tick. Before M28 only a message woke it, so a start from the web UI waited for the timer or a "tick now" (MEASUREMENTS
-2026-10-12, F3).
+next tick, no sooner than `loop.min_gap_minutes` after the last one began, whether idle pacing is on or not; the tick
+records what woke it in `ticks.woken_by` (`message`, `starts`, `grant`) and is not idle. Every channel wakes it the
+same way, whether the act came from another process (`canopy start`) or the loop's own server thread (D073).
+Capacity, attempt limits, and cooldowns hold as for any tick. Before M28 only a message woke it, so a start from the
+web UI waited for the timer or a "tick now" (MEASUREMENTS 2026-10-12, F3).
 
 ### Channels
 

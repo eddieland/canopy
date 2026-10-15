@@ -573,6 +573,8 @@ class Loop(Section):
     interval_minutes: Annotated[Minutes, Scope.USER] = 15
     # The longest wait after idle ticks in a row (DESIGN §6, Idle pacing). Not above the interval, idle pacing is off.
     idle_max_minutes: Annotated[Minutes, Scope.USER] = 120
+    # The least time from one tick's start to the next's, whatever ends the wait, but `TICK_NOW_KEY` (DESIGN §6).
+    min_gap_minutes: Annotated[Minutes, Scope.USER] = 1
 
     @model_validator(mode="after")
     def _cap_not_below_interval(self) -> Loop:
