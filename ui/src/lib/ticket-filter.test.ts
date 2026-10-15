@@ -12,7 +12,8 @@ describe('ticketShowOf', () => {
     it('keeps a filter the page offers and drops anything else', () => {
         expect(ticketShowOf('waiting')).toBe('waiting')
         expect(ticketShowOf('done')).toBe('done')
-        expect(ticketShowOf('blocked')).toBeUndefined()
+        expect(ticketShowOf('blocked')).toBe('blocked')
+        expect(ticketShowOf('stuck')).toBeUndefined()
         expect(ticketShowOf(['done'])).toBeUndefined()
         expect(ticketShowOf(undefined)).toBeUndefined()
     })
@@ -37,20 +38,27 @@ describe('ticketShown', () => {
     const open = ticket({ done: false, awaiting: null, running_run: null })
     const working = ticket({ running_run: 41, awaiting: null })
     const waiting = ticket({ awaiting: 5, running_run: null })
+    const blocked = ticket({ phase: 'blocked', awaiting: null, running_run: null })
     const done = ticket({ done: true, awaiting: null, running_run: null })
 
     it('shows every ticket with no filter', () => {
-        for (const t of [open, working, waiting, done]) {
+        for (const t of [open, working, waiting, blocked, done]) {
             expect(ticketShown(t, undefined, undefined)).toBe(true)
         }
     })
 
     it('keeps the tickets standing where the filter says', () => {
-        const all = [open, working, waiting, done]
-        expect(all.filter((t) => ticketShown(t, 'open', undefined))).toEqual([open, working, waiting])
+        const all = [open, working, waiting, blocked, done]
+        expect(all.filter((t) => ticketShown(t, 'open', undefined))).toEqual([open, working, waiting, blocked])
         expect(all.filter((t) => ticketShown(t, 'working', undefined))).toEqual([working])
         expect(all.filter((t) => ticketShown(t, 'waiting', undefined))).toEqual([waiting])
+        expect(all.filter((t) => ticketShown(t, 'blocked', undefined))).toEqual([blocked])
         expect(all.filter((t) => ticketShown(t, 'done', undefined))).toEqual([done])
+    })
+
+    it('keeps a ticket an open blocker holds, not one whose run asked a question', () => {
+        expect(ticketShown(ticket({ phase: 'blocked' }), 'blocked', undefined)).toBe(true)
+        expect(ticketShown(ticket({ phase: 'needs_human', awaiting: 5 }), 'blocked', undefined)).toBe(false)
     })
 
     it('finds every word of the text in the key or title, in any case', () => {
