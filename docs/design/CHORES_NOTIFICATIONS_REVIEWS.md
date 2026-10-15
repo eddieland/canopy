@@ -505,7 +505,8 @@ Slack sink only as a configured command.
 ### Commands
 
 - `canopy notify test [SINK]` sends a `test` message to every sink, or one, now, outside any tick, and prints each
-  result. It changes no cursor or table, and refuses when `CANOPY_TICK_ID` is set, so the overseer cannot page.
+  result. It changes no cursor or table, and refuses when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, so neither the
+  overseer nor a worker, review, or chore can page.
 - `canopy status` shows a line per sink: last delivery, consecutive failures and last error, events waiting.
 
 ### Two-way, later
