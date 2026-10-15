@@ -154,6 +154,13 @@ The file is removed once the run's row is closed, by whichever process closed it
 lives, so a closed one needs no file, and without this every run would leave an empty `<id>.lock` beside its log for
 good. It is never removed earlier: a `running` row with no file would be asked after by its pid instead.
 
+Every kind of detached run has the same lifecycle, written once: its table is one of a closed set in `core/db.py`
+(`runs`, `chore_runs`, `review_runs`), and claiming a run by pid, recording its agent's pid, its report, and closing it
+take the table as an argument, never a string from input. Reconcile's shared part is `core/dead_runs.py`: the running
+rows whose process is gone, their agents killed, and a run closed `crashed` with its lifelock's file removed. Each kind
+adds only what is its own (a worker run's messages and slots, a review's slot), and a new kind of detached run adds its
+table to the set rather than another copy, so a fix to the claim or to the crash rule is made once.
+
 ### The loop
 
 `canopy loop [--dry-run] [--every MINUTES] [--ticks N] [--defer MINUTES] [--no-serve]` is how ticks are meant to run

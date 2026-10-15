@@ -130,7 +130,9 @@ def run_started(
 def run_ended(
     config: Config, run: sqlite3.Row, status: str, result_json: str | None
 ) -> Callable[[int | None], Event | None]:
-    """Return what builds the `run.ended` event for a run closing as `status` with `result_json`, for `db.finish_run`.
+    """Return what builds the `run.ended` event for a run closing as `status` with `result_json`.
+
+    `db.finish_ticket_run` calls it once it knows the run's messages.
 
     It is built from the id of the message the run recorded (`message`): its question for a `blocked` run and its
     report otherwise, so a channel can say what a reply answers (DESIGN §22). It is None if no sink takes runs.

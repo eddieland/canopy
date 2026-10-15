@@ -905,7 +905,7 @@ def close_run(conn: sqlite3.Connection, config: Config, run: sqlite3.Row, status
     Returns:
         True if this closed the run. False if it was already closed: nothing is recorded.
     """
-    return db.finish_run(
+    return db.finish_ticket_run(
         conn,
         int(run["id"]),
         status,

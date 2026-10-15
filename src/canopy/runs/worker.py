@@ -172,7 +172,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     run = db.get_run(ctx.conn, run_id)
     if run is None:
         raise WorkerError(f"no run {run_id}")
-    if not db.claim_run(ctx.conn, run_id, os.getpid()):
+    if not db.claim_run(ctx.conn, "runs", run_id, os.getpid()):
         raise WorkerError(f"run {run_id} is not waiting to start: it is {run['status']} or another process has it")
     slots = [_Slot.of(ctx, row) for row in db.run_slots(ctx.conn, run_id)]
     for slot in slots:
@@ -335,7 +335,7 @@ def _run_agent(
         # object directory; an unsandboxed worker ignores it (DESIGN §8).
         env={conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))},
         timeout=timeout_minutes * 60,
-        on_start=lambda pid: db.set_worker_pid(ctx.conn, run_id, pid),
+        on_start=lambda pid: db.set_agent_pid(ctx.conn, "runs", run_id, pid),
     )
     out.write(f"--- worker stdout ---\n{result.stdout}\n--- worker stderr ---\n{result.stderr}\n")
     out.write(f"--- worker exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
@@ -343,7 +343,7 @@ def _run_agent(
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
     output = agent_output.read(result.stdout)
     if output.session_id is not None or output.usage is not None:
-        db.set_run_report(ctx.conn, run_id, output.session_id, output.usage)
+        db.set_run_report(ctx.conn, "runs", run_id, output.session_id, output.usage)
         spent = output.usage.spent() if output.usage else {}
         log.info("worker reported", extra={"run_id": run_id, "session_id": output.session_id, **spent})
     return result, output.text
