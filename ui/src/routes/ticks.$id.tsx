@@ -21,6 +21,7 @@ import { tickRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId, tickState } from '@/lib/ticks'
 import { cn } from '@/lib/utils'
+import { None } from '@/components/none'
 
 /** One tick: the decisions it recorded, the overseer's transcript, and its output as written. */
 export const Route = createFileRoute('/ticks/$id')({
@@ -100,21 +101,21 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                         <Field label="ended" mono>
                             {tick.ended_at === null ? 'still running' : <Timestamp at={tick.ended_at} />}
                         </Field>
-                        <Field label="summary">{tick.summary ? <RichText text={tick.summary} /> : 'none'}</Field>
+                        <Field label="summary">{tick.summary ? <RichText text={tick.summary} /> : <None />}</Field>
                         <Field label="overseer" mono>
                             {tick.session_id ? (
                                 <Copyable text={tick.session_id} label="session id">
                                     session {tick.session_id}
                                 </Copyable>
                             ) : (
-                                'no session reported'
+                                <None />
                             )}
                         </Field>
                         <Field label="spent" mono>
                             <Cost usd={tick.cost_usd} />
                         </Field>
                         <Field label="output" mono title="the overseer's stdout and stderr: yours alone">
-                            {output ?? 'none kept'}
+                            {output ?? <None />}
                         </Field>
                     </Fields>
                 </Panel>

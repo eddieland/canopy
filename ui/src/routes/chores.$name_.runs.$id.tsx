@@ -17,8 +17,9 @@ import { TranscriptPanel } from '@/components/transcript'
 import { choreRef, choreRunRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
-import { tokenCount } from '@/lib/transcript'
+import { RUN_TOKENS_TITLE, runTokens } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
+import { None } from '@/components/none'
 
 /** One chore run: how it ended, the whole of what it reported, and its session's transcript. */
 export const Route = createFileRoute('/chores/$name_/runs/$id')({
@@ -131,10 +132,10 @@ function RunPanel({ detail }: { detail: ChoreRunDetail }) {
                     {run.ended_at === null ? 'still running' : <Timestamp at={run.ended_at} />}
                 </Field>
                 {detail.note && <Field label="harness">{detail.note}</Field>}
-                <Field label="summary">{detail.summary ? <RichText text={detail.summary} /> : 'none'}</Field>
+                <Field label="summary">{detail.summary ? <RichText text={detail.summary} /> : <None />}</Field>
                 <Field label="spent" mono>
                     <Cost usd={run.cost_usd} />
-                    {run.tokens === null ? '' : `, ${tokenCount(run.tokens)} tokens`}
+                    <span title={RUN_TOKENS_TITLE}>{runTokens(run.new_tokens, run.peak_context)}</span>
                 </Field>
                 <Field label="log" mono>
                     <span title="the chore's stdout and stderr: yours alone">{run.log_path}</span>

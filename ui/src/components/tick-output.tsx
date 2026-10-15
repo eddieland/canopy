@@ -55,7 +55,9 @@ export function TickOutputPanel({ id, path, running }: { id: number; path: strin
                     </span>
                 </PanelHeader>
                 {path === null ? (
-                    <Empty>{running ? 'no output yet: the overseer’s is written when it ends' : 'none kept'}</Empty>
+                    <Empty>
+                        {running ? 'no output yet: the overseer’s is written when it ends' : 'no output kept'}
+                    </Empty>
                 ) : (
                     <>
                         <CollapsibleContent>

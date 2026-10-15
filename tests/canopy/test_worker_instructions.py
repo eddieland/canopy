@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, prompts
+from canopy.core import db, prompts, records
 from canopy.core.config import load
 from tests.canopy.helpers import InlineRunner, in_tick, journal
 from tests.canopy.test_prompts import VALUES
@@ -35,7 +35,7 @@ def instruct(canopy_env: CanopyEnv, text: str | bytes) -> Path:
     return path
 
 
-def dispatch(conn: sqlite3.Connection) -> tuple[int, list[sqlite3.Row]]:
+def dispatch(conn: sqlite3.Connection) -> tuple[int, list[records.Decision]]:
     """Dispatch an `implement` of PROJ-1 in a tick, and return the exit code and the tick's decisions."""
     with in_tick(conn) as tick_id:
         code = main(
@@ -56,7 +56,7 @@ def test_the_operators_standing_instructions_reach_the_worker(
 ) -> None:
     instruct(canopy_env, f"\n{FIXUP}\n\n")
     code, decisions = dispatch(conn)
-    assert code == 0, [dict(d) for d in decisions]
+    assert code == 0, decisions
     assert section_of(canopy_env, conn) == FIXUP
 
 
@@ -64,7 +64,7 @@ def test_without_standing_instructions_the_section_says_none(
     canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
 ) -> None:
     code, decisions = dispatch(conn)
-    assert code == 0, [dict(d) for d in decisions]
+    assert code == 0, decisions
     assert section_of(canopy_env, conn) == "None."
 
 
@@ -91,8 +91,8 @@ def test_instructions_that_cannot_be_used_refuse_the_dispatch(
     code, decisions = dispatch(conn)
     assert code == 1
     [decision] = decisions
-    assert decision["action"] == "refused:bad_prompt"
-    assert error in decision["rationale"]
+    assert decision.action == "refused:bad_prompt"
+    assert error in decision.rationale
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
@@ -111,12 +111,12 @@ def test_an_override_without_the_placeholder_fails_closed_once_instructions_are_
     (overrides / "worker-implement.md").write_text("Implement {{KEY}} if it carries {{LABELS}}.\n")
     code, decisions = dispatch(conn)
     if not instructed:
-        assert code == 0, [dict(d) for d in decisions]
+        assert code == 0, decisions
         return
     assert code == 1
     [decision] = decisions
-    assert decision["action"] == "refused:bad_prompt"
-    assert "missing required placeholder {{STANDING_INSTRUCTIONS}}" in decision["rationale"]
+    assert decision.action == "refused:bad_prompt"
+    assert "missing required placeholder {{STANDING_INSTRUCTIONS}}" in decision.rationale
 
 
 @pytest.mark.parametrize("kind", ["implement", "fix-ci", "resume"])

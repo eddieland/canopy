@@ -16,7 +16,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import agent_output
+from canopy.core import agent_output, records
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -26,6 +26,8 @@ DB_FILE_NAME = "canopy.db"
 # How long a connection waits for another to release the write lock before its write fails as `database is locked`.
 BUSY_SECONDS = 10.0
 _MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
+# The rationale the overseer gives a `done` decision for a ticket the tracker reports closed (DESIGN §7).
+CLOSED_RATIONALE = "closed"
 
 # `canopy ticket set --cursor NAME=ID` names, and the column each one updates. The comment cursor is the ticket's; the
 # review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a private
@@ -510,6 +512,23 @@ def open_tickets(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute("SELECT * FROM tickets WHERE done = 0 ORDER BY key").fetchall()
 
 
+def recently_done(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
+    """Return the tickets marked done whose newest `done` decision is at or after `since`, by key (DESIGN §7).
+
+    Each row has `key` and `done_at`, that decision's time. Not one: a ticket marked done with no `done` decision since
+    the operator last forgot it, or whose newest one says `closed`, since the tracker reports a closed ticket closed,
+    and leaving it out lets the query find it again once it is reopened.
+    """
+    # Each done ticket's newest decision by `decisions_ticket`, not a scan of every decision ever recorded.
+    return conn.execute(
+        "SELECT t.key, d.created_at AS done_at FROM tickets t JOIN decisions d ON d.id = ("
+        "  SELECT max(id) FROM decisions WHERE ticket_key = t.key AND action = 'done'"
+        ") WHERE t.done = 1 AND d.created_at >= ? AND d.rationale != ? "
+        "AND (t.forgotten_at IS NULL OR d.created_at > t.forgotten_at) ORDER BY t.key",
+        (since, CLOSED_RATIONALE),
+    ).fetchall()
+
+
 # Runs and decisions
 
 # A run with its ticket's title as `ticket_title`, for display (DESIGN §13). Every query a page or `canopy status` shows
@@ -696,7 +715,8 @@ def usage_of(row: sqlite3.Row) -> Usage | None:
     """What a run, chore run, review run, or tick row says its agent cost, or None when the runtime reported nothing.
 
     Returns:
-        The row's cost and token counts, a missing count read as 0, or None when it has no cost.
+        The row's cost and token counts, a missing count read as 0 and a missing peak context as unknown, or None
+        when it has no cost.
     """
     if row["cost_usd"] is None:
         return None
@@ -707,6 +727,7 @@ def usage_of(row: sqlite3.Row) -> Usage | None:
         reasoning=int(row["tokens_reasoning"] or 0),
         cache_read=int(row["tokens_cache_read"] or 0),
         cache_write=int(row["tokens_cache_write"] or 0),
+        peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
     )
 
 
@@ -718,13 +739,21 @@ def _set_report(
     usage: Usage | None,
 ) -> None:
     spent = (
-        (usage.cost_usd, usage.input, usage.output, usage.reasoning, usage.cache_read, usage.cache_write)
+        (
+            usage.cost_usd,
+            usage.input,
+            usage.output,
+            usage.reasoning,
+            usage.cache_read,
+            usage.cache_write,
+            usage.peak_context,
+        )
         if usage is not None
-        else (None,) * 6
+        else (None,) * 7
     )
     conn.execute(
         f"UPDATE {table} SET session_id = ?, cost_usd = ?, tokens_input = ?, tokens_output = ?, "  # noqa: S608
-        "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ? WHERE id = ?",
+        "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ?, tokens_peak_context = ? WHERE id = ?",
         (session_id, *spent, row_id),
     )
 
@@ -1208,21 +1237,25 @@ def has_runs(conn: sqlite3.Connection, key: str) -> bool:
     return conn.execute("SELECT 1 FROM runs WHERE ticket_key = ? LIMIT 1", (key,)).fetchone() is not None
 
 
-def decisions_for_tick(conn: sqlite3.Connection, tick_id: int) -> list[sqlite3.Row]:
+def decisions_for_tick(conn: sqlite3.Connection, tick_id: int) -> list[records.Decision]:
     """Return a tick's decisions in the order they were recorded."""
-    return conn.execute("SELECT * FROM decisions WHERE tick_id = ? ORDER BY id", (tick_id,)).fetchall()
+    return records.fetch_all(
+        conn, records.Decision, "SELECT * FROM decisions WHERE tick_id = ? ORDER BY id", (tick_id,)
+    )
 
 
-def decisions_about(conn: sqlite3.Connection, key: str, limit: int) -> list[sqlite3.Row]:
+def decisions_about(conn: sqlite3.Connection, key: str, limit: int) -> list[records.Decision]:
     """Return the latest `limit` decisions about ticket `key`, its units' included, across ticks, newest first."""
-    return conn.execute(
-        "SELECT * FROM decisions WHERE ticket_key = ? ORDER BY id DESC LIMIT ?", (key, limit)
-    ).fetchall()
+    return records.fetch_all(
+        conn, records.Decision, "SELECT * FROM decisions WHERE ticket_key = ? ORDER BY id DESC LIMIT ?", (key, limit)
+    )
 
 
-def decisions_about_pr(conn: sqlite3.Connection, url: str, limit: int) -> list[sqlite3.Row]:
+def decisions_about_pr(conn: sqlite3.Connection, url: str, limit: int) -> list[records.Decision]:
     """Return the latest `limit` decisions that name the PR at `url`, across ticks, newest first."""
-    return conn.execute("SELECT * FROM decisions WHERE pr = ? ORDER BY id DESC LIMIT ?", (url, limit)).fetchall()
+    return records.fetch_all(
+        conn, records.Decision, "SELECT * FROM decisions WHERE pr = ? ORDER BY id DESC LIMIT ?", (url, limit)
+    )
 
 
 def last_decision_of(conn: sqlite3.Connection, key: str) -> str | None:

@@ -8,6 +8,7 @@ import { attentionQuery, choreQuery, pullRequestQuery, ticketQuery, ticketsQuery
 import type { AttentionItem } from '@/api/types'
 import { AllClear } from '@/components/all-clear'
 import { Age } from '@/components/age'
+import { ChoreFindingText } from '@/components/chore-finding'
 import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
 import { Conversation } from '@/components/conversation'
@@ -251,17 +252,22 @@ function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
     )
 }
 
-/** What the item says: its reason, subject, and age, an action beside them, and its detail with any notice below. */
+/**
+ * What the item says: its reason, subject, and age, an action beside them, and its detail, or a `body` in its place,
+ * with any notice below.
+ */
 function Head({
     item,
     done,
     action,
     notice,
+    body,
 }: {
     item: AttentionItem
     done: boolean
     action?: ReactNode
     notice?: ReactNode
+    body?: ReactNode
 }) {
     return (
         <div className="flex flex-col gap-2 border-b p-3">
@@ -272,9 +278,11 @@ function Head({
                 <Age at={item.since} className="ml-auto" />
                 {action}
             </div>
-            <p className="text-sm break-words whitespace-pre-wrap">
-                <InlineCode text={item.detail} />
-            </p>
+            {body ?? (
+                <p className="text-sm break-words whitespace-pre-wrap">
+                    <InlineCode text={item.detail} />
+                </p>
+            )}
             {done && (
                 <p className="text-sm text-muted-foreground" data-testid="answered-note">
                     You answered it. The item leaves at the next tick, when the loop reads your reply.
@@ -285,10 +293,17 @@ function Head({
     )
 }
 
-/** A chore's finding's head: as any item's, with the button that dismisses it beside its age. */
+/**
+ * A chore's finding's head: as any item's, with the button that dismisses it beside its age, and the finding as its
+ * chore's page shows it: the item's detail runs its title and link together and leaves out what it says of itself.
+ * Until the chore's page is read, or once the finding is gone from it, the item's detail stands in.
+ */
 function FindingHead({ item, chore, done }: { item: AttentionItem; chore: string; done: boolean }) {
     const { button, notice } = useDismissFinding(chore, item.reason, false)
-    return <Head item={item} done={done} action={button} notice={notice} />
+    const { data } = useQuery(choreQuery(chore))
+    const finding = data?.chore.findings.find((f) => f.id === item.reason)
+    const body = finding === undefined ? undefined : <ChoreFindingText finding={finding} />
+    return <Head item={item} done={done} action={button} notice={notice} body={body} />
 }
 
 function Subject({ item }: { item: AttentionItem }) {

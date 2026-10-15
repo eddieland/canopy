@@ -11,8 +11,8 @@ import { cn } from '@/lib/utils'
  * The search box atop the nav, on every page (DESIGN §22, Search). `/` focuses it from anywhere but a text field, and
  * Escape leaves it. Typing opens the search page once the operator pauses, replacing the history entry while the page
  * is open, so Back leaves the search rather than stepping through each keystroke; Enter opens it at once. While it
- * holds text, a clear button takes the keycap's place: it empties the box and keeps the focus there, leaving the page
- * as it is.
+ * holds text, a clear button takes the keycap's place: it empties the box and keeps the focus there. Emptying the box,
+ * by the button or by deleting its text, clears the search page if it is open, and leaves any other page as it is.
  */
 export function SearchBox() {
     const navigate = useNavigate()
@@ -48,17 +48,21 @@ export function SearchBox() {
 
     function open(text: string) {
         globalThis.clearTimeout(timer.current)
+        const onPage = matchRoute({ to: '/search' }) !== false
         const query = searchQueryOf(text)
         if (query === undefined) {
+            // An empty box empties the search page; a query too short to send leaves the last one's hits in place.
+            if (onPage && text.trim() === '') {
+                void navigate({ to: '/search', search: { q: undefined }, replace: true })
+            }
             return
         }
-        const onPage = matchRoute({ to: '/search' }) !== false
         void navigate({ to: '/search', search: { q: query }, replace: onPage })
     }
 
     function clear() {
-        globalThis.clearTimeout(timer.current)
         setValue('')
+        open('')
         input.current?.focus()
     }
 

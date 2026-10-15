@@ -31,7 +31,7 @@ def dispatch(key: str, *args: str, kind: str = "implement") -> list[str]:
 
 
 def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
-    return [(str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)]
+    return [(d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 def push_in(repo: str, message: str = "PROJ-1: the change") -> list[list[str]]:
@@ -192,8 +192,8 @@ def test_units_have_their_own_attempts_and_share_the_branch(ws: Ws, treehouse_st
             "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out --slug"
         )
         assert reasons["refused:attempt_limit"] == "PROJ-1 in api has had 2 implement runs and the limit is 2"
-        [limit] = [d for d in db.decisions_for_tick(conn, tick_id) if d["action"] == "attention:attempt_limit"]
-        assert limit["repo"] == "api"  # the item is about the unit at its limit
+        [limit] = [d for d in db.decisions_for_tick(conn, tick_id) if d.action == "attention:attempt_limit"]
+        assert limit.repo == "api"  # the item is about the unit at its limit
         assert {str(r["branch"]) for r in conn.execute("SELECT branch FROM runs")} == {"agent/PROJ-1-login"}
 
         # fix-ci's cooldown is per unit too: api's just ended, web has had none.

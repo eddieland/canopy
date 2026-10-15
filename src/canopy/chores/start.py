@@ -94,9 +94,7 @@ def check(ctx: Context, *, tick_id: int, name: str) -> Chore:
         Refusal: a guard refused.
     """
     planned = [
-        str(d["chore"])
-        for d in db.decisions_for_tick(ctx.conn, tick_id)
-        if d["action"] == DISPATCH_ACTION and d["chore"] is not None
+        d.chore for d in db.decisions_for_tick(ctx.conn, tick_id) if d.action == DISPATCH_ACTION and d.chore is not None
     ]
     with lock.hold(ctx.dispatch_lock_path, wait=True):
         return _guard(ctx, name, planned=planned)

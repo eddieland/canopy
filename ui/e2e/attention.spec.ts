@@ -54,6 +54,11 @@ test("a chore's finding opens the chore's notes and a form for another", async (
 
     const detail = page.getByTestId('attention-detail')
     await expect(detail.getByRole('link', { name: 'chore:deps' })).toBeVisible()
+    // The finding as its chore's page has it: its title, then what it says of itself, then its link on its own line.
+    const text = detail.getByTestId('finding-text')
+    await expect(text).toContainText('lodash 4.17.20 has a prototype pollution advisory')
+    await expect(text).toContainText('through an old date picker; 4.17.21 fixes it.')
+    await expect(text.getByRole('link')).toHaveAttribute('href', 'https://github.com/advisories/GHSA-35jh-r3h4-6jhm')
     await expect(detail.getByTestId('message-8')).toContainText("Leave out the docs site's lockfile")
     await expect(detail.getByTestId('message-8')).not.toContainText('waiting for the next run')
     await expect(detail.getByRole('form', { name: 'Note' })).toBeVisible()
@@ -80,7 +85,7 @@ test('the counters show the loop at a glance, and the nav counts the list by sev
     await expect(page.getByTestId('counter-waiting')).toContainText('1')
     await expect(page.getByTestId('counter-waiting')).toContainText('oldest')
     await expect(page.getByTestId('counter-attention')).toContainText('5')
-    await expect(page.getByTestId('counter-attention')).toContainText('1 failed · 1 waiting · 3 more')
+    await expect(page.getByTestId('counter-attention')).toContainText('1 broken, 1 waiting on you, 3 other')
 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /Runs/u }).click()
     await expect(page.getByTestId('nav-attention-failed')).toHaveText('1')

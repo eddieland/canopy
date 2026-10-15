@@ -289,8 +289,8 @@ def test_a_missing_include_file_refuses_the_dispatch_and_leases_nothing(
         assert main(dispatch("--slug", "work"), runner=InlineRunner()) == 1
 
     [decision] = db.decisions_for_tick(conn, tick_id)
-    assert decision["action"] == "refused:no_slot"
-    assert "failed to read include file" in decision["rationale"]
+    assert decision.action == "refused:no_slot"
+    assert "failed to read include file" in decision.rationale
     assert all(s["status"] == "available" for s in pool(treehouse_state))
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 

@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest'
 
 import { mockChores } from '@/api/mocks'
 
-import { awaitsRun, choreLine, dueText, runsText, windowText } from './chores'
+import {
+    awaitsRun,
+    cadenceText,
+    choreLine,
+    choreRunState,
+    dueText,
+    findingsReadout,
+    findingsText,
+    runsText,
+    windowText,
+} from './chores'
 
 const [deps] = mockChores
 if (!deps?.latest) {
@@ -42,11 +52,38 @@ describe('chores', () => {
         expect(runsText({ runs: 0, priced: 0 })).toBe('0')
     })
 
+    it('count the findings still waiting as open, and the dismissed ones apart, as canopy status does', () => {
+        expect(findingsText(deps.findings)).toBe('1 open finding')
+        expect(findingsText([])).toBe('0 open findings')
+        const waiting = { dismissed: false }
+        const dismissed = { dismissed: true }
+        expect(findingsText([waiting, dismissed, waiting])).toBe('2 open findings · 1 dismissed')
+        expect(findingsText([dismissed, dismissed])).toBe('0 open findings · 2 dismissed')
+        expect(findingsReadout(deps.findings)).toBe('1')
+        expect(findingsReadout([dismissed, waiting, dismissed])).toBe('1 · 2 dismissed')
+    })
+
     it('mark a note no run has read: one after the latest run started', () => {
         expect(awaitsRun({ at: '2026-10-08T07:00:00Z' }, deps)).toBe(false)
         expect(awaitsRun({ at: '2026-10-08T12:00:00Z' }, deps)).toBe(true)
         const running = { ...latest, status: 'running', started_at: '2026-10-08T12:20:00Z' }
         expect(awaitsRun({ at: '2026-10-08T12:00:00Z' }, { ...deps, running })).toBe(false)
         expect(awaitsRun({ at: '2026-10-08T12:00:00Z' }, { running: null, latest: null })).toBe(true)
+    })
+})
+
+describe('cadenceText', () => {
+    it('says how often a chore may start in minutes, as the config and the CLI do', () => {
+        expect(cadenceText(360)).toBe('every 360 minutes')
+        expect(cadenceText(1)).toBe('every minute')
+    })
+})
+
+describe('choreRunState', () => {
+    it('groups a chore run by its status as the server does', () => {
+        expect(choreRunState('running')).toBe('running')
+        expect(choreRunState('ok')).toBe('done')
+        expect(choreRunState('crashed')).toBe('failed')
+        expect(choreRunState('failed')).toBe('failed')
     })
 })

@@ -96,7 +96,7 @@ def idle(ctx: Context, outcome: tick.Outcome, seen: Before) -> bool:
     if previous is None or previous["read_at"] is None or previous["message_id"] is None:
         return False
     return (
-        all(_quiet(str(d["action"])) for d in db.decisions_for_tick(ctx.conn, outcome.tick_id))
+        all(_quiet(d.action) for d in db.decisions_for_tick(ctx.conn, outcome.tick_id))
         and attention.keys(attention.listed(ctx)) == attention.keys(seen.attention)
         and db.tickets_snapshot(ctx.conn) == seen.tickets
         and _nothing_since(ctx, previous)

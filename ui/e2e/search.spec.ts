@@ -37,6 +37,14 @@ test('every source that holds a word has its panel, in the server order', async 
         .locator('> section')
         .evaluateAll((panels) => panels.map((p) => p.dataset['testid']))
     expect(order).toEqual(['search-ticket', 'search-message', 'search-chore_run', 'search-decision'])
+
+    // A chore run's hit is named as the run, and opens the run's page, not its chore's.
+    await page
+        .getByTestId('search-chore_run')
+        .getByRole('link', { name: /^chore:[\w-]+#\d+$/u })
+        .first()
+        .click()
+    await expect(page).toHaveURL(/\/chores\/[\w-]+\/runs\/\d+$/u)
 })
 
 test('slash focuses the box from anywhere but a text field, and Escape leaves it', async ({ page }) => {
@@ -57,7 +65,7 @@ test('slash focuses the box from anywhere but a text field, and Escape leaves it
     await expect(box).not.toBeFocused()
 })
 
-test('the clear button empties the box and keeps the focus there, leaving the page as it is', async ({ page }) => {
+test('the clear button empties the box and the search page, keeping the focus in the box', async ({ page }) => {
     await page.goto('search?q=web')
     await settled(page)
     const box = page.getByRole('searchbox', { name: 'Search the journal' })
@@ -68,11 +76,39 @@ test('the clear button empties the box and keeps the focus there, leaving the pa
     await expect(box).toHaveValue('')
     await expect(box).toBeFocused()
     await expect(clear).toBeHidden()
-    await expect(page).toHaveURL(/\/search\?q=web$/u)
+    await expect(page).toHaveURL(/\/search$/u)
+    await expect(page.getByText('type at least 2 characters in the search box')).toBeVisible()
 
     await box.fill('stale requests')
     await expect(clear).toBeVisible()
     await expect(page).toHaveURL(/\/search\?q=stale(\+|%20)requests$/u)
+})
+
+test('deleting every character empties the search page, and elsewhere leaves the page as it is', async ({ page }) => {
+    await page.clock.install()
+    await page.goto('search?q=web')
+    await settled(page)
+    const box = page.getByRole('searchbox', { name: 'Search the journal' })
+    await box.press('End')
+    await box.press('Backspace')
+    await page.clock.runFor(1_000)
+    await expect(page).toHaveURL(/\/search\?q=we$/u)
+    await box.press('Backspace')
+    await page.clock.runFor(1_000)
+    // One character is too short to send, so the last query's hits stay.
+    await expect(page).toHaveURL(/\/search\?q=we$/u)
+    await expect(page.getByTestId('search-results')).toBeVisible()
+    await box.press('Backspace')
+    await page.clock.runFor(1_000)
+    await expect(page).toHaveURL(/\/search$/u)
+    await expect(page.getByText('type at least 2 characters in the search box')).toBeVisible()
+
+    await page.goto('ticks')
+    await settled(page)
+    await box.fill('web')
+    await box.fill('')
+    await page.clock.runFor(1_000)
+    await expect(page).toHaveURL(/\/ticks$/u)
 })
 
 test('a query the server would refuse asks for one, and one nothing holds says so', async ({ page }) => {

@@ -145,7 +145,8 @@ Rules:
   Attention counter splits them: broken in `status-failed`, waiting on the operator's answer in `status-blocked`, the
   rest muted, each only when there is one. Never in the section's rose, too near the failure color to tell apart at that
   size. Since color alone tells the numbers apart, they are said in words on hover and to a screen reader
-  (`1 broken, 1 waiting on you, 3 other`).
+  (`1 broken, 1 waiting on you, 3 other`), the words the Attention counter's line says under its value: one function
+  splits the count for both (`breakdown` in `src/lib/attention.ts`).
 - **The pause** is the header's standing action, since it is about the loop, not a page's subject: a ghost Pause
   button while the loop runs; paused, `paused · 3m` in `status-blocked` (the loop waits on the operator; when and
   from where on hover) and a Resume button. The button keeps one width in both states. It has no `Notice`: what it
@@ -373,6 +374,11 @@ list, an empty state, or a skeleton by hand.
   it is due`); `now` for what comes and goes rather than `yet` (`no open findings now`). A search that finds nothing
   says so; a page whose subject is missing says why. An error is never an `Empty`, and never a red sentence in a
   panel: it is a `Notice`, which names a refusal's guard.
+- **`None`** (`src/components/none.tsx`): what a field or a cell holds when it has no value, `none` in muted text in
+  its place's own type, never a sentence of its own. With a reason, the reason follows a colon; in a column too narrow
+  for it (`brief`), the reason is on hover. One phrase per concept: a summary, a branch, a PR, a session, or a tick's
+  output that was never recorded is `none`; a PR canopy only reviews has as its ticket `none: canopy only reviews it`
+  (`NO_TICKET` in `src/lib/words.ts`). A list with no rows is an `Empty`, not a `None`.
 - **`PanelSkeleton`** (`src/components/panel.tsx`): what a panel shows while its data has not arrived at all, `rows`
   shimmering bars, each shorter than the last. It takes the minimum height its content will (`min-h-72` for a page's
   main panel), so nothing moves when the data lands.
@@ -389,8 +395,9 @@ list, an empty state, or a skeleton by hand.
   finding, the rail's runs, the oldest question). The header's tick is the one exception: `3m ago` once it ended, so
   its line stays short. A moment shown whole is `Timestamp`, the local `Oct 8 10:30` with the ISO time the journal
   keeps on hover, beside its age on a run's, tick's, chore run's, or review's page; a raw ISO string is never shown. A
-  cost is `Cost`: `$0.42` as a readout, or a dash when nothing reported one, `none reported` on hover; never formatted
-  in place.
+  cost is `Cost`: `$0.42` as a readout, its dollars grouped by thousands (`$1,234.50`, `costText`, rounded to the cent
+  as the CLI rounds), or a dash when nothing reported one, `none reported` on hover; never formatted in place, a hat's
+  price included.
 - **A list in time can be flipped**, oldest first or newest first, from its panel's header (`OrderToggle`): every list
   in time order, which is a conversation, a chore's notes, a transcript, the runs page and a ticket's, chore's, or
   PR's runs, a ticket's, tick's, or PR's decisions, the ticks, the tickets, the PRs, and the reviews and a PR's. The
@@ -417,11 +424,11 @@ list, an empty state, or a skeleton by hand.
   head line leads with the ticket: the state, the key, and the title in the free column, then the run's id and chips.
   What goes under it starts under the title. A ticket that asked, got its answer, and asked again is one blocked row,
   not two. The state
-  filter goes by each ticket's latest run, and so do the rail's working runs and the Running counter's `N blocked`: a
-  blocked run a later one followed waits on nothing. A ticket's page lists its runs flat (`RunsTable`), since every row
-  there is the same ticket's. A run's line of links names its first three worktrees, then `+N more worktrees` with
-  every one on hover, never `+1 more`, which would take the room the fourth's path does: a ticket across many
-  repositories holds a slot in each, and its run's page lists them all.
+  filter goes by each ticket's latest run, and so do the rail's working runs and the Running counter's
+  `N waiting on you`: a blocked run a later one followed waits on nothing. A ticket's page lists its runs flat
+  (`RunsTable`), since every row there is the same ticket's. A run's line of links names its first three worktrees,
+  then `+N more worktrees` with every one on hover, never `+1 more`, which would take the room the fourth's path
+  does: a ticket across many repositories holds a slot in each, and its run's page lists them all.
 - **A total cost** (`CostTotalRow`) is the last row of a ticket's Work panel and a PR's Pull request panel: the total
   as a `readout` (`costText`, a dash when nothing reported one), then, muted, what it counted
   (`over 3 runs and 1 review, 1 unpriced`; `countedText`), since the page lists only the recent ones.
@@ -451,10 +458,13 @@ list, an empty state, or a skeleton by hand.
   and its word in that color. A run's journal says `done` where a tick's and a chore run's say `ok`: each is the CLI's
   word for its own, kept as it prints it, and both wear `status-done`, as a tick's `skipped` does (`tickState` in
   `src/lib/ticks.ts`).
+- **A run state named in words** (a filter's chip, a counter's line) is the operator's: `blocked`, a run that asked,
+  reads `waiting on you` (`RUN_WORD` in `src/lib/run-state.ts`), as the rail, the tickets list, and a question's chip
+  say it. The URL keeps `?state=blocked`, and a run's own status in its page's header stays the CLI's word.
 - **A ticket's title** (`TicketTitle`) follows its key, in medium weight, so it reads as the row's name and apart
   from what a run said under it; one line, cut to fit, the whole on hover. A ticket with none yet reads `untitled`,
-  muted, so its cell is never blank. A ticket's page heading sets the key in
-  muted mono before it. Nowhere too narrow to show more than a few letters of it.
+  muted, so its cell is never blank, the rail's working runs included, never the run's kind in its place. A ticket's
+  page heading sets the key in muted mono before it. Nowhere too narrow to show more than a few letters of it.
 - **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you, and
   attention; the spend is in the rail) and the worktrees page (working, held, needs a look, free, across every pool).
   The line under the value is cut to fit, and whole on hover, since it grows with the workspace (`4 pools unread`).
@@ -491,13 +501,17 @@ list, an empty state, or a skeleton by hand.
   title, semibold, after the key. A
   reason chip takes `status-failed` or `status-blocked` for the first two, plain otherwise. A finding's reason is its
   id, the agent's text, so its chip says `finding` and the id follows its chore in muted monospace. An item's detail
-  is the harness's line, with its `code` spans set as code and nothing else read (`InlineCode`). The list is
+  is the harness's line, with its `code` spans set as code and nothing else read (`InlineCode`), but for a GitHub PR's
+  address, which is a `PullRequestLink` (its name alone in a row, which is a link already), so a detail names a PR as
+  the rest of the page does. The harness names a run in it as `canopy show` reads one, `run:40`. The list is
   Attention, as the page and its counter are; what waits on the operator's answer is `waiting on you` wherever it
   shows: the counter, a question's chip in a conversation, the tickets list, and the rail. The selection is
   `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows, under the item, the ticket's
   actions and what it is stuck at (below), then its conversation and the reply form, as a ticket's page orders them;
   an item about a PR no ticket owns, its review limit; a chore's item (a finding or `chore_failed`) shows the chore's
-  notes and the note form, and a finding a ghost `dismiss` beside its age (`useDismissFinding`); an item about neither
+  notes and the note form, and a finding a ghost `dismiss` beside its age (`useDismissFinding`) and, in place of its
+  detail, the finding as its chore's page has it (`ChoreFindingText`): the title whole, then what it says of itself,
+  then its link on its own line, where the item's detail runs title and link together; an item about neither
   shows its detail and nothing to answer. The page keeps no list of the runs working now: the rail's, on every page,
   is the one, so one count of them shows at a time.
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
@@ -564,29 +578,37 @@ list, an empty state, or a skeleton by hand.
   keeps its order.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
-  `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` and **strong** inline.
+  `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` (at `text-xs`) and
+  **strong** inline.
   It reads nothing else: other markup, a labelled link's included, stays characters. Every piece is React text, and
   its text and strong pieces go through `LinkedText`, so a URL outside code is a link to itself. In a list's row it
   shows the first four lines and a `show N more lines` toggle in the accent; text one line over shows whole.
   A conversation's bubbles keep their own `whitespace-pre-wrap`.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
-  its latest run's state color, then its window (`windowText`), its open findings, and what its runs cost in the last
+  its latest run's state color, then how often it may start and its window (`cadenceText`: `every 360 minutes`, as
+  the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed
+  as `canopy status` counts them (`findingsText`: `1 open finding · 2 dismissed`; its page's findings panel the
+  same, `findingsReadout`: `1 · 2 dismissed`), and what its runs cost in the last
   24 hours and 30 days (`costText`, a dash when none reported a cost). Its page puts that spend in a table under its
   runs, a row a window: runs (`runsText`: `4, 1 unpriced`), total, average, p99, and max. A chore run is a row like a
   run's, its id as `chore:deps#2` (Names, below) linking to its page, with its findings as a chip on
   an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
   how long it has been open, and on the chore's page has `dismiss` after its age, or once dismissed a plain
   `dismissed` chip and `undo`: still reported, only off the attention list; its detail and link start under
-  its title. Its id leads the row in muted monospace. A row's own action is a ghost `xs`
+  its title. Its title is never cut: it is the finding's name and up to 200 characters, so it wraps, with the head
+  line on its first line's baseline. Its id leads the row in muted monospace, at most `12rem` wide; a longer one
+  wraps down beside the detail rather than squeeze the title. A row's own action is a ghost `xs`
   button in monospace in its head line, as the list-order toggle is, never a full button under the row; what it did
   goes under the row, once clicked.
 - **Names** (`src/lib/refs.ts`): what canopy keeps by id is named as the CLI reads a reference, `KIND:ID`, in rows,
   trails, titles, and the tab alike: `run:41`, `review:4`, `chore:deps`, and in the same grammar `tick:2`, which the
   CLI takes no reference for. A chore run has no reference of its own, so it is its chore's and its number,
   `chore:deps#2`, as GitHub writes an issue's. Each has a link component that opens its page (`RunLink`, `TickLink`,
-  `ReviewLink`, `ChoreLink`); a page's title calls the same function. A PR is named as GitHub writes a reference,
-  `org/repo#123` (`pullRequestLabel`; any other host's URL as written without `https://`), and only through
-  `PullRequestLink`.
+  `ReviewLink`, `ChoreLink`, `ChoreRunLink`), used wherever it is named, a message's head and a worktree's holder
+  included; a page's title calls the same function. A message is `#5`, as its conversation numbers it, and a worktree
+  slot `#3`, as treehouse does (`messageRef`, `slotRef`). Nothing builds a reference in place. A PR is named as
+  GitHub writes a reference, `org/repo#123` (`pullRequestLabel`; any other host's URL as written without
+  `https://`), and only through `PullRequestLink`.
 - **The label goes in, the icon goes out.** A PR or a ticket named anywhere is its name linking to its page in canopy,
   then a small icon (`LinkOut`) opening the same thing outside canopy in a new tab, named for a screen reader and on
   hover (`acme/web#88 on GitHub`, `ABC-102 in the tracker`): `PullRequestLink`, and `TicketLink` when
@@ -670,23 +692,26 @@ list, an empty state, or a skeleton by hand.
   what it did. The list of reviews is a `ReviewsTable`: the review's link, its run state's dot and its verdict in its
   worst finding's color (`verdictTone`: a blocking one's `status-failed`, a major one's
   `status-blocked`, else plain), so a review with a blocking finding never reads as calm as a clean one; its ticket
-  (or `review.query`, muted), the PR (`PullRequestLink`), the commit's first 7 characters, its impact, cost, and age.
-  A review's page colors its verdict the same way.
+  (or `None`, its reason on hover), the PR (`PullRequestLink`), the commit's first 7 characters, its impact, cost,
+  and age. A review's page colors its verdict the same way.
 - **A PR** (`/pull-requests`, `/pull-requests/pr?url=`) has a section of its own. A PR's row: the PR
-  (`PullRequestLink`, the URL on hover), its ticket and title (or `no ticket`, muted) and its unit's phase as a chip in
-  the free column, then the run working it now (a pulsing dot and `run:N`), its latest review (its state's dot,
-  `review:N`, and its verdict, in its worst finding's color; `not reviewed` muted), and its age. Its page: the PR's
-  name (`org/repo#123`) as the title with its phase as a chip, a link out under it as a ticket's page has, saying where
-  it goes (`on GitHub`) rather than repeating the title, then panels for its fields and total cost, with a grant of
+  (`PullRequestLink`, the URL on hover), its ticket and title (or `none: canopy only reviews it`, `None`) and its
+  unit's phase as a chip in the free column, then the run working it now (a pulsing dot and `run:N`), its latest
+  review (its state's dot, `review:N`, and its verdict, in its worst finding's color; `not reviewed` muted), and its
+  age. Its page: the PR's name (`org/repo#123`) as the title with its phase as a chip, a link out under it as a
+  ticket's page has, saying where it goes (`on GitHub`) rather than repeating the title, then panels for its fields
+  and total cost, with a grant of
   another review in its foot when it is at its review limit, its reviews (`ReviewsTable`), the runs that pushed to it
   (`RunsTable`), and its decisions. The journal keeps no PR's own title, so
   the page has none to show.
 - **Search** sits atop the nav on every page (`SearchBox`): a magnifier, the field, and `/` in a keycap, its shortcut
   from anywhere but a text field. While the field holds text, a ghost clear button (`X`, on the keycap's `bg-muted`
-  when hovered) takes the keycap's place: it empties the field and keeps the focus there, leaving the page as it is.
+  when hovered) takes the keycap's place: it empties the field and keeps the focus there. An empty field, by the
+  button or by deleting its text, empties the search page if it is open, and leaves any other page as it is.
   The search page has a panel per source with hits, in the server's order, its count in the header (`newest 20` when
-  the source has more). A hit is a row: where it opens (its ticket or chore with the run that said it, or the tick
-  that decided it), its label as a chip, the snippet with the query's words marked on the accent's tint
+  the source has more). A hit is a row: where it opens (its ticket or chore with the run that said it, a chore run
+  as itself, `chore:deps#2` opening its page, or the tick that decided it), its label as a chip (a chore run's status
+  as its dot and word, as its chore's page lists it), the snippet with the query's words marked on the accent's tint
   (`bg-accent/20`, `src/lib/search.ts`), and its age. A snippet links nothing, since it may cut a URL short. While
   the next query's hits load, the last ones stay, dimmed to 60%.
 - **Signed out**, the whole page is the sign-in card, centered on the canvas: no shell, nothing from the journal.

@@ -163,7 +163,7 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     output = agent_output.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
         db.set_chore_run_report(ctx.conn, run_id, output.session_id, output.usage)
-        spent = {"cost_usd": output.usage.cost_usd, "tokens": output.usage.tokens} if output.usage else {}
+        spent = output.usage.spent() if output.usage else {}
         log.info("chore reported", extra={"chore_run_id": run_id, "session_id": output.session_id, **spent})
     return outcome_of(done, output, chore)
 

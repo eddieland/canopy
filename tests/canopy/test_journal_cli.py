@@ -61,7 +61,7 @@ def test_decide_records_and_touches_ticket(canopy_env: CanopyEnv, conn: sqlite3.
     with in_tick(conn) as tick_id:
         assert main(["decide", "PROJ-1", "skip", "--rationale", "  blocked by PROJ-0  "]) == 0
         assert main(["decide", "skip", "--rationale", "mcp_unavailable: tracker"]) == 0
-        rows = [(d["ticket_key"], d["action"], d["rationale"]) for d in db.decisions_for_tick(conn, tick_id)]
+        rows = [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
         assert rows == [("PROJ-1", "skip", "blocked by PROJ-0"), (None, "skip", "mcp_unavailable: tracker")]
         ticket = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
         assert ticket["repo"] == str(canopy_env.root)
@@ -79,7 +79,7 @@ def test_long_text_is_truncated(canopy_env: CanopyEnv, conn: sqlite3.Connection)
     with in_tick(conn) as tick_id:
         assert main(["decide", "PROJ-1", "wait", "--rationale", "x" * 5000]) == 0
         [row] = db.decisions_for_tick(conn, tick_id)
-        assert len(row["rationale"]) == 2000
+        assert len(row.rationale) == 2000
 
 
 def test_attention_reason_format(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
@@ -125,7 +125,7 @@ def test_dry_run_dispatch_records_branch_cursors_and_context(canopy_env: CanopyE
             )
             == 0
         )
-        rows = [(d["action"], d["rationale"]) for d in db.decisions_for_tick(conn, tick_id)]
+        rows = [(d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
         assert rows == [
             (
                 "dispatch:implement",
@@ -209,14 +209,16 @@ def test_decisions_and_status_print_what_a_tick_cost(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:
     tick_id = db.start_tick(conn, dry_run=False)
-    usage = agent_output.Usage(cost_usd=0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0)
+    usage = agent_output.Usage(
+        0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0, peak_context=26_000
+    )
     db.set_tick_report(conn, tick_id, "ses_o1", usage)
     db.finish_tick(conn, tick_id, "ok", "0 decisions: none")
 
     assert main(["decisions"]) == 0
-    assert "\n  overseer session ses_o1  $0.50, 50.0k tokens\n" in capsys.readouterr().out
+    assert "\n  overseer session ses_o1  $0.50, 10.0k new tokens, 26.0k peak context\n" in capsys.readouterr().out
     assert main(["status"]) == 0
-    assert "Last tick: 1 ok, started 0s ago  $0.50, 50.0k tokens\n" in capsys.readouterr().out
+    assert "Last tick: 1 ok, started 0s ago  $0.50, 10.0k new tokens, 26.0k peak context\n" in capsys.readouterr().out
 
 
 def test_decisions_filters_by_ticket_and_reports_no_match(

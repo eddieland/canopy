@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from canopy.chores import reconcile as chore_reconcile
@@ -28,6 +28,10 @@ DONE_LINE = "CANOPY_TICK_DONE"
 CANOPY_CHECK = ("canopy", "--version")
 CANOPY_CHECK_TIMEOUT_SECONDS = 60
 CANOPY_UNAVAILABLE = attention.UNAVAILABLE
+# How long a ticket marked done stays in the state block's `recently_done`, so the overseer leaves it out while a human
+# has yet to close it in the tracker (DESIGN §7). One still open after that is read again and marked done again, which
+# lists it for as long once more.
+RECENTLY_DONE_DAYS = 30
 
 
 @dataclass(frozen=True)
@@ -69,7 +73,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
 
     def finish(status: str, summary: str, usage: agent_output.Usage | None = None) -> Outcome:
         db.finish_tick(ctx.conn, tick_id, status, summary)
-        spent = {"cost_usd": usage.cost_usd, "tokens": usage.tokens} if usage is not None else {}
+        spent = usage.spent() if usage is not None else {}
         log.info("tick finished", extra={"status": status, "summary": summary, **spent})
         return Outcome(tick_id, status, summary, usage)
 
@@ -107,6 +111,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         running=running,
         tickets=tickets,
         stopped=stopped,
+        recently_done=db.recently_done(ctx.conn, db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS))),
         units=db.all_units(ctx.conn),
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, [int(r["id"]) for r in [*running, *last_runs.values()]]),
@@ -138,10 +143,10 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     prefix = "dry run; " if dry_run else ""
     # A tick-wide skip (mcp_unavailable, tracker_unsupported) means the overseer could not see the world. Closing it
     # `ok` would make its empty list the attention list and notify every open item as resolved.
-    skips = [str(d["rationale"]) for d in decisions if d["ticket_key"] is None and d["action"] == "skip"]
+    skips = [d.rationale for d in decisions if d.ticket_key is None and d.action == "skip"]
     if skips:
         return finish("skipped", f"{prefix}overseer skipped the tick: {'; '.join(skips)}", usage)
-    actions = Counter(str(d["action"]) for d in decisions)
+    actions = Counter(d.action for d in decisions)
     counts = ", ".join(f"{action}={n}" for action, n in sorted(actions.items())) or "none"
     return finish("ok", f"{prefix}{actions.total()} decisions: {counts}", usage)
 

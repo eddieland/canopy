@@ -41,6 +41,23 @@ export function tokenCount(n: number): string {
     return String(n)
 }
 
+/**
+ * A run's tokens after its cost, as the CLI says them (`agent_output.Usage.describe`): `, 12.3k new tokens, 45.6k peak
+ * context`, the peak only when it was recorded, and nothing when the runtime reported no tokens.
+ */
+export function runTokens(newTokens: number | null, peakContext: number | null): string {
+    if (newTokens === null) {
+        return ''
+    }
+    const peak = peakContext === null ? '' : `, ${tokenCount(peakContext)} peak context`
+    return `, ${tokenCount(newTokens)} new tokens${peak}`
+}
+
+/** What a run's token counts mean, for the hover on them. */
+export const RUN_TOKENS_TITLE =
+    'new tokens: input, cache writes, output, and reasoning, summed over its model calls; cache reads are left out, ' +
+    'since each call reads again what the calls before it were sent. peak context: the most one call was sent.'
+
 /** What a transcript holds, counted. */
 export interface Tally {
     /** Tool calls. */

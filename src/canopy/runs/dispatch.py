@@ -179,9 +179,9 @@ def check(
     # Each stands for a run this dry run would have started: a worker run, or a review, which holds a slot too. A
     # review of a PR with no ticket is named by its PR, so it counts toward capacity and blocks no ticket.
     planned = [
-        str(d["ticket_key"] or f"pr:{d['pr']}")
+        d.ticket_key or f"pr:{d.pr}"
         for d in db.decisions_for_tick(ctx.conn, tick_id)
-        if str(d["action"]).startswith("dispatch:") and (d["ticket_key"] is not None or d["pr"] is not None)
+        if d.action.startswith("dispatch:") and (d.ticket_key is not None or d.pr is not None)
     ]
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
         _check_notice(ctx, tick_id, kind)
