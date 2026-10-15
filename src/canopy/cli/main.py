@@ -8,7 +8,7 @@ from collections.abc import Sequence
 import click
 
 from canopy.cli import chores, conversation, journal, loop, notify, reviews, runs, setup, spend, workspace
-from canopy.cli.common import Obj
+from canopy.cli.common import Group, Obj
 from canopy.core import config, db
 from canopy.infra import procs
 
@@ -39,7 +39,7 @@ def main(argv: Sequence[str] | None = None, runner: procs.Runner | None = None) 
     return result if isinstance(result, int) else 0
 
 
-@click.group(invoke_without_command=True, context_settings={"help_option_names": ["-h", "--help"]})
+@click.group(cls=Group, invoke_without_command=True, context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(package_name="canopy", prog_name="canopy", message="%(prog)s %(version)s")
 @click.pass_context
 def cli(ctx: click.Context) -> None:

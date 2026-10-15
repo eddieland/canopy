@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import click
 
-from canopy.cli.common import CliError, open_context, require_tick
+from canopy.cli.common import CliError, OverseerCommand, open_context, require_tick
 from canopy.cli.params import COMMENT_ID, REPO, SLUG, TICKET_KEY, CursorType, TextType, truncate
 from canopy.core import db
 from canopy.infra import logs
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     import sqlite3
 
 
-@click.command("dispatch")
+@click.command("dispatch", cls=OverseerCommand)
 @click.argument("key", type=TICKET_KEY)
 @click.option("--kind", required=True, type=click.Choice(policy.DISPATCH_KINDS))
 @click.option(

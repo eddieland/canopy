@@ -9,7 +9,7 @@ import sys
 import click
 
 from canopy.chores import execute, start, trial
-from canopy.cli.common import CliError, open_context, require_tick
+from canopy.cli.common import CliError, Group, OverseerCommand, open_context, require_tick
 from canopy.cli.params import CHORE, TextType, truncate
 from canopy.core import chore_view as view
 from canopy.core import conversation, db
@@ -17,12 +17,12 @@ from canopy.infra import logs, procs
 from canopy.loop import attention, tick
 
 
-@click.group("chore")
+@click.group("chore", cls=Group)
 def chore_group() -> None:
     """Run or wait on the operator's chores (the overseer), or run one now by hand (the operator)."""
 
 
-@chore_group.command("run")
+@chore_group.command("run", cls=OverseerCommand)
 @click.argument("name", type=CHORE)
 @click.option(
     "--context",
@@ -59,7 +59,7 @@ def cmd_chore_run(click_ctx: click.Context, name: str, context: str | None) -> i
     return 0
 
 
-@chore_group.command("wait")
+@chore_group.command("wait", cls=OverseerCommand)
 @click.argument("name", type=CHORE)
 @click.option("--rationale", required=True, type=TextType())
 @click.pass_context
