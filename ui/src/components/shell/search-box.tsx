@@ -1,11 +1,9 @@
 import { useMatchRoute, useNavigate, useSearch } from '@tanstack/react-router'
-import { Search, X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 
-import { Button } from '@/components/ui/button'
+import { SearchField } from '@/components/input'
 import { Kbd } from '@/components/ui/kbd'
 import { isSearchShortcut, SEARCH_DEBOUNCE_MS, SEARCH_MAX, searchQueryOf } from '@/lib/search'
-import { cn } from '@/lib/utils'
 
 /**
  * The search box atop the nav, on every page (DESIGN §22, Search). `/` focuses it from anywhere but a text field, and
@@ -73,15 +71,9 @@ export function SearchBox() {
                     event.preventDefault()
                     open(value)
                 }}
-                className={cn(
-                    'flex h-8 items-center gap-2 rounded-md border bg-surface-raised px-2.5',
-                    'focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50',
-                )}
             >
-                <Search aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-                <input
+                <SearchField
                     ref={input}
-                    type="search"
                     aria-label="Search the journal"
                     aria-keyshortcuts="/"
                     placeholder="Search"
@@ -98,25 +90,10 @@ export function SearchBox() {
                             event.currentTarget.blur()
                         }
                     }}
-                    className={cn(
-                        'min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none',
-                        'placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden',
-                    )}
+                    onClear={clear}
+                    clearLabel="Clear search"
+                    idle={<Kbd aria-hidden>/</Kbd>}
                 />
-                {value ? (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-xs"
-                        aria-label="Clear search"
-                        onClick={clear}
-                        className="hover:bg-muted"
-                    >
-                        <X aria-hidden />
-                    </Button>
-                ) : (
-                    <Kbd aria-hidden>/</Kbd>
-                )}
             </form>
         </search>
     )

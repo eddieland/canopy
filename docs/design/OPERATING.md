@@ -29,9 +29,23 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   not close `ok`; an `ok` one the loop called idle; one it called not idle; one no loop ran, which a tick from before
   the loop recorded it also reads as), with the count and cost of each and idle ticks' share of what the live ticks
   that ended cost; the live ticks the loop ran by `woken_by`; and how many ended runs of each kind reported no cost.
-  Every figure is by start, within the window's days and none after, read in one transaction. `--json` prints the
-  same as one object, for a re-measurement (`docs/MEASUREMENTS.md`) to start from. The web UI's spend page shows it
-  (§22).
+  Beside what the window cost, what it got done (asked for by the operator, 2026-10-15, to weigh cost against value):
+  the tickets marked done in it, each day's and in all, and the window's whole spend over them; each ticket with a
+  run or review run in the window, or marked done in it, with what its own runs cost and when and how it was marked
+  done; and each PR a run in the window pushed to, or a review run of it, with what those cost. Every figure is by
+  start, within the window's days and none after, read in one transaction. The text lists the ten costliest
+  tickets; `--json` prints all of it as one object, for a re-measurement (`docs/MEASUREMENTS.md`) to start from. The
+  web UI's spend page shows it (§22).
+
+  Done is a ticket's newest `done` decision (§7) in the window, on a ticket still marked done and not forgotten since:
+  `merged`, and `closed` too, since a tracker that closes a ticket when its PR merges closes most tickets that landed
+  before the loop sees the merge, so leaving them out would undercount what landed. A ticket closed unworked is
+  counted as well; the per-ticket row says which it was. Spend per ticket done divides the window's whole spend, the
+  overseer's, chores', and the runs of tickets still open included, since that is what getting those tickets done
+  cost; comparing two windows' figures is what tells whether spending more bought more. A ticket's and a PR's own
+  cost is its worker, split, and review runs, as on its page, but within the window: the overseer's is no ticket's. A
+  PR's runs are those whose result names it, so a joint run counts on each of its PRs, and a run still running, with
+  no result yet, counts on its ticket and on none of its PRs.
   `canopy decisions [TICK]` prints a tick (the latest by default), its overseer's session and cost, and its decisions;
   `--ticket KEY` filters decisions by exact ticket key and reports when none match. This is the way to read a dry run's
   plan. The web UI shows the same: its ticks page lists the latest 50, a tick's page its decisions, and a ticket's page
@@ -387,14 +401,16 @@ From events the harness also reads, each validated (D026):
 - the peak context: the most one `step_finish` was sent, its input, cache read, and cache write together, so how large
   the run's context grew. 0 when it made no model call.
 
-Wherever canopy prints what a run cost, the CLI (`Usage.describe`) and the web UI's run pages alike, it says it as
-`$0.25, 3.5k new tokens, 5.5k peak context`. New tokens are every kind but cache reads: input, cache write, output,
-and reasoning, summed over the calls. Cache reads are left out of the headline because each call reads again what the
+Wherever canopy prints what a run or a tick cost, the CLI (`Usage.describe`) and the web UI alike, it says it as
+`$0.25, 3.5k tokens, 5.5k peak context`. The tokens are every kind but cache reads: input, cache write, output, and
+reasoning, summed over the calls. Cache reads are left out of the headline because each call reads again what the
 calls before it were sent, so their sum grows with the square of a session's length and dwarfs the rest: a run of 40
 calls over a 50k context reads two million tokens from the cache, which says nothing about what it did. The peak
 context says what the sum hid, how large the context got. Each kind is still kept apart in the journal, and a
-transcript shows each call's (§22). A run recorded before the peak was kept prints its new tokens alone. A log line's
-`new_tokens` and `peak_context` are the same two counts.
+transcript shows each call's (§22). A run recorded before the peak was kept prints its tokens alone. It once said
+`new tokens`; the operator found the word drew a distinction that was no use to them (2026-10-15), so it is just
+`tokens`, and the hover on it in the web UI says what is left out. A log line's and the API's `new_tokens` and
+`peak_context` are the same two counts, their names unchanged.
 
 The default `overseer_cmd`, `worker_cmd`, `split_cmd`, `chore_cmd`, and `review_cmd` ask for events. A tick records
 what its overseer reports on the tick (§6), `_run` what a worker or split reports on the run (§8, §11), `_chore` what a
@@ -511,9 +527,9 @@ its overseer's cost when the runtime reported it, and a line each for a pause an
 dismissal.
 
 `canopy status` also lists the tickets the operator started (§22), each with its title (§7), status, phase, and the
-message it awaits a reply to, running workers, and the ten runs that ended most recently, newest first: ticket and its
+message it awaits a reply to, running workers, and the ten runs that ended most recently, the last first: ticket and its
 title, kind, status, how long ago it ended, and each PR it reported; its harness note or else its summary, on one line
-with control characters dropped and cut at 160 characters; and its session id, its cost, new tokens, and peak context
+with control characters dropped and cut at 160 characters; and its session id, its cost, tokens, and peak context
 when the runtime reported them (§13), and its run log.
 
 Reasons are exactly the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`,

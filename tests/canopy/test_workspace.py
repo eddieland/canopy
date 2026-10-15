@@ -282,7 +282,7 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
         )
 
         # The ticket has a unit in api only: resuming it in web has no branch to continue there (DESIGN §18).
-        db.finish_run(conn, 1, "done", "{}")
+        db.finish_run(conn, "runs", 1, "done", "{}")
         resume = ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "resume", "--repo", "web"]
         assert main(resume, runner=runner) == 1
         assert decisions(conn, tick_id)[-1] == (

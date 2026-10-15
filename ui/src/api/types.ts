@@ -59,6 +59,10 @@ export type SpendCosts = Schemas['SpendCosts']
 export type SpendDay = Schemas['SpendDay']
 /** What a group of ticks bought (DESIGN §6, Idle pacing): idle, busy, hand-run, not ok, or a dry run. */
 export type SpendGroup = Schemas['SpendGroup']
+/** What one ticket's own runs in a spend window cost, and whether the loop marked it done in that window. */
+export type SpendTicket = Schemas['SpendTicket']
+/** What the runs that pushed to one PR, and the reviews of it, in a spend window cost. */
+export type SpendPullRequest = Schemas['SpendPullRequest']
 /** A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded. */
 export type Tick = Schemas['Tick']
 /** The latest tick, or none before the first, and the newest message a tick has acknowledged. */

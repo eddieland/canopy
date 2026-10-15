@@ -82,6 +82,7 @@ def summary(row: sqlite3.Row) -> ReviewSummary:
     """
     stored = result.stored(row["result_json"])
     status = str(row["status"])
+    worst = _worst(stored.findings) if stored is not None else None
     return ReviewSummary(
         id=int(row["id"]),
         pr_url=str(row["pr_url"]),
@@ -93,7 +94,8 @@ def summary(row: sqlite3.Row) -> ReviewSummary:
         verdict=stored.verdict if stored is not None else None,
         impact=stored.impact if stored is not None else None,
         findings=len(stored.findings) if stored is not None else 0,
-        worst=_worst(stored.findings) if stored is not None else None,
+        worst=worst,
+        worst_count=sum(f.severity == worst for f in stored.findings) if stored is not None else 0,
         started_at=db.parse_time(str(row["started_at"])),
         ended_at=db.parse_time(str(row["ended_at"])) if row["ended_at"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,

@@ -209,7 +209,8 @@ canopy (harness, Python)
     contract.py    what every agent result contract is built from: bounded text, plain URLs, the last stdout line
     conversation.py references, start records, the operator's messages, runs' reports and questions, with the guards
                    every channel shares (§22)
-    db.py          SQLite journal, migrations
+    db.py          SQLite journal, migrations; the one lifecycle of every table of detached runs (§6)
+    dead_runs.py   what each kind's reconcile shares: runs whose process is gone, their agents killed, closed crashed
     records.py     typed journal rows: a frozen dataclass per table, built by a query and held to its schema
     items.py       the attention item: its subject, fingerprint, and age
     outbox.py      the events notification sinks receive, recorded with the fact they report (§20)

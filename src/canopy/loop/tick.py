@@ -93,7 +93,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     now = datetime.now(UTC)
     query_due = _query_due(ctx, now)
     db.set_tick_query(ctx.conn, tick_id, due=query_due)
-    running = db.running_runs(ctx.conn)
+    running = db.running_runs(ctx.conn, "runs")
     last_runs = db.latest_runs(ctx.conn)
     # A stopped ticket waits on the operator alone: listed by key, it gets no decision every tick (DESIGN §22).
     stopped = conversation.stopped(ctx.conn)

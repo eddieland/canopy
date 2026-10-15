@@ -70,7 +70,7 @@ def review_run(conn: sqlite3.Connection, tick_id: int) -> int:
     run_id = db.insert_review_run(
         conn, tick_id=tick_id, pr_url=PR, sha="a" * 40, ticket=None, repo=None, purpose="query", logs_dir=LOGS
     )
-    assert db.claim_review_run(conn, run_id, os.getpid())
+    assert db.claim_run(conn, "review_runs", run_id, os.getpid())
     return run_id
 
 
@@ -158,7 +158,7 @@ def review_started_long_ago(conn: sqlite3.Connection, tick_id: int) -> None:
 
 
 def review_ends(conn: sqlite3.Connection, _tick_id: int) -> None:
-    assert db.finish_review_run(conn, 1, "done", None)
+    assert db.finish_run(conn, "review_runs", 1, "done", None)
 
 
 def chore_starts(conn: sqlite3.Connection, tick_id: int) -> None:
@@ -238,7 +238,7 @@ def test_each_change_makes_a_tick_not_idle(canopy_env: CanopyEnv, case: Case) ->
 def test_a_run_that_ended_before_the_previous_tick_read_does_not_count(canopy_env: CanopyEnv) -> None:
     def setup(conn: sqlite3.Connection, tick_id: int) -> None:
         run_id = review_run(conn, tick_id)
-        assert db.finish_review_run(conn, run_id, "done", None)
+        assert db.finish_run(conn, "review_runs", run_id, "done", None)
         conn.execute("UPDATE review_runs SET started_at = ?, ended_at = ?", (ago(hours=1), ago(minutes=30)))
 
     assert was_idle(context(canopy_env), Case(setup=setup))
@@ -365,7 +365,7 @@ def fix_ci_ended(conn: sqlite3.Connection, ended: datetime) -> None:
 def chore_started(conn: sqlite3.Connection, started: datetime) -> None:
     tick_id = db.start_tick(conn, dry_run=False)
     run_id = db.insert_chore_run(conn, tick_id=tick_id, chore="build-health", logs_dir=LOGS)
-    assert db.finish_chore_run(conn, run_id, "ok", None)
+    assert db.finish_run(conn, "chore_runs", run_id, "ok", None)
     conn.execute("UPDATE chore_runs SET started_at = ? WHERE id = ?", (stamp(started), run_id))
 
 
@@ -542,7 +542,7 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
     db.touch_ticket(ctx.conn, KEY, "/r")
     run_id = review_run(ctx.conn, first)
     if when == "before the tick":
-        assert db.finish_review_run(ctx.conn, run_id, "done", None)
+        assert db.finish_run(ctx.conn, "review_runs", run_id, "done", None)
     commands = [finishes_review(canopy_env.state_dir / db.DB_FILE_NAME)] if when == "during the tick" else []
     with overseer_does(*commands):
         time = FakeTime()
@@ -551,7 +551,7 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
             if len(time.slept) != 1:
                 return
             if when == "during the wait":
-                assert db.finish_review_run(ctx.conn, run_id, "done", None)
+                assert db.finish_run(ctx.conn, "review_runs", run_id, "done", None)
             elif when == "an operator message":
                 assert main(["reply", KEY, "Go ahead."]) == 0
 
@@ -663,7 +663,7 @@ def test_with_idle_pacing_off_a_run_ending_does_not_wake_the_wait(
     with overseer_does():
 
         def run_ends() -> None:
-            db.finish_review_run(ctx.conn, run_id, "done", None)
+            db.finish_run(ctx.conn, "review_runs", run_id, "done", None)
 
         time = FakeTime(on_sleep=run_ends)
         term, _ = console()

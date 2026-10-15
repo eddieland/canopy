@@ -2,9 +2,14 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { spendBreakdownQuery } from '@/api/queries'
-import type { SpendBreakdown, SpendDay } from '@/api/types'
+import type { SpendBreakdown, SpendDay, SpendPullRequest, SpendTicket } from '@/api/types'
 import { Cost } from '@/components/cost'
+import { None } from '@/components/none'
 import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { PullRequestLink } from '@/components/pull-request-link'
+import { Word } from '@/components/status'
+import { TicketLink } from '@/components/ticket-link'
+import { TicketTitle } from '@/components/ticket-title'
 import { TickRow } from '@/components/tick-row'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import {
@@ -12,6 +17,7 @@ import {
     chartTop,
     dayHint,
     dayLabel,
+    doneText,
     GROUP_HINT,
     GROUP_LABEL,
     SERIES,
@@ -22,10 +28,16 @@ import {
 } from '@/lib/spend'
 import type { SpendWindowDays } from '@/lib/spend'
 import { cn } from '@/lib/utils'
+import { NO_TICKET } from '@/lib/words'
 
 interface SpendSearch {
     days?: SpendWindowDays | undefined
 }
+
+// What the window's spend per ticket done counts, on hover.
+const PER_DONE_HINT =
+    "The window's whole spend, the overseer's and chores' included, over the tickets marked done in it: what getting " +
+    'them done cost, the runs of tickets still open included'
 
 // Each kind of run in words, as `canopy spend` counts the runs that reported no cost.
 const KIND_LABEL = {
@@ -36,8 +48,9 @@ const KIND_LABEL = {
 } as const
 
 /**
- * What agent runs cost per UTC day, by kind, and what the overseer's ticks bought, as `canopy spend` prints it. The
- * window is `?days=`, a week or 30 days; the nav opens the week, and the rail's Spent counters their own window.
+ * What agent runs cost per UTC day, by kind, and what the overseer's ticks bought, as `canopy spend` prints it, beside
+ * what it got done: the tickets marked done, and what each ticket's and PR's own runs cost. The window is `?days=`, a
+ * week or 30 days; the nav opens the week, and the rail's Spent counters their own window.
  */
 export const Route = createFileRoute('/spend')({
     // Typed search params: a window the page does not offer is dropped, which reads as the week.
@@ -53,7 +66,8 @@ function SpendPage() {
         <>
             <PageHeader title="Spend">
                 What agent runs cost each UTC day, as the runtime reported it: the overseer, with idle ticks apart, and
-                the workers, chores, and reviews it started. As{' '}
+                the workers, chores, and reviews it started; and beside it, the tickets the loop marked done and what
+                each ticket&apos;s and PR&apos;s own runs cost. As{' '}
                 <code className="font-mono text-xs">canopy spend --days {days}</code> prints it.
             </PageHeader>
             <Panel data-testid="spend-totals">
@@ -84,6 +98,30 @@ function SpendPage() {
                 {data === undefined ? <PanelSkeleton rows={6} className="min-h-72" /> : <ByDay days={data.per_day} />}
             </Panel>
             <div className="grid gap-6 xl:grid-cols-2">
+                <Panel data-testid="spend-tickets">
+                    <PanelHeader label="By ticket">
+                        <span className="readout text-xs text-muted-foreground">{data?.tickets.length ?? ''}</span>
+                    </PanelHeader>
+                    {data === undefined ? (
+                        <PanelSkeleton rows={5} className="min-h-40" />
+                    ) : (
+                        <Tickets tickets={data.tickets} days={days} />
+                    )}
+                </Panel>
+                <Panel data-testid="spend-pull-requests">
+                    <PanelHeader label="By pull request">
+                        <span className="readout text-xs text-muted-foreground">
+                            {data?.pull_requests.length ?? ''}
+                        </span>
+                    </PanelHeader>
+                    {data === undefined ? (
+                        <PanelSkeleton rows={5} className="min-h-40" />
+                    ) : (
+                        <PullRequests pullRequests={data.pull_requests} days={days} />
+                    )}
+                </Panel>
+            </div>
+            <div className="grid gap-6 xl:grid-cols-2">
                 <Panel data-testid="spend-ticks">
                     <PanelHeader label="Ticks by what they bought" />
                     {data === undefined ? <PanelSkeleton rows={5} className="min-h-40" /> : <TickGroups found={data} />}
@@ -113,7 +151,10 @@ function SpendPage() {
     )
 }
 
-/** The window's total, each kind's, idle ticks' share of the overseer's, and the runs that reported no cost. */
+/**
+ * The window's total, each kind's, and what it got done: the tickets marked done, and the whole spend over them. Then
+ * idle ticks' share of the overseer's, and the runs that reported no cost.
+ */
 function Totals({ found }: { found: SpendBreakdown }) {
     const { totals } = found
     const cells = [
@@ -140,6 +181,27 @@ function Totals({ found }: { found: SpendBreakdown }) {
                         </dd>
                     </div>
                 ))}
+            </dl>
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 border-t pt-3 @md:grid-cols-4 @3xl:grid-cols-7">
+                <div className="flex flex-col gap-0.5">
+                    <dt
+                        className="panel-label"
+                        title="Merged, or closed in the tracker, which may close it as its PR merges"
+                    >
+                        tickets done
+                    </dt>
+                    <dd className="readout text-lg text-foreground" data-testid="spend-done">
+                        {found.done}
+                    </dd>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                    <dt className="panel-label" title={PER_DONE_HINT}>
+                        per ticket done
+                    </dt>
+                    <dd className="readout text-lg text-foreground" data-testid="spend-per-done">
+                        <Cost usd={found.per_done} />
+                    </dd>
+                </div>
             </dl>
             <p className="text-xs text-muted-foreground" data-testid="spend-idle-share">
                 Idle ticks were <span className="readout text-foreground">{shareText(found.idle_share)}</span> of the
@@ -195,6 +257,7 @@ function ByDay({ days }: { days: SpendDay[] }) {
                                 </th>
                             ))}
                             <th className="panel-label pb-1.5 font-normal">total</th>
+                            <th className="panel-label pb-1.5 font-normal">done</th>
                         </tr>
                     </thead>
                     <tbody className="font-mono text-xs">
@@ -211,6 +274,7 @@ function ByDay({ days }: { days: SpendDay[] }) {
                                 <td className="readout text-foreground">
                                     <Cost usd={day.costs.total} />
                                 </td>
+                                <td className={cn('readout', day.done === 0 && 'text-muted-foreground')}>{day.done}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -249,6 +313,103 @@ function costOf(day: SpendDay, key: (typeof SERIES)[number]['key']): number | nu
         return day.costs.overseer === null ? null : seriesCost(day.costs, key)
     }
     return day.costs[key]
+}
+
+/**
+ * Each ticket with a run, or a review naming it, that started in the window, or marked done in it, the costliest
+ * first: its key and title, its runs and reviews, what they cost, and when and how it was marked done. Not the
+ * overseer's, whose ticks serve the whole workspace.
+ */
+function Tickets({ tickets, days }: { tickets: SpendTicket[]; days: number }) {
+    if (tickets.length === 0) {
+        return <Empty size="panel">no ticket had a run in these {days} days</Empty>
+    }
+    return (
+        <PanelScroll label="Spend by ticket" className="max-h-96 p-3">
+            <table className="w-full border-collapse text-sm" data-testid="spend-ticket-table">
+                <thead className="sticky top-0 bg-surface">
+                    <tr className="text-right">
+                        <th className="panel-label pb-1.5 text-left font-normal">ticket</th>
+                        <th className="panel-label pb-1.5 font-normal">runs</th>
+                        <th className="panel-label pb-1.5 font-normal">spent</th>
+                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">done</th>
+                    </tr>
+                </thead>
+                <tbody className="text-xs">
+                    {tickets.map((ticket) => (
+                        <tr key={ticket.key} className="text-right" data-testid={`spend-ticket-${ticket.key}`}>
+                            <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
+                                <span className="flex min-w-0 items-center gap-2">
+                                    <TicketLink ticketKey={ticket.key} className="shrink-0" />
+                                    <TicketTitle title={ticket.title} />
+                                </span>
+                            </th>
+                            <td className="readout pl-3" title={`${ticket.runs} runs, ${ticket.reviews} reviews`}>
+                                {ticket.runs + ticket.reviews}
+                            </td>
+                            <td className="readout pl-3">
+                                <Cost usd={ticket.cost_usd} />
+                            </td>
+                            <td className="readout pl-3 text-left whitespace-nowrap text-muted-foreground">
+                                {doneText(ticket)}
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </PanelScroll>
+    )
+}
+
+/**
+ * Each PR a run that started in the window pushed to, or a review of it did, the costliest first: the PR, its ticket,
+ * its phase, its runs and reviews, and what they cost. A run that pushed to two PRs counts on each.
+ */
+function PullRequests({ pullRequests, days }: { pullRequests: SpendPullRequest[]; days: number }) {
+    if (pullRequests.length === 0) {
+        return <Empty size="panel">no run pushed to a PR, and none was reviewed, in these {days} days</Empty>
+    }
+    return (
+        <PanelScroll label="Spend by pull request" className="max-h-96 p-3">
+            <table className="w-full border-collapse text-sm" data-testid="spend-pull-request-table">
+                <thead className="sticky top-0 bg-surface">
+                    <tr className="text-right">
+                        <th className="panel-label pb-1.5 text-left font-normal">pull request</th>
+                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">ticket</th>
+                        <th className="panel-label pb-1.5 font-normal">runs</th>
+                        <th className="panel-label pb-1.5 font-normal">spent</th>
+                    </tr>
+                </thead>
+                <tbody className="text-xs">
+                    {pullRequests.map((pr) => (
+                        <tr key={pr.url} className="text-right" data-testid="spend-pull-request">
+                            <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
+                                <span className="flex min-w-0 items-center gap-2">
+                                    <PullRequestLink url={pr.url} className="min-w-0" />
+                                    {pr.phase !== null && (
+                                        <Word word={pr.phase} className="truncate text-muted-foreground" />
+                                    )}
+                                </span>
+                            </th>
+                            <td className="pl-3 text-left whitespace-nowrap">
+                                {pr.ticket_key === null ? (
+                                    <None reason={NO_TICKET} brief className="font-mono text-xs" />
+                                ) : (
+                                    <TicketLink ticketKey={pr.ticket_key} />
+                                )}
+                            </td>
+                            <td className="readout pl-3" title={`${pr.runs} runs, ${pr.reviews} reviews`}>
+                                {pr.runs + pr.reviews}
+                            </td>
+                            <td className="readout pl-3">
+                                <Cost usd={pr.cost_usd} />
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </PanelScroll>
+    )
 }
 
 /** The ticks that ended in the window, a row per group, with idle ticks' share. */
