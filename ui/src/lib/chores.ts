@@ -1,4 +1,4 @@
-import type { ChoreSpendWindow, ChoreSummary, Message, RunState } from '@/api/types'
+import type { ChoreFinding, ChoreSpendWindow, ChoreSummary, Message, RunState } from '@/api/types'
 import { age } from '@/lib/time'
 
 /**
@@ -60,4 +60,27 @@ export function awaitsRun(note: Pick<Message, 'at'>, chore: Pick<ChoreSummary, '
 export function runsText(window: Pick<ChoreSpendWindow, 'runs' | 'priced'>): string {
     const unpriced = window.runs - window.priced
     return unpriced > 0 ? `${window.runs}, ${unpriced} unpriced` : String(window.runs)
+}
+
+/**
+ * A chore's findings as its line in the list counts them: those still waiting on the operator, then how many the
+ * operator dismissed, as `canopy status` counts them (DESIGN §19): `1 open finding · 2 dismissed`. A dismissed one is
+ * still reported, only off the attention list, so counting it as open would leave a chore whose findings were all
+ * dismissed looking as if they waited.
+ */
+export function findingsText(findings: readonly Pick<ChoreFinding, 'dismissed'>[]): string {
+    const { waiting, dismissed } = countFindings(findings)
+    const open = waiting === 1 ? '1 open finding' : `${waiting} open findings`
+    return dismissed > 0 ? `${open} · ${dismissed} dismissed` : open
+}
+
+/** The same count as `findingsText`, for the chore page's findings panel, whose label names them: `0 · 2 dismissed`. */
+export function findingsReadout(findings: readonly Pick<ChoreFinding, 'dismissed'>[]): string {
+    const { waiting, dismissed } = countFindings(findings)
+    return dismissed > 0 ? `${waiting} · ${dismissed} dismissed` : String(waiting)
+}
+
+function countFindings(findings: readonly Pick<ChoreFinding, 'dismissed'>[]): { waiting: number; dismissed: number } {
+    const dismissed = findings.filter((f) => f.dismissed).length
+    return { waiting: findings.length - dismissed, dismissed }
 }

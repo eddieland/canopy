@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest'
 
 import { mockChores } from '@/api/mocks'
 
-import { awaitsRun, cadenceText, choreLine, choreRunState, dueText, runsText, windowText } from './chores'
+import {
+    awaitsRun,
+    cadenceText,
+    choreLine,
+    choreRunState,
+    dueText,
+    findingsReadout,
+    findingsText,
+    runsText,
+    windowText,
+} from './chores'
 
 const [deps] = mockChores
 if (!deps?.latest) {
@@ -40,6 +50,17 @@ describe('chores', () => {
         expect(runsText(deps.spend.day)).toBe('2')
         expect(runsText(deps.spend.month)).toBe('4, 1 unpriced')
         expect(runsText({ runs: 0, priced: 0 })).toBe('0')
+    })
+
+    it('count the findings still waiting as open, and the dismissed ones apart, as canopy status does', () => {
+        expect(findingsText(deps.findings)).toBe('1 open finding')
+        expect(findingsText([])).toBe('0 open findings')
+        const waiting = { dismissed: false }
+        const dismissed = { dismissed: true }
+        expect(findingsText([waiting, dismissed, waiting])).toBe('2 open findings · 1 dismissed')
+        expect(findingsText([dismissed, dismissed])).toBe('0 open findings · 2 dismissed')
+        expect(findingsReadout(deps.findings)).toBe('1')
+        expect(findingsReadout([dismissed, waiting, dismissed])).toBe('1 · 2 dismissed')
     })
 
     it('mark a note no run has read: one after the latest run started', () => {
