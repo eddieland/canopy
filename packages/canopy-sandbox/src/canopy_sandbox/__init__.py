@@ -18,9 +18,10 @@ In order, it:
 2. Finds the worktrees the run works in, for a worker or setup: the cwd, or each worktree a joint run's desk links to,
    and each one's own and shared git directories. A chore has none.
 3. Fills the template's placeholders with those paths and writes the policy to a private directory of its own, with
-   the run's temp directory beside it. Whatever the template says, the policy denies reading the directory that holds
-   every run's, so no run reads another's temp directory, and the workspace's `.canopy/` when the run's directories
-   name it, in case the workspace is outside the HOME the template denies. It allows reading `srt`'s own `vendor/`
+   the run's temp directory beside it, which is `srt`'s own TMPDIR too, so what `srt` leaves there goes with it.
+   Whatever the template says, the policy denies reading the directory that holds every run's, so no run reads
+   another's temp directory, and the workspace's `.canopy/` when the run's directories name it, in case the workspace
+   is outside the HOME the template denies. It allows reading `srt`'s own `vendor/`
    directory, whose seccomp helper runs inside the sandbox, wherever `srt` is installed.
 4. Points git at the run's object directory, `CANOPY_GIT_OBJECTS`, with each worktree's shared objects as alternates.
 5. Runs `srt --settings POLICY -- COMMAND...`, waits for it, removes its directory, and exits with `srt`'s status.
@@ -119,6 +120,10 @@ GIT_LOCATION = (
 SRT_PACKAGE = "@anthropic-ai/sandbox-runtime"
 # Where srt puts the sandbox's TMPDIR. Unset, it is /tmp/claude, which every sandboxed run shares.
 SRT_TMPDIR = "CLAUDE_CODE_TMPDIR"
+# On Linux, srt makes the Unix sockets that carry the sandbox's network in its own TMPDIR, which the wrapper sets to the
+# run's temp directory, under names up to this long (checked at 0.0.79); a socket's path holds at most 107 bytes there.
+SRT_SOCKET_NAME = "claude-socks-0123456789abcdef.sock"
+SOCKET_PATH_MAX = 107
 
 
 class SandboxError(Exception):
@@ -162,6 +167,7 @@ def run(argv: list[str]) -> int:
         return 2
     try:
         tmp = run_dir / "tmp"
+        check_socket_room(tmp)
         tmp.mkdir(mode=0o700)
         policy = fill(template, placeholders(cwd, trees, objects, tmp, reads))
         check(policy, [run_dir.parent, *state_dirs(objects, cwd)], vendor_dirs(srt))
@@ -336,6 +342,20 @@ def make_run_dir() -> Path:
     (run_dir / "pid.new").write_text(f"{os.getpid()}\n", encoding="utf-8")
     (run_dir / "pid.new").replace(run_dir / "pid")
     return run_dir
+
+
+def check_socket_room(tmp: Path) -> None:
+    """Refuse a temp directory too long for srt's sockets, which srt reports only as a failure to make them.
+
+    Raises:
+        SandboxError: on Linux, a socket in `tmp` would have a path too long to bind.
+    """
+    socket = tmp / SRT_SOCKET_NAME
+    if sys.platform == "linux" and len(os.fsencode(socket)) > SOCKET_PATH_MAX:
+        raise SandboxError(
+            f"the temp directory {tempfile.gettempdir()} has too long a path for srt's sockets: set TMPDIR to a "
+            "shorter one, such as /tmp"
+        )
 
 
 def placeholders(
