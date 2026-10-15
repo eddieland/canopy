@@ -183,10 +183,10 @@ overseer's judgment, checked again by the worker; the harness cannot see who wro
 
 ### R14. Flaky CI is rerun, not fixed
 
-Planned (M25). Written down 2026-10-09. When a PR's check fails for a reason the change did not cause (a flaky test, a
-lost runner, a registry outage), canopy should rerun it instead of sending a worker to "fix" code that is not broken.
-Which failures are flaky is the repository's knowledge, so it comes from a skill the operator or the repository
-provides, and a CI that is not GitHub Actions is reached through its own MCP server.
+Deferred (M25, 2026-10-15). Written down 2026-10-09. When a PR's check fails for a reason the change did not cause (a
+flaky test, a lost runner, a registry outage), canopy should rerun it instead of sending a worker to "fix" code that is
+not broken. Which failures are flaky is the repository's knowledge, so it comes from a skill the operator or the
+repository provides, and a CI that is not GitHub Actions is reached through its own MCP server.
 
 Shape (§23): a `triage-ci` run comes before `fix-ci` on a new failure. It reads the failure, follows the
 named skill, and either reruns the failed jobs or reports the failure real, which sends `fix-ci` as today. It never

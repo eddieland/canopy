@@ -5,7 +5,7 @@ numbered across the whole design; the [README](README.md) has the map. Previous:
 
 ## 23. Flaky CI (M25)
 
-Designed, not built: until M25 lands, §7's `ci_red` always dispatches `fix-ci`, and §7,
+Designed, not built, and deferred (ROADMAP M25): until M25 lands, §7's `ci_red` always dispatches `fix-ci`, and §7,
 §8, §12, and §13 describe canopy as it is. This section says what changes in each.
 
 Some failures are not the change's: a test that fails one run in five, a runner that died, a package registry that

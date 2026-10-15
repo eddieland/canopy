@@ -14,7 +14,8 @@ Next: how that changes later milestones, docs, or open questions.
 ```
 
 A milestone a later one absorbs ends `Status: superseded by MN (YYYY-MM-DD).`, `MN` a milestone or a range, followed
-by one sentence saying how.
+by one sentence saying how. A milestone set aside before it is done ends `Status: deferred YYYY-MM-DD.` and keeps its
+bullets and Accept, and the deferred list at the end names the trigger that would bring it back.
 
 A done milestone is collapsed: one line on what it delivered replaces its bullets and Accept, and `Learned` and `Next`
 keep only what a later milestone needs, a sentence or two each. Leave `Next` out when nothing changes. The detail lives
@@ -332,7 +333,7 @@ Accept: the tests above pass. Live: on a PR whose check fails for a reason the c
 once and the PR goes green with no `fix-ci` run; on a PR with a real failure, the triage reports `real` and the next
 tick's `fix-ci` fixes it; a repository skill that names a flaky test is followed.
 
-Status: not started.
+Status: deferred 2026-10-15. Until it is built, `ci_red` dispatches `fix-ci` as DESIGN §7 says.
 
 ## M26. Sandboxed workers, opt-in
 
@@ -930,3 +931,5 @@ Status: not started.
 - Slack replies: when the operator wants to answer from Slack. A channel into the journal's conversation (DESIGN
   §22): a Socket Mode bridge running `canopy reply`, or the overseer reading Slack through MCP. Needs a T1
   change.
+- Flaky CI triage (M25): when live use shows `fix-ci` attempts spent on failures the change did not cause. The design
+  (DESIGN §23) and the milestone's bullets stand as written.
