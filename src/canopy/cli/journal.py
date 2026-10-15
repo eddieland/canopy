@@ -52,7 +52,9 @@ DECIDE_ACTIONS = ("wait", "skip", "done")
 @click.command("decide", cls=OverseerCommand)
 # click has no optional positional before a required one, so `[KEY] ACTION` is parsed by hand.
 @click.argument("words", nargs=-1, required=True, metavar="[KEY] ACTION")
-@click.option("--rationale", required=True, type=TextType())
+@click.option(
+    "--rationale", required=True, type=TextType(), help="Why, in your own words: `canopy decisions` shows it."
+)
 @click.pass_context
 def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationale: str) -> int:
     """Record a decision (overseer only).
@@ -96,7 +98,9 @@ def _unit(ctx: Context, repo: str | None) -> str | None:
 @click.command("attention", cls=OverseerCommand)
 # click has no optional positional before a required one, so `[KEY] REASON` is parsed by hand.
 @click.argument("words", nargs=-1, required=True, metavar="[KEY] REASON")
-@click.option("--detail", required=True, type=TextType())
+@click.option(
+    "--detail", required=True, type=TextType(), help="What the operator needs to know, shown on the attention list."
+)
 @click.option("--repo", type=REPO, help="The repository of the ticket's unit the item is about, in a workspace.")
 @click.option("--pr", "pr", type=PR_URL, help="A PR the loop reviews; in place of KEY for a PR with no ticket.")
 @click.pass_context
@@ -136,9 +140,20 @@ def ticket_group() -> None:
     type=REPO,
     help="The unit a phase about a PR and the review and ci cursors are for.",
 )
-@click.option("--phase", type=click.Choice(PHASES))
-@click.option("--cursor", "cursor_pairs", type=CursorType(), multiple=True)
-@click.option("--done", is_flag=True)
+@click.option(
+    "--phase",
+    type=click.Choice(PHASES),
+    help="The ticket's phase, or a unit's with --repo: pushed_no_pr to merged are about a PR, so a unit's.",
+)
+@click.option(
+    "--cursor",
+    "cursor_pairs",
+    type=CursorType(),
+    multiple=True,
+    help="Advance a cursor past what you handled. comment and message are the ticket's; review and ci a unit's, "
+    "with --repo. Repeat it for several. A dry run advances none.",
+)
+@click.option("--done", is_flag=True, help="Mark the ticket done in the journal. A dry run does not.")
 @click.option(
     "--title",
     type=TitleType(),

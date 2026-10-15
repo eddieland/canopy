@@ -61,7 +61,7 @@ def cmd_chore_run(click_ctx: click.Context, name: str, context: str | None) -> i
 
 @chore_group.command("wait", cls=OverseerCommand)
 @click.argument("name", type=CHORE)
-@click.option("--rationale", required=True, type=TextType())
+@click.option("--rationale", required=True, type=TextType(), help="Why it should not run now, in your own words.")
 @click.pass_context
 def cmd_chore_wait(click_ctx: click.Context, name: str, rationale: str) -> int:
     """Record that chore NAME is due but should not run now, and why."""
