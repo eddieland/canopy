@@ -269,9 +269,9 @@ def _detail(run: sqlite3.Row) -> str:
             harness: object = result.get("harness")
             summary: object = result.get("summary")
             note = str(harness or summary or "")
-    # A split works on no branch.
+    # A split works on no branch. The run is named as `canopy show` reads it, and as the web UI names it.
     what = f"{run['kind']}, {run['branch']}" if run["branch"] else str(run["kind"])
-    text = f"run {run['id']} ({what}) ended {run['status']}"
+    text = f"run:{run['id']} ({what}) ended {run['status']}"
     if note:
         text += f": {note}"
     return f"{text}; log {run['log_path']}"[:2000]

@@ -216,7 +216,7 @@ test("a tick's output shows as written when asked, stderr included, and a tick t
 
     await page.goto('ticks/1')
     await settled(page)
-    await expect(page.getByTestId('tick-output')).toContainText('none kept')
+    await expect(page.getByTestId('tick-output')).toContainText('no output kept')
     await expect(page.getByTestId('tick-output').getByRole('button')).toHaveCount(0)
 })
 
