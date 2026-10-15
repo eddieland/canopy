@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
 import tailwindcss from '@tailwindcss/vite'
@@ -30,6 +31,27 @@ function preloadFonts(): Plugin {
     }
 }
 
+// Swagger UI's script and stylesheet, for the API's docs page FastAPI serves at /api/docs. Copied into the build's
+// api-docs/, so that page loads nothing from another origin.
+const SWAGGER_UI = new URL('./node_modules/swagger-ui-dist/', import.meta.url)
+const SWAGGER_UI_FILES = ['swagger-ui-bundle.js', 'swagger-ui.css']
+
+/** Copies SWAGGER_UI_FILES into the build's api-docs/, where the server serves them as it does any built file. */
+function apiDocs(): Plugin {
+    return {
+        name: 'canopy:api-docs',
+        apply: 'build',
+        async generateBundle() {
+            const files = await Promise.all(
+                SWAGGER_UI_FILES.map(async (name) => ({ name, source: await readFile(new URL(name, SWAGGER_UI)) })),
+            )
+            for (const { name, source } of files) {
+                this.emitFile({ type: 'asset', fileName: `api-docs/${name}`, source })
+            }
+        },
+    }
+}
+
 /** The SPA's build and dev server: file-based routes, the React Compiler, Tailwind, and `/api` proxied in dev. */
 export default defineConfig({
     // Relative URLs: FastAPI writes a <base href> into index.html, so one build serves under any path prefix.
@@ -40,6 +62,7 @@ export default defineConfig({
         react({ compiler: true }),
         tailwindcss(),
         preloadFonts(),
+        apiDocs(),
     ],
     resolve: {
         alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) },
@@ -48,7 +71,7 @@ export default defineConfig({
         host: '127.0.0.1',
         port: 5173,
         strictPort: true,
-        // /api includes the SSE stream; the proxy streams it as it arrives.
+        // /api includes the SSE stream, which the proxy streams as it arrives, and /api-docs, the docs page's files.
         proxy: { '/api': { target: api, changeOrigin: true } },
     },
     build: {
