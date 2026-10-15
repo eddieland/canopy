@@ -379,6 +379,12 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             (2, at(-60), at(-59), "mock tick", 8, "ses_tick2", 0.31, 1, "timer"),
         ],
     )
+    # Their overseers' tokens, in the proportions the runs' are below.
+    conn.execute(
+        "UPDATE ticks SET tokens_input = CAST(cost_usd * 40000 AS INTEGER), "
+        "tokens_output = CAST(cost_usd * 6000 AS INTEGER), tokens_cache_read = CAST(cost_usd * 400000 AS INTEGER), "
+        "tokens_peak_context = CAST(cost_usd * 60000 AS INTEGER)"
+    )
     tickets = (
         # key, title (None: not named yet), phase, branch, last seen
         ("ABC-099", "Debounce search input", "in_review", "agent/ABC-099-search", -59),

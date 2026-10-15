@@ -20,6 +20,7 @@ import { ordered, useListOrder } from '@/lib/list-order'
 import { tickRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId, tickState } from '@/lib/ticks'
+import { RUN_TOKENS_TITLE, runTokens } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 import { None } from '@/components/none'
 
@@ -113,6 +114,7 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                         </Field>
                         <Field label="spent" mono>
                             <Cost usd={tick.cost_usd} />
+                            <span title={RUN_TOKENS_TITLE}>{runTokens(tick.new_tokens, tick.peak_context)}</span>
                         </Field>
                         <Field label="output" mono title="the overseer's stdout and stderr: yours alone">
                             {output ?? <None />}

@@ -278,6 +278,8 @@ def tick_of(row: sqlite3.Row, decisions: int) -> Tick:
         summary=lines(str(row["summary"] or "")) or None,
         session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
+        new_tokens=new_tokens(row),
+        peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
         decisions=decisions,
         idle=None if row["idle"] is None else bool(row["idle"]),
         woken_by=str(row["woken_by"]) if row["woken_by"] is not None else None,
@@ -517,7 +519,7 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
 
 
 def new_tokens(row: sqlite3.Row) -> int | None:
-    """A run's or a chore run's new tokens, every kind but cache reads, or None when the runtime reported none.
+    """A run's, a chore run's, or a tick's tokens, every kind but cache reads; None when the runtime reported none.
 
     Cache reads are left out: each model call reads again what the calls before it were sent, so their sum grows with
     the number of calls. The peak context says how large that grew.
