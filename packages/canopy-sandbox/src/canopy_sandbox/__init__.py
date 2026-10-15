@@ -36,7 +36,8 @@ A placeholder is a whole string in one of the template's lists, and expands to z
     @GIT_OWN@        each worktree's own git directory: its HEAD, index, and reflog
     @GIT_SHARED@     what each worktree's common git directory holds, which every slot shares (refs, objects,
                      config, hooks), entry by entry, leaving out the run's own git directories
-    @GIT_PROTECTED@  each worktree's `.git` link and `config.worktree`
+    @GIT_PROTECTED@  each worktree's `.git` link, and the files in its own git directory that point git elsewhere:
+                     `config.worktree`, `commondir`, and `gitdir`
     @OBJECTS@        the run's object directory
     @TMPDIR@         the run's temp directory, the command's TMPDIR
     @READ@           each `--read` path
@@ -84,6 +85,10 @@ DESK_MARKER = ".canopy-desk"
 # The workspace's state directory, which holds the run directories canopy passes (D016).
 STATE_DIR = ".canopy"
 PLACEHOLDER = re.compile(r"@[A-Z_]+@")
+# What a worktree's own git directory holds that git reads as config or as where the rest of the repository is. With
+# `commondir` rewritten, every git on the host in the slot, canopy's and treehouse's, reads a config and hooks the
+# worker wrote (HOST_ISOLATION §4.2).
+GIT_OWN_PROTECTED = ("config.worktree", "commondir", "gitdir")
 # The git the wrapper runs reads a slot a worker had, on the host: nothing from it may run (HOST_ISOLATION §5 item 1).
 SAFE_GIT = (
     "git",
@@ -371,7 +376,7 @@ def placeholders(
         "@WORKTREES@": [t.top for t in trees],
         "@GIT_OWN@": [t.own for t in trees],
         "@GIT_SHARED@": shared_entries(trees),
-        "@GIT_PROTECTED@": [p for t in trees for p in (t.top / ".git", t.own / "config.worktree")],
+        "@GIT_PROTECTED@": [p for t in trees for p in (t.top / ".git", *(t.own / n for n in GIT_OWN_PROTECTED))],
         "@OBJECTS@": [objects] if objects is not None else [],
         "@TMPDIR@": [tmp],
         "@READ@": reads,

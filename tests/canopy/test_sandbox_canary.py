@@ -240,6 +240,12 @@ def test_a_worker_cannot_change_what_the_slots_share(canary: Canary, script: str
         pytest.param('printf "#!/bin/sh\\necho pwned\\n" > "$1/hooks/post-checkout"', "{common}/hooks/post-checkout"),
         pytest.param('echo "[core] hooksPath = /tmp" > "$2/config.worktree"', "{own}/config.worktree"),
         pytest.param('echo "gitdir: /tmp" > .git', "{slot}/.git", id="git-link"),
+        pytest.param('echo "$PWD/planted" > "$2/commondir"', "{own}/commondir", id="commondir"),
+        pytest.param(
+            'echo "$PWD/planted" > "$2/c" && mv -f "$2/c" "$2/commondir"', "{own}/commondir", id="commondir-mv"
+        ),
+        pytest.param('rm -f "$2/commondir"', "{own}/commondir", id="commondir-rm"),
+        pytest.param('echo /tmp/.git > "$2/gitdir"', "{own}/gitdir", id="gitdir"),
         pytest.param("echo pwned > ../2/planted", "{other}/planted", id="another-slots-files"),
         pytest.param('echo pwned > "$1/info/exclude"', "{common}/info/exclude", id="info-exclude"),
     ],
