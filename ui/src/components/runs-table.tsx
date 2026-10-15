@@ -4,6 +4,7 @@ import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
 import { Copyable } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
+import { Disclosure } from '@/components/disclosure'
 import { LinkedText } from '@/components/linked-text'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ListRow, RowLine } from '@/components/rows'
@@ -12,7 +13,7 @@ import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { rowLineFrom } from '@/lib/rows'
 import { RUN_TEXT } from '@/lib/run-state'
 import type { TicketRuns } from '@/lib/run-state'
@@ -67,16 +68,12 @@ function TicketRow({ group }: { group: TicketRuns }) {
                 {earlier.length > 0 && (
                     <>
                         <RowLine from="title">
-                            <CollapsibleTrigger
-                                className={cn(
-                                    'rounded-sm font-mono text-xs text-accent underline-offset-4 outline-none',
-                                    'hover:underline focus-visible:ring-3 focus-visible:ring-ring/50',
-                                )}
-                            >
-                                {open
-                                    ? 'hide earlier runs'
-                                    : `${earlier.length} earlier ${earlier.length === 1 ? 'run' : 'runs'}`}
-                            </CollapsibleTrigger>
+                            <Disclosure
+                                open={open}
+                                what={`${earlier.length} earlier ${earlier.length === 1 ? 'run' : 'runs'}`}
+                                // In line with the title above it, and no taller than a line of text.
+                                className="-my-1 -ml-2"
+                            />
                         </RowLine>
                         <CollapsibleContent asChild>
                             <ul

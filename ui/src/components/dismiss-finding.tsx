@@ -67,7 +67,7 @@ function useDismiss({ dismissed, act, refresh, labels, titles, testId }: Dismiss
             variant="ghost"
             size="xs"
             // Negative margins keep the head line as tall as it is without the button.
-            className="-my-1 font-mono font-normal text-muted-foreground"
+            className="-my-1 text-muted-foreground"
             title={titles[which]}
             onClick={() => dismiss.mutate(dismissed)}
             disabled={dismiss.isPending}

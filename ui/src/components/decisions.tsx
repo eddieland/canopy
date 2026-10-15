@@ -8,16 +8,8 @@ import { Chip } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import { TicketLink } from '@/components/ticket-link'
 import { actionTone } from '@/lib/decisions'
-import type { ActionTone } from '@/lib/decisions'
 import { rowLineFrom } from '@/lib/rows'
 import { cn } from '@/lib/utils'
-
-// Written out so Tailwind finds them.
-const TONE: Record<ActionTone, string> = {
-    refused: 'border-status-failed/40 text-status-failed',
-    attention: 'border-status-blocked/40 text-status-blocked',
-    other: '',
-}
 
 /**
  * Decisions, one row each: what it was about (or, on its subject's page, which tick), the action, and under it the
@@ -34,10 +26,7 @@ export function Decisions({ decisions, byTick = false }: { decisions: Decision[]
                 >
                     {byTick ? <TickLink id={decision.tick_id} /> : <Subject decision={decision} />}
                     <span className="flex min-w-0 items-center gap-3">
-                        <Chip
-                            className={cn(TONE[actionTone(decision.action)], 'min-w-0 shrink')}
-                            word={decision.action}
-                        />
+                        <Chip tone={actionTone(decision.action)} className="min-w-0 shrink" word={decision.action} />
                         {/* A PR that is the row's subject is named there already. */}
                         {decision.pr && (byTick || !prIsSubject(decision)) && <PullRequestLink url={decision.pr} />}
                     </span>

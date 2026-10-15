@@ -20,6 +20,7 @@ const REVIEW: ReviewSummary = {
     impact: 'normal',
     findings: 3,
     worst: 'major',
+    worst_count: 1,
     started_at: '2026-10-08T11:02:00Z',
     ended_at: '2026-10-08T11:04:00Z',
     cost_usd: 0.24,
@@ -53,8 +54,12 @@ describe('placeFindings', () => {
 
 describe('verdictText', () => {
     it('says what a review found, or why it has no verdict', () => {
-        expect(verdictText(REVIEW)).toBe('3 findings')
-        expect(verdictText({ ...REVIEW, findings: 1 })).toBe('1 finding')
+        expect(verdictText(REVIEW)).toBe('3 findings, 1 major')
+        expect(verdictText({ ...REVIEW, worst: 'blocking', worst_count: 2 })).toBe('3 findings, 2 blocking')
+        // Every finding as bad as the worst: one word says both.
+        expect(verdictText({ ...REVIEW, findings: 1 })).toBe('1 major finding')
+        expect(verdictText({ ...REVIEW, worst: 'minor', worst_count: 3 })).toBe('3 minor findings')
+        expect(verdictText({ ...REVIEW, findings: 2, worst: null, worst_count: 0 })).toBe('2 findings')
         expect(verdictText({ ...REVIEW, verdict: 'clean', findings: 0 })).toBe('clean')
         expect(verdictText({ ...REVIEW, verdict: null, state: 'failed', findings: 0 })).toBe('no verdict')
         expect(verdictText({ ...REVIEW, verdict: null, state: 'running', findings: 0 })).toBe('reviewing')

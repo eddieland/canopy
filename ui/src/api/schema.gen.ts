@@ -2313,6 +2313,12 @@ export type components = {
             verdict: components["schemas"]["ReviewVerdict"] | null;
             /** @description The severity of the worst finding it reported, which colors its verdict; None when it reported none. */
             worst: components["schemas"]["FindingSeverity"] | null;
+            /**
+             * Worst Count
+             * @description How many of its findings are of the worst severity, which its verdict says in words (`3 findings, 1 major`).
+             * @default 0
+             */
+            worst_count: number;
         };
         /**
          * @description A review run's verdict (DESIGN §21).

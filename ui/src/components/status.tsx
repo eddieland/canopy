@@ -2,8 +2,19 @@ import type { ReactNode } from 'react'
 
 import type { RunState } from '@/api/types'
 import { RUN_DOT } from '@/lib/run-state'
+import type { Tone } from '@/lib/tone'
 import { cn } from '@/lib/utils'
 import { readable } from '@/lib/words'
+
+// Every chip's color, the one map of them (ui/DESIGN.md, "Chips"): its color's hairline at 40% over the same color at
+// 10%, so it holds its edge on a selected row's tint too. Plain is muted-foreground's. Written out so Tailwind finds
+// them.
+const TONE: Record<Tone, string> = {
+    plain: 'border-muted-foreground/40 bg-muted-foreground/10 text-muted-foreground',
+    failed: 'border-status-failed/40 bg-status-failed/10 text-status-failed',
+    blocked: 'border-status-blocked/40 bg-status-blocked/10 text-status-blocked',
+    running: 'border-status-running/40 bg-status-running/10 text-status-running',
+}
 
 /** A small round marker in a run state's color. `running` pulses. */
 export function RunDot({ state, className }: { state: RunState; className?: string }) {
@@ -22,17 +33,27 @@ export function RunDot({ state, className }: { state: RunState; className?: stri
 
 /**
  * A small bordered label: a reason, a kind, private or public. Pass a word from the journal as `word`: it reads with
- * spaces for underscores, and keeps its spelling, the one the CLI prints, on hover. A chip given room to shrink
- * (`min-w-0 shrink`) cuts its word to fit.
+ * spaces for underscores, and keeps its spelling, the one the CLI prints, on hover. Its `tone` is plain, or the status
+ * color of the state it marks. A chip given room to shrink (`min-w-0 shrink`) cuts its word to fit.
  */
-export function Chip({ className, word, children }: { className?: string; word?: string; children?: ReactNode }) {
+export function Chip({
+    className,
+    tone = 'plain',
+    word,
+    children,
+}: {
+    className?: string
+    tone?: Tone
+    word?: string
+    children?: ReactNode
+}) {
     const text = word === undefined ? undefined : readable(word)
     return (
         <span
             title={word !== undefined && word !== text ? word : undefined}
             className={cn(
                 'inline-flex h-5 shrink-0 items-center gap-1 rounded-sm border px-1.5 font-mono text-2xs',
-                'text-muted-foreground',
+                TONE[tone],
                 className,
             )}
         >

@@ -9,6 +9,8 @@ import { pullRequestLabel } from '@/lib/pull-request-label'
 
 // A default that is a fresh array on each render would be a new prop each time.
 const NONE: readonly never[] = []
+// A link out's button: an `sm` outline button, its label in the accent's monospace, since it names an address.
+const LINK_OUT = 'max-w-full gap-1.5 font-mono text-accent'
 
 /**
  * A ticket's links out, under its page's title so they are the first thing found: its page in the tracker, then its
@@ -91,12 +93,12 @@ function LinkGroup({ links, icon, many }: { links: Link[]; icon: LucideIcon; man
                 <Button
                     variant="outline"
                     size="sm"
-                    className="gap-1.5 font-mono text-xs font-normal text-accent"
+                    className={LINK_OUT}
                     title={`The ticket's ${links.length} ${many}, one per repository`}
                 >
                     <Icon aria-hidden className="size-4" />
                     {links.length} {many}
-                    <ChevronDown aria-hidden className="size-3.5" />
+                    <ChevronDown aria-hidden />
                 </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-w-[min(36rem,var(--radix-popper-available-width))]">
@@ -119,14 +121,28 @@ function LinkGroup({ links, icon, many }: { links: Link[]; icon: LucideIcon; man
     )
 }
 
-function LinkOutButton({ href, label, icon, hint }: { href: string; label: string; icon: LucideIcon; hint: string }) {
+/**
+ * One link out as a page's header shows it (ui/DESIGN.md, "A link out"): an outline button in the accent's monospace,
+ * what it opens as its one icon first (GitHub's mark for github.com), then its label, opening in a new tab. `hint` says
+ * on hover what it opens.
+ */
+export function LinkOutButton({
+    href,
+    label,
+    icon,
+    hint,
+}: {
+    /** Where it goes. */
+    href: string
+    /** What it says: an address, a PR's name, or where it goes. */
+    label: string
+    /** What it opens, shown unless `href` is on github.com. */
+    icon: LucideIcon
+    /** What it opens, in words, on hover. */
+    hint: string
+}) {
     return (
-        <Button
-            asChild
-            variant="outline"
-            size="sm"
-            className="max-w-full gap-1.5 font-mono text-xs font-normal text-accent"
-        >
+        <Button asChild variant="outline" size="sm" className={LINK_OUT}>
             <a href={href} target="_blank" rel="noreferrer noopener" title={hint}>
                 <LinkOutIcon href={href} icon={icon} className="size-4" />
                 <span className="truncate">{label}</span>

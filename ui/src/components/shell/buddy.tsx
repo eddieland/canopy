@@ -142,7 +142,7 @@ function Bubble({ tip, shown, onAnother }: { tip: string; shown: boolean; onAnot
                 className="absolute top-2 right-2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
                 data-testid="buddy-close"
             >
-                <X className="size-3.5" />
+                <X className="size-4" />
             </button>
             {/* The tail: a square turned on its corner, its two outer edges bordered, tucked under the bubble's. */}
             <span

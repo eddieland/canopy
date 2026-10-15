@@ -34,6 +34,7 @@ import type { Listed } from '@/lib/leaving'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
 import { phaseLabel, phaseWord } from '@/lib/phase'
+import type { Tone } from '@/lib/tone'
 
 interface AttentionSearch {
     item?: string | undefined
@@ -49,12 +50,12 @@ export const Route = createFileRoute('/attention')({
     component: AttentionPage,
 })
 
-// Written out so Tailwind finds them: what is broken in the failure color, what waits on the operator in theirs.
-const TONE: Record<Severity, string> = {
-    failed: 'border-status-failed/40 bg-status-failed/10 text-status-failed',
-    waiting: 'border-status-blocked/40 bg-status-blocked/10 text-status-blocked',
-    other: '',
-    finding: '',
+// A reason chip's tone: what is broken in the failure color, what waits on the operator in theirs, the rest plain.
+const TONE: Record<Severity, Tone> = {
+    failed: 'failed',
+    waiting: 'blocked',
+    other: 'plain',
+    finding: 'plain',
 }
 
 // How long a cleared item's row plays its exit before it is let go: `animate-leave` in src/index.css, and a little
@@ -223,12 +224,12 @@ function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
  * chip says `finding` and the head line names the id beside its chore.
  */
 function ReasonChip({ item }: { item: AttentionItem }) {
-    return item.finding ? <Chip>finding</Chip> : <Chip className={TONE[severity(item)]} word={item.reason} />
+    return item.finding ? <Chip>finding</Chip> : <Chip tone={TONE[severity(item)]} word={item.reason} />
 }
 
 /** On an `awaiting_reply` item the operator has answered: it stays until a tick reads the answer. */
 function Answered() {
-    return <Chip className="border-status-running/40 text-status-running">answered</Chip>
+    return <Chip tone="running">answered</Chip>
 }
 
 /**

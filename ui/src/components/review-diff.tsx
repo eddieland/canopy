@@ -5,7 +5,7 @@ import { useDismissReviewFinding } from '@/components/dismiss-finding'
 import { Panel, PanelHeader } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { Chip } from '@/components/status'
-import { findingAnchor, SEVERITY_TEXT } from '@/lib/reviews'
+import { findingAnchor, SEVERITY_TONE } from '@/lib/reviews'
 import type { Numbered, Placed } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
 
@@ -132,7 +132,7 @@ export function FindingCard({ run, numbered, className }: { run: number; numbere
         >
             <header className="flex flex-wrap items-center gap-2">
                 <span className="readout text-xs text-muted-foreground">{n}</span>
-                <Chip className={SEVERITY_TEXT[finding.severity]}>{finding.severity}</Chip>
+                <Chip tone={SEVERITY_TONE[finding.severity]}>{finding.severity}</Chip>
                 <span className={cn('font-medium', finding.dismissed && 'text-muted-foreground')}>{finding.title}</span>
                 {finding.location && (
                     <span className="font-mono text-xs break-all text-muted-foreground">{finding.location}</span>

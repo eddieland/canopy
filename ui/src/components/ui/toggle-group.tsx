@@ -31,7 +31,7 @@ function ToggleGroupItem({ className, ...props }: ComponentProps<typeof ToggleGr
                 'focus-visible:z-10 focus-visible:ring-3 focus-visible:ring-ring/50',
                 'disabled:pointer-events-none disabled:opacity-50',
                 'data-[state=on]:bg-surface-raised data-[state=on]:text-foreground data-[state=on]:shadow-xs',
-                "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3.5",
+                "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-3",
                 className,
             )}
             {...props}
