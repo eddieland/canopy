@@ -104,9 +104,12 @@ function Form({
             <div className="flex items-center justify-between gap-4 border-t p-3">
                 <div className="flex flex-col gap-1">
                     <p className="text-sm text-muted-foreground">
-                        Saved to <code className="font-mono text-xs">{settings.user_file}</code> with its comments kept;
-                        the workspace file is never written. Anything else, or looser than this allows, is the
-                        file&apos;s to change.
+                        Saved to{' '}
+                        <code className="font-mono text-xs" data-testid="config-user-file">
+                            {settings.user_file}
+                        </code>{' '}
+                        with its comments kept; the workspace file is never written. Anything else, or looser than this
+                        allows, is the file&apos;s to change.
                     </p>
                     <Notice error={form.invalid.length > 0 ? `${form.invalid.join(', ')}: a whole number` : refused}>
                         {saved ? savedText(saved) : null}
