@@ -175,8 +175,12 @@ class Run(_Model):
     """The runtime's session, for opening its transcript with the runtime's own tools."""
     cost_usd: float | None = None
     """What the agent runtime reported it cost, in US dollars; None when it reported nothing."""
-    tokens: int | None = None
-    """How many tokens the agent runtime reported it used; None when it reported nothing."""
+    new_tokens: int | None = None
+    """The tokens the runtime reported its model took in or wrote anew, every kind but cache reads; None when it
+    reported nothing."""
+    peak_context: int | None = None
+    """The most tokens one of its model calls was sent, from the cache or not; None when the runtime reported nothing,
+    or recorded it before canopy kept it."""
     worktrees: list[str] = []
     """The worktrees a running run holds, from the workspace root when under it."""
     log_path: str
@@ -361,8 +365,12 @@ class ChoreRun(_Model):
     """The runtime's session, for opening its transcript with the runtime's own tools."""
     cost_usd: float | None = None
     """What the agent runtime reported it cost, in US dollars; None when it reported nothing."""
-    tokens: int | None = None
-    """How many tokens the agent runtime reported it used; None when it reported nothing."""
+    new_tokens: int | None = None
+    """The tokens the runtime reported its model took in or wrote anew, every kind but cache reads; None when it
+    reported nothing."""
+    peak_context: int | None = None
+    """The most tokens one of its model calls was sent, from the cache or not; None when the runtime reported nothing,
+    or recorded it before canopy kept it."""
     log_path: str
     """Where its log is: from the workspace root when under it."""
 

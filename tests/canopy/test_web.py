@@ -15,7 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from canopy.cli.main import main
-from canopy.core import config, conversation, db, pause
+from canopy.core import agent_output, config, conversation, db, pause
 from canopy.core.context import Context
 from canopy.infra import resources
 from canopy.loop import repeat, reread, web
@@ -101,6 +101,20 @@ def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journ
     assert not Path(run["log_path"]).is_absolute()
     assert root / run["log_path"] == Path(stored["log_path"])
     assert [root / w for w in run["worktrees"]] == [slot]
+
+
+def test_a_runs_spend_is_its_new_tokens_and_its_peak_context(ctx: Context) -> None:
+    run_id = running_run(ctx, KEY, private=False)
+    usage = agent_output.Usage(0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0)
+    db.set_run_report(ctx.conn, run_id, "ses_w1", dataclasses.replace(usage, peak_context=26_000))
+
+    c, _ = signed_in_client(ctx)
+    run = c.get(f"/api/runs/{run_id}").json()
+    assert (run["cost_usd"], run["new_tokens"], run["peak_context"]) == (0.5, 10_000, 26_000)  # no cache reads
+
+    db.set_run_report(ctx.conn, run_id, "ses_w1", usage)  # as a run recorded before the peak was kept
+    run = c.get(f"/api/runs/{run_id}").json()
+    assert (run["new_tokens"], run["peak_context"]) == (10_000, None)
 
 
 def test_meta_carries_each_repositorys_branch_url_when_set(canopy_env: CanopyEnv, ctx: Context) -> None:

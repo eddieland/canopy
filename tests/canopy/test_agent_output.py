@@ -28,23 +28,31 @@ def test_plain_text_is_read_as_it_is() -> None:
     assert agent_output.read(stdout) == AgentOutput(stdout, stdout)  # plain text is one message
 
 
-def test_events_give_the_text_the_session_and_the_cost() -> None:
+def test_events_give_the_text_the_session_the_cost_and_the_peak_context() -> None:
     lines = [
         event("step_start", {"type": "step-start"}),
         text("Working on it.\nStill working."),
         event("tool_use", {"tool": "bash", "state": {"output": RESULT.replace("did it", "a tool's output")}}),
         step(0.25),
         text(RESULT),
-        step(1),
+        step(1, {**TOKENS, "cache": {"read": 900, "write": 50}}),
         "not an event",
     ]
     output = agent_output.read("\n".join(lines))
     assert output.text == f"Working on it.\nStill working.\n{RESULT}"
     assert output.last == RESULT
     assert output.session_id == "ses_abc123"
-    assert output.usage == Usage(1.25, input=200, output=40, reasoning=6, cache_read=800, cache_write=100)
+    peak = 100 + 900 + 50  # the second call's input, cache read, and cache write
+    assert output.usage == Usage(1.25, 200, 40, 6, cache_read=1300, cache_write=100, peak_context=peak)
     assert output.usage is not None
-    assert output.usage.tokens == 2 * (100 + 20 + 3 + 400 + 50)
+    assert output.usage.new_tokens == 2 * (100 + 50 + 20 + 3)  # every kind but the cache reads
+    assert output.usage.describe() == "$1.25, 346 new tokens, 1.1k peak context"
+
+
+def test_a_cost_recorded_before_the_peak_context_was_kept_says_none() -> None:
+    usage = Usage(0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0)
+    assert usage.describe() == "$0.50, 10.0k new tokens"
+    assert usage.spent() == {"cost_usd": 0.5, "new_tokens": 10_000, "peak_context": None}
 
 
 def test_a_result_line_is_not_an_event() -> None:
@@ -56,7 +64,7 @@ def test_events_with_no_model_call_cost_nothing() -> None:
     error = json.dumps({"type": "error", "timestamp": 1, "sessionID": "ses_abc123", "error": {"name": "UnknownError"}})
     output = agent_output.read(error)
     assert (output.text, output.last, output.session_id) == ("", "", "ses_abc123")
-    assert output.usage == Usage(0, 0, 0, 0, 0, 0)
+    assert output.usage == Usage(0, 0, 0, 0, 0, 0, peak_context=0)
 
 
 @pytest.mark.parametrize(

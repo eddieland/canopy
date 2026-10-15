@@ -696,7 +696,8 @@ def usage_of(row: sqlite3.Row) -> Usage | None:
     """What a run, chore run, review run, or tick row says its agent cost, or None when the runtime reported nothing.
 
     Returns:
-        The row's cost and token counts, a missing count read as 0, or None when it has no cost.
+        The row's cost and token counts, a missing count read as 0 and a missing peak context as unknown, or None
+        when it has no cost.
     """
     if row["cost_usd"] is None:
         return None
@@ -707,6 +708,7 @@ def usage_of(row: sqlite3.Row) -> Usage | None:
         reasoning=int(row["tokens_reasoning"] or 0),
         cache_read=int(row["tokens_cache_read"] or 0),
         cache_write=int(row["tokens_cache_write"] or 0),
+        peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
     )
 
 
@@ -718,13 +720,21 @@ def _set_report(
     usage: Usage | None,
 ) -> None:
     spent = (
-        (usage.cost_usd, usage.input, usage.output, usage.reasoning, usage.cache_read, usage.cache_write)
+        (
+            usage.cost_usd,
+            usage.input,
+            usage.output,
+            usage.reasoning,
+            usage.cache_read,
+            usage.cache_write,
+            usage.peak_context,
+        )
         if usage is not None
-        else (None,) * 6
+        else (None,) * 7
     )
     conn.execute(
         f"UPDATE {table} SET session_id = ?, cost_usd = ?, tokens_input = ?, tokens_output = ?, "  # noqa: S608
-        "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ? WHERE id = ?",
+        "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ?, tokens_peak_context = ? WHERE id = ?",
         (session_id, *spent, row_id),
     )
 

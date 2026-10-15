@@ -69,7 +69,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
 
     def finish(status: str, summary: str, usage: agent_output.Usage | None = None) -> Outcome:
         db.finish_tick(ctx.conn, tick_id, status, summary)
-        spent = {"cost_usd": usage.cost_usd, "tokens": usage.tokens} if usage is not None else {}
+        spent = usage.spent() if usage is not None else {}
         log.info("tick finished", extra={"status": status, "summary": summary, **spent})
         return Outcome(tick_id, status, summary, usage)
 

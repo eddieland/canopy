@@ -492,8 +492,9 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     for run_id, key, kind, branch, started, ended, status, result, private, cost in runs:
         conn.execute(
             "INSERT INTO runs (id, tick_id, ticket_key, kind, branch, started_at, ended_at, status, result_json, "
-            "log_path, private, session_id, cost_usd, tokens_input, tokens_output) "
-            "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "log_path, private, session_id, cost_usd, tokens_input, tokens_output, tokens_cache_read, "
+            "tokens_peak_context) "
+            "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 run_id,
                 key,
@@ -509,6 +510,8 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
                 cost,
                 int(cost * 40_000),
                 int(cost * 6_000),
+                int(cost * 400_000),
+                int(cost * 60_000),
             ),
         )
     run_slots = (
@@ -637,7 +640,8 @@ def _chore_fixtures(conn: sqlite3.Connection, root: Path) -> None:
     for run_id, name, started, ended, status, result, cost in chore_runs:
         conn.execute(
             "INSERT INTO chore_runs (id, tick_id, chore, started_at, ended_at, status, result_json, log_path, "
-            "session_id, cost_usd, tokens_input, tokens_output) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "session_id, cost_usd, tokens_input, tokens_output, tokens_cache_read, tokens_peak_context) "
+            "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 run_id,
                 name,
@@ -650,6 +654,8 @@ def _chore_fixtures(conn: sqlite3.Connection, root: Path) -> None:
                 cost,
                 int(cost * 40_000),
                 int(cost * 6_000),
+                int(cost * 400_000),
+                int(cost * 60_000),
             ),
         )
     conn.execute(

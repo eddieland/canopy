@@ -1057,6 +1057,18 @@ export type components = {
              */
             log_path: string;
             /**
+             * New Tokens
+             * @description The tokens the runtime reported its model took in or wrote anew, every kind but cache reads; None when it
+             *     reported nothing.
+             */
+            new_tokens: number | null;
+            /**
+             * Peak Context
+             * @description The most tokens one of its model calls was sent, from the cache or not; None when the runtime reported nothing,
+             *     or recorded it before canopy kept it.
+             */
+            peak_context: number | null;
+            /**
              * Session Id
              * @description The runtime's session, for opening its transcript with the runtime's own tools.
              */
@@ -1079,11 +1091,6 @@ export type components = {
              * @description The harness's note or the agent's summary, line breaks kept, cut at 300 characters.
              */
             summary: string | null;
-            /**
-             * Tokens
-             * @description How many tokens the agent runtime reported it used; None when it reported nothing.
-             */
-            tokens: number | null;
         };
         /**
          * ChoreRunDetail
@@ -2348,6 +2355,18 @@ export type components = {
              */
             log_path: string;
             /**
+             * New Tokens
+             * @description The tokens the runtime reported its model took in or wrote anew, every kind but cache reads; None when it
+             *     reported nothing.
+             */
+            new_tokens: number | null;
+            /**
+             * Peak Context
+             * @description The most tokens one of its model calls was sent, from the cache or not; None when the runtime reported nothing,
+             *     or recorded it before canopy kept it.
+             */
+            peak_context: number | null;
+            /**
              * Private
              * @description Whether it works a ticket started in canopy, whose conversation never reaches the tracker.
              */
@@ -2391,11 +2410,6 @@ export type components = {
              * @description The ticket's title, as the overseer named it (DESIGN §13); None until it does.
              */
             ticket_title: string | null;
-            /**
-             * Tokens
-             * @description How many tokens the agent runtime reported it used; None when it reported nothing.
-             */
-            tokens: number | null;
             /**
              * Worktrees
              * @description The worktrees a running run holds, from the workspace root when under it.

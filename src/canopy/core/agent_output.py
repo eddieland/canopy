@@ -5,7 +5,8 @@ per line. canopy reads two kinds of event and one field of every event, each val
 
 - `text`: a finished piece of the agent's text, in `part.text`. Joined one per line they are what stdout holds without
   `--format json`, so every result contract reads the same either way. The last one is the agent's final message.
-- `step_finish`: one model call's `part.cost`, in dollars, and `part.tokens`. Summed, they are what the run cost.
+- `step_finish`: one model call's `part.cost`, in dollars, and `part.tokens`. Summed, they are what the run cost; the
+  most one call was sent is the run's peak context.
 - `sessionID`, on every event: the session OpenCode kept, which the operator opens with OpenCode's own tools.
 
 Any other event, and any line that is not an event, is ignored. Output with no events at all is plain text, as from a
@@ -63,7 +64,10 @@ class _StepFinish(BaseModel):
 
 @dataclass(frozen=True)
 class Usage:
-    """What a run cost: dollars as the runtime priced them, and tokens by kind."""
+    """What a run cost: dollars as the runtime priced them, tokens by kind, and the most one model call was sent.
+
+    `peak_context` is None for a run recorded before canopy kept it.
+    """
 
     cost_usd: float
     input: int
@@ -71,19 +75,34 @@ class Usage:
     reasoning: int
     cache_read: int
     cache_write: int
+    peak_context: int | None = None
 
     @property
-    def tokens(self) -> int:
-        """Every token the model read or wrote, cache reads and writes included."""
-        return self.input + self.output + self.reasoning + self.cache_read + self.cache_write
+    def new_tokens(self) -> int:
+        """The tokens the model took in or wrote for the first time: every kind but cache reads.
+
+        A cache read is context a call had already been sent, read again by each call after it, so summed over a run's
+        calls it grows with their number and outweighs the rest; the peak context says how large that context got.
+        """
+        return self.input + self.cache_write + self.output + self.reasoning
 
     def describe(self) -> str:
-        """What it cost for a person, as `$0.25, 12.3k tokens`.
+        """What it cost for a person, as `$0.25, 12.3k new tokens, 45.6k peak context`.
 
         Returns:
-            The cost to the cent and the token count, abbreviated with `k` or `M` from a thousand up.
+            The cost to the cent, the new tokens, and the peak context when it is known, counts abbreviated with `k` or
+            `M` from a thousand up.
         """
-        return f"${self.cost_usd:.2f}, {_count(self.tokens)} tokens"
+        peak = f", {_count(self.peak_context)} peak context" if self.peak_context is not None else ""
+        return f"${self.cost_usd:.2f}, {_count(self.new_tokens)} new tokens{peak}"
+
+    def spent(self) -> dict[str, object]:
+        """What it cost as a log line's fields.
+
+        Returns:
+            The cost in dollars, the new tokens, and the peak context.
+        """
+        return {"cost_usd": self.cost_usd, "new_tokens": self.new_tokens, "peak_context": self.peak_context}
 
 
 def _count(n: int) -> str:
@@ -171,4 +190,5 @@ def _total(steps: list[_StepFinish]) -> Usage:
         reasoning=sum(s.tokens.reasoning for s in steps),
         cache_read=sum(s.tokens.cache.read for s in steps),
         cache_write=sum(s.tokens.cache.write for s in steps),
+        peak_context=max((s.tokens.input + s.tokens.cache.read + s.tokens.cache.write for s in steps), default=0),
     )
