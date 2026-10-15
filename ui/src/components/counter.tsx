@@ -56,7 +56,13 @@ export function Counter({
             <span className="readout h-8 text-3xl leading-8 font-medium">
                 {value === undefined ? <Skeleton className="h-7 w-12" /> : <RollingNumber value={String(value)} />}
             </span>
-            <span className="truncate text-xs text-muted-foreground">{children}</span>
+            {/* Cut to fit, so a line that grows with the workspace (pools unread) is whole on hover. */}
+            <span
+                className="truncate text-xs text-muted-foreground"
+                title={typeof children === 'string' ? children : undefined}
+            >
+                {children}
+            </span>
         </div>
     )
 }

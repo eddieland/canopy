@@ -43,3 +43,57 @@ export function slotsRoot(worktrees: Worktree[]): string | null {
     const [root] = roots
     return roots.size === 1 && root !== null && root !== undefined ? root : null
 }
+
+/** The fewest idle slots in a row that fold into one line on the worktrees page: two show as they are. */
+export const IDLE_RUN = 3
+
+/** A pool's slots as the worktrees page lists them: a slot on its own line, or a run of idle ones folded into one. */
+export type SlotGroup = { kind: 'slot'; worktree: Worktree } | { kind: 'idle'; worktrees: Worktree[] }
+
+/**
+ * A pool's slots in slot order, each run of `IDLE_RUN` or more idle slots in a row folded into one group. A pool of
+ * many slots is mostly idle ones, which say nothing but their number: folded, the slots with work in them stay in
+ * reach. With a `state`, only the groups in it: idle ones are folded as they lie in the whole pool, so a group never
+ * spans a slot in another state.
+ */
+export function slotGroups(worktrees: readonly Worktree[], state?: WorktreeState): SlotGroup[] {
+    const groups = folded(worktrees)
+    if (state === undefined) {
+        return groups
+    }
+    return groups.filter((g) => (g.kind === 'idle' ? state === 'idle' : g.worktree.state === state))
+}
+
+/**
+ * Whether a pool shows under the worktrees page's filter by `state`: with no filter, every pool; with one, a pool with
+ * a slot in that state, or under `broken` one treehouse could not read, which the Needs a look counter counts too.
+ */
+export function poolShown(pool: Pool, state: WorktreeState | undefined): boolean {
+    if (state === undefined) {
+        return true
+    }
+    return pool.worktrees.some((w) => w.state === state) || (state === 'broken' && pool.error !== null)
+}
+
+function folded(worktrees: readonly Worktree[]): SlotGroup[] {
+    const groups: SlotGroup[] = []
+    let idle: Worktree[] = []
+    const flush = () => {
+        if (idle.length >= IDLE_RUN) {
+            groups.push({ kind: 'idle', worktrees: idle })
+        } else {
+            groups.push(...idle.map((worktree) => ({ kind: 'slot', worktree }) as const))
+        }
+        idle = []
+    }
+    for (const worktree of worktrees) {
+        if (worktree.state === 'idle') {
+            idle.push(worktree)
+            continue
+        }
+        flush()
+        groups.push({ kind: 'slot', worktree })
+    }
+    flush()
+    return groups
+}

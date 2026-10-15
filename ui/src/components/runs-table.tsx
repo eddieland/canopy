@@ -17,6 +17,9 @@ import { RUN_TEXT } from '@/lib/run-state'
 import type { TicketRuns } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
 
+// A run's worktrees named in its row before `+N more`: three repositories' worth, on one line in most panels.
+const WORKTREES_SHOWN = 3
+
 /**
  * Runs, one row each: state, the ticket and its title, the run's id (opening its page) and kind, cost, when, and what
  * it said. `ticket` leaves out the ticket and its title, for a ticket's own page.
@@ -134,17 +137,41 @@ function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
                     {run.prs.map((pr) => (
                         <PullRequestLink key={pr} url={pr} />
                     ))}
-                    {run.worktrees.map((path) => (
-                        <span key={path} className="text-muted-foreground" title="the worktree it holds">
-                            {path}
-                        </span>
-                    ))}
+                    <RunWorktrees paths={run.worktrees} />
                     {run.session_id && (
                         <span className="text-muted-foreground" title="its transcript is on the run's page">
                             session {run.session_id}
                         </span>
                     )}
                 </RowLine>
+            )}
+        </>
+    )
+}
+
+/**
+ * The worktrees a run holds, one per repository it works in: the first three, then how many more, every one on hover.
+ * A ticket across many repositories holds a slot in each, and its run's page lists them all. One more is named rather
+ * than counted, since `+1 more` would take the room its path does.
+ */
+function RunWorktrees({ paths }: { paths: string[] }) {
+    const shown = paths.length > WORKTREES_SHOWN + 1 ? paths.slice(0, WORKTREES_SHOWN) : paths
+    const more = paths.length - shown.length
+    return (
+        <>
+            {shown.map((path) => (
+                <span key={path} className="text-muted-foreground" title="the worktree it holds">
+                    {path}
+                </span>
+            ))}
+            {more > 0 && (
+                <span
+                    className="text-muted-foreground"
+                    title={`the worktrees it holds:\n${paths.join('\n')}`}
+                    data-testid="run-worktrees-more"
+                >
+                    +{more} more {more === 1 ? 'worktree' : 'worktrees'}
+                </span>
             )}
         </>
     )

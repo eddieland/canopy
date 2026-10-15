@@ -111,7 +111,9 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                             active <Age at={ticket.active_at} variant="ago" />
                         </span>
                     </PanelHeader>
-                    <Fields>
+                    {/* Three field lists spaced as one: a ticket across many repositories scrolls its units in */}
+                    {/* place, so its total and actions stay in reach. */}
+                    <Fields className="pb-0">
                         <Field label="phase" mono>
                             <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} />
                             {ticket.done ? ', done' : ''}
@@ -119,9 +121,17 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         <Field label="branch" mono>
                             {ticket.branch === null ? 'none yet' : <Copyable text={ticket.branch} label="branch" />}
                         </Field>
-                        {units.map((unit) => (
-                            <Unit key={unit.repo ?? ''} repo={unit.repo} pr={unit.pr_url} phase={unit.phase} />
-                        ))}
+                    </Fields>
+                    {units.length > 0 && (
+                        <PanelScroll label="Repositories" className="max-h-60" data-testid="ticket-units">
+                            <Fields className="pt-1.5 pb-0">
+                                {units.map((unit) => (
+                                    <Unit key={unit.repo ?? ''} repo={unit.repo} pr={unit.pr_url} phase={unit.phase} />
+                                ))}
+                            </Fields>
+                        </PanelScroll>
+                    )}
+                    <Fields className="pt-1.5">
                         <CostTotalRow cost={cost} />
                     </Fields>
                     <div className="border-t" data-testid="ticket-actions">
