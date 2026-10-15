@@ -208,8 +208,9 @@ function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
                 </span>
                 <Age at={item.since} className="ml-auto" />
             </span>
-            {item.ticket_key !== null && <TicketTitle title={item.ticket_title} />}
-            <span className="line-clamp-2 text-sm break-words">
+            {/* The title is the row's name and the detail its preview, as an inbox's subject over its first line. */}
+            {item.ticket_key !== null && <TicketTitle title={item.ticket_title} className="font-semibold" />}
+            <span className="line-clamp-2 text-sm break-words text-muted-foreground">
                 <InlineCode text={item.detail} links={false} />
             </span>
         </>
@@ -295,7 +296,7 @@ function Subject({ item }: { item: AttentionItem }) {
         return (
             <>
                 <TicketLink ticketKey={item.ticket_key} className="shrink-0" />
-                <TicketTitle title={item.ticket_title} />
+                <TicketTitle title={item.ticket_title} className="font-semibold" />
             </>
         )
     }
