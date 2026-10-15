@@ -1,7 +1,7 @@
-"""`canopy init`, `canopy skill`, `canopy secret`, and `canopy sandbox setup`: setting canopy up on this machine.
+"""`canopy init`, `canopy skill`, `canopy completion`, `canopy secret`, and `canopy sandbox setup`: setting canopy up.
 
-`canopy skill` is for the operator's own agent sessions, `canopy secret` for the web UI, and `canopy sandbox setup`
-for sandboxed runs.
+`canopy skill` is for the operator's own agent sessions, `canopy completion` for their shell, `canopy secret` for the
+web UI, and `canopy sandbox setup` for sandboxed runs.
 """
 
 from __future__ import annotations
@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 import click
+from click.shell_completion import BashComplete, FishComplete, ShellComplete, ZshComplete
 
 from canopy.cli import workspace as cli_workspace
 from canopy.cli.common import CliError, runner_of
@@ -20,6 +21,11 @@ from canopy.serve import secret
 from canopy.setup import init
 from canopy.setup import sandbox as setup_sandbox
 from canopy.setup import workspace as setup_workspace
+
+# The shells `canopy completion` writes a script for. The script runs canopy with `_CANOPY_COMPLETE` set, which click
+# answers before any command runs.
+SHELLS: dict[str, type[ShellComplete]] = {"bash": BashComplete, "zsh": ZshComplete, "fish": FishComplete}
+COMPLETE_VAR = "_CANOPY_COMPLETE"
 
 
 @click.command("init")
@@ -218,6 +224,26 @@ def cmd_skill() -> int:
         canopy skill > ~/.agents/skills/canopy/SKILL.md
     """  # noqa: D301  (\b is click's marker for a paragraph it must not rewrap)
     click.echo(resources.operator_skill().read_text(encoding="utf-8"), nl=False)
+    return 0
+
+
+@click.command("completion")
+@click.argument("shell", type=click.Choice(tuple(SHELLS)))
+@click.pass_context
+def cmd_completion(click_ctx: click.Context, shell: str) -> int:
+    """Print the script that completes canopy's commands, options, and names in your shell.
+
+    It completes repository and chore names from the workspace you are in. Load it from your shell's startup file
+    (bash needs 4.4 or newer):
+
+    \b
+        echo 'eval "$(canopy completion bash)"' >> ~/.bashrc
+        echo 'eval "$(canopy completion zsh)"' >> ~/.zshrc
+        canopy completion fish > ~/.config/fish/completions/canopy.fish
+    """  # noqa: D301  (\b is click's marker for a paragraph it must not rewrap)
+    script = SHELLS[shell](click_ctx.find_root().command, {}, "canopy", COMPLETE_VAR)
+    # The template rather than `source()`, whose bash version check runs bash outside canopy.infra.procs.
+    click.echo(script.source_template % script.source_vars(), nl=False)
     return 0
 
 

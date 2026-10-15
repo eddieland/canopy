@@ -51,6 +51,7 @@ def cli(ctx: click.Context) -> None:
 for command in (
     setup.cmd_init,
     setup.cmd_skill,
+    setup.cmd_completion,
     setup.cmd_secret,
     setup.sandbox_group,
     loop.cmd_loop,
