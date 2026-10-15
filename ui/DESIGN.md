@@ -509,7 +509,9 @@ list, an empty state, or a skeleton by hand.
   `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows, under the item, the ticket's
   actions and what it is stuck at (below), then its conversation and the reply form, as a ticket's page orders them;
   an item about a PR no ticket owns, its review limit; a chore's item (a finding or `chore_failed`) shows the chore's
-  notes and the note form, and a finding a ghost `dismiss` beside its age (`useDismissFinding`); an item about neither
+  notes and the note form, and a finding a ghost `dismiss` beside its age (`useDismissFinding`) and, in place of its
+  detail, the finding as its chore's page has it (`ChoreFindingText`): the title whole, then what it says of itself,
+  then its link on its own line, where the item's detail runs title and link together; an item about neither
   shows its detail and nothing to answer. The page keeps no list of the runs working now: the rail's, on every page,
   is the one, so one count of them shows at a time.
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
@@ -591,7 +593,9 @@ list, an empty state, or a skeleton by hand.
   an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
   how long it has been open, and on the chore's page has `dismiss` after its age, or once dismissed a plain
   `dismissed` chip and `undo`: still reported, only off the attention list; its detail and link start under
-  its title. Its id leads the row in muted monospace. A row's own action is a ghost `xs`
+  its title. Its title is never cut: it is the finding's name and up to 200 characters, so it wraps, with the head
+  line on its first line's baseline. Its id leads the row in muted monospace, at most `12rem` wide; a longer one
+  wraps down beside the detail rather than squeeze the title. A row's own action is a ghost `xs`
   button in monospace in its head line, as the list-order toggle is, never a full button under the row; what it did
   goes under the row, once clicked.
 - **Names** (`src/lib/refs.ts`): what canopy keeps by id is named as the CLI reads a reference, `KIND:ID`, in rows,
