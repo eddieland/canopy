@@ -88,8 +88,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D014. Tracker-agnostic: MCP plus a contract, with optional provider skills
 
-- Config names a free-form `tracker.provider` and `tracker.query`; DESIGN §17 is the contract; provider knowledge goes
-  in optional `tracker-<provider>` skills.
+- Config names a free-form `tracker.provider` and each workspace's query (`tracker.queries`); DESIGN §17 is the
+  contract; provider knowledge goes in optional `tracker-<provider>` skills.
 - The label, not the query, authorizes work. Ticket keys are regex-guarded: they reach branch names, paths, and argv.
 - Revisit: a tracker that needs code gets an entry before the code.
 

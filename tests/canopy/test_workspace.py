@@ -15,7 +15,7 @@ from canopy.loop import attention
 from canopy.setup import workspace as setup_workspace
 from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools, th
 from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, wait_for_run, worker_does
-from tests.conftest import CanopyEnv, git
+from tests.conftest import QUERY, CanopyEnv, git
 
 LABEL = "agent-ready-tester"
 
@@ -34,7 +34,7 @@ def dispatch(key: str, *args: str) -> list[str]:
 def test_the_workspace_is_found_from_below_and_its_repositories_files_are_not_read(
     ws: Ws, canopy_env: CanopyEnv
 ) -> None:
-    (ws.clone("api") / "canopy.toml").write_text('[tracker]\nprovider = "jira"\nquery = "project = API"\n')
+    (ws.clone("api") / "canopy.toml").write_text('[tracker]\nprovider = "jira"\n')
     deep = ws.clone("api") / "src"
     deep.mkdir()
     found = workspace.find(deep)
@@ -46,7 +46,7 @@ def test_the_workspace_is_found_from_below_and_its_repositories_files_are_not_re
     ]
     cfg = config.load(found.root, canopy_env.user_file)
     # The repositories' own canopy.toml files are not read inside a workspace: one tracker, one queue.
-    assert (cfg.tracker.provider, cfg.tracker.query) == ("github", "is:issue is:open")
+    assert (cfg.tracker.provider, cfg.tracker.query_for(found.root)) == ("github", QUERY)
     # Each workspace keeps its own state.
     assert found.state_dir == ws.state_dir
 
@@ -355,6 +355,7 @@ def test_init_workspace_writes_the_skeleton(
     root = tmp_path / "acme"
     root.mkdir()
     (root / ".gitignore").write_text("*.pyc")
+    canopy_env.add_query_root(root)
     with contextlib.chdir(root):
         assert main(["init", "--workspace", "--provider", "github"]) == 0
         out = capsys.readouterr().out
@@ -425,3 +426,16 @@ def test_sync_outside_a_workspace_refuses(
     with contextlib.chdir(elsewhere):
         assert main(["workspace", "sync"]) == 1
         assert "run `canopy init` first" in capsys.readouterr().err
+
+
+def test_init_of_another_workspace_says_the_query_line_to_add(
+    canopy_env: CanopyEnv, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    # One user file serves every workspace, and init never edits one it did not write: it says what to add.
+    root = tmp_path / "second"
+    root.mkdir()
+    with contextlib.chdir(root):
+        assert main(["init", "--workspace", "--provider", "github"]) == 0
+    out = capsys.readouterr().out
+    assert f"kept    {canopy_env.user_file}" in out
+    assert f'add "{root}" = <the query> under [tracker.queries]' in out

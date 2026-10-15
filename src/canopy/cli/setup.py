@@ -110,7 +110,8 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
     map_file = root / config.WORKSPACE_FILE_NAME
     if map_file in report.written and not repos:
         click.echo(
-            f"Edit tracker.query and add each repository under [repos.<name>] in {map_file}, describe them in "
+            f"Edit this workspace's tracker query in {user_file}, add each repository under [repos.<name>] in "
+            f"{map_file}, describe them in "
             f"{workspace.MAP_FILE_NAME}, then run `canopy workspace sync`. Or pass clone URLs to "
             f"`canopy workspace add`, which adds and syncs them."
         )
@@ -129,7 +130,8 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
         ws = workspace.load(root)
         click.echo(
             f"\nWrite a one-line summary for each repository in {map_file}, and describe them in "
-            f"{workspace.MAP_FILE_NAME}: the overseer reads both to choose repositories. Edit tracker.query too."
+            f"{workspace.MAP_FILE_NAME}: the overseer reads both to choose repositories. Edit this workspace's tracker "
+            f"query in {user_file} too."
         )
     click.echo()
     click.echo(init.BRANCH_PROTECTION.format(prefix=cfg.trust.branch_prefix), nl=False)

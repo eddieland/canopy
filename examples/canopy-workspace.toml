@@ -28,7 +28,7 @@ provider = "jira"
 # Added by a worker that needs an answer, removed when it resumes. Any label your tracker accepts; it must
 # already exist, since canopy does not create labels.
 needs_human_label = "needs-human"
-query = 'project = ACME AND statusCategory != Done ORDER BY priority DESC, created ASC'
+# The query that finds candidate tickets is each operator's, in their user config's [tracker.queries] (DESIGN §12).
 # Optional: a ticket's page, with {key} where its key goes. The web UI links each ticket there.
 # ticket_url = "https://acme.atlassian.net/browse/{key}"
 

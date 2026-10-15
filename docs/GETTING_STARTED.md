@@ -46,10 +46,10 @@ The smallest setup: canopy works tickets in one repository.
    own (`agent-ready-<you>`); and, in the directory, `canopy-workspace.toml`, `MAP.md`, and a `.gitignore` for what
    canopy keeps there. It clones the repository into `repos/api/` and prints the branch protection canopy relies on.
    Run in a git checkout, init refuses: canopy keeps nothing in your repositories.
-2. In `canopy-workspace.toml`, set `tracker.query` to find candidate tickets and write a one-line `summary` under
-   `[repos.api]`. Create the `needs-human` label in your tracker (or set `needs_human_label` to one you have).
-   `examples/canopy-workspace.toml` is a full one. Commit the workspace to a repository of its own only if teammates
-   share it.
+2. In your personal config, edit this workspace's query under `[tracker.queries]` to find candidate tickets; init wrote
+   an example. In `canopy-workspace.toml`, write a one-line `summary` under `[repos.api]`. Create the `needs-human`
+   label in your tracker (or set `needs_human_label` to one you have). `examples/canopy-workspace.toml` is a full one.
+   Commit the workspace to a repository of its own only if teammates share it.
 3. In your personal config, add your tracker account id to `trust.authorized_repliers`, so your comments can unblock a
    ticket, and your GitHub login to `trust.trusted_reviewers`, so your review comments send a worker back to its PR.
    `examples/config.toml` lists every key with its default.
