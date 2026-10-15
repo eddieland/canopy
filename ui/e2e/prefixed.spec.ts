@@ -127,6 +127,12 @@ test("a chore's finding takes a note its next run reads, and is dismissed and li
     await expect(list.getByRole('link').filter({ hasText: 'lodash-advisory' })).toHaveCount(0)
     await expect(leaving).toHaveCount(0)
 
+    // The chores list counts it apart, as canopy status does, so a chore whose findings are all dismissed reads so.
+    await page.goto('chores')
+    await expect(page.getByTestId('chore-deps').getByTestId('chore-findings')).toHaveText(
+        '0 open findings · 1 dismissed',
+    )
+
     await page.goto('chores/deps')
     await expect(page.getByTestId('chore-notes').locator('[data-source=operator]').last()).toContainText(
         'until 2026-10-15',
