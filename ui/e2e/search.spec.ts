@@ -91,10 +91,12 @@ test('deleting every character empties the search page, and elsewhere leaves the
     const box = page.getByRole('searchbox', { name: 'Search the journal' })
     await box.press('End')
     await box.press('Backspace')
+    await page.clock.runFor(1_000)
+    await expect(page).toHaveURL(/\/search\?q=we$/u)
     await box.press('Backspace')
     await page.clock.runFor(1_000)
     // One character is too short to send, so the last query's hits stay.
-    await expect(page).toHaveURL(/\/search\?q=web$/u)
+    await expect(page).toHaveURL(/\/search\?q=we$/u)
     await expect(page.getByTestId('search-results')).toBeVisible()
     await box.press('Backspace')
     await page.clock.runFor(1_000)
