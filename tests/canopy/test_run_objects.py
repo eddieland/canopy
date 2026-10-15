@@ -124,9 +124,9 @@ def sandboxed_worker_then_kill(canopy_env: CanopyEnv, conn: sqlite3.Connection, 
     conn.execute("UPDATE runs SET pid = ? WHERE id = ?", (DEAD_PID, run_id))
 
 
-@pytest.mark.parametrize("rewrites_link", [False, True])
+@pytest.mark.parametrize("rewrites", [None, ".git", "commondir"])
 def test_reconcile_tidies_the_slots_of_a_killed_run(
-    rewrites_link: bool,  # noqa: FBT001  (a parameter)
+    rewrites: str | None,
     canopy_env: CanopyEnv,
     git_pool: GitPool,
     worktree_pool: tuple[Path, list[Path]],
@@ -138,9 +138,13 @@ def test_reconcile_tidies_the_slots_of_a_killed_run(
     run_id = dispatch(conn, InlineRunner())
     slot = Path(slot_of(conn, run_id)["slot_path"])
     link = (slot / ".git").read_bytes()
+    own = hostgit.own_git_dir(slot, link)
+    assert own is not None
     sandboxed_worker_then_kill(canopy_env, conn, run_id, slot)
-    if rewrites_link:
+    if rewrites == ".git":
         (slot / ".git").write_text("gitdir: /somewhere/else\n")
+    elif rewrites == "commondir":
+        (own / "commondir").write_text("/somewhere/else\n")
 
     with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
         assert main(["tick"]) == 0
@@ -149,6 +153,7 @@ def test_reconcile_tidies_the_slots_of_a_killed_run(
         assert run is not None
         assert run["status"] == "crashed"
         assert (slot / ".git").read_bytes() == link  # put back, from what `_run` recorded, before any git ran there
+        assert (own / "commondir").read_bytes() == hostgit.COMMONDIR_CONTENT
         assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")
         assert not objects_of(canopy_env, run_id).exists()
         assert_healthy(slot, primary)

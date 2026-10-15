@@ -135,8 +135,8 @@ canopy (harness, Python)
     worker.py      canopy _run: branch setup and the operator's setup command in each slot, the worker, result
                    parsing, push verification, slot return; a split's run, its children validated into split_children
     desks.py       a joint run's desk: one link per worktree it leased (§18)
-    tidy.py        a run's object directory, and each slot put back before it is returned: its `.git` link, and
-                   no ref or reflog naming the run's own objects (§8)
+    tidy.py        a run's object directory, and each slot put back before it is returned: its `.git` link and
+                   `commondir`, and no ref or reflog naming the run's own objects (§8)
     reconcile.py   dead runs marked crashed, their slots and desks cleaned up, stale leases returned, the capacity left
     halt.py        canopy stop --now: a stopped ticket's run killed and closed as reconcile closes a dead one (§22)
 
@@ -213,7 +213,7 @@ canopy (harness, Python)
     prompts.py     prompt files and overrides; rendering worker prompts
     treehouse.py   status, get --lease, return, destroy; a Pool per repository, with its declared size (§18)
     hostgit.py     git as the harness runs it: hooks, the filesystem monitor, and submodule fetches off; a slot's
-                   `.git` link, read and put back (§8)
+                   `.git` link and `commondir`, read and put back (§8)
     workspace.py   the workspace: its map, repositories, their pools, the private state directory (§18)
 
   infra/           plumbing that knows nothing about tickets or agents

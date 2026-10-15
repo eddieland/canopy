@@ -581,8 +581,9 @@ dispatch names at least one, in a workspace of one repository too.
    A split (§18) differs: step 2 checks each slot out at its base, detached, with no branch, and runs no setup, since
    the splitter has no shell; step 3 runs `split_cmd` in the desk; step 4 parses and validates the split's result;
    step 5 is skipped, since a split pushes nothing.
-5. If any slot's `.git` file no longer holds what step 2 read, record `status='crashed'`, with a note naming each such
-   slot, and run no git in any slot of the run: the file may now point at a git directory the worker made, which would
+5. If any slot's `.git` file no longer holds what step 2 read, or the `commondir` in the git directory it names no
+   longer names the directory that holds that git directory, record `status='crashed'`, with a note naming each such
+   file, and run no git in any slot of the run: either may now point at a git directory the worker made, which would
    take host git past D107's flags.
    Otherwise, if the worker left anything in the object directory, git in each slot from here on reads it as well as the
    slot's own objects (`GIT_OBJECT_DIRECTORY` and `GIT_ALTERNATE_OBJECT_DIRECTORIES`), and a push puts origin's
@@ -601,13 +602,14 @@ dispatch names at least one, in a workspace of one repository too.
    If any slot's push failed or left commits behind, record `status='unpushed'`, naming each repository in a
    workspace: the checkpoint invariant failed and a human looks.
 6. Always: remove a joint run's desk, tidy each slot (`runs/tidy.py`): put back its `.git` file if the run changed it,
-   and, if the object directory holds anything, check it out detached at `origin/<base>` with `--force`, delete its own
-   refs (`refs/worktree/*`, `refs/bisect/*`, `refs/rewritten/*`), `ORIG_HEAD`, and `FETCH_HEAD`, and expire its HEAD
-   reflog, so nothing in it names an object only that directory holds; then
-   `treehouse return --force --if-lease-id <id> --if-lease-holder <holder> <slot>` for every slot, in its repository's
-   pool. A trap runs this on any exit path: normal exit, exception, and SIGTERM, SIGHUP, or SIGINT (the run is then
-   `crashed`). Then delete the object directory. A slot that cannot be tidied is not returned, and the directory is kept
-   for the operator. SIGKILL cannot be trapped; reconcile tidies and returns that run's slots from what step 2 recorded.
+   and its `commondir` as git writes it (`../..`) if it names anywhere else, and, if the object directory holds
+   anything, check it out detached at `origin/<base>` with `--force`, delete its own refs (`refs/worktree/*`,
+   `refs/bisect/*`, `refs/rewritten/*`), `ORIG_HEAD`, and `FETCH_HEAD`, and expire its HEAD reflog, so nothing in it
+   names an object only that directory holds; then `treehouse return --force --if-lease-id <id> --if-lease-holder
+   <holder> <slot>` for every slot, in its repository's pool. A trap runs this on any exit path: normal exit, exception,
+   and SIGTERM, SIGHUP, or SIGINT (the run is then `crashed`). Then delete the object directory. A slot that cannot be
+   tidied is not returned, and the directory is kept for the operator. SIGKILL cannot be trapped; reconcile tidies and
+   returns that run's slots from what step 2 recorded.
 7. Update the `runs` row: ended_at, status, result_json, and in the same transaction record the run's messages about
    its ticket (§22): a `report`, its summary (else the harness's note, else the status) with each PR on a line, and
    for a `blocked` run its `question`. A git failure before or after the worker is `crashed`.

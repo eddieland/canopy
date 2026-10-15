@@ -118,7 +118,8 @@ def test_a_worker_runs_under_a_policy_made_for_its_slot(sandbox: Sandbox, tmp_pa
     assert filesystem["allowRead"][: len(paths) + 2] == [*paths, tmp, str(definitions)]
     assert str(shared) not in filesystem["allowRead"]
     assert filesystem["allowWrite"][:4] == [str(slot), str(own), str(objects), tmp]
-    assert filesystem["denyWrite"] == [str(slot / ".git"), str(own / "config.worktree")]
+    protected = [slot / ".git", own / "config.worktree", own / "commondir", own / "gitdir"]
+    assert filesystem["denyWrite"] == [str(p) for p in protected]
     assert "#" not in json.dumps(call["settings"])
     assert call["settings"]["network"]["allowedDomains"][0] == "api.anthropic.com"
     assert call["env"] == {
