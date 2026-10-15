@@ -424,8 +424,8 @@ Next: M39 waits on S27's overnight run.
 
 ## M29. Probe-gated overseer
 
-A `probe_cmd` that fingerprinted tickets and PRs, so the overseer ran only when one changed (MEASUREMENTS 2026-10-12
-F7 to F10).
+A `probe_cmd` that fingerprinted tickets and PRs, so the overseer ran only when one changed, the loop was woken, a gate
+came due, or `loop.idle_max_minutes` passed (MEASUREMENTS 2026-10-12 F7 to F10).
 
 Status: superseded by M36 to M39 (2026-10-15). M36's connectors observe into the journal every fact the probe would
 have fingerprinted, and M39 runs the overseer only when those observations leave it something to judge.
@@ -436,8 +436,8 @@ The probe's facts in the state block, so the overseer read a PR or a ticket in f
 (MEASUREMENTS 2026-10-12 F6; 2026-10-13 F14).
 
 Status: superseded by M37 (2026-10-15). M37 puts the connectors' observations in the state block instead of a probe's
-facts and drops the overseer's reads, so an unchanged PR or a stopped ticket is not read, and it checks authorized
-repliers against comment authors in code, the question this milestone left open.
+facts and drops the overseer's reads, so an unchanged PR or a stopped ticket is read only while its observations are
+stale, and it checks authorized repliers against comment authors in code, the question this milestone left open.
 
 ## M31. Search in the web UI
 
