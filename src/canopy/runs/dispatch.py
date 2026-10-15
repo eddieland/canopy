@@ -7,6 +7,7 @@ Guards are code and the overseer cannot talk its way past them (DESIGN §4, TRUS
 from __future__ import annotations
 
 import contextlib
+import functools
 import json
 import re
 import sys
@@ -59,7 +60,10 @@ class Refusal(Exception):  # noqa: N818  (a refusal is an outcome the overseer i
 
 @dataclass(frozen=True)
 class Started:
-    """A dispatched run: its branch, the slots it leased, one per repository, and the desk a joint run works in."""
+    """A dispatched run: its branch, the slots it leased, one per repository, and the desk a joint run works in.
+
+    `starts` says the run started its ticket privately, under `tracker.private` (DESIGN §22).
+    """
 
     run_id: int
     branch: str
@@ -67,6 +71,7 @@ class Started:
     pid: int
     label: str
     desk: Path | None = None
+    starts: bool = False
 
     @property
     def repos(self) -> tuple[str, ...]:
@@ -82,6 +87,7 @@ class Plan:
     repositories are the names of the units it covers, in the order the dispatch named them. A run over several is a
     joint run (DESIGN §18). A split has no branch (""): it reads the repositories it names and changes none of them. A
     private run works a ticket the operator started; its start record authorizes it, and it has no label (DESIGN §22).
+    A run that `starts` the ticket is its first, under `tracker.private`: it is private, and writes the start record.
     """
 
     branch: str
@@ -89,6 +95,7 @@ class Plan:
     label: str
     repos: tuple[str, ...]
     private: bool = False
+    starts: bool = False
 
     @property
     def joint(self) -> bool:
@@ -315,6 +322,7 @@ def _plan(
     private = _check_start(ctx, key, kind)
     # A started ticket's start record authorizes it, checked in code; a public ticket's `--label` is a claim (D051).
     configured = "" if private else _check_label(ctx.config.tracker.labels, key, label)
+    starts = not private and _starts_privately(ctx, key, kind)
     if kind == policy.SPLIT and request is None:
         raise Refusal(
             "unauthorized",
@@ -334,7 +342,7 @@ def _plan(
     branch = _branch(ctx, key, kind, slug, names)
     if base is not None:
         _check_base(ctx.config.trust.branch_prefix, branch, base)
-    return Plan(branch=branch, base=base, label=configured, repos=names, private=private)
+    return Plan(branch=branch, base=base, label=configured, repos=names, private=private or starts, starts=starts)
 
 
 def _check_start(ctx: Context, key: str, kind: str) -> bool:
@@ -362,6 +370,29 @@ def _check_start(ctx: Context, key: str, kind: str) -> bool:
     if ctx.config.tracker.tools() is None:
         raise Refusal(
             "no_read_tools", "no tracker tools are known for a private worker; set tracker.mcp_server and read_tools"
+        )
+    return True
+
+
+def _starts_privately(ctx: Context, key: str, kind: str) -> bool:
+    """Return whether this dispatch starts a labeled ticket privately, under `tracker.private` (DESIGN §22).
+
+    Only a ticket canopy never ran is started so: one already worked in public keeps its conversation on the tracker.
+    A split works no unit and leaves the ticket public; its children are started by their own first dispatch.
+
+    Returns:
+        True if the run will be private and write the ticket's start record, False if it stays public.
+
+    Raises:
+        Refusal: no tracker tools are known for a private worker (`no_read_tools`).
+    """
+    if not ctx.config.tracker.private or kind == policy.SPLIT or db.has_runs(ctx.conn, key):
+        return False
+    if ctx.config.tracker.tools() is None:
+        raise Refusal(
+            "no_read_tools",
+            "tracker.private is set, but no tracker tools are known for a private worker; set tracker.mcp_server and "
+            "read_tools",
         )
     return True
 
@@ -701,13 +732,6 @@ def _spawn(
     except (OSError, prompts.PromptError) as e:
         raise Refusal("bad_prompt", str(e)) from e
 
-    def check_start() -> None:
-        # Again inside the run's insert: `canopy stop` marks the record in a transaction of its own, so whichever
-        # commits first wins (DESIGN §22).
-        if plan.private != conversation.is_started(conversation.start_of(ctx.conn, key)):
-            what = "was stopped" if plan.private else "was started privately"
-            raise Refusal("stopped" if plan.private else "private", f"{key} {what} while this dispatch was planned")
-
     run_id = db.insert_run(
         ctx.conn,
         tick_id=tick_id,
@@ -719,7 +743,7 @@ def _spawn(
         works_units=not split,
         started=outbox.run_started(cfg, key=key, kind=kind, branch=branch, attempt=attempt, limit=limit),
         private=plan.private,
-        check=check_start,
+        check=functools.partial(_check_start_again, ctx, key, plan),
     )
     run = db.get_run(ctx.conn, run_id)
     if run is None:
@@ -734,7 +758,22 @@ def _spawn(
         conversation.close_run(ctx.conn, cfg, run, "crashed", note)
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, run_id, pid)
-    return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk)
+    return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
+
+
+def _check_start_again(ctx: Context, key: str, plan: Plan) -> None:
+    """Check the start record again inside the run's insert, writing it for a run that starts the ticket (DESIGN §22).
+
+    `canopy stop` marks the record in a transaction of its own, so whichever commits first wins.
+
+    Raises:
+        Refusal: the ticket was stopped (`stopped`), or started privately (`private`), since the dispatch was planned.
+    """
+    if plan.starts and conversation.start_of(ctx.conn, key) is None:
+        db.set_start(ctx.conn, conversation.TICKET, key, status="started", channel=conversation.LABEL)
+    if plan.private != conversation.is_started(conversation.start_of(ctx.conn, key)):
+        what = "was stopped" if plan.private else "was started privately"
+        raise Refusal("stopped" if plan.private else "private", f"{key} {what} while this dispatch was planned")
 
 
 def _unit_prs(ctx: Context, key: str) -> dict[str, str]:

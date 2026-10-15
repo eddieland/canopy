@@ -44,6 +44,9 @@ TICK_ID_ENV = "CANOPY_TICK_ID"
 RUN_ID_ENV = "CANOPY_RUN_ID"
 MAX_OPERATOR = 4000
 MAX_PR_URL = 300
+# The channel of a start record the loop wrote: with `tracker.private` set, a labeled ticket's first dispatch starts
+# it privately, as if the operator had (DESIGN §22).
+LABEL = "label"
 # A submission id a channel's form draws when it is rendered (DESIGN §22).
 SUBMISSION_RE = re.compile(r"[A-Za-z0-9_-]{8,64}")
 # A mirrored tracker comment's body is cut to this, and marked truncated (DESIGN §22).

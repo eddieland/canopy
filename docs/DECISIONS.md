@@ -400,3 +400,12 @@ such as a shipped migration, may still cite one, and git history has its text.
   cannot write. A new `srt` is a lockfile change. Root-only steps are printed, never run.
 - Rejected: `npm install -g` (unpinned, shared with the operator's own); bundling `srt` (it needs Node regardless).
 - Revisit: if `srt` ships a standalone binary, or the sandbox stops being opt-in.
+
+## D118. Under `tracker.private`, a labeled ticket's first dispatch writes its start record
+
+- The loop writes a start record, which only the operator's commands wrote before, when the operator set the switch
+  and a ticket canopy never ran is dispatched on a queue label. Settled by the operator.
+- No worker re-reads the label after that, and removing it does not stop the ticket; `canopy stop` does (TRUST_MODEL
+  T1's residual).
+- Rejected: the label authorizing every run (more code: phases and replies without a start record); keeping the
+  worker's label check for such tickets (the operator chose an ordinary private ticket).

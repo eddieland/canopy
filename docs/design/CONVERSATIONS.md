@@ -15,7 +15,8 @@ Slack later. Channels differ in how they reach the operator and how they prove w
 workers never see which channel a message came from, so adding a channel changes no prompt.
 
 A ticket is **public** when one of `tracker.labels` authorizes it, as today, and **private** when the operator starts
-it in canopy (below). A started ticket is private whatever labels it carries: the start record wins. A private
+it in canopy, or, with `tracker.private` set, when its label brings it in (below). A started ticket is private whatever
+labels it carries: the start record wins. A private
 ticket's conversation never touches the tracker: the operator can deliver a ticket a client filed without the agent's
 reports, its questions, or the operator's answers appearing on it.
 
@@ -90,6 +91,15 @@ separate `list`.
 - `start` is private by construction: canopy cannot label a ticket (D003), so a ticket started in canopy keeps its
   conversation in the journal. The command says so when it runs, and when the next tick will pick the ticket up. A
   later `--public` could start a ticket whose conversation stays on the tracker; none is planned.
+- `tracker.private` (user-only, off by default) starts labeled tickets privately (D118). The first dispatch of a ticket
+  canopy never ran, authorized by its `--label` as any public ticket's, writes the start record in the transaction that
+  inserts the run, with channel `label`, and the run is private. From then on it is an ordinary private ticket: no
+  `--label`, no label check in its worker's prompt, and removing the label does not stop it; `canopy stop` does. The
+  dispatch's decision says it started the ticket, and `canopy show` says how. A ticket already worked in public keeps
+  its conversation on the tracker, and a split leaves its ticket public, since it creates tickets there; its children
+  are started by their own first dispatch. With no read tools for the provider the dispatch is refused
+  `no_read_tools`. The label stays visible on the ticket (REQUIREMENTS R11): the switch hides the conversation, not
+  that canopy works the ticket.
 - `stop` without `--now` is graceful: it says which run is still going and that it will finish. With `--now` it also
   ends that run: its process group is killed and its slots returned and desk removed as reconcile does for a
   crashed run (§6), and the run is marked `stopped`, a status that raises no attention item and counts toward attempt
@@ -98,7 +108,8 @@ separate `list`.
 - `stop` does not delete the start record; it marks it stopped. A stopped ticket stays private and is dispatched
   by nothing, whatever labels it carries, until `canopy start` again: a queue label left on it never turns it
   public.
-- The start record is the authorization. Only the operator's commands write it, short of T1's residual (below).
+- The start record is the authorization. Only the operator's commands write it, and, under `tracker.private`, a
+  labeled ticket's first dispatch, short of T1's residual (below).
 - A started ticket is private even when it also carries a queue label, or gains one later. The harness chooses the
   worker in code: `canopy dispatch` for a started ticket always renders the private prompt and runs the private
   definition, whatever the overseer passed.

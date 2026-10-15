@@ -400,6 +400,10 @@ class Tracker(Section):
     # write, which a shared workspace file must not (TRUST_MODEL T7).
     mcp_server: Annotated[StrictStr, Scope.USER, AfterValidator(_server_name)] = ""
     read_tools: Annotated[tuple[ToolPart, ...] | None, Scope.USER] = None
+    # Whether a labeled ticket canopy has never worked is started privately by its first dispatch, as if the operator
+    # had run `canopy start` (DESIGN §22, D118). User-only: it turns a label into a start record, which a shared file
+    # must not.
+    private: Annotated[StrictBool, Scope.USER] = False
 
     def tools(self) -> TrackerTools | None:
         """The server and tools a private worker gets, or None if neither config nor a default names any.

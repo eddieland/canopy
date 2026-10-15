@@ -94,12 +94,18 @@ Controls:
   would drop it (D093).
 - A private ticket (DESIGN §22, M18) is authorized by its start record, and its replies by operator messages, both
   written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
-  `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8). `canopy dispatch` checks
-  the start record in code, in the transaction that inserts the run, so it needs no `--label`, and `_run` reads it
-  again before the worker starts. A stopped ticket is dispatched by nothing, whatever labels it carries. Tracker
-  comments on a private ticket are data, whoever wrote them; only the operator's messages are instructions, and the
-  harness renders them into the worker's prompt itself. `canopy forget` is the operator's too: it clears what the
-  journal knows of a ticket's branch and PRs and deletes no run, so it lifts no attempt limit or cooldown (D030, D086).
+  `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8). With `tracker.private`
+  set (user-only), a labeled ticket canopy never ran is started by its first dispatch instead, on the overseer's
+  `--label` claim, which the harness checks against config as for any public dispatch (D118). No worker re-reads the
+  labels for it, then or later, and removing the label does not stop it: an overseer that claims a label a ticket
+  does not carry starts it for good, with nothing but its own read to catch it, until the operator runs `canopy stop`.
+  That is the switch's residual, beside D051's; `canopy show` and the dispatch's decision name such a start.
+  `canopy dispatch` checks the start record in code, in the transaction that inserts the run, so it needs no
+  `--label`, and `_run` reads it again before the worker starts. A stopped ticket is dispatched by nothing, whatever
+  labels it carries. Tracker comments on a private ticket are data, whoever wrote them; only the operator's messages
+  are instructions, and the harness renders them into the worker's prompt itself. `canopy forget` is the operator's
+  too: it clears what the journal knows of a ticket's branch and PRs and deletes no run, so it lifts no attempt limit
+  or cooldown (D030, D086).
   `canopy grant` is the operator's alone as well, from the shell or the web UI behind the listener secret (T8): it
   raises one unit's attempt limit for one kind, or one PR's review limit, and resets no count (DESIGN §22). `start`,
   `stop`, `reply`, `forget`, and `grant` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, which every agent
