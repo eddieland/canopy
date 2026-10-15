@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 @click.command("dispatch")
 @click.argument("key", type=TICKET_KEY)
-@click.option("--kind", required=True, type=click.Choice(policy.DISPATCH_KINDS))
+@click.option("--kind", required=True, type=click.Choice(policy.DISPATCH_KINDS), help="What the worker does.")
 @click.option(
     "--label",
     metavar="LABEL",

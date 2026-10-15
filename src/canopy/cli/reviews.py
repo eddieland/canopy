@@ -69,7 +69,9 @@ def cmd_review_run(
 @review_group.command("wait")
 @click.option("--pr", "pr", required=True, metavar="URL", help="The PR's https:// URL.")
 @click.option("--ticket", type=TICKET_KEY, help="The ticket of one of the loop's own PRs.")
-@click.option("--rationale", required=True, type=TextType())
+@click.option(
+    "--rationale", required=True, type=TextType(), help="Why not now, such as checks still running, or a draft."
+)
 @click.pass_context
 def cmd_review_wait(click_ctx: click.Context, *, pr: str, ticket: str | None, rationale: str) -> int:
     """Record that the PR at URL is not to be reviewed now, and why."""
