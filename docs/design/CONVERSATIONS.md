@@ -346,9 +346,10 @@ Served by `canopy loop` from a thread (D073):
   conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
   and the list, `ui/DESIGN.md`), runs (running, then the 50 that ended last, each with a page and its session's
   transcript, below), worktrees (each pool's slots, below), tickets, each with its conversation and the decisions about
-  it, pull requests (below), chores (below), ticks (below), search (below), and spend (below). The side rail shows the
-  runs working now and the spend of the last 24 hours and the last 30 days on every page, under the nav, so what the
-  loop is doing and what it costs stay in view wherever the operator is; either figure opens the spend page. In a
+  it, the list filtered by where each stands and by words in its key or title, pull requests (below), chores (below),
+  ticks (below), search (below), and spend (below). The side rail shows the runs working now and the spend of the last
+  24 hours and the last 30 days on every page, under the nav, so what the loop is doing and what it costs stay in view
+  wherever the operator is; either figure opens the spend page. In a
   window narrower than 1024px, as half of a second monitor is, the rail is a strip of the nav's icons whose button
   opens it whole over the page, and each list shows the columns its width has room for, its title always
   (`ui/DESIGN.md`).
