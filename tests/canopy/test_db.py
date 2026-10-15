@@ -39,6 +39,7 @@ SHIPPED = {
     20: "00382891c078ea709d9987a62de8d5cfc493e6985abdf8ccc7884b778366bd46",
     21: "58c9215c4a5ebe34410cc620a9feeb8f7b8fb60a9cb23fdced184000ee5b6fdc",
     22: "089e023a4a03edec3e74abb101b22e5b1e54461350e31d5122323a23db227398",
+    23: "321b5eeb0950f7a6dc158d2ec0a3e3f0a0e11bf143eb432936ec9f8bd6f2c8e8",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -336,3 +337,36 @@ def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: 
     assert (tick["session_id"], tick["cost_usd"], tick["tokens_input"]) == (None, None, None)
     # Nor did the loop say whether it was idle or what woke it.
     assert (tick["idle"], tick["woken_by"]) == (None, None)
+
+
+def test_review_runs_from_before_their_purpose_are_own_only_where_their_tickets_unit_has_their_pr(
+    tmp_path: Path, journals: Journals
+) -> None:
+    """0023 settles the purpose of runs recorded before it: `own` for their ticket's unit's PR, `query` otherwise."""
+    conn = journal_at(journals, tmp_path, 21)
+    conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
+    conn.execute(
+        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, phase) VALUES ('OLD-1', '/r', 'x', 'y', 'ci_red')"
+    )
+    conn.execute(
+        "INSERT INTO ticket_units (ticket_key, repo, branch, phase, pr_url) "
+        "VALUES ('OLD-1', 'api', 'b', 'ci_red', 'https://e.test/pr/7')"
+    )
+    pr = "https://e.test/pr/7"
+    # The unit's PR in its repository, and with no repository recorded (a workspace of one); another PR; no ticket; and
+    # the unit's PR URL in another repository.
+    for url, ticket, repo in [
+        (pr, "OLD-1", "api"),
+        (pr, "OLD-1", None),
+        ("https://e.test/pr/8", "OLD-1", "api"),
+        (pr, None, "api"),
+        (pr, "OLD-1", "web"),
+    ]:
+        conn.execute(
+            "INSERT INTO review_runs (tick_id, pr_url, sha, ticket_key, repo, started_at, status, log_path) "
+            "VALUES (1, ?, 'abc', ?, ?, 'x', 'done', 'l')",
+            (url, ticket, repo),
+        )
+    assert db.migrate(conn, resources.migrations_dir()) == versions_after(21)
+    purposes = [r[0] for r in conn.execute("SELECT purpose FROM review_runs ORDER BY id")]
+    assert purposes == ["own", "own", "query", "query", "query"]

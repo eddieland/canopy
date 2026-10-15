@@ -45,7 +45,7 @@ def test_each_slot_shows_what_holds_it_and_what_runs_in_it(ctx: Context, treehou
     tick_id = db.start_tick(ctx.conn, dry_run=False)
     review_id = db.insert_review_run(
         ctx.conn, tick_id=tick_id, pr_url="https://example.test/pr/3", sha="abc", ticket=None, repo=None,
-        logs_dir=ctx.state_dir / "reviews",
+        purpose="query", logs_dir=ctx.state_dir / "reviews",
     )  # fmt: skip
     db.set_review_slot(
         ctx.conn, review_id, slot=Path("/pool/2"), lease_id="lease-review", lease_holder="canopy:r", base_branch="main"

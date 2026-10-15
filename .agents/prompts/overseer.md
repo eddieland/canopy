@@ -531,7 +531,8 @@ Attention about reviews, every tick its cause holds, with `--pr` (and the ticket
 - `review_limit`: a candidate PR's head is unreviewed and it is at its limit.
 
 The CLI refuses a review when reviews are off (`reviews_off`), the URL, commit, or ticket is malformed (`bad_pr`), the
-repository is missing (`unknown_repo`), a review of the PR or a worker on its ticket is running (`running`), the commit
+repository is missing (`unknown_repo`), `--ticket` names a ticket whose unit did not open that PR (`not_ours`: pass
+`--ticket` only for the ticket's own PR), a review of the PR or a worker on its ticket is running (`running`), the commit
 already has a `done` review (`reviewed`), the PR is at its limit (`review_limit`, which also records the attention
 item), the day's reviews are used up (`daily_limit`), or there is no review or worker capacity (`review_capacity`,
 `capacity`).
