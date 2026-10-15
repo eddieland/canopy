@@ -37,7 +37,7 @@ export const RUN_WORD: Record<RunState, string> = {
 export interface TicketRuns {
     /** The ticket's latest run: its running one, else the one that ended last. */
     latest: Run
-    /** Its runs before that, newest first. */
+    /** Its runs before that, the one that ended last first. */
     earlier: Run[]
 }
 
@@ -46,8 +46,8 @@ export interface TicketRuns {
  * that asked a question, got its answer, and asked again is one entry, not two blocked ones.
  */
 export function byTicket(runs: Run[]): TicketRuns[] {
-    // The server sends the running runs first, then the rest newest first, and runs one worker per ticket at a time:
-    // a ticket's first run in the list is its latest.
+    // The server sends the running runs first, then the rest by the one that ended last, and runs one worker per ticket
+    // at a time: a ticket's first run in the list is its latest.
     const groups = new Map<string, TicketRuns>()
     for (const run of runs) {
         const group = groups.get(run.ticket_key)

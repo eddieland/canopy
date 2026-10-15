@@ -2,9 +2,9 @@ import { useSyncExternalStore } from 'react'
 
 /**
  * Which way each list runs: oldest first or newest first. Every list in time has the order it reads in by default (a
- * conversation oldest first, as a chat does; runs and ticks newest first, as the CLI prints them), and the operator can
- * flip any one of them from its panel's header (`OrderToggle`). Each list keeps its own choice, across reloads: kept in
- * localStorage like the theme, and synced across tabs.
+ * conversation oldest first, as a chat does; ticks newest first, as the CLI prints them; tickets the most recently
+ * updated first), and the operator can flip any one of them from its panel's header (`OrderToggle`). Each list keeps
+ * its own choice, across reloads: kept in localStorage like the theme, and synced across tabs.
  */
 
 /** Which end of a list comes first. */
@@ -46,6 +46,20 @@ export const LISTS = {
 
 /** A list that can be flipped. */
 export type ListName = keyof typeof LISTS
+
+/**
+ * The lists sorted by each row's latest activity, not by when it began: a ticket's or PR's last activity, each
+ * ticket's latest run. Their newest end is the most recently updated, which may be the oldest row, so they say so.
+ */
+const BY_ACTIVITY: ReadonlySet<ListName> = new Set(['runs', 'tickets', 'pull-requests'])
+
+/** Which end of `list` comes first in `order`, in words: `newest first`, or `recently updated` by activity. */
+export function orderWords(list: ListName, order: Order): string {
+    if (BY_ACTIVITY.has(list)) {
+        return order === 'newest' ? 'recently updated' : 'least recently updated'
+    }
+    return `${order} first`
+}
 
 /** The orders the operator chose, by list. A list missing from it runs in its own order. */
 export type Orders = Partial<Record<ListName, Order>>

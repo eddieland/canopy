@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { LISTS, ordered, parseOrders, withOrder } from './list-order'
+import { LISTS, orderWords, ordered, parseOrders, withOrder } from './list-order'
 
 describe('parseOrders', () => {
     it('chooses nothing when nothing is stored', () => {
@@ -49,5 +49,18 @@ describe('ordered', () => {
         expect(ordered('runs', 'newest', messages)).toEqual([1, 2, 3])
         expect(ordered('runs', 'oldest', messages)).toEqual([3, 2, 1])
         expect(messages).toEqual([1, 2, 3])
+    })
+})
+
+describe('orderWords', () => {
+    it('names a list in time by its newest or oldest end', () => {
+        expect(orderWords('ticks', 'newest')).toBe('newest first')
+        expect(orderWords('conversation', 'oldest')).toBe('oldest first')
+    })
+
+    it('names a list by activity by when its rows were last updated, not when they began', () => {
+        expect(orderWords('tickets', 'newest')).toBe('recently updated')
+        expect(orderWords('pull-requests', 'oldest')).toBe('least recently updated')
+        expect(orderWords('runs', 'newest')).toBe('recently updated')
     })
 })

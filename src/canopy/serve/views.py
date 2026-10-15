@@ -460,7 +460,7 @@ def decision(row: records.Decision) -> Decision:
 
 
 def runs(ctx: Context) -> list[Run]:
-    """Running runs, oldest first, then the ones that ended most recently, newest first.
+    """Running runs, oldest first, then the ones that ended most recently, the one that ended last first.
 
     Returns:
         The running runs with the worktrees they hold, then at most `RECENT_RUNS` that ended.
