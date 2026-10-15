@@ -10,13 +10,13 @@ import click
 from canopy.cli.common import CliError, open_context, optional_tick, require_tick
 from canopy.cli.params import (
     KEY_RE,
+    PR_URL,
     REASON_RE,
     REPO,
     TICKET_KEY,
     CursorType,
     TextType,
     TitleType,
-    plain_pr_url,
     valid_key,
 )
 from canopy.core import conversation, db
@@ -98,7 +98,7 @@ def _unit(ctx: Context, repo: str | None) -> str | None:
 @click.argument("words", nargs=-1, required=True, metavar="[KEY] REASON")
 @click.option("--detail", required=True, type=TextType())
 @click.option("--repo", type=REPO, help="The repository of the ticket's unit the item is about, in a workspace.")
-@click.option("--pr", "pr", metavar="URL", help="A PR the loop reviews; in place of KEY for a PR with no ticket.")
+@click.option("--pr", "pr", type=PR_URL, help="A PR the loop reviews; in place of KEY for a PR with no ticket.")
 @click.pass_context
 def cmd_attention(
     click_ctx: click.Context, words: tuple[str, ...], detail: str, repo: str | None, pr: str | None
@@ -111,8 +111,6 @@ def cmd_attention(
         raise click.UsageError(f"invalid ticket key {key!r}: must match {KEY_RE.pattern}", click_ctx)
     if not REASON_RE.fullmatch(reason):
         raise click.UsageError(f"invalid reason {reason!r}: must match {REASON_RE.pattern}", click_ctx)
-    if pr is not None and not plain_pr_url(pr):
-        raise click.UsageError("--pr must be a plain https:// URL of at most 300 characters", click_ctx)
     ctx = open_context(click_ctx)
     current = require_tick(ctx)
     unit = _unit(ctx, repo)

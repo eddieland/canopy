@@ -573,6 +573,19 @@ def test_attention_about_a_pr_without_a_ticket(
             assert decisions(conn, tick_id) == []
 
 
+def test_review_wait_records_a_plain_pr_url_and_refuses_anything_else(
+    reviews: CanopyEnv, capsys: pytest.CaptureFixture[str]
+) -> None:
+    conn = reviews.journal()
+    with in_tick(conn) as tick_id:
+        for bad in ("http://x.test/pull/1", "javascript:alert(1)", f"{PR}/{'x' * 300}"):
+            assert main(["review", "wait", "--pr", bad, "--rationale", "draft"]) == 2
+            assert "must be a plain https:// URL" in capsys.readouterr().err
+        assert decisions(conn, tick_id) == []
+        assert main(["review", "wait", "--pr", PR, "--rationale", "draft"]) == 0
+        assert decisions(conn, tick_id) == [(None, PR, "wait", "draft")]
+
+
 def test_a_sink_that_takes_reviews_hears_when_one_ends(
     reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, tmp_path: Path
 ) -> None:

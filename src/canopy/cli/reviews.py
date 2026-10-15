@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 import click
 
 from canopy.cli.common import CliError, open_context, require_tick
-from canopy.cli.params import REPO, TICKET_KEY, TextType, truncate
+from canopy.cli.params import PR_URL, REPO, TICKET_KEY, TextType, truncate
 from canopy.core import db
 from canopy.infra import logs
 from canopy.loop import attention, tick
@@ -67,7 +67,7 @@ def cmd_review_run(
 
 
 @review_group.command("wait")
-@click.option("--pr", "pr", required=True, metavar="URL", help="The PR's https:// URL.")
+@click.option("--pr", "pr", required=True, type=PR_URL, help="The PR's https:// URL.")
 @click.option("--ticket", type=TICKET_KEY, help="The ticket of one of the loop's own PRs.")
 @click.option("--rationale", required=True, type=TextType())
 @click.pass_context
@@ -77,7 +77,7 @@ def cmd_review_wait(click_ctx: click.Context, *, pr: str, ticket: str | None, ra
     current = require_tick(ctx)
     if not ctx.config.reviews_on:
         raise CliError("reviews are off in this configuration")
-    db.record_decision(ctx.conn, int(current["id"]), ticket, "wait", rationale, pr=pr[: start.MAX_PR_URL])
+    db.record_decision(ctx.conn, int(current["id"]), ticket, "wait", rationale, pr=pr)
     click.echo(f"recorded wait for {pr}")
     return 0
 
