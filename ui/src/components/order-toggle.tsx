@@ -21,7 +21,6 @@ export function OrderToggle({ list }: { list: ListName }) {
             title={`Show ${orderWords(list, other)}`}
             data-testid={`order-${list}`}
             data-order={order}
-            className="font-mono font-normal"
             onClick={() => setListOrder(list, other)}
         >
             <ArrowDownUp />

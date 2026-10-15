@@ -6,7 +6,7 @@ import type { ReactNode } from 'react'
 import { ticketsQuery } from '@/api/queries'
 import type { TicketSummary } from '@/api/types'
 import { Age } from '@/components/age'
-import { Input } from '@/components/input'
+import { SearchField } from '@/components/input'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { ListRow } from '@/components/rows'
@@ -149,27 +149,29 @@ function TextFilter() {
         setSeen(q)
         setValue(q ?? '')
     }
+
+    function filter(text: string) {
+        const query = ticketQueryOf(text)
+        setValue(text)
+        setSeen(query)
+        void navigate({ search: (prev) => ({ ...prev, q: query }), replace: true })
+    }
+
     return (
         <search className="border-b px-3 py-2">
-            <Input
-                type="search"
+            <SearchField
                 aria-label="Filter tickets by key or title"
                 placeholder="Filter by key or title"
                 maxLength={TICKET_QUERY_MAX}
                 value={value}
-                onChange={(event) => {
-                    const text = event.target.value
-                    const query = ticketQueryOf(text)
-                    setValue(text)
-                    setSeen(query)
-                    void navigate({ search: (prev) => ({ ...prev, q: query }), replace: true })
-                }}
+                onChange={(event) => filter(event.target.value)}
                 onKeyDown={(event) => {
                     if (event.key === 'Escape') {
                         event.currentTarget.blur()
                     }
                 }}
-                className="h-8"
+                onClear={() => filter('')}
+                clearLabel="Clear the filter"
             />
         </search>
     )

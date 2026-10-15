@@ -89,7 +89,7 @@ function Row({ pr }: { pr: PullRequest }) {
             {/* The dot is how the review's run ended; the verdict's color, its worst finding. */}
             <span
                 className={cn(
-                    'flex items-center gap-1.5 font-mono text-xs whitespace-nowrap',
+                    'flex min-w-0 items-center gap-1.5 font-mono text-xs whitespace-nowrap',
                     review ? verdictTone(review) : 'text-muted-foreground',
                 )}
                 data-testid="pull-request-review"
@@ -98,7 +98,9 @@ function Row({ pr }: { pr: PullRequest }) {
                     <>
                         <RunDot state={review.state} />
                         <ReviewLink id={review.id} />
-                        {verdictText(review)}
+                        <span className="truncate" title={verdictText(review)}>
+                            {verdictText(review)}
+                        </span>
                     </>
                 ) : (
                     'not reviewed'

@@ -12,6 +12,7 @@ import { Age } from '@/components/age'
 import { CopyButton } from '@/components/copy-button'
 import { Counter } from '@/components/counter'
 import type { Tone } from '@/components/counter'
+import { Disclosure } from '@/components/disclosure'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
@@ -20,7 +21,7 @@ import { RunLink } from '@/components/run-link'
 import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useWholePath } from '@/hooks/use-whole-path'
 import { slotRef } from '@/lib/refs'
@@ -65,7 +66,7 @@ function WorktreesPage() {
                 whenever a run starts or ends.
             </PageHeader>
             <PoolCounters pools={data} />
-            {/* One panel of every pool, so the read that covers them all sits in its header, as Open all does. */}
+            {/* One panel of every pool, so the read that covers them all sits in its header, as All open does. */}
             <Panel data-testid="pools">
                 <PanelHeader label="Pools">
                     <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
@@ -267,7 +268,7 @@ function SlotStrip({ worktrees }: { worktrees: Worktree[] }) {
                     key={w.path}
                     title={`${slotRef(w.name)} ${w.status}`}
                     data-state={w.state}
-                    className={cn('inline-flex size-2.5 rounded-[2px]', WORKTREE_DOT[w.state])}
+                    className={cn('inline-flex size-2.5 rounded-xs', WORKTREE_DOT[w.state])}
                 />
             ))}
         </span>
@@ -291,16 +292,12 @@ function IdleSlots({ worktrees, repo, shared }: { worktrees: Worktree[]; repo: s
                         idle
                     </span>
                     <RowLine from="slot" className="flex items-center">
-                        <CollapsibleTrigger
-                            className={cn(
-                                'rounded-sm font-mono text-xs text-accent underline-offset-4 outline-none',
-                                'hover:underline focus-visible:ring-3 focus-visible:ring-ring/50',
-                            )}
-                        >
-                            {open
-                                ? `hide ${worktrees.length} idle slots`
-                                : `${worktrees.length} slots, ${slotRef(first ?? '')} to ${slotRef(last ?? '')}`}
-                        </CollapsibleTrigger>
+                        <Disclosure
+                            open={open}
+                            what={`${worktrees.length} slots, ${slotRef(first ?? '')} to ${slotRef(last ?? '')}`}
+                            // In line with the slot numbers above and below it, and no taller than a line of text.
+                            className="-my-1 -ml-2"
+                        />
                     </RowLine>
                 </RowGrid>
                 <CollapsibleContent asChild>
