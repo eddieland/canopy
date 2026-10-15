@@ -374,8 +374,9 @@ Bounds:
 
 ### Batching
 
-A busy loop ticks often: a run ending wakes it a minute later (§6), so a burst of runs is a message every few minutes.
-A sink with `batch_minutes` sends at most one message per window, unless something needs the operator now:
+A busy loop ticks often: a run ending wakes it `loop.min_gap_minutes` after the tick began (§6, default 1), so a burst
+of runs is a message every few minutes. A sink with `batch_minutes` sends at most one message per window, unless
+something needs the operator now:
 
 - After a delivery, the sink is batching for `batch_minutes`. What it gathers meanwhile is held: its cursor and the
   attention it was told of stay where they were, so the first tick after the window gathers it all again, with what
