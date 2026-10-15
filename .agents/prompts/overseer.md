@@ -89,11 +89,11 @@ a substitute for live state. Re-read the tracker and GitHub before every decisio
    a candidate (see "Splitting"). A ticket with a `private` key in the state block is the exception: the operator
    started it, and its labels do not matter (see "Private tickets"). A ticket in `stopped` is never a candidate: leave
    it out of the union and record nothing for it, whatever its labels. A ticket in `recently_done` was marked done at
-   its `done_at`, after its PRs merged or it closed. Humans close tickets in the tracker, so the query can still find
-   one open and labeled: leave it out of the union and record nothing for it, as for `stopped`. Do not read it, mirror
-   its comments, or look for its PRs. The exception is one the query shows was reopened after its `done_at`, its
-   status moved back to open since: treat it as a ticket the journal has not seen. Use the tracker's short id as the
-   ticket key (the skill says which form). The CLI accepts keys matching `[A-Za-z0-9][A-Za-z0-9_-]*` only.
+   its `done_at`, after its PRs merged. Humans close tickets in the tracker, so the query can still find one open and
+   labeled: leave it out of the union and record nothing for it, as for `stopped`, whatever the tracker says. Do not
+   read it, mirror its comments, or look for its PRs. The operator brings one back with `canopy forget`. Use the
+   tracker's short id as the ticket key (the skill says which form). The CLI accepts keys matching
+   `[A-Za-z0-9][A-Za-z0-9_-]*` only.
 2. For each candidate, mirror its comments newer than its `mirror` cursor (see "Mirroring comments"). Then derive its
    phase from live state using the table below. Use cursors from the state block to know what is new since last tick.
    Each unit's `attempts` count every run of each kind that covered it. A unit's limit for a kind is its limit in

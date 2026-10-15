@@ -243,8 +243,8 @@ def state_block(
 
     `tickets` leave out the tickets the operator stopped, which `stopped` names by key (DESIGN §22), and the tickets
     marked done; `recently_done` names those marked done lately, with when, so the overseer leaves out one the tracker
-    still shows open (DESIGN §7). `units` are each
-    ticket's units and `run_slots` each running or latest run's slots, by run id. `attempts`, `grants`, and
+    still shows open (DESIGN §7). `units` are each ticket's units and `run_slots` each running or latest run's slots,
+    by run id. `attempts`, `grants`, and
     `fix_ci_cooldowns` are per unit (`policy.unit`); a unit the operator granted no runs has no `granted` key (DESIGN
     §22). `split_attempts` are per ticket, and `split_children` are the children of splits not yet done, with their
     split run's end (DESIGN §18). `chores` are the configured chores (DESIGN §19); with none, the block has no `chores`

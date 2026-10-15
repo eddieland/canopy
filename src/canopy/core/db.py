@@ -26,6 +26,8 @@ DB_FILE_NAME = "canopy.db"
 # How long a connection waits for another to release the write lock before its write fails as `database is locked`.
 BUSY_SECONDS = 10.0
 _MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
+# The rationale the overseer gives a `done` decision for a ticket the tracker reports closed (DESIGN §7).
+CLOSED_RATIONALE = "closed"
 
 # `canopy ticket set --cursor NAME=ID` names, and the column each one updates. The comment cursor is the ticket's; the
 # review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a private
@@ -511,17 +513,19 @@ def open_tickets(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 
 
 def recently_done(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
-    """Return the tickets marked done whose newest `done` decision is at or after `since`, by key.
+    """Return the tickets marked done whose newest `done` decision is at or after `since`, by key (DESIGN §7).
 
-    Each row has `key` and `done_at`, that decision's time. A ticket marked done with no `done` decision is not one.
+    Each row has `key` and `done_at`, that decision's time. Not one: a ticket marked done with no `done` decision since
+    the operator last forgot it, or whose newest one says `closed`, since the tracker reports a closed ticket closed,
+    and leaving it out lets the query find it again once it is reopened.
     """
-    # Each done ticket's decisions by `decisions_ticket`, not a scan of every decision ever recorded.
+    # Each done ticket's newest decision by `decisions_ticket`, not a scan of every decision ever recorded.
     return conn.execute(
-        "SELECT key, done_at FROM ("
-        "  SELECT t.key, (SELECT max(d.created_at) FROM decisions d WHERE d.ticket_key = t.key AND d.action = 'done')"
-        "  AS done_at FROM tickets t WHERE t.done = 1"
-        ") WHERE done_at >= ? ORDER BY key",
-        (since,),
+        "SELECT t.key, d.created_at AS done_at FROM tickets t JOIN decisions d ON d.id = ("
+        "  SELECT max(id) FROM decisions WHERE ticket_key = t.key AND action = 'done'"
+        ") WHERE t.done = 1 AND d.created_at >= ? AND d.rationale != ? "
+        "AND (t.forgotten_at IS NULL OR d.created_at > t.forgotten_at) ORDER BY t.key",
+        (since, CLOSED_RATIONALE),
     ).fetchall()
 
 

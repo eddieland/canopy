@@ -464,11 +464,19 @@ again. Those decisions are not waits, so no such tick was idle and idle pacing n
 days of live use, 176 repeated `done` decisions and 257 repeated mirrors in 152 ticks, with the loop at its base
 interval all night. The state block therefore names each ticket marked done in the last 30 days in `recently_done`,
 with the time of its newest `done` decision, and the overseer leaves such a ticket out of the union and records
-nothing for it, as for `stopped`. One the tracker shows was reopened after that time is read as a ticket
-the journal has not seen, as before. A ticket still open 30 days after its `done` decision drops out of the list; the
-next tick reads it, marks it done again, and that decision lists it for another 30 days. A ticket marked done with no
-`done` decision is never listed. The 30 days bound the list by the tickets a human might not have closed yet, not by
-every ticket the loop ever finished.
+nothing for it, as for `stopped`, whatever the tracker says. A ticket still open 30 days after its `done` decision
+drops out of the list; the next tick reads it, marks it done again, and that decision lists it for another 30 days.
+The 30 days bound the list by the tickets a human might not have closed yet, not by every ticket the loop ever
+finished.
+
+Not listed: a ticket whose newest `done` decision has the rationale `closed`, since the tracker reports it closed and
+the rule above already records nothing for it, so once it is reopened the query finds it again as before; and a ticket
+marked done with no `done` decision since the operator last forgot it (§22), whose done mark the overseer has not
+explained. One cut off between `ticket set --done` and its decision is read again by the next tick, which marks it
+done again, as before this list. A merged ticket reopened in the tracker for follow-up was never worked again: the
+overseer found its merged PR and marked it done again each tick. Listed, it is left out instead, and the operator
+brings it back with `canopy forget`, which clears the done mark, so the query finds it as a ticket the journal has not
+seen.
 
 ## 8. Dispatch and the worker contract
 
