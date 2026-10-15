@@ -31,6 +31,7 @@ from pydantic import (
     ConfigDict,
     Field,
     StrictBool,
+    StrictFloat,
     StrictInt,
     StrictStr,
     ValidationError,
@@ -573,6 +574,9 @@ class Loop(Section):
     interval_minutes: Annotated[Minutes, Scope.USER] = 15
     # The longest wait after idle ticks in a row (DESIGN §6, Idle pacing). Not above the interval, idle pacing is off.
     idle_max_minutes: Annotated[Minutes, Scope.USER] = 120
+    # What the overseer may spend a day, in US dollars, at its recent cost per tick; 0 is no budget (DESIGN §6, Spend
+    # pacing). It lengthens the wait, never shortens it, and counts no worker's, chore's, or review's spend.
+    daily_budget_usd: Annotated[StrictFloat, Scope.USER, Field(ge=0, allow_inf_nan=False)] = 0.0
 
     @model_validator(mode="after")
     def _cap_not_below_interval(self) -> Loop:

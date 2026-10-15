@@ -41,7 +41,8 @@ canopy loop
   take the loop lock
   until Ctrl-C:
     canopy tick (below)
-    print what it did, then wait loop.interval_minutes, doubling after each idle tick up to loop.idle_max_minutes
+    print what it did, then wait loop.interval_minutes, doubling after each idle tick up to loop.idle_max_minutes,
+      and longer if the latest ticks would spend over loop.daily_budget_usd a day
 
 canopy tick
   acquire lock, run migrations

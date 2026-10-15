@@ -407,6 +407,18 @@ def get_tick(conn: sqlite3.Connection, tick_id: int) -> sqlite3.Row | None:
     return row
 
 
+def recent_tick_costs(conn: sqlite3.Connection, limit: int) -> list[float]:
+    """What the overseer cost on the latest `limit` ticks that reported a cost, whatever ran them (§6, Spend pacing).
+
+    Returns:
+        Their costs in US dollars, newest first; none when no tick reported one.
+    """
+    rows = conn.execute(
+        "SELECT cost_usd FROM ticks WHERE cost_usd IS NOT NULL ORDER BY id DESC LIMIT ?", (limit,)
+    ).fetchall()
+    return [float(r["cost_usd"]) for r in rows]
+
+
 def last_tick(conn: sqlite3.Connection) -> sqlite3.Row | None:
     """Return the most recent tick row, or None."""
     row: sqlite3.Row | None = conn.execute("SELECT * FROM ticks ORDER BY id DESC LIMIT 1").fetchone()
