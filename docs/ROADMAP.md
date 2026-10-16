@@ -836,7 +836,7 @@ it when its review ends `done` (DESIGN §21, §22; `core/review_requests.py`, mi
 
 Status: done 2026-10-16.
 Learned: closed on the operator's request with the tests with the fakes and Playwright passing, before the live check
-against a coworker's PR, which is SCENARIOS S37. The operator cut watching a PR, reviewed again at each new commit
+against a coworker's PR, which is SCENARIOS S39. The operator cut watching a PR, reviewed again at each new commit
 until it merges, as more than MVP needs; asking again after a push reviews the new head. The operator asked that a
 request name no repository, since the overseer already matches `review.query`'s PRs to one. The request needed no new
 authority in code: it is the run's purpose (`request`) and one more source for `reviews_on`, and every guard of
