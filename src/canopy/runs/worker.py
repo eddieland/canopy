@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 
 from pydantic import BaseModel, ConfigDict, StrictStr
 
-from canopy.core import agent_output, contract, conversation, db, definitions, hostgit, transcript, treehouse
+from canopy.core import agent_output, contract, conversation, db, definitions, hostgit, pools, transcript, treehouse
 from canopy.core.config import render_command, setup_words
 from canopy.core.vocab import RunStatus
 from canopy.core.workspace import DESKS_DIR
@@ -732,7 +732,7 @@ def _return_slot(ctx: Context, run: sqlite3.Row, slot: _Slot, log: logs.TickAdap
         # The next tick's reconcile returns a canopy lease with no running run.
         log.error("slot not returned", extra={**fields, "error": str(e)})  # noqa: TRY400
         return
-    if outcome is treehouse.ReturnOutcome.RETURNED:
+    if outcome is pools.ReturnOutcome.RETURNED:
         log.info("slot returned", extra=fields)
     else:
         log.warning("slot not returned", extra={**fields, "outcome": outcome.value})

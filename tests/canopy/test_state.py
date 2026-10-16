@@ -17,7 +17,7 @@ from unittest import mock
 import pytest
 from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 
-from canopy.core import config, conversation, db, treehouse, workspace
+from canopy.core import config, conversation, db, pools, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import RunStatus
 from canopy.infra import procs
@@ -181,12 +181,12 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, block: Snaps
         tick_id = db.start_tick(conn, dry_run=True)
 
     leased = [
-        treehouse.Slot(
+        pools.Slot(
             name="repo-2",
             path=canopy_env.root / "slots" / "repo-2",
             status="leased",
             lease_id="lease-2",
-            lease_holder=f"{treehouse.HOLDER_PREFIX}PROJ-2",
+            lease_holder=f"{pools.HOLDER_PREFIX}PROJ-2",
             leased_at=stamp("09:55"),
         )
     ]
@@ -222,7 +222,7 @@ def slot(n: int) -> db.RunSlot:
         repo="repo",
         slot_path=Path(WORKSPACE) / "slots" / f"repo-{n}",
         lease_id=f"lease-{n}",
-        lease_holder=f"{treehouse.HOLDER_PREFIX}PROJ-{n}",
+        lease_holder=f"{pools.HOLDER_PREFIX}PROJ-{n}",
         base_branch="main",
     )
 
@@ -235,7 +235,7 @@ def rendered(
     dry_run: bool,
     query_due: bool,
     running: int,
-    leased: list[treehouse.Slot],
+    leased: list[pools.Slot],
 ) -> str:
     """The tick's state block, with its JSON indented so a change to it is a readable diff, and the root replaced."""
     capacity = reconcile.Capacity(max_workers=ctx.config.capacity.max_workers, running=running)

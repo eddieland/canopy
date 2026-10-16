@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, notice, outbox, prompts, review_requests, treehouse
+from canopy.core import contract, db, notice, outbox, pools, prompts, review_requests, treehouse
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import lock, logs, procs
@@ -103,7 +103,7 @@ def holder(run_id: int) -> str:
     Returns:
         The holder string treehouse records on the lease.
     """
-    return treehouse.holder_for(f"{HOLDER_KEY}{run_id}")
+    return pools.holder_for(f"{HOLDER_KEY}{run_id}")
 
 
 def check(ctx: Context, *, tick_id: int, request: Request) -> str:
@@ -179,7 +179,7 @@ def _purpose(conn: sqlite3.Connection, request: Request) -> str:
 
 
 def _spawn(
-    ctx: Context, run_id: int, request: Request, lease: treehouse.Lease, *, attempt: int, context: str | None
+    ctx: Context, run_id: int, request: Request, lease: pools.Lease, *, attempt: int, context: str | None
 ) -> Started:
     cfg = ctx.config
     values = {

@@ -3,6 +3,9 @@
 In a workspace, every repository with a clone has its own pool, and each is read and cleaned up in turn. A joint run
 holds a slot in several pools, and all of them are returned, and its desk removed, when its process is gone
 (DESIGN §18).
+
+While treehouse makes the pools, reconcile also classifies each idle treehouse slot with canopy's own pool's checks and
+logs a `pool_shadow_mismatch` line wherever the two disagree (ROADMAP M45, stage 2). The shadow changes nothing.
 """
 
 from __future__ import annotations
@@ -12,15 +15,17 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, dead_runs, definitions, treehouse
+from canopy.core import conversation, db, dead_runs, definitions, pool, pools, treehouse
 from canopy.core.vocab import RunStatus
-from canopy.infra import logs, procs
+from canopy.infra import cwds, logs, procs
 from canopy.runs import desks, dispatch, tidy
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Mapping, Sequence
 
     from canopy.core.context import Context
+    from canopy.core.workspace import Workspace
 
 
 @dataclass(frozen=True)
@@ -41,7 +46,7 @@ class Reconciled:
     """What reconcile leaves: the capacity, and each cloned repository's leased slots, by repository name."""
 
     capacity: Capacity
-    leased: dict[str, list[treehouse.Slot]] = field(default_factory=dict[str, list[treehouse.Slot]])
+    leased: dict[str, list[pools.Slot]] = field(default_factory=dict[str, list[pools.Slot]])
 
 
 def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
@@ -56,7 +61,8 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
         treehouse.TreehouseError: treehouse could not be read or a slot could not be returned. The tick stops.
     """
     ws = ctx.workspace
-    pools = {repo.name: treehouse.status(ctx.runner, pool=ws.pool(repo.name)) for repo in ws.repos if repo.cloned}
+    slots = {repo.name: treehouse.status(ctx.runner, pool=ws.pool(repo.name)) for repo in ws.repos if repo.cloned}
+    shadow(ctx.runner, ws, log, slots)
     returned = _close_dead_runs(ctx, log)
     running = db.running_runs(ctx.conn, "runs")
     running_slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
@@ -64,7 +70,7 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     # A running review holds a slot too (DESIGN §21); its own reconcile returns it if its `_review` is gone.
     reviews = db.running_runs(ctx.conn, "review_runs")
     held |= {str(r["lease_id"]) for r in reviews if r["lease_id"]}
-    leased = {name: _return_stale(ctx, log, name, slots, held=held, returned=returned) for name, slots in pools.items()}
+    leased = {name: _return_stale(ctx, log, name, found, held=held, returned=returned) for name, found in slots.items()}
     for desk in desks.prune(ws.root, {str(r["ticket_key"]) for r in running}):
         log.warning("desk with no running run; removed", extra={"desk": str(desk)})
     if not running:
@@ -73,6 +79,47 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     capacity = Capacity(max_workers=ctx.config.capacity.max_workers, running=len(running) + len(reviews))
     log.info("reconciled", extra={"running": capacity.running, "available": capacity.available})
     return Reconciled(capacity, leased)
+
+
+def shadow(
+    runner: procs.Runner, ws: Workspace, log: logs.TickAdapter, slots: Mapping[str, Sequence[pools.Slot]]
+) -> int:
+    """Classify each unleased treehouse slot with canopy's own checks, and log each one where they disagree.
+
+    `slots` is what treehouse said of each cloned repository's pool, by repository name. Nothing is changed, and a
+    check that fails is logged, never raised: the shadow must not stop a tick (ROADMAP M45, stage 2).
+
+    Returns:
+        How many slots it logged a mismatch for.
+    """
+    mismatches = 0
+    # One read of the process table for every slot: on macOS each read is a full `lsof`.
+    try:
+        processes: cwds.Table | None = cwds.table(runner)
+    except cwds.CwdError:
+        processes = None
+    for name, found in slots.items():
+        repo = ws.repo(name)
+        if repo is None:
+            continue
+        for slot in found:
+            if slot.lease_holder or slot.lease_id:
+                continue
+            try:
+                ours = (
+                    pool.classify(runner, repo.path, slot.path, found=processes.inside(slot.path))
+                    if processes is not None
+                    else pool.UNVERIFIED
+                )
+            except OSError as e:
+                ours = f"error: {e}"
+            if ours != slot.status:
+                mismatches += 1
+                log.warning(
+                    "pool_shadow_mismatch",
+                    extra={"repo": name, "slot": str(slot.path), "treehouse": slot.status, "canopy": ours},
+                )
+    return mismatches
 
 
 def _close_dead_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
@@ -151,10 +198,10 @@ def end_run(ctx: Context, run: sqlite3.Row, status: RunStatus, note: str, log: l
 
 
 def _return_stale(
-    ctx: Context, log: logs.TickAdapter, name: str, slots: list[treehouse.Slot], *, held: set[str], returned: set[str]
-) -> list[treehouse.Slot]:
+    ctx: Context, log: logs.TickAdapter, name: str, slots: list[pools.Slot], *, held: set[str], returned: set[str]
+) -> list[pools.Slot]:
     """Return repository `name`'s canopy leases that no running run holds. Returns the slots still leased."""
-    leased: list[treehouse.Slot] = []
+    leased: list[pools.Slot] = []
     for slot in slots:
         if not slot.lease_id or slot.lease_id in returned:
             continue

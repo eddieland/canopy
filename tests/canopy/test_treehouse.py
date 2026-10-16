@@ -5,7 +5,7 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import treehouse
+from canopy.core import pools, treehouse
 from canopy.infra.procs import SubprocessRunner
 
 runner = SubprocessRunner()
@@ -25,12 +25,12 @@ def test_lease_status_and_return(treehouse_state: Path) -> None:
     assert slot.leased_at == lease.leased_at
 
     outcome = treehouse.return_slot(runner, lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
-    assert outcome is treehouse.ReturnOutcome.RETURNED
+    assert outcome is pools.ReturnOutcome.RETURNED
     [slot] = treehouse.status(runner)
     assert (slot.status, slot.canopy_key, slot.leased_at) == ("available", None, None)
     # The lease is gone, so returning it again fails rather than touching whoever holds the slot next.
     again = treehouse.return_slot(runner, lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
-    assert again is treehouse.ReturnOutcome.FAILED
+    assert again is pools.ReturnOutcome.FAILED
 
     calls = json.loads(treehouse_state.read_text())["calls"]
     assert calls[0] == ["get", "--lease", "--lease-holder", "canopy:PROJ-1", "--json"]

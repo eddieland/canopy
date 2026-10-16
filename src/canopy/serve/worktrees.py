@@ -18,6 +18,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, treehouse
+from canopy.core.pools import AVAILABLE, HOLDER_PREFIX, SYNC_HOLDER, Slot
 from canopy.serve import views
 from canopy.serve.schema import Pool, Process, ReviewHold, Worktree, WorktreeState
 
@@ -33,7 +34,7 @@ READERS = 8
 # How many of a slot's processes the page lists; a build can start hundreds.
 PROCESSES = 20
 _STATES: dict[str, WorktreeState] = {
-    treehouse.AVAILABLE: "idle",
+    AVAILABLE: "idle",
     "you're here": "idle",
     "leased": "held",
     "in-use": "held",
@@ -78,7 +79,7 @@ def pools(backend: Backend, ctx: Context) -> list[Pool]:
     return found
 
 
-def worktree(slot: treehouse.Slot, run: sqlite3.Row | None, review: sqlite3.Row | None, *, root: Path) -> Worktree:
+def worktree(slot: Slot, run: sqlite3.Row | None, review: sqlite3.Row | None, *, root: Path) -> Worktree:
     """One slot, with the running run or review that holds its lease, if the journal has one.
 
     Its path is shown from workspace `root` when under it.
@@ -92,9 +93,9 @@ def worktree(slot: treehouse.Slot, run: sqlite3.Row | None, review: sqlite3.Row 
     note = None
     if run is not None or review is not None:
         state = "working"
-    elif leased and slot.lease_holder == treehouse.SYNC_HOLDER:
+    elif leased and slot.lease_holder == SYNC_HOLDER:
         note = _SYNC
-    elif leased and slot.lease_holder.startswith(treehouse.HOLDER_PREFIX):
+    elif leased and slot.lease_holder.startswith(HOLDER_PREFIX):
         note = _STALE
     return Worktree(
         name=slot.name,

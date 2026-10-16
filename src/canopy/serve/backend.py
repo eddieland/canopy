@@ -20,7 +20,7 @@ from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, db, treehouse
+from canopy.core import chore_view, db, pools, treehouse
 from canopy.core.context import Context, db_path
 from canopy.infra import procs
 
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from canopy.core.workspace import Workspace
 
 
-def _status(ctx: Context, pool: treehouse.Pool) -> list[treehouse.Slot]:
+def _status(ctx: Context, pool: treehouse.Pool) -> list[pools.Slot]:
     return treehouse.status(ctx.runner, pool=pool)
 
 
@@ -99,7 +99,7 @@ class Backend:
     mock: bool = False
     # A pool's slots, for the worktrees page: `treehouse status --json`, through `ctx.runner`. Called on a thread per
     # pool, so it must not use `ctx.conn`, which belongs to the request's own thread.
-    slots: Callable[[Context, treehouse.Pool], list[treehouse.Slot]] = field(default=_status)
+    slots: Callable[[Context, treehouse.Pool], list[pools.Slot]] = field(default=_status)
     # Now, for windows such as the spend figure's: the mock's is fixed, as its journal's times are.
     clock: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
     # Rewrite `attention.md` after a write that changes the list without a tick, such as a dismissal. The mock's

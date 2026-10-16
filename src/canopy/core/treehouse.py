@@ -13,28 +13,14 @@ with `TREEHOUSE_ROOT` set to the workspace root, and `get` pins where a new slot
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
 from pathlib import Path
-from typing import Annotated
 
-from pydantic import (
-    BaseModel,
-    BeforeValidator,
-    ConfigDict,
-    StrictBool,
-    StrictInt,
-    StrictStr,
-    TypeAdapter,
-    ValidationError,
-)
+from pydantic import BaseModel, ConfigDict, StrictStr, TypeAdapter, ValidationError
 
+from canopy.core import pools
+from canopy.core.pools import Lease, ReturnOutcome, Slot
 from canopy.infra import procs
 
-HOLDER_PREFIX = "canopy:"
-# Held only while `canopy workspace sync` makes a pool's slots, which it then returns. Not a `canopy:` holder, so no
-# ticket key can name it and reconcile leaves it to the next sync.
-SYNC_HOLDER = "canopy-sync"
-AVAILABLE = "available"
 ROOT_ENV = "TREEHOUSE_ROOT"
 # treehouse's own default layout, pinned: a repository's `treehouse.toml` cannot move a workspace's slots, and `return`
 # finds a slot's pool two levels above it even when the repository's clone is gone.
@@ -42,77 +28,14 @@ WORKTREE_PATH = "{pool}/{slot}/{repo}"
 _TIMEOUT_SECONDS = 120
 
 
-class TreehouseError(Exception):
+class TreehouseError(pools.PoolError):
     """treehouse failed or said something canopy cannot parse."""
 
 
-def _null_is_empty(value: object) -> object:
-    return "" if value is None else value
-
-
-def _empty_is_null(value: object) -> object:
-    return None if value == "" else value
-
-
-def _null_is_list(value: object) -> object:
-    return list[object]() if value is None else value
-
-
-# treehouse writes "" for an unleased slot's lease fields and null for its `leased_at`; accept either for both.
-MaybeStr = Annotated[StrictStr, BeforeValidator(_null_is_empty)]
-
-
-class _Output(BaseModel):
-    # treehouse may add fields; canopy reads only the ones it needs.
-    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
-
-
-class Process(_Output):
-    """A process treehouse found running in a slot."""
-
-    pid: StrictInt
-    name: StrictStr
-
-
-class Slot(_Output):
-    """One worktree in the pool, from `treehouse status --json`.
-
-    `status` is treehouse's word: available, leased, in-use, dirty, damaged, unverified, or "you're here". `branch` is
-    empty for a detached or unreadable checkout; `branch_error` says why it could not be read. Only the web UI's
-    worktrees page reads `branch`, `detached`, `branch_error`, and `processes` (DESIGN §22).
-    """
-
-    name: StrictStr
-    path: Path
-    status: StrictStr
-    branch: MaybeStr = ""
-    detached: StrictBool = False
-    branch_error: MaybeStr = ""
-    lease_id: MaybeStr = ""
-    lease_holder: MaybeStr = ""
-    leased_at: Annotated[StrictStr | None, BeforeValidator(_empty_is_null)] = None
-    processes: Annotated[list[Process], BeforeValidator(_null_is_list)] = []
-
-    @property
-    def canopy_key(self) -> str | None:
-        """The ticket key if canopy holds this slot's lease, else None."""
-        if self.lease_holder.startswith(HOLDER_PREFIX):
-            return self.lease_holder.removeprefix(HOLDER_PREFIX)
-        return None
-
-
-class Lease(_Output):
-    """A slot leased with `treehouse get --lease --json`."""
-
-    path: Path
-    lease_id: StrictStr
-    lease_holder: StrictStr
-    leased_at: StrictStr
-    base_branch: StrictStr
-
-
-class _Held(_Output):
+class _Held(BaseModel):
     """The fields of a `get` allocation needed to return it, for output that is not a full `Lease`."""
+
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     path: Path
     lease_id: StrictStr
@@ -120,16 +43,6 @@ class _Held(_Output):
 
 
 _SLOTS = TypeAdapter(list[Slot], config=ConfigDict(defer_build=True))
-
-
-class ReturnOutcome(Enum):
-    """What `treehouse return` said."""
-
-    RETURNED = "returned"
-    # Exit 1: the slot is unknown, not leased, or leased under a different identity. Retrying cannot help.
-    FAILED = "failed"
-    # Exit 3: dirty and not forced. canopy always forces, so this is an attention item, never a retry.
-    DIRTY = "dirty"
 
 
 @dataclass(frozen=True)
@@ -152,9 +65,52 @@ class Pool:
 DEFAULT_POOL = Pool()
 
 
-def holder_for(key: str) -> str:
-    """Return the lease holder canopy uses for ticket `key`."""
-    return f"{HOLDER_PREFIX}{key}"
+@dataclass(frozen=True)
+class TreehousePool:
+    """One repository's treehouse pool as a `pools.Pool`: the module's operations, run where `where` says."""
+
+    runner: procs.Runner
+    where: Pool = DEFAULT_POOL
+
+    def status(self) -> list[Slot]:
+        """Every slot in the pool, as `status` reads them.
+
+        Returns:
+            The slots, in treehouse's order.
+        """
+        return status(self.runner, pool=self.where)
+
+    def lease(self, key: str, *, base: str | None = None) -> Lease:
+        """Lease a slot for ticket `key` within the pool's declared size, as `lease` does.
+
+        Returns:
+            The leased slot.
+        """
+        return lease(self.runner, key, base=base, pool=self.where)
+
+    def lease_as(self, holder: str, *, base: str | None = None, fetch: bool = True) -> Lease:
+        """Lease any slot for `holder`, whatever the pool's declared size, as `lease_as` does.
+
+        Returns:
+            The leased slot.
+        """
+        return lease_as(self.runner, holder, base=base, pool=self.where, fetch=fetch)
+
+    def return_slot(self, path: Path, *, lease_id: str, lease_holder: str) -> ReturnOutcome:
+        """Return slot `path` only if it is still held under this exact lease, as `return_slot` does.
+
+        Returns:
+            What treehouse said.
+        """
+        return return_slot(self.runner, path, lease_id=lease_id, lease_holder=lease_holder, pool=self.where)
+
+    def destroy(self, path: Path) -> str | None:
+        """Remove slot `path` if treehouse finds it disposable, as `destroy` does.
+
+        Returns:
+            None when the slot is gone, else why treehouse kept it.
+        """
+        return destroy(self.runner, path, pool=self.where)
 
 
 def status(runner: procs.Runner, *, pool: Pool = DEFAULT_POOL) -> list[Slot]:
@@ -192,12 +148,12 @@ def lease(runner: procs.Runner, key: str, *, base: str | None = None, pool: Pool
             printed something that is not a lease, or it made a slot past the pool's declared size.
     """
     if pool.slots is None:
-        return lease_as(runner, holder_for(key), base=base, pool=pool)
+        return lease_as(runner, pools.holder_for(key), base=base, pool=pool)
     before = status(runner, pool=pool)
-    busy = sum(s.status != AVAILABLE for s in before)
+    busy = sum(s.status != pools.AVAILABLE for s in before)
     if busy >= pool.slots:
         raise TreehouseError(f"{busy} of its slots are busy, and capacity declares {pool.slots} for this pool")
-    leased = lease_as(runner, holder_for(key), base=base, pool=pool)
+    leased = lease_as(runner, pools.holder_for(key), base=base, pool=pool)
     if len(before) < pool.slots or any(s.path == leased.path for s in before):
         return leased
     raise TreehouseError(

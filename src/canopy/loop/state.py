@@ -9,11 +9,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
-from canopy.core import conversation, db
+from canopy.core import conversation, db, pools
 from canopy.runs import policy
 
 if TYPE_CHECKING:
-    from canopy.core import treehouse
     from canopy.core.chore_view import ChoreSummary
     from canopy.core.config import Config
     from canopy.core.notice import Notice
@@ -220,7 +219,7 @@ def state_block(
     dry_run: bool,
     capacity: Capacity,
     workspace: Workspace,
-    leased: Mapping[str, list[treehouse.Slot]],
+    leased: Mapping[str, list[pools.Slot]],
     running: list[sqlite3.Row],
     tickets: list[sqlite3.Row],
     stopped: Sequence[str],

@@ -22,7 +22,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, config, conversation, db, treehouse, workspace
+from canopy.core import chore_view, config, conversation, db, pools, treehouse, workspace
 from canopy.core.items import Item
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs, resources
@@ -152,7 +152,7 @@ def slot_path(root: Path, repo: str, slot: int) -> str:
     return str(root / ".treehouse" / _POOLS[repo] / str(slot) / repo)
 
 
-def _pools(root: Path) -> dict[str, list[treehouse.Slot]]:
+def _pools(root: Path) -> dict[str, list[pools.Slot]]:
     """What `treehouse status --json` would show for each cloned repository's pool.
 
     web: the two running runs' slots, a shell someone opened in a third, one idle, and one dirty, five for a declared
@@ -197,7 +197,7 @@ def _pools(root: Path) -> dict[str, list[treehouse.Slot]]:
     }
     return {
         repo: [
-            treehouse.Slot.model_validate({"name": str(n), "path": slot_path(root, repo, n), **slot})
+            pools.Slot.model_validate({"name": str(n), "path": slot_path(root, repo, n), **slot})
             for n, slot in enumerate(slots, start=1)
         ]
         for repo, slots in found.items()
@@ -225,10 +225,10 @@ def seed(directory: Path) -> Backend:
     ws = workspace.load(root)
     cfg = config.load(root, user_file)
     workspace.ensure_state_dir(ws.state_dir)
-    pools = _pools(root)
+    slots_by_repo = _pools(root)
 
-    def slots(_ctx: Context, pool: treehouse.Pool) -> list[treehouse.Slot]:
-        return list(pools.get(pool.cwd.name, [])) if pool.cwd is not None else []
+    def slots(_ctx: Context, pool: treehouse.Pool) -> list[pools.Slot]:
+        return list(slots_by_repo.get(pool.cwd.name, [])) if pool.cwd is not None else []
 
     backend = Backend(
         config=cfg,
