@@ -1,10 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SECTIONS } from '@/lib/sections'
+import { breakStorage, otherTab, otherTabClears } from '@/test-utils'
 
 import { ANYWHERE, DEFAULT, pageOf, parseBuddy, TIPS, tipFor } from './buddy'
 
 const DAY = 86_400_000
+
+// The setting is read when the module loads, so each test loads a fresh copy.
+function load() {
+    vi.resetModules()
+    return import('./buddy')
+}
 
 describe('parseBuddy', () => {
     it('is off unless turned on', () => {
@@ -96,5 +104,44 @@ describe('tipFor', () => {
         expect(tipFor('/runs', 1, 5 * DAY)).toBe(tipFor('/runs', 1, 5 * DAY + 1000))
         expect(tipFor('/runs', 1, 5 * DAY)).not.toBe(tipFor('/runs', 2, 5 * DAY))
         expect(tipFor('/runs', 0, 5 * DAY)).not.toBe(tipFor('/runs', 0, 6 * DAY))
+    })
+})
+
+describe('useBuddy', () => {
+    beforeEach(() => localStorage.clear())
+
+    it('turns Sprig on and off, and keeps the setting', async () => {
+        const buddy = await load()
+        const { result } = renderHook(() => buddy.useBuddy())
+        expect(result.current).toBe('off')
+
+        act(() => buddy.setBuddy('on'))
+        expect(result.current).toBe('on')
+        expect(localStorage.getItem(buddy.STORAGE_KEY)).toBe('on')
+    })
+
+    it("follows another tab's setting, one made before it was read, and storage cleared", async () => {
+        const buddy = await load()
+        localStorage.setItem(buddy.STORAGE_KEY, 'on')
+        const { result } = renderHook(() => buddy.useBuddy())
+        expect(result.current).toBe('on')
+
+        act(() => otherTab(buddy.STORAGE_KEY, 'off'))
+        expect(result.current).toBe('off')
+        act(() => otherTab(buddy.STORAGE_KEY, 'on'))
+        act(() => otherTab('canopy-theme', 'dark'))
+        expect(result.current).toBe('on')
+        act(() => otherTabClears())
+        expect(result.current).toBe('off')
+    })
+
+    it('is off where storage is unavailable, and still turns on for this page', async () => {
+        breakStorage()
+        const buddy = await load()
+        const { result } = renderHook(() => buddy.useBuddy())
+        expect(result.current).toBe('off')
+
+        act(() => buddy.setBuddy('on'))
+        expect(result.current).toBe('on')
     })
 })

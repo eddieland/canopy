@@ -40,6 +40,21 @@ function press(editor: Editor, key: string): boolean {
     return editor.view.someProp('handleKeyDown', (handle) => handle(editor.view, event)) ?? false
 }
 
+// The document position of `word`'s first letter.
+function posOf(editor: Editor, word: string): number {
+    let found: number | undefined
+    editor.state.doc.descendants((node, pos) => {
+        const at = node.isText ? (node.text?.indexOf(word) ?? -1) : -1
+        if (found === undefined && at >= 0) {
+            found = pos + at
+        }
+    })
+    if (found === undefined) {
+        throw new Error(`no ${word} in the plan`)
+    }
+    return found
+}
+
 function quoteOf(editor: Editor, id: string) {
     const range = highlightsKey.getState(editor.state)?.ranges.get(id)
     return range && editor.state.doc.textBetween(range.from, range.to)
@@ -140,5 +155,28 @@ describe('PlanHighlights', () => {
         })
         editor.commands.keyboardShortcut('Mod-Alt-m')
         expect(asked).toBe(1)
+    })
+
+    it("opens the clicked passage's thread, the innermost of two that overlap, never a resolved one", async () => {
+        const editor = open(PLAN)
+        sync(editor, [placed('outer', 'Stream the rows'), placed('inner', 'the rows'), placed('done', 'large', true)])
+        const opened: string[] = []
+        editor.on('planThreadActivate', ({ id }) => {
+            opened.push(id)
+        })
+        const click = (word: string) =>
+            editor.view.someProp('handleClick', (handle) =>
+                handle(editor.view, posOf(editor, word), new MouseEvent('click')),
+            )
+
+        // No handler takes the click, so ProseMirror still places the cursor.
+        expect(click('the')).toBeUndefined()
+        click('Stream')
+        click('large')
+        click('Plan')
+        await new Promise((resolve) => {
+            setTimeout(resolve, 0)
+        })
+        expect(opened).toEqual(['inner', 'outer'])
     })
 })
