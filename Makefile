@@ -34,9 +34,10 @@ lint: ## Run linters and the type checker (ruff, pyrefly strict, rumdl, editorco
 test: ## Run all tests, in parallel
 	uv run pytest -q -n auto
 
-# Review the diff before committing it: a snapshot is what the tests hold canopy's output to (tests/snapshot.py).
-snapshots: ## Run all tests, recording every snapshot under tests/snapshots/ that differs
-	uv run pytest -q -n auto --update-snapshots
+# Review the diff before committing it: a snapshot is what the tests hold canopy's output to (syrupy). It also deletes
+# the snapshots no test reads any more. Serial: syrupy refuses to update under xdist without an experimental file lock.
+snapshots: ## Run all tests, recording every snapshot that differs
+	uv run pytest -q --snapshot-update
 
 ##@ Web UI (ui/; needs Node 22.12+, D079)
 
