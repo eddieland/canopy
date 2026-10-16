@@ -5,6 +5,8 @@ import { useDismissReviewFinding } from '@/components/dismiss-finding'
 import { Panel, PanelHeader } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { Chip } from '@/components/status'
+import { useHighlight } from '@/hooks/use-highlight'
+import type { CodeKind, CodeToken } from '@/lib/highlight'
 import { findingAnchor, SEVERITY_TONE } from '@/lib/reviews'
 import type { Numbered, Placed } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
@@ -13,10 +15,20 @@ import { cn } from '@/lib/utils'
 const LINE_TINT: Record<DiffLine['kind'], string> = { add: 'bg-diff-add/12', del: 'bg-diff-del/12', ctx: '' }
 const LINE_MARK: Record<DiffLine['kind'], string> = { add: 'text-diff-add', del: 'text-diff-del', ctx: '' }
 const MARK: Record<DiffLine['kind'], string> = { add: '+', del: '-', ctx: ' ' }
+// A piece of code's color by what it is (ui/DESIGN.md, "A review"): the syntax tokens agent output's JSON wears, and
+// comments muted. Anything else stays the line's own color.
+const CODE_CLASS: Record<Exclude<CodeKind, 'text'>, string> = {
+    keyword: 'text-syntax-literal',
+    string: 'text-syntax-string',
+    constant: 'text-syntax-number',
+    function: 'text-syntax-key',
+    comment: 'text-muted-foreground',
+}
 
 /**
  * The reviewed commit's diff, a panel per file, with each finding's card under the line it names, or under the file's
- * header when the diff does not show its line. The diff is the PR's own text: every line is React text.
+ * header when the diff does not show its line. The diff is the PR's own text: every line is React text, its code
+ * colored once its language's grammar has read it (`useHighlight`).
  */
 export function ReviewDiffPanels({ run, diff, placed }: { run: number; diff: ReviewDiff; placed: Placed }) {
     return (
@@ -50,6 +62,7 @@ function FilePanel({
     onLine: Map<number, Numbered[]> | undefined
     onFile: Numbered[]
 }) {
+    const highlighted = useHighlight(file)
     return (
         <Panel data-testid="diff-file">
             <PanelHeader label="File">
@@ -79,7 +92,7 @@ function FilePanel({
                                     </tr>
                                     {hunk.lines.map((line, n) => (
                                         <Fragment key={n}>
-                                            <Line line={line} />
+                                            <Line line={line} tokens={highlighted?.[h]?.[n]} />
                                             {line.new !== null && onLine?.get(line.new) && line.kind !== 'del' && (
                                                 <tr>
                                                     <td colSpan={4} className="border-y bg-surface px-3 py-2">
@@ -103,7 +116,7 @@ function FilePanel({
     )
 }
 
-function Line({ line }: { line: DiffLine }) {
+function Line({ line, tokens }: { line: DiffLine; tokens: CodeToken[] | undefined }) {
     return (
         <tr className={LINE_TINT[line.kind]} data-kind={line.kind}>
             <td className="w-12 px-2 text-right text-muted-foreground tabular-nums select-none">{line.old ?? ''}</td>
@@ -111,8 +124,23 @@ function Line({ line }: { line: DiffLine }) {
             <td aria-hidden className={cn('w-4 select-none', LINE_MARK[line.kind])}>
                 {MARK[line.kind]}
             </td>
-            <td className="pr-3 whitespace-pre">{line.text}</td>
+            <td className="pr-3 whitespace-pre" data-highlighted={tokens !== undefined || undefined}>
+                {tokens === undefined ? line.text : <Code tokens={tokens} />}
+            </td>
         </tr>
+    )
+}
+
+function Code({ tokens }: { tokens: CodeToken[] }) {
+    // A line's tokens never reorder, so their index is their key.
+    return tokens.map((token, i) =>
+        token.kind === 'text' ? (
+            token.text
+        ) : (
+            <span key={i} className={CODE_CLASS[token.kind]}>
+                {token.text}
+            </span>
+        ),
     )
 }
 

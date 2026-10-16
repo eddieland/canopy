@@ -8,12 +8,15 @@ export function stuck(limits: readonly Limit[]): Limit[] {
     return limits.filter((limit) => limit.runs >= limit.limit)
 }
 
-/** What a limit counts, in a few words: `fix-ci in web`, or `reviews of acme/web#88`, the PR named as anywhere. */
-export function limitLabel(limit: Limit): string {
+/**
+ * What a limit counts, in a few words: `fix-ci in web`, or `reviews of acme/web#88`, the PR named as anywhere, but on
+ * its own page (`ownPr`), where it is the title and the limit is just `reviews`.
+ */
+export function limitLabel(limit: Limit, ownPr?: string): string {
     if (limit.kind !== 'review') {
         return limit.repo === null ? limit.kind : `${limit.kind} in ${limit.repo}`
     }
-    return limit.pr_url === null ? 'reviews' : `reviews of ${pullRequestLabel(limit.pr_url)}`
+    return limit.pr_url === null || limit.pr_url === ownPr ? 'reviews' : `reviews of ${pullRequestLabel(limit.pr_url)}`
 }
 
 /** A limit's runs against it, and the runs granted past the policy's: `2 of 2 runs`, `3 of 3 runs, 1 granted`. */

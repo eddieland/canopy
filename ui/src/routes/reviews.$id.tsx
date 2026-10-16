@@ -19,18 +19,23 @@ import { RichText } from '@/components/rich-text'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
 import { Chip, RunDot, Word } from '@/components/status'
-import { TicketLink } from '@/components/ticket-link'
+import { TicketField } from '@/components/ticket-field'
 import { Timestamp } from '@/components/timestamp'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
+import { reviewDescription } from '@/lib/descriptions'
 import { reviewSentText } from '@/lib/outcomes'
+import { pullRequestLabel } from '@/lib/pull-request-label'
 import { reviewRef } from '@/lib/refs'
 import { findingAnchor, placeFindings, SEVERITY_TONE, shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
 import { cn } from '@/lib/utils'
-import { None } from '@/components/none'
-import { NO_TICKET } from '@/lib/words'
+
+// What every review's page shows, on its title's hover: its description is the review's state.
+const HELP =
+    "canopy's adversarial read of one commit of a PR, kept here and posted nowhere: its findings sit on the diff, at " +
+    'the lines they name.'
 
 /** One review run: its fields, its findings, and the diff with each finding on the line it names. */
 export const Route = createFileRoute('/reviews/$id')({
@@ -65,9 +70,12 @@ function Loaded({ id }: { id: number }) {
     const placed = placeFindings(data.findings, data.diff !== null)
     return (
         <>
-            <PageHeader title={reviewRef(data.review.id)}>
-                canopy&apos;s adversarial read of one commit of a PR, kept here and posted nowhere: its findings sit on
-                the diff, at the lines they name.
+            <PageHeader
+                title={`${reviewRef(data.review.id)} ${pullRequestLabel(data.review.pr_url)}`}
+                subject={data.ticket_title}
+                help={HELP}
+            >
+                {reviewDescription(data.review)}
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <ReviewPanel detail={data} />
@@ -129,13 +137,7 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
                 <Field label="pull request" mono>
                     <PullRequestLink url={review.pr_url} className="text-sm" />
                 </Field>
-                <Field label="ticket">
-                    {review.ticket_key === null ? (
-                        <None reason={NO_TICKET} />
-                    ) : (
-                        <TicketLink ticketKey={review.ticket_key} />
-                    )}
-                </Field>
+                <TicketField ticketKey={review.ticket_key} title={detail.ticket_title} />
                 <Field label="commit" mono>
                     <Copyable text={review.sha} label="commit">
                         <span title={review.sha}>{shortSha(review.sha)}</span>

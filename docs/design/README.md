@@ -275,6 +275,9 @@ canopy installs from git with `uv tool install` (D046), which builds the wheel a
 both sinks, and the sandbox wrapper on `PATH`. Dispatch, chores, and reviews start `_run`, `_chore`, and `_review` via
 `sys.executable -m canopy`, so whatever runs canopy must be an interpreter that imports it. The version is the tag's
 (D085): a build at `v0.2.0` is 0.2.0, and a build between tags names its distance from the last one and its commit.
+Pushing the tag runs `.github/workflows/release.yml`, which makes the tag's GitHub Release with notes Claude writes,
+through the operator's subscription, from the commits since the previous tag; GitHub's generated notes stand in if it
+fails. The release carries no build: the install is still from git.
 
 Where later work goes:
 

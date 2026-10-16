@@ -17,6 +17,7 @@ import { TickOutputPanel } from '@/components/tick-output'
 import { Timestamp } from '@/components/timestamp'
 import { TranscriptPanel } from '@/components/transcript'
 import { ordered, useListOrder } from '@/lib/list-order'
+import { tickDescription } from '@/lib/descriptions'
 import { tickRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId, tickState } from '@/lib/ticks'
@@ -57,6 +58,15 @@ function Loaded({ id }: { id: number }) {
     return <Tick detail={data} transcript={transcript} />
 }
 
+/** What every tick's page shows, on its title's hover: its description is the tick's state. */
+function help(id: number): string {
+    return (
+        `What the overseer decided in this tick, and why, as canopy decisions ${id} prints it. Attention items and ` +
+        "refusals are the harness's. Under them, the overseer's session: what it read and ran to decide; and under " +
+        'that, its output as written, stderr included.'
+    )
+}
+
 function NoTick({ title, children }: { title: string; children: string }) {
     return (
         <>
@@ -73,11 +83,8 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
     const decisionsOrder = useListOrder('tick-decisions')
     return (
         <>
-            <PageHeader title={tickRef(tick.id)} chips={tick.dry_run && <Chip>dry run</Chip>}>
-                What the overseer decided in this tick, and why, as{' '}
-                <code className="font-mono text-xs">canopy decisions {tick.id}</code> prints it. Attention items and
-                refusals are the harness&apos;s. Under them, the overseer&apos;s session: what it read and ran to
-                decide; and under that, its output as written, stderr included.
+            <PageHeader title={tickRef(tick.id)} help={help(tick.id)} chips={tick.dry_run && <Chip>dry run</Chip>}>
+                {tickDescription(tick, decisions.length)}
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <Panel>
@@ -134,7 +141,8 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                         <Decisions decisions={ordered('tick-decisions', decisionsOrder, decisions)} />
                     )}
                 </Panel>
-                <TranscriptPanel transcript={transcript} running={tick.status === 'running'} />
+                {/* Its session id is the Tick panel's overseer field: said once. */}
+                <TranscriptPanel transcript={transcript} running={tick.status === 'running'} session={false} />
                 <TickOutputPanel id={tick.id} path={output} running={tick.status === 'running'} />
             </div>
         </>

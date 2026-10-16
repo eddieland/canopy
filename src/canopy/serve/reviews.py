@@ -24,7 +24,7 @@ from canopy.serve.schema import (
     ReviewSummary,
     RunState,
 )
-from canopy.serve.views import lines
+from canopy.serve.views import lines, ticket_title
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -49,8 +49,8 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
     """One review run in full, or None if there is no such run.
 
     Returns:
-        The run with its summary, harness note, findings, the diff it reviewed if that was kept, and every review run
-        of the same PR; or None.
+        The run with its ticket's title, summary, harness note, findings, the diff it reviewed if that was kept, and
+        every review run of the same PR; or None.
     """
     row = db.get_review_run(ctx.conn, run_id)
     if row is None:
@@ -60,8 +60,10 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
     note = contract.stored_object(row.result_json).get("harness")
     found = review_diff.read(review_diff.path_for(row.log_path))
     diff = _diff(found) if found is not None else None
+    ticket = db.get_ticket(ctx.conn, row.ticket_key) if row.ticket_key else None
     return ReviewDetail(
         review=summary(row),
+        ticket_title=ticket_title(ticket.title) if ticket is not None else None,
         summary=lines(stored.summary) or None if stored is not None else None,
         note=lines(note) or None if isinstance(note, str) else None,
         base_branch=row.base_branch or None,

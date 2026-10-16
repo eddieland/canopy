@@ -42,8 +42,23 @@ async function caretAt(page: Page, id: string, offset: number): Promise<void> {
     await page.mouse.click(point.x, point.y)
 }
 
+// Pastes `text` into the plan as the browser would from a clipboard holding it as plain text alone.
+async function paste(page: Page, text: string): Promise<void> {
+    await plan(page).evaluate((root, value) => {
+        const data = new DataTransfer()
+        data.setData('text/plain', value)
+        root.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+    }, text)
+}
+
 function plan(page: Page): Locator {
     return page.getByRole('textbox', { name: 'Plan', exact: true })
+}
+
+// How far apart, in pixels, the tops of two elements are.
+async function topGap(a: Locator, b: Locator): Promise<number> {
+    const [boxA, boxB] = await Promise.all([a.boundingBox(), b.boundingBox()])
+    return Math.abs((boxA?.y ?? 0) - (boxB?.y ?? Infinity))
 }
 
 function comments(page: Page): Locator {
@@ -140,6 +155,135 @@ test('each toolbar control names a shortcut on hover, and that shortcut does wha
         await page.keyboard.press('ControlOrMeta+z')
         await expect(control, name).toHaveAttribute('aria-pressed', 'false')
     }
+})
+
+test('the toolbar stays at the top of the page while the plan scrolls under it', async ({ page }) => {
+    const toolbar = page.getByRole('toolbar', { name: 'Format' })
+    await select(page, 'template cache')
+    await plan(page).locator('blockquote').scrollIntoViewIfNeeded()
+    await page.locator('.page-scroll').evaluate((scroller) => scroller.scrollBy(0, 400))
+    const top = await page.locator('.page-scroll').evaluate((scroller) => scroller.getBoundingClientRect().top)
+    await expect.poll(async () => (await toolbar.boundingBox())?.y).toBeGreaterThanOrEqual(top)
+    await expect(toolbar).toBeInViewport()
+    await toolbar.getByRole('button', { name: 'Bold' }).click()
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    await expect(page.getByLabel('Plan Markdown')).toContainText('a **template cache**')
+})
+
+test('each comment sits beside its passage, and moves with it as the plan is edited above', async ({ page }) => {
+    const card = comments(page).filter({ hasText: 'proxy in front' })
+    const passage = plan(page).locator('[data-thread=sample-1]')
+    await expect.poll(() => topGap(card, passage)).toBeLessThanOrEqual(1)
+    await plan(page).getByRole('heading', { level: 1 }).click()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('A paragraph that moves every passage under it down.')
+    await expect.poll(() => topGap(card, passage)).toBeLessThanOrEqual(1)
+})
+
+test('typing in the middle of a comment being written edits it in place', async ({ page }) => {
+    await select(page, "Excel's own format")
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    const field = page.getByRole('form', { name: 'Comment' }).getByRole('textbox')
+    await expect(field).toBeFocused()
+    await page.keyboard.type('abc')
+    await page.keyboard.press('ArrowLeft')
+    await page.keyboard.press('ArrowLeft')
+    await page.keyboard.type('X')
+    await expect(field).toHaveValue('aXbc')
+})
+
+test('a comment opens beside its passage, without the page moving', async ({ page }) => {
+    // As the operator would find it: in the middle of the window.
+    await plan(page)
+        .getByText("Excel's own format")
+        .evaluate((element) => element.scrollIntoView({ block: 'center' }))
+    await select(page, "Excel's own format")
+    const scroller = page.locator('.page-scroll')
+    const before = await scroller.evaluate((element) => element.scrollTop)
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    const form = page.getByRole('form', { name: 'Comment' })
+    await expect(form.getByRole('textbox')).toBeFocused()
+    expect(await scroller.evaluate((element) => element.scrollTop)).toBe(before)
+    const draft = page.locator('[data-align=draft]')
+    const passage = plan(page).locator('.plan-comment-active').filter({ hasText: "Excel's own format" })
+    await expect.poll(() => topGap(draft, passage)).toBeLessThanOrEqual(1)
+})
+
+// Where the page is too narrow for the comments beside the plan, they sit under it, as a list.
+test.describe('with the comments under the plan', () => {
+    test.use({ viewport: { width: 1000, height: 800 } })
+
+    test('the comments are a list under the plan, none placed at its passage', async ({ page }) => {
+        const doc = await plan(page).boundingBox()
+        const first = await comments(page).first().boundingBox()
+        expect(first?.y).toBeGreaterThan((doc?.y ?? 0) + (doc?.height ?? 0))
+        await expect(page.locator('.plan-margin[data-aligned]')).toHaveCount(0)
+    })
+
+    test('a comment shows its passage in the plan, clear of the toolbar', async ({ page }) => {
+        const card = comments(page).filter({ hasText: 'proxy in front' })
+        await card.scrollIntoViewIfNeeded()
+        const passage = plan(page).locator('[data-thread=sample-1]')
+        await expect(passage).not.toBeInViewport()
+        await card.getByRole('button', { name: "streams the report's rows" }).click()
+        await expect(passage).toBeInViewport()
+        const toolbar = await page.getByRole('toolbar', { name: 'Format' }).boundingBox()
+        expect((await passage.boundingBox())?.y).toBeGreaterThanOrEqual((toolbar?.y ?? 0) + (toolbar?.height ?? 0))
+    })
+})
+
+// The narrowest window the UI is laid out for (e2e/narrow.spec.ts): the toolbar's header must still fit on one line
+// there, within the 48px the editor keeps clear under it (TOOLBAR_CLEARANCE in src/components/plan-editor.tsx).
+test.describe('on half a monitor', () => {
+    test.use({ viewport: { width: 820, height: 900 } })
+
+    test('the stuck toolbar fits in the space the editor keeps clear, and covers no passage it shows', async ({
+        page,
+    }) => {
+        const header = page.getByRole('toolbar', { name: 'Format' }).locator('xpath=..')
+        const card = comments(page).filter({ hasText: 'proxy in front' })
+        await card.scrollIntoViewIfNeeded()
+        const stuck = await header.boundingBox()
+        expect(stuck?.height).toBeLessThan(48)
+        const passage = plan(page).locator('[data-thread=sample-1]')
+        await card.getByRole('button', { name: "streams the report's rows" }).click()
+        await expect(passage).toBeInViewport()
+        const box = await header.boundingBox()
+        expect((await passage.boundingBox())?.y).toBeGreaterThanOrEqual((box?.y ?? 0) + (box?.height ?? 0))
+    })
+})
+
+test('Markdown pasted into the plan becomes the headings, lists, and marks it writes', async ({ page }) => {
+    await plan(page).locator('blockquote p').click()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Enter')
+    await paste(page, '## Rollout\n\n- **ship** behind a flag\n- remove the flag')
+    await expect(plan(page).getByRole('heading', { level: 2, name: 'Rollout' })).toBeVisible()
+    await expect(plan(page).locator('li').filter({ hasText: 'remove the flag' })).toBeVisible()
+    await expect(plan(page).locator('strong').filter({ hasText: 'ship' })).toBeVisible()
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    await expect(page.getByLabel('Plan Markdown')).toContainText('## Rollout')
+    await expect(page.getByLabel('Plan Markdown')).toContainText('- **ship** behind a flag')
+})
+
+test('inline Markdown pasted into a sentence stays in it, and prose or a Shift paste stays as written', async ({
+    page,
+}) => {
+    await select(page, 'Scheduling exports.')
+    await paste(page, 'Scheduling `cron` exports.')
+    await expect(plan(page).locator('li code').filter({ hasText: 'cron' })).toBeVisible()
+    await select(page, "Excel's own format")
+    await paste(page, 'Spreadsheet formats')
+    await expect(plan(page).getByText('Spreadsheet formats, which the ticket')).toBeVisible()
+    await select(page, 'Spreadsheet formats')
+    // Ctrl+Shift+V, as the browser pastes plain text: Shift held in the plan.
+    await plan(page).focus()
+    await page.keyboard.down('Shift')
+    await paste(page, '**Spreadsheets** and `.ods`')
+    await page.keyboard.up('Shift')
+    await expect(plan(page).getByText('**Spreadsheets** and `.ods`, which the ticket')).toBeVisible()
 })
 
 test('resolving a thread folds it away and takes its highlight off the plan', async ({ page }) => {

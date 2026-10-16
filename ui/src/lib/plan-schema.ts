@@ -5,20 +5,26 @@
 // that shows and writes back its characters, as an image is, which would otherwise fetch from another origin
 // (ui/AGENTS.md). A link keeps its Markdown and shows its address on hover, but is not a link: the web UI links a URL
 // only to itself (D113). A line the source wraps inside a paragraph is a soft break of its own, drawn as a space and
-// written back as the wrap it was.
+// written back as the wrap it was. Text pasted as Markdown is read as Markdown, through the same parser.
 import { Extension, Node } from '@tiptap/core'
-import type { AnyExtension, JSONContent } from '@tiptap/core'
+import type { AnyExtension, JSONContent, MarkdownToken } from '@tiptap/core'
 import { Link } from '@tiptap/extension-link'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { TableKit } from '@tiptap/extension-table'
 import { Markdown } from '@tiptap/markdown'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { StarterKit } from '@tiptap/starter-kit'
 
 import { ATOM } from '@/lib/plan-anchors'
 
 // A mark as a document's JSON holds it.
 type JSONMark = NonNullable<JSONContent['marks']>[number]
+
+// A line that starts a heading, a list item (a task's too), a quote, a fence, or a table row.
+const MARKDOWN_BLOCK = /^ {0,3}(?:#{1,6} \S|[-*+] \S|\d{1,9}[.)] \S|> ?\S|```|~~~|\|.*\|\s*$)/mu
+// Bold, inline code, or a link.
+const MARKDOWN_INLINE = /\*\*[^*\n]+\*\*|`[^`\n]+`|\[[^\]\n]+\]\([^)\s]+\)/u
 
 /** The extensions of a plan's document, with `more` (the comments' highlights) after them. */
 export function planExtensions(more: AnyExtension[] = []): AnyExtension[] {
@@ -31,15 +37,24 @@ export function planExtensions(more: AnyExtension[] = []): AnyExtension[] {
         }),
         PlanLink.configure({ openOnClick: false, autolink: false, linkOnPaste: false }),
         TaskList,
-        TaskItem.configure({ nested: true }),
+        PlanTaskItem.configure({ nested: true }),
         TableKit.configure({ table: { resizable: false } }),
         VerbatimBlock,
         VerbatimInline,
         ImageAsText,
         SoftBreak,
+        PasteMarkdown,
         PlanMarkdown.configure({ indentation: { style: 'space', size: 2 } }),
         ...more,
     ]
+}
+
+/**
+ * Whether pasted text reads as Markdown: a line that starts a heading, a list item, a quote, a fence, or a table row,
+ * or inline marks (`**bold**`, `` `code` ``, `[a link](url)`). Prose without them pastes as the text it is.
+ */
+export function readsAsMarkdown(text: string): boolean {
+    return MARKDOWN_BLOCK.test(text) || MARKDOWN_INLINE.test(text)
 }
 
 /**
@@ -222,14 +237,17 @@ const PlanMarkdown = Markdown.extend({
 // `node` with each soft break turned into its text, joined to the text beside it. Its marks are those of the text on
 // both sides of it, which the parser gives the text alone. A soft break at either end of its block, which an edit can
 // leave there, separates nothing and is dropped.
-function softBreaksAsText(node: JSONContent): JSONContent {
+//
+// `indent` is what the line after each soft break in `node` starts with beyond the wrap itself: in a list item's first
+// paragraph, its marker's width, since the list writes that paragraph after its marker and indents no line of it.
+function softBreaksAsText(node: JSONContent, indent = ''): JSONContent {
     if (node.content === undefined) {
         return node
     }
     const content: JSONContent[] = []
     node.content.forEach((child, i, all) => {
         if (child.type !== 'softBreak') {
-            content.push(softBreaksAsText(child))
+            content.push(softBreaksAsText(child, indentIn(node, child, i, indent)))
             return
         }
         if (i === 0 || i === all.length - 1) {
@@ -237,9 +255,30 @@ function softBreaksAsText(node: JSONContent): JSONContent {
         }
         const after = all[i + 1]?.marks ?? []
         const marks = (all[i - 1]?.marks ?? []).filter((mark) => after.some((other) => sameMark(mark, other)))
-        content.push({ type: 'text', text: String(child.attrs?.['raw'] ?? '\n'), marks })
+        const wrap = String(child.attrs?.['raw'] ?? '\n')
+        // In a list item, the marker's width in place of what the reader left of the source's indent, which differs
+        // between Tiptap's lists.
+        const raw = indent ? wrap.replace(/\n[ \t]*/u, `\n${indent}`) : wrap
+        content.push({ type: 'text', text: raw, marks })
     })
     return { ...node, content: joinText(content) }
+}
+
+// The indent of the lines a soft break starts in `child`, the `i`th child of `node`: a list hands each item its
+// marker's width (`- `, `- [ ] ` as `- `, `12. `), which the item hands its first paragraph. Any other line is
+// indented, or quoted, by the block around it as it is written.
+function indentIn(node: JSONContent, child: JSONContent, i: number, indent: string): string {
+    if (node.type === 'bulletList' || node.type === 'taskList') {
+        return '  '
+    }
+    if (node.type === 'orderedList') {
+        const start = Number(node.attrs?.['start'] ?? 1)
+        return ' '.repeat(`${(Number.isFinite(start) ? start : 1) + i}. `.length)
+    }
+    if (node.type === 'listItem' || node.type === 'taskItem') {
+        return i === 0 && child.type === 'paragraph' ? indent : ''
+    }
+    return ''
 }
 
 // Adjacent text nodes with the same marks, as one.
@@ -265,6 +304,63 @@ function sameMarks(a: JSONContent, b: JSONContent): boolean {
 function sameMark(a: JSONMark, b: JSONMark | undefined): boolean {
     return JSON.stringify(a) === JSON.stringify(b)
 }
+
+// Text pasted as Markdown, as a planner's plan or a chat's answer is copied from a terminal or an editor, becomes the
+// headings, lists, and marks it writes, read by the plan's own parser, so its HTML stays characters as a plan's does.
+// What pastes as it always has: a copy from the editor itself, which carries its own slice (`data-pm-slice`); text that
+// does not read as Markdown; and a paste with Shift held, the browser's paste as plain text.
+const PasteMarkdown = Extension.create({
+    name: 'pasteMarkdown',
+    addProseMirrorPlugins() {
+        const editor = this.editor
+        let shift = false
+        return [
+            new Plugin({
+                key: new PluginKey('pasteMarkdown'),
+                props: {
+                    handleDOMEvents: {
+                        keydown: (_, event) => {
+                            shift = event.shiftKey
+                            return false
+                        },
+                        keyup: (_, event) => {
+                            shift = event.shiftKey
+                            return false
+                        },
+                    },
+                    handlePaste: (_, event) => {
+                        const text = event.clipboardData?.getData('text/plain') ?? ''
+                        const html = event.clipboardData?.getData('text/html') ?? ''
+                        if (shift || html.includes('data-pm-slice') || !readsAsMarkdown(text)) {
+                            return false
+                        }
+                        return editor.commands.insertContent(text, { contentType: 'markdown' })
+                    },
+                },
+            }),
+        ]
+    },
+})
+
+// A task item whose text wraps, as `- [ ] a task\n  that wraps`. Tiptap's task list reads the first line as the task's
+// text and the lines under it as blocks of their own, so a wrapped task would become two paragraphs. A paragraph that
+// comes straight after the first line, with no blank line between, is the same paragraph, as CommonMark reads it: its
+// words join the task's text after a soft break. A blank line before it shows as a leading `space` token, and keeps it
+// apart. In a list that mixes tasks and bullets, Tiptap trims the blank line away before it lexes the lines under a
+// task (with marked's whole lexer, whose tokens carry `links`), so nothing there can be told apart and nothing joins.
+const PlanTaskItem = TaskItem.extend({
+    parseMarkdown(token, helpers) {
+        const found: unknown = token['nestedTokens']
+        const nested = Array.isArray(found) ? (found as MarkdownToken[]) : undefined
+        const first = nested?.[0]
+        if (nested === undefined || first?.type !== 'paragraph' || 'links' in nested) {
+            return this.parent?.(token, helpers) ?? []
+        }
+        const wrap: MarkdownToken = { type: 'softBreak', raw: '\n', text: '\n' }
+        const tokens = [...(token.tokens ?? []), wrap, ...(first.tokens ?? [])]
+        return this.parent?.({ ...token, tokens, nestedTokens: nested.slice(1) }, helpers) ?? []
+    },
+})
 
 // An image, as the characters that wrote it: the editor never fetches it.
 const ImageAsText = Extension.create({

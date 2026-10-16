@@ -43,9 +43,10 @@ function RunsPage() {
                 what it said, and what it cost. A ticket&apos;s earlier runs open under it.
             </PageHeader>
             <Panel>
-                <PanelHeader label="By state">
+                <PanelHeader label="Runs">
                     <span className="flex flex-wrap items-center gap-x-3">
                         <nav aria-label="Filter by state" className="flex flex-wrap items-center gap-1">
+                            <span className="mr-1 font-mono text-xs text-muted-foreground">state</span>
                             <FilterLink search={{ state: undefined }}>all</FilterLink>
                             {RUN_STATES.map((s) => (
                                 <FilterLink key={s} search={{ state: s }}>
@@ -55,6 +56,12 @@ function RunsPage() {
                             ))}
                         </nav>
                         {shown !== undefined && shown.length > 1 && <OrderToggle list="runs" />}
+                        {shown !== undefined && (
+                            // Every run listed, a ticket's earlier ones too, as the Runs panel of a ticket counts them.
+                            <span className="readout text-xs text-muted-foreground" data-testid="runs-count">
+                                {shown.reduce((sum, g) => sum + 1 + g.earlier.length, 0)}
+                            </span>
+                        )}
                     </span>
                 </PanelHeader>
                 {shown === undefined ? (

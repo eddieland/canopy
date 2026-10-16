@@ -2,7 +2,7 @@ import { Editor } from '@tiptap/core'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { ATOM } from '@/lib/plan-anchors'
-import { docText, planExtensions, rangeOf, spanOf } from '@/lib/plan-schema'
+import { docText, planExtensions, rangeOf, readsAsMarkdown, spanOf } from '@/lib/plan-schema'
 
 const editors: Editor[] = []
 
@@ -10,6 +10,15 @@ function open(markdown: string): Editor {
     const editor = new Editor({ extensions: planExtensions(), content: markdown, contentType: 'markdown' })
     editors.push(editor)
     return editor
+}
+
+// How many paragraphs the plan's document holds.
+function paragraphs(markdown: string): number {
+    let count = 0
+    open(markdown).state.doc.descendants((node) => {
+        count += node.type.name === 'paragraph' ? 1 : 0
+    })
+    return count
 }
 
 afterEach(() => {
@@ -66,6 +75,24 @@ describe('planExtensions', () => {
         expect(texts.join('')).not.toContain('\n')
         expect(editor.getText()).toContain('a new route, which streams')
         expect(editor.getMarkdown()).toBe(plan)
+    })
+
+    it.each([
+        ['a bullet', '- an item\n  that wraps\n- two'],
+        ['a numbered item', '1. an item\n   that wraps\n2. two'],
+        ['a numbered item past nine', '9. nine\n10. ten\n    that wraps'],
+        ['a nested item', '- outer\n  - inner\n    that wraps'],
+        ['a task', '- [ ] a task\n  that wraps\n- [x] done'],
+        ['a task with a second paragraph', '- [ ] a task\n\n  its own paragraph'],
+    ])('writes back %s that wraps as it was read', (_, plan) => {
+        expect(open(plan).getMarkdown()).toBe(plan)
+    })
+
+    it('reads a wrapped task as one paragraph, and one after a blank line as two', () => {
+        expect(paragraphs('- [ ] a task\n  that wraps')).toBe(1)
+        expect(paragraphs('- [ ] a task\n\n  its own paragraph')).toBe(2)
+        // After a bullet, Tiptap reads the task's lines with the blank line trimmed away: nothing there joins.
+        expect(paragraphs('- a bullet\n- [ ] a task\n\n  its own paragraph')).toBe(3)
     })
 
     it('keeps a hard break apart from a soft one', () => {
@@ -136,4 +163,28 @@ describe('docText', () => {
         const { text, positions } = docText(open('a\n\nb').state.doc)
         expect(rangeOf(positions, text.indexOf('\n'), text.indexOf('\n') + 1)).toBeUndefined()
     })
+})
+
+describe('readsAsMarkdown', () => {
+    it.each([
+        '## Rollout',
+        'Intro\n- ship it',
+        '1. first',
+        '- [ ] a task',
+        '> a risk',
+        '```\ncode\n```',
+        '| a | b |',
+        'a **bold** word',
+        'run `make check`',
+        'see [the docs](https://x.test)',
+    ])('reads %j as Markdown', (text) => {
+        expect(readsAsMarkdown(text)).toBe(true)
+    })
+
+    it.each(['Just a sentence.', 'https://x.test/a', '2 * 3 = 6', '#hashtag', '-5 degrees'])(
+        'reads %j as text',
+        (text) => {
+            expect(readsAsMarkdown(text)).toBe(false)
+        },
+    )
 })
