@@ -20,6 +20,7 @@ from canopy.runs import desks
 from canopy.runs.dispatch import DISPATCH_LOCK
 from tests.canopy.conftest import Ws, seed_pools
 from tests.canopy.helpers import InlineRunner, in_tick, wait_for_run, worker_does
+from tests.canopy.test_reconcile import overseer_does, waits
 from tests.conftest import CanopyEnv, git
 
 LABEL = "agent-ready-tester"
@@ -239,7 +240,7 @@ def test_the_state_block_shows_each_unit(ws: Ws, treehouse_state: Path, agent_lo
             wait_for_run(conn, 1)
             assert main(["ticket", "set", "PROJ-1", "--repo", "web", "--phase", "ci_red", "--cursor", "ci=run-9"]) == 0
             assert main(["ticket", "set", "PROJ-1", "--phase", "running", "--cursor", "comment=c-1"]) == 0
-        with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        with overseer_does(*waits("PROJ-1")):
             assert main(["tick", "--dry-run"]) == 0
 
     overseer = json.loads(agent_log.read_text().splitlines()[-1])
@@ -402,7 +403,7 @@ def test_a_killed_joint_run_is_detected_and_all_its_slots_returned(
             time.sleep(0.05)
         assert pool_statuses(treehouse_state) == ["leased", "leased"]
 
-        with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        with overseer_does(*waits("PROJ-1")):
             assert main(["tick"]) == 0
         crashed = db.get_run(conn, 1)
         assert crashed is not None

@@ -71,7 +71,10 @@ def test_the_overseer_reads_the_trusted_list_and_a_public_tickets_operator_messa
     db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     message = reply(conn, GO_AHEAD)
 
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    waits = [["canopy", "decide", key, "wait", "--rationale", "next tick"] for key in (KEY, "PROJ-2")]
+    with mock.patch.dict(
+        os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(waits), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
+    ):
         assert main(["tick", "--dry-run"]) == 0
         state = overseer_state(agent_log)
         assert state["trust"]["trusted_reviewers"] == ["octocat", "canopy:review"]

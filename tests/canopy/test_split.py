@@ -356,7 +356,10 @@ def test_the_state_block_shows_split_children(ws: Ws, treehouse_state: Path, age
     with in_tick(conn), splitter_reports({"status": "done", "children": {"PROJ-13": "api", "PROJ-14": "web"}}):
         assert main(split("PROJ-12", "--request", "1", "--repo", "api", "--repo", "web")) == 0
         run = wait_for_run(conn, 1)
-        with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        wait = [["canopy", "decide", "PROJ-12", "wait", "--rationale", "split into PROJ-13 and PROJ-14"]]
+        with mock.patch.dict(
+            os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(wait), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
+        ):
             os.environ.pop("CANOPY_TICK_ID")
             assert main(["tick", "--dry-run"]) == 0
 

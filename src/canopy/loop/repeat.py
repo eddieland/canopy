@@ -46,7 +46,7 @@ from rich.text import Text
 
 from canopy.core import config, db, notice, pause
 from canopy.infra import lock, logs, resources
-from canopy.loop import attention, pacing, reread, tick
+from canopy.loop import attention, duties, pacing, reread, tick
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -71,7 +71,7 @@ TICK_NOW_KEY = "t"
 PAUSE_KEY = "p"
 # Decisions every tick repeats, and copies of tracker comments. The tick's summary counts them; `canopy decisions` lists
 # them.
-_QUIET_ACTIONS = ("wait", "mirror")
+_QUIET_ACTIONS = ("wait", "mirror", duties.QUERIED_ACTION)
 _STATUS_STYLES = {
     "ok": "bold green",
     "skipped": "bold yellow",

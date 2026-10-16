@@ -308,11 +308,14 @@ def test_the_loop_waits_line_says_what_a_tick_churned(
     time = FakeTime()
     term, _ = console()
     with contextlib.ExitStack() as stack:
-        stack.enter_context(overseer_does(canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_running")))
+        wait = canopy("decide", KEY, "wait", "--rationale", "checks pending")
+        label = canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_running")
+        stack.enter_context(overseer_does(label, wait))
 
         def relabel_at_the_first_wait() -> None:
             if len(time.slept) == 1:
-                stack.enter_context(overseer_does(canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_red")))
+                relabel = canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_red")
+                stack.enter_context(overseer_does(relabel, wait))
 
         time.on_sleep = relabel_at_the_first_wait
         repeat.run(
