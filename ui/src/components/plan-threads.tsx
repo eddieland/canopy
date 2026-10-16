@@ -1,5 +1,5 @@
 import { Check, MessageSquarePlus, Reply, RotateCcw, Send, Trash2 } from 'lucide-react'
-import { useId, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { KeyboardEvent, Ref, SubmitEvent } from 'react'
 
 import { Age } from '@/components/age'
@@ -326,9 +326,24 @@ function CommentForm({
     onCancel: () => void
 }) {
     const sendKey = useSendKey()
+    const field = useRef<HTMLTextAreaElement>(null)
     const [own, setOwn] = useState('')
     const body = value ?? own
     const setBody = onValueChange ?? setOwn
+
+    // The form opens on a click that asks for it, so the field takes the focus as it opens, once, after any words it
+    // holds already; the page scrolls to it a frame on, once the comments are placed beside the plan. Only then: a
+    // render as the operator types leaves the cursor and the page where they are.
+    useEffect(() => {
+        const element = field.current
+        if (element === null) {
+            return
+        }
+        element.focus({ preventScroll: true })
+        element.setSelectionRange(element.value.length, element.value.length)
+        const frame = requestAnimationFrame(() => element.scrollIntoView({ block: 'nearest' }))
+        return () => cancelAnimationFrame(frame)
+    }, [])
 
     function send(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
@@ -358,13 +373,7 @@ function CommentForm({
                 maxLength={MAX_COMMENT}
                 onChange={(event) => setBody(event.target.value)}
                 onKeyDown={onKey}
-                // The form opens on a click that asks for it, so the field takes the focus at once, after any words it
-                // holds already; the page scrolls to it a frame on, once the comments are placed beside the plan.
-                ref={(field) => {
-                    field?.focus({ preventScroll: true })
-                    field?.setSelectionRange(field.value.length, field.value.length)
-                    requestAnimationFrame(() => field?.scrollIntoView({ block: 'nearest' }))
-                }}
+                ref={field}
                 className="min-h-16"
             />
             <div className="flex items-center justify-end gap-1">

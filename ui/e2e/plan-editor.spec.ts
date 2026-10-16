@@ -172,6 +172,18 @@ test('each comment sits beside its passage, and moves with it as the plan is edi
     await expect.poll(() => topGap(card, passage)).toBeLessThanOrEqual(1)
 })
 
+test('typing in the middle of a comment being written edits it in place', async ({ page }) => {
+    await select(page, "Excel's own format")
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    const field = page.getByRole('form', { name: 'Comment' }).getByRole('textbox')
+    await expect(field).toBeFocused()
+    await page.keyboard.type('abc')
+    await page.keyboard.press('ArrowLeft')
+    await page.keyboard.press('ArrowLeft')
+    await page.keyboard.type('X')
+    await expect(field).toHaveValue('aXbc')
+})
+
 test('a comment opens beside its passage, without the page moving', async ({ page }) => {
     // As the operator would find it: in the middle of the window.
     await plan(page)
