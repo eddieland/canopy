@@ -94,6 +94,10 @@ class Canary:
     def own(self) -> Path:
         return self.common / "worktrees" / self.slot.name
 
+    def cache(self, group: str) -> Path:
+        """The cache the wrapper gives the roles in `group`, under the HOME the template denies."""
+        return self.home / ".cache" / "canopy" / "sandbox" / group
+
     def run(
         self, script: str, *args: str, role: str = "worker", tmpdir: str | None = None, timeout: float | None = None
     ) -> procs.Result:
@@ -205,6 +209,11 @@ def test_a_run_cannot_read_home_or_the_state_dir(canary: Canary, script: str, ro
         pytest.param('echo pwned >> "$HOME/.config/canopy/config.toml"', "~/.config/canopy/config.toml", id="config"),
         pytest.param('echo pwned > "$1/planted"', "{state}/planted", id="state-dir"),
         pytest.param('echo pwned > "$1/runs/planted"', "{state}/runs/planted", id="state-runs"),
+        pytest.param(
+            'mkdir -p "$HOME/.cache/uv" && echo pwned > "$HOME/.cache/uv/planted"',
+            "~/.cache/uv/planted",
+            id="own-cache",
+        ),
     ],
 )
 @pytest.mark.parametrize("role", ROLES)
@@ -379,6 +388,34 @@ def test_a_repository_a_tool_makes_keeps_its_own_objects(canary: Canary) -> None
     assert not SubprocessRunner().run(["git", "cat-file", "-e", head], cwd=canary.primary).ok
     in_objects = {"GIT_OBJECT_DIRECTORY": str(canary.objects)}
     assert SubprocessRunner().run(["git", "cat-file", "-e", head], cwd=canary.slot, env=in_objects).ok
+
+
+@pytest.mark.parametrize("role", ["chore", "review"])
+def test_a_run_cannot_reach_another_roles_cache(canary: Canary, role: str) -> None:
+    """What a worker's build fetched, a chore or a review neither reads nor replaces, nor the other way about."""
+    build = canary.cache("build")
+    build.mkdir(parents=True, mode=0o700)
+    (build / "kept").write_text(f"{PLANTED}\n")
+    other = canary.cache("review" if role == "chore" else "chore")
+    other.mkdir(mode=0o700)
+
+    done = canary.run(
+        'cat "$1/kept"; echo pwned > "$1/kept"; echo pwned > "$2/planted"', str(build), str(other), role=role
+    )
+
+    assert PLANTED not in done.stdout + done.stderr
+    assert (build / "kept").read_text() == f"{PLANTED}\n"
+    assert not (other / "planted").exists()
+
+
+def test_a_worker_and_setup_share_a_cache_that_outlasts_the_run(canary: Canary) -> None:
+    """A positive control: what a worker's tools cache is on the host after the run, where setup's tools find it."""
+    done = canary.run('mkdir -p "$UV_CACHE_DIR" && echo cached > "$UV_CACHE_DIR/canary"')
+
+    assert done.ok, done.stderr
+    assert (canary.cache("build") / "uv" / "canary").read_text() == "cached\n"
+    again = canary.run('cat "$UV_CACHE_DIR/canary"', role="setup")
+    assert again.stdout.splitlines()[1:] == ["cached"], again.stderr
 
 
 def test_a_worker_runs_under_the_system_temp_directory(canary: Canary) -> None:

@@ -114,8 +114,7 @@ own rules are the only ones.
 
 `filesystem.allowRead` re-allows what a run must read under `$HOME`, which `denyRead` hides. Trim the toolchains to
 the ones you build with, and add any that are missing: `~/.local/bin`, `~/.nvm`, `~/.cargo`, `~/.rustup`, `~/go`,
-and `~/.local/share/uv` are there. A toolchain is readable, not writable; a cache a build writes to goes in
-`allowWrite` too. Two more you are likely to need:
+and `~/.local/share/uv` are there. A toolchain is readable, not writable. Two more you are likely to need:
 
 - **Push credentials.** A worker pushes from inside the sandbox, so its git credential helper does too. Add what the
   helper reads: `~/.config/gh` for `gh auth setup-git`, `~/.git-credentials` for the store helper. That token is in
@@ -124,12 +123,21 @@ and `~/.local/share/uv` are there. A toolchain is readable, not writable; a cach
   The wrapper denies `.canopy/` itself when the run's directories name it, but a chore with a `cwd` of its own names
   none.
 
-OpenCode's local MCP servers start inside the sandbox and inherit its policy: each one's hosts must be on the
-allowlist, and a server that reads credentials from `$HOME` needs those paths in `allowRead`. A server started with
-`npx` or `uvx` needs its registry on the allowlist (`registry.npmjs.org`, or `pypi.org` and
-`files.pythonhosted.org`), and fetches itself each run, since its cache is under the `$HOME` the template hides. A
-server started with `docker run` cannot work: the sandbox refuses Unix sockets, the Docker daemon's included. Use the
-server's binary, or its remote form, whose host goes on the allowlist like any other.
+Leave `@CACHE@` in `allowRead` and `allowWrite`. It is a cache for sandboxed runs alone, which lasts from run to run:
+`~/.cache/canopy/sandbox/build/` for workers and setup, and one each for chores and reviews (under `$XDG_CACHE_HOME`
+when that is set). The wrapper points uv, pip, npm and `npx`, yarn, Go, and pre-commit there, in place of your own
+caches, so that what a steered run writes there never reaches a build you run yourself. A tool it does not point there
+keeps writing under `$HOME`, where the sandbox drops what it writes when the run ends; give it a directory under
+`~/.cache/canopy/sandbox/build/` with its own setting. Cargo is the one that fails: its registry is under `~/.cargo`,
+which is read-only, so a Rust build that fetches a crate needs the crate vendored, or fetched outside the sandbox first.
+Nothing prunes the caches; with the loop stopped, delete one whenever you like.
+
+OpenCode's local MCP servers start inside the sandbox and inherit its policy: each one's hosts must be on the allowlist,
+and a server that reads credentials from `$HOME` needs those paths in `allowRead`. A server started with `npx` or `uvx`
+needs its registry on the allowlist (`registry.npmjs.org`, or `pypi.org` and `files.pythonhosted.org`), and fetches
+itself into the cache on its first run. A server started with `docker run` cannot work: the sandbox refuses Unix
+sockets, the Docker daemon's included. Use the server's binary, or its remote form, whose host goes on the allowlist
+like any other.
 
 ## 4. Push over HTTPS
 
@@ -233,7 +241,9 @@ github.com.
   (step 3).
 - **A build cannot fetch, or a tool cannot find its files:** a registry missing from `allowedDomains`, or a toolchain
   missing from `allowRead`. The error is the tool's own, in the run's log. A tool that writes outside `TMPDIR` and
-  the worktree needs its directory in `allowWrite`.
+  the worktree needs its directory in `allowWrite`, or a cache under `@CACHE@` (step 3).
+- **Every run fetches its dependencies again:** a template copied before canopy had `@CACHE@`. `canopy sandbox setup`
+  notes each kept template that lacks a placeholder the shipped one names; add `@CACHE@` where the shipped one has it.
 - **Bazel:** put the disk and repository caches and `--output_user_root` from [BAZEL.md](BAZEL.md) in `allowWrite`
   of `worker.json` and `setup.json`. Expect each run's Bazel server to end with its sandbox, so a run starts its own.
 - **A tool's git cannot write objects in the slot:** inside the sandbox, `git` on `PATH` is the wrapper's own, which

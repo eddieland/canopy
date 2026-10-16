@@ -25,7 +25,8 @@
       "Reads under HOME are denied, then re-allowed where the run needs them; allowRead outranks denyRead. Writes",
       "are denied everywhere except allowWrite; denyWrite outranks allowWrite. If your workspace is outside HOME,",
       "add it to denyRead, so its .canopy/ stays hidden. To push, add what your git credential helper reads to",
-      "allowRead: ~/.config/gh for gh, ~/.git-credentials for the store helper."
+      "allowRead: ~/.config/gh for gh, ~/.git-credentials for the store helper. @CACHE@ is the cache workers and",
+      "setup share, apart from yours: canopy-sandbox points uv, pip, npm, yarn, Go, and pre-commit there."
     ],
     "denyRead": ["~"],
     "allowRead": [
@@ -35,6 +36,7 @@
       "@GIT_SHARED@",
       "@OBJECTS@",
       "@TMPDIR@",
+      "@CACHE@",
       "@READ@",
       "~/.gitconfig",
       "~/.config/git",
@@ -55,6 +57,7 @@
       "@GIT_OWN@",
       "@OBJECTS@",
       "@TMPDIR@",
+      "@CACHE@",
       "~/.local/share/opencode",
       "~/.local/state/opencode",
       "~/.cache/opencode"

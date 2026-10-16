@@ -27,6 +27,14 @@ RECORDED = (
     "GIT_OBJECT_DIRECTORY",
     "PATH",
     "TMPDIR",
+    # Where the wrapper points each tool's cache.
+    "GOCACHE",
+    "GOMODCACHE",
+    "PIP_CACHE_DIR",
+    "PRE_COMMIT_HOME",
+    "UV_CACHE_DIR",
+    "YARN_CACHE_FOLDER",
+    "npm_config_cache",
 )
 
 

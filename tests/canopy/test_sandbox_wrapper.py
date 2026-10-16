@@ -94,6 +94,15 @@ def reading(objects: Path, primary: Path) -> dict[str, str]:
     return {"GIT_OBJECT_DIRECTORY": str(objects), "GIT_ALTERNATE_OBJECT_DIRECTORIES": str(primary / ".git" / "objects")}
 
 
+def caches(cache: Path) -> dict[str, str]:
+    """Each tool's cache variable as the wrapper sets it, in the role's cache `cache`."""
+    return {name: str(cache / sub) for name, sub in canopy_sandbox.CACHE_ENV.items()}
+
+
+def cache_of(home: Path, group: str) -> Path:
+    return home / ".cache" / "canopy" / "sandbox" / group
+
+
 def objects_dir(tmp_path: Path) -> Path:
     objects = tmp_path / "runs" / "1.objects"
     objects.mkdir(parents=True)
@@ -108,7 +117,9 @@ def review_dir(parent: Path, checkout: Path) -> Path:
     return cwd
 
 
-def test_a_worker_runs_under_a_policy_made_for_its_slot(sandbox: Sandbox, tmp_path: Path) -> None:
+def test_a_worker_runs_under_a_policy_made_for_its_slot(
+    sandbox: Sandbox, canopy_env: CanopyEnv, tmp_path: Path
+) -> None:
     primary, slot = linked_worktree(tmp_path, "repo")
     git("worktree", "add", "--quiet", "--detach", str(tmp_path / "repo" / "other"), cwd=primary)
     objects = objects_dir(tmp_path)
@@ -125,13 +136,15 @@ def test_a_worker_runs_under_a_policy_made_for_its_slot(sandbox: Sandbox, tmp_pa
     assert call["argv"] == ["--settings", settings, "--", *PRINT_ARG, PROMPT]
     own, shared = primary / ".git" / "worktrees" / "slot", primary / ".git"
     filesystem = call["settings"]["filesystem"]
-    assert filesystem["denyRead"] == ["~", str(sandbox.runs_root())]  # no run reads another's temp directory
+    cache = cache_of(canopy_env.home, "build")
+    # No run reads another's temp directory, or another role's cache.
+    assert filesystem["denyRead"] == ["~", str(sandbox.runs_root()), str(cache.parent)]
     # The shared directory entry by entry, so that its read-only binds leave this slot's own directory writable.
     entries = [*sorted(p for p in shared.iterdir() if p.name != "worktrees"), shared / "worktrees" / "other"]
     paths = [str(p) for p in (slot, own, *entries, objects)]
-    assert filesystem["allowRead"][: len(paths) + 2] == [*paths, tmp, str(definitions)]
+    assert filesystem["allowRead"][: len(paths) + 3] == [*paths, tmp, str(cache), str(definitions)]
     assert str(shared) not in filesystem["allowRead"]
-    assert filesystem["allowWrite"][:4] == [str(slot), str(own), str(objects), tmp]
+    assert filesystem["allowWrite"][:5] == [str(slot), str(own), str(objects), tmp, str(cache)]
     protected = [slot / ".git", own / "config.worktree", own / "commondir", own / "gitdir"]
     assert filesystem["denyWrite"] == [str(p) for p in protected]
     assert "#" not in json.dumps(call["settings"])
@@ -141,7 +154,12 @@ def test_a_worker_runs_under_a_policy_made_for_its_slot(sandbox: Sandbox, tmp_pa
     assert call["env"].pop("PATH").split(os.pathsep)[0] == bin_dir
     assert bin_dir in filesystem["allowRead"]
     assert bin_dir not in filesystem["allowWrite"]
-    assert call["env"] == {"CANOPY_GIT_OBJECTS": str(objects), "CLAUDE_CODE_TMPDIR": tmp, "TMPDIR": tmp}
+    assert call["env"] == {
+        "CANOPY_GIT_OBJECTS": str(objects),
+        "CLAUDE_CODE_TMPDIR": tmp,
+        "TMPDIR": tmp,
+        **caches(cache),
+    }
     assert Path(tmp).parent.parent == sandbox.runs_root()
     assert list(sandbox.runs_root().iterdir()) == []  # the policy and the temp directory are gone
 
@@ -296,7 +314,7 @@ def test_setup_gets_its_own_policy(sandbox: Sandbox, tmp_path: Path) -> None:
     assert sandbox.only_call()["settings"]["network"]["allowedDomains"] == ["registry.npmjs.org"]
 
 
-def test_a_chore_reads_its_cwd_and_gets_no_git(sandbox: Sandbox, tmp_path: Path) -> None:
+def test_a_chore_reads_its_cwd_and_gets_no_git(sandbox: Sandbox, canopy_env: CanopyEnv, tmp_path: Path) -> None:
     cwd = tmp_path / "chores" / "build-health"
     cwd.mkdir(parents=True)
 
@@ -306,13 +324,15 @@ def test_a_chore_reads_its_cwd_and_gets_no_git(sandbox: Sandbox, tmp_path: Path)
     call = sandbox.only_call()
     filesystem = call["settings"]["filesystem"]
     tmp = call["env"]["TMPDIR"]
-    assert filesystem["allowRead"][:3] == [str(cwd.resolve()), tmp, "/defs"]
+    assert filesystem["allowRead"][:4] == [str(cwd.resolve()), tmp, str(cache_of(canopy_env.home, "chore")), "/defs"]
     assert str(cwd.resolve()) not in filesystem["allowWrite"]
     assert filesystem["denyWrite"] == []
     assert "GIT_OBJECT_DIRECTORY" not in call["env"]
 
 
-def test_a_review_reads_its_checkout_and_writes_none_of_it(sandbox: Sandbox, tmp_path: Path) -> None:
+def test_a_review_reads_its_checkout_and_writes_none_of_it(
+    sandbox: Sandbox, canopy_env: CanopyEnv, tmp_path: Path
+) -> None:
     """The reviewer reads the PR's checkout through its directory's link, and writes nothing there: not the worktree,
     not its git directories, and no objects, so it gets neither an object directory nor the run's git."""
     primary, slot = linked_worktree(tmp_path, "repo")
@@ -328,12 +348,84 @@ def test_a_review_reads_its_checkout_and_writes_none_of_it(sandbox: Sandbox, tmp
     own, shared = primary / ".git" / "worktrees" / "slot", primary / ".git"
     entries = sorted(p for p in shared.iterdir() if p.name != "worktrees")
     paths = [str(p) for p in (cwd.resolve(), slot, own, *entries)]
-    assert filesystem["allowRead"][: len(paths) + 2] == [*paths, tmp, "/defs"]
-    assert not [p for p in filesystem["allowWrite"] if p.startswith(str(tmp_path))]
-    assert filesystem["allowWrite"][0] == tmp
+    cache = str(cache_of(canopy_env.home, "review"))
+    assert filesystem["allowRead"][: len(paths) + 3] == [*paths, tmp, cache, "/defs"]
+    assert [p for p in filesystem["allowWrite"] if p.startswith(str(tmp_path))] == [cache]  # its own, no worker's
+    assert filesystem["allowWrite"][:2] == [tmp, cache]
     assert filesystem["denyWrite"] == []
     assert "github.com" not in call["settings"]["network"]["allowedDomains"]  # it pushes and fetches nothing
-    assert call["env"] == {"CLAUDE_CODE_TMPDIR": tmp, "PATH": os.environ["PATH"], "TMPDIR": tmp}
+    assert call["env"] == {"CLAUDE_CODE_TMPDIR": tmp, "PATH": os.environ["PATH"], "TMPDIR": tmp, **caches(Path(cache))}
+
+
+def test_each_role_has_a_cache_of_its_own_that_outlasts_the_run(
+    sandbox: Sandbox, canopy_env: CanopyEnv, tmp_path: Path
+) -> None:
+    """A worker and setup share the build cache; a chore and a review each have their own. A tool the caller pointed
+    at the operator's own cache is pointed at the role's instead, and what a run leaves there is there for the next."""
+    _, slot = linked_worktree(tmp_path, "repo")
+    chore = tmp_path / "chores" / "build-health"
+    chore.mkdir(parents=True)
+    cwds = {"worker": slot, "setup": slot, "chore": chore, "review": review_dir(tmp_path, slot)}
+    keep = 'mkdir -p "$UV_CACHE_DIR" && echo "$0" >> "$UV_CACHE_DIR/runs"'
+    env = {"CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path)), "UV_CACHE_DIR": str(canopy_env.home / ".cache" / "uv")}
+
+    for role, cwd in cwds.items():
+        done = wrap(role, "sh", "-c", keep, role, cwd=cwd, env=env)
+        assert done.ok, done.stderr
+
+    calls = [json.loads(line) for line in sandbox.log.read_text().splitlines()]
+    groups = {role: cache_of(canopy_env.home, group) for role, group in canopy_sandbox.CACHE_GROUPS.items()}
+    assert [c["env"]["UV_CACHE_DIR"] for c in calls] == [str(groups[role] / "uv") for role in cwds]
+    assert sorted(p.name for p in groups["worker"].parent.iterdir()) == ["build", "chore", "review"]
+    assert (groups["worker"] / "uv" / "runs").read_text() == "worker\nsetup\n"
+    assert (groups["chore"] / "uv" / "runs").read_text() == "chore\n"
+    assert (groups["review"] / "uv" / "runs").read_text() == "review\n"
+    for cache in groups.values():
+        assert cache.stat().st_mode & 0o777 == 0o700
+    assert not (canopy_env.home / ".cache" / "uv").exists()
+
+
+def test_a_template_without_the_cache_leaves_each_tool_where_it_was(
+    sandbox: Sandbox, canopy_env: CanopyEnv, tmp_path: Path
+) -> None:
+    """A template from before `@CACHE@`, or one the operator took it out of: nothing is made, and nothing is moved."""
+    (sandbox.templates / "chore.json").write_text(
+        json.dumps({"network": {"allowedDomains": []}, "filesystem": {"denyRead": ["~"], "allowRead": ["@CACHE@"]}})
+    )
+    mine = str(canopy_env.home / ".cache" / "uv")
+
+    done = wrap("chore", "true", cwd=tmp_path, env={"UV_CACHE_DIR": mine})
+
+    assert done.ok, done.stderr
+    env = sandbox.only_call()["env"]
+    assert env["UV_CACHE_DIR"] == mine
+    assert not set(canopy_sandbox.CACHE_ENV) - {"UV_CACHE_DIR"} & set(env)
+    assert not cache_of(canopy_env.home, "chore").exists()
+
+
+def test_a_relative_cache_home_is_ignored(sandbox: Sandbox, canopy_env: CanopyEnv, tmp_path: Path) -> None:
+    """The wrapper runs in the slot, where a relative XDG_CACHE_HOME would name a directory the branch committed."""
+    _, slot = linked_worktree(tmp_path, "repo")
+
+    done = wrap(
+        "worker", "true", cwd=slot, env={"CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path)), "XDG_CACHE_HOME": "c"}
+    )
+
+    assert done.ok, done.stderr
+    assert sandbox.only_call()["env"]["UV_CACHE_DIR"] == str(cache_of(canopy_env.home, "build") / "uv")
+    assert not (slot / "c").exists()
+
+
+def test_a_cache_that_is_a_link_runs_nothing(sandbox: Sandbox, canopy_env: CanopyEnv, tmp_path: Path) -> None:
+    cache = cache_of(canopy_env.home, "chore")
+    cache.parent.mkdir(parents=True)
+    cache.symlink_to(canopy_env.home, target_is_directory=True)
+
+    done = wrap("chore", "true", cwd=tmp_path)
+
+    assert done.returncode == 2
+    assert "is not a directory of this user's" in done.stderr
+    assert not sandbox.log.exists()
 
 
 @pytest.mark.parametrize("place", ["empty", "slot"])

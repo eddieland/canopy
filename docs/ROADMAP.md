@@ -423,6 +423,15 @@ overseer and harness calls, `/tmp/claude`, and exfiltration through an allowed h
 (D118).
 HOST_ISOLATION's settled parts are DESIGN §24 now, with its answered questions beside what they settled; HOST_ISOLATION
 keeps the problem, goals, and options, and points each later section there.
+The filesystem table's last unbuilt row, build and package caches apart from the operator's, is in: each template names
+`@CACHE@`, a cache per role that lasts from run to run (workers and setup share one), and the wrapper points uv, pip,
+npm, yarn, Go, and pre-commit there (DESIGN §24, Caches). Without it, a day of sandboxed runs would have fetched every
+dependency on every run, and Go could fetch no module at all, under the read-only `~/go`. `canopy sandbox setup` notes
+a template it kept that lacks a placeholder the shipped one names, which an operator who ran it before will see. The
+canary checks the cache from both sides. Under `srt` 0.0.79 and bubblewrap 0.9, every case passed but the four that
+need a route out, which the machine it ran on had only through a proxy on its own loopback; against the fake `srt`,
+every new denial fails and its positive control passes. Cargo's registry is left open: it shares `CARGO_HOME` with
+Cargo's binaries and config.
 Next: the canary on the operator's Linux and macOS machines.
 
 ## M27. Session transcripts in the web UI

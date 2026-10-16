@@ -193,8 +193,8 @@ split_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-
 @pytest.fixture
 def canopy_env(tmp_path: Path, journals: Journals) -> Iterator[CanopyEnv]:
     """A workspace of one repository with its workspace file, and a user config whose runtime commands run the fake
-    agent. HOME, XDG_CONFIG_HOME, and XDG_DATA_HOME point into tmp_path too, so nothing reads or writes the real
-    operator's files.
+    agent. HOME, XDG_CONFIG_HOME, XDG_DATA_HOME, and XDG_CACHE_HOME point into tmp_path too, so nothing reads or
+    writes the real operator's files.
     CANOPY_TICK_ID is cleared."""
     home = tmp_path / "home"
     root = tmp_path / "ws"
@@ -217,6 +217,7 @@ def canopy_env(tmp_path: Path, journals: Journals) -> Iterator[CanopyEnv]:
         "HOME": str(home),
         "XDG_CONFIG_HOME": str(home / ".config"),
         "XDG_DATA_HOME": str(home / ".local" / "share"),
+        "XDG_CACHE_HOME": str(home / ".cache"),
         "USER": "tester",
     }
     with mock.patch.dict(os.environ, variables), contextlib.chdir(root):
