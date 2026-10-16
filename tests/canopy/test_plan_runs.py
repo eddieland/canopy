@@ -10,7 +10,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import conversation, db, plans
-from canopy.core.vocab import PlanStatus, RunStatus
+from canopy.core.vocab import PlanStatus, RunStatus, TickStatus
 from canopy.runs import policy
 from tests.canopy.helpers import (
     KEY,
@@ -65,7 +65,7 @@ def test_a_plan_is_written_to_its_file_and_recorded_proposed(
     assert run["branch"] == ""
     ticket = db.get_ticket(conn, KEY)
     assert ticket is not None
-    assert ticket["branch"] is None
+    assert ticket.branch is None
     assert db.units(conn, KEY) == []
     assert git_pool.remote_head(f"agent/{KEY}-work") is None
 
@@ -226,7 +226,7 @@ def test_a_started_or_split_ticket_is_not_planned(
         works_units=False,
     )
     db.record_split_children(conn, "PROJ-2", split, {"PROJ-3": "repo"})
-    db.finish_tick(conn, tick_id, "ok", "test")
+    db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     assert dispatch_refused(conn, *PLAN, key="PROJ-2") == [
         ("refused:bad_plan", "PROJ-2 was split into PROJ-3; plan those instead")
     ]

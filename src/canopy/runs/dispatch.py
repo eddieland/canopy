@@ -510,9 +510,9 @@ def _check_plan(ctx: Context, key: str, *, slug: str | None, base: str | None) -
     if split_into:
         raise Refusal("bad_plan", f"{key} was split into {', '.join(split_into)}; plan those instead")
     ticket = db.get_ticket(ctx.conn, key)
-    if ticket is not None and ticket["branch"]:
+    if ticket is not None and ticket.branch:
         # Its first implement recorded the branch: a plan now would describe work already started (DESIGN §25, Open).
-        raise Refusal("bad_plan", f"{key} already has work on {ticket['branch']}; a started ticket is not planned")
+        raise Refusal("bad_plan", f"{key} already has work on {ticket.branch}; a started ticket is not planned")
     if ctx.config.tracker.tools() is None:
         raise Refusal(
             "no_read_tools", "no tracker read tools are known for the planner; set tracker.mcp_server and read_tools"

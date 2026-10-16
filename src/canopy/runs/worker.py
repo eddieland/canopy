@@ -530,6 +530,7 @@ def _record_plan(ctx: Context, run: sqlite3.Row, parsed: PlanResult, text: str, 
         written = plans.write(ctx.state_dir, key, run_id, text)
     except (plans.PlanFileError, OSError) as e:
         return Outcome(RunStatus.CRASHED, parsed, f"the plan was not written: {e}")
+    # Should this fail, the file stays with no row: it is never read, and its name is this run's alone (DESIGN §25).
     plan = plans.record(ctx.conn, key, run_id, written)
     log.info("plan recorded", extra={"run_id": run_id, "plan_id": plan.id, "size": written.size})
     return Outcome(RunStatus.DONE, parsed)
