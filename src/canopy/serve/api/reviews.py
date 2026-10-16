@@ -120,9 +120,32 @@ def _json(model: BaseModel, request: Request) -> Response:
     Returns:
         The response, with `Vary: Accept-Encoding` either way, since its body depends on that header.
     """
-    body = model.model_dump_json().encode()
+    # By alias, as FastAPI serializes a `response_model`, so this body stays what the schema declares.
+    body = model.model_dump_json(by_alias=True).encode()
     headers = {"Vary": "Accept-Encoding"}
-    if len(body) >= _GZIP_FROM and "gzip" in request.headers.get("accept-encoding", ""):
+    if len(body) >= _GZIP_FROM and _takes_gzip(request.headers.get("accept-encoding", "")):
         body = gzip.compress(body)
         headers["Content-Encoding"] = "gzip"
     return Response(body, media_type="application/json", headers=headers)
+
+
+def _takes_gzip(accept_encoding: str) -> bool:
+    """Whether an `Accept-Encoding` header takes gzip: it names `gzip` with a weight above 0, or none, which is 1.
+
+    Returns:
+        True when the header lists gzip and does not refuse it with `q=0`; a weight that is not a number refuses it.
+    """
+    for part in accept_encoding.split(","):
+        coding, _, params = part.partition(";")
+        if coding.strip().lower() != "gzip":
+            continue
+        weight = 1.0
+        for param in params.split(";"):
+            name, _, value = param.partition("=")
+            if name.strip().lower() == "q":
+                try:
+                    weight = float(value)
+                except ValueError:
+                    weight = 0.0
+        return weight > 0
+    return False

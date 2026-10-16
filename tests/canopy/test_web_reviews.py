@@ -65,6 +65,17 @@ def test_a_review_goes_gzipped_to_a_browser_that_takes_it_and_as_it_is_to_one_th
     assert ("content-encoding" in plain.headers, plain.headers["vary"]) == (False, "Accept-Encoding")
     assert taken.json() == plain.json()
     assert int(taken.headers["content-length"]) < int(plain.headers["content-length"])
+    # gzip named among others, or with a weight, is taken; refused with q=0, or only as x-gzip, it is not.
+    for accept, gzipped in [
+        ("deflate, gzip;q=0.5", True),
+        ("br, GZIP", True),
+        ("gzip;q=0", False),
+        ("gzip; q=0.0, identity", False),
+        ("gzip;q=x", False),
+        ("x-gzip", False),
+    ]:
+        sent = c.get("/api/reviews/4", headers={"accept-encoding": accept})
+        assert (sent.headers.get("content-encoding") == "gzip") is gzipped, accept
     # A review too short to be worth it goes as it is.
     short = c.get("/api/reviews/3")
     assert len(short.content) < 1024
