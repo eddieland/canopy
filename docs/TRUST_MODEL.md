@@ -141,10 +141,17 @@ Controls:
   splitter's permissions deny tools whose names suggest labels, assignees, or edits to existing tickets, as defense in
   depth: a tracker whose create tool also takes labels passes that check. The harness records each child's repository
   from the split's validated result, only for a ticket new to the journal, and refuses any other repository for it.
-- The reviewer (DESIGN §21) reads the most hostile text the loop meets, a diff by anyone `review.query` matches. What
-  it writes is data wherever it goes: the overseer classifies its findings as it classifies review comments, and a
-  resumed worker reads them in its prompt as it reads any review comment. `review.query` authorizes a review, and only
-  the operator writes it (user-only, T7). Reviews live in the journal only (D114): nothing on a PR is one.
+- The reviewer (DESIGN §21) reads the most hostile text the loop meets, a diff by anyone `review.query` matches or the
+  operator asks for by name. What it writes is data wherever it goes: the overseer classifies its findings as it
+  classifies review comments, and a resumed worker reads them in its prompt as it reads any review comment.
+  `review.query` authorizes a review, and only the operator writes it (user-only, T7). A review request (`canopy start
+  URL --review`, ROADMAP M42) authorizes one review of one PR the same way: a journal fact made only through the
+  operator's channels, the CLI and the web UI, refused as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set,
+  so an agent steered by a PR's text cannot point the reviewer, and the operator's spend, at another PR. The overseer
+  names the repository the review runs in, as it does for `review.query`'s matches, and can end a request, as `merged`,
+  `closed`, or `unknown_repo`, and nothing else: a wrong repository fails that review, and a steered overseer ending a
+  request early costs a review, never adds one; the PR's page shows who ended it and why. Reviews live in the journal
+  only (D114): nothing on a PR is one.
 - Chores (DESIGN §19) read text from people outside the operator's queue: other people's PRs, build logs. Their
   findings are data wherever they go: the attention list, notifications, and the overseer's state block, where they
   inform only when the chore runs again, never what is done about a ticket.
@@ -478,8 +485,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
   reply to, and forget tickets, end a stopped ticket's run, grant a unit or a PR one more run as `canopy grant` does,
   note something to a chore as `canopy reply chore:NAME` does, dismiss a chore's or a review's finding or take that
-  back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, pause and resume the loop
-  as `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, and ask the
+  back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, make and end a review
+  request on a PR as `canopy start URL --review` and `canopy stop URL` do, pause and resume the loop as
+  `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, and ask the
   loop
   to read its config files again as SIGHUP does, nothing else. It cannot write config: a reload reads only the
   operator's own files, and a `serve.*` change waits for a restart, so the listener's bind and port never change under
@@ -528,8 +536,9 @@ the network (D076), transcripts included: a secret a worker's tool printed into 
 - Run on a machine and account that already have exactly the access the loop
   needs, nothing more.
 - Read the attention list.
-- A `review.query` that matches other people's PRs runs an agent on their code and text under your account, though it
-  posts nothing. A reviewer definition of your own that runs commands runs the PR's code on your machine.
+- A `review.query` that matches other people's PRs, or a review request on one, runs an agent on their code and text
+  under your account, though it posts nothing. A reviewer definition of your own that runs commands runs the PR's
+  code on your machine.
 - Point a notification sink only at a place whose audience may read the tickets and PRs it quotes, and keep the
   Slack sink's webhook or token file readable only by you. Give a bot token only the `chat:write` scope: the file holds
   whatever the token can do. People who can read the channel see what the loop does; they cannot steer it.

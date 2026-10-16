@@ -1,4 +1,4 @@
-"""`canopy review run` and `wait` for the overseer, `show` for the operator, and the detached `_review` (DESIGN §21)."""
+"""`canopy review run`, `wait`, and `end` for the overseer, `show` for the operator, the detached `_review` (§21)."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import click
 
 from canopy.cli.common import CliError, Group, OverseerCommand, open_context, require_tick
 from canopy.cli.params import PR_URL, REPO, TICKET_KEY, TextType, truncate
-from canopy.core import db
+from canopy.core import conversation, db, review_requests
 from canopy.infra import logs
 from canopy.loop import attention, tick
 from canopy.reviews import execute, findings, grants, start, view
@@ -18,7 +18,7 @@ from canopy.reviews import execute, findings, grants, start, view
 
 @click.group("review", cls=Group)
 def review_group() -> None:
-    """Review PRs: `run` and `wait` are the overseer's; `show` is how you read what canopy's reviews found."""
+    """Review PRs: `run`, `wait`, and `end` are the overseer's; `show` is how you read what canopy's reviews found."""
 
 
 @review_group.command("run", cls=OverseerCommand)
@@ -47,6 +47,9 @@ def cmd_review_run(
             started = start.start(ctx, tick_id=tick_id, request=request, context=context)
     except start.Refusal as r:
         db.record_decision(ctx.conn, tick_id, ticket, f"refused:{r.guard}", r.reason, pr=pr_key)
+        if r.guard == "reviewed" and not current["dry_run"] and review_requests.answered(ctx.conn, pr):
+            # The head already has a `done` review: that answers a `once` request, which no new review would end.
+            log.info("review request answered", extra={"pr": pr_key})
         if r.guard == "review_limit":
             # The overseer wants a review the limit forbids: a human has to look (DESIGN §21).
             action = f"{attention.ACTION_PREFIX}review_limit"
@@ -77,10 +80,39 @@ def cmd_review_wait(click_ctx: click.Context, *, pr: str, ticket: str | None, ra
     """Record that the PR at URL is not to be reviewed now, and why."""
     ctx = open_context(click_ctx)
     current = require_tick(ctx)
-    if not ctx.config.reviews_on:
-        raise CliError("reviews are off in this configuration")
+    if not review_requests.reviews_on(ctx.conn, ctx.config):
+        raise CliError("reviews are off: no [review] agent_prs or query, and no open review request")
     db.record_decision(ctx.conn, int(current["id"]), ticket, "wait", rationale, pr=pr)
     click.echo(f"recorded wait for {pr}")
+    return 0
+
+
+# The decision `canopy review end` records: the overseer ended a review request no review of could answer.
+END_ACTION = "review:end"
+
+
+@review_group.command("end", cls=OverseerCommand)
+@click.option("--pr", "pr", required=True, type=PR_URL, help="The requested PR's https:// URL.")
+@click.option("--reason", required=True, type=click.Choice(review_requests.OVERSEER_REASONS), help="What you read.")
+@click.pass_context
+def cmd_review_end(click_ctx: click.Context, *, pr: str, reason: str) -> int:
+    """End the operator's review request on the PR at URL: it merged or closed first, or is in no repository here."""
+    ctx = open_context(click_ctx)
+    current = require_tick(ctx)
+    tick_id = int(current["id"])
+    dry_run = bool(current["dry_run"])
+    try:
+        review_requests.end(ctx.conn, pr, reason, dry_run=dry_run)
+    except conversation.Refused as r:
+        db.record_decision(ctx.conn, tick_id, None, f"refused:{r.guard}", r.reason, pr=pr)
+        raise CliError(f"review end refused ({r.guard}): {r.reason}; the refusal was recorded") from None
+    if dry_run:
+        db.record_decision(ctx.conn, tick_id, None, END_ACTION, f"dry run: not ended; {reason}", pr=pr)
+        click.echo(f"dry run: recorded the end of {pr}'s review request; nothing was ended")
+        return 0
+    db.record_decision(ctx.conn, tick_id, None, END_ACTION, reason, pr=pr)
+    logs.for_tick(tick_id).info("review request ended", extra={"pr": pr, "reason": reason})
+    click.echo(f"ended the review request on {pr}: {reason}")
     return 0
 
 

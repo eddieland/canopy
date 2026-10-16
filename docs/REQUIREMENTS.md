@@ -218,23 +218,14 @@ chooses a prompt, or moves the listener, stays an edit to the file. Today the we
 
 ### R17. Review a coworker's PR on request, once or for as long as it is open
 
-Gap (M42). Written down 2026-10-14. The operator should be able to hand canopy someone else's PR to review: once, at
-its current commit, or watched, reviewed again at each new commit until it merges or closes. Today canopy reviews a PR
-only as the loop's own (`review.agent_prs`) or as a match of `review.query`, a standing search in the user file, so
-one PR means editing config and editing it back. The review is what any canopy review is: findings in the journal for
-the operator, posted nowhere (D114), with no worker and no ticket.
-
-### R18. Plan a ticket before implementing it, and keep the plan
-
-Gap (M44). Written down 2026-10-15. Planning should be a step canopy can take for a ticket: a run that reads the
-ticket and the code and writes down how it will do the work, before any `implement` starts. Two reasons. A worker
-that starts from an explicit plan should do better than one that plans as it goes. And the plan should stay in the
-journal, so the operator can read it later for any ticket, as they read its conversation and runs today.
-
-Whether a ticket is planned is a config default the operator can change for one ticket. When a ticket is planned, the
-operator reads the plan before work starts: nothing is implemented until they approve it, and a reply asking for
-changes makes a new plan. The plan stays in canopy and is posted nowhere, so a private ticket is planned the same way.
-Today the `implement` worker plans inside its own session, and nothing of it survives but its summary.
+Built in part (M42): `canopy start URL --review`, or the web UI's pull requests page, has canopy review a
+PR once, at its head (§21, Review requests); the live check is SCENARIOS S37. Watching one, reviewed again at each new
+commit until it merges, is deferred (ROADMAP's deferred list): the operator judged it more than MVP needs. Written down
+2026-10-14. The operator should be able to hand canopy someone else's PR to review: once, at its current commit, or
+watched, reviewed again at each new commit until it merges or closes. Before M42 canopy reviewed a PR only as the
+loop's own (`review.agent_prs`) or as a match of `review.query`, a standing search in the user file, so one PR meant
+editing config and editing it back. The review is what any canopy review is: findings in the journal for the
+operator, posted nowhere (D114), with no worker and no ticket.
 
 ## Nice to have
 

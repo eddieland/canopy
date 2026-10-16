@@ -603,13 +603,21 @@ def finish_run(
 ) -> bool:
     """Close a running run in `table`, recording `event` with it. Returns False if it was already closed.
 
-    A worker or split run that reports messages closes with `finish_ticket_run` instead.
+    A worker or split run that reports messages closes with `finish_ticket_run` instead. A review run that ends `done`
+    also ends its PR's open review request, as `reviewed`, in the same transaction (DESIGN §21): the request asked for
+    one review, and this is it.
 
     Returns:
         True if this call closed the run.
     """
     with transaction(conn):
         closed = _close_run(conn, table, run_id, status, result_json)
+        if closed and table == "review_runs" and status == "done":
+            conn.execute(
+                "UPDATE review_requests SET ended_at = ?, end_reason = 'reviewed' "
+                "WHERE ended_at IS NULL AND pr_url = (SELECT pr_url FROM review_runs WHERE id = ?)",
+                (now(), run_id),
+            )
         if closed and event is not None:
             record_event(conn, event)
     return closed
@@ -1022,7 +1030,8 @@ def insert_review_run(
 ) -> int:
     """Insert a `running` review run with no slot or pid yet, logging to `<logs_dir>/<id>.log`, and return its id.
 
-    `purpose` is why it runs (DESIGN §21): `own` for one of the loop's own PRs, `query` for a `review.query` match.
+    `purpose` is why it runs (DESIGN §21): `own` for one of the loop's own PRs, `request` for a PR the operator
+    asked for, `query` for a `review.query` match.
 
     Returns:
         The new review run's id.
@@ -1123,10 +1132,11 @@ def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict
 def pull_requests(conn: sqlite3.Connection, limit: int, *, url: str | None = None) -> list[sqlite3.Row]:
     """Return the `limit` PRs with the most recent activity, most recently active first; with `url`, only it (§22).
 
-    A PR is known by a ticket's unit, whose activity is the ticket's last sighting, or by a review run, whose activity
-    is its start or end. Each row has `url` and `active_at`, and the unit's `ticket_key`, `repo`, `branch`, `phase`,
-    and the ticket's `title`, all NULL for a PR no unit records. Decisions are not a source: they are many. Only the
-    candidates `_candidates` finds are weighed, so the read costs what `limit` does.
+    A PR is known by a ticket's unit, whose activity is the ticket's last sighting, by a review run, whose activity
+    is its start or end, or by the operator's review request, whose activity is when it was made or ended. Each row
+    has `url` and `active_at`, and the unit's `ticket_key`, `repo`, `branch`, `phase`, and the ticket's `title`, all
+    NULL for a PR no unit records. Decisions are not a source: they are many. Only the candidates `_candidates` finds
+    are weighed, so the read costs what `limit` does.
     """
     if limit < 1:
         return []
@@ -1143,15 +1153,18 @@ def _weighed_pull_requests(conn: sqlite3.Connection, urls: str, limit: int) -> l
         "  WHERE u.pr_url IN (SELECT value FROM json_each(?))"
         "  UNION ALL SELECT pr_url, coalesce(ended_at, started_at) FROM review_runs"
         "  WHERE pr_url IN (SELECT value FROM json_each(?))"
+        "  UNION ALL SELECT pr_url, coalesce(ended_at, created_at) FROM review_requests"
+        "  WHERE pr_url IN (SELECT value FROM json_each(?))"
         ") k "
         "LEFT JOIN ticket_units u ON u.pr_url = k.url LEFT JOIN tickets t ON t.key = u.ticket_key "
         "GROUP BY k.url ORDER BY active_at DESC, k.url LIMIT ?",
-        (urls, urls, limit),
+        (urls, urls, urls, limit),
     ).fetchall()
 
 
 # Each source of a PR's activity as `pull_requests` weighs it, for `_candidates`: its units by when a tick last saw
-# their ticket, and its review runs by when each ended, or started while it runs (`finish_run` sets the end).
+# their ticket, its review runs by when each ended, or started while it runs (`finish_run` sets the end), and its
+# review requests by when each ended, or was made while it is open.
 # CROSS JOIN keeps SQLite reading the tickets in order and each one's units after, rather than sorting every unit.
 _PR_ACTIVITY = (
     (
@@ -1160,6 +1173,7 @@ _PR_ACTIVITY = (
     ),
     "SELECT pr_url, ended_at FROM review_runs WHERE ended_at IS NOT NULL ORDER BY ended_at DESC",
     "SELECT pr_url, started_at FROM review_runs WHERE status = 'running' ORDER BY started_at DESC",
+    "SELECT pr_url, coalesce(ended_at, created_at) AS at FROM review_requests ORDER BY at DESC",
 )
 
 

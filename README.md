@@ -144,6 +144,7 @@ on their own; anyone else's comments wait on the attention list as `untrusted_re
 | Start a ticket over, once its PR is closed and its branch deleted | `canopy forget KEY` |
 | Allow one more run past an `attempt_limit` | `canopy grant KEY implement` (or `resume`, `fix-ci`), or the ticket's page |
 | Allow one more review past a `review_limit` | `canopy grant PR_URL review`, or the PR's page |
+| Have canopy review a coworker's PR | `canopy start PR_URL --review`, or the pull requests page |
 | See what a tick decided and what it cost | `canopy decisions [TICK] [--ticket KEY]` |
 | See what the last days cost, how much of it idle ticks spent, and what each ticket done cost | `canopy spend [--days N]`, or the web UI's spend page |
 | Read a run's transcript | its page in the web UI, or `opencode export <session id>` |

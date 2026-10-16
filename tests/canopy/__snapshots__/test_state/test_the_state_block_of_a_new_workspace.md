@@ -40,6 +40,7 @@ This is a live tick.
     {
       "name": "repo",
       "path": "/workspace/repos/repo",
+      "url": "https://example.test/acme/repo.git",
       "summary": "The only repository.",
       "cloned": true,
       "leased_slots": []

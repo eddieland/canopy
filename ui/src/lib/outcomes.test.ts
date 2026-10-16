@@ -9,7 +9,9 @@ import {
     reloadedText,
     repliedText,
     reviewDismissedText,
+    reviewRequestedText,
     reviewSentText,
+    reviewStoppedText,
     startedText,
     stoppedText,
 } from './outcomes'
@@ -77,6 +79,22 @@ describe('outcomes', () => {
         expect(grantedText('https://example.test/o/r/pull/1', { kind: 'review', repo: null, runs: 3, limit: 4 })).toBe(
             'https://example.test/o/r/pull/1 has had 3 review runs, and may now have 4. ' +
                 'The next tick decides whether to review it.',
+        )
+    })
+
+    it('say what a review request did, as canopy start URL --review and canopy stop URL do', () => {
+        const pr = 'https://example.test/o/r/pull/12'
+        const request = { created_at: '2026-10-15T12:00:00Z', channel: 'web', ended_at: null, end_reason: null }
+        expect(reviewRequestedText(pr, { request, already: false })).toBe(
+            `${pr} is requested for review. The next tick reviews its head, once.`,
+        )
+        expect(reviewRequestedText(pr, { request, already: true })).toBe(`${pr} was already requested for review.`)
+        expect(reviewStoppedText(pr, { request, running_review: null })).toBe(
+            `${pr}'s review request is stopped; nothing reviews it now.`,
+        )
+        expect(reviewStoppedText(pr, { request, running_review: 4 })).toBe(
+            `${pr}'s review request is stopped; nothing reviews it now. ` +
+                'Review run 4 of it is still running and will finish.',
         )
     })
 

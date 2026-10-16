@@ -39,6 +39,12 @@ export type Forgot = Schemas['Forgot']
 export type Limit = Schemas['Limit']
 /** What a grant recorded: one more run allowed, every earlier one still counted. The next tick decides. */
 export type Granted = Schemas['Granted']
+/** The operator's request to review a PR the loop does not own (DESIGN §21): open, or how it ended. */
+export type ReviewRequest = Schemas['ReviewRequest']
+/** What a review request recorded: the open request, and whether it was already open or replaced another. */
+export type ReviewRequested = Schemas['ReviewRequested']
+/** What stopping a review request did: the request as it was, and a review of the PR still running. */
+export type ReviewRequestStopped = Schemas['ReviewRequestStopped']
 /** What a dismissal left: the chore's finding, and whether it is now dismissed. */
 export type Dismissed = Schemas['Dismissed']
 /** What a dismissal of a review's finding left: the run, the finding's number, and whether it is now dismissed. */

@@ -6,6 +6,8 @@ import type {
     NoticeChanged,
     Replied,
     ReviewDismissed,
+    ReviewRequested,
+    ReviewRequestStopped,
     ReviewSent,
     Started,
     Stopped,
@@ -138,4 +140,21 @@ export function reloadedText(reload: ConfigReload): string {
     const restart =
         count === 0 ? '' : ` ${reload.restart.join(', ')} take${count === 1 ? 's' : ''} effect on a restart.`
     return `${what}. ${when}${restart}`
+}
+
+/** What a review request did, as `canopy start URL --review` says it: new, or already open. */
+export function reviewRequestedText(url: string, requested: ReviewRequested): string {
+    if (requested.already) {
+        return `${url} was already requested for review.`
+    }
+    return `${url} is requested for review. The next tick reviews its head, once.`
+}
+
+/** What stopping a review request did, as `canopy stop URL` says it, and a review of the PR still running. */
+export function reviewStoppedText(url: string, stopped: ReviewRequestStopped): string {
+    const head = `${url}'s review request is stopped; nothing reviews it now.`
+    if (stopped.running_review === null) {
+        return head
+    }
+    return `${head} Review run ${stopped.running_review} of it is still running and will finish.`
 }
