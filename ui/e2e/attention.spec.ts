@@ -112,7 +112,8 @@ test("a started ticket's item leads with the ticket's own actions, then its conv
     await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'awaiting reply' }).click()
     const detail = page.getByTestId('attention-detail')
     await expect(detail.getByRole('button', { name: 'Stop', exact: true })).toBeVisible()
-    await expect(detail.getByText('Private: workers read the ticket and write nothing to it.')).toBeVisible()
+    // Whether the ticket is private is said once, as its page's chip says it, over the conversation it decides.
+    await expect(detail.getByText('private', { exact: true })).toBeVisible()
     // The same order as the ticket's own page: its actions foot what it is, above the thread you answer in.
     const actions = await detail.getByTestId('attention-actions').boundingBox()
     const reply = await detail.getByRole('textbox', { name: /^Reply/u }).boundingBox()

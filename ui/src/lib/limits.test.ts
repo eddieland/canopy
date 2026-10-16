@@ -29,6 +29,9 @@ describe('limitLabel', () => {
         expect(limitLabel({ ...review, repo: null })).toBe('reviews of acme/web#88')
         expect(limitLabel({ ...review, pr_url: 'https://example.test/x' })).toBe('reviews of example.test/x')
         expect(limitLabel({ ...review, pr_url: null })).toBe('reviews')
+        // On the PR's own page, which names it in its title.
+        expect(limitLabel(review, 'https://github.com/acme/web/pull/88')).toBe('reviews')
+        expect(limitLabel(review, 'https://github.com/acme/web/pull/91')).toBe('reviews of acme/web#88')
     })
 })
 

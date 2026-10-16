@@ -17,7 +17,7 @@ test('a review opens from the nav and puts each finding on its line of the diff'
 
     await page.getByTestId('review-4').getByRole('link', { name: 'review:4' }).click()
     await expect(page).toHaveURL(/\/reviews\/4$/u)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:4')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:4 acme/web#88 Debounce search input')
     await expect(nav.getByRole('link', { name: 'Reviews' })).toHaveAttribute('data-status', 'active')
 
     const files = page.getByTestId('diff-file')
@@ -28,6 +28,11 @@ test('a review opens from the nav and puts each finding on its line of the diff'
     await expect(card).toBeVisible()
     const above = card.locator('xpath=ancestor::tr/preceding-sibling::tr[1]')
     await expect(above).toContainText('setLoading(false)')
+    // Its code is colored once TypeScript's grammar loads: the same characters, a keyword in its own color.
+    await expect(above.locator('[data-highlighted]')).toHaveText(/setLoading\(false\)/u)
+    await expect(hook.locator('[data-highlighted]').getByText('export', { exact: true }).first()).toHaveClass(
+        'text-syntax-literal',
+    )
     // A finding about a file the diff does not touch has a panel of its own.
     await expect(page.getByText('Not in the diff', { exact: true })).toBeVisible()
 

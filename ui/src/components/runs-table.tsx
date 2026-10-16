@@ -26,13 +26,13 @@ const WORKTREES_SHOWN = 3
 /**
  * Runs, one row each: state, the ticket and its title, the run's id (opening its page) and kind, cost, when, and what
  * it said, or while it runs, its latest tool call. `ticket` leaves out the ticket and its title, for a ticket's own
- * page.
+ * page; `ownPr` leaves out the PR whose page it is, among those a run pushed to.
  */
-export function RunsTable({ runs, ticket = true }: { runs: Run[]; ticket?: boolean }) {
+export function RunsTable({ runs, ticket = true, ownPr }: { runs: Run[]; ticket?: boolean; ownPr?: string }) {
     return (
         <ul className="divide-y" data-testid="runs">
             {runs.map((run) => (
-                <RunRow key={run.id} run={run} ticket={ticket} />
+                <RunRow key={run.id} run={run} ticket={ticket} ownPr={ownPr} />
             ))}
         </ul>
     )
@@ -52,10 +52,10 @@ export function TicketRunsTable({ groups }: { groups: TicketRuns[] }) {
     )
 }
 
-function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
+function RunRow({ run, ticket, ownPr }: { run: Run; ticket: boolean; ownPr: string | undefined }) {
     return (
         <ListRow kind={ticket ? 'run' : 'own-run'} className="group/copy" data-testid={`run-${run.id}`}>
-            <RunBody run={run} ticket={ticket} />
+            <RunBody run={run} ticket={ticket} ownPr={ownPr} />
         </ListRow>
     )
 }
@@ -115,9 +115,11 @@ function EarlierRow({ run }: { run: Run }) {
     )
 }
 
-function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
+function RunBody({ run, ticket, ownPr }: { run: Run; ticket: boolean; ownPr?: string | undefined }) {
     // What goes under the head line starts under the ticket's title, or under the run's id on its subject's page.
     const under = ticket ? 'title' : 'facts'
+    // On a PR's page, the PR is its title: its rows name only the others a run pushed to.
+    const prs = run.prs.filter((pr) => pr !== ownPr)
     return (
         <>
             <RunStatus run={run} />
@@ -137,9 +139,9 @@ function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
                     <RunDoing activity={run.activity} />
                 </RowLine>
             )}
-            {(run.prs.length > 0 || run.worktrees.length > 0 || run.session_id) && (
+            {(prs.length > 0 || run.worktrees.length > 0 || run.session_id) && (
                 <RowLine from={under} className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs">
-                    {run.prs.map((pr) => (
+                    {prs.map((pr) => (
                         <PullRequestLink key={pr} url={pr} />
                     ))}
                     <RunWorktrees paths={run.worktrees} />

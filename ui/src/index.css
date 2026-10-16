@@ -669,6 +669,16 @@
  * here by tag rather than by classes on each.
  */
 @layer components {
+    /* The comments beside a plan, each at its passage (src/lib/plan-margin.ts): apart, each is a card of its own, */
+    /* and so is one whose passage is gone, under them. */
+    .plan-margin[data-aligned] > :is([data-align], article) {
+        @apply mx-2 rounded-md border;
+    }
+    /* The cards that follow the placed ones (a passage gone) keep the gap between cards. */
+    .plan-margin[data-aligned] > article:not([data-align]) {
+        @apply mt-2;
+    }
+
     .plan-doc {
         @apply flex min-h-72 max-w-3xl flex-col gap-3 text-sm leading-relaxed break-words text-foreground outline-none;
 
@@ -761,7 +771,8 @@
         }
         /* A commented passage, on the accent's tint; the one open, or being commented on, deeper and underlined. */
         & .plan-comment {
-            @apply cursor-pointer rounded-xs bg-accent/14;
+            /* Clear of the sticky toolbar when a comment shows its passage: TOOLBAR_CLEARANCE in plan-editor.tsx. */
+            @apply cursor-pointer scroll-mt-12 rounded-xs bg-accent/14;
         }
         & .plan-comment-active {
             @apply bg-accent/28 underline decoration-accent decoration-2 underline-offset-4;

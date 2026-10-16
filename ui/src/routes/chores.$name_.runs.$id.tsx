@@ -14,12 +14,18 @@ import { RichText } from '@/components/rich-text'
 import { RunDot, Word } from '@/components/status'
 import { Timestamp } from '@/components/timestamp'
 import { TranscriptPanel } from '@/components/transcript'
+import { choreRunDescription } from '@/lib/descriptions'
 import { choreRef, choreRunRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
 import { RUN_TOKENS_TITLE, runTokens } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 import { None } from '@/components/none'
+
+// What every chore run's page shows, on its title's hover: its description is the run's state.
+const HELP =
+    "What the chore's agent did, from its session's events in the run's log: its text, each tool call with its input " +
+    'and output, and what each model call cost.'
 
 /** One chore run: how it ended, the whole of what it reported, and its session's transcript. */
 export const Route = createFileRoute('/chores/$name_/runs/$id')({
@@ -65,9 +71,8 @@ function Loaded({ name, id }: { name: string; id: number }) {
     }
     return (
         <>
-            <PageHeader parents={<ChoreCrumb name={name} />} title={title}>
-                What the chore&apos;s agent did, from its session&apos;s events in the run&apos;s log: its text, each
-                tool call with its input and output, and what each model call cost.
+            <PageHeader parents={<ChoreCrumb name={name} />} title={title} help={HELP}>
+                {choreRunDescription(data.run, data.findings.length)}
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <RunPanel detail={data} />

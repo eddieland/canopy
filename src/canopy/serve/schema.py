@@ -1372,6 +1372,8 @@ class ReviewDetail(_Model):
 
     review: ReviewSummary
     """The review run, as the reviews list shows it."""
+    ticket_title: str | None = None
+    """Its ticket's title, on one line; None when it has no ticket or the ticket no title."""
     summary: str | None = None
     """The reviewer's summary, line breaks kept: untrusted text."""
     note: str | None = None

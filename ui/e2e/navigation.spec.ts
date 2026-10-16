@@ -156,6 +156,8 @@ test('search params are typed: a known state filters, an unknown one is dropped'
     await expect(filters.getByRole('link', { name: 'waiting on you' })).toHaveAttribute('data-selected', 'true')
     await expect(filters.getByRole('link', { name: 'all' })).toHaveAttribute('data-selected', 'false')
     await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(1)
+    // The panel is named for its noun and counts what it lists, as every Runs panel does.
+    await expect(page.getByTestId('runs-count')).toHaveText('1')
 
     // The router leaves the URL as typed; what matters is the page never sees the value.
     await page.goto('runs?state=bogus')
@@ -212,6 +214,23 @@ test("a ticket's page links to it in the tracker, from tracker.ticket_url, under
     await expect(link).toHaveAttribute('href', 'https://jira.example/browse/ABC-102')
     await expect(link).toHaveAttribute('target', '_blank')
     await expect(link).toHaveAttribute('rel', 'noreferrer noopener')
+})
+
+test("a public ticket's actions say how to stop its worker where Stop would be", async ({ page }) => {
+    await page.goto('tickets/ABC-101')
+    await settled(page)
+    const actions = page.getByTestId('ticket-actions')
+    await expect(actions.getByRole('button', { name: 'Start privately' })).toBeVisible()
+    await expect(actions.getByRole('button', { name: 'Stop', exact: true })).toHaveCount(0)
+    await expect(actions.getByTestId('public-stop')).toHaveText(
+        'Public: remove its queue label to stop it, or start it privately.',
+    )
+    // Whether it is public is its title's chip, and said nowhere else on the page.
+    await expect(page.getByText('public', { exact: true })).toHaveCount(1)
+    // Every button in the foot is one size.
+    const buttons = actions.getByRole('button')
+    const heights = await buttons.evaluateAll((all) => all.map((b) => b.getBoundingClientRect().height))
+    expect(new Set(heights).size).toBe(1)
 })
 
 test("a ticket's page links to its PR and its branch under its title, beside the tracker", async ({ page }) => {
@@ -276,6 +295,8 @@ test('the chores page lists each chore as canopy status does, and a chore page w
 
     await page.goto('chores/deps')
     await settled(page)
+    // Where it stands is its description, as its line in the list says it.
+    await expect(page.locator('main header p')).toHaveText('last ok 4h ago, due in 1h')
     await expect(page.getByTestId('chore-spend-24h').getByRole('cell')).toHaveText([
         '2',
         '$0.47',

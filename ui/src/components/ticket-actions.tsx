@@ -12,7 +12,11 @@ import { forgotText, startedText, stoppedText } from '@/lib/outcomes'
 
 /**
  * The CLI's verbs on one ticket: start, stop, stop now, and forget (DESIGN §22). Stop now kills the running run, so it
- * asks once more before it does. Forget cannot be undone here, so it asks for the ticket's key typed out.
+ * asks once more before it does. Forget cannot be undone here, so it asks for the ticket's key typed out; until then it
+ * is the quietest of them, at the row's end, since what is said loudest is clicked first. A public ticket has no Stop,
+ * since its queue label authorizes it: while a worker runs on one, a line in Stop's place says how to stop it. Whether
+ * the ticket is private is a chip, beside its page's title or over its attention item's conversation, so nothing here
+ * says it again.
  */
 export function TicketActions({ ticket }: { ticket: TicketSummary }) {
     const client = useQueryClient()
@@ -59,6 +63,11 @@ export function TicketActions({ ticket }: { ticket: TicketSummary }) {
                         Stop
                     </Button>
                 )}
+                {!ticket.private && ticket.running_run !== null && (
+                    <span className="text-xs text-muted-foreground" data-testid="public-stop">
+                        Public: remove its queue label to stop it, or start it privately.
+                    </span>
+                )}
                 {ticket.private && ticket.running_run !== null && confirming === null && (
                     <Button variant="destructive" onClick={() => setConfirming('stop')} disabled={pending}>
                         <Octagon />
@@ -77,7 +86,12 @@ export function TicketActions({ ticket }: { ticket: TicketSummary }) {
                     </>
                 )}
                 {confirming === null && (
-                    <Button variant="destructive" onClick={() => setConfirming('forget')} disabled={pending}>
+                    <Button
+                        variant="ghost"
+                        className="ml-auto text-status-failed hover:text-status-failed"
+                        onClick={() => setConfirming('forget')}
+                        disabled={pending}
+                    >
                         <Eraser />
                         Forget
                     </Button>
@@ -91,12 +105,7 @@ export function TicketActions({ ticket }: { ticket: TicketSummary }) {
                     onCancel={() => setConfirming(null)}
                 />
             )}
-            <Notice error={start.error ?? stop.error ?? forget.error}>
-                {said ??
-                    (ticket.private
-                        ? 'Private: workers read the ticket and write nothing to it.'
-                        : 'Public: its queue label authorizes it. Starting it here makes it private from now on.')}
-            </Notice>
+            <Notice error={start.error ?? stop.error ?? forget.error}>{said}</Notice>
         </div>
     )
 }

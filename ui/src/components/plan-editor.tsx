@@ -20,7 +20,7 @@ import {
     TextQuote,
     Undo2,
 } from 'lucide-react'
-import { useEffect, useEffectEvent, useState } from 'react'
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { Panel, PanelHeader } from '@/components/panel'
@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/toolbar'
 import { anchorFor, anchorsOf, highlightsKey, PlanHighlights, withHighlight } from '@/lib/plan-highlights'
 import type { Range } from '@/lib/plan-highlights'
+import { alignComments } from '@/lib/plan-margin'
 import { planExtensions } from '@/lib/plan-schema'
 import { addReply, addThread, inPlanOrder, removeThread, setResolved, withAnchors } from '@/lib/plan-threads'
 import type { PlanThread } from '@/lib/plan-threads'
@@ -45,6 +46,9 @@ import { ariaKeys, keysLabel } from '@/lib/shortcut'
 const APPLE = isApple(navigator.userAgent)
 // The selection's bubble, by its key, so opening a comment can hide it.
 const BUBBLE = new PluginKey('planBubble')
+// How far below the top of the page the editor keeps what it scrolls into view, in pixels: the sticky toolbar's height
+// (`min-h-9`) and a little air. A passage's highlight keeps the same as its scroll margin (`.plan-comment`).
+const TOOLBAR_CLEARANCE = 48
 // The shortcut that comments on the selection (`PlanHighlights`).
 const COMMENT_KEYS = 'Mod-Alt-m'
 
@@ -87,9 +91,16 @@ export function PlanEditor({
         editable,
         // The editor renders on the first pass, so the plan never paints empty first.
         immediatelyRender: true,
+        // Pasted Markdown is read whole (`src/lib/plan-schema.ts`), so the marks' own paste rules would add nothing but
+        // turn a Shift paste's `**bold**` bold. Typed Markdown (`## `, `**`) still formats, by the input rules.
+        enablePasteRules: false,
         // What a render shows is selected below (`useEditorState`), so a keystroke re-renders only what it changes.
         shouldRerenderOnTransaction: false,
         editorProps: {
+            // What the editor scrolls into view (the cursor as it types, a passage shown from its comment) stays clear
+            // of the toolbar, which sticks over the top of the page.
+            scrollMargin: { top: TOOLBAR_CLEARANCE, bottom: 16, left: 0, right: 0 },
+            scrollThreshold: { top: TOOLBAR_CLEARANCE, bottom: 16, left: 0, right: 0 },
             attributes: {
                 class: 'plan-doc',
                 'aria-label': 'Plan',
@@ -107,12 +118,43 @@ export function PlanEditor({
                 // Where each found thread starts, in plan order: what the list's order and its `passage gone` follow.
                 starts: [...(highlights?.ranges ?? new Map<string, Range>())].map(([id, range]) => [id, range.from]),
                 active: highlights?.active,
+                // Where the comment being written starts, which places it among the threads.
+                draftFrom: highlights?.draft?.from,
                 selected: !current.state.selection.empty,
             }
         },
     })
     const starts = new Map(seen.starts as [string, number][])
     const ordered = inPlanOrder(threads, starts)
+    const draftFrom = seen.draftFrom
+    const draftAt =
+        draftFrom === undefined
+            ? 0
+            : ordered.filter((thread) => !thread.resolved && (starts.get(thread.id) ?? Infinity) < draftFrom).length
+    const list = useRef<HTMLDivElement>(null)
+
+    // Each comment beside its passage while the comments sit beside the plan (`src/lib/plan-margin.ts`): after each
+    // render, and whenever an edit, a resize, or a card that grows (a reply being written) moves a passage or a card.
+    useLayoutEffect(() => {
+        if (list.current !== null) {
+            alignComments(editor, list.current)
+        }
+    })
+    useEffect(() => {
+        const element = list.current
+        if (element === null) {
+            return
+        }
+        const align = () => alignComments(editor, element)
+        const observer = new ResizeObserver(align)
+        observer.observe(element)
+        observer.observe(editor.view.dom)
+        editor.on('transaction', align)
+        return () => {
+            observer.disconnect()
+            editor.off('transaction', align)
+        }
+    }, [editor])
 
     // The threads go to the highlights whenever they change; the plugin keeps the ranges it has and looks for the rest.
     useEffect(() => {
@@ -194,7 +236,10 @@ export function PlanEditor({
         editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id }))
         const range = highlightsKey.getState(editor.state)?.ranges.get(id)
         if (fromCard && range !== undefined) {
-            editor.chain().setTextSelection(range.from).scrollIntoView().run()
+            editor.commands.setTextSelection(range.from)
+            // By its highlight: ProseMirror scrolls to its selection only while the page's selection is in the editor,
+            // and the card's button holds it now. Its scroll margin keeps it clear of the toolbar (`src/index.css`).
+            editor.view.dom.querySelector(`[data-thread="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest' })
         } else if (!fromCard) {
             // The thread's card, not its highlight in the plan, which carries the same attribute.
             document.querySelector(`article[data-thread="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest' })
@@ -203,58 +248,64 @@ export function PlanEditor({
 
     const open = threads.filter((thread) => !thread.resolved).length
     return (
-        <div className="grid min-w-0 items-start gap-6 2xl:grid-cols-[minmax(0,1fr)_24rem]">
-            <Panel>
-                <PanelHeader label="Plan">
-                    {editable && <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />}
-                </PanelHeader>
-                <EditorContent editor={editor} className="px-6 py-4" />
-                {editable && (
-                    <BubbleMenu
-                        editor={editor}
-                        pluginKey={BUBBLE}
-                        options={{ placement: 'top' }}
-                        className="rounded-md border bg-surface p-0.5"
-                        data-testid="plan-bubble"
-                    >
-                        <Button
-                            variant="ghost"
-                            size="xs"
-                            onClick={startComment}
-                            title={withKeys('Comment', COMMENT_KEYS)}
+        // The comments sit beside the plan once both fit (a 20rem column beside a plan of about 40rem), by the space
+        // the page gives them rather than the window's width, since the rail takes some of it.
+        <div className="@container min-w-0">
+            <div className="grid min-w-0 items-start gap-6 @min-[60rem]:grid-cols-[minmax(0,1fr)_20rem]">
+                <Panel>
+                    <PanelHeader label="Plan" sticky>
+                        {editable && <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />}
+                    </PanelHeader>
+                    <EditorContent editor={editor} className="px-6 py-4" />
+                    {editable && (
+                        <BubbleMenu
+                            editor={editor}
+                            pluginKey={BUBBLE}
+                            options={{ placement: 'top' }}
+                            className="rounded-md border bg-surface p-0.5"
+                            data-testid="plan-bubble"
                         >
-                            <MessageSquarePlus aria-hidden />
-                            Comment
-                        </Button>
-                    </BubbleMenu>
-                )}
-            </Panel>
-            <Panel>
-                <PanelHeader label="Comments">
-                    <span className="readout text-xs text-muted-foreground">{open} open</span>
-                </PanelHeader>
-                <PlanThreads
-                    threads={ordered}
-                    found={new Set(starts.keys())}
-                    active={seen.active}
-                    draft={draft}
-                    editable={editable}
-                    onDraftChange={(body) => setDraft(draft && { ...draft, body })}
-                    onDraftSubmit={addComment}
-                    onDraftCancel={cancelComment}
-                    onActivate={(id) => activate(id, true)}
-                    onReply={(id, body) =>
-                        onThreadsChange(
-                            addReply(threads, id, { id: crypto.randomUUID(), body, at: new Date().toISOString() }),
-                        )
-                    }
-                    onResolve={(id, resolved) => onThreadsChange(setResolved(threads, id, resolved))}
-                    onDelete={(id) => onThreadsChange(removeThread(threads, id))}
-                />
-                {editable && onAskForChanges !== undefined && (
-                    <AskForChanges threads={threads} starts={starts} onAsk={onAskForChanges} />
-                )}
-            </Panel>
+                            <Button
+                                variant="ghost"
+                                size="xs"
+                                onClick={startComment}
+                                title={withKeys('Comment', COMMENT_KEYS)}
+                            >
+                                <MessageSquarePlus aria-hidden />
+                                Comment
+                            </Button>
+                        </BubbleMenu>
+                    )}
+                </Panel>
+                <Panel>
+                    <PanelHeader label="Comments">
+                        <span className="readout text-xs text-muted-foreground">{open} open</span>
+                    </PanelHeader>
+                    <PlanThreads
+                        threads={ordered}
+                        found={new Set(starts.keys())}
+                        active={seen.active}
+                        draft={draft}
+                        draftAt={draftAt}
+                        listRef={list}
+                        editable={editable}
+                        onDraftChange={(body) => setDraft(draft && { ...draft, body })}
+                        onDraftSubmit={addComment}
+                        onDraftCancel={cancelComment}
+                        onActivate={(id) => activate(id, true)}
+                        onReply={(id, body) =>
+                            onThreadsChange(
+                                addReply(threads, id, { id: crypto.randomUUID(), body, at: new Date().toISOString() }),
+                            )
+                        }
+                        onResolve={(id, resolved) => onThreadsChange(setResolved(threads, id, resolved))}
+                        onDelete={(id) => onThreadsChange(removeThread(threads, id))}
+                    />
+                    {editable && onAskForChanges !== undefined && (
+                        <AskForChanges threads={threads} starts={starts} onAsk={onAskForChanges} />
+                    )}
+                </Panel>
+            </div>
         </div>
     )
 }

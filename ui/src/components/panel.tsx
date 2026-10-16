@@ -18,10 +18,17 @@ import { cn, isBlank } from '@/lib/utils'
  * section). On the section's own list that is all it is; on any page under it, the section links to its list, then
  * come `parents`, plain router `Link`s the trail styles, to the pages between it and this one, and every step ends in
  * a chevron. The title is the trail's last step, so the trail never repeats it. The header also names the browser
- * tab (`pageTitle`): `tab`, or the title when it is plain text, after the count of attention items that block work.
+ * tab (`pageTitle`): `tab`, or the title when it is plain text, then its `subject`, after the count of attention items
+ * that block work.
+ *
+ * A detail page's title leads with what it is about: its `subject`, after the page's reference in a quieter data face
+ * (`run:39 Debounce search input`), and its description says the subject's state. What a kind of page shows, the same
+ * on every instance, is its `help`, on the title's hover.
  */
 export function PageHeader({
     title,
+    subject,
+    help,
     tab,
     parents,
     root,
@@ -29,8 +36,15 @@ export function PageHeader({
     links,
     children,
 }: {
-    /** The page's name. */
+    /** The page's name: on a detail page, its subject's reference, such as `run:39`. */
     title: ReactNode
+    /**
+     * What a detail page is about, such as its ticket's title, after `title`, which it turns muted and monospace. None,
+     * or null, leaves the reference alone as the title.
+     */
+    subject?: string | null
+    /** What every page of its kind shows, on the title's hover, so the description is left for this one's state. */
+    help?: string
     /** The page's name in the browser tab, when `title` is not plain text or the tab wants other words. */
     tab?: string
     /**
@@ -55,10 +69,12 @@ export function PageHeader({
     const linked = section !== undefined && !atSection
     const end = linked && <ChevronRight aria-hidden className="size-3 shrink-0" />
     const attention = useQuery(attentionQuery).data?.filter(blocking).length
+    const plain = typeof title === 'string' ? title : undefined
+    const named = plain === undefined || isBlank(subject) ? plain : `${plain} ${subject}`
     return (
         <header className="flex flex-col gap-1">
             {/* React puts it in the document's head, ahead of index.html's, so it names the tab. */}
-            <title>{pageTitle(tab ?? (typeof title === 'string' ? title : undefined), attention)}</title>
+            <title>{pageTitle(tab ?? named, attention)}</title>
             <nav aria-label="Breadcrumb">
                 <ol className="flex flex-wrap items-center gap-1 panel-label">
                     <li
@@ -99,7 +115,16 @@ export function PageHeader({
                 </ol>
             </nav>
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words">{title}</h1>
+                <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words" title={help}>
+                    {isBlank(subject) ? (
+                        title
+                    ) : (
+                        // The reference in its data face, quieter, so the subject reads as the page's name (DESIGN §7).
+                        <>
+                            <span className="font-mono font-normal text-muted-foreground">{title}</span> {subject}
+                        </>
+                    )}
+                </h1>
                 {chips}
             </div>
             {!isBlank(children) && (
@@ -125,9 +150,18 @@ export function Panel({ className, ...props }: ComponentProps<'section'>) {
 /**
  * A panel's title row: a label on the left, anything on the right. Half a step toward `surface-raised`, with its label
  * in `foreground`, so it reads as the head of the rows under it; half, so a ghost button's hover in it still shows.
- * In a panel too narrow for both on one line, what is on the right wraps under the label.
+ * In a panel too narrow for both on one line, what is on the right wraps under the label. A `sticky` header stays at
+ * the top of the page while its panel scrolls under it, as an editor's toolbar does.
  */
-export function PanelHeader({ label, children }: { label: string; children?: ReactNode }) {
+export function PanelHeader({
+    label,
+    sticky = false,
+    children,
+}: {
+    label: string
+    sticky?: boolean
+    children?: ReactNode
+}) {
     return (
         <div
             className={cn(
@@ -135,6 +169,8 @@ export function PanelHeader({ label, children }: { label: string; children?: Rea
                 'bg-surface-raised/50',
                 // Inside the panel's border, so a radius a pixel smaller than the panel's.
                 'first:rounded-t-[calc(var(--radius-md)-1px)]',
+                // Over the panel's own rows, so opaque: the same half step, laid over the panel's surface.
+                sticky && 'sticky top-0 z-10 bg-surface bg-linear-to-b from-surface-raised/50 to-surface-raised/50',
             )}
         >
             <span className="panel-label font-medium whitespace-nowrap text-foreground">{label}</span>
