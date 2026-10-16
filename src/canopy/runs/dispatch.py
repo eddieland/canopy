@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, notice, outbox, pools, prompts
 from canopy.core.context import DISPATCH_LOCK
-from canopy.core.vocab import PoolKind, RunKind, RunStatus
+from canopy.core.vocab import PoolKind, RunKind, RunStatus, StartStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
 from canopy.runs import policy
@@ -778,7 +778,7 @@ def _check_start_again(ctx: Context, key: str, plan: Plan) -> None:
         Refusal: the ticket was stopped (`stopped`), or started privately (`private`), since the dispatch was planned.
     """
     if plan.starts and conversation.start_of(ctx.conn, key) is None:
-        db.set_start(ctx.conn, conversation.TICKET, key, status="started", channel=conversation.LABEL)
+        db.set_start(ctx.conn, conversation.TICKET, key, status=StartStatus.STARTED, channel=conversation.LABEL)
     if plan.private != conversation.is_started(conversation.start_of(ctx.conn, key)):
         what = "was stopped" if plan.private else "was started privately"
         raise Refusal("stopped" if plan.private else "private", f"{key} {what} while this dispatch was planned")

@@ -625,7 +625,7 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
     record = conversation.start_of(conn, key)
     status: StartStatus | None = None
     if record is not None:
-        status = "started" if record["status"] == "started" else "stopped"
+        status = "started" if conversation.is_started(record) else "stopped"
     waiting = conversation.latest_question(conn, key) if status == "started" else None
     running = db.running_run_of(conn, key)
     return TicketSummary(

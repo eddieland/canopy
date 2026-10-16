@@ -19,7 +19,7 @@ from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 
 from canopy.core import config, conversation, db, pools, workspace
 from canopy.core.context import Context
-from canopy.core.vocab import Phase, RunStatus, TickStatus
+from canopy.core.vocab import Phase, RunStatus, StartStatus, TickStatus
 from canopy.infra import procs
 from canopy.loop import tick
 from canopy.runs import policy, reconcile
@@ -109,8 +109,8 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, block: Snaps
         with db.transaction(conn):
             for key in ("PROJ-3", "PROJ-4"):
                 db.touch_ticket(conn, key, root)
-                db.set_start(conn, conversation.TICKET, key, status="started", channel="cli")
-            db.set_start(conn, conversation.TICKET, "PROJ-3", status="stopped", channel="cli")
+                db.set_start(conn, conversation.TICKET, key, status=StartStatus.STARTED, channel="cli")
+            db.set_start(conn, conversation.TICKET, "PROJ-3", status=StartStatus.STOPPED, channel="cli")
         db.set_ticket(conn, "PROJ-4", root, title="Tidy the CLI help")
         conn.execute(
             "INSERT INTO notices (body, set_at, channel, lapses_at) VALUES (?, ?, 'cli', ?)",

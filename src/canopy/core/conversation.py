@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, TypedDict
 from canopy.core import chore_view, contract, db, outbox, review_result
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
-from canopy.core.vocab import ReviewRunStatus, RunStatus
+from canopy.core.vocab import ReviewRunStatus, RunStatus, StartStatus
 from canopy.infra import lock
 
 if TYPE_CHECKING:
@@ -186,18 +186,18 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
             )
 
 
-def start_of(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
+def start_of(conn: sqlite3.Connection, key: str) -> records.Start | None:
     """Return a ticket's start record, or None if it is public: the operator never started it."""
     return db.get_start(conn, TICKET, key)
 
 
-def is_started(record: sqlite3.Row | None) -> bool:
+def is_started(record: records.Start | None) -> bool:
     """Whether a start record says the ticket is being worked: started and not stopped.
 
     Returns:
         True for a record whose status is `started`; False for a stopped one or None.
     """
-    return record is not None and record["status"] == "started"
+    return record is not None and record.status is StartStatus.STARTED
 
 
 # The operator's commands
@@ -233,7 +233,7 @@ def start(conn: sqlite3.Connection, config: Config, ref: Ref, *, repo: str, chan
         db.touch_ticket(conn, ref.id, repo)
         # A ticket the overseer marked done is worked again: the operator asked for it.
         conn.execute("UPDATE tickets SET done = 0 WHERE key = ?", (ref.id,))
-        db.set_start(conn, TICKET, ref.id, status="started", channel=channel)
+        db.set_start(conn, TICKET, ref.id, status=StartStatus.STARTED, channel=channel)
         running = db.running_run_of(conn, ref.id)
     return Started(already=is_started(record), running=running)
 
@@ -279,9 +279,9 @@ def stop(conn: sqlite3.Connection, ref: Ref, *, channel: str) -> Stopped:
                 "not_started",
                 f"{ref} was not started in canopy; a public ticket stops when its queue label is removed",
             )
-        db.set_start(conn, TICKET, ref.id, status="stopped", channel=channel)
+        db.set_start(conn, TICKET, ref.id, status=StartStatus.STOPPED, channel=channel)
         running = db.running_run_of(conn, ref.id)
-    return Stopped(already=record["status"] == "stopped", running=running)
+    return Stopped(already=record.status is StartStatus.STOPPED, running=running)
 
 
 @dataclass(frozen=True)
@@ -787,7 +787,7 @@ def state_section(conn: sqlite3.Connection, ticket: records.Ticket) -> PrivateSe
     forgotten = ticket.forgotten_message_id or 0
     question = latest_question(conn, key)
     return {
-        "started_at": record["started_at"],
+        "started_at": record.started_at,
         "message_cursor": cursor or None,
         "new_operator_messages": [
             _operator_message(m) for m in operator_messages_after(conn, key, max(cursor, forgotten))

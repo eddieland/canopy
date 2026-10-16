@@ -8,7 +8,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import conversation, db
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunStatus, StartStatus
 from canopy.loop import attention
 from tests.canopy.helpers import (
     KEY,
@@ -128,7 +128,7 @@ def test_forgetting_a_private_ticket_leaves_its_old_question_waiting_on_nothing(
         # The ticket stays started, and the conversation stays in the journal for `show`.
         record = conversation.start_of(conn, KEY)
         assert record is not None
-        assert record["status"] == "started"
+        assert record.status == StartStatus.STARTED
         # The report, the question, the reply, and the question after it.
         assert len(db.messages_of(conn, "ticket", KEY, 10)) == 4
 
