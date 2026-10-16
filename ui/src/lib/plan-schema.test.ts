@@ -188,3 +188,31 @@ describe('readsAsMarkdown', () => {
         },
     )
 })
+
+describe('copying out of a plan', () => {
+    it('copies lines of a list, or a heading and its paragraph, as the Markdown that writes them', () => {
+        const editor = open('## Steps\n\nRead the ticket.\n\n- one\n- two\n- three')
+        expect(copy(editor, 'one', 'two')).toBe('- one\n- two')
+        expect(copy(editor, 'Steps', 'ticket.')).toBe('## Steps\n\nRead the ticket.')
+    })
+
+    it('copies words inside one paragraph as the words, unescaped and without their marks', () => {
+        const editor = open('Call `iter_rows()` on **every** report_query.')
+        expect(copy(editor, 'iter_rows()', 'report_query')).toBe('iter_rows() on every report_query')
+    })
+
+    it('copies a wrapped line as words a space apart', () => {
+        expect(copy(open('One wraps\nhere.'), 'wraps', 'here')).toBe('wraps here')
+    })
+})
+
+// What a copy of the text from the start of `first` to the end of `last` puts on the clipboard as plain text.
+function copy(editor: Editor, first: string, last: string): string {
+    const { text, positions } = docText(editor.state.doc)
+    const start = text.indexOf(first)
+    const end = text.indexOf(last, start) + last.length
+    editor.commands.setTextSelection({ from: positions[start] ?? 0, to: (positions[end - 1] ?? 0) + 1 })
+    // As a copy takes it: the selection's content, with the blocks around it.
+    const slice = editor.state.selection.content()
+    return editor.view.someProp('clipboardTextSerializer', (serialize) => serialize(slice, editor.view)) ?? ''
+}
