@@ -210,8 +210,8 @@ api = 4                 # by repository name; wins over slots_per_repo
   commit otherwise starts it in the background on that shared git directory, where it packs refs and prunes while
   other slots' runs use them; on CI it pruned a worktree `git worktree add` had made but not yet locked. The harness's
   own git has it off through `core/hostgit.py` (§8), which covers a clone no sync has reached yet. A dry run sets
-  nothing. Nothing runs maintenance in its place yet; the operator can run `git maintenance run` in a clone while none
-  of its pool's slots is leased.
+  nothing. Nothing runs maintenance in its place yet (§26 plans `canopy gc --git`); the operator can run `git
+  maintenance run` in a clone while none of its pool's slots is leased.
 - Sync holds the tick lock, waiting for a running tick to end. Runs in progress keep their leases, counted as busy.
 - `canopy workspace sync --dry-run` reports what it would clone, make, and remove, changing nothing. It runs the
   read-only checks, so a clone it would keep a real sync keeps; what it would remove, treehouse may still keep. An
