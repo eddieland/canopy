@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
+import { ATOM } from '@/lib/plan-anchors'
+
 import {
     addReply,
     addThread,
@@ -79,6 +81,11 @@ describe('changeRequest', () => {
         expect(changeRequest(two(), new Map([['b', 0]]))).toContain('2. On "streams rows" (no longer in the plan):')
         expect(changeRequest(setResolved(two().slice(0, 1), 'a', true), new Map())).toBe('')
         expect(changeRequest([], new Map(), '  Shorter.  ')).toBe('Shorter.')
+    })
+
+    it('quotes a passage without the placeholders its tags stand as in the editor', () => {
+        const threads = addThread([], { id: 'a', anchor: anchor(`Use ${ATOM}raw${ATOM} rows`), body: 'Why?', at: AT })
+        expect(changeRequest(threads, new Map([['a', 0]]))).toContain('1. On "Use raw rows":')
     })
 
     it('cuts a long passage in the request, not in the thread', () => {

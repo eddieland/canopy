@@ -3,6 +3,7 @@
 // given as it was, so a component keeps the list in state. The open threads become one message to the planner
 // (`changeRequest`), which is how the operator asks for changes: the next plan is written with every comment and the
 // passage it is on in front of it.
+import { ATOM, collapse } from '@/lib/plan-anchors'
 import type { Anchor } from '@/lib/plan-anchors'
 
 /** How long a comment or a reply may be, as a reply to a ticket may (DESIGN §22). */
@@ -118,8 +119,10 @@ export function changeRequest(threads: PlanThread[], starts: ReadonlyMap<string,
     return parts.join('\n\n')
 }
 
-// A passage cut to `MAX_QUOTE` characters, at a word when one ends near the cut.
-function cut(quote: string): string {
+// A passage as the planner reads it: without the placeholders its HTML tags and images stand as in the editor's text,
+// which are no characters of the plan, and cut to `MAX_QUOTE` characters, at a word when one ends near the cut.
+function cut(passage: string): string {
+    const quote = collapse(passage.replaceAll(ATOM, ''))
     if (quote.length <= MAX_QUOTE) {
         return quote
     }

@@ -1,7 +1,8 @@
 import { Editor } from '@tiptap/core'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { ATOM, docText, planExtensions, rangeOf, spanOf } from '@/lib/plan-schema'
+import { ATOM } from '@/lib/plan-anchors'
+import { docText, planExtensions, rangeOf, spanOf } from '@/lib/plan-schema'
 
 const editors: Editor[] = []
 

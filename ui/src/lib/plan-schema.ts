@@ -14,8 +14,7 @@ import { Markdown } from '@tiptap/markdown'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { StarterKit } from '@tiptap/starter-kit'
 
-/** The character an inline atom (a verbatim tag or image) stands as in a plan's text, so an anchor can span it. */
-export const ATOM = '￼'
+import { ATOM } from '@/lib/plan-anchors'
 
 /** The extensions of a plan's document, with `more` (the comments' highlights) after them. */
 export function planExtensions(more: AnyExtension[] = []): AnyExtension[] {

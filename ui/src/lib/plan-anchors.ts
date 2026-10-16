@@ -5,6 +5,12 @@
 // found nowhere, and its comment says so rather than move to something else. Whitespace counts as one space either
 // way, so a passage the planner reflows is still found.
 
+/**
+ * The character an inline atom (a verbatim tag or image, `src/lib/plan-schema.ts`) stands as in a plan's text, so an
+ * anchor can span it.
+ */
+export const ATOM = '\uFFFC'
+
 /** How much text either side of a passage an anchor keeps, to tell two copies of it apart. */
 export const CONTEXT = 32
 
