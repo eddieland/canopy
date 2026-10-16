@@ -28,6 +28,7 @@
       "@GIT_SHARED@",
       "@OBJECTS@",
       "@TMPDIR@",
+      "@CACHE@",
       "~/.gitconfig",
       "~/.config/git",
       "~/.local/bin",
@@ -41,7 +42,8 @@
       "@WORKTREES@",
       "@GIT_OWN@",
       "@OBJECTS@",
-      "@TMPDIR@"
+      "@TMPDIR@",
+      "@CACHE@"
     ],
     "denyWrite": ["@GIT_PROTECTED@"]
   }
