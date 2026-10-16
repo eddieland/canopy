@@ -274,6 +274,12 @@ Where later work goes:
   script among its own, so one install puts them all on `PATH`. canopy reads the wrapper's bundled templates and
   lockfile, and never runs it: only a command template does.
 - A module that takes on a second concern splits into a same-named package in the same layer, as `cli.py` did.
+- A pydantic model sets `defer_build=True`, so its schema is built where it first validates, not where it is imported.
+  The overseer and workers run `canopy` many times a tick, and each process would otherwise build every model it
+  imports, though a command validates few of them. A field whose default is a model takes it through
+  `default_factory`; a default instance builds the model at import. The web server's models in `serve/` stay eager,
+  since FastAPI builds them all when it creates the app. `tests/canopy/test_models.py` fails on a model that does not
+  defer, does not build, or is built when `canopy` starts.
 
 Roles:
 

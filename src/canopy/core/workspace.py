@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, StrictStr, ValidationError
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError
 
 from canopy.core import treehouse
 from canopy.core.config import (
@@ -75,7 +75,7 @@ def _url(value: str) -> str:
 
 
 class _Table(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
 
 
 class _WorkspaceTable(_Table):
@@ -91,7 +91,7 @@ class _RepoTable(_Table):
 
 
 class _Map(_Table):
-    workspace: _WorkspaceTable = _WorkspaceTable()
+    workspace: _WorkspaceTable = Field(default_factory=_WorkspaceTable)
     repos: dict[RepoName, _RepoTable] = {}
 
 
