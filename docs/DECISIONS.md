@@ -38,10 +38,10 @@ belongs in DESIGN or the PR. A changed choice edits its entry in place, so the l
 text is in git history. Numbers are never reused, so gaps are entries that were pruned; a file that cannot change,
 such as a shipped migration, may still cite one, and git history has its text.
 
-## D002. canopy will own its worktree pools; treehouse stays until M45 to M47 prove the replacement
+## D002. canopy will own its worktree pools; treehouse stays until M45's stages prove the replacement
 
-- Slots become git worktrees canopy makes, with leases as journal rows. Until M48 removes it, treehouse (holder
-  `canopy:<TICKET>`) is a supported pool, and the default until M47 changes it.
+- Slots become git worktrees canopy makes, with leases as journal rows. Until M45's last stage removes it, treehouse
+  (holder `canopy:<TICKET>`) is a supported pool, and the default until its third stage changes it.
 - Why: treehouse needs Go and an unreleased commit to install (against D067), keeps leases outside the journal, and
   reads config canopy cannot set (D066).
 - Kept: worktrees are ephemeral and the pushed branch is the checkpoint; reuse and return keep ignored files.
