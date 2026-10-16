@@ -573,6 +573,8 @@ def test_a_worker_records_the_session_and_cost_it_reported(
     tokens = ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
     assert tuple(run[c] for c in tokens) == (2000, 400, 60, 8000, 1000)
     assert run["tokens_peak_context"] == 1000 + 4000 + 500  # one call's input, cache read, and cache write
+    assert (run["tokens_first_call"], run["tokens_first_cache_write"]) == (5500, 500)
+    assert (canopy_env.state_dir / definitions.RUNTIME_DIR / run["definitions_digest"]).is_dir()  # the one it loaded
 
     capsys.readouterr()
     assert main(["status"]) == 0

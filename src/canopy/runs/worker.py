@@ -318,7 +318,8 @@ def _run_agent(
         if naming:
             raise _SetupError(definitions.naming_tools_message(tools.server, naming))
     title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
-    argv = render_command(template, prompt, definitions.ensure(ctx.state_dir, ctx.config), title)
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config)
+    argv = render_command(template, prompt, snapshot, title)
     if len(slots) > 1:
         cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), [(s.repo, s.path) for s in slots])
     else:
@@ -344,7 +345,7 @@ def _run_agent(
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
     output = agent_output.read(result.stdout)
     if output.session_id is not None or output.usage is not None:
-        db.set_run_report(ctx.conn, "runs", run_id, output.session_id, output.usage)
+        db.set_run_report(ctx.conn, "runs", run_id, output.session_id, output.usage, digest=snapshot.name)
         spent = output.usage.spent() if output.usage else {}
         log.info("worker reported", extra={"run_id": run_id, "session_id": output.session_id, **spent})
     return result, output.text

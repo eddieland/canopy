@@ -18,7 +18,7 @@ from canopy.chores import execute, start
 from canopy.cli.main import main
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
-from canopy.core import db, workspace
+from canopy.core import db, definitions, workspace
 from canopy.core.config import load
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus
@@ -699,6 +699,8 @@ def test_a_chore_run_records_what_it_cost(
         usage = db.usage_of(row)
         assert usage is not None
         assert usage.cost_usd == 0.25  # two model calls at 0.125
+        assert (usage.first_call, usage.first_cache_write) == (5500, 500)
+        assert (canopy_env.state_dir / definitions.RUNTIME_DIR / row["definitions_digest"]).is_dir()
         assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
 
         capsys.readouterr()

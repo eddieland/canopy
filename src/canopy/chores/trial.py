@@ -82,7 +82,7 @@ def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
         body, state, None, context, conversation.chore_notes(ctx.conn, name), held=notice.for_prompt(ctx.conn)
     )
     try:
-        cwd, argv = execute.prepare(ctx, name, chore, prompt)
+        cwd, argv, _ = execute.prepare(ctx, name, chore, prompt)
     except execute.SetupError as e:
         raise TrialError(str(e)) from e
     return Prepared(name, chore, body, context, cwd, argv)

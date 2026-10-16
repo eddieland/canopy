@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from canopy.core import db
+from canopy.core.agent_output import Usage
 from canopy.infra import resources
 from tests.canopy.helpers import journal_at, shipped_through, versions_after
 from tests.canopy.test_reconcile import DEAD_PID
@@ -45,6 +46,7 @@ SHIPPED = {
     24: "a59b144fa265e361eddef9a9366dc48552d723a9f03c640823297446ef3a12a0",
     25: "ed074227c70399b039f9560b50ae9ec4e6adbc43cce5c909552f728019da73ff",
     26: "77d395b0529f9fb1bf83d67f0d7518dec52429d972b41001ac29b08fe08ad3db",
+    27: "724265400f40f3aaeaa8afbe35981bd529a60687d194924ce4c7d3bb3b008cbc",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -243,6 +245,9 @@ LIFECYCLE_COLUMNS = frozenset(
         "tokens_cache_read",
         "tokens_cache_write",
         "tokens_peak_context",
+        "tokens_first_call",
+        "tokens_first_cache_write",
+        "definitions_digest",
     }
 )
 
@@ -255,6 +260,30 @@ def test_every_run_table_has_what_the_shared_lifecycle_needs(tmp_path: Path, jou
     for table in db.RUN_TABLES:
         columns = {r["name"] for r in conn.execute("SELECT name FROM pragma_table_info(?)", (table,))}
         assert columns >= LIFECYCLE_COLUMNS | {db.AGENT_PID[table]}, table
+
+
+def test_a_report_keeps_the_first_call_and_the_snapshot_only_with_what_the_runtime_reported(
+    tmp_path: Path, journals: Journals
+) -> None:
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+    usage = Usage(0.25, 10, 2, 0, 400, 50, peak_context=900, first_call=460, first_cache_write=50)
+    tick = db.start_tick(conn, dry_run=True)
+    db.set_tick_report(conn, tick, "ses_o1", usage, digest="0123456789abcdef")
+    row = conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone()
+    assert db.usage_of(row) == usage
+    assert row["definitions_digest"] == "0123456789abcdef"
+
+    # A plain-text overseer reported nothing: no agent canopy can tell loaded the snapshot.
+    db.set_tick_report(conn, tick, None, None, digest="0123456789abcdef")
+    row = conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone()
+    assert (row["tokens_first_call"], row["tokens_first_cache_write"], row["definitions_digest"]) == (None,) * 3
+
+    # A cost recorded before the first call was kept reads it as unknown.
+    db.set_tick_report(conn, tick, "ses_o1", Usage(0.25, 10, 2, 0, 400, 50, peak_context=900))
+    usage = db.usage_of(conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone())
+    assert usage is not None
+    assert (usage.first_call, usage.first_cache_write) == (None, None)
 
 
 # The last migration before M36. A table made after it constrains each column of a closed vocabulary (`core/vocab.py`)

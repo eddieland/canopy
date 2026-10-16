@@ -577,10 +577,19 @@ def set_agent_pid(conn: sqlite3.Connection, table: RunTable, run_id: int, pid: i
 
 
 def set_run_report(
-    conn: sqlite3.Connection, table: RunTable, run_id: int, session_id: str | None, usage: Usage | None
+    conn: sqlite3.Connection,
+    table: RunTable,
+    run_id: int,
+    session_id: str | None,
+    usage: Usage | None,
+    *,
+    digest: str | None = None,
 ) -> None:
-    """Record what the agent runtime reported about a run in `table`: its session, and what it cost (DESIGN §13)."""
-    _set_report(conn, table, run_id, session_id, usage)
+    """Record what the agent runtime reported about a run in `table`: its session, and what it cost (DESIGN §13).
+
+    `digest` names the definitions snapshot the run loaded, recorded only when the runtime reported something.
+    """
+    _set_report(conn, table, run_id, session_id, usage, digest=digest)
 
 
 def finish_run(
@@ -743,9 +752,14 @@ def finish_ticket_run(
     return True
 
 
-def set_tick_report(conn: sqlite3.Connection, tick_id: int, session_id: str | None, usage: Usage | None) -> None:
-    """Record what the agent runtime reported about a tick's overseer run: its session, and what it cost (§6, §13)."""
-    _set_report(conn, "ticks", tick_id, session_id, usage)
+def set_tick_report(
+    conn: sqlite3.Connection, tick_id: int, session_id: str | None, usage: Usage | None, *, digest: str | None = None
+) -> None:
+    """Record what the agent runtime reported about a tick's overseer run: its session, and what it cost (§6, §13).
+
+    `digest` names the definitions snapshot the overseer loaded, recorded only when the runtime reported something.
+    """
+    _set_report(conn, "ticks", tick_id, session_id, usage, digest=digest)
 
 
 def set_tick_session(conn: sqlite3.Connection, tick_id: int, session_id: str) -> None:
@@ -757,8 +771,8 @@ def usage_of(row: sqlite3.Row) -> Usage | None:
     """What a run, chore run, review run, or tick row says its agent cost, or None when the runtime reported nothing.
 
     Returns:
-        The row's cost and token counts, a missing count read as 0 and a missing peak context as unknown, or None
-        when it has no cost.
+        The row's cost and token counts, a missing count read as 0 and a missing peak context or first call as
+        unknown, or None when it has no cost.
     """
     if row["cost_usd"] is None:
         return None
@@ -770,6 +784,8 @@ def usage_of(row: sqlite3.Row) -> Usage | None:
         cache_read=int(row["tokens_cache_read"] or 0),
         cache_write=int(row["tokens_cache_write"] or 0),
         peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
+        first_call=int(row["tokens_first_call"]) if row["tokens_first_call"] is not None else None,
+        first_cache_write=int(row["tokens_first_cache_write"]) if row["tokens_first_cache_write"] is not None else None,
     )
 
 
@@ -779,6 +795,8 @@ def _set_report(
     row_id: int,
     session_id: str | None,
     usage: Usage | None,
+    *,
+    digest: str | None,
 ) -> None:
     spent = (
         (
@@ -789,14 +807,19 @@ def _set_report(
             usage.cache_read,
             usage.cache_write,
             usage.peak_context,
+            usage.first_call,
+            usage.first_cache_write,
         )
         if usage is not None
-        else (None,) * 7
+        else (None,) * 9
     )
+    # Only with a report: a template of the operator's that prints plain text may not load the snapshot at all.
+    loaded = digest if session_id is not None or usage is not None else None
     conn.execute(
         f"UPDATE {table} SET session_id = ?, cost_usd = ?, tokens_input = ?, tokens_output = ?, "  # noqa: S608
-        "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ?, tokens_peak_context = ? WHERE id = ?",
-        (session_id, *spent, row_id),
+        "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ?, tokens_peak_context = ?, "
+        "tokens_first_call = ?, tokens_first_cache_write = ?, definitions_digest = ? WHERE id = ?",
+        (session_id, *spent, loaded, row_id),
     )
 
 

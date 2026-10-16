@@ -155,12 +155,8 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     if shadowing:
         raise _SetupError(definitions.shadowing_message(shadowing))
     prompt = start.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
-    argv = render_command(
-        ctx.config.runtime.review_cmd,
-        prompt,
-        definitions.ensure(ctx.state_dir, ctx.config),
-        f"review {run['pr_url']}",
-    )
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config)
+    argv = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, f"review {run['pr_url']}")
     timeout_minutes = ctx.config.runtime.review_timeout_minutes
     log.info(
         "running reviewer",
@@ -181,7 +177,7 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
     output = agent_output.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
-        db.set_run_report(ctx.conn, "review_runs", run_id, output.session_id, output.usage)
+        db.set_run_report(ctx.conn, "review_runs", run_id, output.session_id, output.usage, digest=snapshot.name)
         spent = output.usage.spent() if output.usage else {}
         log.info("reviewer reported", extra={"review_run_id": run_id, "session_id": output.session_id, **spent})
     if done.timed_out:

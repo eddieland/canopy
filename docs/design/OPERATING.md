@@ -37,6 +37,18 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   tickets; `--json` prints all of it as one object, for a re-measurement (`docs/MEASUREMENTS.md`) to start from. The
   web UI's spend page shows it (§22).
 
+  `--json` also has `first_calls`: for each kind and each definitions snapshot its runs loaded in the window, how many
+  reported a first call, the median of what it was sent (the lower middle one of an even count), the share that started
+  cold, and when the first and last of them started. A run's fixed overhead, the system prompt, the agent's body, and
+  the tool schemas, is all in its first call (§13), so the median less the prompt canopy sent is that kind's overhead,
+  and a change of snapshot (a prompt, an override, or a definition, D040) shows as a step between two rows; an OpenCode
+  upgrade does not change the snapshot, so a re-measurement splits by start for one. A first call started cold when it
+  wrote more than half of what it was sent to the cache: a warm one reads the fixed prefix from it and writes only what
+  is new, the prompt, while a cold one writes the prefix too. The rule is a heuristic; the two counts are in the journal
+  for a finer one. The overseer's include dry runs, whose first call is a live tick's; a run recorded before migration
+  0027, or that made no model call, is in none. Neither the text nor the web UI shows them: they are for a
+  re-measurement, as S33 reads them.
+
   Done is a ticket's newest `done` decision (§7) in the window, on a ticket still marked done and not forgotten since:
   `merged`, and `closed` too, since a tracker that closes a ticket when its PR merges closes most tickets that landed
   before the loop sees the merge, so leaving them out would undercount what landed. A ticket closed unworked is
@@ -64,8 +76,10 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   marks a run on a started ticket. Source for capacity, crash
   detection, attempt counts, and the fix-ci cooldown. What the runtime reported (§13): the session id (`session_id`),
   the dollar cost (`cost_usd`), tokens by kind (`tokens_input`, `tokens_output`, `tokens_reasoning`,
-  `tokens_cache_read`, `tokens_cache_write`), and the peak context (`tokens_peak_context`, §13), all NULL when it
-  reported nothing; the peak is NULL too on a run recorded before migration 0025.
+  `tokens_cache_read`, `tokens_cache_write`), the peak context (`tokens_peak_context`, §13), the first model call's
+  context and cache write (`tokens_first_call`, `tokens_first_cache_write`, §13), and the digest of the definitions
+  snapshot it loaded (`definitions_digest`, §13), all NULL when it reported nothing; the peak is NULL too on a run
+  recorded before migration 0025, and the first call and digest on one before migration 0027.
 - `run_slots`: one row per slot a run leased; the repository whose pool it came from, slot path, lease id and holder,
   and the base branch the run started from there. A joint run has one per repository.
 - `review_runs`: one row per review run; the PR's URL, the commit, the ticket of an agent PR, the repository and slot,
@@ -400,6 +414,14 @@ From events the harness also reads, each validated (D026):
   session's, and not counted.
 - the peak context: the most one `step_finish` was sent, its input, cache read, and cache write together, so how large
   the run's context grew. 0 when it made no model call.
+- the first call: what the first `step_finish` was sent, counted the same way, and its cache write, each None when it
+  made no model call. All of a run's fixed overhead (the system prompt, the agent's body, the tool schemas) is in its
+  first call, so less the prompt canopy sent it is the overhead, and the cache write says whether the provider had
+  the prefix cached: small on a warm start, the whole prefix on a cold one (MEASUREMENTS 2026-10-13 F11, F12).
+
+With the report the harness records the digest of the definitions snapshot the run loaded, the name of its directory
+(`core/definitions.py`), so a change to a prompt, an override, or a definition splits the runs into before and after.
+Only when the runtime reported something: a template that prints plain text may not load the snapshot at all.
 
 Wherever canopy prints what a run or a tick cost, the CLI (`Usage.describe`) and the web UI alike, it says it as
 `$0.25, 3.5k tokens, 5.5k peak context`. The tokens are every kind but cache reads: input, cache write, output, and
