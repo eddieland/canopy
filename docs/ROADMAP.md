@@ -865,10 +865,11 @@ Status: not started.
 
 ## M44. Plans before implementing
 
-REQUIREMENTS R18, DESIGN §7, §8, §14, §20, and §22. Asked for by the operator (2026-10-15), and taken next, ahead of
-M36: a ticket can be planned before it is implemented, the operator approves the plan before work starts, and the plan
-stays in the journal to read later. Today the `implement` worker plans inside its own session, and only its summary
-survives. M36 to M40 take up the new phases and kind as they reshape the state block and the overseer.
+REQUIREMENTS R18, DESIGN §25, and the parts of §7, §8, §14, §20, and §22 it changes. Asked for by the operator
+(2026-10-15), and taken next, ahead of M36: a ticket can be planned before it is implemented, the operator approves
+the plan before work starts, and the plan stays in the journal to read later. Today the `implement` worker plans
+inside its own session, and only its summary survives. M36 to M40 take up the new phases and kind as they reshape
+the state block and the overseer.
 
 - A new run kind, `plan`, dispatched with `canopy dispatch KEY --kind plan --repo NAME...`, before the ticket's first
   `implement`. It runs as `canopy-planner` with `runtime.plan_cmd`, in a desk of the named repositories' worktrees at
