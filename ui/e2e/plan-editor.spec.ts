@@ -321,6 +321,20 @@ test('resolving a thread folds it away and takes its highlight off the plan', as
     await expect(page.getByRole('button', { name: 'Show 2 resolved' })).toBeVisible()
 })
 
+test('deleting a comment asks first, in its place, and Escape keeps it', async ({ page }) => {
+    const thread = comments(page).filter({ hasText: 'proxy in front' })
+    await thread.getByRole('button', { name: 'Delete' }).click()
+    const confirm = thread.getByRole('group', { name: 'Delete this comment and its replies?' })
+    await expect(confirm.getByRole('button', { name: 'Keep' })).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(confirm).toBeHidden()
+    await expect(thread.getByRole('button', { name: 'Delete' })).toBeVisible()
+    await thread.getByRole('button', { name: 'Delete' }).click()
+    await confirm.getByRole('button', { name: 'Delete' }).click()
+    await expect(thread).toHaveCount(0)
+    await expect(plan(page).locator('[data-thread=sample-1]')).toHaveCount(0)
+})
+
 test('Ask for changes sends the open comments, each on its passage, with the note', async ({ page }) => {
     await comments(page).filter({ hasText: 'proxy in front' }).getByRole('button', { name: 'Reply' }).click()
     const reply = page.getByRole('form', { name: 'Reply' })
