@@ -882,7 +882,7 @@ Status: not started.
 
 REQUIREMENTS R18, DESIGN §25, and the parts of §7, §8, §14, §20, and §22 it changes. Asked for by the operator
 (2026-10-15), and taken next, ahead of M36: a ticket can be planned before it is implemented, the operator approves
-the plan before work starts, and the plan stays in the journal to read later. Today the `implement` worker plans
+the plan before work starts, and the plan is kept on disk to read later. Today the `implement` worker plans
 inside its own session, and only its summary survives. M36 to M40 take up the new phases and kind as they reshape
 the state block and the overseer.
 
@@ -910,8 +910,11 @@ the state block and the overseer.
   the next tick dispatches a new `plan` or the `implement`. Each refuses as `inside_run` when `CANOPY_TICK_ID` or
   `CANOPY_RUN_ID` is set, and `--skip` and asking for a plan refuse as `bad_plan` while a plan run is running or once
   the ticket has a branch.
-- Approval: `canopy plan KEY --approve` approves the newest plan; it refuses `inside_run`, and `bad_plan` when the
-  newest plan is not waiting or a plan run for the ticket is running. A reply (`canopy reply KEY`) newer than the plan
+- Approval: `canopy plan KEY --approve` approves the newest plan as its file stands, the operator's edits included,
+  and records the file's hash; it refuses `inside_run`, and `bad_plan` when the newest plan is not waiting (unless it
+  is approved and its file changed since), a plan run for the ticket is running, or its file is missing or no longer
+  a plan. `implement` and `resume` refuse `plan_changed` when the approved plan's file no longer has its approved
+  hash. A reply (`canopy reply KEY`) newer than the plan
   asks for changes: the overseer dispatches `plan` again with the reply in its context, and the new plan supersedes
   the old. An approval after such a reply, before the new plan run starts, wins: it is the operator's later word, and
   the reply reaches the `implement` as an operator message, as any message does.
@@ -938,8 +941,10 @@ the state block and the overseer.
   `Approve`, `Ask for changes` (a reply), and `Skip`, and lists earlier plans. `POST /tickets/{key}/plan` with
   `approve`, `request`, or `skip`, through the same code as the CLI, so with the same refusals. A `plan.proposed`
   event goes to the operator's sinks (§20), with the ticket's title and no plan text.
-- Journal: a migration adds `plans` (id, ticket key, run id, body, created at, status `proposed`, `approved`, or
-  `superseded`, approved at and channel) and the ticket's own plan setting (unset, `plan`, or `skip`), set only by the
+- Storage: each plan is a file of its own, `<state_dir>/plans/<KEY>/<id>.md`, operator-only, never deleted by canopy
+  (§25, Where plans live). A migration adds `plans` (id, ticket key, run id, created at, status `proposed`,
+  `approved`, or `superseded`, the SHA-256 and size of the file as written, the approved hash, approved at and
+  channel; no body) and the ticket's own plan setting (unset, `plan`, or `skip`), set only by the
   operator's channels. `canopy forget` supersedes a waiting or approved plan, so a forgotten ticket is planned again
   under `"approve"`. Its hash joins `SHIPPED`, and a row `SEED`, in `tests/canopy/test_db.py`.
 - TRUST_MODEL: T1 says an approved plan is data, not an operator instruction; T3 counts plan runs toward capacity and
@@ -947,7 +952,9 @@ the state block and the overseer.
   operator's approval note in the PR, for those, the overseer prompt, the new prompt, and the `canopy-planner`
   definition.
 - Tests with the fakes: under `"approve"`, a dry-run tick dispatches `plan` for a ready ticket; a `done` plan is
-  recorded `proposed` and raises `plan_review`; `implement` is refused `unplanned` until `canopy plan --approve`, then
+  written to its file and recorded `proposed`, and raises `plan_review`; an edit to the file before `--approve` is
+  what the worker gets; an edit after it makes `implement` refuse `plan_changed` until approved again; `implement` is
+  refused `unplanned` until `canopy plan --approve`, then
   finds `.canopy-plan.md` in its cwd, ignored by git, and the plan's headings in its prompt, and the file is gone once
   the slot is returned; a pushed head holding the file gets a harness note; a reply makes the next plan supersede the
   first; `--skip` lets `implement` through; an empty plan or one over the bound is `unknown`; a `blocked` plan records
