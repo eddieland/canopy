@@ -63,6 +63,7 @@ PROMPT_VALUES = {
     "WORKER_COMMENT": "starts with `CANOPY:` outside any quote",
     "MARK_COMMENTS": "In every comment and reply you post, start it with `CANOPY:` and a space.",
     "OPEN_PR": "Open each PR through the GitHub MCP.",
+    "REVIEW_SKILL": "",
     "TRUSTED_REVIEWERS": "`octocat`",
     "OPERATOR_MESSAGES": "No messages from the operator.",
     "PREVIOUS_RUNS": "None: no earlier run of this ticket has ended.",

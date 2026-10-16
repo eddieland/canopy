@@ -226,6 +226,7 @@ split_cmd    = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 pr_skill = ""           # optional; the skill workers open PRs with instead of the GitHub MCP (§8)
+review_skill = ""       # optional; the skill resume workers follow to address review feedback (§8)
 setup_cmd = ""          # optional; runs in each slot at the run's branch, before the worker (§9)
 setup_timeout_minutes = 30
 # private_worker_cmd: worker_cmd with `--agent canopy-worker-private`, for a ticket started with `canopy start` (§22)
@@ -543,7 +544,8 @@ reliably override each other. A `$HOME` skill that workers use must be a single 
 `external_directory: deny` lets it load the skill but not read files next to it outside the worktree. A repository can
 also define its own agents under other names, MCP servers, and permissions (TRUST_MODEL T7). A skill only adds to what
 a prompt says; when the operator needs workers to open PRs differently from what the prompt says, `runtime.pr_skill`
-names the skill and the prompt then says to use it (§8). Prefer that to a prompt override.
+names the skill and the prompt then says to use it (§8), and `runtime.review_skill` does the same for how a `resume`
+worker addresses review feedback. Prefer those to a prompt override.
 
 ### The operator's skill
 
