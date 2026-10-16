@@ -730,6 +730,9 @@ can write there, so without them a hook or monitor it planted would run on the h
 `remote.<name>.uploadpack`) still runs; closing that takes a git directory the worker cannot write (§24, Git state).
 The worker's own git is unaffected, so its push runs the repository's hooks; step 5's fallback push runs none, so a
 repository whose push needs one (Git LFS's `pre-push`) depends on the worker pushing.
+`core/hostgit.py` also adds `-c maintenance.auto=false -c gc.auto=0`, so no git the harness runs starts git's
+automatic maintenance in the background on the shared directory while other slots' runs use it. `canopy workspace
+sync` sets the same in each primary clone's config, for the worker's git and treehouse's (§18).
 
 The object directory is for a sandboxed worker (§24, Git state), which cannot write the git directory its slot
 shares, objects included. `_run` passes it as `CANOPY_GIT_OBJECTS` and never sets git's own variables for the worker:

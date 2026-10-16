@@ -4,11 +4,12 @@ Init writes a workspace's skeleton: the map, `MAP.md`, and a `.gitignore` for wh
 root, plus the user config if missing. It never overwrites a file; a `.gitignore` only gains the lines it lacks.
 
 Sync makes the workspace match what is declared: the map's repositories, and the slots `capacity` declares for each
-pool. It clones each repository in the map that has no clone at `repos/<name>`, and reports a clone whose `origin` is
-not the map's URL. It makes or removes slots until each pool has its declared size, and removes a clone under `repos/`
-the map no longer lists, with its slots. Nothing with work in it is removed: a slot only as treehouse's unforced
-`destroy` allows, a clone only when it is clean and every local commit is on a remote. Sync is the only code that reads
-the map's URLs, and an operator runs it; a tick never clones, removes, or changes a remote.
+pool. It clones each repository in the map that has no clone at `repos/<name>`, reports a clone whose `origin` is not
+the map's URL, and turns off git's automatic maintenance in each clone. It makes or removes slots until each pool has
+its declared size, and removes a clone under `repos/` the map no longer lists, with its slots. Nothing with work in it
+is removed: a slot only as treehouse's unforced `destroy` allows, a clone only when it is clean and every local commit
+is on a remote. Sync is the only code that reads the map's URLs, and an operator runs it; a tick never clones,
+removes, or changes a remote.
 """
 
 from __future__ import annotations
@@ -263,6 +264,32 @@ def check_origin(runner: procs.Runner, repo: workspace.Repo) -> Checked:
     return Checked(
         repo, "present", f"origin is {shown(origin)}, but the map says {shown(str(repo.url))}; canopy changes no remote"
     )
+
+
+def turn_off_auto_maintenance(runner: procs.Runner, repo: workspace.Repo) -> Checked | None:
+    """Turn off git's automatic maintenance in the clone's own config, which every slot of its pool shares.
+
+    `hostgit.argv` turns it off for the harness's git; this is for the git it does not run, the worker's and
+    treehouse's, since a fetch or commit in one slot otherwise starts it on the git directory every other slot uses.
+
+    Returns:
+        None once both keys are set, or `failed` with why git could not set one.
+    """
+    for key, value in hostgit.AUTO_MAINTENANCE_OFF:
+        try:
+            result = runner.run(
+                hostgit.argv("config", "--local", key, value),
+                cwd=repo.path,
+                env=hostgit.ENV,
+                timeout=_GIT_TIMEOUT_SECONDS,
+            )
+        except procs.ProcError as e:
+            return Checked(repo, "failed", str(e))
+        if not result.ok:
+            return Checked(
+                repo, "failed", f"git config {key} exited {result.returncode}: {result.stderr.strip()[:500]}"
+            )
+    return None
 
 
 def shown(url: str) -> str:

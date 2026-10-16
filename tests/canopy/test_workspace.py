@@ -398,6 +398,21 @@ def test_sync_clones_missing_repositories_and_reports_a_different_origin(
     assert "gone: failed: git clone exited 128" in capsys.readouterr().out
 
 
+def test_sync_turns_off_gits_automatic_maintenance_in_every_clone_but_not_in_a_dry_run(ws: Ws, tmp_path: Path) -> None:
+    extra = bare_origin(tmp_path / "origins" / "docs.git", tmp_path)
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(("api", str(ws.origins["api"])), ("docs", str(extra))))
+    off = {"maintenance.auto=false", "gc.auto=0"}
+
+    def local_config(name: str) -> set[str]:
+        return set(git("config", "--local", "--list", cwd=ws.clone(name)).splitlines())
+
+    assert main(["workspace", "sync", "--dry-run"]) == 0
+    assert not off & local_config("api")
+    assert main(["workspace", "sync"]) == 0
+    assert off <= local_config("api")  # a clone from before
+    assert off <= local_config("docs")  # and one sync made
+
+
 def test_sync_refuses_a_path_that_is_not_a_clone_and_never_prints_a_credential(
     ws: Ws, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
