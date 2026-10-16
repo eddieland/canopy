@@ -20,7 +20,7 @@ import {
     TextQuote,
     Undo2,
 } from 'lucide-react'
-import { useEffect, useEffectEvent, useState } from 'react'
+import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { Panel, PanelHeader } from '@/components/panel'
@@ -36,6 +36,7 @@ import {
 } from '@/components/ui/toolbar'
 import { anchorFor, anchorsOf, highlightsKey, PlanHighlights, withHighlight } from '@/lib/plan-highlights'
 import type { Range } from '@/lib/plan-highlights'
+import { alignComments } from '@/lib/plan-margin'
 import { planExtensions } from '@/lib/plan-schema'
 import { addReply, addThread, inPlanOrder, removeThread, setResolved, withAnchors } from '@/lib/plan-threads'
 import type { PlanThread } from '@/lib/plan-threads'
@@ -114,12 +115,43 @@ export function PlanEditor({
                 // Where each found thread starts, in plan order: what the list's order and its `passage gone` follow.
                 starts: [...(highlights?.ranges ?? new Map<string, Range>())].map(([id, range]) => [id, range.from]),
                 active: highlights?.active,
+                // Where the comment being written starts, which places it among the threads.
+                draftFrom: highlights?.draft?.from,
                 selected: !current.state.selection.empty,
             }
         },
     })
     const starts = new Map(seen.starts as [string, number][])
     const ordered = inPlanOrder(threads, starts)
+    const draftFrom = seen.draftFrom
+    const draftAt =
+        draftFrom === undefined
+            ? 0
+            : ordered.filter((thread) => !thread.resolved && (starts.get(thread.id) ?? Infinity) < draftFrom).length
+    const list = useRef<HTMLDivElement>(null)
+
+    // Each comment beside its passage while the comments sit beside the plan (`src/lib/plan-margin.ts`): after each
+    // render, and whenever an edit, a resize, or a card that grows (a reply being written) moves a passage or a card.
+    useLayoutEffect(() => {
+        if (list.current !== null) {
+            alignComments(editor, list.current)
+        }
+    })
+    useEffect(() => {
+        const element = list.current
+        if (element === null) {
+            return
+        }
+        const align = () => alignComments(editor, element)
+        const observer = new ResizeObserver(align)
+        observer.observe(element)
+        observer.observe(editor.view.dom)
+        editor.on('transaction', align)
+        return () => {
+            observer.disconnect()
+            editor.off('transaction', align)
+        }
+    }, [editor])
 
     // The threads go to the highlights whenever they change; the plugin keeps the ranges it has and looks for the rest.
     useEffect(() => {
@@ -213,58 +245,64 @@ export function PlanEditor({
 
     const open = threads.filter((thread) => !thread.resolved).length
     return (
-        <div className="grid min-w-0 items-start gap-6 2xl:grid-cols-[minmax(0,1fr)_24rem]">
-            <Panel>
-                <PanelHeader label="Plan" sticky>
-                    {editable && <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />}
-                </PanelHeader>
-                <EditorContent editor={editor} className="px-6 py-4" />
-                {editable && (
-                    <BubbleMenu
-                        editor={editor}
-                        pluginKey={BUBBLE}
-                        options={{ placement: 'top' }}
-                        className="rounded-md border bg-surface p-0.5"
-                        data-testid="plan-bubble"
-                    >
-                        <Button
-                            variant="ghost"
-                            size="xs"
-                            onClick={startComment}
-                            title={withKeys('Comment', COMMENT_KEYS)}
+        // The comments sit beside the plan once both fit (a 20rem column beside a plan of about 40rem), by the space
+        // the page gives them rather than the window's width, since the rail takes some of it.
+        <div className="@container min-w-0">
+            <div className="grid min-w-0 items-start gap-6 @min-[60rem]:grid-cols-[minmax(0,1fr)_20rem]">
+                <Panel>
+                    <PanelHeader label="Plan" sticky>
+                        {editable && <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />}
+                    </PanelHeader>
+                    <EditorContent editor={editor} className="px-6 py-4" />
+                    {editable && (
+                        <BubbleMenu
+                            editor={editor}
+                            pluginKey={BUBBLE}
+                            options={{ placement: 'top' }}
+                            className="rounded-md border bg-surface p-0.5"
+                            data-testid="plan-bubble"
                         >
-                            <MessageSquarePlus aria-hidden />
-                            Comment
-                        </Button>
-                    </BubbleMenu>
-                )}
-            </Panel>
-            <Panel>
-                <PanelHeader label="Comments">
-                    <span className="readout text-xs text-muted-foreground">{open} open</span>
-                </PanelHeader>
-                <PlanThreads
-                    threads={ordered}
-                    found={new Set(starts.keys())}
-                    active={seen.active}
-                    draft={draft}
-                    editable={editable}
-                    onDraftChange={(body) => setDraft(draft && { ...draft, body })}
-                    onDraftSubmit={addComment}
-                    onDraftCancel={cancelComment}
-                    onActivate={(id) => activate(id, true)}
-                    onReply={(id, body) =>
-                        onThreadsChange(
-                            addReply(threads, id, { id: crypto.randomUUID(), body, at: new Date().toISOString() }),
-                        )
-                    }
-                    onResolve={(id, resolved) => onThreadsChange(setResolved(threads, id, resolved))}
-                    onDelete={(id) => onThreadsChange(removeThread(threads, id))}
-                />
-                {editable && onAskForChanges !== undefined && (
-                    <AskForChanges threads={threads} starts={starts} onAsk={onAskForChanges} />
-                )}
-            </Panel>
+                            <Button
+                                variant="ghost"
+                                size="xs"
+                                onClick={startComment}
+                                title={withKeys('Comment', COMMENT_KEYS)}
+                            >
+                                <MessageSquarePlus aria-hidden />
+                                Comment
+                            </Button>
+                        </BubbleMenu>
+                    )}
+                </Panel>
+                <Panel>
+                    <PanelHeader label="Comments">
+                        <span className="readout text-xs text-muted-foreground">{open} open</span>
+                    </PanelHeader>
+                    <PlanThreads
+                        threads={ordered}
+                        found={new Set(starts.keys())}
+                        active={seen.active}
+                        draft={draft}
+                        draftAt={draftAt}
+                        listRef={list}
+                        editable={editable}
+                        onDraftChange={(body) => setDraft(draft && { ...draft, body })}
+                        onDraftSubmit={addComment}
+                        onDraftCancel={cancelComment}
+                        onActivate={(id) => activate(id, true)}
+                        onReply={(id, body) =>
+                            onThreadsChange(
+                                addReply(threads, id, { id: crypto.randomUUID(), body, at: new Date().toISOString() }),
+                            )
+                        }
+                        onResolve={(id, resolved) => onThreadsChange(setResolved(threads, id, resolved))}
+                        onDelete={(id) => onThreadsChange(removeThread(threads, id))}
+                    />
+                    {editable && onAskForChanges !== undefined && (
+                        <AskForChanges threads={threads} starts={starts} onAsk={onAskForChanges} />
+                    )}
+                </Panel>
+            </div>
         </div>
     )
 }
