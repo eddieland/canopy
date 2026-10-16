@@ -42,7 +42,8 @@ It implements `initialize`, `notifications/initialized`, `ping`, `tools/list`, a
 resources, prompts, sampling, or HTTP transport. That is a few hundred lines over `json` and pydantic. Rejected: the
 `mcp` SDK, a runtime dependency with its own async stack and HTTP transports, for five methods canopy can speak itself
 (stdlib first). It answers `initialize` with the protocol version the client asked for when the server knows it, and
-otherwise with its newest; which versions OpenCode's client asks for is read from its source in stage 0.
+otherwise with its newest. OpenCode's client asks for `2025-11-25` and accepts that or four older versions (below),
+so the server knows `2025-11-25` and `2025-06-18`.
 
 Each `tools/call` opens the Context as a CLI command does, runs the verb, and closes it, so a call sees and writes
 exactly what the same CLI call would. Calls are handled one at a time, in the order they arrive.
@@ -57,11 +58,24 @@ exactly what the same CLI call would. Calls are handled one at a time, in the or
   keeps serving.
 - It logs as the CLI's verbs do, JSON lines to `canopy.log` with the tick id, plus one line per call naming the tool
   and its outcome. It never logs an argument's text: a mirrored comment's body is the tracker's, not the log's.
+- It writes nothing to stderr, and points its own stderr at `/dev/null` before it serves, so a warning or a traceback
+  cannot reach it either: OpenCode pipes a local server's stderr and never reads it (below), so enough output there
+  fills the pipe and blocks the server mid-call.
+- It exits when its stdin closes, which is how OpenCode stops it.
+- A run a tool starts (dispatch's `_run`, a chore's `_chore`, a review's `_review`) is never the server's descendant.
+  When the overseer's run ends, OpenCode sends SIGTERM to every descendant of a local server, found by parent pid
+  (below), so a worker the server spawned as its child would die with the tick that dispatched it. Today `canopy
+  dispatch` exits as soon as it has spawned `_run`, which then belongs to init; the server lives on. So a spawn from
+  the server goes through an intermediate process that starts the run and exits at once, and the run is reparented
+  before the overseer ends. `procs.spawn` gains that as an option, used by every verb that starts a run.
 
 ### The tools
 
-OpenCode names an MCP tool `<server>_<tool>`, so the server is `canopy` and the overseer sees `canopy_dispatch` and
-the rest.
+OpenCode names an MCP tool `<server>_<tool>`, each part with every character outside `[A-Za-z0-9_-]` replaced by `_`,
+so the server is `canopy` and the overseer sees `canopy_dispatch` and the rest. No tool name holds an underscore: a
+tool `ticket_set` would be `canopy_ticket_set`, which a server named `canopy_ticket` with a tool `set` also produces,
+and the later one replaces the earlier in OpenCode's tool table. With one underscore in each full name, only a server
+named `canopy` can produce it, and that one the shadowing check refuses (below).
 
 | Tool | Today | Input |
 | --- | --- | --- |
@@ -69,10 +83,10 @@ the rest.
 | `decide` | `canopy decide` | `key` (optional only for a tick-wide `skip`), `action`, `rationale` |
 | `queried` | `canopy queried` | `keys`, a list, empty for none |
 | `attention` | `canopy attention` | its arguments and options as fields |
-| `ticket_set` | `canopy ticket set` | its arguments and options as fields |
+| `ticket-set` | `canopy ticket set` | its arguments and options as fields |
 | `mirror` | `canopy mirror` | `ref`, `comment`, `author`, `at`, and `body`, a field: no heredoc, no delimiter |
-| `review_run`, `review_wait`, `review_end` | `canopy review run`, `wait`, `end` | their options as fields |
-| `chore_run`, `chore_wait` | `canopy chore run`, `wait` | their arguments and options as fields |
+| `review-run`, `review-wait`, `review-end` | `canopy review run`, `wait`, `end` | their options as fields |
+| `chore-run`, `chore-wait` | `canopy chore run`, `wait` | their arguments and options as fields |
 
 No tool reads the pool: the state block's `repositories[].leased_slots` already says what `treehouse status` would,
 and the prompt tells the overseer not to run `treehouse`. The definition's `treehouse status*` allow is a leftover,
@@ -103,10 +117,11 @@ gains the hidden `_mcp`. No new package, layer, or §5 line beyond the two modul
 The runtime needs one config entry, a local server named `canopy` whose command is canopy's own interpreter running
 `-m canopy _mcp`, as dispatch starts `_run` (§8). It needs no `canopy` on `PATH`.
 
-- The entry is in the overseer process's environment, as OpenCode's inline config, set by the harness as it sets
-  `CANOPY_TICK_ID`, not in the shared definitions snapshot every run loads (§13). Stage 0 reads from OpenCode's source
-  how inline config merges with the operator's and the workspace's, whether it reaches OpenCode's children, and what
-  a run does when a local server fails to start; if it does not behave as assumed, this part is redesigned first.
+- The entry is in the overseer process's environment, as OpenCode's inline config, `OPENCODE_CONFIG_CONTENT`, set by
+  the harness as it sets `CANOPY_TICK_ID`, not in the shared definitions snapshot every run loads (§13). It is merged
+  after the workspace's own config, so canopy's `command` replaces any the workspace sets (below).
+- The entry sets `type`, `command`, `cwd` (the workspace root), and `enabled: true`, and leaves `environment` unset,
+  since the server needs nothing beyond what it inherits.
 - The server inherits that environment, and `procs.spawn` passes the spawner's whole environment on (D015), so every
   worker, chore, and review a tool starts would inherit the entry and start a `canopy` server of its own. The harness
   removes the variable from every run it starts: `procs`' `env` can only add or override today, so the seam gains a
@@ -114,14 +129,54 @@ The runtime needs one config entry, a local server named `canopy` whose command 
   not the protection.
 - The overseer's definition allows each tool by its exact name, `canopy_dispatch: allow` and so on, never
   `canopy_*`: a server another config names `canopy_x` would have tools that wildcard matches. Its `bash` is denied.
-  Every other definition denies `canopy_*`, where a wildcard is the safe direction.
+  Every other definition denies `canopy_*`, where a wildcard is the safe direction. Allowing by name is needed in any
+  case: a tool no rule matches is `ask`, which `opencode run` rejects (D021).
 - `definitions.shadowing` also refuses a workspace whose OpenCode config names an MCP server `canopy`, as it refuses
-  one that defines a canopy agent (TRUST_MODEL T7). The rest of T7's residual stands: the workspace can still add
-  servers of its own, under other names.
+  one that defines a canopy agent (TRUST_MODEL T7). Merging replaces only the keys canopy's entry sets, so without
+  the check a workspace's `mcp.canopy.environment` would survive into canopy's entry and could set `PYTHONPATH` for
+  canopy's own interpreter. The rest of T7's residual stands: the workspace can still add servers of its own, under
+  other names, and plugins, which already run code in the agent process.
+- The harness also removes `OPENCODE_EXPERIMENTAL_CODE_MODE` and `OPENCODE_EXPERIMENTAL` from the overseer's
+  environment: either turns on OpenCode's code mode, in which MCP tools are not offered as tools (below).
 - Before the overseer runs, the check §6 step 5 makes of `canopy` becomes a check of the server: start `-m canopy
   _mcp`, send `initialize`, and on failure close the tick `canopy_unavailable`, as today. It does not prove OpenCode
   loaded the entry; a run that never had the tools records nothing, and the duties check (§6) fails it
   `overseer_failed`. No migration.
+
+### What OpenCode does
+
+From OpenCode's source at 1.19.3 (2026-10-16), and the MCP SDK it pins, `@modelcontextprotocol/sdk` 1.29.0 with
+OpenCode's patch. The design above rests on each of these; a later OpenCode is read again before stage 2.
+
+- **Config order.** `packages/opencode/src/config/config.ts` merges, each over the one before: a remote well-known
+  config, the global files under `~/.config/opencode`, `OPENCODE_CONFIG`, the project's `opencode.json` and
+  `opencode.jsonc` files, each `.opencode` directory and `OPENCODE_CONFIG_DIR`, then `OPENCODE_CONFIG_CONTENT`, then
+  an account organization's config, the managed config directory, macOS managed preferences, and
+  `OPENCODE_PERMISSION`. Inline config therefore comes after the workspace's config and before only what the operator
+  or their organization manages.
+- **Merging.** remeda's `mergeDeep`: a plain object is merged key by key, and anything else, an array included, is
+  replaced. So canopy's `command` replaces a workspace's, and a key canopy's entry leaves out keeps the workspace's
+  value.
+- **A local server's environment.** `packages/opencode/src/mcp/index.ts` starts it with OpenCode's whole environment,
+  then the entry's `environment` over it, in the entry's `cwd` resolved against the run's directory, or that directory
+  itself. So the server inherits `OPENCODE_CONFIG_CONTENT`, and so would every process it starts.
+- **stderr.** The transport is made with `stderr: "pipe"`, and nothing reads the pipe.
+- **A server that fails to start.** Its status becomes `failed`, OpenCode logs `server unavailable`, and the run goes on
+  without its tools. The connection's timeout is the entry's `timeout`, 30 seconds by default.
+- **Protocol.** The client sends `initialize` with `2025-11-25` and refuses a server that answers with a version
+  outside `2025-11-25`, `2025-06-18`, `2025-03-26`, `2024-11-05`, and `2024-10-07`, then sends
+  `notifications/initialized`. It lists tools only when the server's capabilities name `tools`. A call's timeout is
+  the entry's `timeout`, else `experimental.mcp_timeout`, else the SDK's 60 seconds.
+- **Tool names and permission.** `packages/opencode/src/mcp/catalog.ts` names a tool `sanitize(server) + "_" +
+  sanitize(tool)`, `sanitize` replacing each character outside `[A-Za-z0-9_-]` with `_`. Each call asks the permission
+  named for the tool with pattern `*`; a permission no rule matches is `ask`.
+- **A tool error.** A result with `isError` becomes an error whose message is the result's text, which the model
+  reads as the tool's failure.
+- **Stopping.** When the run ends, OpenCode finds every descendant of each local server's pid by `pgrep -P`,
+  recursively, and sends each SIGTERM, whatever its session or process group. It then closes the server's stdin,
+  waits two seconds, sends SIGTERM, waits two more, and sends SIGKILL.
+- **Code mode.** With `OPENCODE_EXPERIMENTAL_CODE_MODE` set, or `OPENCODE_EXPERIMENTAL` and that one not set false,
+  `packages/opencode/src/session/tools.ts` returns before it adds MCP tools, which code mode offers in its own way.
 
 ### What changes elsewhere, in stage 2
 
