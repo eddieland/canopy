@@ -179,11 +179,27 @@ Rules:
   under it; half, so a ghost button's hover in it still shows. In a panel too narrow for one line, what is on its
   right wraps under the label. The page header's trail starts in its section's color; a panel's label never takes
   one. A page's main list is named for its page's noun (Reviews on
-  Reviews, Attention on Attention), and a chore's notes are Notes.
+  Reviews, Attention on Attention), and a chore's notes are Notes. A panel is named for its noun, never for how it is
+  cut, and counts what it lists: a list of runs is Runs on every page, the runs page's, a ticket's, a chore's, and a
+  PR's, and how the runs page filters it (by state) is a label in its header, not its name.
   Its title wraps (`min-w-0 break-words`) inside an unbroken word, since it can be a ticket's title or a search's
   query: a pasted URL widened the page. Its description is `text-balance` up to `max-w-3xl`: most fit on one line on
   a wide screen, a longer one splits into even lines rather than leaving a word or two on its last, and a command in it
   (`code`) never breaks across lines.
+- **A detail page leads with what it is about.** Its title is its subject's, after its reference in a muted
+  monospace (`PageHeader`'s `subject`), as a ticket's page has always led: `run:39 Debounce search input`,
+  `acme/web#88 Debounce search input`, a review's `review:4 acme/web#88` then its ticket's title. With no subject (a
+  tick, a chore run, a PR canopy only reviews, a ticket untitled yet), the reference alone is the title. Its
+  description is that subject's state, a line of facts (`src/lib/descriptions.ts`): `done · implement · ABC-099`,
+  `ABC-099 · 2 reviews`, `ok · 5 decisions · woken by timer`, a chore's `choreLine`, so no two pages of a kind say
+  the same thing there. What every page of its kind shows, the same each time, is its `help`, on the title's hover,
+  as the nav's items say what their pages hold. A ticket is named one way in every identity panel that names one
+  (`TicketField`: its key, a run's kind as a chip, its title).
+- **One home per fact.** What a page says, it says once. Its subject's own name is its title, so the lists under it
+  leave it out: on a ticket's page its runs leave out the ticket (`ticket={false}`); on a PR's page its runs and
+  decisions leave out the PR (`ownPr`), and so does its review limit (`reviews`). A PR's phase is its title's chip, not
+  a field too; whether a ticket is private is its title's chip, not a notice under its actions; a tick's session is
+  its Tick panel's field, not its transcript's header too.
 - **A detail page has one skeleton**: what it is, then its thread or main content, then the lists that support it.
   First the identity panel, its subject's fields (a ticket's Work, a run's Run, a PR's Pull request, a chore's
   Schedule); its actions sit in that panel's foot, under a hairline, never in a panel of their own above the content.
@@ -201,7 +217,8 @@ Rules:
   section (search, the 404) names itself there in the accent. A parent is a journal name, so it keeps its case
   (`chore:deps` on a chore run) and stays muted until hovered. The title is the trail's last step, so the trail never
   repeats it. The trail follows the URL, not the journal: a run's page is under Runs, not its ticket, which its panel
-  links. What qualifies a page, `private` or `dry run`, is a `Chip` beside the title, never a word in the trail.
+  links. What qualifies a page, `private` or `dry run`, is a `Chip` beside the title, never a word in the trail. Where
+  there is no title to qualify, a ticket's attention item, its `private` or `public` chip heads its conversation.
 - **The tab** names the page too: `PageHeader` renders a `<title>` (`pageTitle` in `src/lib/page-title.ts`), which
   React puts ahead of `index.html`'s. A tab is narrow and cut from the right, so it leads with how many attention
   items block work, when any do, then the page's name, then `canopy`: `(3) ABC-102 Export reports as CSV · canopy`.
@@ -384,7 +401,8 @@ list, an empty state, or a skeleton by hand.
   a list of reviews), and a label that wraps does too. A total cost is a `Field` (`CostTotalRow`).
 - **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
   page of what they belong to, the columns that would repeat it go (`pr={false}`, `ticket={false}`), as a `ListRow`
-  kind of their own (`own-review`, `own-run`).
+  kind of their own (`own-review`, `own-run`). A run names the PRs it pushed to under its row, so on a PR's page
+  `ownPr` leaves that PR out of them, as it does from `Decisions`.
 - **`Empty`** (`src/components/panel.tsx`): what a list or page says when it has nothing to show, in muted text, in two
   sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
   around it. Its words are `no X yet` and one clause on why or what to do (`no runs yet: the overseer starts one when
@@ -648,7 +666,8 @@ list, an empty state, or a skeleton by hand.
   the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed
   as `canopy status` counts them (`findingsText`: `1 open finding · 2 dismissed`; its page's findings panel the
   same, `findingsReadout`: `1 · 2 dismissed`), and what its runs cost in the last
-  24 hours and 30 days (`costText`, a dash when none reported a cost). Its page puts that spend in a table under its
+  24 hours and 30 days (`costText`, a dash when none reported a cost). Its page's description is that line, and it
+  puts that spend in a table under its
   runs, a row a window: runs (`runsText`: `4, 1 unpriced`), total, average, p99, and max. A chore run is a row like a
   run's, its id as `chore:deps#2` (Names, below) linking to its page, with its findings as a chip on
   an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
@@ -735,8 +754,8 @@ list, an empty state, or a skeleton by hand.
     `Show hats`). In a row's line it sits in line with the text above it (`-ml-2`), no taller than a line (`-my-1`).
     A row that opens to its own body, a transcript's tool call or model call, is the row itself, a chevron at its end.
   - Two of either are one: a pair that does and undoes (Open all, Close all) is one `Toggle` (All open).
-  - A panel header's modes sit together, after what the panel is about: a transcript's session id, a hairline rule,
-    then its order, By call, and All open.
+  - A panel header's modes sit together, after what the panel is about: a transcript's session id (but on a tick's
+    page, whose Tick panel names it), a hairline rule, then its order, By call, and All open.
 - **Buttons come in three sizes**, each one look: the default (`h-9`, `text-sm` at 500) in a form and a panel's foot;
   `sm` (`h-8`, the same type) in the header and for a link out, whose label is the accent's monospace at that size and
   weight (`LinkOutButton`); and `xs` (`h-6`, `text-xs` monospace at 400, as a readout beside it is) in a panel's header
@@ -754,15 +773,20 @@ list, an empty state, or a skeleton by hand.
   `status-failed`, naming the guard. An action that kills something asks
   once more inline (Stop now, then End run N now), never through a browser dialog. One that cannot be undone asks
   for its subject typed out: Forget opens a form in `status-failed` that says what it drops and keeps, and its button
-  stays disabled until the field holds the ticket's key exactly.
+  stays disabled until the field holds the ticket's key exactly. Until then Forget is the quietest of the row, a ghost
+  button in `status-failed` text at its end, since the loudest button is the one clicked first. The line under the
+  actions is empty until one has said something: what the ticket is, private or public, is its chip. A public ticket
+  has no Stop, since its queue label authorizes it; while a worker runs on one, a muted line stands in Stop's place:
+  `Public: remove its queue label to stop it, or start it privately.`
 - **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions, in its Work panel's foot on its
   page and under the item's head on its attention item, above the conversation either way, and in the foot of a PR's
   Pull request panel, under the operator's review request. While something is stuck it is a block on the
   `status-failed` tint, the color its `attempt_limit` chip wears, so it stands out from the panel: a line in body text
   led by `At its limit.` in `status-failed`, then a row per limit whose runs have reached it, what it counts in
-  monospace (`fix-ci in web`, `reviews of web#88`), its runs against it in `status-failed` (`1 of 1 runs`, and `, N
-  granted` past the policy's), and an outline `Allow one more` button at the row's end, as a ticket's actions are, the
-  CLI's command on hover. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
+  monospace (`fix-ci in web`, `reviews of web#88`, just `reviews` on the PR's own page), its runs against it in
+  `status-failed` (`1 of 1 runs`, and `, N granted` past the policy's), and an outline `Allow one more` button at the
+  row's end, the default size of every button in a panel's foot, as a ticket's actions are, the CLI's command on
+  hover. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
   leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
   does not own (DESIGN §21). The pull requests page leads with a `Review a PR` panel above the list: a line saying
