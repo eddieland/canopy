@@ -10,7 +10,8 @@ from typing import ClassVar
 import pytest
 
 from canopy.core import db, records
-from canopy.core.vocab import ChoreRunStatus
+from canopy.core.vocab import ChoreRunStatus, PoolKind, ReviewRunStatus
+from tests.canopy.helpers import in_tick
 from tests.conftest import Journals
 
 # The field types a column of each declared type may be read as.
@@ -20,6 +21,7 @@ AFFINITY: dict[str, frozenset[object]] = {
     "REAL": frozenset({float}),
     "BLOB": frozenset({bytes}),
 }
+PR = "https://github.com/acme/api/pull/7"
 DECISION_COLUMNS = "id, tick_id, ticket_key, action, rationale, created_at, repo, chore, pr"
 
 
@@ -176,3 +178,14 @@ def test_columns_reads_a_typed_row_and_a_sqlite_row_alike(conn: sqlite3.Connecti
     assert typed is not None
     untyped = conn.execute("SELECT * FROM chore_runs WHERE id = ?", (run_id,)).fetchone()
     assert {k: records.columns(typed)[k] for k in untyped.keys()} == dict(untyped)  # noqa: SIM118
+
+
+def test_a_review_run_reads_its_status_and_pool_as_their_members(conn: sqlite3.Connection, tmp_path: Path) -> None:
+    with in_tick(conn) as tick_id:
+        run_id = db.insert_review_run(
+            conn, tick_id=tick_id, pr_url=PR, sha="abc", ticket=None, repo=None, purpose="request", logs_dir=tmp_path
+        )
+    [run] = db.review_runs_of(conn, PR)
+    assert (run.id, run.status, run.pool) == (run_id, ReviewRunStatus.RUNNING, PoolKind.TREEHOUSE)
+    assert isinstance(run.status, ReviewRunStatus)
+    assert isinstance(run.pool, PoolKind)

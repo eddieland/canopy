@@ -91,9 +91,9 @@ def state_section(conn: sqlite3.Connection, config: Config, now: datetime) -> Re
     if not review_requests.reviews_on(conn, config):
         return None
     runs = db.review_runs_since(conn, db.format_time(now - RECENT))
-    by_pr: dict[str, list[sqlite3.Row]] = {}
+    by_pr: dict[str, list[records.ReviewRun]] = {}
     for run in runs:
-        by_pr.setdefault(str(run["pr_url"]), []).append(run)
+        by_pr.setdefault(run.pr_url, []).append(run)
     prs = [_pr_summary(conn, url) for url in list(by_pr)[:MAX_PRS]]
     started_today = len(db.review_runs_since(conn, db.format_time(now - timedelta(hours=24))))
     return {
@@ -139,7 +139,7 @@ def _pr_summary(conn: sqlite3.Connection, url: str) -> ReviewedPR:
     granted = grants.granted(conn, url)
     return {
         "url": url,
-        "ticket": next((r["ticket_key"] for r in runs if r["ticket_key"]), None),
+        "ticket": next((r.ticket_key for r in runs if r.ticket_key), None),
         "review_runs": len(runs),
         # Only a PR the operator granted more reviews has the key: its limit is the policy's plus this.
         **({"granted": granted} if granted else {}),
@@ -147,23 +147,23 @@ def _pr_summary(conn: sqlite3.Connection, url: str) -> ReviewedPR:
     }
 
 
-def _latest(conn: sqlite3.Connection, latest: sqlite3.Row) -> LatestReview:
-    stored = result.stored(latest["result_json"])
+def _latest(conn: sqlite3.Connection, latest: records.ReviewRun) -> LatestReview:
+    stored = result.stored(latest.result_json)
     # The operator's dismissals hold a finding back from workers and from the overseer alike (DESIGN §21).
-    dismissed = db.review_dismissals(conn, int(latest["id"]))
+    dismissed = db.review_dismissals(conn, latest.id)
     findings: list[result.Finding] = stored.findings if stored is not None else []
     return {
-        "run_id": latest["id"],
-        "sha": latest["sha"],
-        "status": latest["status"],
+        "run_id": latest.id,
+        "sha": latest.sha,
+        "status": latest.status,
         "verdict": stored.verdict if stored is not None else None,
         "impact": stored.impact if stored is not None else None,
         "findings": [f.title for i, f in enumerate(findings, 1) if i not in dismissed],
         "dismissed_findings": len(dismissed),
-        "started_at": latest["started_at"],
-        "ended_at": latest["ended_at"],
+        "started_at": latest.started_at,
+        "ended_at": latest.ended_at,
         # The review's time for the `review` cursor, which takes whole seconds only (DESIGN §7).
-        "reviewed_at": _to_second(latest["ended_at"]),
+        "reviewed_at": _to_second(latest.ended_at),
     }
 
 

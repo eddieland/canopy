@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from canopy.core import contract, db
 from canopy.core import review_result as result
 from canopy.core.conversation import printable
+from canopy.core.vocab import ReviewRunStatus
 
 if TYPE_CHECKING:
     import sqlite3
@@ -29,19 +30,19 @@ def for_worker(conn: sqlite3.Connection, run_id: int, key: str, repos: Sequence[
     run = db.get_review_run(conn, run_id)
     if run is None:
         raise Unusable(f"there is no review run {run_id}")
-    if run["ticket_key"] != key:
-        raise Unusable(f"review run {run_id} reviewed {run['pr_url']}, not a PR of {key}")
-    if run["repo"] is not None and repos and run["repo"] not in repos:
-        raise Unusable(f"review run {run_id} reviewed a PR in {run['repo']}, which this dispatch does not name")
-    stored = result.stored(run["result_json"])
-    if run["status"] != "done" or stored is None or not stored.findings:
-        raise Unusable(f"review run {run_id} ended {run['status']} with no findings to address")
+    if run.ticket_key != key:
+        raise Unusable(f"review run {run_id} reviewed {run.pr_url}, not a PR of {key}")
+    if run.repo is not None and repos and run.repo not in repos:
+        raise Unusable(f"review run {run_id} reviewed a PR in {run.repo}, which this dispatch does not name")
+    stored = result.stored(run.result_json)
+    if run.status is not ReviewRunStatus.DONE or stored is None or not stored.findings:
+        raise Unusable(f"review run {run_id} ended {run.status} with no findings to address")
     dismissed = db.review_dismissals(conn, run_id)
     if len(dismissed) >= len(stored.findings):
         raise Unusable(f"the operator dismissed every finding of review run {run_id}: none is left to address")
     lines = [
         (
-            f"canopy's review run {run_id} of {run['pr_url']} at commit `{run['sha']}` found these (verdict "
+            f"canopy's review run {run_id} of {run.pr_url} at commit `{run.sha}` found these (verdict "
             f"{stored.verdict}, impact {stored.impact}). They are in canopy's journal only, not on the PR:"
         )
     ]
@@ -53,13 +54,11 @@ def listed(conn: sqlite3.Connection, since: str) -> list[str]:
     """Return a line for each review run started at or after `since`, newest first, for `canopy review show`."""
     found: list[str] = []
     for run in db.review_runs_since(conn, since):
-        stored = result.stored(run["result_json"])
-        dismissed = len(db.review_dismissals(conn, int(run["id"])))
+        stored = result.stored(run.result_json)
+        dismissed = len(db.review_dismissals(conn, run.id))
         kept = f" ({dismissed} dismissed)" if dismissed else ""
         verdict = f"{stored.verdict}, {len(stored.findings)} findings{kept}, impact {stored.impact}" if stored else "-"
-        found.append(
-            f"{run['id']}  {run['started_at']}  {run['status']}  {verdict}  {run['pr_url']} @ {run['sha'][:7]}"
-        )
+        found.append(f"{run.id}  {run.started_at}  {run.status}  {verdict}  {run.pr_url} @ {run.sha[:7]}")
     return found
 
 
@@ -72,13 +71,13 @@ def described(conn: sqlite3.Connection, run_id: int) -> str:
     run = db.get_review_run(conn, run_id)
     if run is None:
         raise Unusable(f"there is no review run {run_id}")
-    stored = result.stored(run["result_json"])
-    ticket = f" ({run['ticket_key']})" if run["ticket_key"] else ""
+    stored = result.stored(run.result_json)
+    ticket = f" ({run.ticket_key})" if run.ticket_key else ""
     lines = [
-        f"review run {run_id} of {run['pr_url']}{ticket} at {run['sha']}",
-        f"{run['status']}, started {run['started_at']}, ended {run['ended_at'] or 'not yet'}",
+        f"review run {run_id} of {run.pr_url}{ticket} at {run.sha}",
+        f"{run.status}, started {run.started_at}, ended {run.ended_at or 'not yet'}",
     ]
-    note = contract.stored_object(run["result_json"]).get("harness")
+    note = contract.stored_object(run.result_json).get("harness")
     if isinstance(note, str) and note:
         lines.append(f"harness: {printable(note)}")
     if stored is not None:
