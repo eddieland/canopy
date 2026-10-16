@@ -680,13 +680,16 @@ list, an empty state, or a skeleton by hand.
   (`Bold (⌘B)`, `Bold (Ctrl+B)` elsewhere), and declares the same keys as `aria-keyshortcuts`. The paragraph's style is
   a menu, as a document's is: its button names the style in force (`Heading 2 ▾`), and it lists Text and Heading 1 to 4,
   each set as the plan sets it, with its keys at the right in muted monospace and a check in the accent on the one in
-  force; a style chosen leaves the cursor in the plan. An empty plan shows its prompt in `muted-foreground` where its
-  first line starts: `Write the plan here, or paste its Markdown.` The plan's header, with the toolbar, is `sticky`, and
-  what the editor scrolls into view (the cursor as it types, a passage a comment shows) stops 48px below it. A selection
-  also shows a `Comment` bubble over it. A commented passage sits on the accent's tint at 14%; the open one, or the one
-  being commented on, at 28% and underlined in the accent; clicking a passage opens its thread, and the cursor leaving
-  it, or Escape, closes it. A thread is its passage quoted (two lines, a hairline in the accent at its left, the whole
-  on hover; a button that shows it in the plan), the comment and its replies as text with their ages, and ghost `xs`
+  force; a style chosen leaves the cursor in the plan. After the blocks, a `Table` menu inserts a table where none is (a
+  header row and two rows of three columns, as a plan's Files table is), and inside one adds a row above or below or a
+  column left or right, and deletes a row, a column, or the table; what the cursor's place does not allow is disabled,
+  and an action leaves the cursor in the plan. An empty plan shows its prompt in `muted-foreground` where its first line
+  starts: `Write the plan here, or paste its Markdown.` The plan's header, with the toolbar, is `sticky`, and what the
+  editor scrolls into view (the cursor as it types, a passage a comment shows) stops 48px below it. A selection also
+  shows a `Comment` bubble over it. A commented passage sits on the accent's tint at 14%; the open one, or the one being
+  commented on, at 28% and underlined in the accent; clicking a passage opens its thread, and the cursor leaving it, or
+  Escape, closes it. A thread is its passage quoted (two lines, a hairline in the accent at its left, the whole on
+  hover; a button that shows it in the plan), the comment and its replies as text with their ages, and ghost `xs`
   actions, `Reply`, `Resolve` (`Reopen`), and `Delete`. While the thread is open, the comment and each reply carry an
   `Edit` beside their age, in `text-2xs`, which turns it into the comment form in place, holding its words, with `Save`;
   the actions hide while it is open. `Delete` asks first, in the actions' place, since nothing brings a thread back:
