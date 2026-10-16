@@ -16,7 +16,7 @@ from canopy.cli.main import main
 from canopy.core import conversation, db, definitions, review_diff
 from canopy.core import review_result as result
 from canopy.core.config import load
-from canopy.core.vocab import ReviewRunStatus
+from canopy.core.vocab import ReviewRunStatus, TickStatus
 from canopy.infra import procs
 from canopy.loop import attention
 from tests.canopy.helpers import (
@@ -214,7 +214,7 @@ def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_s
         with in_tick(conn) as tick_id:
             assert main(review(sha="b" * 40), runner=InlineRunner()) == 1
             assert [d[2] for d in review_decisions(conn, tick_id)] == ["refused:review_limit", "attention:review_limit"]
-            db.finish_tick(conn, tick_id, "ok", "test")
+            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
 
         assert operator("grant", PR, "review") == 0
         assert f"{PR} has had 1 review runs, and may now have 2." in capsys.readouterr().out
@@ -231,7 +231,7 @@ def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_s
             (PR, "this PR has had 2 review runs and the limit is 2"),
             (f"{PR}0", "this PR has had 1 review runs and the limit is 1"),
         ]
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     assert operator("grant", PR, "review", "--runs", "2") == 0
     assert "has had 2 review runs, and may now have 4." in capsys.readouterr().out
 
@@ -260,7 +260,7 @@ def test_only_the_operator_grants_reviews(
             os.environ.pop("CANOPY_TICK_ID")
         assert main(["grant", PR, "review"]) == 1
         assert "grant refused (inside_run)" in capsys.readouterr().err
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     assert conn.execute("SELECT count(*) FROM review_grants").fetchone()[0] == 0
 
 
@@ -439,7 +439,7 @@ def test_a_killed_review_is_crashed_on_the_next_tick(reviews: CanopyEnv, git_poo
     with mock.patch.dict(os.environ, {"FAKE_REVIEWER_SLEEP": "60"}):
         with in_tick(conn) as tick_id:
             assert main(review(sha=head(git_pool))) == 0
-            db.finish_tick(conn, tick_id, "ok", "test")
+            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         deadline = time.monotonic() + 30
         row = db.get_review_run(conn, 1)
         while (row is None or row.agent_pid is None) and time.monotonic() < deadline:
@@ -475,7 +475,7 @@ def test_reconcile_leaves_a_running_reviews_slot_alone(reviews: CanopyEnv, git_p
     conn = reviews.journal()
     with in_tick(conn) as tick_id:
         assert main(review(sha=head(git_pool)), runner=InlineRunner()) == 0  # claimed by this live process
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     with overseer_waits("PROJ-1"):
         assert main(["tick"]) == 0
         assert [s["status"] for s in pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))] == ["leased", "available"]
@@ -638,7 +638,7 @@ def implemented(conn: sqlite3.Connection) -> None:
     with worker_does(*commit_and_push("agent/PROJ-1-work")), in_tick(conn) as tick_id:
         command = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
         assert main(command, runner=InlineRunner()) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         assert main(["_run", "1"], runner=InlineRunner()) == 0
 
 

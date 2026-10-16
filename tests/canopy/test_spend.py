@@ -187,7 +187,7 @@ def test_idle_ticks_are_the_newest_live_idle_ones_in_the_window(canopy_env: Cano
     journal_of_a_week(conn, NOW)
     week = spend.breakdown(conn, NOW, 7)
     rows = spend.idle_ticks(conn, week.since, week.until)
-    assert [(r["started_at"], r["cost_usd"]) for r in rows] == [
+    assert [(r.started_at, r.cost_usd) for r, _ in rows] == [
         (at(NOW, 1, 2), None),
         (at(NOW, 1), 0.25),
         (at(NOW, 2, 1), 0.25),

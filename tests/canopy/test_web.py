@@ -16,7 +16,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import agent_output, config, conversation, db, pause
 from canopy.core.context import Context
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import resources
 from canopy.loop import repeat, reread, web
 from canopy.reviews import grants
@@ -47,7 +47,7 @@ def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journ
         runs_dir=ctx.state_dir / "runs",
         private=False,
     )
-    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "test")
     stored = db.get_run(ctx.conn, run_id)
     assert stored is not None
 
@@ -82,7 +82,7 @@ def test_a_ticks_spend_is_its_overseers_new_tokens_and_peak_context(ctx: Context
 
     usage = agent_output.Usage(0.25, input=3000, output=400, reasoning=100, cache_read=20_000, cache_write=500)
     db.set_tick_report(ctx.conn, tick_id, "ses_o1", dataclasses.replace(usage, peak_context=12_000))
-    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "test")
     tick = c.get("/api/ticks").json()[0]
     assert (tick["cost_usd"], tick["new_tokens"], tick["peak_context"]) == (0.25, 4000, 12_000)  # no cache reads
     detail = c.get(f"/api/ticks/{tick_id}").json()["tick"]
@@ -224,7 +224,7 @@ def ended_run(ctx: Context, key: str, kind: str) -> int:
         runs_dir=ctx.state_dir / "runs",
     )
     ctx.conn.execute("UPDATE runs SET status = 'failed', ended_at = started_at WHERE id = ?", (run_id,))
-    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "test")
     return run_id
 
 
@@ -282,7 +282,7 @@ def test_grant_from_the_web_raises_a_prs_review_limit_as_canopy_grant_review_doe
         purpose="own",
         logs_dir=ctx.state_dir / "reviews",
     )
-    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "test")
     review = {"kind": "review", "repo": "repo", "pr_url": pr, "runs": 1, "granted": 0, "limit": 3}
     assert c.get("/api/pull-request", params={"url": pr}).json()["review_limit"] == review
 
@@ -298,7 +298,7 @@ def test_an_item_about_a_pr_no_ticket_owns_names_the_pr(ctx: Context) -> None:
     pr = "https://github.com/acme/repo/pull/7"
     tick_id = db.start_tick(ctx.conn, dry_run=False)
     db.record_decision(ctx.conn, tick_id, None, "attention:review_limit", "at its limit", pr=pr)
-    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "test")
     [item] = c.get("/api/attention").json()
     assert (item["pr"], item["ticket_key"], item["ticket_title"], item["subject"]) == (pr, None, None, f"pr:{pr}")
 
@@ -405,7 +405,7 @@ def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:
     assert conversation.close_run(ctx.conn, ctx.config, run, RunStatus.BLOCKED, json.dumps(result))
     tick_id = db.start_tick(ctx.conn, dry_run=False)
     db.record_decision(ctx.conn, tick_id, KEY, "attention:needs_reviewer", "https://example.test/pr/9")
-    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "test")
 
     [item] = c.get("/api/attention").json()
     assert (item["ticket_key"], item["ticket_title"], item["reason"], item["detail"]) == (
@@ -443,7 +443,7 @@ def test_summaries_and_rationales_keep_their_line_breaks(ctx: Context) -> None:
     assert conversation.close_run(ctx.conn, ctx.config, run, RunStatus.DONE, json.dumps(result))
     tick_id = db.start_tick(ctx.conn, dry_run=False)
     db.record_decision(ctx.conn, tick_id, KEY, "wait", "Checks running:\n  - lint")
-    db.finish_tick(ctx.conn, tick_id, "ok", "\nOne wait.\nNothing else.\n")
+    db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "\nOne wait.\nNothing else.\n")
 
     [listed] = c.get("/api/runs").json()
     assert listed["summary"] == "Done:\n- one\n- two"  # control characters dropped, trailing space cut
@@ -506,7 +506,7 @@ def test_the_last_tick_is_the_latest_row_with_its_status_and_cost(ctx: Context) 
     assert c.get("/api/tick").json() == {"tick": None, "acknowledged": None}
     db.start_tick(ctx.conn, dry_run=False)
     later = db.start_tick(ctx.conn, dry_run=True)
-    db.finish_tick(ctx.conn, later, "ok", "nothing to do\x1b[2J")
+    db.finish_tick(ctx.conn, later, TickStatus.OK, "nothing to do\x1b[2J")
     ctx.conn.execute("UPDATE ticks SET cost_usd = 0.25 WHERE id = ?", (later,))
 
     tick = c.get("/api/tick").json()["tick"]
@@ -520,7 +520,7 @@ def test_a_message_is_acknowledged_by_the_latest_ok_tick_that_read_it(ctx: Conte
     assert c.post(f"/api/tickets/{KEY}/start", headers=headers).status_code == 200
     first = db.start_tick(ctx.conn, dry_run=False)
     db.set_tick_read(ctx.conn, first)
-    db.finish_tick(ctx.conn, first, "ok", "read nothing")
+    db.finish_tick(ctx.conn, first, TickStatus.OK, "read nothing")
     assert c.get("/api/tick").json()["acknowledged"] == 0
 
     reply = {"body": "blue", "submission": "form-ack-1"}
@@ -528,14 +528,14 @@ def test_a_message_is_acknowledged_by_the_latest_ok_tick_that_read_it(ctx: Conte
     # A tick that read the reply but did not close `ok` acknowledges nothing: the attention list is still the last's.
     failed = db.start_tick(ctx.conn, dry_run=False)
     db.set_tick_read(ctx.conn, failed)
-    db.finish_tick(ctx.conn, failed, "overseer_failed", "exit 1")
+    db.finish_tick(ctx.conn, failed, TickStatus.OVERSEER_FAILED, "exit 1")
     last = c.get("/api/tick").json()
     assert (last["tick"]["id"], last["acknowledged"]) == (failed, 0)
 
     read = db.start_tick(ctx.conn, dry_run=False)
     db.set_tick_read(ctx.conn, read)
     assert c.get("/api/tick").json()["acknowledged"] == 0  # still running
-    db.finish_tick(ctx.conn, read, "ok", "resumed")
+    db.finish_tick(ctx.conn, read, TickStatus.OK, "resumed")
     assert c.get("/api/tick").json()["acknowledged"] == replied
 
 

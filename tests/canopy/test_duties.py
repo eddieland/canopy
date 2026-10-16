@@ -9,6 +9,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.core.vocab import TickStatus
 from canopy.loop import attention, duties
 from tests.canopy.helpers import canopy, chore_toml, in_tick, overseer_does, state_block
 from tests.conftest import CanopyEnv
@@ -111,7 +112,7 @@ def test_stopped_and_recently_done_tickets_are_owed_nothing(canopy_env: CanopyEn
     with in_tick(conn) as tick_id:
         db.set_ticket(conn, "PROJ-2", repo, done=True)
         db.record_decision(conn, tick_id, "PROJ-2", "done", "merged")
-        db.finish_tick(conn, tick_id, "ok", "")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "")
     with mock.patch.dict(os.environ):
         os.environ.pop("CANOPY_TICK_ID", None)
         assert main(["start", "PROJ-1"]) == 0

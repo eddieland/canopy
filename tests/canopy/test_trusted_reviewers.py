@@ -12,6 +12,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import conversation, db
+from canopy.core.vocab import TickStatus
 from canopy.loop.state import OverseerState, TicketState
 from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, worker_does
 from tests.conftest import CanopyEnv, GitPool
@@ -47,7 +48,7 @@ def run_once(conn: sqlite3.Connection, *args: str) -> sqlite3.Row:
     runner = InlineRunner()
     with in_tick(conn) as tick_id:
         assert main(["dispatch", KEY, "--repo", "repo", "--label", "agent-ready-tester", *args], runner=runner) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
     assert main(["_run", str(run_id)], runner=runner) == 0
     run = db.get_run(conn, run_id)
