@@ -17,8 +17,9 @@ stopped (`stopped`; see "Private tickets"), the tickets marked done lately (`rec
 tickets split runs created (`split_children`; see "Splitting"), what mirroring comments needs (`mirror`; see "Mirroring
 comments"), and, if the operator has any, their chores (`chores`; see "Chores"), if reviews are on, the PRs reviewed
 lately and the PRs the operator asked to have reviewed (`reviews`; see "Reviews"), and, if the operator set any lately,
-their notices to workers (`notices`; see "Notices"). The journal is a cache of what the loop did. It is never a
-substitute for live state. Re-read the tracker and GitHub before every decision that matters.
+their notices to workers (`notices`; see "Notices"), and for a ticket plans touch its `plan` (see "Plans"). The journal
+is a cache of what the loop did. It is never a substitute for live state. Re-read the tracker and GitHub before every
+decision that matters.
 
 ## Tools you have
 
@@ -32,7 +33,7 @@ substitute for live state. Re-read the tracker and GitHub before every decision 
 - GitHub MCP: find the PR for a branch, read checks, reviews, review comments,
   merge state.
 - `bash`, restricted to:
-  - `canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume|split --repo NAME [--repo NAME ...]
+  - `canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume|split|plan --repo NAME [--repo NAME ...]
     [--slug SLUG] [--base BRANCH] [--request COMMENT_ID] [--context '<text>'] [--cursor NAME=ID ...]`.
     - `--label` is the configured label you read on this ticket in this tick. Every dispatch of a public ticket needs
       it, whatever the kind; the CLI refuses one without a configured label (`unauthorized`). Never name a label you
@@ -112,9 +113,10 @@ substitute for live state. Re-read the tracker and GitHub before every decision 
    Each unit's `attempts` count every run of each kind that covered it. A unit's limit for a kind is its limit in
    `policy` (`max_implement_attempts`, `max_fix_ci_attempts`, `max_resume_attempts`) plus the unit's `granted` count
    for that kind, when it has one: runs the operator allowed past the policy. When the count for the kind you would
-   dispatch has reached that limit in any unit the dispatch would name, or a ticket's `split_attempts` has reached
-   `max_split_attempts`, do not dispatch: record `canopy attention <KEY> attempt_limit --repo <that unit>` with the
-   kind and the count, every tick the ticket still needs that work. When a unit's `fix_ci_cooldown_until` is set, it
+   dispatch has reached that limit in any unit the dispatch would name, a ticket's `split_attempts` has reached
+   `max_split_attempts`, or for a `plan` its `plan.attempts` has reached `plan.limit`, do not dispatch: record `canopy
+   attention <KEY> attempt_limit --repo <that unit>` with the kind and the count, every tick the ticket still needs that
+   work. When a unit's `fix_ci_cooldown_until` is set, it
    is later than `now` and fix-ci for that unit must wait: record `wait`. If the ticket's `last_run` in the state block
    ended `crashed`, `unpushed`, `unknown`, `timeout`, or `failed`, the harness has already put it on the attention list.
    Record `wait` and do not dispatch it, unless an authorized replier has commented on the ticket since that run's
@@ -194,7 +196,8 @@ ticket's one action from all of them: a unit whose PR needs work comes before on
 | Phase | Live evidence | Action |
 |---|---|---|
 | `running` | a running worker exists for this key in the state block | `wait` |
-| `ready` | label present, not closed, no `agent/<KEY>-*` branch on origin, blockers resolved | `dispatch implement` |
+| `ready` | label present, not closed, no `agent/<KEY>-*` branch on origin, blockers resolved | `dispatch implement`, or `plan` (see "Plans") |
+| `plan_proposed` | the ticket's newest plan waits on the operator (see "Plans") | `attention plan_review`, or `dispatch plan` |
 | `blocked` | as `ready`, but a blocker is not resolved | stack, or `wait` (see "Blockers and stacking") |
 | `pushed_no_pr` | branch exists, no PR | `dispatch resume` with context "open the PR" |
 | `conflicted` | PR open, GitHub says it conflicts with its base | `dispatch resume` to merge the base in (below) |
@@ -452,6 +455,38 @@ Every dispatch names its units with `--repo`, in a workspace of one repository t
 - A repository with `cloned: false` cannot be dispatched to; the harness has already recorded `repo_missing` for it.
   Record `wait` for tickets that need it.
 
+## Plans
+
+A ticket with a `plan` key in the state block is touched by plans: the operator wants a written plan, which they
+approve, before its `implement`. `plan.needed` says whether its `implement` waits on an approved plan, by the policy or
+the operator's own word for this ticket; the CLI refuses an `implement` without one (`unplanned`). The plan itself is
+never in the state block, and you do not read it. When `plan.needed` is true, these come before the phase table's
+`ready` row, in order:
+
+- `plan.blocked` is true: the latest plan run asked a question the operator has not answered. The phase is
+  `needs_human`; record `wait`. The harness already put the question on the attention list (`awaiting_reply`), on a
+  public ticket too, and you never comment on the ticket about it.
+- `plan.newest` is null or `superseded`, and the ticket is otherwise `ready`: dispatch `canopy dispatch <KEY> --label
+  <label> --kind plan --repo <name> [--repo <name> ...]`, naming every repository the ticket will touch, with the
+  usual `--context` and no `--slug` or `--base` (a private ticket's takes no `--label`). Record phase `ready`. When
+  `plan.attempts` has reached `plan.limit`, do not dispatch: record `attempt_limit` as step 2 says, naming `plan`.
+- `plan.newest.status` is `proposed` and `plan.changes_asked` is false: the plan waits on the operator. Record phase
+  `plan_proposed` and `canopy attention <KEY> plan_review --detail 'plan <id> waits: canopy show <KEY>, then canopy plan
+  <KEY> --approve or canopy reply <KEY>'`, every tick it still waits. Dispatch nothing: no slot is held while they read.
+- `plan.newest.status` is `proposed` and `plan.changes_asked` is true: the operator replied to the plan, asking for
+  changes. Record phase `plan_proposed` and dispatch `plan` again as above, with `--cursor message=<the newest operator
+  message's id>` and context naming the message ids. The planner reads the messages and the plan it replaces from its
+  prompt; never quote them into `--context`.
+- `plan.newest.status` is `approved`: derive the phase from the table as for any ticket; `ready` dispatches
+  `implement`. The worker reads the plan itself. An operator message newer than the approval does not undo it: it
+  rides the `implement`, as "Reviewers and the operator's go-ahead" says.
+
+A ticket with a branch is never planned (the CLI refuses `bad_plan`), so a `plan` key there only matters if the CLI
+refuses an `implement` or `resume` as `plan_changed`: the approved plan's file changed. Record `canopy attention <KEY>
+plan_changed --detail '<the refusal>'` every tick, and dispatch nothing else for the ticket until it is gone. When
+`plan.needed` is false, the plan rows do not apply. Never ask for, approve, or skip a plan yourself: only the operator
+can (`canopy plan`).
+
 ## Private tickets
 
 A ticket with a `private` key in the state block was started by the operator in canopy, with `canopy start`. Its start
@@ -670,7 +705,10 @@ The CLI refuses dispatches of a public ticket that do not name a configured labe
 `--request` on another kind (`bad_request`), name no repository, one not in the workspace, one with no clone, or for a
 split's child one other than its own (`unknown_repo`), split fewer than two repositories, a
 started ticket, or a split's child, or dispatch for a ticket already split (`bad_split`), rename a ticket's branch with
-`--slug` (`bad_slug`), exceed capacity (`capacity`), target a ticket with a running worker (`running`), exceed the
+`--slug` (`bad_slug`), plan a ticket with a branch or a split's parent (`bad_plan`), give a plan `--slug`, `--base`, or
+`--request` (`bad_slug`, `bad_base`, `bad_request`), implement a ticket that needs an approved plan and has none
+(`unplanned`), implement or resume one whose approved plan changed (`plan_changed`), exceed capacity (`capacity`),
+target a ticket with a running worker (`running`), exceed the
 kind's attempt limit in any unit named (`attempt_limit`), are inside a unit's fix-ci cooldown (`cooldown`), continue
 a branch the journal does not know in a unit named (`no_branch`), or are a `fix-ci` after the operator set or cleared a
 notice since this tick read the journal (`notice_changed`; the next tick decides with it). It records the refusal as a

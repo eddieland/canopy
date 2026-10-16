@@ -31,8 +31,9 @@ TIMEOUT_SECONDS = 60
 # `loop.failing` once.
 FAILING_AFTER = 3
 _POINT_GROUPS = (outbox.LOOP, outbox.RUNS, outbox.CHORES, outbox.REVIEWS)
-# Events a batching sink sends at once, with whatever it held: the loop or a sink failing.
-_URGENT_KINDS = frozenset({"loop.failing", "loop.sink_failing"})
+# Events a batching sink sends at once, with whatever it held: the loop or a sink failing, or a plan waiting on the
+# operator, which holds its ticket until they answer (DESIGN §25).
+_URGENT_KINDS = frozenset({"loop.failing", "loop.sink_failing", "plan.proposed"})
 
 
 @dataclass(frozen=True)

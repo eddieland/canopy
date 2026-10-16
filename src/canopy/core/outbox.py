@@ -53,6 +53,14 @@ class RunEnded(TypedDict):
     message: int | None
 
 
+class PlanProposed(TypedDict):
+    """A `plan.proposed` event's fields: which plan waits on the operator, never its text (DESIGN §25)."""
+
+    ticket: str
+    run: int
+    plan: int
+
+
 class ChoreEnded(TypedDict):
     """A `chore.ended` event's fields."""
 
@@ -165,6 +173,22 @@ def run_ended(
             "message": message,
         }
         return Event(RUNS, "run.ended", fields)
+
+    return build
+
+
+def plan_proposed(config: Config, *, key: str, run_id: int) -> Callable[[int], Event | None]:
+    """Return what builds the `plan.proposed` event from the new plan's id, for `plans.record`.
+
+    It names the ticket, the run, and the plan, and no plan text, so nothing of the plan leaves the machine through a
+    sink (DESIGN §25). It is None if no sink takes runs.
+    """
+
+    def build(plan_id: int) -> Event | None:
+        if not config.notify.takes(RUNS):
+            return None
+        fields: PlanProposed = {"ticket": key, "run": run_id, "plan": plan_id}
+        return Event(RUNS, "plan.proposed", fields)
 
     return build
 
