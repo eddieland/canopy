@@ -13,7 +13,7 @@ from rich.console import Console
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
 from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, spent
-from canopy.core import chore_view, conversation, db, notice, pause, review_requests
+from canopy.core import chore_view, contract, conversation, db, notice, pause, review_requests
 from canopy.infra import hangup, keys, lock
 from canopy.loop import attention, repeat, reread, tick
 from canopy.notify import deliver
@@ -232,7 +232,7 @@ def _print_recent_runs(ctx: Context) -> None:
         ended = f"{attention.age(str(r['ended_at']))} ago"
         prs = "".join(f"  {pr}" for pr in prs_of(result))
         click.echo(f"  {named(r['ticket_key'], r['ticket_title'])}  {r['kind']}  {r['status']}  {ended}{prs}")
-        said = one_line(str(result.get("harness") or result.get("summary") or ""))
+        said = one_line(contract.stored_note(result))
         if said:
             click.echo(f"    {said}")
         session = f"session {r['session_id']}" if r["session_id"] else "no session reported"

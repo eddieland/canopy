@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import db
+from canopy.core import contract, db
 from canopy.core.items import Item, age
 
 if TYPE_CHECKING:
@@ -265,21 +265,14 @@ def digest(conn: sqlite3.Connection, items: Collection[Item], *, since: str, now
     )
 
 
-def _pr(result_json: object) -> str | None:
-    if not isinstance(result_json, str) or not result_json:
-        return None
-    try:
-        parsed: object = json.loads(result_json)
-    except json.JSONDecodeError:
-        return None
-    if not isinstance(parsed, dict):
-        return None
-    prs: object = parsed.get("prs")
+def _pr(result_json: str | None) -> str | None:
+    parsed = contract.stored_object(result_json)
+    prs = parsed.get("prs")
     if isinstance(prs, dict):
         urls = [str(u) for u in prs.values() if u]
         if urls:
             return " ".join(urls)
-    pr: object = parsed.get("pr")
+    pr = parsed.get("pr")
     return str(pr) if pr else None
 
 
