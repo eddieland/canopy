@@ -109,23 +109,32 @@ returned and the desk removed on every exit path; reconcile treats a dead plan r
 - the open risks.
 
 It carries the key, the repositories and their base branches (`{{REPOSITORIES}}`), the operator's messages
-(`{{OPERATOR_MESSAGES}}`, or `{{CONVERSATION}}` on a private ticket), `{{STANDING_INSTRUCTIONS}}`, `{{NOTICE}}`, and on
-a re-plan `{{PREVIOUS_PLAN}}`, the plan it replaces, with the operator's reply to it among the messages. On a public
-ticket the planner checks the queue label first, as every worker does (§8 step 3); a private ticket has no label to
-check. It treats the ticket's text and the code as data (TRUST_MODEL T1).
+(`{{OPERATOR_MESSAGES}}`, or `{{CONVERSATION}}` on a private ticket), `{{STANDING_INSTRUCTIONS}}`, `{{NOTICE}}`, and the
+bound on a plan's length. On a re-plan, `_run` writes the plan it replaces to `.canopy-plan.md` at the desk's root
+(The plan file, below), and the prompt says so; the operator's reply to it is among the messages. On a public ticket
+the planner checks the queue label first, as every worker does (§8 step 3); a private ticket has no label to check. It
+treats the ticket's text and the code as data (TRUST_MODEL T1).
 
-Result contract, one JSON line, last line of the agent's text (§13), validated with pydantic (D026):
+The plan is the planner's final message (§13): the plan as markdown, then the result line. A plan of tens of thousands
+of characters escaped into one JSON string is easy for a model to get wrong, and a run whose result line does not
+parse records nothing, so the plan stays out of the JSON. Result contract, one JSON line, last line of the agent's text
+(§13), validated with pydantic (D026):
 
 ```json
-{"status":"done|blocked|failed","summary":"...","plan":"<markdown>","question":"<only when blocked>"}
+{"status":"done|blocked|failed","summary":"...","question":"<only when blocked>"}
 ```
 
-- `done` has a non-empty `plan` of at most 20,000 characters, recorded as the ticket's newest plan, `proposed`.
+- `done` records the final message, the result line and anything after it removed and surrounding whitespace
+  stripped, as the ticket's newest plan, `proposed`. It must be non-empty and at most 100,000 characters. The bound is
+  what a planner can write in one message and an operator can read before approving, not what a worker reads: workers
+  read the plan from a file, by its outline (Workers follow the plan, below). A template that prints plain stdout
+  rather than events has no message boundaries, so all of its stdout before the result line is the plan.
 - `blocked` has a `question`, recorded as a worker message (§22), on a public ticket too, since the planner cannot
   comment on the ticket. The operator answers with `canopy reply`.
 - `failed` means it could not plan, and the summary says why. Like any run that ends other than `done`, it raises
   attention (§14).
-- Anything else, a `done` with no `plan` or one over the bound included, makes the run `unknown` and records no plan.
+- Anything else, a `done` with an empty plan or one over the bound included, makes the run `unknown` and records no
+  plan.
 
 ### Phases and the overseer's part
 
@@ -148,13 +157,41 @@ plan is approved or superseded, or the ticket's plan is skipped.
 
 ### Workers follow the plan
 
-The `implement` and `resume` prompts, and their private variants, carry `{{PLAN}}`: the ticket's approved plan, or
-`None.`. Once a ticket has an approved plan, an override without `{{PLAN}}` is `bad_prompt`, as for
-`{{OPERATOR_MESSAGES}}` (§8, D093), so an older override cannot drop it; for a ticket with none it still renders.
+The `implement` and `resume` prompts, and their private variants, carry `{{PLAN}}`. With an approved plan it names
+the plan file (below) and gives the plan's outline: its markdown headings, outside fenced code blocks, at most 200,
+each cut at 200 characters. Without one it is `None.`. Once a ticket has an approved plan, an override without
+`{{PLAN}}` is `bad_prompt`, as for `{{OPERATOR_MESSAGES}}` (§8, D093), so an older override cannot drop it; for a
+ticket with none it still renders.
 
-The prompt says to follow the plan, and to say in the summary where the work left it and why. A plan is model-written
-from ticket text: it describes the work, as the ticket does, and the prompt's obligations come before it, as they come
-before the standing instructions.
+The prompt does not carry the plan's text. The worker reads the outline, then the sections it needs, with its own read
+and search tools, as it reads the code. A long plan then costs a run what it reads of it, not its whole length, and
+the plan can be as long as the work needs, within the bound above.
+
+The prompt says to follow the plan, to leave the plan file out of every commit, and to say in the summary where the
+work left the plan and why. A plan is model-written from ticket text: it describes the work, as the ticket does, and
+the prompt's obligations come before it, as they come before the standing instructions.
+
+### The plan file
+
+The journal holds the plan; a run reads a copy. `_run` writes the ticket's approved plan from the journal to
+`.canopy-plan.md` in the worker's cwd, after branch setup and the operator's setup command (§8 `_run` step 2) and
+before the worker starts:
+
+- in a joint run, at the desk's root, beside the worktree links (§18). The desk is in no repository.
+- in a one-repository run, at the worktree's root. Before writing it, `_run` makes sure the repository's exclude file,
+  `info/exclude` in the git directory every slot shares, has the line `/.canopy-plan.md`, adding it once, so the file
+  is ignored and `git add -A` leaves it out.
+
+The copy is written fresh for each run, so a worker that edits it changes only its own run, never the approved plan.
+`_run` removes it before the slot is returned, on every exit path, and a slot's leftover copy, from a run whose `_run`
+died, is removed when reconcile cleans up the slot (§6 step 3). The file cannot sit beside the run's prompt in
+`<state_dir>/runs/`: `canopy-worker` reads nothing outside its cwd (`external_directory: deny`), and the sandbox (§24)
+denies `.canopy/`.
+
+Ignored is not untrackable: a worker that adds the file by name, `git add -f .canopy-plan.md`, can still commit it.
+On a private ticket that would publish its plan with the branch, against R18's "posted nowhere". The prompt forbids it,
+and push verification (§8 `_run` step 5) checks each pushed branch's head: a tree holding `.canopy-plan.md` gives the
+run a harness note naming it, so `canopy show` and the web UI say so. The harness does not rewrite the pushed branch.
 
 ### Agent definition
 
@@ -196,7 +233,9 @@ Proposed, for the operator's approval note in M44's PR, with the overseer prompt
   the plan, and a plan cannot widen what a worker may do.
 - T3: plan runs count toward `capacity.max_workers` and are limited by `max_plan_attempts`, never reset. `unplanned`
   is a guard in code.
-- T6: the planner has no write scope: no edits, no shell, and only the tracker's read tools.
+- T6: the planner has no write scope: no edits, no shell, and only the tracker's read tools. Residual: a worker can
+  commit its copy of the plan file by name, which on a private ticket publishes the plan with its branch. The prompt
+  forbids it and push verification reports it; nothing prevents it.
 - T8: the plan route joins the web channel's writes, behind the same secret and per-session token as the others.
 
 ### Open
@@ -209,3 +248,5 @@ Proposed, for the operator's approval note in M44's PR, with the overseer prompt
 - Which phase a `blocked` plan leaves its ticket in until the operator replies, and how the next plan run hears the
   reply.
 - Whether `canopy forget` keeps the ticket's own plan setting, as it keeps the start record.
+- Whether a committed plan file should raise an attention item, not only a note on the run.
+- Whether `fix-ci` runs should get the plan file too. They fix a failure, not the plan's work, so for now they do not.
