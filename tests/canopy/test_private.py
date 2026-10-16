@@ -147,7 +147,7 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(  # noqa: P
             assert "the operator's reply to message" in prompt
             ticket = db.get_ticket(conn, KEY)
             assert ticket is not None
-            assert ticket["last_message_id"] == db.latest_message_id(conn, source="operator")
+            assert ticket.last_message_id == db.latest_message_id(conn, source="operator")
             # The reply answered the question: the next tick raises no `awaiting_reply`, and acknowledges the reply.
             assert conversation.awaiting(conn) == []
             acknowledged = db.acknowledged_message_id(conn)

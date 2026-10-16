@@ -18,7 +18,7 @@ from canopy.core import conversation, db
 if TYPE_CHECKING:
     import sqlite3
 
-    from canopy.core import chore_view
+    from canopy.core import chore_view, records
 
 # The decision `canopy queried` records: the tick ran the tracker query, and which open tickets it returned. Its
 # rationale is `queried_rationale`'s, which `queried_keys` reads back.
@@ -51,7 +51,7 @@ def owed(
     tick_id: int,
     *,
     query_due: bool,
-    tickets: Iterable[sqlite3.Row],
+    tickets: Iterable[records.Ticket],
     stopped: Iterable[str],
     recently_done: Iterable[sqlite3.Row],
     chores: Iterable[chore_view.ChoreSummary],
@@ -64,7 +64,7 @@ def owed(
     recorded = db.decisions_for_tick(conn, tick_id)
     return Duties(
         query_due=query_due,
-        tickets=frozenset(str(t["key"]) for t in tickets),
+        tickets=frozenset(t.key for t in tickets),
         exempt=frozenset([*stopped, *(str(t["key"]) for t in recently_done)]),
         chores=frozenset(c["name"] for c in chores if c["due"] and not c["running"]),
         harness=max((d.id for d in recorded), default=0),

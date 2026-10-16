@@ -475,8 +475,8 @@ def _check_split(ctx: Context, key: str, repos: Sequence[str], *, slug: str | No
     if child is not None:
         raise Refusal("bad_split", f"{key} was created by splitting {child['parent_key']}; it is not split again")
     ticket = db.get_ticket(ctx.conn, key)
-    if ticket is not None and ticket["branch"]:
-        raise Refusal("bad_split", f"{key} already has work on {ticket['branch']}; a started ticket is not split")
+    if ticket is not None and ticket.branch:
+        raise Refusal("bad_split", f"{key} already has work on {ticket.branch}; a started ticket is not split")
 
 
 def _check_child_repo(ctx: Context, key: str, repos: Sequence[str]) -> None:
@@ -505,7 +505,7 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence
             or in one of `repos` (`no_branch`).
     """
     ticket = db.get_ticket(ctx.conn, key)
-    recorded = str(ticket["branch"]) if ticket is not None and ticket["branch"] else None
+    recorded = ticket.branch if ticket is not None and ticket.branch else None
     if kind == RunKind.IMPLEMENT:
         if recorded is None:
             slug = DEFAULT_SLUG if slug is None else slug

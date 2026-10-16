@@ -392,12 +392,12 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     )
     tickets = (
         # key, title (None: not named yet), phase, branch, last seen
-        ("ABC-099", "Debounce search input", "in_review", "agent/ABC-099-search", -59),
-        ("ABC-100", "Fix the flaky checkout test", "ci_failing", "agent/ABC-100-flaky-test", -59),
-        ("ABC-101", "Sign in with SSO", "implementing", "agent/ABC-101-login", 10),
+        ("ABC-099", "Debounce search input", "review_pending", "agent/ABC-099-search", -59),
+        ("ABC-100", "Fix the flaky checkout test", "ci_red", "agent/ABC-100-flaky-test", -59),
+        ("ABC-101", "Sign in with SSO", "running", "agent/ABC-101-login", 10),
         ("ABC-102", "Export reports as CSV", "needs_human", "agent/ABC-102-export", -4),
-        ("ABC-103", "Move billing to the v2 API", "in_review", "agent/ABC-103-billing-v2", -80),
-        ("ABC-104", None, "ci_failing", "agent/ABC-104-retry-queue", 5),
+        ("ABC-103", "Move billing to the v2 API", "review_pending", "agent/ABC-103-billing-v2", -80),
+        ("ABC-104", None, "ci_red", "agent/ABC-104-retry-queue", 5),
     )
     for key, title, phase, branch, seen in tickets:
         conn.execute(
@@ -407,11 +407,11 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         )
     conn.execute(
         "INSERT INTO ticket_units (ticket_key, repo, branch, pr_url, phase) VALUES (?, 'web', ?, ?, ?)",
-        ("ABC-099", "agent/ABC-099-search", "https://github.com/acme/web/pull/88", "in_review"),
+        ("ABC-099", "agent/ABC-099-search", "https://github.com/acme/web/pull/88", "review_pending"),
     )
     conn.execute(
         "INSERT INTO ticket_units (ticket_key, repo, branch, pr_url, phase) VALUES (?, 'web', ?, ?, ?)",
-        ("ABC-103", "agent/ABC-103-billing-v2", "https://github.com/acme/web/pull/91", "in_review"),
+        ("ABC-103", "agent/ABC-103-billing-v2", "https://github.com/acme/web/pull/91", "review_pending"),
     )
     runs = (
         # id, ticket, kind, branch, started, ended, status, result, private, cost

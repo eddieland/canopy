@@ -134,7 +134,7 @@ def test_the_route_searches_the_mock_journal_and_refuses_a_bad_query(backend: Ba
     body = c.get("/api/search", params={"q": "search"}).json()
     assert body["words"] == ["search"]
     assert [(h["source"], h["ticket_key"], h["label"]) for h in body["hits"]] == [
-        ("ticket", "ABC-099", "in_review"),
+        ("ticket", "ABC-099", "review_pending"),
         ("message", "ABC-099", "report"),
     ]
     assert body["hits"][1]["run_id"] == 39
