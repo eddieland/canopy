@@ -8,6 +8,7 @@ import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReviewLink } from '@/components/review-link'
+import { ReviewRequestForm } from '@/components/review-request'
 import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, RunDot } from '@/components/status'
@@ -16,6 +17,8 @@ import { TicketTitle } from '@/components/ticket-title'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { verdictText, verdictTone } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
+import { None } from '@/components/none'
+import { NO_TICKET } from '@/lib/words'
 
 /** Every PR the journal knows, most recent activity first, whoever's it is. */
 export const Route = createFileRoute('/pull-requests/')({
@@ -28,9 +31,14 @@ function PullRequestsPage() {
     return (
         <>
             <PageHeader title="Pull requests">
-                The loop&apos;s own PRs and every PR canopy reviewed, most recent activity first. A PR&apos;s page has
-                its ticket, the runs that pushed to it, canopy&apos;s reviews of it, and what the loop decided.
+                The loop&apos;s own PRs, every PR canopy reviewed, and every PR you asked it to review, most recent
+                activity first. A PR&apos;s page has its ticket, the runs that pushed to it, canopy&apos;s reviews of
+                it, and what the loop decided.
             </PageHeader>
+            <Panel className="mb-6">
+                <PanelHeader label="Review a PR" />
+                <ReviewRequestForm />
+            </Panel>
             <Panel>
                 <PanelHeader label="Pull requests">
                     <span className="flex items-center gap-2">
@@ -57,8 +65,9 @@ function PullRequestsPage() {
 }
 
 /**
- * A PR: the PR (`org/repo#123` for GitHub's), its ticket and title (or `no ticket`, for any PR canopy only reviews),
- * its unit's phase, the run working it now, its latest review's verdict, and its age.
+ * A PR: the PR (`org/repo#123` for GitHub's), its ticket and title (or `none`, for any PR canopy only reviews),
+ * its unit's phase, the run working it now, its latest review's verdict and whether the operator's review request on
+ * it is open, and its age.
  */
 function Row({ pr }: { pr: PullRequest }) {
     const review = pr.latest_review
@@ -67,7 +76,7 @@ function Row({ pr }: { pr: PullRequest }) {
             <PullRequestLink url={pr.url} />
             <span className="flex min-w-0 items-center gap-3">
                 {pr.ticket_key === null ? (
-                    <span className="font-mono text-xs text-muted-foreground">no ticket</span>
+                    <None reason={NO_TICKET} className="truncate font-mono text-xs" />
                 ) : (
                     <span className="flex min-w-0 items-center gap-2">
                         <TicketLink ticketKey={pr.ticket_key} className="shrink-0" />
@@ -87,7 +96,7 @@ function Row({ pr }: { pr: PullRequest }) {
             {/* The dot is how the review's run ended; the verdict's color, its worst finding. */}
             <span
                 className={cn(
-                    'flex items-center gap-1.5 font-mono text-xs whitespace-nowrap',
+                    'flex min-w-0 items-center gap-1.5 font-mono text-xs whitespace-nowrap',
                     review ? verdictTone(review) : 'text-muted-foreground',
                 )}
                 data-testid="pull-request-review"
@@ -96,11 +105,14 @@ function Row({ pr }: { pr: PullRequest }) {
                     <>
                         <RunDot state={review.state} />
                         <ReviewLink id={review.id} />
-                        {verdictText(review)}
+                        <span className="truncate" title={verdictText(review)}>
+                            {verdictText(review)}
+                        </span>
                     </>
                 ) : (
                     'not reviewed'
                 )}
+                {pr.review_request !== null && pr.review_request.ended_at === null && <Chip>requested</Chip>}
             </span>
             <Age at={pr.active_at} variant="ago" className="text-right" />
         </ListRow>

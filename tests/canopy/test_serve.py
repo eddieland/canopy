@@ -2,6 +2,7 @@
 the mock journal. The API over a real journal, and the loop serving it, are in test_web.py."""
 
 import asyncio
+import dataclasses
 import json
 import logging
 import re
@@ -20,7 +21,6 @@ import anyio
 import httpx2
 import pytest
 import uvicorn
-from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from starlette.types import Message, Receive, Scope, Send
 
@@ -49,6 +49,7 @@ from canopy.serve.schema import (
 )
 from canopy.serve.spa import content_security_policy
 from canopy.serve.sse import QuietLeaving
+from tests.canopy.web_helpers import ORIGIN, SECRET, client, signed_in
 from tests.conftest import Journals
 
 INDEX = """<!doctype html>
@@ -61,8 +62,6 @@ INDEX = """<!doctype html>
   <body><div id="root"></div></body>
 </html>
 """
-SECRET = "s3cret-" + "x" * 40
-ORIGIN = "http://127.0.0.1:8765"
 
 
 @pytest.fixture
@@ -73,26 +72,6 @@ def ui(tmp_path: Path) -> Path:
     (root / "assets" / "index-abc123.js").write_text("console.log(1)")
     (root / "favicon.svg").write_text("<svg/>")
     return root
-
-
-@pytest.fixture
-def backend(tmp_path: Path) -> Backend:
-    return serve_mock.seed(tmp_path / "mock")
-
-
-def client(ui_dir: Path | None, backend: Backend, *, key: str | None = None, **options: object) -> TestClient:
-    opts = ServeOptions.model_validate({"ui_dir": ui_dir, "mock": True, "mock_event_seconds": None, **options})
-    sessions = Sessions(key, port=opts.port, base_path=opts.base_path, hosts=opts.hosts)
-    return TestClient(create_app(opts, backend, sessions), base_url="http://127.0.0.1:8765")
-
-
-def signed_in(c: TestClient, *, base: str = "") -> dict[str, str]:
-    """Sign `c` in; return the headers a write needs."""
-    response = c.post(f"{base}/api/session", json={"secret": SECRET})
-    assert response.status_code == 200
-    token = response.json()["token"]
-    assert isinstance(token, str)
-    return {"x-canopy-token": token, "origin": ORIGIN}
 
 
 # Serving the app
@@ -164,6 +143,25 @@ def test_a_base_path_prefixes_everything(ui: Path, backend: Backend) -> None:
     assert c.get("/canopy", follow_redirects=False).headers["location"] == "/canopy/"
     assert c.get("/runs").status_code == 404
     assert c.get("/api/meta").status_code == 404
+
+
+def test_the_schema_and_its_docs_page_are_served_under_the_api_behind_the_session(ui: Path, backend: Backend) -> None:
+    c = client(ui, dataclasses.replace(backend, mock=False), key=SECRET, mock=False, base_path="/canopy")
+    assert c.get("/canopy/api/docs").status_code == 401
+    assert c.get("/canopy/api/openapi.json").status_code == 401
+    signed_in(c, base="/canopy")
+    page = c.get("/canopy/api/docs")
+    assert page.status_code == 200
+    # Swagger UI from the UI's build, never a CDN, and the inline script allowed by its hash alone.
+    assert '<script src="/canopy/api-docs/swagger-ui-bundle.js">' in page.text
+    assert '"openapi": "/canopy/api/openapi.json"' in page.text
+    assert "http" not in page.text
+    assert page.headers["content-security-policy"] == content_security_policy(page.text)
+    assert "'sha256-" in page.headers["content-security-policy"]
+    assert c.get("/canopy/api/openapi.json").json()["info"]["title"] == "canopy"
+    assert c.get("/canopy/docs", follow_redirects=False).headers["location"] == "/canopy/api/docs"
+    for path in ("/canopy/api/redoc", "/docs", "/openapi.json", "/docs/oauth2-redirect"):
+        assert c.get(path).status_code == 404, path
 
 
 def test_each_app_serves_its_own_backend_and_sessions(ui: Path, tmp_path: Path) -> None:
@@ -810,6 +808,9 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "LoopState",
         "Pause",
         "PauseChanged",
+        "WorkerNotice",
+        "NoticeRequest",
+        "NoticeChanged",
         "ConfigReload",
     }
     assert names <= set(schema["components"]["schemas"])
@@ -851,8 +852,12 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/pull-requests",
         "/api/pull-request",
         "/api/pull-request/grants",
+        "/api/pull-request/start",
+        "/api/pull-request/stop",
         "/api/loop/pause",
         "/api/loop/resume",
+        "/api/loop/notice",
+        "/api/loop/notice/clear",
         "/api/loop/reload",
         "/api/config",
     }

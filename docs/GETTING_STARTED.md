@@ -105,7 +105,8 @@ setup_timeout_minutes = 30
 - Its output is in the run's log, `.canopy/runs/<id>.log`, after a `--- setup <repo> ---` header.
 
 For setup that depends only on the base branch, such as downloading a toolchain, a treehouse `post_create` hook fits
-better; stage 5 shows one. DESIGN §9 says how the three steps fit together.
+better; stage 5 shows one. canopy's own pool (`pools.backend = "canopy"`, DESIGN §18) runs no hook, so there it goes
+in `setup_cmd` too, as BAZEL.md shows. DESIGN §9 says how the three steps fit together.
 
 ## 3. A pool of a set size
 

@@ -7,7 +7,7 @@ import { ChoreLink } from '@/components/chore-link'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunDot } from '@/components/status'
-import { choreLine, windowText } from '@/lib/chores'
+import { cadenceText, choreLine, findingsText, windowText } from '@/lib/chores'
 import { costText } from '@/lib/cost-total'
 import { RUN_TEXT } from '@/lib/run-state'
 import { useNow } from '@/lib/time'
@@ -51,7 +51,7 @@ function ChoresPage() {
 function Row({ chore }: { chore: ChoreSummary }) {
     const now = useNow()
     const run = chore.running ?? chore.latest
-    const findings = chore.findings.length
+    const waiting = chore.findings.some((f) => !f.dismissed)
     return (
         <ListRow kind="chore" data-testid={`chore-${chore.name}`}>
             <ChoreLink name={chore.name} className="truncate" />
@@ -65,20 +65,17 @@ function Row({ chore }: { chore: ChoreSummary }) {
                 {choreLine(chore, now)}
             </span>
             <span
-                className={cn(
-                    'text-right font-mono text-xs',
-                    findings > 0 ? 'text-foreground' : 'text-muted-foreground',
-                )}
+                className={cn('text-right font-mono text-xs', waiting ? 'text-foreground' : 'text-muted-foreground')}
                 data-testid="chore-findings"
             >
-                {findings === 1 ? '1 open finding' : `${findings} open findings`}
+                {findingsText(chore.findings)}
             </span>
             <RowLine
                 from="state"
                 className="flex flex-wrap items-center gap-x-3 font-mono text-xs text-muted-foreground"
             >
                 <span>
-                    at most every {chore.every_minutes}m · {windowText(chore)}
+                    at most {cadenceText(chore.every_minutes)} · {windowText(chore)}
                 </span>
                 <span
                     className="readout ml-auto"

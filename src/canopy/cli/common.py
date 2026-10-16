@@ -6,17 +6,50 @@ import os
 import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING, override
 
 import click
 
-from canopy.core import config, db, workspace
+from canopy.core import config, conversation, db, workspace
 from canopy.core.context import Context, db_path
 from canopy.infra import logs, procs, resources
-from canopy.loop import tick
+
+if TYPE_CHECKING:
+    from click.shell_completion import CompletionItem
 
 
 class CliError(click.ClickException):
     """A refusal or failure, reported on stderr, exit 1. Misuse is a click.UsageError instead, exit 2."""
+
+
+class OverseerCommand(click.Command):
+    """A command only the overseer runs, inside a tick: `--help` lists it, but Tab does not offer it (DESIGN §13)."""
+
+
+class Group(click.Group):
+    """A command group whose shell completion offers the operator's subcommands, and leaves out the overseer's.
+
+    A group counts as the overseer's when every subcommand in it is, so `canopy ticket` goes with `ticket set`.
+    """
+
+    @override
+    def shell_complete(self, ctx: click.Context, incomplete: str) -> list[CompletionItem]:
+        """Complete as click does, without the overseer's subcommands.
+
+        Returns:
+            The completions click offers, less each subcommand only the overseer runs.
+        """
+        return [
+            item
+            for item in super().shell_complete(ctx, incomplete)
+            if not _overseers(self.get_command(ctx, item.value))
+        ]
+
+
+def _overseers(command: click.Command | None) -> bool:
+    if isinstance(command, click.Group):
+        return bool(command.commands) and all(_overseers(sub) for sub in command.commands.values())
+    return isinstance(command, OverseerCommand)
 
 
 @dataclass(frozen=True)
@@ -70,12 +103,12 @@ def optional_tick(ctx: Context) -> sqlite3.Row | None:
     Raises:
         CliError: CANOPY_TICK_ID is set but does not name a running tick.
     """
-    raw = os.environ.get(tick.TICK_ID_ENV)
+    raw = os.environ.get(conversation.TICK_ID_ENV)
     if not raw:
         return None
     row = db.get_tick(ctx.conn, int(raw)) if raw.isdigit() else None
     if row is None or row["status"] != "running":
-        raise CliError(f"{tick.TICK_ID_ENV}={raw} does not name a running tick")
+        raise CliError(f"{conversation.TICK_ID_ENV}={raw} does not name a running tick")
     return row
 
 
@@ -87,5 +120,5 @@ def require_tick(ctx: Context) -> sqlite3.Row:
     """
     row = optional_tick(ctx)
     if row is None:
-        raise CliError(f"no tick is running ({tick.TICK_ID_ENV} is not set); this command runs inside a tick")
+        raise CliError(f"no tick is running ({conversation.TICK_ID_ENV} is not set); this command runs inside a tick")
     return row

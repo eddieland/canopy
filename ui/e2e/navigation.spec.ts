@@ -153,7 +153,7 @@ test('the keys scroll the page from a fresh load', async ({ page }) => {
 test('search params are typed: a known state filters, an unknown one is dropped', async ({ page }) => {
     await page.goto('runs?state=blocked')
     const filters = page.getByRole('navigation', { name: 'Filter by state' })
-    await expect(filters.getByRole('link', { name: 'blocked' })).toHaveAttribute('data-selected', 'true')
+    await expect(filters.getByRole('link', { name: 'waiting on you' })).toHaveAttribute('data-selected', 'true')
     await expect(filters.getByRole('link', { name: 'all' })).toHaveAttribute('data-selected', 'false')
     await expect(page.getByTestId('runs').locator(':scope > li')).toHaveCount(1)
 
@@ -170,11 +170,11 @@ test('the runs page lists a ticket once, by its latest run, and opens its earlie
     await expect(rows.filter({ has: page.getByRole('link', { name: 'ABC-100', exact: true }) })).toHaveCount(1)
     const ticket = page.getByTestId('run-40')
     await expect(page.getByTestId('run-37')).toHaveCount(0)
-    await ticket.getByRole('button', { name: '1 earlier run' }).click()
+    await ticket.getByRole('button', { name: 'Show 1 earlier run' }).click()
     const earlier = ticket.getByTestId('earlier-runs-ABC-100')
     await expect(earlier.getByTestId('run-37')).toContainText('done')
     // Radix's Collapsible ties the toggle to what it opened, for assistive technology.
-    const hide = ticket.getByRole('button', { name: 'hide earlier runs' })
+    const hide = ticket.getByRole('button', { name: 'Hide 1 earlier run' })
     await expect(hide).toHaveAttribute('aria-expanded', 'true')
     await expect(hide).toHaveAttribute('aria-controls', (await earlier.getAttribute('id')) ?? 'no id')
     await hide.click()
@@ -436,6 +436,9 @@ test('the ticks page lists the latest ticks, and a ticket page why the loop did 
     await settled(page)
     await expect(page.getByTestId('ticks').locator(':scope > li')).toHaveCount(2)
     await expect(page.getByTestId('tick-1').getByTestId('tick-decisions')).toHaveText('5 decisions')
+    // Its overseer's tokens beside its cost, and the most one model call was sent.
+    await expect(page.getByTestId('tick-1').getByTestId('tick-tokens')).toHaveText('12.9k tokens')
+    await expect(page.getByTestId('tick-1').getByTestId('tick-peak')).toHaveText('16.8k peak')
     await expect(page.getByTestId('tick-1')).toContainText('dispatched 2, waiting on 1')
 
     await page.goto('tickets/ABC-102')

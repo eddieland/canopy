@@ -94,12 +94,18 @@ Controls:
   would drop it (D093).
 - A private ticket (DESIGN §22, M18) is authorized by its start record, and its replies by operator messages, both
   written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
-  `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8). `canopy dispatch` checks
-  the start record in code, in the transaction that inserts the run, so it needs no `--label`, and `_run` reads it
-  again before the worker starts. A stopped ticket is dispatched by nothing, whatever labels it carries. Tracker
-  comments on a private ticket are data, whoever wrote them; only the operator's messages are instructions, and the
-  harness renders them into the worker's prompt itself. `canopy forget` is the operator's too: it clears what the
-  journal knows of a ticket's branch and PRs and deletes no run, so it lifts no attempt limit or cooldown (D030, D086).
+  `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8). With `tracker.private`
+  set (user-only), a labeled ticket canopy never ran is started by its first dispatch instead, on the overseer's
+  `--label` claim, which the harness checks against config as for any public dispatch (D119). No worker re-reads the
+  labels for it, then or later, and removing the label does not stop it: an overseer that claims a label a ticket
+  does not carry starts it for good, with nothing but its own read to catch it, until the operator runs `canopy stop`.
+  That is the switch's residual, beside D051's; `canopy show` and the dispatch's decision name such a start.
+  `canopy dispatch` checks the start record in code, in the transaction that inserts the run, so it needs no
+  `--label`, and `_run` reads it again before the worker starts. A stopped ticket is dispatched by nothing, whatever
+  labels it carries. Tracker comments on a private ticket are data, whoever wrote them; only the operator's messages
+  are instructions, and the harness renders them into the worker's prompt itself. `canopy forget` is the operator's
+  too: it clears what the journal knows of a ticket's branch and PRs and deletes no run, so it lifts no attempt limit
+  or cooldown (D030, D086).
   `canopy grant` is the operator's alone as well, from the shell or the web UI behind the listener secret (T8): it
   raises one unit's attempt limit for one kind, or one PR's review limit, and resets no count (DESIGN §22). `start`,
   `stop`, `reply`, `forget`, and `grant` refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, which every agent
@@ -110,7 +116,14 @@ Controls:
   dismiss one could hide what it was steered to hide from the operator, or spare its own change a reviewer's finding.
   So does `send`, which sends a review's findings to a worker as an operator message on its ticket (§21): an agent
   that could send them could start work in the operator's name. The message names findings by number and never quotes
-  them, so the reviewer's text stays data.
+  them, so the reviewer's text stays data. So does `notice`, when it sets or clears the operator's notice to workers
+  (DESIGN §8): a notice reaches every later worker's, review's, and chore's prompt as the operator's words, so an agent
+  steered by one ticket's text that could set one would write instructions into every other ticket's runs, and one
+  that could clear it could drop the operator's warning and send `fix-ci` at an outage's failures. Reading it refuses
+  nothing. Its text is bounded at 1 KiB when it is set, it lapses within seven days, and a run's prompt says that the
+  prompt's obligations come before it, as they do before the standing instructions. The overseer reads it as the
+  operator's word about the world, to hold a failed check the notice explains: that changes when `fix-ci` runs, never
+  what a worker may do.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
   and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
   (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
@@ -128,10 +141,17 @@ Controls:
   splitter's permissions deny tools whose names suggest labels, assignees, or edits to existing tickets, as defense in
   depth: a tracker whose create tool also takes labels passes that check. The harness records each child's repository
   from the split's validated result, only for a ticket new to the journal, and refuses any other repository for it.
-- The reviewer (DESIGN §21) reads the most hostile text the loop meets, a diff by anyone `review.query` matches. What
-  it writes is data wherever it goes: the overseer classifies its findings as it classifies review comments, and a
-  resumed worker reads them in its prompt as it reads any review comment. `review.query` authorizes a review, and only
-  the operator writes it (user-only, T7). Reviews live in the journal only (D114): nothing on a PR is one.
+- The reviewer (DESIGN §21) reads the most hostile text the loop meets, a diff by anyone `review.query` matches or the
+  operator asks for by name. What it writes is data wherever it goes: the overseer classifies its findings as it
+  classifies review comments, and a resumed worker reads them in its prompt as it reads any review comment.
+  `review.query` authorizes a review, and only the operator writes it (user-only, T7). A review request (`canopy start
+  URL --review`, ROADMAP M42) authorizes one review of one PR the same way: a journal fact made only through the
+  operator's channels, the CLI and the web UI, refused as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set,
+  so an agent steered by a PR's text cannot point the reviewer, and the operator's spend, at another PR. The overseer
+  names the repository the review runs in, as it does for `review.query`'s matches, and can end a request, as `merged`,
+  `closed`, or `unknown_repo`, and nothing else: a wrong repository fails that review, and a steered overseer ending a
+  request early costs a review, never adds one; the PR's page shows who ended it and why. Reviews live in the journal
+  only (D114): nothing on a PR is one.
 - Chores (DESIGN §19) read text from people outside the operator's queue: other people's PRs, build logs. Their
   findings are data wherever they go: the attention list, notifications, and the overseer's state block, where they
   inform only when the chore runs again, never what is done about a ticket.
@@ -220,16 +240,41 @@ Controls now:
 - `runtime.setup_cmd` (DESIGN §9) runs on the host in each slot of a worker run, after the run's branch is checked out
   and before the worker starts. It runs that branch's code, which a worker wrote (install scripts, generators), outside
   the agent runtime's permissions. It is user-only (T7), and the code is what the worker's own shell runs a moment
-  later; once `worker_cmd` runs in a sandbox, `setup_cmd` must run in the same one (HOST_ISOLATION §4.4). treehouse's
+  later; with the sandbox below, it runs in one too, under the `setup` role (HOST_ISOLATION §4.4). treehouse's
   `post_create` hooks run on the base, and its seeding copies only ignored files from the operator's primary clone,
   chosen by the committed `.worktreeinclude` or the operator's own (`paths.worktree_include`, user-only).
 - A review checks out code the loop did not write. The harness runs nothing from it, and the reviewer's working
   directory is a directory of canopy's outside the checkout, holding one link to it, so the runtime loads no
   configuration from the checkout. The shipped `canopy-reviewer` cannot run commands or edit, and reads only through
   that link; a canary like the desk's checks the reads (DESIGN §21).
+- Opt-in: an OS sandbox around every agent run but the overseer's (HOST_ISOLATION, docs/SANDBOX.md, D117, D118). The
+  operator prefixes `worker_cmd`, `private_worker_cmd`, `split_cmd`, `runtime.setup_cmd`, `chore_cmd` and each chore's
+  `cmd`, and `review_cmd` with `canopy-sandbox <role>`, which runs the command under `srt` with a policy it writes for
+  the run from the operator's template for that role. Under the shipped templates a sandboxed run reads, under
+  `$HOME`, only its worktrees and their git directories, canopy's agent definitions, and the runtime's and toolchains'
+  files: not `~/.ssh`, other repositories, `~/.config/canopy`, or the workspace's `.canopy/`. It writes only its
+  worktrees, its slot's own HEAD, index, and reflog, a per-run object directory and temp directory, and the runtime's
+  data: no ref another slot shares, and no hook, git config, `.git` link, or `commondir` that git on the host later
+  reads. A review writes none of its checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
+  permissions stay as defense in depth.
+- The prefix is in the user config, which no repository or workspace file can set (T7) and no sandboxed run can write,
+  so neither removes it. The harness never learns whether a run is sandboxed: it runs the template (D023, D118).
+- With or without the sandbox, the harness's own steps after a worker run read nothing it could have planted: every
+  git the harness runs has hooks and the filesystem monitor off (D107); a run that changed a slot's `.git` link or
+  `commondir` is `crashed`, and no git runs in its slots until both are put back (DESIGN §8); and a slot whose run
+  wrote objects is checked out detached at `origin/<base>`, without the run's own refs or reflog, before the run's
+  object directory is deleted and the slot returned, by `_run` or, for a `_run` that was killed, by reconcile (DESIGN
+  §8, §15).
+- The sandbox canary (`tests/canopy/test_sandbox_canary.py`, HOST_ISOLATION §6) runs a plain script, no model, through
+  the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
+  so that a sandbox that refuses everything fails. CI runs it on Linux and macOS.
 
-Deferred (ROADMAP): running `worker_cmd` inside a container or OS sandbox. The
-command template is the plug point; nothing else changes.
+Residual: an unsandboxed run has a filesystem-wide shell as the operator, and the sandbox is opt-in. A sandboxed one
+shares the kernel, so code written to escape it is not contained. The overseer, `notify.cmd`, and the harness's own
+git and treehouse calls run outside it (HOST_ISOLATION §4.4). Every process `srt` sandboxes can write `/tmp/claude`,
+so two runs can pass files through it. A filter driver the operator's own git config defines still runs on whatever a
+branch's `.gitattributes` selects, on a slot's return as on any checkout. A template the operator edits can allow
+anything; canopy checks only that it denies some reads and lists an allowlist.
 
 ### T5. Attribution and audit
 
@@ -291,11 +336,21 @@ Controls:
   runtime need not grant it a write tool at all.
 - A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, shell, or subagent
   tools, and denies MCP write tools by name.
-Residual: real. Sandboxing and egress controls are the eventual answer;
-until then this risk is accepted and documented. A chore steered by what it read can put up to 20 findings of its
-choosing in front of the operator and into `notify.cmd`, wherever that sends them, and a finding's link can carry data
-in its URL. A steered agent likewise chooses up to 500 characters per attention item, and 300 per worker summary
-and question, that a sink puts in front of whoever reads its destination. A steered reviewer can put what it read into
+- Opt-in: a sandboxed run (T4) reads none of the operator's secrets under `$HOME` but what its template re-allows, and
+  reaches the network only through `srt`'s proxy, which connects to the hosts on the operator's allowlist and to no
+  other, and to no loopback, link-local, or cloud metadata address, nor the host's own, whatever name resolves there.
+  It cannot open a Unix socket, so it reaches neither the SSH agent nor the Docker daemon. The review template leaves
+  `github.com` off its allowlist. The canary checks each, through the proxy and around it.
+
+Residual: real. An unsandboxed run can send anything it reads to any host. A sandboxed one can still send what it
+reads, the worktree and whatever its template re-allows, to any allowed host, with the credentials it holds: with
+`github.com` allowed and a push credential in reach, it can push or post anywhere the operator can. Scoping those
+credentials is the next step (HOST_ISOLATION §8); until then this risk is accepted and documented. Behind a corporate
+proxy, which `srt` forwards through, `srt` makes no address checks and the proxy's rules are the only ones. A chore
+steered by what it read can put up to 20 findings of its choosing in front of the operator and into `notify.cmd`,
+wherever that sends them, and a finding's link can carry data in its URL. A steered agent likewise chooses up to 500
+characters per attention item, and 300 per worker summary and question, that a sink puts in front of whoever reads
+its destination. A steered reviewer can put what it read into
 its findings, which reach the operator and, through `resume`, a worker on that ticket, who can push and comment; the
 worker reads them as data, as it reads any review comment. A write tool the operator's runtime grants anyway, under a
 name the deny patterns miss, would let a steered reviewer post; that is noise, not authority, since the loop reads
@@ -303,9 +358,10 @@ reviews only from its journal.
 A private ticket's privacy rests on the tool lists: a tool listed as read that writes would write; the defaults are
 named from the servers' published tool lists, and the private worker's `gh` deny means a `runtime.pr_skill` that runs
 `gh` cannot work for it. Its bash still reaches any tracker client or token the operator's shell can, beyond the CLIs
-denied by name (D076's root cause: workers run as the operator until HOST_ISOLATION). A private ticket hides the
-conversation, not authorship or the work: commits keep the attribution T5 gives them, and its branch and PR title name
-the ticket key, which a tracker's VCS integration may link to the ticket.
+denied by name (D076's root cause: workers run as the operator); a sandboxed one reaches only those its template
+re-allows, which include what its git credential helper reads to push. A private ticket hides the conversation, not
+authorship or the work: commits keep the attribution T5 gives them, and its branch and PR title name the ticket key,
+which a tracker's VCS integration may link to the ticket.
 An operator message on a public ticket (D089, D093) is kept off the ticket only by the worker's prompt: a public worker
 can comment on the ticket and its PRs, so one that disregards the prompt, or is steered by what it read, can repeat the
 message there, and its work shows what the message asked for. Text the ticket's readers must never see belongs on a
@@ -355,7 +411,12 @@ Residual: the repository still chooses the tracker provider, the query, `needs_h
 prefix, and `tracker.ticket_url`. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled PRs,
 agent branches under an unexpected prefix, which branch protection (§7) still governs, or the web UI's ticket links
 leading to an `https://` site other than the tracker: the UI shows each link's address, and following one runs
-nothing. The provider also picks the default tracker server and
+nothing. The query can still widen what the overseer reads: it reads every ticket a query returns, text and comments,
+before it checks for a label, so a widened query puts tickets nobody labeled, any the operator's tracker account can
+see, in front of the model, where their text can try to steer it (T1). It cannot make one a candidate. Settled
+(2026-10-15, the operator's choice): the query stays in the workspace file, beside the map it is about, and an operator
+who shares the workspace with people they do not trust overrides it in the user file. Checking labels in code before
+any ticket reaches the overseer closes this with ROADMAP M37. The provider also picks the default tracker server and
 tools a private ticket's worker gets (T6): a repository that names another provider leaves the real tracker's server
 undenied in that definition. An operator who works private tickets in a repository they do not control sets
 `tracker.mcp_server` and `tracker.read_tools`, which are user-only, to pin them. Through the runtime's own config it can
@@ -425,13 +486,14 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
   reply to, and forget tickets, end a stopped ticket's run, grant a unit or a PR one more run as `canopy grant` does,
   note something to a chore as `canopy reply chore:NAME` does, dismiss a chore's or a review's finding or take that
-  back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, pause and resume the loop
-  as `canopy pause` and `canopy resume` do, ask the loop
-  to read its config files again as SIGHUP does, and change the limits and trust settings below in the user file,
+  back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, make and end a review
+  request on a PR as `canopy start URL --review` and `canopy stop URL` do, pause and resume the loop as
+  `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, ask the loop to
+  read its config files again as SIGHUP does, and change the limits and trust settings below in the user file,
   nothing else. A reload reads only the operator's own files, and a `serve.*` change waits for a restart, so the
   listener's bind and port never change under it. A forget must carry the ticket's key typed out, checked in code. A
   grant allows one more run a request, with `canopy grant`'s guards. It cannot run a chore.
-- Its config writes (DESIGN §12, §22, D118) are an allowlist in code, by key name, never a section's wildcard, so a key
+- Its config writes (DESIGN §12, §22, D120) are an allowlist in code, by key name, never a section's wildcard, so a key
   added later is not writable until it is named. Limits may be raised or lowered, but not past a bound in code (a
   count's ceiling, such as `capacity.max_workers` at 32, or a pace's floor): the counts in `capacity`, the attempt
   limits and the fix-CI cooldown in `policy`, and `loop.interval_minutes` and `loop.idle_max_minutes`. Trust settings
@@ -448,7 +510,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   it.
 
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
-credentials. Binding to a private address rather than loopback relies on the network for the rest. A local user on a
+credentials. A notice set that way reaches every run's prompt, every ticket's, until it lapses, at most seven days, or
+the operator clears it, and it outlives a new secret; the banner on every page and `canopy status` show it while it is
+in force. Binding to a private address rather than loopback relies on the network for the rest. A local user on a
 shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port
 on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
 read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session
@@ -489,12 +553,16 @@ the network (D076), transcripts included: a secret a worker's tool printed into 
 - Run on a machine and account that already have exactly the access the loop
   needs, nothing more.
 - Read the attention list.
-- A `review.query` that matches other people's PRs runs an agent on their code and text under your account, though it
-  posts nothing. A reviewer definition of your own that runs commands runs the PR's code on your machine.
+- A `review.query` that matches other people's PRs, or a review request on one, runs an agent on their code and text
+  under your account, though it posts nothing. A reviewer definition of your own that runs commands runs the PR's
+  code on your machine.
 - Point a notification sink only at a place whose audience may read the tickets and PRs it quotes, and keep the
   Slack sink's webhook or token file readable only by you. Give a bot token only the `chat:write` scope: the file holds
   whatever the token can do. People who can read the channel see what the loop does; they cannot steer it.
 - If you allow a tool in a chore's agent definition, you are responsible for what that tool can do. canopy's controls
   assume chore tools only read.
+- If you sandbox runs (T4), prefix every command docs/SANDBOX.md lists, `private_worker_cmd` included, and run its
+  check. Keep each template's allowlist and `allowRead` to what the runs need: every host and file there is in a
+  steered worker's reach.
 - Keep the listener secret file private, and bind a listener to a private-network address only on a network whose
   members may see the operator's tickets and code (T8). Label only PRs you are willing to have a worker push to.

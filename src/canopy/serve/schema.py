@@ -126,6 +126,8 @@ class AttentionItem(_Model):
     """How the CLI names it: `PROJ-1`, `api`, `PROJ-1 (api)`, `chore:deps`."""
     ticket_key: str | None = None
     """The ticket it is about, when it is about one; a chore's and a repository's items have none."""
+    ticket_title: str | None = None
+    """That ticket's title, as the overseer named it (DESIGN §13); None until it does, or when it is about none."""
     chore: str | None = None
     """The chore it is about, when it is about one."""
     repo: str | None = None
@@ -140,6 +142,17 @@ class AttentionItem(_Model):
     """A chore's finding rather than a ticket's item."""
     pr: str | None = None
     """The PR it is about when no ticket owns it, such as a `review_limit` on a PR `review.query` found."""
+
+
+class RunActivity(_Model):
+    """A running run's latest tool call, as `_run` read it from the worker's events (DESIGN §8)."""
+
+    tool: str
+    """The tool's name, as the runtime names it: `bash`, `read`, an MCP server's tool."""
+    did: str
+    """What the call did, on one line: a shell call's command, else the runtime's title; empty when it gave neither."""
+    at: datetime
+    """When `_run` read it."""
 
 
 class Run(_Model):
@@ -173,12 +186,19 @@ class Run(_Model):
     """The runtime's session, for opening its transcript with the runtime's own tools."""
     cost_usd: float | None = None
     """What the agent runtime reported it cost, in US dollars; None when it reported nothing."""
-    tokens: int | None = None
-    """How many tokens the agent runtime reported it used; None when it reported nothing."""
+    new_tokens: int | None = None
+    """The tokens the runtime reported its model took in or wrote anew, every kind but cache reads; None when it
+    reported nothing."""
+    peak_context: int | None = None
+    """The most tokens one of its model calls was sent, from the cache or not; None when the runtime reported nothing,
+    or recorded it before canopy kept it."""
     worktrees: list[str] = []
     """The worktrees a running run holds, from the workspace root when under it."""
     log_path: str
     """Where its log is: from the workspace root when under it, as a worktree's path is."""
+    activity: RunActivity | None = None
+    """While it runs, its worker's latest tool call; None before the first, for a template that prints no events, and
+    once it ends."""
 
 
 class TicketSummary(_Model):
@@ -359,8 +379,12 @@ class ChoreRun(_Model):
     """The runtime's session, for opening its transcript with the runtime's own tools."""
     cost_usd: float | None = None
     """What the agent runtime reported it cost, in US dollars; None when it reported nothing."""
-    tokens: int | None = None
-    """How many tokens the agent runtime reported it used; None when it reported nothing."""
+    new_tokens: int | None = None
+    """The tokens the runtime reported its model took in or wrote anew, every kind but cache reads; None when it
+    reported nothing."""
+    peak_context: int | None = None
+    """The most tokens one of its model calls was sent, from the cache or not; None when the runtime reported nothing,
+    or recorded it before canopy kept it."""
     log_path: str
     """Where its log is: from the workspace root when under it."""
 
@@ -716,6 +740,12 @@ class Tick(_Model):
     """The overseer's session, when the runtime reported it (§13)."""
     cost_usd: float | None = None
     """What the overseer cost, in US dollars, when the runtime reported it (§13)."""
+    new_tokens: int | None = None
+    """The tokens the runtime reported the overseer's model took in or wrote anew, every kind but cache reads; None
+    when it reported nothing."""
+    peak_context: int | None = None
+    """The most tokens one of the overseer's model calls was sent, from the cache or not; None when the runtime
+    reported nothing, or recorded it before canopy kept it."""
     decisions: int = 0
     """How many decisions it recorded so far."""
     idle: bool | None = None
@@ -921,11 +951,53 @@ class Pause(_Model):
     """How it was paused."""
 
 
+type NoticeChannel = Annotated[Literal["cli", "web"], Field(description="How the operator set the notice.")]
+
+
+class WorkerNotice(_Model):
+    """The operator's notice to workers in force (`canopy notice`, DESIGN §8).
+
+    Every run dispatched while it is in force hears it, and the overseer holds a failed check it explains.
+    """
+
+    text: str
+    """What the operator told the workers: the operator's own words."""
+    since: datetime
+    """When it was set."""
+    lapses_at: datetime
+    """When it lapses, unless the operator clears it or sets another first."""
+    channel: NoticeChannel
+    """How it was set."""
+
+
 class LoopState(_Model):
-    """Whether the loop is paused: no tick starts until the operator resumes it. A tick running when paused finishes."""
+    """Whether the loop is paused, and the notice to workers in force.
+
+    While paused, no tick starts until the operator resumes it; a tick running when paused finishes.
+    """
 
     paused: Pause | None = None
     """The pause; None when the loop is not paused."""
+    notice: WorkerNotice | None = None
+    """The notice to workers in force; None without one."""
+
+
+class NoticeRequest(_Model):
+    """A notice to set, as `canopy notice TEXT --for DURATION` sets it, replacing the one in force."""
+
+    text: Annotated[str, Field(max_length=4096)]
+    """What to tell the workers. Bounded again in code at 1024 bytes, after stripping (DESIGN §8)."""
+    minutes: Annotated[int | None, Field(ge=1, le=10080)] = None
+    """How long it lasts, in minutes; four hours when None."""
+
+
+class NoticeChanged(_Model):
+    """What setting or clearing a notice did, and the state it left."""
+
+    already: bool
+    """For a clear, whether no notice was in force, so nothing changed; always false for a set."""
+    loop: LoopState
+    """The state it left."""
 
 
 class PauseChanged(_Model):
@@ -1094,6 +1166,65 @@ class SpendDay(_Model):
     """The day, `YYYY-MM-DD`, in UTC."""
     costs: SpendCosts
     """What the runs that started on it cost."""
+    done: int = 0
+    """How many tickets the loop marked done on it."""
+
+
+class SpendTicket(_Model):
+    """What one ticket's own runs that started in the window cost, and whether it was marked done in the window."""
+
+    key: str
+    """The ticket."""
+    title: str | None = None
+    """Its title, as the overseer named it; None before it did."""
+    runs: int
+    """How many of its worker and split runs started in the window, a running one included."""
+    reviews: int
+    """How many review runs naming it started in the window."""
+    cost_usd: float | None = None
+    """What those cost, in US dollars; None when none reported a cost. Not the overseer's, which is no ticket's."""
+    done: Literal["merged", "closed"] | None = None
+    """How the loop marked it done in the window (DESIGN §7): its PRs merged, or the tracker closed it, which a
+    tracker may do when its PR merges. None when it was not marked done in the window."""
+    done_at: datetime | None = None
+    """When it was marked done; None when it was not, in the window."""
+
+
+class SpendPullRequest(_Model):
+    """What the runs that pushed to one PR and the review runs of it, started in the window, cost."""
+
+    url: str
+    """The PR."""
+    ticket_key: str | None = None
+    """The ticket that owns it: its unit's, else one a run or review named; None for a PR canopy only reviewed."""
+    phase: str | None = None
+    """Its unit's phase (DESIGN §7), `merged` once it merged; None for a PR no unit of the loop's has."""
+    runs: int
+    """How many runs that pushed to it started in the window: a run that pushed to two PRs counts on each."""
+    reviews: int
+    """How many review runs of it started in the window."""
+    cost_usd: float | None = None
+    """What those cost, in US dollars; None when none reported a cost."""
+
+
+class SpendTool(_Model):
+    """What one tool's calls in one kind's runs that started in the window put into their context (DESIGN §13)."""
+
+    kind: SpendKind
+    """The kind of run that called it; the overseer's include dry runs."""
+    tool: str
+    """The tool's name as the runtime gives it, an MCP server's prefixed with the server's: untrusted text."""
+    runs: int
+    """How many of those runs called it."""
+    calls: int
+    """How many of its calls ended."""
+    errors: int
+    """How many of those ended in an error."""
+    result_chars: int
+    """The characters they returned, output or error, which each later model call of the run reads again."""
+    est_tokens: int
+    """`result_chars` over 4: an estimate of their tokens, since the runtime does not say which of a call's tokens a
+    tool's result was."""
 
 
 class SpendTicks(_Model):
@@ -1151,6 +1282,17 @@ class SpendBreakdown(_Model):
     no cost, so there is nothing to share."""
     idle_ticks: list[Tick]
     """The newest live idle ticks in the window, at most 20, newest first: what idle spend bought."""
+    done: int = 0
+    """How many tickets the loop marked done in the window, merged or closed."""
+    per_done: float | None = None
+    """The window's whole spend, the overseer's and chores' included, over the tickets marked done in it, in US
+    dollars; None when none was, or nothing reported a cost."""
+    tickets: list[SpendTicket] = []
+    """Each ticket with a run or review run that started in the window, or marked done in it, the costliest first."""
+    pull_requests: list[SpendPullRequest] = []
+    """Each PR a run that started in the window pushed to, or a review run of it started in it, the costliest first."""
+    tools: list[SpendTool] = []
+    """What each kind's tool calls returned, by tool, the most characters first: a row per kind and tool."""
 
 
 type SearchSource = Annotated[
@@ -1229,6 +1371,8 @@ class ReviewSummary(_Model):
     """How many findings it reported."""
     worst: FindingSeverity | None = None
     """The severity of the worst finding it reported, which colors its verdict; None when it reported none."""
+    worst_count: int = 0
+    """How many of its findings are of the worst severity, which its verdict says in words (`3 findings, 1 major`)."""
     started_at: datetime
     """When it started."""
     ended_at: datetime | None = None
@@ -1324,6 +1468,38 @@ class ReviewDetail(_Model):
     """Every review run of the same PR, newest first, this one included."""
 
 
+class ReviewRequest(_Model):
+    """The operator's request to review a PR the loop does not own (DESIGN §21): open, or how it ended."""
+
+    created_at: datetime
+    """When the operator made it."""
+    channel: str
+    """Where it was made: `cli` or `web`."""
+    ended_at: datetime | None = None
+    """When it ended; None while it is open."""
+    end_reason: Literal["reviewed", "merged", "closed", "unknown_repo", "stopped"] | None = None
+    """Why it ended: a `done` review of the PR; the PR merged or closed first, or is in none of the workspace's
+    repositories (the overseer's reading); or the operator stopped it. None while it is open."""
+
+
+class ReviewRequested(_Model):
+    """What a review request recorded: the open request, and whether it was already open or replaced another."""
+
+    request: ReviewRequest
+    """The PR's open request."""
+    already: bool
+    """Whether it was already open, so nothing new was recorded."""
+
+
+class ReviewRequestStopped(_Model):
+    """What stopping a review request did: the request as it was, and a review of the PR still running."""
+
+    request: ReviewRequest
+    """The request it ended, as `stopped`."""
+    running_review: int | None = None
+    """A review run of the PR still running, which finishes; None when none is."""
+
+
 class PullRequest(_Model):
     """A PR the journal knows (DESIGN §22): one a ticket's unit records, or one canopy reviewed, whoever's it is."""
 
@@ -1340,13 +1516,15 @@ class PullRequest(_Model):
     phase: str | None = None
     """The unit's phase as the overseer last derived it, for display; None for a PR no unit records."""
     active_at: datetime
-    """The newest of its ticket's last sighting and its review runs' starts and ends."""
+    """The newest of its ticket's last sighting, its review runs' starts and ends, and its review requests'."""
     running_run: int | None = None
     """A run of its ticket working now, whose page it opens."""
     reviews: int = 0
     """How many review runs it has had, however they ended."""
     latest_review: ReviewSummary | None = None
     """Its newest review run, or None when canopy has not reviewed it."""
+    review_request: ReviewRequest | None = None
+    """The operator's latest review request on it, open or ended; None when they never made one."""
 
 
 class PullRequestDetail(_Model):
@@ -1432,12 +1610,17 @@ class TickUpdated(_Model):
 
 
 class LoopUpdated(_Model):
-    """The loop was paused or resumed. The payload is what `GET /loop` returns."""
+    """The loop was paused or resumed, or a notice to workers was set, cleared, or lapsed.
+
+    The payload is what `GET /loop` returns.
+    """
 
     type: Literal["loop.updated"] = "loop.updated"
     """What the event is."""
     paused: Pause | None = None
     """The pause; None when the loop is not paused."""
+    notice: WorkerNotice | None = None
+    """The notice to workers in force; None without one."""
 
 
 class StreamEvent(

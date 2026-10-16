@@ -13,12 +13,21 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.core.vocab import RunStatus
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from canopy.runs import desks
 from canopy.runs.dispatch import DISPATCH_LOCK
 from tests.canopy.conftest import Ws, seed_pools
-from tests.canopy.helpers import InlineRunner, in_tick, wait_for_run, worker_does
+from tests.canopy.helpers import (
+    InlineRunner,
+    decisions,
+    in_tick,
+    overseer_does,
+    wait_for_run,
+    waits,
+    worker_does,
+)
 from tests.conftest import CanopyEnv, git
 
 LABEL = "agent-ready-tester"
@@ -28,10 +37,6 @@ PRS = {"api": "https://x.test/api/pull/1", "web": "https://x.test/web/pull/2", "
 
 def dispatch(key: str, *args: str, kind: str = "implement") -> list[str]:
     return ["dispatch", key, "--label", LABEL, "--kind", kind, *args]
-
-
-def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
-    return [(str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 def push_in(repo: str, message: str = "PROJ-1: the change") -> list[list[str]]:
@@ -165,7 +170,7 @@ def test_units_have_their_own_attempts_and_share_the_branch(ws: Ws, treehouse_st
                     assert runner.run(
                         ["treehouse", "return", "--force", s["slot_path"]], env={"TREEHOUSE_ROOT": str(ws.root)}
                     ).ok
-                assert db.finish_run(conn, run_id, "done", "{}")
+                assert db.finish_run(conn, "runs", run_id, RunStatus.DONE, "{}")
             return code
 
         assert run("--repo", "api", "--slug", "login") == 0
@@ -192,8 +197,8 @@ def test_units_have_their_own_attempts_and_share_the_branch(ws: Ws, treehouse_st
             "PROJ-1's branch is agent/PROJ-1-login, named by its first implement; leave out --slug"
         )
         assert reasons["refused:attempt_limit"] == "PROJ-1 in api has had 2 implement runs and the limit is 2"
-        [limit] = [d for d in db.decisions_for_tick(conn, tick_id) if d["action"] == "attention:attempt_limit"]
-        assert limit["repo"] == "api"  # the item is about the unit at its limit
+        [limit] = [d for d in db.decisions_for_tick(conn, tick_id) if d.action == "attention:attempt_limit"]
+        assert limit.repo == "api"  # the item is about the unit at its limit
         assert {str(r["branch"]) for r in conn.execute("SELECT branch FROM runs")} == {"agent/PROJ-1-login"}
 
         # fix-ci's cooldown is per unit too: api's just ended, web has had none.
@@ -238,7 +243,7 @@ def test_the_state_block_shows_each_unit(ws: Ws, treehouse_state: Path, agent_lo
             wait_for_run(conn, 1)
             assert main(["ticket", "set", "PROJ-1", "--repo", "web", "--phase", "ci_red", "--cursor", "ci=run-9"]) == 0
             assert main(["ticket", "set", "PROJ-1", "--phase", "running", "--cursor", "comment=c-1"]) == 0
-        with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        with overseer_does(*waits("PROJ-1")):
             assert main(["tick", "--dry-run"]) == 0
 
     overseer = json.loads(agent_log.read_text().splitlines()[-1])
@@ -401,7 +406,7 @@ def test_a_killed_joint_run_is_detected_and_all_its_slots_returned(
             time.sleep(0.05)
         assert pool_statuses(treehouse_state) == ["leased", "leased"]
 
-        with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        with overseer_does(*waits("PROJ-1")):
             assert main(["tick"]) == 0
         crashed = db.get_run(conn, 1)
         assert crashed is not None

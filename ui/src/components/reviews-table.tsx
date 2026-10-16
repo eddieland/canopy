@@ -8,6 +8,8 @@ import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { shortSha, verdictText, verdictTone } from '@/lib/reviews'
 import { cn } from '@/lib/utils'
+import { None } from '@/components/none'
+import { NO_TICKET } from '@/lib/words'
 
 /**
  * Review runs, one row each, opening the review's page with its findings on its diff: its verdict, its ticket and PR,
@@ -39,15 +41,17 @@ function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
         >
             <ReviewLink id={review.id} />
             {/* The dot is how its run ended; the verdict's color, its worst finding. */}
-            <span className={cn('flex items-center gap-1.5 font-mono text-xs', verdictTone(review))}>
+            <span className={cn('flex min-w-0 items-center gap-1.5 font-mono text-xs', verdictTone(review))}>
                 <RunDot state={review.state} />
-                {verdictText(review)}
+                <span className="truncate" title={verdictText(review)}>
+                    {verdictText(review)}
+                </span>
             </span>
             {pr ? (
                 <>
                     <span className="truncate">
                         {review.ticket_key === null ? (
-                            <span className="font-mono text-xs text-muted-foreground">review.query</span>
+                            <None reason={NO_TICKET} brief className="font-mono text-xs" />
                         ) : (
                             <TicketLink ticketKey={review.ticket_key} />
                         )}

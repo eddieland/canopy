@@ -76,6 +76,7 @@ each, the worktree pools, and canopy's state. The loop runs from the workspace r
   repos/api/                 primary clones, one per repository in the map
   repos/web/
   .treehouse/                every repository's treehouse pool
+  pools/api/1/api            canopy's own pools, with `pools.backend = "canopy"` (canopy's pool, below)
   desks/PROJ-12/             one per running joint run: a link to each worktree it leased
     api -> ../../.treehouse/<api pool>/3/api
     web -> ../../.treehouse/<web pool>/1/web
@@ -85,7 +86,7 @@ each, the worktree pools, and canopy's state. The loop runs from the workspace r
 canopy finds the workspace by walking up from the current directory to the nearest `canopy-workspace.toml`, so it
 works from inside `repos/` too. With none, every command that reads the config or the journal refuses, and names a
 `canopy.toml` left in the repository it was run from as not read (D016). `canopy init`, `canopy skill`,
-`canopy secret`, and `canopy sandbox setup` need no workspace.
+`canopy completion`, `canopy secret`, and `canopy sandbox setup` need no workspace.
 
 ### The map
 
@@ -126,7 +127,7 @@ summary = "Customer web app. Consumes the api's generated client from a release.
   anyway. A tick never clones or changes a remote; a mapped repository with no clone is attention `repo_missing` and
   cannot be dispatched to.
 - `canopy init` writes, overwriting nothing: the workspace file (asking for the tracker provider), a
-  `MAP.md`, a `.gitignore` covering `repos/`, `.treehouse/`, `desks/`, and `.canopy/` (an existing one gains only
+  `MAP.md`, a `.gitignore` covering `repos/`, `.treehouse/`, `pools/`, `desks/`, and `.canopy/` (an existing one gains only
   missing lines), and the user file if missing. It prints the branch protection rules with every mapped repository
   they must be configured in. `canopy init` inside a workspace does the same.
   `canopy init [NAME=]URL...` also does `canopy workspace add` with the URLs, before printing the rules.
@@ -204,11 +205,161 @@ api = 4                 # by repository name; wins over slots_per_repo
   seeds into slots) and `git stash list`; every commit reachable from `HEAD`, a branch, or a tag on a remote-tracking
   ref; and every slot in its pool available and destroyed by treehouse unforced. Anything else is kept and reported,
   and sync exits 1. treehouse's record of the emptied pool stays under `.treehouse/`.
+- **Sync turns off git's automatic maintenance** in each primary clone's own config (`maintenance.auto=false`,
+  `gc.auto=0`), which every slot of its pool shares, so neither the worker's git nor treehouse's starts it. A fetch or
+  commit otherwise starts it in the background on that shared git directory, where it packs refs and prunes while
+  other slots' runs use them; on CI it pruned a worktree `git worktree add` had made but not yet locked. The harness's
+  own git has it off through `core/hostgit.py` (§8), which covers a clone no sync has reached yet. A dry run sets
+  nothing. Nothing runs maintenance in its place yet (§26 plans `canopy gc --git`); the operator can run `git
+  maintenance run` in a clone while none of its pool's slots is leased.
 - Sync holds the tick lock, waiting for a running tick to end. Runs in progress keep their leases, counted as busy.
 - `canopy workspace sync --dry-run` reports what it would clone, make, and remove, changing nothing. It runs the
   read-only checks, so a clone it would keep a real sync keeps; what it would remove, treehouse may still keep. An
   uncloned repository is previewed with every slot to make.
 - A lease sync cannot return, its own or a dead sync's, makes the pool `failed` and sync exit 1.
+
+### What a pool guarantees
+
+What canopy takes from a pool, whichever implements it, is a list of guarantees, each stated by one case in
+`tests/canopy/test_pool_contract.py` (ROADMAP M45). The suite runs every case through `pools.Pool`, the interface every
+caller uses, against canopy's own pool and the fake on every `make check`, and against real treehouse when it is on
+PATH: `make pool-contract`, which CI runs on Linux and macOS with treehouse built at the pinned commit. A behavior with
+no case is not a guarantee, and a caller may rely only on what is listed here. The fake models treehouse's CLI and
+lease bookkeeping, not git, so the cases about what is in a slot run only against a pool of real worktrees.
+
+Leasing:
+
+- A new pool has no slots (`test_a_new_pool_has_no_slots`).
+- A lease names its slot, its id, its holder `canopy:<KEY>`, when it was taken (ISO 8601 with an offset), and its base
+  branch by its bare name, `main` by default; `status` shows the slot `leased` under the same id, holder, and time
+  (`test_a_lease_names_its_slot_holder_time_and_base`).
+- Slots are numbered from 1 under the workspace: treehouse's `<root>/.treehouse/<pool>/<N>/<repo>`, canopy's
+  `<root>/pools/<repo>/<N>/<repo>` (`test_slots_live_under_the_workspace_in_the_pool_s_layout`).
+- Leases held at once are different slots (`test_leases_held_at_once_are_different_slots`).
+- A lease on a base starts at that branch's tip (`test_a_lease_on_a_base_starts_there`).
+- A lease fetches `origin` first; sync's `--no-fetch` lease cuts the slot from the refs already there
+  (`test_a_lease_fetches_first_unless_told_not_to`).
+- A slot is a linked worktree of the primary clone, detached at its base, whose `.git` file and `commondir` `_run`
+  checks (`test_a_slot_is_a_detached_worktree_of_the_primary_clone`).
+- A sync lease names no ticket (`test_a_sync_lease_names_no_ticket`).
+
+Returning:
+
+- A return frees the slot: `available`, with no lease id, holder, or time (`test_a_return_frees_the_slot`).
+- A return needs the lease's id and holder both, and fails otherwise, leaving the lease
+  (`test_a_return_needs_the_lease_id_and_holder`); so a lease returns once, and never touches the slot's next holder
+  (`test_a_lease_returns_once`).
+- Returning a path no pool manages fails (`test_returning_a_path_no_pool_manages_fails`).
+- A return finds the slot's pool from the slot's own path, so it works from the workspace root when the clone is gone
+  (`test_a_return_finds_the_pool_from_the_slot_when_the_clone_is_gone`).
+- A return is forced: it never answers `dirty`, and it discards uncommitted changes, untracked files, and commits no
+  branch holds, leaving HEAD at the base (`test_a_return_is_forced_and_discards_what_the_run_left`).
+- A return ends the processes in the slot first (`test_a_return_ends_the_processes_in_the_slot`).
+
+Reuse:
+
+- A returned slot is reused before a new one is made (`test_a_returned_slot_is_reused`).
+- Reuse resets the slot to the base's tip and keeps its ignored files, such as build outputs and caches, and nothing
+  else (`test_reuse_keeps_ignored_files_and_nothing_else`).
+- A return parks the slot on its lease's base, and a slot parked on a stacked run's base is still reused
+  (`test_a_return_parks_the_slot_on_its_base_and_it_is_reused`).
+- An idle slot with changes is `dirty`, and one with a process in it `in-use`; neither is reused
+  (`test_an_idle_slot_with_changes_is_dirty_and_not_reused`,
+  `test_an_idle_slot_with_a_process_in_it_is_in_use_and_not_reused`).
+- An idle slot whose HEAD is not merged into the base is not reused, though clean and so `available`
+  (`test_an_idle_slot_with_unmerged_commits_is_not_reused`): `available` does not promise reusable.
+
+Seeding (§9):
+
+- Every lease, a reused slot's too, copies from the primary clone the untracked, ignored files the include file
+  selects, and nothing else (`test_a_lease_seeds_the_ignored_files_the_include_file_selects`,
+  `test_seeding_repeats_on_every_lease`); never a tracked file (`test_seeding_never_copies_a_tracked_file`).
+- A return removes what seeding wrote, so the next lease seeds afresh (`test_a_return_removes_what_seeding_wrote`).
+- A seed target already in the slot fails the lease, and the slot is held under a holder no ticket can name until the
+  operator returns it (`test_a_seed_target_already_in_the_slot_fails_the_lease_and_holds_the_slot`).
+- A seeded symlink is written as a regular file holding the link's target
+  (`test_a_seeded_link_is_written_as_a_file_holding_its_target`); whether it should be a link is open (ROADMAP M45).
+- A missing include file fails the lease before any slot is touched
+  (`test_a_missing_include_file_fails_the_lease_before_any_slot`).
+
+Removing (sync's trim, above):
+
+- `destroy` removes an idle, clean, merged slot and its directory (`test_destroy_removes_an_idle_merged_slot`), and
+  keeps, saying why, a slot that is leased, dirty, in use, or holds commits not merged into the default branch
+  (`test_destroy_keeps_a_leased_slot`, `test_destroy_keeps_a_dirty_slot`,
+  `test_destroy_keeps_a_slot_with_a_process_in_it`, `test_destroy_keeps_a_slot_with_unmerged_commits`), or that no
+  pool manages
+  (`test_destroy_of_a_path_no_pool_manages_says_why`).
+
+Size (above):
+
+- A pool with no declared size stops at its bound: treehouse's `max_trees`, or 16 for canopy's
+  (`test_an_unmanaged_pool_stops_at_its_bound`).
+- A declared pool with every slot busy, a dirty idle one counting as busy, refuses a lease without growing
+  (`test_a_declared_pool_with_every_slot_busy_refuses_without_growing`,
+  `test_a_declared_pool_counts_a_dirty_idle_slot_as_busy`), and keeps its size when its idle slot cannot be reused
+  (`test_a_declared_pool_keeps_its_size_when_its_idle_slot_cannot_be_reused`).
+
+Not guaranteed, though treehouse does it: `status` rewrites treehouse's state, forgets a slot whose directory is gone,
+and records a worktree it finds in the pool directory as held; `destroy` runs `git fetch` and `git ls-remote` on
+`origin` first; `post_create` hooks run after seeding. treehouse runs git with none of D107's flags.
+
+### canopy's pool
+
+canopy's own pool (`core/pool.py`, ROADMAP M45) keeps every guarantee above, and is held to them by the same cases.
+`pools.backend` (§12), user-only, chooses which pool makes a workspace's worktrees: `"treehouse"`, the default until M45
+changes it, or `"canopy"`. Every caller reaches either through `pools.Pool` and none learns which it has.
+
+- **A lease goes back where it came from.** The journal records which pool made each lease, `run_slots.pool` and
+  `review_runs.pool`, and a slot is always returned through that pool, whatever `pools.backend` names by then, so
+  switching with runs in flight is safe. Reconcile reads the configured backend's pools, and a failure stops the tick
+  as before; it also reads the other backend's where the workspace has any on disk, so a lease left there still goes
+  back, and one it cannot read there is logged, not fatal. The state block's leased slots come from both.
+- **Switching** is `canopy workspace sync`'s. To `"canopy"`, it moves each idle treehouse slot into `pools/` with `git
+  worktree move`, which keeps everything in it, ignored files and build caches too; a busy one waits for a later sync,
+  and its lease goes back to treehouse meanwhile. Back to `"treehouse"`, it removes canopy's idle slots as its trim
+  removes a slot, keeping one with anything to lose, and treehouse makes fresh slots: switching back costs only warm
+  caches. Each prints a line per repository, `moved` or `removed`, and exits 1 on a slot it had to keep.
+- **No `post_create`.** canopy's pool runs no hook; what one did moves to `runtime.setup_cmd` (§9, BAZEL.md).
+- **The worktrees page** reads the configured backend's pools at once, a thread each, each read on a journal
+  connection of its own, since canopy's pool reads its leases from the journal (§22).
+- **Layout.** A repository's slots are `<workspace>/pools/<repo>/<N>/<repo>`, numbered from 1, each a detached linked
+  worktree of the primary clone. There is no hash of the remote in the path: a workspace's repository names are
+  unique, and the pools are the workspace's own (D033).
+- **Leases are journal rows.** The `slots` table holds each slot: repository, name, path, lease id and holder, when it
+  was leased, the base it was last leased on by name, and the paths seeding wrote. Every lease runs under the pool's
+  lock, `<workspace>/pools/<repo>/.lock`, so two leases never pick one slot: a new slot's row is claimed before its
+  worktree is made, and a reused one is reset and then claimed, which nothing else can do between. The row is
+  written in its own transaction, not the run's: the slot is claimed before the run that needs it can be recorded, as
+  treehouse's lease is. A lease whose process dies before its run is recorded is a `canopy:` lease no
+  running run holds, which reconcile returns, as it returns treehouse's.
+- **Size.** The declared size is the only bound; a pool with none declared stops at 16, treehouse's default
+  `max_trees`. canopy's pool reads no config of treehouse's.
+- **Lease, reuse, return, and seeding** are treehouse's (above, and ROADMAP M45's notes from its source): a reused
+  slot is reset with `read-tree --reset -u`, HEAD moved to the base's tip, and `clean -fd`, after the files seeding
+  wrote are removed; seeding copies the untracked, ignored files the manifest selects, never through a link in the
+  slot; a collision quarantines a reused slot under the holder `quarantined: worktree seeding failed`. Reuse takes an
+  idle slot only when it is clean, has no process in it, and its HEAD is an ancestor of the base or of the base it was
+  last leased on; treehouse also takes one whose HEAD has the same content as a squash merge into the base, and canopy's
+  pool passes that one over and makes a slot instead.
+- **Processes in a slot** are read from `/proc` on Linux and with `lsof` through `procs` on macOS (`infra/cwds.py`), so
+  there is no dependency for them. A return ends them, SIGTERM and then SIGKILL after two seconds; one that outlives
+  both fails the return and keeps the lease. A slot whose processes cannot be read is `unverified`, never reused, and
+  kept by `destroy`.
+- **The host stays safe.** Every git the pool runs goes through `hostgit.argv` (D107). Before any git in a slot, the
+  slot's `.git` file must name a directory under the clone's `.git/worktrees/`, and its `commondir` the clone's `.git`
+  (D118); a slot that fails is `damaged`, never reset, reused, or removed. A return frees such a slot without a reset.
+- **No network but a lease's fetch.** `destroy` judges merged against the default branch as last fetched, never with
+  `ls-remote`: sync runs it after leases that fetched, and a stale ref keeps a slot rather than losing one.
+- **Recovery.** A worktree in the pool's directory with no row, as a lease that died after `git worktree add` leaves
+  one, is adopted as an idle slot when it is a sound worktree of the clone. An idle row whose directory is gone is
+  forgotten at the next lease. `status` changes nothing.
+
+**The shadow.** While treehouse makes the pools (`pools.backend = "treehouse"`), every tick's reconcile also classifies
+each idle treehouse slot with
+canopy's pool's checks (`pool.classify`) and logs a `pool_shadow_mismatch` line, with the repository, the slot, and
+both answers, wherever they disagree. It changes nothing, and a check that fails is logged, never raised. Each mismatch
+the operator explains becomes a contract case, and canopy's checks are fixed until it passes (ROADMAP M45, stage 2).
 
 ### Units
 

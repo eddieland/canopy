@@ -1,19 +1,20 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { ChevronRight, LogOut, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
+import { ChevronRight, LogOut, Megaphone, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 
-import { reloadConfig, signOut } from '@/api/mutations'
+import { reloadConfig, setNotice, showLoop, signOut } from '@/api/mutations'
 import { keys, sessionQuery, spendQuery } from '@/api/queries'
 import { Cost } from '@/components/cost'
+import { Disclosure } from '@/components/disclosure'
 import { HatPreview } from '@/components/hat'
-import { Input } from '@/components/input'
+import { Input, Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { setBuddy, useBuddy } from '@/lib/buddy'
@@ -21,7 +22,7 @@ import { costText } from '@/lib/cost-total'
 import { balanceCents, buy, HATS, setWardrobe, useWardrobe } from '@/lib/hats'
 import type { Hat } from '@/lib/hats'
 import type { TickerTopic } from '@/lib/headlines'
-import { reloadedText } from '@/lib/outcomes'
+import { noticeSetText, reloadedText } from '@/lib/outcomes'
 import { setSendKey, useSendKey } from '@/lib/send-key'
 import type { SendKey } from '@/lib/send-key'
 import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } from '@/lib/ticker-settings'
@@ -54,6 +55,13 @@ const TOPICS: { value: TickerTopic; label: string }[] = [
     { value: 'programming', label: 'Programming' },
     { value: 'vibes', label: 'Vibe coding' },
     { value: 'tips', label: 'Tips' },
+]
+
+// How long a notice set here lasts; `canopy notice --for` takes any duration up to a week.
+const LASTS: { value: string; label: string; minutes: number }[] = [
+    { value: '1h', label: '1 hour', minutes: 60 },
+    { value: '4h', label: '4 hours', minutes: 240 },
+    { value: '1d', label: '1 day', minutes: 1440 },
 ]
 
 const SEND_KEYS: { value: SendKey; label: string }[] = [
@@ -93,6 +101,7 @@ function SettingsPage() {
                 </div>
             </Panel>
             <SendKeyPanel />
+            <NoticePanel />
             <LimitsPanel />
             <ConfigPanel />
             {/* Second to last: below what changes how canopy works, above signing out. */}
@@ -175,7 +184,7 @@ function FunPanel() {
                         step={1}
                         defaultValue={gap}
                         disabled={!on}
-                        className="readout h-8 w-20 text-right"
+                        className="readout w-20 text-right"
                         data-testid="ticker-gap"
                         onChange={(event) => {
                             const value = event.currentTarget.value
@@ -249,11 +258,7 @@ function HatShop() {
                             left of {loaded ? <Cost usd={total} /> : '…'} spent
                         </span>
                     </div>
-                    <CollapsibleTrigger asChild>
-                        <Button variant="ghost" size="xs" data-testid="hats-toggle">
-                            {open ? 'Hide hats' : 'Show hats'}
-                        </Button>
-                    </CollapsibleTrigger>
+                    <Disclosure open={open} what="hats" data-testid="hats-toggle" />
                 </div>
                 <CollapsibleContent asChild>
                     <ul className="grid grid-cols-2 gap-2 border-t p-3 sm:grid-cols-4">
@@ -324,7 +329,7 @@ function HatItem({
                     onClick={onBuy}
                     data-testid={`hat-${hat.id}-buy`}
                 >
-                    Buy <span className="readout">${hat.price}</span>
+                    Buy <Cost usd={hat.price} />
                 </Button>
             )}
         </li>
@@ -382,6 +387,79 @@ function LimitsPanel() {
                     </Link>
                 </Button>
             </div>
+        </Panel>
+    )
+}
+
+/**
+ * Sets the operator's notice to workers, as `canopy notice TEXT --for DURATION` does (docs/design §8): every run
+ * dispatched until it lapses hears it. The banner above every page shows it while it is in force, and clears it.
+ */
+function NoticePanel() {
+    const client = useQueryClient()
+    const [text, setText] = useState('')
+    const [lasts, setLasts] = useState('4h')
+    const minutes = LASTS.find((l) => l.value === lasts)?.minutes ?? 240
+    const mutation = useMutation({
+        mutationFn: () => setNotice(text, minutes),
+        onSuccess: (changed) => {
+            showLoop(client, changed.loop)
+            setText('')
+        },
+    })
+    return (
+        <Panel>
+            <PanelHeader label="Notice to workers" />
+            <form
+                className="flex flex-col gap-2 p-3"
+                onSubmit={(event) => {
+                    event.preventDefault()
+                    mutation.mutate()
+                }}
+            >
+                <p className="text-sm text-muted-foreground">
+                    Tell every run dispatched from now on about something passing outside the work, such as a CI outage,
+                    as <code className="font-mono text-xs">canopy notice</code> does. Workers, reviews, and chores hear
+                    it, and the overseer holds a failed check it explains. It lapses on its own; setting another
+                    replaces it. A run already running keeps the prompt it started with.
+                </p>
+                <Textarea
+                    value={text}
+                    onChange={(event) => setText(event.target.value)}
+                    placeholder="Artifactory is down: CI builds that fetch dependencies will likely fail."
+                    aria-label="Notice to workers"
+                    data-testid="notice-text"
+                    className="min-h-16"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                    <ToggleGroup
+                        type="single"
+                        value={lasts}
+                        aria-label="Lasts for"
+                        onValueChange={(value) => {
+                            if (value !== '') {
+                                setLasts(value)
+                            }
+                        }}
+                    >
+                        {LASTS.map(({ value, label }) => (
+                            <ToggleGroupItem key={value} value={value} data-testid={`notice-lasts-${value}`}>
+                                {label}
+                            </ToggleGroupItem>
+                        ))}
+                    </ToggleGroup>
+                    <Button
+                        type="submit"
+                        variant="outline"
+                        disabled={mutation.isPending || text.trim() === ''}
+                        data-testid="notice-set"
+                    >
+                        <Megaphone />
+                        Set notice
+                    </Button>
+                </div>
+                <Notice error={mutation.error}>{mutation.data ? noticeSetText(mutation.data) : null}</Notice>
+            </form>
         </Panel>
     )
 }

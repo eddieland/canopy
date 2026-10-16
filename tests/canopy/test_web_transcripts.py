@@ -3,20 +3,11 @@ session read back from the events its log holds. Reads only; every text in them 
 
 import dataclasses
 import json
-from pathlib import Path
 from unittest import mock
 
-import pytest
-
 from canopy.core import transcript
-from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
-from tests.canopy.test_serve import client
-
-
-@pytest.fixture
-def backend(tmp_path: Path) -> Backend:
-    return serve_mock.seed(tmp_path / "mock")
+from tests.canopy.web_helpers import client
 
 
 def test_a_run_page_is_the_run_as_the_runs_list_shows_it(backend: Backend) -> None:
@@ -76,9 +67,17 @@ def test_a_runtime_error_ends_a_failed_runs_transcript(backend: Backend) -> None
     }
 
 
-def test_a_running_runs_log_holds_no_events_until_it_ends(backend: Backend) -> None:
+def test_a_running_runs_transcript_is_what_its_worker_printed_so_far(backend: Backend) -> None:
     found = client(None, backend).get("/api/runs/41/transcript").json()
-    assert (found["status"], found["session_id"], found["entries"]) == ("read", "ses_mock41", [])
+    assert (found["status"], found["session_id"]) == ("read", "ses_mock41")
+    assert [e["kind"] for e in found["entries"]] == ["text", "tool", "step", "tool", "step"]
+    assert found["entries"][-2]["title"] == "Run the login tests"
+
+
+def test_a_running_run_shows_its_latest_tool_call(backend: Backend) -> None:
+    runs = {r["id"]: r for r in client(None, backend).get("/api/runs").json()}
+    assert runs[41]["activity"] == {"tool": "bash", "did": "npm test -- login", "at": "2026-10-08T12:27:00Z"}
+    assert runs[39]["activity"] is None  # ended: its result says what it did
 
 
 def test_only_the_recorded_sessions_events_are_shown(backend: Backend) -> None:

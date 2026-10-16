@@ -10,6 +10,7 @@ export const ROUTES = [
     'attention',
     'runs',
     'runs/39',
+    'runs/41',
     'worktrees',
     'tickets',
     'tickets/ABC-102',
@@ -107,6 +108,17 @@ export async function padDecisions(page: Page, ticketKey: string, count: number)
         const body = (await response.json()) as { decisions: { id: number }[] }
         const recorded = body.decisions
         body.decisions = Array.from({ length: count }, (_, i) => ({ ...recorded[i % recorded.length], id: 1000 + i }))
+        await route.fulfill({ response, json: body })
+    })
+}
+
+/** Makes a ticket's conversation `count` messages long, its recorded ones over and over, so it scrolls. */
+export async function padMessages(page: Page, ticketKey: string, count: number): Promise<void> {
+    await page.route(`**/api/tickets/${ticketKey}`, async (route) => {
+        const response = await route.fetch()
+        const body = (await response.json()) as { messages: { id: number }[] }
+        const recorded = body.messages
+        body.messages = Array.from({ length: count }, (_, i) => ({ ...recorded[i % recorded.length], id: 1000 + i }))
         await route.fulfill({ response, json: body })
     })
 }

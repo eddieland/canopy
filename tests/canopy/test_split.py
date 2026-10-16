@@ -12,10 +12,11 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.core.vocab import RunStatus
 from canopy.loop import attention
 from canopy.runs import worker
 from tests.canopy.conftest import Ws, seed_pools
-from tests.canopy.helpers import InlineRunner, in_tick, journal, wait_for_run
+from tests.canopy.helpers import InlineRunner, decisions, in_tick, wait_for_run
 from tests.conftest import CanopyEnv, git
 
 LABEL = "agent-ready-tester"
@@ -23,10 +24,6 @@ LABEL = "agent-ready-tester"
 
 def split(key: str, *args: str) -> list[str]:
     return ["dispatch", key, "--label", LABEL, "--kind", "split", *args]
-
-
-def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
-    return [(str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 @contextmanager
@@ -160,7 +157,7 @@ def test_a_started_ticket_is_not_split_and_a_split_has_an_attempt_limit(ws: Ws, 
         assert main(split("PROJ-1", "--request", "1", "--repo", "api", "--repo", "web"), runner=runner) == 1
 
         assert main(split("PROJ-12", "--request", "1", "--repo", "api", "--repo", "web"), runner=runner) == 0
-        assert db.finish_run(conn, 1, "failed", "{}")
+        assert db.finish_run(conn, "runs", 1, RunStatus.FAILED, "{}")
         for s in db.run_slots(conn, 1):
             assert runner.run(
                 ["treehouse", "return", "--force", s["slot_path"]], env={"TREEHOUSE_ROOT": str(ws.root)}
@@ -177,7 +174,7 @@ def test_a_started_ticket_is_not_split_and_a_split_has_an_attempt_limit(ws: Ws, 
 
 
 def test_a_workspace_of_one_repository_is_never_split(canopy_env: CanopyEnv, treehouse_state: Path) -> None:
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     with in_tick(conn) as tick_id:
         assert main(split("PROJ-1", "--request", "1", "--repo", "repo"), runner=InlineRunner()) == 1
         assert decisions(conn, tick_id) == [
@@ -242,7 +239,7 @@ def test_invalid_children_are_recorded_nowhere(
         assert pool_statuses(treehouse_state) == ["available", "available"]
         [item] = [i for i in attention.from_runs(conn) if i.ticket_key == "PROJ-12"]
         assert item.reason == "unknown_result"
-        assert item.detail.startswith("run 2 (split) ended unknown: children not recorded: ")
+        assert item.detail.startswith("run:2 (split) ended unknown: children not recorded: ")
 
 
 def test_a_blocked_or_missing_split_result_is_unknown() -> None:
@@ -284,7 +281,7 @@ def test_a_timed_out_split_records_the_children_it_reported(ws: Ws, treehouse_st
 def test_a_child_is_not_worked_in_a_workspace_of_another_repository(
     canopy_env: CanopyEnv, treehouse_state: Path
 ) -> None:
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     with in_tick(conn, dry_run=True) as tick_id:
         db.touch_ticket(conn, "PROJ-12", str(canopy_env.root))
         conn.execute(
@@ -355,7 +352,10 @@ def test_the_state_block_shows_split_children(ws: Ws, treehouse_state: Path, age
     with in_tick(conn), splitter_reports({"status": "done", "children": {"PROJ-13": "api", "PROJ-14": "web"}}):
         assert main(split("PROJ-12", "--request", "1", "--repo", "api", "--repo", "web")) == 0
         run = wait_for_run(conn, 1)
-        with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        wait = [["canopy", "decide", "PROJ-12", "wait", "--rationale", "split into PROJ-13 and PROJ-14"]]
+        with mock.patch.dict(
+            os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(wait), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
+        ):
             os.environ.pop("CANOPY_TICK_ID")
             assert main(["tick", "--dry-run"]) == 0
 

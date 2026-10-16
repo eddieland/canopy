@@ -1,6 +1,7 @@
-"""`canopy sandbox setup`: what running agents in a sandbox needs on this machine (HOST_ISOLATION, docs/SANDBOX.md).
+"""`canopy sandbox setup`: what running agents in a sandbox needs on this machine (DESIGN §24, docs/SANDBOX.md).
 
-It copies `canopy-sandbox`'s policy templates to where the wrapper reads them, never over one already there; installs
+It copies `canopy-sandbox`'s policy templates to where the wrapper reads them, never over one already there, and says
+when one already there lets a run write the operator's own caches, as templates from before `@CACHE@` did; installs
 the `srt` that the wrapper's lockfile pins, with `npm ci`, into a directory of canopy's own, which no sandbox can
 write; and checks what it cannot install, because that needs root: bubblewrap, socat, and ripgrep on Linux, ripgrep
 on macOS, and unprivileged user namespaces. It also checks what srt itself only warns about, in a debug log nobody
@@ -58,6 +59,10 @@ NPM_CI = ("npm", "ci", "--ignore-scripts", "--engine-strict", "--no-audit", "--n
 # lockfile itself in place before it runs, so that copy says nothing about whether the install behind it succeeded.
 INSTALLED_LOCK = "canopy-installed.lock"
 NPM_TIMEOUT = 600
+SHARED_CACHE = """\
+{template} lets a sandboxed run write {paths}: your own caches, whose packages and programs your tools run outside
+the sandbox, OpenCode's for the overseer included. Remove them from its allowWrite and allowRead, and add @CACHE@ to
+both, as the shipped template does (docs/SANDBOX.md)."""
 
 
 @dataclass
@@ -110,11 +115,48 @@ def _copy_templates(report: Report) -> None:
             path = target / f"{role}.json"
             if path.exists():
                 report.kept.append(path)
+                if shared := _shared_caches(path):
+                    report.todo.append(SHARED_CACHE.format(template=path, paths=", ".join(shared)))
                 continue
             path.write_text((canopy_sandbox.TEMPLATES / path.name).read_text(encoding="utf-8"), encoding="utf-8")
             report.written.append(path)
     except OSError as e:
         report.todo.append(f"the policy templates could not be copied: {e}")
+
+
+def _shared_caches(template: Path) -> list[str]:
+    """List what `template` lets a run write in the operator's cache directory, but inside a role's cache directory.
+
+    The directory that holds every role's is flagged too: a run that can write it can write every role's.
+
+    Returns:
+        Each such `allowWrite` entry, as the template spells it; none for a template that cannot be read.
+    """
+    try:
+        policy = json.loads(template.read_text(encoding="utf-8"))
+        writable: object = policy["filesystem"]["allowWrite"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+    if not isinstance(writable, list):
+        return []
+    xdg = Path(os.environ.get("XDG_CACHE_HOME", ""))
+    roots = {Path.home() / ".cache", *([xdg] if xdg.is_absolute() else [])}
+    entries: list[object] = writable
+    return [
+        entry
+        for entry in entries
+        if isinstance(entry, str)
+        and any(_within(Path(entry).expanduser(), root, but=root / "canopy" / "sandbox") for root in roots)
+    ]
+
+
+def _within(path: Path, root: Path, *, but: Path) -> bool:
+    """Whether `path` is `root` or under it, and not under `but`, though it may be `but` itself.
+
+    Returns:
+        True when it is.
+    """
+    return path.is_relative_to(root) and not (path.is_relative_to(but) and path != but)
 
 
 def _install_runtime(runner: procs.Runner, report: Report) -> None:

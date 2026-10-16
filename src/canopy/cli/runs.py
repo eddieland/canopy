@@ -8,9 +8,10 @@ from typing import TYPE_CHECKING
 
 import click
 
-from canopy.cli.common import CliError, open_context, require_tick
+from canopy.cli.common import CliError, OverseerCommand, open_context, require_tick
 from canopy.cli.params import COMMENT_ID, REPO, SLUG, TICKET_KEY, CursorType, TextType, truncate
 from canopy.core import db
+from canopy.core.vocab import RunKind
 from canopy.infra import logs
 from canopy.loop import attention, tick
 from canopy.reviews import findings
@@ -20,9 +21,11 @@ if TYPE_CHECKING:
     import sqlite3
 
 
-@click.command("dispatch")
+@click.command("dispatch", cls=OverseerCommand)
 @click.argument("key", type=TICKET_KEY)
-@click.option("--kind", required=True, type=click.Choice(policy.DISPATCH_KINDS))
+@click.option(
+    "--kind", required=True, type=click.Choice([str(k) for k in policy.DISPATCH_KINDS]), help="What the worker does."
+)
 @click.option(
     "--label",
     metavar="LABEL",
@@ -118,7 +121,7 @@ def cmd_dispatch(
                 repos=repos,
                 request=request,
             )
-            branch, queue_label, repo_names = plan.branch, plan.label, plan.repos
+            branch, queue_label, repo_names, starts = plan.branch, plan.label, plan.repos, plan.starts
             started = None
         else:
             started = dispatch.start(
@@ -134,7 +137,7 @@ def cmd_dispatch(
                 request=request,
                 review=review,
             )
-            branch, queue_label, repo_names = started.branch, started.label, started.repos
+            branch, queue_label, repo_names, starts = started.branch, started.label, started.repos, started.starts
     except dispatch.Refusal as r:
         db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
         if r.guard == "attempt_limit":
@@ -144,8 +147,10 @@ def cmd_dispatch(
         log.info("dispatch refused", extra={"ticket": key, "kind": kind, "guard": r.guard, "reason": r.reason})
         raise CliError(f"dispatch refused ({r.guard}): {r.reason}; the refusal was recorded") from None
     # `base` passed the guards, so it is the branch this run is stacked on. `queue_label` is the configured spelling, or
-    # empty for a private ticket, which its start record authorizes (DESIGN §22).
+    # empty for a private ticket, which its start record authorizes (DESIGN §22). Under `tracker.private` the label
+    # authorizes a ticket's first run, which starts it privately.
     authorized = f"label {queue_label}" if queue_label else "private: started by the operator"
+    authorized += "; starts it privately (tracker.private)" if starts else ""
     on_base = f" on {base}" if base is not None else ""
     in_repo = f" in {', '.join(repo_names)}"
     # A split works on no branch: it reads its repositories and creates a ticket for each.
@@ -204,7 +209,7 @@ def _review_findings(
     """
     if run_id is None:
         return None
-    if kind != "resume":
+    if kind != RunKind.RESUME:
         raise dispatch.Refusal(
             "bad_review", "--review-run names findings for a resume to address; it is for resume only"
         )

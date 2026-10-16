@@ -11,7 +11,16 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
-from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, slot_of, wait_for_run, worker_does
+from tests.canopy.helpers import (
+    InlineRunner,
+    decisions,
+    dispatch_and_run,
+    in_tick,
+    pool,
+    slot_of,
+    wait_for_run,
+    worker_does,
+)
 from tests.conftest import CanopyEnv, GitPool, git
 
 LABEL = "agent-ready-tester"
@@ -24,30 +33,8 @@ def push(branch: str) -> list[str]:
     return ["git", "push", "--quiet", "origin", f"HEAD:refs/heads/{branch}"]
 
 
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return journal(canopy_env)
-
-
-def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
-    return [(str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)]
-
-
 def commit(message: str) -> list[str]:
     return ["git", "commit", "--quiet", "--allow-empty", "-m", message]
-
-
-def dispatch_and_run(conn: sqlite3.Connection, key: str, *args: str) -> tuple[sqlite3.Row, list[tuple[str, str]]]:
-    """Dispatch in a fresh tick, then do the run in-process. Returns the closed run and the tick's decisions."""
-    runner = InlineRunner()
-    with in_tick(conn) as tick_id:
-        assert main(["dispatch", key, "--repo", "repo", *args], runner=runner) == 0, decisions(conn, tick_id)
-        db.finish_tick(conn, tick_id, "ok", "test")
-        run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
-        assert main(["_run", str(run_id)], runner=runner) == 0
-        run = db.get_run(conn, run_id)
-        assert run is not None
-        return run, decisions(conn, tick_id)
 
 
 def prompt_of(env: CanopyEnv, run_id: int) -> str:
@@ -63,7 +50,7 @@ def subjects(git_pool: GitPool, branch: str) -> list[str]:
 def blocker(git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection) -> Iterator[None]:
     """PROJ-1 implemented and pushed as `agent/PROJ-1-first`: the branch of the blocker's open PR."""
     with worker_does(commit("PROJ-1: the blocker"), push(FIRST)):
-        run, _ = dispatch_and_run(conn, "PROJ-1", "--label", LABEL, "--kind", "implement", "--slug", "first")
+        run = dispatch_and_run(conn, "--label", LABEL, "--kind", "implement", "--slug", "first", key="PROJ-1")
         assert run["status"] == "done"
         yield
 
@@ -76,13 +63,13 @@ def test_implement_stacked_on_a_blocker_starts_from_its_branch_and_targets_it(
     conn: sqlite3.Connection,
 ) -> None:
     with worker_does(commit("PROJ-2: stacked"), push(SECOND)):
-        run, made = dispatch_and_run(
-            conn, "PROJ-2", "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST
+        run = dispatch_and_run(
+            conn, "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST, key="PROJ-2"
         )
 
         slot = slot_of(conn, int(run["id"]))
         assert (run["status"], run["branch"], slot["base_branch"]) == ("done", "agent/PROJ-2-second", FIRST)
-        assert made == [
+        assert decisions(conn, int(run["tick_id"])) == [
             (
                 "dispatch:implement",
                 f"run 2: agent/PROJ-2-second on {FIRST} in repo at {slot['slot_path']}; label {LABEL}",
@@ -108,18 +95,20 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(
     conn: sqlite3.Connection,
 ) -> None:
     with worker_does(commit("PROJ-2: stacked"), push(SECOND)):
-        dispatch_and_run(conn, "PROJ-2", "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST)
+        dispatch_and_run(
+            conn, "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST, key="PROJ-2"
+        )
 
     # While the blocker's PR is open the overseer passes the base again; the run continues the pushed branch.
     with worker_does(commit("PROJ-2: review fix"), push(SECOND)):
-        resume, _ = dispatch_and_run(conn, "PROJ-2", "--label", LABEL, "--kind", "resume", "--base", FIRST)
+        resume = dispatch_and_run(conn, "--label", LABEL, "--kind", "resume", "--base", FIRST, key="PROJ-2")
         assert (resume["status"], slot_of(conn, int(resume["id"]))["base_branch"]) == ("done", FIRST)
         assert f": branch `agent/PROJ-2-second` from `{FIRST}`; PR: " in prompt_of(canopy_env, int(resume["id"]))
 
     # Once it merged, the overseer omits it: the run's base is the repository's, and the worker retargets the PR.
     with worker_does(push(SECOND)):
-        retarget, _ = dispatch_and_run(
-            conn, "PROJ-2", "--label", LABEL, "--kind", "resume", "--context", "blocker merged"
+        retarget = dispatch_and_run(
+            conn, "--label", LABEL, "--kind", "resume", "--context", "blocker merged", key="PROJ-2"
         )
         assert (retarget["status"], slot_of(conn, int(retarget["id"]))["base_branch"]) == ("done", "main")
         text = prompt_of(canopy_env, int(retarget["id"]))
@@ -129,7 +118,10 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(
         assert subjects(git_pool, "agent/PROJ-2-second")[:2] == ["PROJ-2: review fix", "PROJ-2: stacked"]
 
         # The overseer sees which base each ticket's latest run started from.
-        with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        waits = [["canopy", "decide", key, "wait", "--rationale", "PR open"] for key in ("PROJ-1", "PROJ-2")]
+        with mock.patch.dict(
+            os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(waits), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
+        ):
             os.environ.pop("CANOPY_TICK_ID", None)
             assert main(["tick"]) == 0
             prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
@@ -146,7 +138,7 @@ def test_a_base_gone_from_origin_is_crashed_and_returns_the_slot(
     conn: sqlite3.Connection,
 ) -> None:
     # The blocker's PR merged and its branch was deleted between the overseer's look and the run.
-    run, _ = dispatch_and_run(conn, "PROJ-2", "--label", LABEL, "--kind", "implement", "--base", FIRST)
+    run = dispatch_and_run(conn, "--label", LABEL, "--kind", "implement", "--base", FIRST, key="PROJ-2")
     assert run["status"] == "crashed"
     note = json.loads(run["result_json"])["harness"]
     assert note == f"repo: the base branch {FIRST} is not on origin; if it was stacked on, its PR may have merged"
@@ -163,12 +155,14 @@ def test_a_continued_branch_whose_base_is_gone_is_crashed(
     conn: sqlite3.Connection,
 ) -> None:
     with worker_does(commit("PROJ-2: stacked"), push(SECOND)):
-        dispatch_and_run(conn, "PROJ-2", "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST)
+        dispatch_and_run(
+            conn, "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST, key="PROJ-2"
+        )
         workers = len(agent_log.read_text().splitlines())
 
         # The blocker's branch is deleted after PROJ-2's branch exists; a resume still naming it must not start.
         git("branch", "--quiet", "-D", FIRST, cwd=git_pool.origin)
-        run, _ = dispatch_and_run(conn, "PROJ-2", "--label", LABEL, "--kind", "resume", "--base", FIRST)
+        run = dispatch_and_run(conn, "--label", LABEL, "--kind", "resume", "--base", FIRST, key="PROJ-2")
         assert run["status"] == "crashed"
         assert json.loads(run["result_json"])["harness"].startswith(f"repo: the base branch {FIRST} is not on origin")
         assert len(agent_log.read_text().splitlines()) == workers  # the worker never ran
@@ -314,8 +308,8 @@ def test_two_linked_tickets_are_worked_in_order(
 
             ticks = [int(r["id"]) for r in conn.execute("SELECT id FROM ticks ORDER BY id")]
             assert [[a for a, _ in decisions(conn, t)] for t in ticks] == [
-                ["dispatch:implement", "wait"],
-                ["wait", "dispatch:implement"],
+                ["queried", "dispatch:implement", "wait"],
+                ["queried", "wait", "dispatch:implement"],
             ]
             assert git("merge-base", "--is-ancestor", FIRST, "agent/PROJ-2-second", cwd=git_pool.origin) == ""
             assert f": branch `agent/PROJ-2-second` from `{FIRST}`; PR: " in prompt_of(canopy_env, 2)

@@ -115,10 +115,16 @@ describe('applyStreamEvent', () => {
         const client = new QueryClient()
         const paused = { since: '2026-10-08T11:50:00Z', channel: 'loop' } as const
 
-        applyStreamEvent(client, { type: 'loop.updated', paused })
-        expect(client.getQueryData(keys.loop)).toEqual({ paused })
-        applyStreamEvent(client, { type: 'loop.updated', paused: null })
-        expect(client.getQueryData(keys.loop)).toEqual({ paused: null })
+        applyStreamEvent(client, { type: 'loop.updated', paused, notice: null })
+        expect(client.getQueryData(keys.loop)).toEqual({ paused, notice: null })
+        const notice = {
+            text: 'CI is down.',
+            since: '2026-10-08T11:50:00Z',
+            lapses_at: '2026-10-08T15:50:00Z',
+            channel: 'web',
+        } as const
+        applyStreamEvent(client, { type: 'loop.updated', paused: null, notice })
+        expect(client.getQueryData(keys.loop)).toEqual({ paused: null, notice })
     })
 
     it('marks the ticks and the tickets stale when the latest tick changes', () => {
@@ -134,7 +140,7 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.ticket('ABC-102'))?.isInvalidated).toBe(true)
     })
 
-    it('writes a run a page holds, and marks its transcript stale only when its status moves', () => {
+    it('writes a run a page holds, and marks its transcript stale when its log has more in it', () => {
         const client = new QueryClient()
         const [first, second] = mockRuns
         if (!first || !second) {
@@ -145,11 +151,26 @@ describe('applyStreamEvent', () => {
         client.setQueryData(keys.runTranscript(first.id), empty)
         client.setQueryData(keys.runTranscript(second.id), empty)
 
+        // The same row again moves nothing.
+        applyStreamEvent(client, { type: 'runs.updated', runs: mockRuns })
+        expect(client.getQueryState(keys.runTranscript(first.id))?.isInvalidated).toBe(false)
+        // A model call ended: the worker printed it, and its cost moved.
         applyStreamEvent(client, { type: 'runs.updated', runs: mockRuns.map((r) => ({ ...r, cost_usd: 9 })) })
         expect(client.getQueryData<Run>(keys.run(first.id))?.cost_usd).toBe(9)
-        expect(client.getQueryState(keys.runTranscript(first.id))?.isInvalidated).toBe(false)
+        expect(client.getQueryState(keys.runTranscript(first.id))?.isInvalidated).toBe(true)
         // A run no page holds is not written into the cache.
         expect(client.getQueryData(keys.run(second.id))).toBeUndefined()
+
+        // A tool call ended.
+        client.setQueryData(keys.runTranscript(first.id), empty)
+        const called = {
+            ...first,
+            cost_usd: 9,
+            activity: { tool: 'bash', did: 'make check', at: '2026-10-08T12:29:00Z' },
+        }
+        applyStreamEvent(client, { type: 'runs.updated', runs: [called, ...mockRuns.slice(1)] })
+        expect(client.getQueryState(keys.runTranscript(first.id))?.isInvalidated).toBe(true)
+        client.setQueryData(keys.runTranscript(first.id), empty)
 
         const ended = { ...first, status: 'done', state: 'done', ended_at: '2026-10-08T12:20:00Z' } as const
         applyStreamEvent(client, { type: 'runs.updated', runs: [ended, ...mockRuns.slice(1)] })
@@ -170,6 +191,8 @@ describe('applyStreamEvent', () => {
             summary: null,
             session_id: null,
             cost_usd: null,
+            new_tokens: null,
+            peak_context: null,
             decisions: 0,
             idle: null,
             woken_by: null,
@@ -241,13 +264,20 @@ describe('parseStreamEvent', () => {
         expect(parseStreamEvent(tick)).toEqual({ type: 'tick.updated', tick: null, acknowledged: 7 })
         expect(parseStreamEvent('{"type":"tick.updated"}')).toBeNull()
         expect(parseStreamEvent('{"type":"tick.updated","tick":null,"acknowledged":"7"}')).toBeNull()
-        const paused = { type: 'loop.updated', paused: { since: '2026-10-08T11:50:00Z', channel: 'web' } }
+        const paused = {
+            type: 'loop.updated',
+            paused: { since: '2026-10-08T11:50:00Z', channel: 'web' },
+            notice: { text: 'CI is down.', since: '2026-10-08T11:50:00Z', lapses_at: '2026-10-08T15:50:00Z' },
+        }
         expect(parseStreamEvent(JSON.stringify(paused))).toEqual(paused)
-        expect(parseStreamEvent('{"type":"loop.updated","paused":null}')).toEqual({
+        expect(parseStreamEvent('{"type":"loop.updated","paused":null,"notice":null}')).toEqual({
             type: 'loop.updated',
             paused: null,
+            notice: null,
         })
         expect(parseStreamEvent('{"type":"loop.updated"}')).toBeNull()
+        expect(parseStreamEvent('{"type":"loop.updated","paused":null}')).toBeNull()
+        expect(parseStreamEvent('{"type":"loop.updated","paused":null,"notice":"CI is down."}')).toBeNull()
         expect(parseStreamEvent('{"type":"loop.updated","paused":"yes"}')).toBeNull()
         expect(parseStreamEvent('null')).toBeNull()
     })

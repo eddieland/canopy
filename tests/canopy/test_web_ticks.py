@@ -1,20 +1,12 @@
 """The web UI's ticks (DESIGN §6, §22, ROADMAP M24): what `canopy decisions` prints, a tick's page, and each ticket's
 decisions across ticks. Reads only."""
 
-from pathlib import Path
-
 import pytest
 
 from canopy.core import db
 from canopy.loop import attention
-from canopy.serve import mock
 from canopy.serve.backend import Backend
-from tests.canopy.test_serve import client
-
-
-@pytest.fixture
-def backend(tmp_path: Path) -> Backend:
-    return mock.seed(tmp_path / "mock")
+from tests.canopy.web_helpers import client
 
 
 def test_the_ticks_list_is_the_latest_newest_first_with_how_many_decisions_each(backend: Backend) -> None:
@@ -106,6 +98,24 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
         (1, False, "start"),
     ]
     assert [u["kind"] for u in found["unpriced"]] == ["overseer", "workers", "chores", "reviews"]
+    # What each ticket's and PR's own runs cost, the costliest first; the mock marked no ticket done.
+    assert [(t["key"], t["runs"], t["reviews"], t["cost_usd"]) for t in found["tickets"]][:2] == [
+        ("ABC-099", 1, 2, pytest.approx(2.76)),
+        ("ABC-103", 1, 1, pytest.approx(1.86)),
+    ]
+    assert (found["done"], found["per_done"], found["tickets"][0]["done"]) == (0, None, None)
+    assert [(p["url"], p["ticket_key"], p["phase"]) for p in found["pull_requests"]] == [
+        ("https://github.com/acme/web/pull/88", "ABC-099", "in_review"),
+        ("https://github.com/acme/web/pull/91", "ABC-103", "in_review"),
+        ("https://github.com/acme/web/pull/86", "ABC-100", None),
+        ("https://github.com/acme/api/pull/12", None, None),  # only reviewed
+    ]
+    # Which tools put the most into context: the overseer's PR reads, then the workers' shell calls.
+    assert [(t["kind"], t["tool"], t["runs"], t["calls"], t["result_chars"]) for t in found["tools"]][:2] == [
+        ("overseer", "github_pull_request_read", 2, 25, 325_000),
+        ("workers", "bash", 4, 119, 279_000),
+    ]
+    assert found["tools"][0]["est_tokens"] == 325_000 // 4
 
     assert c.get("/api/spend/breakdown").json()["days"] == 7  # canopy spend's default
     assert c.get("/api/spend/breakdown", params={"days": 0}).status_code == 422

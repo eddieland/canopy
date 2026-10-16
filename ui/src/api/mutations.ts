@@ -11,9 +11,12 @@ import type {
     Granted,
     Limit,
     LoopState,
+    NoticeChanged,
     PauseChanged,
     Replied,
     ReviewDismissed,
+    ReviewRequested,
+    ReviewRequestStopped,
     ReviewSent,
     Session,
     Started,
@@ -22,9 +25,10 @@ import type {
 
 /**
  * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, dismissing a finding,
- * sending a review's findings to a worker, granting a run past a limit, and pausing the loop. Each goes through the
- * same function on the server as `canopy start`, `stop`, `reply`, `forget`, `dismiss`, `send`, `grant`, `pause`, and
- * `resume`, with the same guards; a refusal is an ApiError naming its guard.
+ * sending a review's findings to a worker, granting a run past a limit, asking for a PR to be reviewed, pausing the
+ * loop, and a notice to workers. Each goes through the same function on the server as `canopy start`, `stop`,
+ * `reply`, `forget`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `pause`, `resume`, and `notice`,
+ * with the same guards; a refusal is an ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -72,6 +76,19 @@ export async function grantLimit(ticketKey: string | null, limit: Limit): Promis
             body: { kind: limit.kind, repo: limit.repo },
         }),
     )
+}
+
+/**
+ * `canopy start URL --review`: canopy reviews a PR it does not own, once, at its head. Nothing is posted on the PR;
+ * the next tick reviews it.
+ */
+export async function requestReview(url: string): Promise<ReviewRequested> {
+    return unwrap(await api.POST('/api/pull-request/start', { params: { query: { url } } }))
+}
+
+/** `canopy stop URL`: the PR's review request ends, and a review of it already running finishes. */
+export async function stopReview(url: string): Promise<ReviewRequestStopped> {
+    return unwrap(await api.POST('/api/pull-request/stop', { params: { query: { url } } }))
 }
 
 /** `canopy reply`: a message on the ticket for the next tick to read. `submission` makes a resend a no-op. */
@@ -135,6 +152,19 @@ export async function resumeLoop(): Promise<PauseChanged> {
 }
 
 /**
+ * `canopy notice TEXT --for DURATION`: every run dispatched until it lapses hears it (DESIGN §8). It replaces the
+ * notice in force. A blank text is refused (`empty`), and one over 1024 bytes (`too_long`).
+ */
+export async function setNotice(text: string, minutes: number): Promise<NoticeChanged> {
+    return unwrap(await api.POST('/api/loop/notice', { body: { text, minutes } }))
+}
+
+/** `canopy notice --clear`: runs dispatched from now on hear no notice. */
+export async function clearNotice(): Promise<NoticeChanged> {
+    return unwrap(await api.POST('/api/loop/notice/clear'))
+}
+
+/**
  * Ask the loop to read its config files again, as SIGHUP does (DESIGN §6). A file that does not load is refused
  * (`config_invalid`) and the loop keeps the config it has.
  */
@@ -151,7 +181,7 @@ export async function saveConfig(hash: string, changes: Record<string, ConfigVal
     return unwrap(await api.PATCH('/api/config', { body: { hash, changes } }))
 }
 
-/** After a pause or a resume: show the state it left now, rather than wait for the stream. */
+/** After a pause, a resume, or a notice set or cleared: show the state it left now, rather than wait for the stream. */
 export function showLoop(client: QueryClient, loop: LoopState): void {
     client.setQueryData(keys.loop, loop)
 }
@@ -180,6 +210,11 @@ export async function refreshLimits(client: QueryClient, ticketKey: string | nul
         ...(ticketKey === null ? [] : [client.invalidateQueries({ queryKey: keys.ticket(ticketKey) })]),
         ...(limit.pr_url === null ? [] : [client.invalidateQueries({ queryKey: keys.pullRequest(limit.pr_url) })]),
     ])
+}
+
+/** After a review request is made or stopped: read the PRs list and every PR's page again; the stream sends neither. */
+export function refreshPullRequests(client: QueryClient): Promise<void> {
+    return client.invalidateQueries({ queryKey: keys.pullRequests })
 }
 
 /** After an action on a ticket: read it again now, rather than wait for the stream to say it changed. */

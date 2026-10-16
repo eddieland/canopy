@@ -1,4 +1,4 @@
-import { ChevronRight, Rows3, Search, X } from 'lucide-react'
+import { ChevronRight, ChevronsUpDown, Rows3 } from 'lucide-react'
 import { useDeferredValue, useState } from 'react'
 import type { ReactNode } from 'react'
 
@@ -12,13 +12,13 @@ import type {
 } from '@/api/types'
 import { Copyable } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
+import { SearchField } from '@/components/input'
 import { JsonTokens } from '@/components/json-text'
 import { MarkedText } from '@/components/marked-text'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { RowGrid, RowLine } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
-import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Toggle } from '@/components/ui/toggle'
 import { ordered, useListOrder } from '@/lib/list-order'
@@ -53,10 +53,18 @@ const NO_WORDS: readonly string[] = []
  * its input and output open on a click), each model call's cost, and the runtime's errors, in the order the runtime
  * printed them. By call, the same entries are grouped by the model call they came from, each opening to what it was
  * sent and what it did. In order, a search keeps the rows with a line that holds it, its matches marked, and opens a
- * tool call whose input or output holds it. All of it is agent output, rendered as text. `running` says the session's
- * events have not reached the log yet: they do when its run or tick ends.
+ * tool call whose input or output holds it. All of it is agent output, rendered as text. `running` says the session
+ * has not ended: its events reach the log when it does, or with `live`, a worker run's, as the runtime prints them.
  */
-export function TranscriptPanel({ transcript, running }: { transcript: Transcript | undefined; running: boolean }) {
+export function TranscriptPanel({
+    transcript,
+    running,
+    live = false,
+}: {
+    transcript: Transcript | undefined
+    running: boolean
+    live?: boolean
+}) {
     const [grouped, setGrouped] = useState(false)
     const [typed, setTyped] = useState('')
     // A long transcript is searched behind the field, so typing never waits on it.
@@ -68,7 +76,7 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
     // The search is the events' in order: By call keeps its own, whole.
     const query = callView ? null : findQueryOf(deferred)
     const words = query === null ? [] : [query]
-    // Bumped by Open all and Close all: each call remounts open or closed, then toggles on its own. It wins over the
+    // Bumped by All open, on or off: each call remounts open or closed, then toggles on its own. It wins over the
     // search it was made under; a new search opens the calls it finds again.
     const [opened, setOpened] = useState<{ open: boolean; round: number; query: string | null }>({
         open: false,
@@ -84,23 +92,15 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
         entries.map((entry, i) => ({ entry, i, hits: query === null ? null : hitsIn(entry, query) })),
     )
     const shown = numbered.filter((n) => n.hits === null || n.hits.row + n.hits.body > 0)
+    // A search opens a call whose input or output holds it, until All open is turned on or off under it.
+    const searchOpens = (hits: { body: number } | null) => hits !== null && hits.body > 0 && opened.query !== query
+    // All open stays on while the calls stand open together: it was turned on, or a search opened what it found.
+    const allOpen = opened.open || (!callView && shown.some((n) => searchOpens(n.hits)))
     const lines = shown.reduce((sum, n) => sum + (n.hits === null ? 0 : n.hits.row + n.hits.body), 0)
     return (
         <Panel className="min-h-40" data-testid="transcript">
             <PanelHeader label="Transcript">
-                <span className="flex items-center gap-3">
-                    {entries.length > 1 && <OrderToggle list="transcript" />}
-                    {calls.calls.length > 0 && (
-                        <Toggle
-                            size="xs"
-                            pressed={grouped}
-                            onPressedChange={setGrouped}
-                            title={grouped ? 'Show each event in order' : 'Group the events by model call'}
-                        >
-                            <Rows3 />
-                            By call
-                        </Toggle>
-                    )}
+                <span className="flex flex-wrap items-center gap-3">
                     {transcript?.session_id && (
                         <Copyable
                             text={transcript.session_id}
@@ -112,28 +112,41 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                             </span>
                         </Copyable>
                     )}
-                    {(tools || callView) && (
-                        <span className="flex items-center">
-                            {(['open', 'close'] as const).map((verb) => (
-                                <Button
-                                    key={verb}
-                                    variant="ghost"
-                                    size="xs"
-                                    onClick={() =>
-                                        setOpened((o) => ({ open: verb === 'open', round: o.round + 1, query }))
-                                    }
-                                >
-                                    {verb === 'open' ? 'Open all' : 'Close all'}
-                                </Button>
-                            ))}
-                        </span>
+                    {transcript?.session_id && (entries.length > 1 || calls.calls.length > 0 || tools) && (
+                        // The session is what the transcript is; the modes after the rule are how it is shown.
+                        <span aria-hidden className="hidden h-4 w-px bg-border sm:inline" />
                     )}
+                    <span className="flex items-center gap-1">
+                        {entries.length > 1 && <OrderToggle list="transcript" />}
+                        {calls.calls.length > 0 && (
+                            <Toggle
+                                size="xs"
+                                pressed={grouped}
+                                onPressedChange={setGrouped}
+                                title={grouped ? 'Show each event in order' : 'Group the events by model call'}
+                            >
+                                <Rows3 />
+                                By call
+                            </Toggle>
+                        )}
+                        {(tools || callView) && (
+                            <Toggle
+                                size="xs"
+                                pressed={allOpen}
+                                onPressedChange={(on) => setOpened((o) => ({ open: on, round: o.round + 1, query }))}
+                                title={allOpen ? 'Close every call' : 'Open every call'}
+                            >
+                                <ChevronsUpDown />
+                                All open
+                            </Toggle>
+                        )}
+                    </span>
                 </span>
             </PanelHeader>
             {transcript === undefined ? (
                 <PanelSkeleton />
             ) : entries.length === 0 ? (
-                <Empty>{empty(transcript, running)}</Empty>
+                <Empty>{empty(transcript, running, live)}</Empty>
             ) : (
                 <>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-3 py-1.5">
@@ -193,10 +206,8 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
                     ) : (
                         <ol className="divide-y" data-testid="transcript-entries">
                             {shown.map(({ entry, i, hits }) => {
-                                // A search opens a call whose input or output holds it, until Open all or Close all is
-                                // used under it; a row whose place changes remounts to it.
-                                const inBody = hits !== null && hits.body > 0
-                                const open = opened.open || (inBody && opened.query !== query)
+                                // A row whose place changes remounts to it.
+                                const open = opened.open || searchOpens(hits)
                                 return (
                                     <Entry
                                         key={`${i}-${opened.round}-${open}`}
@@ -215,7 +226,11 @@ export function TranscriptPanel({ transcript, running }: { transcript: Transcrip
     )
 }
 
-function empty(transcript: Transcript, running: boolean): string {
+function empty(transcript: Transcript, running: boolean, live: boolean): string {
+    if (running && live) {
+        // Its session is recorded at its first event, so before then there is none.
+        return 'no events yet: they show here as the worker prints them'
+    }
     switch (transcript.status) {
         case 'no_session': {
             return 'the runtime reported no session: a template without --format json prints no events'
@@ -250,15 +265,9 @@ function Find({
     rows: number
 }) {
     return (
-        <search
-            className={cn(
-                'ml-auto flex h-7 w-full items-center gap-2 rounded-md border bg-surface-raised px-2 sm:w-72',
-                'focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50',
-            )}
-        >
-            <Search aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
-            <input
-                type="search"
+        <search className="ml-auto w-full sm:w-72">
+            <SearchField
+                size="sm"
                 aria-label="Find lines in the transcript"
                 placeholder="Find lines"
                 value={value}
@@ -268,28 +277,16 @@ function Find({
                         onChange('')
                     }
                 }}
-                className={cn(
-                    'min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none',
-                    'placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden',
-                )}
+                onClear={() => onChange('')}
+                clearLabel="Clear the transcript's search"
+                end={
+                    lines !== null && (
+                        <span className="readout shrink-0 text-xs text-muted-foreground" data-testid="transcript-found">
+                            {lines} {lines === 1 ? 'line' : 'lines'}, {rows} {rows === 1 ? 'row' : 'rows'}
+                        </span>
+                    )
+                }
             />
-            {lines !== null && (
-                <span className="readout shrink-0 text-xs text-muted-foreground" data-testid="transcript-found">
-                    {lines} {lines === 1 ? 'line' : 'lines'}, {rows} {rows === 1 ? 'row' : 'rows'}
-                </span>
-            )}
-            {value !== '' && (
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    aria-label="Clear the transcript's search"
-                    onClick={() => onChange('')}
-                    className="hover:bg-muted"
-                >
-                    <X aria-hidden />
-                </Button>
-            )}
         </search>
     )
 }
@@ -421,10 +418,7 @@ function Tool({
                         )}
                     </span>
                     {verdict === 'refused' && (
-                        <Chip
-                            className="min-w-0 shrink border-status-failed/40 text-status-failed"
-                            word={`refused:${guard ?? ''}`}
-                        />
+                        <Chip tone="failed" className="min-w-0 shrink" word={`refused:${guard ?? ''}`} />
                     )}
                     {entry.cut && <Chip>cut</Chip>}
                     <span className="readout w-14 shrink-0 text-right text-xs text-muted-foreground">
@@ -432,7 +426,7 @@ function Tool({
                     </span>
                     <ChevronRight
                         className={cn(
-                            'size-3.5 shrink-0 text-muted-foreground',
+                            'size-3 shrink-0 text-muted-foreground',
                             'transition-transform group-open:rotate-90',
                         )}
                     />
@@ -472,7 +466,7 @@ function ModelCall({ entry, start }: { entry: TranscriptStep; start: string | nu
         return (
             <li className={muted}>
                 {line}
-                <span className="size-3.5 shrink-0" />
+                <span className="size-3 shrink-0" />
             </li>
         )
     }
@@ -490,7 +484,7 @@ function ModelCall({ entry, start }: { entry: TranscriptStep; start: string | nu
                     {line}
                     <ChevronRight
                         className={cn(
-                            'size-3.5 shrink-0 text-muted-foreground',
+                            'size-3 shrink-0 text-muted-foreground',
                             'transition-transform group-open:rotate-90',
                         )}
                     />
@@ -568,7 +562,7 @@ function CallRow({
                     />
                     <ChevronRight
                         className={cn(
-                            'size-3.5 shrink-0 text-muted-foreground',
+                            'size-3 shrink-0 text-muted-foreground',
                             'transition-transform group-data-[state=open]/call:rotate-90',
                         )}
                     />

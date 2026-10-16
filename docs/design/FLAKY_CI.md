@@ -2,6 +2,7 @@
 
 Part of the canopy design, normative like all of it: triage of a CI failure before a fix-ci worker is sent. Sections are
 numbered across the whole design; the [README](README.md) has the map. Previous: [Conversations](CONVERSATIONS.md).
+Next: [Sandboxed runs](SANDBOXING.md).
 
 ## 23. Flaky CI (M25)
 

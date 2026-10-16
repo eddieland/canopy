@@ -18,12 +18,12 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import db, notice
 from canopy.core.context import Context
+from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus
 from canopy.infra import resources
 from canopy.loop import pacing, repeat, tick
-from tests.canopy.test_chores import chore_toml
-from tests.canopy.test_loop import FakeKeys, FakeTime, canopy, console, context, overseer_does
+from tests.canopy.helpers import FakeKeys, FakeTime, canopy, chore_toml, console, context, overseer_does
 from tests.conftest import CanopyEnv
 
 KEY = "PROJ-1"
@@ -70,7 +70,7 @@ def review_run(conn: sqlite3.Connection, tick_id: int) -> int:
     run_id = db.insert_review_run(
         conn, tick_id=tick_id, pr_url=PR, sha="a" * 40, ticket=None, repo=None, purpose="query", logs_dir=LOGS
     )
-    assert db.claim_review_run(conn, run_id, os.getpid())
+    assert db.claim_run(conn, "review_runs", run_id, os.getpid())
     return run_id
 
 
@@ -158,7 +158,7 @@ def review_started_long_ago(conn: sqlite3.Connection, tick_id: int) -> None:
 
 
 def review_ends(conn: sqlite3.Connection, _tick_id: int) -> None:
-    assert db.finish_review_run(conn, 1, "done", None)
+    assert db.finish_run(conn, "review_runs", 1, ReviewRunStatus.DONE, None)
 
 
 def chore_starts(conn: sqlite3.Connection, tick_id: int) -> None:
@@ -206,6 +206,19 @@ def sets_branch(conn: sqlite3.Connection, _tick_id: int) -> None:
     conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-x' WHERE key = ?", (KEY,))
 
 
+def notice_set(conn: sqlite3.Connection, _tick_id: int) -> None:
+    notice.set_notice(conn, "Artifactory is down.", minutes=60, channel="cli")
+
+
+def notice_set_long_ago(conn: sqlite3.Connection, tick_id: int) -> None:
+    notice_set(conn, tick_id)
+    conn.execute("UPDATE notices SET set_at = ?", (ago(hours=1),))
+
+
+def notice_cleared(conn: sqlite3.Connection, _tick_id: int) -> None:
+    assert notice.clear(conn, channel="web") is not None
+
+
 @pytest.mark.parametrize(
     "case",
     [
@@ -227,6 +240,8 @@ def sets_branch(conn: sqlite3.Connection, _tick_id: int) -> None:
         pytest.param(Case(setup=started_long_ago, during=ticket_stopped), id="ticket stopped"),
         pytest.param(Case(during=attempts_granted), id="attempts granted"),
         pytest.param(Case(during=reviews_granted), id="reviews granted"),
+        pytest.param(Case(during=notice_set), id="notice set"),
+        pytest.param(Case(setup=notice_set_long_ago, during=notice_cleared), id="notice cleared"),
         pytest.param(Case(status="overseer_failed"), id="not ok"),
         pytest.param(Case(previous_read=False), id="no previous read"),
     ],
@@ -238,7 +253,7 @@ def test_each_change_makes_a_tick_not_idle(canopy_env: CanopyEnv, case: Case) ->
 def test_a_run_that_ended_before_the_previous_tick_read_does_not_count(canopy_env: CanopyEnv) -> None:
     def setup(conn: sqlite3.Connection, tick_id: int) -> None:
         run_id = review_run(conn, tick_id)
-        assert db.finish_review_run(conn, run_id, "done", None)
+        assert db.finish_run(conn, "review_runs", run_id, ReviewRunStatus.DONE, None)
         conn.execute("UPDATE review_runs SET started_at = ?, ended_at = ?", (ago(hours=1), ago(minutes=30)))
 
     assert was_idle(context(canopy_env), Case(setup=setup))
@@ -307,11 +322,14 @@ def test_the_loop_waits_line_says_what_a_tick_churned(
     time = FakeTime()
     term, _ = console()
     with contextlib.ExitStack() as stack:
-        stack.enter_context(overseer_does(canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_running")))
+        wait = canopy("decide", KEY, "wait", "--rationale", "checks pending")
+        label = canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_running")
+        stack.enter_context(overseer_does(label, wait))
 
         def relabel_at_the_first_wait() -> None:
             if len(time.slept) == 1:
-                stack.enter_context(overseer_does(canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_red")))
+                relabel = canopy("ticket", "set", KEY, "--repo", "repo", "--phase", "ci_red")
+                stack.enter_context(overseer_does(relabel, wait))
 
         time.on_sleep = relabel_at_the_first_wait
         repeat.run(
@@ -362,7 +380,7 @@ def fix_ci_ended(conn: sqlite3.Connection, ended: datetime) -> None:
 def chore_started(conn: sqlite3.Connection, started: datetime) -> None:
     tick_id = db.start_tick(conn, dry_run=False)
     run_id = db.insert_chore_run(conn, tick_id=tick_id, chore="build-health", logs_dir=LOGS)
-    assert db.finish_chore_run(conn, run_id, "ok", None)
+    assert db.finish_run(conn, "chore_runs", run_id, ChoreRunStatus.OK, None)
     conn.execute("UPDATE chore_runs SET started_at = ? WHERE id = ?", (stamp(started), run_id))
 
 
@@ -539,7 +557,7 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
     db.touch_ticket(ctx.conn, KEY, "/r")
     run_id = review_run(ctx.conn, first)
     if when == "before the tick":
-        assert db.finish_review_run(ctx.conn, run_id, "done", None)
+        assert db.finish_run(ctx.conn, "review_runs", run_id, ReviewRunStatus.DONE, None)
     commands = [finishes_review(canopy_env.state_dir / db.DB_FILE_NAME)] if when == "during the tick" else []
     with overseer_does(*commands):
         time = FakeTime()
@@ -548,7 +566,7 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
             if len(time.slept) != 1:
                 return
             if when == "during the wait":
-                assert db.finish_review_run(ctx.conn, run_id, "done", None)
+                assert db.finish_run(ctx.conn, "review_runs", run_id, ReviewRunStatus.DONE, None)
             elif when == "an operator message":
                 assert main(["reply", KEY, "Go ahead."]) == 0
 
@@ -590,10 +608,12 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
         ("stop", "starts", "a ticket started or stopped ended the wait"),
         ("grant attempts", "grant", "a grant ended the wait"),
         ("grant reviews", "grant", "a grant ended the wait"),
+        ("set a notice", "notice", "a notice to workers set or cleared ended the wait"),
+        ("clear a notice", "notice", "a notice to workers set or cleared ended the wait"),
     ],
 )
 @pytest.mark.parametrize("pacing_on", [True, False], ids=["pacing on", "pacing off"])
-def test_the_operators_start_stop_and_grant_end_the_wait(
+def test_the_operators_acts_end_the_wait(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
     agent_log: Path,
@@ -606,6 +626,8 @@ def test_the_operators_start_stop_and_grant_end_the_wait(
     ctx = context(canopy_env)
     if act == "stop":
         assert main(["start", KEY]) == 0  # before the loop: its first tick sees it
+    elif act == "clear a notice":
+        assert main(["notice", "CI is down."]) == 0
     time = FakeTime()
 
     def at_first_wait() -> None:
@@ -615,6 +637,10 @@ def test_the_operators_start_stop_and_grant_end_the_wait(
             assert main([act, KEY]) == 0
         elif act == "grant attempts":
             attempts_granted(ctx.conn, 0)
+        elif act == "set a notice":
+            assert main(["notice", "CI is down."]) == 0
+        elif act == "clear a notice":
+            assert main(["notice", "--clear"]) == 0
         else:
             reviews_granted(ctx.conn, 0)
 
@@ -652,7 +678,7 @@ def test_with_idle_pacing_off_a_run_ending_does_not_wake_the_wait(
     with overseer_does():
 
         def run_ends() -> None:
-            db.finish_review_run(ctx.conn, run_id, "done", None)
+            db.finish_run(ctx.conn, "review_runs", run_id, ReviewRunStatus.DONE, None)
 
         time = FakeTime(on_sleep=run_ends)
         term, _ = console()

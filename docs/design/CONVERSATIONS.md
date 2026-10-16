@@ -15,7 +15,8 @@ Slack later. Channels differ in how they reach the operator and how they prove w
 workers never see which channel a message came from, so adding a channel changes no prompt.
 
 A ticket is **public** when one of `tracker.labels` authorizes it, as today, and **private** when the operator starts
-it in canopy (below). A started ticket is private whatever labels it carries: the start record wins. A private
+it in canopy, or, with `tracker.private` set, when its label brings it in (below). A started ticket is private whatever
+labels it carries: the start record wins. A private
 ticket's conversation never touches the tracker: the operator can deliver a ticket a client filed without the agent's
 reports, its questions, or the operator's answers appearing on it.
 
@@ -82,14 +83,25 @@ about, so the same verbs serve tickets now, PRs with M14, and what comes later (
 | `canopy forget REF` | forget its branch and PRs, so its next `implement` starts over (below); public tickets too |
 | `canopy grant REF KIND [--repo NAME] [--runs N]` | allow one unit N more runs of KIND, default 1 (below); public tickets too |
 | `canopy grant URL review [--runs N]` | allow the PR at URL N more review runs, default 1 (below, §21) |
-| `canopy show REF` | its phase, PRs, recent runs, and conversation, oldest message first |
+| `canopy start URL --review` | have canopy review a PR the loop does not own, once, at its head (§21, M42) |
+| `canopy stop URL` | end that PR's review request; a review of it already running finishes (§21) |
+| `canopy show REF` | its phase, PRs, recent runs, and conversation, oldest message first; a PR's review request and reviews |
 
-`canopy status` lists what was started, with each subject's phase, beside the attention list and runs; there is no
-separate `list`.
+`canopy status` lists what was started, with each subject's phase, and the open review requests, beside the attention
+list and runs; there is no separate `list`.
 
 - `start` is private by construction: canopy cannot label a ticket (D003), so a ticket started in canopy keeps its
   conversation in the journal. The command says so when it runs, and when the next tick will pick the ticket up. A
   later `--public` could start a ticket whose conversation stays on the tracker; none is planned.
+- `tracker.private` (user-only, off by default) starts labeled tickets privately (D119). The first dispatch of a ticket
+  canopy never ran, authorized by its `--label` as any public ticket's, writes the start record in the transaction that
+  inserts the run, with channel `label`, and the run is private. From then on it is an ordinary private ticket: no
+  `--label`, no label check in its worker's prompt, and removing the label does not stop it; `canopy stop` does. The
+  dispatch's decision says it started the ticket, and `canopy show` says how. A ticket already worked in public keeps
+  its conversation on the tracker, and a split leaves its ticket public, since it creates tickets there; its children
+  are started by their own first dispatch. With no read tools for the provider the dispatch is refused
+  `no_read_tools`. The label stays visible on the ticket (REQUIREMENTS R11): the switch hides the conversation, not
+  that canopy works the ticket.
 - `stop` without `--now` is graceful: it says which run is still going and that it will finish. With `--now` it also
   ends that run: its process group is killed and its slots returned and desk removed as reconcile does for a
   crashed run (§6), and the run is marked `stopped`, a status that raises no attention item and counts toward attempt
@@ -98,7 +110,8 @@ separate `list`.
 - `stop` does not delete the start record; it marks it stopped. A stopped ticket stays private and is dispatched
   by nothing, whatever labels it carries, until `canopy start` again: a queue label left on it never turns it
   public.
-- The start record is the authorization. Only the operator's commands write it, short of T1's residual (below).
+- The start record is the authorization. Only the operator's commands write it, and, under `tracker.private`, a
+  labeled ticket's first dispatch, short of T1's residual (below).
 - A started ticket is private even when it also carries a queue label, or gains one later. The harness chooses the
   worker in code: `canopy dispatch` for a started ticket always renders the private prompt and runs the private
   definition, whatever the overseer passed.
@@ -152,7 +165,8 @@ separate `list`.
   `operator`, and every public `implement`, `fix-ci`, and `resume` prompt carries the latest 20
   (`{{OPERATOR_MESSAGES}}`, at most 30,000 characters), each labeled the operator's: an instruction. The workers'
   questions come with them, labeled data, so a reply to message N names something the worker can read; the rest of the
-  conversation is on the tracker (D093). The overseer's `--context` points at a message by id, never quotes it. A reply
+  conversation is on the tracker (D093). The same prompts carry the latest three runs' reports (`{{PREVIOUS_RUNS}}`,
+  §8), labeled data. The overseer's `--context` points at a message by id, never quotes it. A reply
   on a ticket with no branch yet rides its `implement`, and one after a failed run is "try again". Its authorized
   repliers' comments on the ticket still work as before (§7). `show` drops control characters from every message.
 - A public worker can write to the ticket and its PRs, so keeping the operator's messages off them is its prompt's
@@ -243,7 +257,7 @@ A reference names a subject by its shape, so no kind needs a flag and no form ca
 | Reference | Subject | Verbs |
 |---|---|---|
 | `PROJ-123` | a ticket | all (M18), and the overseer's `mirror` (M19) |
-| `api#42`, or the PR's URL | a PR | `grant` (its reviews, by URL); all, once PR-scoped work exists (M14) |
+| `api#42`, or the PR's URL | a PR | `grant` (its reviews), `start --review` and `stop` (a review request), and `show`, each by URL; the rest once PR-scoped work exists (M14) |
 | `chore:NAME` | a chore (§19) | `reply` (its notes), `dismiss` (one of its findings), `show` |
 | `run:ID` | a run | `show` |
 | `review:ID` | a review run (§21) | `dismiss` (one of its findings), `send` (some to a worker); `canopy review show ID` shows one |
@@ -294,22 +308,23 @@ place, public or private (D081).
 ### Waking the loop
 
 During the wait (§6, the loop), each step checks the journal for the operator's acts: a message to a ticket recorded
-since the last tick began; a ticket started or stopped (`starts`), or attempts or a PR's reviews granted
-(`canopy grant`), since the last tick read the journal (or began, when it read nothing). A note to a chore (§19) does
-not wake it: the chore's next run reads it. Nor does a config reload (§6). Any of those acts ends the wait and runs the
-next tick, no sooner than `loop.min_gap_minutes` after the last one began, whether idle pacing is on or not; the tick
-records what woke it in `ticks.woken_by` (`message`, `starts`, `grant`) and is not idle. Every channel wakes it the
-same way, whether the act came from another process (`canopy start`) or the loop's own server thread (D073).
-Capacity, attempt limits, and cooldowns hold as for any tick. Before M28 only a message woke it, so a start from the
-web UI waited for the timer or a "tick now" (MEASUREMENTS 2026-10-12, F3).
+since the last tick began; a ticket started or stopped (`starts`), attempts or a PR's reviews granted (`canopy grant`),
+or a notice to workers set or cleared (`canopy notice`, §8), since the last tick read the journal (or began, when it
+read nothing). A note to a chore (§19) does not wake it: the chore's next run reads it. Nor does a config reload (§6).
+Any of those acts ends the wait and runs the next tick, no sooner than `loop.min_gap_minutes` after the last one began,
+whether idle pacing is on or not; the tick records what woke it in `ticks.woken_by` (`message`, `starts`, `grant`,
+`notice`) and is not idle. Every channel wakes it the same way, whether the act came from another process
+(`canopy start`) or the loop's own server thread (D073). Capacity, attempt limits, and cooldowns hold as for any tick.
+Before M28 only a message woke it, so a start from the web UI waited for the timer or a "tick now" (MEASUREMENTS
+2026-10-12, F3).
 
 ### Channels
 
 | Channel | In | Out | Proves the operator by |
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
-| cli | `canopy start`, `stop`, `reply` (public tickets too), `forget`, `grant`, `dismiss`, `send` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
-| web (M20) | reply, start, stop, forget, grant; notes to chores (M23), dismissing chores' and reviews' findings, sending reviews' findings to a worker (M32); pause, resume; limits and trust settings (M41) | pages | the listener secret (TRUST_MODEL T8) |
+| cli | `canopy start`, `stop`, `reply` (public tickets too), `forget`, `grant`, `dismiss`, `send`, `notice` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
+| web (M20) | reply, start, stop, forget, grant; notes to chores (M23), dismissing chores' and reviews' findings, sending reviews' findings to a worker (M32); pause, resume; setting and clearing a notice to workers (M35); limits and trust settings (M41) | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
 Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
@@ -324,48 +339,52 @@ Served by `canopy loop` from a thread (D073):
   and serves nothing; the loop goes on. It serves plain HTTP, also on a private address: T8's "relies on the network"
   residual stands (D076).
 - Each request opens its own journal connection, never takes the tick lock, and writes only through the functions the
-  CLI uses: `conversation.start`, `stop`, `reply`, `forget`, `dismiss`, and `send` with channel `web` (a note to a chore
-  is a `reply` on its subject, as `canopy reply chore:NAME` is, and sending a review's findings a `reply` on its ticket,
-  §21), for a stop with `now`, the same `runs.halt.end` as `canopy stop --now`, for a grant `runs.policy.grant` and
-  `reviews.grants.grant` as `canopy grant`, one run each, and `pause.pause` and `pause.resume` as `canopy pause` and
-  `canopy resume` (§6). Reload on the settings page asks the loop to read its config again, as SIGHUP does (§6); it
-  writes nothing. The Limits and trust page under Settings (`/settings/limits`) writes the user file, only the keys §12
-  lists, within their bounds, and trust only toward stricter (`serve.config_edit`, TRUST_MODEL T8), then asks for the
-  same reload; every other key stays the operator's to edit in the file. A forget cannot be undone from the UI, so its
-  request carries the ticket's key as the operator typed it, and the server refuses `not_confirmed` before reading
-  anything when it does not match, so no client skips the challenge; one more click, as Stop now asks, is too easy to
-  give by mistake. Its outcome names the branch and PRs canopy no longer tracks, as the CLI's does; the attempt-limit
-  note is the CLI's alone. `serve` is a feature and cannot import `runs`, `reviews`, or `loop`, so the loop hands it
-  that function and the attention list's (`loop.attention.listed`), a way to ask for a reload (`loop.reread`), and the
-  grants with the limits they raise (`runs.policy`, `reviews.grants`), when it starts the server (`serve.backend`); a
-  reload hands the server the new config, which each request reads as it opens. The one process it runs is `treehouse
-  status --json`, for the worktrees page (below): it changes no lease, but it takes the pool's lock.
+  CLI uses: `conversation.start`, `stop`, `reply`, `forget`, `dismiss`, and `send` with channel `web` (a note to a
+  chore is a `reply` on its subject, as `canopy reply chore:NAME` is, and sending a review's findings a `reply` on its
+  ticket, §21), for a stop with `now`, the same `runs.halt.end` as
+  `canopy stop --now`, for a grant `runs.policy.grant` and `reviews.grants.grant` as `canopy grant`, one run each,
+  `pause.pause` and `pause.resume` as `canopy pause` and `canopy resume` (§6), and `notice.set_notice` and
+  `notice.clear` as `canopy notice` and `canopy notice --clear` (§8). Reload on
+  the settings page asks the loop to read its config again, as SIGHUP does (§6); it writes nothing. The Limits and
+  trust page under Settings (`/settings/limits`) writes the user file, only the keys §12 lists, within their bounds,
+  and trust only toward stricter (`serve.config_edit`, TRUST_MODEL T8), then asks for the same reload; every other key
+  stays the operator's to edit in the file. A forget
+  cannot be undone from the UI, so its request carries the ticket's key as the operator typed it, and the server refuses
+  `not_confirmed` before reading anything when it does not match, so no client skips the challenge; one more click, as
+  Stop now asks, is too easy to give by mistake. Its outcome
+  names the branch and PRs canopy no longer tracks, as the CLI's does; the attempt-limit note is the CLI's alone.
+  `serve` is a feature and cannot import `runs`, `reviews`, or `loop`, so the loop hands it that function and the
+  attention list's (`loop.attention.listed`), a way to ask for a reload (`loop.reread`), and the grants with the
+  limits they raise (`runs.policy`, `reviews.grants`), when it starts the server (`serve.backend`); a reload hands
+  the server the new config, which each request reads as it opens. The one process it runs is
+  `treehouse status --json`, for the worktrees page (below): it changes no lease, but it takes the pool's lock.
 - A server failure is logged and the server restarted after 1 second, doubling to at most 60; it never ends the loop.
   Stopping the loop stops it, waiting at most 2 seconds for open streams.
 - Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected item's
   conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
-  and the list, `ui/DESIGN.md`), runs (running, then the 50 that ended last, each with a page and its session's
-  transcript, below), worktrees (each pool's slots, below), tickets, each with its conversation and the decisions about
-  it, the list filtered by where each stands and by words in its key or title, pull requests (below), chores (below),
-  ticks (below), search (below), and spend (below). The side rail shows the runs working now and the spend of the last
-  24 hours and the last 30 days on every page, under the nav, so what the loop is doing and what it costs stay in view
-  wherever the operator is; either figure opens the spend page. In a
+  and the list, `ui/DESIGN.md`), runs (running, each with its latest tool call, §8, then the 50 that ended last, each
+  with a page and its session's transcript, below), worktrees (each pool's slots, below), tickets, each with its
+  conversation and the decisions about it, the list filtered by where each stands and by words in its key or title,
+  pull requests (below), chores (below), ticks (below), search (below), and spend (below). The side rail shows the
+  runs working now and the spend of the last 24 hours and the last 30 days on every page, under the nav, so what the
+  loop is doing and what it costs stay in view wherever the operator is; either figure opens the spend page. In a
   window narrower than 1024px, as half of a second monitor is, the rail is a strip of the nav's icons whose button
   opens it whole over the page, and each list shows the columns its width has room for, its title always
   (`ui/DESIGN.md`).
   Actions: the CLI's verbs, reply, start, and stop (with or without `now`), granting one more run to what is at its
   limit (below), a note to a chore, dismissing a chore's finding or listing it again, dismissing a review's finding or
   sending some to a worker (§21), and pausing and resuming
-  the loop from the header on every page, which shows how long it has been paused, reloading the loop's config from
-  the settings page, and changing the limits and trust settings §12 lists on Limits and trust, a page under Settings
-  that the settings page links to, so Settings stays short. Its keys come in panels by what they govern (capacity,
-  pools, attempts, pace, trust), each in words over its name in the file, its value as the files say now, which file
-  sets it, and its bound; a list's entries are boxes to clear, and a trust switch already
-  on its stricter side cannot be changed. A save names the keys it wrote apart from what the reload found, whether
-  it waits for a running tick to end, and that a run already running keeps the prompt and permissions it started
-  with; under `canopy loop --every`, that `--every` still sets the pace until the loop restarts. OpenCode's session
-  attach (M15) is not in the UI: a run's page shows its session id and, once it ends, its transcript (below), and
-  attach joins once M15 runs workers against OpenCode's server.
+  the loop from the header on every page, which shows how long it has been paused, setting a notice to workers from
+  the settings page and clearing it from the banner every page shows while it is in force (§8), reloading the loop's
+  config from the settings page, and changing the limits and trust settings §12 lists on Limits and trust, a page
+  under Settings that the settings page links to, so Settings stays short. Its keys come in panels by what they govern
+  (capacity, pools, attempts, pace, trust), each in words over its name in the file, its value as the files say now,
+  which file sets it, and its bound; a list's entries are boxes to clear, and a trust switch already on its stricter
+  side cannot be changed. A save names the keys it wrote apart from what the reload found, whether it waits for a
+  running tick to end, and that a run already running keeps the prompt and permissions it started with; under
+  `canopy loop --every`, that `--every` still sets the pace until the loop restarts. OpenCode's session attach (M15)
+  is not in the UI: a run's page shows its session id and its transcript as it goes (below), and attach joins once
+  M15 runs workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
   uvicorn's `Server` runs in the thread, installs no signal handlers there (the loop's own handle Ctrl-C, §6), logs
   nothing to the terminal, and stops when the loop sets its `should_exit`. Request bodies and path parameters are
@@ -417,15 +436,15 @@ The API, under `{base}/api`:
 | `GET /session`, `POST /session`, `DELETE /session` | whether this browser is signed in, with its token; sign in; sign out |
 | `GET /meta` | canopy's version, whether the data is mock, `tracker.ticket_url` (or none), each repository's branch link template, and the workspace root |
 | `GET /attention` | the attention list, as `canopy status` shows it |
-| `GET /runs` | running runs, then the 50 that ended last: ticket title, kind, status, PRs, summary, session, cost, worktrees |
+| `GET /runs` | running runs, then the 50 that ended last: ticket title, kind, status, PRs, summary, session, cost, worktrees, and a running run's latest tool call |
 | `GET /runs/{id}` | one run, as `GET /runs` shows it; 404 for no such run |
 | `GET /runs/{id}/transcript` | its session's events, read back from its log (below); 404 for no such run |
 | `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none; and the acknowledged message |
-| `GET /ticks` | the latest 50 ticks, newest first: status, times, summary, overseer cost, how many decisions |
+| `GET /ticks` | the latest 50 ticks, newest first: status, times, summary, overseer cost and tokens, how many decisions |
 | `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
 | `GET /ticks/{id}/transcript` | its overseer's session, read back from its output (below); 404 for no such tick |
 | `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13); and what all of them ever cost |
-| `GET /spend/breakdown?days=` | what `canopy spend --days` prints (§11): each UTC day's cost by kind, the ticks by what they bought and by what woke them, the runs that reported no cost, and the newest 20 idle ticks; `days` 1 to 366, 7 by default |
+| `GET /spend/breakdown?days=` | what `canopy spend --days` prints (§11): each UTC day's cost by kind and tickets done, the ticks by what they bought and by what woke them, the runs that reported no cost, the tickets done and the spend per ticket done, each ticket's and PR's own cost, what each kind's tool calls returned by tool, and the newest 20 idle ticks; `days` 1 to 366, 7 by default |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: title, phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, its limits (each kind of each unit it has had runs in, then its units' PRs' review limits), its latest 100 messages, its latest 20 decisions, and its total cost |
 | `POST /tickets/{key}/start` | `canopy start` |
@@ -446,9 +465,12 @@ The API, under `{base}/api`:
 | `GET /pull-requests` | the PRs the journal knows, most recent activity first, at most 100: ticket, branch, phase, the run working it, its latest review |
 | `GET /pull-request?url=` | one PR: the runs that pushed to it, its review runs and limit, the latest 20 decisions naming it, and its total cost; 404 for one nothing names |
 | `POST /pull-request/grants?url=` | `canopy grant URL review`, for one review run |
+| `POST /pull-request/start?url=` | `canopy start URL --review`: a review request (§21) |
+| `POST /pull-request/stop?url=` | `canopy stop URL`: the PR's review request ends, and a review of it already running finishes (§21) |
 | `GET /worktrees` | each pool's slots from `treehouse status --json`, with the running run or review holding each |
-| `GET /loop` | whether the loop is paused: since when, and through which channel (§6), or not |
+| `GET /loop` | whether the loop is paused: since when, and through which channel (§6), or not; and the notice to workers in force: its text, when and through which channel it was set, and when it lapses (§8), or none |
 | `POST /loop/pause`, `POST /loop/resume` | `canopy pause`, `canopy resume`: whether it already was, and the state left |
+| `POST /loop/notice`, `POST /loop/notice/clear` | `canopy notice TEXT --for DURATION` with the text and minutes, and `canopy notice --clear`: for a clear, whether none was in force, and the state left |
 | `POST /loop/reload` | ask the loop to read its config again, as SIGHUP does (§6): the keys that differ, those that wait for a restart, and whether a tick is running |
 | `GET /config` | each key the Limits and trust page edits (§12): its value, the file it comes from, its bound; the user file's hash, the workspace's repositories, and `--every` |
 | `PATCH /config` | the changed keys and the hash the page read: written to the user file, then a reload asked for; refused `not_editable`, `past_bound`, `not_stricter`, `stale`, `unsafe_file`, `not_roundtrip`, `config_invalid`, or `inside_run`, writing nothing; the file as it was is kept as `config.toml.bak` |
@@ -485,15 +507,16 @@ held up every other request while the overseer worked. The route closes the conn
 dependency's teardown, which FastAPI runs however the stream ended: a client leaving while the first events were sent
 left the stream's generator suspended, never finished, and the connection open until the server exited. When another
 connection has committed since, or the loop has read its config again (§6), it reads the attention list, the runs, the
-tickets, the chores, the spend, the latest tick, and the pause again, and sends each that changed, whole:
+tickets, the chores, the spend, the latest tick, and the pause and notice again, and sends each that changed, whole:
 `attention.updated`, `runs.updated`, `tickets.updated`, `chores.updated`, `spend.updated` (when a cost changed; the
 windows move with the clock), `tick.updated`, `loop.updated`, and `ticket.changed` naming each ticket whose summary
 changed. It reads them all in one read transaction, so they are one snapshot: a commit landing between two of its
 queries cannot send a ticket's new summary in a list still in the order from before it. A reload commits nothing, yet
 the chores and the attention list are read through the config, so the stream holds the loop's config as the server's
 requests do, taking the new one at its next read: a chore added and reloaded shows on an open page without a refresh.
-A new stream starts with every list, the spend, the latest
-tick, and the pause, so a pause from the loop's terminal or the CLI shows as one from
+A notice to workers lapses with no commit, so a stream also reads them again once the
+notice it last sent has lapsed, and the banner leaves when the notice does. A new stream starts with every list, the
+spend, the latest tick, and the pause and notice, so a pause from the loop's terminal or the CLI shows as one from
 the web does. The UI writes a list into its query with `setQueryData` and refetches a changed ticket
 only if a page shows it; a chore's page is read again on every `chores.updated`, whose list carries each chore's
 newest note, so a note changes it, and a chore run's page when that list moves the run's status. The latest tick
@@ -562,7 +585,9 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
   list has a small `dismiss` beside its age; on the chore's page each open finding has one in its head line, or,
   dismissed, a mark and `undo`, as `--undo` takes it back.
 - A chore run's summary is the harness's note or the agent's summary, cut at 300 characters, and a finding's title and
-  detail are the agent's: untrusted text, rendered as text with control characters dropped.
+  detail are the agent's: untrusted text, rendered as text with control characters dropped. A finding's title shows
+  whole wherever the finding does, and a finding selected on the attention list shows its detail and link under it,
+  as the chore's page does, rather than the item's one line of title and link run together.
 - A chore run's page (asked for by the operator, 2026-10-13: a list's summary hid the rest of what a run said) is its
   row, the whole of its summary (a result bounds it at 2000 characters) and the harness's note apart from it, the
   findings an `ok` run reported, and its session's transcript (below). `GET /chores/{name}/runs/{id}` finds a run only
@@ -575,9 +600,11 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
 The ticks pages (M24): the `decisions` table is the overseer's reasons for what the loop did and the evaluation corpus
 for prompt changes (§6), and "why has the loop not picked this up" is answered where the ticket is.
 
-- `GET /ticks` lists the latest 50 ticks, newest first, each as the header's tick is shown, with its overseer's
-  session and cost and how many decisions it recorded. `GET /ticks/{id}` is one tick and its decisions in the order
-  they were recorded; an id that is not a positive integer is refused (422), and no such tick is a 404.
+- `GET /ticks` lists the latest 50 ticks, newest first, each as the header's tick is shown, with its overseer's session,
+  its cost, tokens, and peak context as a run's (§13), and how many decisions it recorded. The ticks page shows each
+  as a column; on a narrow list the token counts give way first, since the cost says the same in dollars, and the tick's
+  page shows them after its cost as a run's page does. `GET /ticks/{id}` is one tick and its decisions in the order they
+  were recorded; an id that is not a positive integer is refused (422), and no such tick is a 404.
 - A decision names its subject as `canopy decisions` does: a ticket, a unit as its ticket and repository
   (`ABC-1 (web)`), a repository, `chore:NAME`, `pr:URL` for a PR no ticket owns, or `-` for the whole tick; with its
   ticket, repository, chore, and PR apart, and its action and rationale.
@@ -603,8 +630,20 @@ rather than from a one-off analysis of the log.
   of the live overseer's, each day as a stacked bar of the kinds with idle overseer spend its own series on the
   baseline, the same numbers as a table, the ticks by group and by what woke them, and the idle ticks. A window the
   page does not offer reads as the week. Reads only.
-- The rail's two spend figures open it, the 24 hours' on the week and the 30 days' on the month: a link from them
-  rather than a nav item, since spend is a question the operator asks now and then, not a place they work.
+- Beside the spend, what it got done (asked for by the operator, 2026-10-15: landing twice the tickets for half again
+  the spend is a good trade, and the page could not show it): the tickets marked done in the window and the spend per
+  ticket done under the totals, a done count on each day of the table, and two panels side by side, by ticket and by
+  pull request, each the costliest first and scrolling in its panel. A ticket's row names it and its title, its runs
+  and reviews, what they cost, and when and how it was marked done; a PR's row names it and its phase, its ticket,
+  and the same. What each counts is §11's `canopy spend`.
+- Under them, by tool (asked for by the operator, 2026-10-15, issue 434): which tools put the most into the runs'
+  context, so the costly reads are a glance rather than an analysis session. A row per kind and tool, the most
+  returned first and scrolling in its panel: the tool, the kind of run, its calls (the runs that made them on hover),
+  the errors, the characters returned, and the tokens that is, estimated at four characters each and headed `~tokens`.
+- The nav has it, between Chores and Ticks, opening on the week; the rail's two spend figures open it too, the 24
+  hours' on the week and the 30 days' on the month. It was at first only a link from the figures, as a question the
+  operator asks now and then rather than a place they work, but the operator, who asked for the page, did not find it
+  there (2026-10-15).
 - `spend.updated`, `tick.updated`, and a run starting or ending on `runs.updated` mark the breakdown stale, so a page
   left open follows the loop. Each tick carries `idle` and `woken_by`, so the loop recording them after the tick
   closes sends `tick.updated` again, and the page never keeps the tick as no loop's.
@@ -613,12 +652,14 @@ The pull requests pages (ROADMAP M32, asked for by the operator, 2026-10-13): a 
 the journal holds about one, spread over a ticket's units, its runs, the reviews (§21), and the decisions, is
 gathered on its page.
 
-- A PR is known by a ticket's unit (one of the loop's own, reviewed or not) or by a review run (either kind, §21).
-  `GET /pull-requests` lists each once, most recent activity first: the newest of the unit's ticket's last sighting and
-  the PR's review runs' starts and ends. Each has its URL, the ticket that owns it (a unit's, or else the one a review
-  named, as a forgotten ticket's review still does) with its title, its repository, the unit's branch and phase, the
-  run of its ticket working now, how many review runs it had, and its latest. Decisions are not a source for the
-  list: they are many, and the list is read again on every tick and every ticket change.
+- A PR is known by a ticket's unit (one of the loop's own, reviewed or not), by a review run (any purpose, §21), or
+  by the operator's review request (M42). `GET /pull-requests` lists each once, most recent activity first: the
+  newest of the unit's ticket's last sighting, the PR's review runs' starts and ends, and its review requests' making
+  and ending. Each has its URL, the ticket that owns it (a unit's, or else the one a review named, as a forgotten
+  ticket's review still does) with its title, its repository (a request's, for a PR known by nothing else), the
+  unit's branch and phase, the run of its ticket working now, how many review runs it had, its latest, and the
+  operator's latest review request on it, open or ended. Decisions are not a source for the list: they are many, and
+  the list is read again on every tick and every ticket change.
 - `GET /pull-request?url=` is one PR, named by its URL as a query parameter, since the URL is opaque (§21) and holds
   slashes; only a plain `https://` URL of at most 300 characters is looked up, anything else is a 422. A PR only
   decisions name (a `review.query` match no review has run on yet) has a page too, so it shows why (`wait`, a refusal).
@@ -628,8 +669,11 @@ gathered on its page.
   its page, and so does a review's page.
 - A PR's page shows its total cost, as a ticket's does: every run it lists, past the 20 shown, and every review run of
   it. A run that pushed to two PRs, one per repository, counts on each one's page, and once on its ticket's.
-- Reads only, and not on the event stream: the UI reads them again on `tick.updated` and `ticket.changed`. Nothing
-  here writes to a PR. Everything shown is journal text the other pages already serve, so T8 is unchanged.
+- Not on the event stream: the UI reads them again on `tick.updated` and `ticket.changed`, and after its own writes.
+  Nothing here writes to a PR. The pages write two things to the journal, through the same code as the CLI and so with
+  the same refusals: a grant of one more review (above), and a review request (M42, §21). The pull requests page leads
+  with a form taking a PR's URL, with `Review`; a PR's page shows its request in the foot of its Pull request panel,
+  with `Stop` while it is open. Making and ending one are among the web channel's writes (TRUST_MODEL T8).
 
 The transcripts (M27): what a session did, its tool calls above all, without leaving the browser for
 `opencode export`.
@@ -652,9 +696,10 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   dropped, line breaks kept. A log that is a symlink, a FIFO, or anything but a regular file is not read: it is opened
   without following links and without blocking.
 - A transcript says why it has nothing: no session (a template without `--format json`), no log, or none of its
-  events yet. A run's events reach its log only when it ends, since its stdout is captured whole (§8), as a chore
-  run's do (§19); a running run's page says so. A subagent's calls are its own session's (§13), so a `task` call
-  shows as one tool call with its answer.
+  events yet. A worker run's events reach its log as the worker prints them (§8), so a running run's transcript is
+  what it has done so far, and until its first event its page says they show as it prints; a chore run's reach its
+  log only when it ends, since its stdout is captured whole (§19), as a tick's output does (§6). A subagent's calls
+  are its own session's (§13), so a `task` call shows as one tool call with its answer.
 - A tool call's line says what it did and how it ended, so a tick reads without opening each call: a shell call's
   command, not the description the agent gave it, and the call's other short values when the runtime gave it no title
   (an MCP read's `owner=acme repo=web pullNumber=88`, where its first value alone was `get`); its error, or an output
@@ -662,9 +707,10 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   harness refused, which prints `Error: <verb> refused (<guard>)` and exits 1, would show as done: the UI reads that
   line from a canopy command's output and marks the call refused, with its guard. Only canopy's own lines are read so;
   another command's output is what it printed.
-- It is not on the event stream: a log can be large, and it changes only as its run or tick ends. The UI reads a run's
-  again when `runs.updated` moves that run's status, a chore run's when `chores.updated` moves its, and a tick's when
-  `tick.updated` moves that tick's.
+- It is not on the event stream: a log can be large. The UI reads a run's again when `runs.updated` moves that run's
+  status, its latest tool call, or its cost, which a running run's worker moves as it ends each tool call and model
+  call (§8), so a run's page follows it without polling; a chore run's when `chores.updated` moves its status, and a
+  tick's when `tick.updated` moves that tick's, the only times their logs change.
 - A run's page is its fields as the runs list has them, over its transcript; each run's id in a list of runs opens it.
 - A transcript finds lines in itself (taken on request, 2026-10-13), in the browser over the entries already read, so
   it asks the server nothing: a search keeps the rows with a line that holds it, its matches marked, and opens a tool
@@ -675,9 +721,9 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   JSON, have their keys, strings, and values colored. It holds whatever a tool read or printed, a
   file's contents or a command's output, which is more than the journal does (TRUST_MODEL T8).
 - Rejected: running `opencode export <id>` from the server (a second runtime process behind the listener, and
-  OpenCode's storage format to follow); copying events into the journal (unbounded rows for a view); serving a run's
-  log, or its tail. Revisit when a running run should show its events as they come, which needs its stdout streamed
-  to its log, or when a second runtime prints another shape.
+  OpenCode's storage format to follow); copying events into the journal (unbounded rows for a view), which the
+  latest tool call on a running run's row is not: one bounded line, overwritten; serving a run's log, or its tail.
+  Revisit when a second runtime prints another shape.
 
 Model calls (taken on request, 2026-10-13): to explore what each model call was sent and what it did, not only what
 it cost.
@@ -793,8 +839,9 @@ something, without knowing which page holds it.
   It serves only journal text the other pages serve, behind the same session, so T8 is unchanged.
 - The search box sits atop the nav on every page; `/` focuses it from anywhere but a text field, and Escape leaves it.
   Typing opens `/search?q=` once the operator pauses for 250 ms, replacing the history entry as the query grows, and
-  Enter opens it at once. A clear button empties the box without leaving the page. The page groups hits by source,
-  each a row that links to the page holding it.
+  Enter opens it at once. A clear button empties the box; emptying it, by the button or by deleting its text, empties
+  the search page too, and leaves any other page as it is. The page groups hits by source, each a row that links to
+  the page holding it.
 
 How it serves, built in M20's foundation and true of every page:
 
@@ -828,6 +875,11 @@ How it serves, built in M20's foundation and true of every page:
   not cloned, with a run holding slots in two pools and a pool past its declared size. Writes go to that journal.
   Without `--secret-file` it signs nobody in and asks for no session; only mock mode allows that, and it binds loopback
   only.
+- The API documents itself: its OpenAPI schema at `api/openapi.json` and a Swagger UI page over it at `api/docs`
+  (`docs` redirects there), under the base path, behind the session like every other API route. FastAPI's stock page
+  loads Swagger UI from a CDN, which would run another origin's script beside the operator's journal and session, so
+  `api/docs.py` serves its own page instead: the copy of Swagger UI the UI's build carries in `api-docs/`, a CSP as
+  `index.html`'s, and the session's token added to a write, so "Try it out" works on every route.
 
 ### Trust model changes
 

@@ -17,6 +17,7 @@ from canopy.core.db import Event
 
 if TYPE_CHECKING:
     from canopy.core.config import Config
+    from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunStatus
 
 RUNS = "runs"
 LOOP = "loop"
@@ -128,9 +129,11 @@ def run_started(
 
 
 def run_ended(
-    config: Config, run: sqlite3.Row, status: str, result_json: str | None
+    config: Config, run: sqlite3.Row, status: RunStatus, result_json: str | None
 ) -> Callable[[int | None], Event | None]:
-    """Return what builds the `run.ended` event for a run closing as `status` with `result_json`, for `db.finish_run`.
+    """Return what builds the `run.ended` event for a run closing as `status` with `result_json`.
+
+    `db.finish_ticket_run` calls it once it knows the run's messages.
 
     It is built from the id of the message the run recorded (`message`): its question for a `blocked` run and its
     report otherwise, so a channel can say what a reply answers (DESIGN §22). It is None if no sink takes runs.
@@ -166,7 +169,7 @@ def run_ended(
     return build
 
 
-def chore_ended(config: Config, run: sqlite3.Row, status: str, result_json: str | None) -> Event | None:
+def chore_ended(config: Config, run: sqlite3.Row, status: ChoreRunStatus, result_json: str | None) -> Event | None:
     """Return the `chore.ended` event for a chore run, or None if no sink takes chores."""
     if not config.notify.takes(CHORES):
         return None
@@ -183,7 +186,7 @@ def chore_ended(config: Config, run: sqlite3.Row, status: str, result_json: str 
     return Event(CHORES, "chore.ended", fields)
 
 
-def review_ended(config: Config, run: sqlite3.Row, status: str, result_json: str | None) -> Event | None:
+def review_ended(config: Config, run: sqlite3.Row, status: ReviewRunStatus, result_json: str | None) -> Event | None:
     """Return the `review.ended` event for a review run, or None if no sink takes reviews."""
     if not config.notify.takes(REVIEWS):
         return None

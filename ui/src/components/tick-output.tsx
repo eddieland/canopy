@@ -4,10 +4,10 @@ import { Fragment, useState } from 'react'
 
 import { tickOutputQuery } from '@/api/queries'
 import type { TickOutput } from '@/api/types'
+import { Disclosure } from '@/components/disclosure'
 import { JsonTokens } from '@/components/json-text'
 import { Empty, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
-import { Button } from '@/components/ui/button'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { Toggle } from '@/components/ui/toggle'
 import { jsonLines } from '@/lib/json-lines'
 import { setPrettyOutput, usePrettyOutput } from '@/lib/pretty-output'
@@ -45,17 +45,13 @@ export function TickOutputPanel({ id, path, running }: { id: number; path: strin
                                 Pretty
                             </Toggle>
                         )}
-                        {path !== null && (
-                            <CollapsibleTrigger asChild>
-                                <Button variant="ghost" size="xs">
-                                    {shown ? 'Hide' : 'Show'}
-                                </Button>
-                            </CollapsibleTrigger>
-                        )}
+                        {path !== null && <Disclosure open={shown} what="output" />}
                     </span>
                 </PanelHeader>
                 {path === null ? (
-                    <Empty>{running ? 'no output yet: the overseer’s is written when it ends' : 'none kept'}</Empty>
+                    <Empty>
+                        {running ? 'no output yet: the overseer’s is written when it ends' : 'no output kept'}
+                    </Empty>
                 ) : (
                     <>
                         <CollapsibleContent>

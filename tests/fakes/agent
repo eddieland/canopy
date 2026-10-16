@@ -11,6 +11,9 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
     FAKE_AGENT_SLEEP    seconds to sleep before printing the final line, to exercise timeouts. Default 0.
     FAKE_AGENT_COMMANDS a JSON list of argv lists, run in order before the final line, the way an agent runs
                         commands through its bash tool. Stands in for an overseer calling `canopy decide`. Default none.
+    FAKE_AGENT_QUERIED  for an overseer whose state block says `"query_due": true`: a JSON list of the ticket keys it
+                        records with `canopy queried` before its commands, as the prompt's step 1 does once it has run
+                        the query. Default `[]`, the query found nothing open. `skip` records no query.
     FAKE_AGENT_LOG      if set, one JSON line {"argv": [...], "cwd": "...", "env": {...}, "commands": [...]} is
                         appended to this file per run. `env` holds the CANOPY_* and OPENCODE_* variables the agent
                         saw; `commands` holds each command's argv, exit code, stdout, and stderr.
@@ -20,7 +23,8 @@ Prints a few lines of chatter, then a final line, then exits. Configured through
                         test can make it invalid. Default 0.125. Each step's tokens are STEP_TOKENS.
 
 With `--format json` it prints what `opencode run --format json` does: one JSON event per line, its text as `text`
-events and two model calls as `step_finish` events. Otherwise it prints its text as plain lines.
+events, each command it ran as a `bash` `tool_use` event once it ends, and two model calls as `step_finish` events.
+Otherwise it prints its text as plain lines.
 
 A run started with `--agent canopy-worker` reads FAKE_WORKER_RESULT, FAKE_WORKER_SAYS, FAKE_WORKER_EXIT,
 FAKE_WORKER_SLEEP, FAKE_WORKER_COMMANDS, FAKE_WORKER_SESSION, and FAKE_WORKER_STEP_COST first, falling back to the
@@ -60,10 +64,34 @@ def setting(argv: list[str], name: str, default: str) -> str:
 
 def run_commands(argv: list[str]) -> list[dict[str, object]]:
     ran: list[dict[str, object]] = []
-    for command in json.loads(setting(argv, "COMMANDS", "[]")):
+    for command in [*queried(argv), *json.loads(setting(argv, "COMMANDS", "[]"))]:
         proc = subprocess.run(command, capture_output=True, text=True, check=False)  # noqa: S603  (argv from the test)
         ran.append({"argv": command, "returncode": proc.returncode, "stdout": proc.stdout, "stderr": proc.stderr})
+        if events(argv):
+            # OpenCode prints a call once it has ended, as completed whatever the command's exit.
+            shell = " ".join(command)
+            state = {"status": "completed", "input": {"command": shell}, "output": proc.stdout, "title": shell}
+            emit(argv, "tool_use", {"type": "tool", "tool": "bash", "state": state})
     return ran
+
+
+def queried(argv: list[str]) -> list[list[str]]:
+    found = setting(argv, "QUERIED", "[]")
+    if role(argv) != "OVERSEER" or found == "skip" or not query_due(argv[-1] if argv else ""):
+        return []
+    return [["canopy", "queried", *json.loads(found)]]
+
+
+def query_due(prompt: str) -> bool:
+    """Whether `prompt`, an overseer's state block, says the query is due: its JSON between the fences."""
+    _, fenced, rest = prompt.partition("```json\n")
+    if not fenced:
+        return False
+    try:
+        state = json.loads(rest.partition("\n```")[0])
+    except json.JSONDecodeError:
+        return False
+    return isinstance(state, dict) and state.get("query_due") is True
 
 
 def events(argv: list[str]) -> bool:

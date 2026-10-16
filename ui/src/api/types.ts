@@ -11,6 +11,8 @@ export type Session = Schemas['Session']
 export type AttentionItem = Schemas['AttentionItem']
 /** One worker or split run (`run:ID`). */
 export type Run = Schemas['Run']
+/** A running run's latest tool call, as `_run` read it from the worker's events (DESIGN §8). */
+export type RunActivity = Schemas['RunActivity']
 /** A run's status in the five groups the UI colors (DESIGN §22): `failed` is every ending a human must look at. */
 export type RunState = Schemas['RunState']
 /** A ticket as the tickets list shows it. */
@@ -37,6 +39,12 @@ export type Forgot = Schemas['Forgot']
 export type Limit = Schemas['Limit']
 /** What a grant recorded: one more run allowed, every earlier one still counted. The next tick decides. */
 export type Granted = Schemas['Granted']
+/** The operator's request to review a PR the loop does not own (DESIGN §21): open, or how it ended. */
+export type ReviewRequest = Schemas['ReviewRequest']
+/** What a review request recorded: the open request, and whether it was already open or replaced another. */
+export type ReviewRequested = Schemas['ReviewRequested']
+/** What stopping a review request did: the request as it was, and a review of the PR still running. */
+export type ReviewRequestStopped = Schemas['ReviewRequestStopped']
 /** What a dismissal left: the chore's finding, and whether it is now dismissed. */
 export type Dismissed = Schemas['Dismissed']
 /** What a dismissal of a review's finding left: the run, the finding's number, and whether it is now dismissed. */
@@ -59,12 +67,22 @@ export type SpendCosts = Schemas['SpendCosts']
 export type SpendDay = Schemas['SpendDay']
 /** What a group of ticks bought (DESIGN §6, Idle pacing): idle, busy, hand-run, not ok, or a dry run. */
 export type SpendGroup = Schemas['SpendGroup']
+/** What one ticket's own runs in a spend window cost, and whether the loop marked it done in that window. */
+export type SpendTicket = Schemas['SpendTicket']
+/** What the runs that pushed to one PR, and the reviews of it, in a spend window cost. */
+export type SpendPullRequest = Schemas['SpendPullRequest']
+/** What one tool's calls in one kind's runs in a spend window returned: the calls, errors, and characters. */
+export type SpendTool = Schemas['SpendTool']
 /** A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded. */
 export type Tick = Schemas['Tick']
 /** The latest tick, or none before the first, and the newest message a tick has acknowledged. */
 export type LastTick = Schemas['LastTick']
-/** Whether the operator paused the loop: no tick starts until it is resumed. */
+/** Whether the operator paused the loop (no tick starts until it is resumed), and the notice to workers in force. */
 export type LoopState = Schemas['LoopState']
+/** The operator's notice to workers in force (DESIGN §8): what it says, when it was set, and when it lapses. */
+export type WorkerNotice = Schemas['WorkerNotice']
+/** What setting or clearing a notice did, and the state it left. */
+export type NoticeChanged = Schemas['NoticeChanged']
 /** The operator paused the loop (DESIGN §6): since when, and through which channel. */
 export type Pause = Schemas['Pause']
 /** What a pause or a resume did: whether the loop was already so, and the state it left. */

@@ -5,7 +5,7 @@ import json
 import pytest
 
 from canopy.core import agent_output
-from canopy.core.agent_output import AgentOutput, Usage
+from canopy.core.agent_output import AgentOutput, ToolUse, Usage
 
 RESULT = '{"status":"done","summary":"did it"}'
 TOKENS = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
@@ -28,23 +28,34 @@ def test_plain_text_is_read_as_it_is() -> None:
     assert agent_output.read(stdout) == AgentOutput(stdout, stdout)  # plain text is one message
 
 
-def test_events_give_the_text_the_session_and_the_cost() -> None:
+def test_events_give_the_text_the_session_the_cost_the_peak_context_and_the_first_call() -> None:
     lines = [
         event("step_start", {"type": "step-start"}),
         text("Working on it.\nStill working."),
         event("tool_use", {"tool": "bash", "state": {"output": RESULT.replace("did it", "a tool's output")}}),
         step(0.25),
         text(RESULT),
-        step(1),
+        step(1, {**TOKENS, "cache": {"read": 900, "write": 50}}),
         "not an event",
     ]
     output = agent_output.read("\n".join(lines))
     assert output.text == f"Working on it.\nStill working.\n{RESULT}"
     assert output.last == RESULT
     assert output.session_id == "ses_abc123"
-    assert output.usage == Usage(1.25, input=200, output=40, reasoning=6, cache_read=800, cache_write=100)
+    peak = 100 + 900 + 50  # the second call's input, cache read, and cache write
+    first = 100 + 400 + 50  # the first call's
+    assert output.usage == Usage(
+        1.25, 200, 40, 6, cache_read=1300, cache_write=100, peak_context=peak, first_call=first, first_cache_write=50
+    )
     assert output.usage is not None
-    assert output.usage.tokens == 2 * (100 + 20 + 3 + 400 + 50)
+    assert output.usage.new_tokens == 2 * (100 + 50 + 20 + 3)  # every kind but the cache reads
+    assert output.usage.describe() == "$1.25, 346 tokens, 1.1k peak context"
+
+
+def test_a_cost_recorded_before_the_peak_context_was_kept_says_none() -> None:
+    usage = Usage(0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0)
+    assert usage.describe() == "$0.50, 10.0k tokens"
+    assert usage.spent() == {"cost_usd": 0.5, "new_tokens": 10_000, "peak_context": None}
 
 
 def test_a_result_line_is_not_an_event() -> None:
@@ -56,7 +67,7 @@ def test_events_with_no_model_call_cost_nothing() -> None:
     error = json.dumps({"type": "error", "timestamp": 1, "sessionID": "ses_abc123", "error": {"name": "UnknownError"}})
     output = agent_output.read(error)
     assert (output.text, output.last, output.session_id) == ("", "", "ses_abc123")
-    assert output.usage == Usage(0, 0, 0, 0, 0, 0)
+    assert output.usage == Usage(0, 0, 0, 0, 0, 0, peak_context=0)  # and no first call
 
 
 @pytest.mark.parametrize(
@@ -101,3 +112,49 @@ def test_the_first_valid_session_id_is_kept() -> None:
 def test_a_text_part_that_does_not_validate_is_left_out() -> None:
     stdout = "\n".join([text("first"), event("text", {"text": 12}), event("text", None), text(RESULT)])
     assert agent_output.read(stdout).text == f"first\n{RESULT}"
+
+
+def tool(name: object, status: str = "completed", **state: object) -> str:
+    return event("tool_use", {"type": "tool", "tool": name, "state": {"status": status, "input": {}, **state}})
+
+
+def test_tool_calls_are_rolled_up_by_tool_with_what_they_returned() -> None:
+    lines = [
+        tool("bash", output="12345"),
+        tool("github_pull_request_read", output="x" * 1000),
+        tool("bash", "error", error="no such file"),
+        tool("bash", output=None),  # returned nothing
+        tool("github_pull_request_read", output="y" * 500),
+        event("tool_use", {"tool": "bash", "state": {"status": "running"}}),  # not ended, so not printed by OpenCode
+        event("tool_use", {"state": {"status": "completed", "output": "who called it?"}}),
+        text(RESULT),
+    ]
+    assert agent_output.read("\n".join(lines)).tools == (
+        ToolUse("bash", calls=3, errors=1, result_chars=5 + len("no such file")),
+        ToolUse("github_pull_request_read", calls=2, errors=0, result_chars=1500),
+    )
+
+
+def test_plain_text_and_events_with_no_tool_call_roll_up_no_tool() -> None:
+    assert agent_output.read(f"chatter\n{RESULT}\n").tools == ()
+    assert agent_output.read("\n".join([text(RESULT), step()])).tools == ()
+
+
+def test_a_tools_name_is_one_printable_line_and_their_number_is_bounded() -> None:
+    lines = [tool("evil\x1b[31m\n tool", output="a"), tool("", output="b"), tool("t" * 500, output="c")]
+    lines += [tool(f"mcp_{i}", output="d") for i in range(agent_output.MAX_TOOLS + 5)]
+    tools = agent_output.read("\n".join(lines)).tools
+    assert [t.tool for t in tools[:3]] == ["evil[31m tool", "?", "t" * agent_output.MAX_TOOL_NAME]
+    assert len(tools) == agent_output.MAX_TOOLS + 1
+    # The calls of every tool past the bound count together, under a name no runtime gives a tool.
+    assert tools[-1] == ToolUse(agent_output.OTHER_TOOLS, calls=8, errors=0, result_chars=8)
+
+
+def test_a_tally_rolls_up_the_tools_as_read_does() -> None:
+    lines = [tool("bash", output="12345"), tool("read", output="abc"), tool("bash", "error", error="no")]
+    tally = agent_output.Tally()
+    for line in lines:
+        found = agent_output.parse_event(line)
+        assert found is not None
+        tally.add(found)
+    assert tally.tools == agent_output.read("\n".join(lines)).tools

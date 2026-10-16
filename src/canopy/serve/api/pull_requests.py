@@ -1,7 +1,7 @@
-"""The PRs the journal knows, each with what the journal holds about it (DESIGN §22), and granting one more review.
+"""The PRs the journal knows (DESIGN §22), granting one more review, and the operator's review requests (§21).
 
-canopy writes nothing to a PR: a grant is the journal's. A PR is named by its URL, an opaque string with slashes in it,
-so it is a query parameter, never a path.
+canopy writes nothing to a PR: a grant and a request are the journal's. A PR is named by its URL, an opaque string with
+slashes in it, so it is a query parameter, never a path.
 """
 
 from __future__ import annotations
@@ -10,12 +10,19 @@ from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 
-from canopy.core import contract, conversation
+from canopy.core import contract, conversation, review_requests
 from canopy.infra import logs
 from canopy.serve import pull_requests
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError, not_found
-from canopy.serve.schema import ErrorResponse, Granted, PullRequest, PullRequestDetail
+from canopy.serve.schema import (
+    ErrorResponse,
+    Granted,
+    PullRequest,
+    PullRequestDetail,
+    ReviewRequested,
+    ReviewRequestStopped,
+)
 
 TAG = "pull requests"
 router = APIRouter(tags=[TAG])
@@ -31,6 +38,9 @@ PrUrl = Annotated[
         description=f"The PR's plain https:// URL, at most {conversation.MAX_PR_URL} characters.",
     ),
 ]
+
+# The 422 a route answers for a URL that is not a plain https:// URL of at most 300 characters.
+_BAD_URL = {422: {"model": ErrorResponse, "description": "Not a plain https:// URL of at most 300 characters."}}
 
 
 @router.get("/pull-requests", operation_id="listPullRequests", summary="List the PRs")
@@ -95,3 +105,66 @@ def grant(url: PrUrl, backend: BackendDep) -> Granted:
             raise RefusedError(r) from None
     _log.info("reviews granted", extra={"pr": ref.id, "runs": 1, "channel": WEB})
     return Granted(kind=_REVIEW, runs=granted.runs, limit=granted.limit)
+
+
+@router.post(
+    "/pull-request/start",
+    operation_id="startPullRequestReview",
+    summary="Ask for a PR to be reviewed",
+    responses={**REFUSED, **_BAD_URL},
+)
+def start(url: PrUrl, backend: BackendDep) -> ReviewRequested:
+    """`canopy start URL --review`: review a PR the loop does not own, once, at its head (DESIGN §21).
+
+    It reviews nothing now: the next tick does, in whichever of the workspace's repositories the PR is in. Refused as
+    the CLI refuses it: `reviews_off`, `bad_pr`, and `loop_pr`.
+    """
+    ref = _pr_ref(url, "start")
+    with backend.open() as ctx:
+        try:
+            requested = review_requests.request(ctx.conn, ctx.config, ref, channel=WEB)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info("review requested", extra={"pr": ref.id, "already": requested.already, "channel": WEB})
+    return ReviewRequested(request=pull_requests.review_request(requested.request), already=requested.already)
+
+
+@router.post(
+    "/pull-request/stop",
+    operation_id="stopPullRequestReview",
+    summary="Stop reviewing a PR",
+    responses={**REFUSED, **_BAD_URL},
+)
+def stop(url: PrUrl, backend: BackendDep) -> ReviewRequestStopped:
+    """`canopy stop URL`: end the PR's open review request. A review of it already running finishes.
+
+    Refused `not_requested` for a PR with no open request, and `bad_pr` for a URL that is not a PR's.
+    """
+    ref = _pr_ref(url, "stop")
+    with backend.open() as ctx:
+        try:
+            stopped = review_requests.stop(ctx.conn, ref)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info("review request stopped", extra={"pr": ref.id, "channel": WEB})
+    running = int(stopped.running["id"]) if stopped.running is not None else None
+    return ReviewRequestStopped(request=pull_requests.review_request(stopped.request), running_review=running)
+
+
+def _pr_ref(url: str, verb: str) -> conversation.Ref:
+    """The PR `url` names, refused as the CLI refuses it.
+
+    Returns:
+        The PR's reference.
+
+    Raises:
+        RefusedError: `url` is not a reference (`bad_ref`), or not a PR's (`bad_pr`).
+    """
+    try:
+        ref = conversation.parse_ref(url)
+        conversation.check_verb(ref, verb)
+    except conversation.Refused as r:
+        raise RefusedError(r) from None
+    if ref.kind != conversation.PR:
+        raise RefusedError(conversation.Refused("bad_pr", f"{url} is not a PR's URL"))
+    return ref

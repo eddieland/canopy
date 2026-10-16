@@ -19,6 +19,25 @@ test("a ticket's branch copies from beside it, and the button says it did", asyn
     await expect(copy).toBeVisible()
 })
 
+test('a copy shows a toast saying what it copied, which closes on its own', async ({ page }) => {
+    await page.goto('tickets/ABC-103')
+    await page.getByRole('button', { name: 'Copy branch' }).click()
+    const toast = page.getByTestId('toast')
+    await expect(toast).toContainText('Copied branch')
+    await expect(toast).toContainText('agent/ABC-103-billing-v2')
+    await expect(toast).toHaveCount(0, { timeout: 6000 })
+})
+
+test('a copy the browser refuses says so in its toast', async ({ page }) => {
+    await page.goto('tickets/ABC-103')
+    await page.evaluate(() => {
+        navigator.clipboard.writeText = () => Promise.reject(new Error('refused'))
+    })
+    await page.getByRole('button', { name: 'Copy branch' }).click()
+    await expect(page.getByTestId('toast')).toContainText('Could not copy branch')
+    await expect(page.getByRole('button', { name: 'Could not copy branch' })).toBeVisible()
+})
+
 test("a review's commit copies whole, though the page shows its first 7 characters", async ({ page }) => {
     await page.goto('reviews/4')
     const commit = page.getByRole('button', { name: 'Copy commit' })
@@ -60,6 +79,27 @@ test("a run's paths have no copy button while the server's meta cannot be read, 
     await expect(page.getByText('.canopy/runs/41.log')).toBeVisible()
     await expect(page.getByRole('button', { name: 'Copy log path' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Copy worktree path' })).toHaveCount(0)
+})
+
+test("a session id copies from its run's row, its button showing only while the row is hovered", async ({ page }) => {
+    await page.goto('runs')
+    await settled(page)
+    const row = page.getByTestId('run-41')
+    const copy = row.getByRole('button', { name: 'Copy session id' })
+    await expect(copy).toHaveCSS('opacity', '0')
+    await row.hover()
+    await expect(copy).toHaveCSS('opacity', '1')
+    await copy.click()
+    expect(await clipboard(page)).toBe('ses_mock41')
+})
+
+test("a chore run's session id copies from its row", async ({ page }) => {
+    await page.goto('chores/deps')
+    await settled(page)
+    const row = page.getByTestId('chore-run-2')
+    await row.hover()
+    await row.getByRole('button', { name: 'Copy session id' }).click()
+    expect(await clipboard(page)).toBe('ses_chore2')
 })
 
 /** The workspace root the server's meta gives, which a path shown from it is joined to when copied. */

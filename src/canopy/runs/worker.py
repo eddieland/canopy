@@ -23,8 +23,9 @@ from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 
 from pydantic import BaseModel, ConfigDict, StrictStr
 
-from canopy.core import agent_output, contract, conversation, db, definitions, hostgit, treehouse
+from canopy.core import agent_output, contract, conversation, db, definitions, hostgit, pools, transcript
 from canopy.core.config import render_command, setup_words
+from canopy.core.vocab import PoolKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
 from canopy.runs import desks, dispatch, policy, tidy
@@ -61,7 +62,7 @@ class WorkerResult(BaseModel):
     one repository.
     """
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     status: Literal["done", "blocked", "failed"]
     branch: Text | None = None
@@ -86,7 +87,7 @@ class SplitResult(BaseModel):
     and a refused one is stored without its children.
     """
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     status: Literal["done", "failed"]
     summary: Text = ""
@@ -138,7 +139,7 @@ def _check_child(conn: sqlite3.Connection, parent: str, repos: Sequence[str], ke
 class Outcome:
     """How a run ended: its `runs.status` and the summary stored as `result_json`."""
 
-    status: str
+    status: RunStatus
     result: WorkerResult | SplitResult | None
     note: str = ""
 
@@ -172,7 +173,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     run = db.get_run(ctx.conn, run_id)
     if run is None:
         raise WorkerError(f"no run {run_id}")
-    if not db.claim_run(ctx.conn, run_id, os.getpid()):
+    if not db.claim_run(ctx.conn, "runs", run_id, os.getpid()):
         raise WorkerError(f"run {run_id} is not waiting to start: it is {run['status']} or another process has it")
     slots = [_Slot.of(ctx, row) for row in db.run_slots(ctx.conn, run_id)]
     for slot in slots:
@@ -183,7 +184,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     where = {"slots": [str(s.path) for s in slots], "repos": [s.repo for s in slots]}
     log.info("run started", extra={**fields, **where, "branch": run["branch"]})
 
-    outcome = Outcome("crashed", None, "the run stopped before the worker finished")
+    outcome = Outcome(RunStatus.CRASHED, None, "the run stopped before the worker finished")
     with stopping.StopOnSignal() as stop:
         try:
             if not slots:
@@ -192,12 +193,12 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             work = _split if run["kind"] == policy.SPLIT else _work
             outcome = work(ctx, run, slots, out, log)
         except stopping.Stopped as e:
-            outcome = Outcome("crashed", None, str(e))
+            outcome = Outcome(RunStatus.CRASHED, None, str(e))
         except (_SetupError, desks.DeskError) as e:
-            outcome = Outcome("crashed", None, str(e))
+            outcome = Outcome(RunStatus.CRASHED, None, str(e))
             log.error("run setup failed", extra={**fields, "error": str(e)})  # noqa: TRY400  (no traceback needed)
         except Exception as e:
-            outcome = Outcome("crashed", None, f"{type(e).__name__}: {e}")
+            outcome = Outcome(RunStatus.CRASHED, None, f"{type(e).__name__}: {e}")
             log.exception("run failed", extra=fields)
         finally:
             # From here on a signal is ignored: returning the slots and closing the row must not be interrupted.
@@ -217,7 +218,7 @@ class _Slot:
     """One of a run's slots: the repository it is in, the worktree, its lease, git in it, and its `.git` link.
 
     `link` is what the worktree's `.git` file held when the run started, before any git step, or None if it is not a
-    file (DESIGN §8).
+    file (DESIGN §8). `pool` is the pool that made the lease, which the slot goes back to (DESIGN §18).
     """
 
     repo: str
@@ -227,6 +228,7 @@ class _Slot:
     base: str
     git: _Git
     link: bytes | None
+    pool: PoolKind
 
     def rewritten(self) -> Path | None:
         """Return the file that says where the slot's git is, if the worker changed it: the `.git` file, or `commondir`.
@@ -272,6 +274,7 @@ class _Slot:
             str(row["base_branch"]),
             _Git(ctx.runner, path, repo),
             hostgit.read_link(path),
+            PoolKind(row["pool"]),
         )
 
 
@@ -317,7 +320,8 @@ def _run_agent(
         if naming:
             raise _SetupError(definitions.naming_tools_message(tools.server, naming))
     title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
-    argv = render_command(template, prompt, definitions.ensure(ctx.state_dir, ctx.config), title)
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config)
+    argv = render_command(template, prompt, snapshot, title)
     if len(slots) > 1:
         cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), [(s.repo, s.path) for s in slots])
     else:
@@ -328,6 +332,8 @@ def _run_agent(
         extra={"run_id": run["id"], "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": timeout_minutes},
     )
     run_id = int(run["id"])
+    out.write("--- worker stdout ---\n")
+    out.flush()
     result = ctx.runner.run(
         argv,
         cwd=cwd,
@@ -335,18 +341,59 @@ def _run_agent(
         # object directory; an unsandboxed worker ignores it (DESIGN §8).
         env={conversation.RUN_ID_ENV: str(run_id), tidy.OBJECTS_ENV: str(_objects(ctx, run))},
         timeout=timeout_minutes * 60,
-        on_start=lambda pid: db.set_worker_pid(ctx.conn, run_id, pid),
+        on_start=lambda pid: db.set_agent_pid(ctx.conn, "runs", run_id, pid),
+        on_line=_Progress(ctx, run_id, out, log),
     )
-    out.write(f"--- worker stdout ---\n{result.stdout}\n--- worker stderr ---\n{result.stderr}\n")
+    out.write(f"\n--- worker stderr ---\n{result.stderr}\n")
     out.write(f"--- worker exit {result.returncode}{' (timed out)' if result.timed_out else ''} ---\n")
     out.flush()
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
     output = agent_output.read(result.stdout)
     if output.session_id is not None or output.usage is not None:
-        db.set_run_report(ctx.conn, run_id, output.session_id, output.usage)
-        spent = {"cost_usd": output.usage.cost_usd, "tokens": output.usage.tokens} if output.usage else {}
+        db.set_run_report(
+            ctx.conn, "runs", run_id, output.session_id, output.usage, digest=snapshot.name, tools=output.tools
+        )
+        spent = output.usage.spent() if output.usage else {}
         log.info("worker reported", extra={"run_id": run_id, "session_id": output.session_id, **spent})
     return result, output.text
+
+
+class _Progress:
+    """Each line the worker prints, as it prints it: written to the run log, and its events read (DESIGN §8).
+
+    What they say so far is recorded on the run, so a running run shows its session, what it has spent, and its latest
+    tool call. A line comes on `_run`'s own thread, so this may use the journal connection. A journal write that fails
+    is logged, not raised: raising would kill the worker, and the session and spend are recorded again when it ends.
+    """
+
+    def __init__(self, ctx: Context, run_id: int, out: TextIO, log: logs.TickAdapter) -> None:
+        self.ctx = ctx
+        self.run_id = run_id
+        self.out = out
+        self.log = log
+        self.tally = agent_output.Tally()
+
+    def __call__(self, line: str) -> None:
+        self.out.write(line)
+        self.out.flush()
+        event = agent_output.parse_event(line)
+        if event is None:
+            return
+        seen = self.tally.session_id
+        self.tally.add(event)
+        session = self.tally.session_id
+        if session is None:
+            return
+        usage = self.tally.usage if event["type"] == "step_finish" else None
+        did = transcript.did(event)
+        if session == seen and usage is None and did is None:
+            return
+        try:
+            db.set_run_progress(self.ctx.conn, self.run_id, session, usage=usage, did=did)
+        except sqlite3.Error as e:
+            self.log.warning("worker progress not recorded", extra={"run_id": self.run_id, "error": str(e)})
+        if seen is None:
+            self.log.info("worker session started", extra={"run_id": self.run_id, "session_id": session})
 
 
 def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
@@ -364,13 +411,13 @@ def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log:
     if parsed is None:
         if result.timed_out:
             # Whatever it created is unknown to the journal; its comment on the parent lists it for a human.
-            return Outcome("timeout", None, f"the splitter timed out after {timeout_minutes} minutes")
-        return Outcome("unknown", None, "the splitter's last line was not a valid split result")
+            return Outcome(RunStatus.TIMEOUT, None, f"the splitter timed out after {timeout_minutes} minutes")
+        return Outcome(RunStatus.UNKNOWN, None, "the splitter's last line was not a valid split result")
     key = str(run["ticket_key"])
     invalid = check_children(ctx.conn, key, [s.repo for s in slots], parsed)
     if invalid:
         log.warning("split result refused; no child recorded", extra={"run_id": run["id"], "reason": invalid})
-        status = "timeout" if result.timed_out else "unknown"
+        status = RunStatus.TIMEOUT if result.timed_out else RunStatus.UNKNOWN
         # Stored without its children: a refused map is unbounded, and its note says what was wrong with it.
         return Outcome(status, parsed.model_copy(update={"children": {}}), f"children not recorded: {invalid}")
     if parsed.children:
@@ -378,8 +425,8 @@ def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log:
         db.record_split_children(ctx.conn, key, int(run["id"]), parsed.children)
         log.info("split children recorded", extra={"run_id": run["id"], "children": parsed.children})
     if result.timed_out:
-        return Outcome("timeout", parsed, f"the splitter timed out after {timeout_minutes} minutes")
-    return Outcome(parsed.status, parsed)
+        return Outcome(RunStatus.TIMEOUT, parsed, f"the splitter timed out after {timeout_minutes} minutes")
+    return Outcome(RunStatus(parsed.status), parsed)
 
 
 def _check_out(slot: _Slot, branch: str = "") -> _Start:
@@ -430,7 +477,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: 
     stopped = _stopped(ctx, run)
     if stopped:
         log.info("run not started", extra={"run_id": run["id"], "reason": stopped})
-        return Outcome("stopped", None, stopped)
+        return Outcome(RunStatus.STOPPED, None, stopped)
     branch = str(run["branch"])
     starts = [_check_out(slot, branch) for slot in slots]
     for slot in slots:
@@ -444,17 +491,17 @@ def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: 
     if parsed is not None:
         parsed = parsed.for_repos([s.repo for s in slots])
     if result.timed_out:
-        status, note = "timeout", f"the worker timed out after {timeout_minutes} minutes"
+        status, note = RunStatus.TIMEOUT, f"the worker timed out after {timeout_minutes} minutes"
     elif parsed is None:
-        status, note = "unknown", "the worker's last line was not a valid result"
+        status, note = RunStatus.UNKNOWN, "the worker's last line was not a valid result"
     else:
-        status, note = parsed.status, ""
+        status, note = RunStatus(parsed.status), ""
 
     rewritten = [(slot, path) for slot in slots if (path := slot.rewritten()) is not None]
     if rewritten:
         # The slot's git directory may be one the worker made: canopy runs no git in any slot of this run.
         notes = [f"{s.git.where}the worker rewrote {path}; nothing was checked or pushed" for s, path in rewritten]
-        return Outcome("crashed", parsed, "; ".join(notes))
+        return Outcome(RunStatus.CRASHED, parsed, "; ".join(notes))
     objects = _objects(ctx, run)
     if tidy.used(objects):
         # A sandboxed worker's commits are only in the run's object directory (DESIGN §8).
@@ -468,7 +515,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: 
         if (found := _ensure_pushed(slot, branch, start, log, rebase=rebase))
     ]
     if unpushed:
-        status, note = "unpushed", "; ".join(unpushed)
+        status, note = RunStatus.UNPUSHED, "; ".join(unpushed)
     return Outcome(status, parsed, note)
 
 
@@ -678,18 +725,14 @@ def _objects(ctx: Context, run: sqlite3.Row) -> Path:
 def _return_slot(ctx: Context, run: sqlite3.Row, slot: _Slot, log: logs.TickAdapter) -> None:
     fields = {"run_id": run["id"], "slot": str(slot.path), "lease_id": slot.lease_id, "repo": slot.repo}
     try:
-        outcome = treehouse.return_slot(
-            ctx.runner,
-            slot.path,
-            lease_id=slot.lease_id,
-            lease_holder=slot.lease_holder,
-            pool=ctx.workspace.pool(slot.repo),
+        outcome = ctx.pool_of(slot.pool, slot.repo).return_slot(
+            slot.path, lease_id=slot.lease_id, lease_holder=slot.lease_holder
         )
-    except treehouse.TreehouseError as e:
+    except pools.PoolError as e:
         # The next tick's reconcile returns a canopy lease with no running run.
         log.error("slot not returned", extra={**fields, "error": str(e)})  # noqa: TRY400
         return
-    if outcome is treehouse.ReturnOutcome.RETURNED:
+    if outcome is pools.ReturnOutcome.RETURNED:
         log.info("slot returned", extra=fields)
     else:
         log.warning("slot not returned", extra={**fields, "outcome": outcome.value})

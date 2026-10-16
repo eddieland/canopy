@@ -1,0 +1,66 @@
+# Dependabot keeps the pinned dependencies current: https://docs.github.com/code-security/dependabot
+# Updates come weekly, wait out a week's cooldown so a bad release is likely yanked first, and are grouped so each
+# ecosystem opens one PR a week. A major version comes alone, since it is the one most likely to need code changes.
+version: 2
+
+updates:
+  # The Python workspace: canopy and every member under packages/, all in one uv.lock.
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      python:
+        update-types: [minor, patch]
+
+  # The web UI (D079).
+  - package-ecosystem: npm
+    directory: /ui
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build
+      include: scope
+    groups:
+      ui:
+        update-types: [minor, patch]
+    ignore:
+      # TypeScript 7 is the native port, with a new compiler API: typescript-eslint, which eslint-plugin-jsdoc
+      # pulls in, caps its peer below 6.1, and openapi-typescript runs on the API. Move majors by hand.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      # The types follow the Node the UI runs on (engines and CI: 22), not the newest Node.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
+
+  # The srt that `canopy sandbox setup` installs. Never grouped: each bump is its own PR, so the sandbox canary in CI
+  # judges it alone, and a reviewer checks the claims about srt in docs/design/SANDBOXING.md against the new version.
+  - package-ecosystem: npm
+    directory: /packages/canopy-sandbox/src/canopy_sandbox/runtime
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: build
+      include: scope
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions:
+        update-types: [minor, patch]

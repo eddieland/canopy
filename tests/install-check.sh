@@ -41,7 +41,7 @@ for sink in canopy-notify-desktop canopy-notify-slack; do
     usage=$("$sink" --help </dev/null) || fail "$sink --help failed"
     echo "$usage" | grep -q "^usage: $sink " || fail "$sink --help did not print the sink's usage"
 done
-# The sandbox wrapper too (HOST_ISOLATION §4.1). It refuses to run without a role, naming itself.
+# The sandbox wrapper too (DESIGN §24). It refuses to run without a role, naming itself.
 [ "$(command -v canopy-sandbox)" = "$UV_TOOL_BIN_DIR/canopy-sandbox" ] || fail "canopy-sandbox was not installed"
 status=0
 usage=$(canopy-sandbox 2>&1 </dev/null) || status=$?
@@ -86,7 +86,7 @@ export FAKE_AGENT_RESULT="CANOPY_TICK_DONE"
 export FAKE_AGENT_COMMANDS='[["canopy", "decide", "GH-1", "wait", "--rationale", "install check"]]'
 canopy tick --dry-run
 decisions=$(canopy decisions)
-echo "$decisions" | grep -q 'GH-1  wait  install check' || fail "the dry tick's decision was not recorded"
+echo "$decisions" | grep -Eq 'GH-1 +wait +install check' || fail "the dry tick's decision was not recorded"
 canopy status >/dev/null
 
 # canopy runs each sink by the name in its cmd (DESIGN §20), as a child of its own process. The Slack sink has no

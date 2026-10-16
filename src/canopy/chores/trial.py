@@ -17,8 +17,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.chores import execute, start
-from canopy.core import agent_output, conversation, db, outbox
+from canopy.core import agent_output, conversation, db, notice, outbox
 from canopy.core import chore_view as view
+from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import lock, logs, procs
 
 if TYPE_CHECKING:
@@ -77,9 +78,11 @@ def prepare(ctx: Context, name: str, context: str | None) -> Prepared:
     except OSError as e:
         raise TrialError(f"cannot read {chore.prompt}: {e.strerror}") from e
     state = view.state_of(ctx.conn, name, chore)
-    prompt = start.render(body, state, None, context, conversation.chore_notes(ctx.conn, name))
+    prompt = start.render(
+        body, state, None, context, conversation.chore_notes(ctx.conn, name), held=notice.for_prompt(ctx.conn)
+    )
     try:
-        cwd, argv = execute.prepare(ctx, name, chore, prompt)
+        cwd, argv, _ = execute.prepare(ctx, name, chore, prompt)
     except execute.SetupError as e:
         raise TrialError(str(e)) from e
     return Prepared(name, chore, body, context, cwd, argv)
@@ -100,7 +103,7 @@ def record(ctx: Context, prepared: Prepared) -> Recorded:
     """
     name = prepared.name
     with lock.hold(ctx.dispatch_lock_path, wait=True):
-        running = next((r for r in db.running_chore_runs(ctx.conn) if r["chore"] == name), None)
+        running = next((r for r in db.running_runs(ctx.conn, "chore_runs") if r["chore"] == name), None)
         if running is not None:
             raise RunningError(f"chore run {running['id']} of {name} is running")
         state = view.state_of(ctx.conn, name, prepared.chore)
@@ -114,9 +117,11 @@ def record(ctx: Context, prepared: Prepared) -> Recorded:
         except (OSError, lock.LockBusyError) as e:
             raise TrialError(_crash(ctx, run, e)) from e
         try:
-            db.claim_chore_run(ctx.conn, run_id, os.getpid())
+            db.claim_run(ctx.conn, "chore_runs", run_id, os.getpid())
             notes = conversation.chore_notes(ctx.conn, name)
-            prompt = start.render(prepared.body, state, run_id, prepared.context, notes)
+            prompt = start.render(
+                prepared.body, state, run_id, prepared.context, notes, held=notice.for_prompt(ctx.conn)
+            )
             logs.write_private(start.prompt_file(log_path), prompt)
         except OSError as e:
             os.close(held)
@@ -169,6 +174,6 @@ def _crash(ctx: Context, run: sqlite3.Row, e: Exception) -> str:
         What went wrong, for the error the caller raises.
     """
     note = json.dumps({"harness": f"could not start the try: {e}"})
-    ended = outbox.chore_ended(ctx.config, run, "crashed", note)
-    db.finish_chore_run(ctx.conn, int(run["id"]), "crashed", note, event=ended)
+    ended = outbox.chore_ended(ctx.config, run, ChoreRunStatus.CRASHED, note)
+    db.finish_run(ctx.conn, "chore_runs", int(run["id"]), ChoreRunStatus.CRASHED, note, event=ended)
     return f"chore run {run['id']} could not start: {e}"

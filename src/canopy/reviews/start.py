@@ -16,22 +16,26 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, outbox, prompts, treehouse
+from canopy.core import contract, db, notice, outbox, pools, prompts, review_requests
 from canopy.core import review_result as result
+from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import lock, logs, procs
 from canopy.reviews import grants
 
 if TYPE_CHECKING:
     import sqlite3
 
+    from canopy.core import records
     from canopy.core.context import Context
 
 REVIEWS_DIR = "reviews"
 CHECKOUT_LINK = "checkout"
 DISPATCH_ACTION = "dispatch:review"
 HOLDER_KEY = "review:"
-# Why a review runs (DESIGN §21): one of the loop's own PRs, named by its ticket, or a `review.query` match.
+# Why a review runs (DESIGN §21): one of the loop's own PRs, named by its ticket, a PR with the operator's open review
+# request, or a `review.query` match.
 OWN = "own"
+REQUEST = "request"
 QUERY = "query"
 SHA_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 MAX_PR_URL = 300
@@ -97,9 +101,9 @@ def holder(run_id: int) -> str:
     """The lease holder of a review run's slot: `canopy:review:<id>`.
 
     Returns:
-        The holder string treehouse records on the lease.
+        The holder the pool records on the lease.
     """
-    return treehouse.holder_for(f"{HOLDER_KEY}{run_id}")
+    return pools.holder_for(f"{HOLDER_KEY}{run_id}")
 
 
 def check(ctx: Context, *, tick_id: int, request: Request) -> str:
@@ -136,13 +140,13 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             sha=request.sha,
             ticket=request.ticket,
             repo=repo,
-            purpose=OWN if request.ticket is not None else QUERY,
+            purpose=_purpose(ctx.conn, request),
             logs_dir=reviews_dir(ctx),
         )
         pool = ctx.pool(repo)
         try:
-            lease = treehouse.lease(ctx.runner, f"{HOLDER_KEY}{run_id}", pool=pool)
-        except treehouse.TreehouseError as e:
+            lease = pool.lease(f"{HOLDER_KEY}{run_id}")
+        except pools.PoolError as e:
             db.delete_review_run(ctx.conn, run_id)
             raise Refusal("no_slot", str(e)) from e
         db.set_review_slot(
@@ -152,19 +156,29 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             lease_id=lease.lease_id,
             lease_holder=lease.lease_holder,
             base_branch=lease.base_branch,
+            pool=ctx.config.pools.backend,
         )
         try:
             return _spawn(ctx, run_id, request, lease, attempt=attempt, context=context)
         except BaseException:
-            with contextlib.suppress(treehouse.TreehouseError):
-                treehouse.return_slot(
-                    ctx.runner, lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder, pool=pool
-                )
+            with contextlib.suppress(pools.PoolError):
+                pool.return_slot(lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
             raise
 
 
+def _purpose(conn: sqlite3.Connection, request: Request) -> str:
+    """Why the review runs: `own` with a ticket, checked by `_check_ours`; `request` for a PR the operator asked for.
+
+    Returns:
+        `own`, `request`, or `query`, a PR the loop does not own and the operator has no open request on.
+    """
+    if request.ticket is not None:
+        return OWN
+    return REQUEST if review_requests.open_request(conn, request.pr) is not None else QUERY
+
+
 def _spawn(
-    ctx: Context, run_id: int, request: Request, lease: treehouse.Lease, *, attempt: int, context: str | None
+    ctx: Context, run_id: int, request: Request, lease: pools.Lease, *, attempt: int, context: str | None
 ) -> Started:
     cfg = ctx.config
     values = {
@@ -185,7 +199,7 @@ def _spawn(
     if run is None:
         raise RuntimeError(f"review run {run_id} vanished")
     try:
-        prompt = prompts.render(cfg, prompts.REVIEWER, values, required=prompts.REQUIRED_REVIEWER)
+        prompt = prompts.render_reviewer(cfg, values, notice=notice.for_prompt(ctx.conn))
     except (OSError, prompts.PromptError) as e:
         # Nothing started, so it costs the PR none of its reviews; the caller returns the slot.
         db.delete_review_run(ctx.conn, run_id)
@@ -197,13 +211,20 @@ def _spawn(
         pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run["log_path"]))
     except (OSError, procs.ProcError) as e:
         note = json.dumps({"harness": f"could not start the reviewer: {e}"})
-        db.finish_review_run(ctx.conn, run_id, "crashed", note, event=outbox.review_ended(cfg, run, "crashed", note))
+        db.finish_run(
+            ctx.conn,
+            "review_runs",
+            run_id,
+            ReviewRunStatus.CRASHED,
+            note,
+            event=outbox.review_ended(cfg, run, ReviewRunStatus.CRASHED, note),
+        )
         raise Refusal("spawn_failed", str(e)) from e
-    db.claim_review_run(ctx.conn, run_id, pid)
+    db.claim_run(ctx.conn, "review_runs", run_id, pid)
     return Started(run_id, pid, lease.path)
 
 
-def _guard(ctx: Context, request: Request, *, planned: list[sqlite3.Row] | None = None) -> str:
+def _guard(ctx: Context, request: Request, *, planned: list[records.Decision] | None = None) -> str:
     """Refuse unless a review of `request` may start now. Returns the repository it leases in.
 
     `planned` is a dry run's decisions this tick: its reviews and worker dispatches count as running.
@@ -214,14 +235,17 @@ def _guard(ctx: Context, request: Request, *, planned: list[sqlite3.Row] | None 
     Raises:
         Refusal: reviews are off, or one of the shape, repository, ownership, running, and limit checks refused.
     """
-    if not ctx.config.reviews_on:
-        raise Refusal("reviews_off", "reviews are off: no [review] agent_prs or query, or capacity.max_reviews is 0")
+    if not review_requests.reviews_on(ctx.conn, ctx.config):
+        raise Refusal(
+            "reviews_off",
+            "reviews are off: no [review] agent_prs or query and no open review request, or capacity.max_reviews is 0",
+        )
     _check_shape(request)
     repo = _check_repo(ctx, request.repo)
     _check_ours(ctx, request, repo)
     planned = planned or []
-    planned_reviews = [d for d in planned if d["action"] == DISPATCH_ACTION]
-    planned_runs = [d for d in planned if str(d["action"]).startswith("dispatch:") and d["action"] != DISPATCH_ACTION]
+    planned_reviews = [d for d in planned if d.action == DISPATCH_ACTION]
+    planned_runs = [d for d in planned if d.action.startswith("dispatch:") and d.action != DISPATCH_ACTION]
     _check_running(ctx, request, planned_reviews, planned_runs)
     _check_limits(ctx, request, planned_reviews, planned_runs)
     return repo
@@ -244,28 +268,28 @@ def _check_ours(ctx: Context, request: Request, repo: str) -> None:
 
 
 def _check_running(
-    ctx: Context, request: Request, planned_reviews: list[sqlite3.Row], planned_runs: list[sqlite3.Row]
+    ctx: Context, request: Request, planned_reviews: list[records.Decision], planned_runs: list[records.Decision]
 ) -> None:
     """`running`: a review of this PR, or a worker on its ticket, is running.
 
     Raises:
         Refusal: (`running`) a review of the PR is running or planned, or a worker on its ticket is.
     """
-    running = next((r for r in db.running_review_runs(ctx.conn) if r["pr_url"] == request.pr), None)
+    running = next((r for r in db.running_runs(ctx.conn, "review_runs") if r["pr_url"] == request.pr), None)
     if running is not None:
         raise Refusal("running", f"review run {running['id']} of this PR is running")
-    if any(d["pr"] == request.pr for d in planned_reviews):
+    if any(d.pr == request.pr for d in planned_reviews):
         raise Refusal("running", "this dry run already reviewed this PR")
     if request.ticket is None:
         return
-    worker = next((r for r in db.running_runs(ctx.conn) if r["ticket_key"] == request.ticket), None)
-    if worker is not None or any(d["ticket_key"] == request.ticket for d in planned_runs):
+    worker = next((r for r in db.running_runs(ctx.conn, "runs") if r["ticket_key"] == request.ticket), None)
+    if worker is not None or any(d.ticket_key == request.ticket for d in planned_runs):
         # A review must not race the push it is meant to judge.
         raise Refusal("running", f"a worker run for {request.ticket} is running; review its PR once it ends")
 
 
 def _check_limits(
-    ctx: Context, request: Request, planned_reviews: list[sqlite3.Row], planned_runs: list[sqlite3.Row]
+    ctx: Context, request: Request, planned_reviews: list[records.Decision], planned_runs: list[records.Decision]
 ) -> None:
     """`reviewed`, `review_limit`, `daily_limit`, `review_capacity`, and `capacity`, in that order.
 
@@ -291,10 +315,10 @@ def _check_limits(
     if today >= cfg.capacity.max_reviews_per_day:
         per_day = cfg.capacity.max_reviews_per_day
         raise Refusal("daily_limit", f"{today} review runs started in the last 24 hours; the limit is {per_day}")
-    busy_reviews = len(db.running_review_runs(ctx.conn)) + len(planned_reviews)
+    busy_reviews = len(db.running_runs(ctx.conn, "review_runs")) + len(planned_reviews)
     if busy_reviews >= cfg.capacity.max_reviews:
         raise Refusal("review_capacity", f"{busy_reviews} of {cfg.capacity.max_reviews} review runs are running")
-    busy = len(db.running_runs(ctx.conn)) + busy_reviews + len(planned_runs)
+    busy = len(db.running_runs(ctx.conn, "runs")) + busy_reviews + len(planned_runs)
     if busy >= cfg.capacity.max_workers:
         raise Refusal("capacity", f"{busy} of {cfg.capacity.max_workers} workers and reviews are running")
 

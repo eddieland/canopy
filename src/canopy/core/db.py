@@ -16,16 +16,20 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import agent_output
+from canopy.core import agent_output, records
+from canopy.core.vocab import PoolKind
 from canopy.infra import procs
 
 if TYPE_CHECKING:
-    from canopy.core.agent_output import Usage
+    from canopy.core.agent_output import ToolUse, Usage
+    from canopy.core.vocab import AnyRunStatus, RunStatus
 
 DB_FILE_NAME = "canopy.db"
 # How long a connection waits for another to release the write lock before its write fails as `database is locked`.
 BUSY_SECONDS = 10.0
 _MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
+# The rationale the overseer gives a `done` decision for a ticket the tracker reports closed (DESIGN §7).
+CLOSED_RATIONALE = "closed"
 
 # `canopy ticket set --cursor NAME=ID` names, and the column each one updates. The comment cursor is the ticket's; the
 # review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a private
@@ -33,23 +37,15 @@ _MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
 TICKET_CURSORS: Mapping[str, str] = {"comment": "last_comment_id", "message": "last_message_id"}
 UNIT_CURSORS: Mapping[str, str] = {"review": "last_review_id", "ci": "last_ci_run_id"}
 CURSOR_COLUMNS: Mapping[str, str] = {**TICKET_CURSORS, **UNIT_CURSORS}
-# The phases about a PR, `pushed_no_pr` to `merged` in the overseer's phase table, are a unit's (DESIGN §7, §18); the
-# others are the ticket's own.
-UNIT_PHASES = frozenset(
-    (
-        "pushed_no_pr",
-        "conflicted",
-        "ci_running",
-        "ci_red",
-        "review_pending",
-        "review_findings",
-        "changes_requested",
-        "untrusted_review",
-        "green_unreviewed",
-        "approved",
-        "merged",
-    )
-)
+# The tables of detached runs (DESIGN §6): workers' and splits', chores', and reviews'. Each has the same lifecycle,
+# written once below over a table from this closed set: claimed by its process's pid, its agent's pid recorded, its
+# report, and its close. A table name in SQL comes from here, never from input.
+type RunTable = Literal["runs", "chore_runs", "review_runs"]
+RUN_TABLES: tuple[RunTable, ...] = ("runs", "chore_runs", "review_runs")
+# What each run table's rows are called in a message, and the column it keeps its agent's pid in: the leader of the
+# process group the run's own process starts, which outlives that process if it dies.
+RUN_NOUNS: Mapping[RunTable, str] = {"runs": "run", "chore_runs": "chore run", "review_runs": "review run"}
+AGENT_PID: Mapping[RunTable, str] = {"runs": "worker_pid", "chore_runs": "agent_pid", "review_runs": "agent_pid"}
 
 
 class MigrationError(Exception):
@@ -58,13 +54,17 @@ class MigrationError(Exception):
 
 @dataclass(frozen=True)
 class RunSlot:
-    """One slot a run leased: the repository whose pool it came from, the slot, its lease, and the run's base there."""
+    """One slot a run leased: the repository whose pool it came from, the slot, its lease, and the run's base there.
+
+    `pool` is the pool that made the lease, which is the pool it goes back to (DESIGN §18).
+    """
 
     repo: str
     slot_path: Path
     lease_id: str
     lease_holder: str
     base_branch: str
+    pool: PoolKind = PoolKind.TREEHOUSE
 
 
 @dataclass(frozen=True)
@@ -214,14 +214,13 @@ def _check_no_live_runs(conn: sqlite3.Connection) -> None:
     """
     live: list[str] = []
     # Every table of detached runs: each process writes its own row when it ends.
-    for table, what in (("runs", "run"), ("chore_runs", "chore run"), ("review_runs", "review run")):
+    for table in RUN_TABLES:
         exists = conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone()
         if not exists:
             continue
-        # The table name comes from the fixed list above, never from input.
         sql = f"SELECT id, pid, log_path FROM {table} WHERE status = 'running' ORDER BY id"  # noqa: S608
         rows = conn.execute(sql)
-        live += [f"{what} {r['id']}" for r in rows if procs.running(Path(r["log_path"]), r["pid"])]
+        live += [f"{RUN_NOUNS[table]} {r['id']}" for r in rows if procs.running(Path(r["log_path"]), r["pid"])]
     if live:
         runs = f"{live[0]} is" if len(live) == 1 else f"{', '.join(live)} are"
         raise MigrationError(
@@ -286,16 +285,32 @@ def set_tick_loop(conn: sqlite3.Connection, tick_id: int, *, idle: bool, woken_b
     conn.execute("UPDATE ticks SET idle = ?, woken_by = ? WHERE id = ?", (int(idle), woken_by, tick_id))
 
 
+def set_tick_query(conn: sqlite3.Connection, tick_id: int, *, due: bool) -> None:
+    """Record whether a tick's state block told the overseer to run the tracker query (§7, Spacing the query)."""
+    conn.execute("UPDATE ticks SET query_due = ? WHERE id = ?", (int(due), tick_id))
+
+
+def last_query_at(conn: sqlite3.Connection) -> str | None:
+    """When the newest live `ok` tick that ran the tracker query started (§7, Spacing the query).
+
+    A tick from before `query_due` was recorded ran it. A dry run, and a tick that did not close `ok`, are not counted:
+    one that skipped or failed may not have read the query to the end.
+
+    Returns:
+        That tick's `started_at`, or None if no tick has run the query.
+    """
+    row = conn.execute(
+        "SELECT max(started_at) FROM ticks WHERE status = 'ok' AND dry_run = 0 AND coalesce(query_due, 1) = 1"
+    ).fetchone()
+    return None if row is None or row[0] is None else str(row[0])
+
+
 def previous_tick(conn: sqlite3.Connection, tick_id: int) -> sqlite3.Row | None:
     """Return the tick before `tick_id`, whatever its status, or None if it is the first."""
     row: sqlite3.Row | None = conn.execute(
         "SELECT * FROM ticks WHERE id < ? ORDER BY id DESC LIMIT 1", (tick_id,)
     ).fetchone()
     return row
-
-
-# The tables of detached runs: workers', chores', and reviews'. Fixed names, never input.
-_RUN_TABLES = ("runs", "chore_runs", "review_runs")
 
 
 def runs_moved_after(conn: sqlite3.Connection, since: str) -> bool:
@@ -309,7 +324,7 @@ def runs_moved_after(conn: sqlite3.Connection, since: str) -> bool:
             f"SELECT 1 FROM {table} WHERE started_at > ? OR ended_at > ? LIMIT 1",  # noqa: S608
             (since, since),
         ).fetchone()
-        for table in _RUN_TABLES
+        for table in RUN_TABLES
     )
 
 
@@ -321,7 +336,7 @@ def runs_ended_after(conn: sqlite3.Connection, since: str) -> bool:
     """
     return any(
         conn.execute(f"SELECT 1 FROM {table} WHERE ended_at > ? LIMIT 1", (since,)).fetchone()  # noqa: S608
-        for table in _RUN_TABLES
+        for table in RUN_TABLES
     )
 
 
@@ -510,16 +525,128 @@ def open_tickets(conn: sqlite3.Connection) -> list[sqlite3.Row]:
     return conn.execute("SELECT * FROM tickets WHERE done = 0 ORDER BY key").fetchall()
 
 
-# Runs and decisions
+def recently_done(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
+    """Return the tickets marked done whose newest `done` decision is at or after `since`, by key (DESIGN §7).
+
+    Each row has `key` and `done_at`, that decision's time. Not one: a ticket marked done with no `done` decision since
+    the operator last forgot it, or whose newest one says `closed`, since the tracker reports a closed ticket closed,
+    and leaving it out lets the query find it again once it is reopened.
+    """
+    # Each done ticket's newest decision by `decisions_ticket`, not a scan of every decision ever recorded.
+    return conn.execute(
+        "SELECT t.key, d.created_at AS done_at FROM tickets t JOIN decisions d ON d.id = ("
+        "  SELECT max(id) FROM decisions WHERE ticket_key = t.key AND action = 'done'"
+        ") WHERE t.done = 1 AND d.created_at >= ? AND d.rationale != ? "
+        "AND (t.forgotten_at IS NULL OR d.created_at > t.forgotten_at) ORDER BY t.key",
+        (since, CLOSED_RATIONALE),
+    ).fetchall()
+
+
+# The run lifecycle (DESIGN §6, §8): what every table of detached runs shares
 
 # A run with its ticket's title as `ticket_title`, for display (DESIGN §13). Every query a page or `canopy status` shows
 # runs from starts here.
 _RUNS = "SELECT r.*, t.title AS ticket_title FROM runs r LEFT JOIN tickets t ON t.key = r.ticket_key"
+# What a run table's rows are read as: a run with its ticket's title, for display, and any other run as it is.
+_RUN_SELECT: Mapping[RunTable, str] = {
+    "runs": _RUNS,
+    "chore_runs": "SELECT r.* FROM chore_runs r",
+    "review_runs": "SELECT r.* FROM review_runs r",
+}
 
 
-def running_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Return runs with status `running`, oldest first."""
-    return conn.execute(f"{_RUNS} WHERE r.status = 'running' ORDER BY r.started_at").fetchall()
+def running_runs(conn: sqlite3.Connection, table: RunTable) -> list[sqlite3.Row]:
+    """Return `table`'s runs with status `running`, oldest first."""
+    return conn.execute(f"{_RUN_SELECT[table]} WHERE r.status = 'running' ORDER BY r.started_at").fetchall()
+
+
+def claim_run(conn: sqlite3.Connection, table: RunTable, run_id: int, pid: int) -> bool:
+    """Record `pid` as the process working a running run in `table`. Only the first process to claim a run gets it.
+
+    The spawn claims with the pid it started, and the process (`_run`, `_chore`, `_review`) claims with its own, which
+    is the same pid; a second process for the same run has a different one and is refused.
+
+    Returns:
+        True if `pid` now holds the run; False if the run is not running or another pid holds it.
+    """
+    cur = conn.execute(
+        f"UPDATE {table} SET pid = ? WHERE id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)",  # noqa: S608
+        (pid, run_id, pid),
+    )
+    return cur.rowcount == 1
+
+
+def set_agent_pid(conn: sqlite3.Connection, table: RunTable, run_id: int, pid: int) -> None:
+    """Record the pid, and so the process group, of the agent a run in `table` started: a worker, chore, or reviewer."""
+    conn.execute(f"UPDATE {table} SET {AGENT_PID[table]} = ? WHERE id = ?", (pid, run_id))  # noqa: S608
+
+
+def set_run_report(
+    conn: sqlite3.Connection,
+    table: RunTable,
+    run_id: int,
+    session_id: str | None,
+    usage: Usage | None,
+    *,
+    digest: str | None = None,
+    tools: Sequence[ToolUse] = (),
+) -> None:
+    """Record what the agent runtime reported about a run in `table`: its session, what it cost, and its tools.
+
+    The tools are its tool calls rolled up by tool (DESIGN §13), in place of any recorded before. `digest` names the
+    definitions snapshot the run loaded, recorded only when the runtime reported something.
+    """
+    _set_report(conn, table, run_id, session_id, usage, digest=digest, tools=tools)
+
+
+def finish_run(
+    conn: sqlite3.Connection,
+    table: RunTable,
+    run_id: int,
+    status: AnyRunStatus,
+    result_json: str | None,
+    *,
+    event: Event | None = None,
+) -> bool:
+    """Close a running run in `table`, recording `event` with it. Returns False if it was already closed.
+
+    A worker or split run that reports messages closes with `finish_ticket_run` instead. A review run that ends `done`
+    also ends its PR's open review request, as `reviewed`, in the same transaction (DESIGN §21): the request asked for
+    one review, and this is it.
+
+    Returns:
+        True if this call closed the run.
+    """
+    with transaction(conn):
+        closed = _close_run(conn, table, run_id, status, result_json)
+        if closed and table == "review_runs" and status == "done":
+            conn.execute(
+                "UPDATE review_requests SET ended_at = ?, end_reason = 'reviewed' "
+                "WHERE ended_at IS NULL AND pr_url = (SELECT pr_url FROM review_runs WHERE id = ?)",
+                (now(), run_id),
+            )
+        if closed and event is not None:
+            record_event(conn, event)
+    return closed
+
+
+def _close_run(
+    conn: sqlite3.Connection, table: RunTable, run_id: int, status: AnyRunStatus, result_json: str | None
+) -> bool:
+    """Close a running run in `table`, in the caller's transaction. Nothing changes for one already closed.
+
+    Returns:
+        True if this call closed the run.
+    """
+    cur = conn.execute(
+        f"UPDATE {table} SET ended_at = ?, status = ?, result_json = ? "  # noqa: S608
+        "WHERE id = ? AND status = 'running'",
+        (now(), status, result_json, run_id),
+    )
+    return cur.rowcount == 1
+
+
+# Runs and decisions
 
 
 def insert_run(
@@ -558,9 +685,9 @@ def insert_run(
         run_id = _rowid(cur)
         conn.execute("UPDATE runs SET log_path = ? WHERE id = ?", (str(runs_dir / f"{run_id}.log"), run_id))
         conn.executemany(
-            "INSERT INTO run_slots (run_id, repo, slot_path, lease_id, lease_holder, base_branch) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            [(run_id, s.repo, str(s.slot_path), s.lease_id, s.lease_holder, s.base_branch) for s in slots],
+            "INSERT INTO run_slots (run_id, repo, slot_path, lease_id, lease_holder, base_branch, pool) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [(run_id, s.repo, str(s.slot_path), s.lease_id, s.lease_holder, s.base_branch, s.pool) for s in slots],
         )
         event = started(run_id) if started is not None else None
         if event is not None:
@@ -602,42 +729,21 @@ def get_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
     return row
 
 
-def claim_run(conn: sqlite3.Connection, run_id: int, pid: int) -> bool:
-    """Record `pid` as the process working a running run. Only the first process to claim a run gets it.
-
-    `canopy dispatch` claims with the pid it spawned, and `canopy _run` claims with its own, which is the same pid; a
-    second `_run` for the same run has a different one and is refused.
-
-    Returns:
-        True if `pid` now holds the run; False if the run is not running or another pid holds it.
-    """
-    cur = conn.execute(
-        "UPDATE runs SET pid = ? WHERE id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)",
-        (pid, run_id, pid),
-    )
-    return cur.rowcount == 1
-
-
 def set_slot_link(conn: sqlite3.Connection, run_id: int, repo: str, link: bytes | None) -> None:
     """Record what a run's slot's `.git` file held when `_run` started (DESIGN §8)."""
     conn.execute("UPDATE run_slots SET git_link = ? WHERE run_id = ? AND repo = ?", (link, run_id, repo))
 
 
-def set_worker_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> None:
-    """Record the pid, and so the process group, of a run's worker agent."""
-    conn.execute("UPDATE runs SET worker_pid = ? WHERE id = ?", (pid, run_id))
-
-
-def finish_run(
+def finish_ticket_run(
     conn: sqlite3.Connection,
     run_id: int,
-    status: str,
+    status: RunStatus,
     result_json: str | None,
     *,
     messages: Sequence[tuple[str, str]] = (),
     event: Callable[[int | None], Event | None] | None = None,
 ) -> bool:
-    """Close a running run, with the messages it reports and its event. Returns False if it was already closed.
+    """Close a running worker or split run, with the messages it reports and its event, as `finish_run` closes any run.
 
     `messages` are the run's `(kind, body)` messages about its ticket (DESIGN §22), recorded in order. `event` builds
     the `run.ended` event from the id of the last of them, or None if there are none. Nothing changes for a run already
@@ -647,13 +753,7 @@ def finish_run(
         True if this call closed the run.
     """
     with transaction(conn):
-        ended = now()
-        cur = conn.execute(
-            "UPDATE runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
-            (ended, status, result_json, run_id),
-        )
-        closed = cur.rowcount == 1
-        if not closed:
+        if not _close_run(conn, "runs", run_id, status, result_json):
             return False
         key = conn.execute("SELECT ticket_key FROM runs WHERE id = ?", (run_id,)).fetchone()[0]
         last: int | None = None
@@ -664,17 +764,67 @@ def finish_run(
         built = event(last) if event is not None else None
         if built is not None:
             record_event(conn, built)
-    return closed
+    return True
 
 
-def set_run_report(conn: sqlite3.Connection, run_id: int, session_id: str | None, usage: Usage | None) -> None:
-    """Record what the agent runtime reported about a run: its session, and what it cost (DESIGN §13)."""
-    _set_report(conn, "runs", run_id, session_id, usage)
+def set_tick_report(
+    conn: sqlite3.Connection,
+    tick_id: int,
+    session_id: str | None,
+    usage: Usage | None,
+    *,
+    digest: str | None = None,
+    tools: Sequence[ToolUse] = (),
+) -> None:
+    """Record what the agent runtime reported about a tick's overseer run: its session, cost, and tools (§6, §13).
+
+    The tools are its tool calls rolled up by tool, in place of any recorded before. `digest` names the definitions
+    snapshot the overseer loaded, recorded only when the runtime reported something.
+    """
+    _set_report(conn, "ticks", tick_id, session_id, usage, digest=digest, tools=tools)
 
 
-def set_tick_report(conn: sqlite3.Connection, tick_id: int, session_id: str | None, usage: Usage | None) -> None:
-    """Record what the agent runtime reported about a tick's overseer run: its session, and what it cost (§6, §13)."""
-    _set_report(conn, "ticks", tick_id, session_id, usage)
+def run_tools(conn: sqlite3.Connection, table: RunTable | Literal["ticks"], run_id: int) -> list[records.RunTool]:
+    """What a run's tool calls put into its context, by tool (§13): a tick's overseer when `table` is `ticks`.
+
+    Returns:
+        A row per tool it called, the most characters returned first; empty for a run that printed no tool call.
+    """
+    return records.fetch_all(
+        conn,
+        records.RunTool,
+        "SELECT * FROM run_tools WHERE run_table = ? AND run_id = ? ORDER BY result_chars DESC, tool",
+        (table, run_id),
+    )
+
+
+def set_run_progress(
+    conn: sqlite3.Connection,
+    run_id: int,
+    session_id: str,
+    *,
+    usage: Usage | None = None,
+    did: tuple[str, str] | None = None,
+) -> None:
+    """Record what a running run's worker has reported so far (DESIGN §8). Nothing changes for a run not running.
+
+    Its session always; what it has spent so far when `usage` is given; and its latest tool call when `did` is, as
+    `(tool, what it did)`, stamped now.
+    """
+    with transaction(conn):
+        conn.execute("UPDATE runs SET session_id = ? WHERE id = ? AND status = 'running'", (session_id, run_id))
+        if usage is not None:
+            conn.execute(
+                "UPDATE runs SET cost_usd = ?, tokens_input = ?, tokens_output = ?, tokens_reasoning = ?, "
+                "tokens_cache_read = ?, tokens_cache_write = ?, tokens_peak_context = ?, tokens_first_call = ?, "
+                "tokens_first_cache_write = ? WHERE id = ? AND status = 'running'",
+                (*_spent(usage), run_id),
+            )
+        if did is not None:
+            conn.execute(
+                "UPDATE runs SET activity_tool = ?, activity = ?, activity_at = ? WHERE id = ? AND status = 'running'",
+                (*did, now(), run_id),
+            )
 
 
 def set_tick_session(conn: sqlite3.Connection, tick_id: int, session_id: str) -> None:
@@ -682,21 +832,12 @@ def set_tick_session(conn: sqlite3.Connection, tick_id: int, session_id: str) ->
     conn.execute("UPDATE ticks SET session_id = ? WHERE id = ?", (session_id, tick_id))
 
 
-def set_chore_run_report(conn: sqlite3.Connection, run_id: int, session_id: str | None, usage: Usage | None) -> None:
-    """Record what the agent runtime reported about a chore run: its session, and what it cost (§13, §19)."""
-    _set_report(conn, "chore_runs", run_id, session_id, usage)
-
-
-def set_review_run_report(conn: sqlite3.Connection, run_id: int, session_id: str | None, usage: Usage | None) -> None:
-    """Record what the agent runtime reported about a review run: its session, and what it cost (§13, §21)."""
-    _set_report(conn, "review_runs", run_id, session_id, usage)
-
-
 def usage_of(row: sqlite3.Row) -> Usage | None:
     """What a run, chore run, review run, or tick row says its agent cost, or None when the runtime reported nothing.
 
     Returns:
-        The row's cost and token counts, a missing count read as 0, or None when it has no cost.
+        The row's cost and token counts, a missing count read as 0 and a missing peak context or first call as
+        unknown, or None when it has no cost.
     """
     if row["cost_usd"] is None:
         return None
@@ -707,25 +848,55 @@ def usage_of(row: sqlite3.Row) -> Usage | None:
         reasoning=int(row["tokens_reasoning"] or 0),
         cache_read=int(row["tokens_cache_read"] or 0),
         cache_write=int(row["tokens_cache_write"] or 0),
+        peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
+        first_call=int(row["tokens_first_call"]) if row["tokens_first_call"] is not None else None,
+        first_cache_write=int(row["tokens_first_cache_write"]) if row["tokens_first_cache_write"] is not None else None,
     )
 
 
 def _set_report(
     conn: sqlite3.Connection,
-    table: Literal["runs", "chore_runs", "review_runs", "ticks"],
+    table: RunTable | Literal["ticks"],
     row_id: int,
     session_id: str | None,
     usage: Usage | None,
+    *,
+    digest: str | None,
+    tools: Sequence[ToolUse],
 ) -> None:
-    spent = (
-        (usage.cost_usd, usage.input, usage.output, usage.reasoning, usage.cache_read, usage.cache_write)
-        if usage is not None
-        else (None,) * 6
-    )
-    conn.execute(
-        f"UPDATE {table} SET session_id = ?, cost_usd = ?, tokens_input = ?, tokens_output = ?, "  # noqa: S608
-        "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ? WHERE id = ?",
-        (session_id, *spent, row_id),
+    spent = _spent(usage) if usage is not None else (None,) * 9
+    # Only with a report: a template of the operator's that prints plain text may not load the snapshot at all.
+    loaded = digest if session_id is not None or usage is not None else None
+    with transaction(conn):
+        conn.execute(
+            f"UPDATE {table} SET session_id = ?, cost_usd = ?, tokens_input = ?, tokens_output = ?, "  # noqa: S608
+            "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ?, tokens_peak_context = ?, "
+            "tokens_first_call = ?, tokens_first_cache_write = ?, definitions_digest = ? WHERE id = ?",
+            (session_id, *spent, loaded, row_id),
+        )
+        conn.execute("DELETE FROM run_tools WHERE run_table = ? AND run_id = ?", (table, row_id))
+        conn.executemany(
+            "INSERT INTO run_tools (run_table, run_id, tool, calls, errors, result_chars) VALUES (?, ?, ?, ?, ?, ?)",
+            [(table, row_id, t.tool, t.calls, t.errors, t.result_chars) for t in tools],
+        )
+
+
+def _spent(usage: Usage) -> tuple[float, int, int, int, int, int, int | None, int | None, int | None]:
+    """`usage` as the cost and token columns hold it, in the order `_set_report` and `set_run_progress` write them.
+
+    Returns:
+        The cost, each kind of token, the peak context, and the first call's tokens and cache write.
+    """
+    return (
+        usage.cost_usd,
+        usage.input,
+        usage.output,
+        usage.reasoning,
+        usage.cache_read,
+        usage.cache_write,
+        usage.peak_context,
+        usage.first_call,
+        usage.first_cache_write,
     )
 
 
@@ -759,11 +930,22 @@ def spent_ever(conn: sqlite3.Connection) -> float | None:
 
 
 def recent_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
-    """Return the `limit` runs that ended most recently, newest first."""
+    """Return the `limit` runs that ended most recently, the one that ended last first."""
     return conn.execute(
         f"{_RUNS} WHERE r.status != 'running' ORDER BY r.ended_at DESC, r.id DESC LIMIT ?",
         (limit,),
     ).fetchall()
+
+
+def ended_runs_of(conn: sqlite3.Connection, key: str, limit: int) -> list[sqlite3.Row]:
+    """Return a ticket's latest `limit` ended runs since any forget, oldest first: id, kind, status, and end."""
+    rows = conn.execute(
+        "SELECT r.id, r.kind, r.status, r.ended_at FROM runs r LEFT JOIN tickets t ON t.key = r.ticket_key "
+        "WHERE r.ticket_key = ? AND r.status != 'running' AND r.id > coalesce(t.forgotten_run_id, 0) "
+        "ORDER BY r.id DESC LIMIT ?",
+        (key, limit),
+    ).fetchall()
+    return rows[::-1]
 
 
 def latest_runs(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:
@@ -827,48 +1009,6 @@ def get_chore_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
     """Return the chore run with `run_id`, or None."""
     row: sqlite3.Row | None = conn.execute("SELECT * FROM chore_runs WHERE id = ?", (run_id,)).fetchone()
     return row
-
-
-def claim_chore_run(conn: sqlite3.Connection, run_id: int, pid: int) -> bool:
-    """Record `pid` as the process working a running chore run; only the first process to claim it gets it.
-
-    Returns:
-        True if `pid` now holds the chore run; False if it is not running or another pid holds it.
-    """
-    cur = conn.execute(
-        "UPDATE chore_runs SET pid = ? WHERE id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)",
-        (pid, run_id, pid),
-    )
-    return cur.rowcount == 1
-
-
-def set_chore_agent_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> None:
-    """Record the pid, and so the process group, of a chore run's agent."""
-    conn.execute("UPDATE chore_runs SET agent_pid = ? WHERE id = ?", (pid, run_id))
-
-
-def finish_chore_run(
-    conn: sqlite3.Connection, run_id: int, status: str, result_json: str | None, *, event: Event | None = None
-) -> bool:
-    """Close a running chore run, recording `event` with it. Returns False if it was already closed.
-
-    Returns:
-        True if this call closed the chore run.
-    """
-    with transaction(conn):
-        cur = conn.execute(
-            "UPDATE chore_runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
-            (now(), status, result_json, run_id),
-        )
-        closed = cur.rowcount == 1
-        if closed and event is not None:
-            record_event(conn, event)
-    return closed
-
-
-def running_chore_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Return chore runs with status `running`, oldest first."""
-    return conn.execute("SELECT * FROM chore_runs WHERE status = 'running' ORDER BY started_at").fetchall()
 
 
 def chore_runs(
@@ -936,7 +1076,8 @@ def insert_review_run(
 ) -> int:
     """Insert a `running` review run with no slot or pid yet, logging to `<logs_dir>/<id>.log`, and return its id.
 
-    `purpose` is why it runs (DESIGN §21): `own` for one of the loop's own PRs, `query` for a `review.query` match.
+    `purpose` is why it runs (DESIGN §21): `own` for one of the loop's own PRs, `request` for a PR the operator
+    asked for, `query` for a `review.query` match.
 
     Returns:
         The new review run's id.
@@ -984,12 +1125,19 @@ def delete_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int)
 
 
 def set_review_slot(
-    conn: sqlite3.Connection, run_id: int, *, slot: Path, lease_id: str, lease_holder: str, base_branch: str
+    conn: sqlite3.Connection,
+    run_id: int,
+    *,
+    slot: Path,
+    lease_id: str,
+    lease_holder: str,
+    base_branch: str,
+    pool: PoolKind,
 ) -> None:
-    """Record the slot a review run leased, and the base branch it was leased on."""
+    """Record the slot a review run leased, the base branch it was leased on, and the pool that made the lease."""
     conn.execute(
-        "UPDATE review_runs SET slot_path = ?, lease_id = ?, lease_holder = ?, base_branch = ? WHERE id = ?",
-        (str(slot), lease_id, lease_holder, base_branch, run_id),
+        "UPDATE review_runs SET slot_path = ?, lease_id = ?, lease_holder = ?, base_branch = ?, pool = ? WHERE id = ?",
+        (str(slot), lease_id, lease_holder, base_branch, pool, run_id),
     )
 
 
@@ -997,48 +1145,6 @@ def get_review_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
     """Return the review run with `run_id`, or None."""
     row: sqlite3.Row | None = conn.execute("SELECT * FROM review_runs WHERE id = ?", (run_id,)).fetchone()
     return row
-
-
-def claim_review_run(conn: sqlite3.Connection, run_id: int, pid: int) -> bool:
-    """Record `pid` as the process working a running review run; only the first process to claim it gets it.
-
-    Returns:
-        True if `pid` now holds the review run; False if it is not running or another pid holds it.
-    """
-    cur = conn.execute(
-        "UPDATE review_runs SET pid = ? WHERE id = ? AND status = 'running' AND (pid IS NULL OR pid = ?)",
-        (pid, run_id, pid),
-    )
-    return cur.rowcount == 1
-
-
-def set_review_agent_pid(conn: sqlite3.Connection, run_id: int, pid: int) -> None:
-    """Record the pid, and so the process group, of a review run's agent."""
-    conn.execute("UPDATE review_runs SET agent_pid = ? WHERE id = ?", (pid, run_id))
-
-
-def finish_review_run(
-    conn: sqlite3.Connection, run_id: int, status: str, result_json: str | None, *, event: Event | None = None
-) -> bool:
-    """Close a running review run, recording `event` with it. Returns False if it was already closed.
-
-    Returns:
-        True if this call closed the review run.
-    """
-    with transaction(conn):
-        cur = conn.execute(
-            "UPDATE review_runs SET ended_at = ?, status = ?, result_json = ? WHERE id = ? AND status = 'running'",
-            (now(), status, result_json, run_id),
-        )
-        closed = cur.rowcount == 1
-        if closed and event is not None:
-            record_event(conn, event)
-    return closed
-
-
-def running_review_runs(conn: sqlite3.Connection) -> list[sqlite3.Row]:
-    """Return review runs with status `running`, oldest first."""
-    return conn.execute("SELECT * FROM review_runs WHERE status = 'running' ORDER BY started_at").fetchall()
 
 
 def review_runs_of(conn: sqlite3.Connection, pr_url: str) -> list[sqlite3.Row]:
@@ -1077,12 +1183,13 @@ def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict
 
 
 def pull_requests(conn: sqlite3.Connection, limit: int, *, url: str | None = None) -> list[sqlite3.Row]:
-    """Return the `limit` PRs with the most recent activity, newest first; with `url`, only that one (DESIGN §22).
+    """Return the `limit` PRs with the most recent activity, most recently active first; with `url`, only it (§22).
 
-    A PR is known by a ticket's unit, whose activity is the ticket's last sighting, or by a review run, whose activity
-    is its start or end. Each row has `url` and `active_at`, and the unit's `ticket_key`, `repo`, `branch`, `phase`,
-    and the ticket's `title`, all NULL for a PR no unit records. Decisions are not a source: they are many. Only the
-    candidates `_candidates` finds are weighed, so the read costs what `limit` does.
+    A PR is known by a ticket's unit, whose activity is the ticket's last sighting, by a review run, whose activity
+    is its start or end, or by the operator's review request, whose activity is when it was made or ended. Each row
+    has `url` and `active_at`, and the unit's `ticket_key`, `repo`, `branch`, `phase`, and the ticket's `title`, all
+    NULL for a PR no unit records. Decisions are not a source: they are many. Only the candidates `_candidates` finds
+    are weighed, so the read costs what `limit` does.
     """
     if limit < 1:
         return []
@@ -1099,15 +1206,18 @@ def _weighed_pull_requests(conn: sqlite3.Connection, urls: str, limit: int) -> l
         "  WHERE u.pr_url IN (SELECT value FROM json_each(?))"
         "  UNION ALL SELECT pr_url, coalesce(ended_at, started_at) FROM review_runs"
         "  WHERE pr_url IN (SELECT value FROM json_each(?))"
+        "  UNION ALL SELECT pr_url, coalesce(ended_at, created_at) FROM review_requests"
+        "  WHERE pr_url IN (SELECT value FROM json_each(?))"
         ") k "
         "LEFT JOIN ticket_units u ON u.pr_url = k.url LEFT JOIN tickets t ON t.key = u.ticket_key "
         "GROUP BY k.url ORDER BY active_at DESC, k.url LIMIT ?",
-        (urls, urls, limit),
+        (urls, urls, urls, limit),
     ).fetchall()
 
 
 # Each source of a PR's activity as `pull_requests` weighs it, for `_candidates`: its units by when a tick last saw
-# their ticket, and its review runs by when each ended, or started while it runs (`finish_review_run` sets the end).
+# their ticket, its review runs by when each ended, or started while it runs (`finish_run` sets the end), and its
+# review requests by when each ended, or was made while it is open.
 # CROSS JOIN keeps SQLite reading the tickets in order and each one's units after, rather than sorting every unit.
 _PR_ACTIVITY = (
     (
@@ -1116,6 +1226,7 @@ _PR_ACTIVITY = (
     ),
     "SELECT pr_url, ended_at FROM review_runs WHERE ended_at IS NOT NULL ORDER BY ended_at DESC",
     "SELECT pr_url, started_at FROM review_runs WHERE status = 'running' ORDER BY started_at DESC",
+    "SELECT pr_url, coalesce(ended_at, created_at) AS at FROM review_requests ORDER BY at DESC",
 )
 
 
@@ -1208,21 +1319,25 @@ def has_runs(conn: sqlite3.Connection, key: str) -> bool:
     return conn.execute("SELECT 1 FROM runs WHERE ticket_key = ? LIMIT 1", (key,)).fetchone() is not None
 
 
-def decisions_for_tick(conn: sqlite3.Connection, tick_id: int) -> list[sqlite3.Row]:
+def decisions_for_tick(conn: sqlite3.Connection, tick_id: int) -> list[records.Decision]:
     """Return a tick's decisions in the order they were recorded."""
-    return conn.execute("SELECT * FROM decisions WHERE tick_id = ? ORDER BY id", (tick_id,)).fetchall()
+    return records.fetch_all(
+        conn, records.Decision, "SELECT * FROM decisions WHERE tick_id = ? ORDER BY id", (tick_id,)
+    )
 
 
-def decisions_about(conn: sqlite3.Connection, key: str, limit: int) -> list[sqlite3.Row]:
+def decisions_about(conn: sqlite3.Connection, key: str, limit: int) -> list[records.Decision]:
     """Return the latest `limit` decisions about ticket `key`, its units' included, across ticks, newest first."""
-    return conn.execute(
-        "SELECT * FROM decisions WHERE ticket_key = ? ORDER BY id DESC LIMIT ?", (key, limit)
-    ).fetchall()
+    return records.fetch_all(
+        conn, records.Decision, "SELECT * FROM decisions WHERE ticket_key = ? ORDER BY id DESC LIMIT ?", (key, limit)
+    )
 
 
-def decisions_about_pr(conn: sqlite3.Connection, url: str, limit: int) -> list[sqlite3.Row]:
+def decisions_about_pr(conn: sqlite3.Connection, url: str, limit: int) -> list[records.Decision]:
     """Return the latest `limit` decisions that name the PR at `url`, across ticks, newest first."""
-    return conn.execute("SELECT * FROM decisions WHERE pr = ? ORDER BY id DESC LIMIT ?", (url, limit)).fetchall()
+    return records.fetch_all(
+        conn, records.Decision, "SELECT * FROM decisions WHERE pr = ? ORDER BY id DESC LIMIT ?", (url, limit)
+    )
 
 
 def last_decision_of(conn: sqlite3.Connection, key: str) -> str | None:
@@ -1434,7 +1549,7 @@ def ticket_cost(conn: sqlite3.Connection, key: str) -> sqlite3.Row:
 
 
 def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = None) -> list[sqlite3.Row]:
-    """Return the `limit` tickets with the most recent activity, newest first: each ticket row with `active_at`.
+    """Return the `limit` tickets with the most recent activity, most recently active first, each row with `active_at`.
 
     Activity is a message, a run starting or ending, a start or stop, or a tick seeing the ticket. Every one of those
     times is the journal's own format, so the newest is the greatest string. With `key`, only that ticket.

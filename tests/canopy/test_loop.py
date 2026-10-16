@@ -11,7 +11,7 @@ import os
 import signal
 import sys
 from collections import Counter
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import override
@@ -21,32 +21,11 @@ import pytest
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import config, conversation, db, pause, workspace
-from canopy.core.context import Context
-from canopy.infra import lock, logs, procs, resources
+from canopy.core import conversation, db, pause
+from canopy.infra import lock, procs, resources
 from canopy.loop import repeat, reread
-from tests.canopy.helpers import journal
+from tests.canopy.helpers import FakeKeys, FakeTime, canopy, console, context, overseer_does
 from tests.conftest import CanopyEnv, user_toml
-
-
-@dataclass
-class FakeTime:
-    """A monotonic clock that only `sleep` moves. `on_sleep` runs after each sleep, to act during the wait."""
-
-    now: float = 0.0
-    slept: list[float] = field(default_factory=list)
-    woke: list[float] = field(default_factory=list)  # the clock after each sleep
-    on_sleep: Callable[[], None] | None = None
-
-    def clock(self) -> float:
-        return self.now
-
-    def sleep(self, seconds: float) -> None:
-        self.slept.append(seconds)
-        self.now += seconds
-        self.woke.append(self.now)
-        if self.on_sleep is not None:
-            self.on_sleep()
 
 
 @dataclass
@@ -77,36 +56,9 @@ class RaisingRunner:
         return procs.SubprocessRunner().spawn(args, cwd=cwd, log_path=log_path)
 
 
-def context(env: CanopyEnv, runner: procs.Runner | None = None) -> Context:
-    cfg = config.load(env.root, env.user_file)
-    ws = workspace.load(env.root)
-    workspace.ensure_state_dir(ws.state_dir)
-    logs.configure(ws.state_dir)
-    conn = env.journal(migrate=False)
-    return Context(config=cfg, conn=conn, runner=runner or procs.SubprocessRunner(), ws=ws)
-
-
-@contextlib.contextmanager
-def overseer_does(*commands: list[str]) -> Iterator[None]:
-    """Until the block ends, the fake overseer runs `commands` and then ends its tick."""
-    with mock.patch.dict(
-        os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(commands), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
-    ):
-        yield
-
-
-def canopy(*args: str) -> list[str]:
-    return ["canopy", *args]
-
-
 def interrupt_me() -> list[str]:
     """A command that sends SIGINT to this test process, the way a Ctrl-C at the terminal would."""
     return [sys.executable, "-c", f"import os, signal; os.kill({os.getpid()}, signal.SIGINT)"]
-
-
-def console() -> tuple[Console, io.StringIO]:
-    out = io.StringIO()
-    return Console(file=out, width=200, highlight=False), out
 
 
 def woken_by(env: CanopyEnv) -> list[str | None]:
@@ -144,11 +96,12 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
     ):
         time = FakeTime()
         # Between the ticks, the reviewer approves PROJ-3: the second tick's overseer no longer lists it.
-        time.on_sleep = lambda: (
-            later.enter_context(overseer_does(canopy("decide", "PROJ-3", "wait", "--rationale", "approved")))
-            if len(time.slept) == 1
-            else None
+        second = (
+            canopy("decide", "PROJ-1", "wait", "--rationale", "checks pending"),
+            canopy("decide", "PROJ-2", "wait", "--rationale", "would be running"),
+            canopy("decide", "PROJ-3", "wait", "--rationale", "approved"),
         )
+        time.on_sleep = lambda: later.enter_context(overseer_does(*second)) if len(time.slept) == 1 else None
         term, out = console()
 
         statuses = repeat.run(
@@ -208,7 +161,7 @@ def test_each_tick_block_shows_what_its_overseer_cost(
         )
 
         tick1, tick2 = out.getvalue().split("tick 1  ok")[1].split("tick 2  ok")
-        assert "attention 0  ·  cost $0.25, 11.5k tokens  ·  next tick in 1m at" in tick1
+        assert "attention 0  ·  cost $0.25, 3.5k tokens, 5.5k peak context  ·  next tick in 1m at" in tick1
         assert "cost" not in tick2
 
 
@@ -235,11 +188,11 @@ def test_a_narrow_terminal_shortens_only_the_rationale(
         contextlib.ExitStack() as later,
     ):
         time = FakeTime()
-        time.on_sleep = lambda: (
-            later.enter_context(overseer_does(canopy("decide", "PROJ-3", "wait", "--rationale", "approved")))
-            if len(time.slept) == 1
-            else None
+        second = (
+            canopy("decide", "PROJ-2", "wait", "--rationale", "would be running"),
+            canopy("decide", "PROJ-3", "wait", "--rationale", "approved"),
         )
+        time.on_sleep = lambda: later.enter_context(overseer_does(*second)) if len(time.slept) == 1 else None
         out = io.StringIO()
         term = Console(file=out, width=80, highlight=False)
 
@@ -304,7 +257,7 @@ def test_the_wait_runs_from_the_end_of_the_tick_not_the_end_of_its_report(
 def test_the_footer_counts_running_reviews_as_workers(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     tick_id = db.start_tick(conn, dry_run=True)
     db.finish_tick(conn, tick_id, "ok", "test")
     run_id = db.insert_review_run(
@@ -317,7 +270,7 @@ def test_the_footer_counts_running_reviews_as_workers(
         purpose="query",
         logs_dir=canopy_env.state_dir,
     )
-    assert db.claim_review_run(conn, run_id, os.getpid())  # alive, so reconcile leaves it running
+    assert db.claim_run(conn, "review_runs", run_id, os.getpid())  # alive, so reconcile leaves it running
     with overseer_does():
         term, out = console()
         repeat.run(context(canopy_env), dry_run=True, interval_minutes=1, max_ticks=1, console=term, stop=repeat.Stop())
@@ -406,7 +359,7 @@ def test_ctrl_c_during_a_tick_lets_it_finish_then_stops(
         assert time.slept == []  # stopped without waiting
         assert tick_statuses(canopy_env) == ["ok"]
         conn = canopy_env.journal(migrate=False)
-        assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
+        assert [d.action for d in db.decisions_for_tick(conn, 1)] == ["queried", "done"]  # the overseer ran to its end
 
 
 def seconds_apart(seconds: float) -> Callable[[], float]:
@@ -449,7 +402,7 @@ def test_two_signals_from_one_ctrl_c_let_the_tick_finish(
             )
         assert statuses == {"ok": 1}
         conn = canopy_env.journal(migrate=False)
-        assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
+        assert [d.action for d in db.decisions_for_tick(conn, 1)] == ["queried", "done"]  # the overseer ran to its end
 
 
 @pytest.mark.parametrize(
@@ -492,23 +445,6 @@ def test_a_tick_that_raises_ends_that_tick_not_the_loop(
         assert tick_statuses(canopy_env) == ["abandoned", "ok"]
         log_lines = [json.loads(line) for line in (canopy_env.state_dir / "canopy.log").read_text().splitlines()]
         assert any(line["msg"] == "tick raised; the loop goes on" and "exc" in line for line in log_lines)
-
-
-@dataclass
-class FakeKeys:
-    """What the operator types: `pressed()` returns, and empties, what `type` queued, as `keys.listen`'s function."""
-
-    queued: list[str] = field(default_factory=list)
-    reads: int = 0
-
-    def type(self, text: str) -> None:
-        self.queued.append(text)
-
-    def pressed(self) -> str:
-        self.reads += 1
-        text = "".join(self.queued)
-        self.queued.clear()
-        return text
 
 
 def test_the_tick_now_key_ends_the_wait_at_once(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
@@ -617,7 +553,7 @@ def test_the_tick_now_key_ends_a_deferred_start(canopy_env: CanopyEnv, treehouse
 def test_an_operator_message_ends_a_deferred_start_after_a_minute(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
-    with overseer_does():
+    with overseer_does(canopy("decide", "PROJ-1", "wait", "--rationale", "answered the operator")):
         ctx = context(canopy_env)
         db.migrate(ctx.conn, resources.migrations_dir())
         db.touch_ticket(ctx.conn, "PROJ-1", "/r")
@@ -958,7 +894,7 @@ def test_sighup_during_a_tick_lets_it_finish_on_the_config_it_started_with(
         assert statuses == {"ok": 2}
         assert reload.during_tick == [True, True]  # the web UI would have said: after the running tick
         conn = canopy_env.journal(migrate=False)
-        assert [str(d["action"]) for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
+        assert [d.action for d in db.decisions_for_tick(conn, 1)] == ["queried", "done"]  # the overseer ran to its end
         assert sum(time.slept) == 600  # the wait after it was paced before the reload applied
         text = out.getvalue()
         assert text.index("tick 1  ok") < text.index("config reloaded") < text.index("tick 2  ok")

@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, TypedDict
 from canopy.core import chore_view, contract, db, outbox, review_result
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
+from canopy.core.vocab import RunStatus
 from canopy.infra import lock
 
 if TYPE_CHECKING:
@@ -44,6 +45,9 @@ TICK_ID_ENV = "CANOPY_TICK_ID"
 RUN_ID_ENV = "CANOPY_RUN_ID"
 MAX_OPERATOR = 4000
 MAX_PR_URL = 300
+# The channel of a start record the loop wrote: with `tracker.private` set, a labeled ticket's first dispatch starts
+# it privately, as if the operator had (DESIGN §22).
+LABEL = "label"
 # A submission id a channel's form draws when it is rendered (DESIGN §22).
 SUBMISSION_RE = re.compile(r"[A-Za-z0-9_-]{8,64}")
 # A mirrored tracker comment's body is cut to this, and marked truncated (DESIGN §22).
@@ -60,6 +64,8 @@ MAX_TIME = 64
 # How much of a ticket's conversation a private worker's prompt carries: its latest messages, oldest first.
 PROMPT_MESSAGES = 20
 PROMPT_CHARS = 30_000
+# How many of a ticket's latest runs a public worker's prompt reports (`prompt_previous_runs`).
+PREVIOUS_RUNS = 3
 # How many of the operator's notes to a chore its prompt carries: the latest, oldest first (DESIGN §19).
 CHORE_NOTES = 10
 
@@ -68,17 +74,22 @@ PR = "pr"
 CHORE = "chore"
 RUN = "run"
 REVIEW = "review"
-# The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), and the rest once PR-scoped work
-# exists (ROADMAP M14). `mirror` is the overseer's, not the operator's (DESIGN §22).
+# The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), `start --review` and `stop` (a
+# review request, `core/review_requests.py`), and `show`; working one is PR-scoped work (ROADMAP M14). `mirror` is the
+# overseer's, not the operator's (DESIGN §22).
 VERBS: Mapping[str, tuple[str, ...]] = {
     TICKET: ("start", "stop", "reply", "forget", "grant", "show", MIRROR_ACTION),
-    PR: ("grant",),
+    PR: ("grant", "start", "stop", "show"),
     CHORE: ("reply", "dismiss", "show"),
     RUN: ("show",),
     # `canopy review show ID` shows one; a reference to it serves to dismiss its findings, or send some to a worker
     # (DESIGN §21).
     REVIEW: ("dismiss", "send"),
 }
+# What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.
+_PR_WORK = (
+    "{ref} is a PR; canopy only reviews PRs it does not own, and works them once PR-scoped work exists (ROADMAP M14)"
+)
 _PR_SHORT_RE = re.compile(rf"({REPO_NAME_RE.pattern})#([1-9][0-9]{{0,9}})")
 _PR_URL_RE = re.compile(r"https://[^\s/]+/[^\s/]+/[^\s/]+/pull/[1-9][0-9]{0,9}/?")
 
@@ -150,7 +161,7 @@ def check_verb(ref: Ref, verb: str) -> None:
     if verb in verbs:
         return
     if ref.kind == PR:
-        raise Refused("unsupported", f"{ref} is a PR; canopy works PRs only once PR-scoped work exists (ROADMAP M14)")
+        raise Refused("unsupported", _PR_WORK.format(ref=ref))
     raise Refused("unsupported", f"{ref} is a {ref.kind}, which takes only {', '.join(verbs)}")
 
 
@@ -209,7 +220,7 @@ def start(conn: sqlite3.Connection, config: Config, ref: Ref, *, repo: str, chan
         Refused: `unsupported` for a subject that is not a ticket, `no_read_tools` when no tracker tools are known for
             a private worker to read the ticket with.
     """
-    check_verb(ref, "start")
+    _check_ticket(ref, "start")
     if config.tracker.tools() is None:
         raise Refused(
             "no_read_tools",
@@ -224,6 +235,19 @@ def start(conn: sqlite3.Connection, config: Config, ref: Ref, *, repo: str, chan
         db.set_start(conn, TICKET, ref.id, status="started", channel=channel)
         running = db.running_run_of(conn, ref.id)
     return Started(already=is_started(record), running=running)
+
+
+def _check_ticket(ref: Ref, verb: str) -> None:
+    """Refuse `verb` on anything but a ticket: on a PR, `start` and `stop` are a review request's (review_requests.py).
+
+    Raises:
+        Refused: (`unsupported`) `ref` is not a ticket.
+    """
+    check_verb(ref, verb)
+    if ref.kind == PR:
+        raise Refused("unsupported", f"{_PR_WORK.format(ref=ref)}; `canopy start {ref} --review` asks for a review")
+    if ref.kind != TICKET:
+        raise Refused("unsupported", f"{ref} is a {ref.kind}, which takes only {', '.join(VERBS[ref.kind])}")
 
 
 @dataclass(frozen=True)
@@ -246,7 +270,7 @@ def stop(conn: sqlite3.Connection, ref: Ref, *, channel: str) -> Stopped:
     Raises:
         Refused: `unsupported` for a subject that is not a ticket, `not_started` for a public ticket.
     """
-    check_verb(ref, "stop")
+    _check_ticket(ref, "stop")
     with db.transaction(conn):
         record = db.get_start(conn, TICKET, ref.id)
         if record is None:
@@ -833,6 +857,25 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
     return _bounded([_prompt_message(m) for m in rows], "No messages yet.")
 
 
+def prompt_previous_runs(conn: sqlite3.Connection, key: str) -> str:
+    """Return a public worker's `{{PREVIOUS_RUNS}}`: what the ticket's latest runs reported, oldest first.
+
+    Each run's kind, how it ended, its report, and a `blocked` run's question, as the run recorded them
+    (`run_messages`). Every run starts a fresh session, so this is how a worker learns what the runs before it
+    concluded (DESIGN §8). A private worker reads the same reports in its conversation. Runs from before the operator
+    forgot the ticket's work are left out. A summary and a question are each at most 2000 characters
+    (`worker.MAX_TEXT`), so the section is bounded.
+    """
+    blocks: list[str] = []
+    for run in db.ended_runs_of(conn, key, PREVIOUS_RUNS):
+        ended = f" at {run['ended_at']}" if run["ended_at"] else ""
+        lines = [f"Run {run['id']}, `{run['kind']}`, ended `{run['status']}`{ended}."]
+        for m in db.run_messages(conn, int(run["id"])):
+            lines += [f"Its {m['kind']}:", _quoted(str(m["body"]))]
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks) or "None: no earlier run of this ticket has ended."
+
+
 class ChoreNote(TypedDict):
     """One of the operator's notes to a chore, as its prompt carries it (DESIGN §19)."""
 
@@ -875,14 +918,18 @@ def _prompt_message(m: sqlite3.Row) -> str:
         what = f"{whose} tracker comment {m['comment_id']}, data"
     else:
         what = f"an earlier worker's {m['kind']}" + (f", run {m['run_id']}" if m["run_id"] else "")
-    body = "\n".join(f"> {line}" for line in printable(str(m["body"])).splitlines() or [""])
-    return f"Message {m['id']}, {what}, at {m['at']}:\n{body}"
+    return f"Message {m['id']}, {what}, at {m['at']}:\n{_quoted(str(m['body']))}"
+
+
+def _quoted(text: str) -> str:
+    # A message's body as a quote, one `> ` line per line, without control characters.
+    return "\n".join(f"> {line}" for line in printable(text).splitlines() or [""])
 
 
 # A run's messages
 
 
-def run_messages(status: str, result_json: str | None) -> list[tuple[str, str]]:
+def run_messages(status: RunStatus, result_json: str | None) -> list[tuple[str, str]]:
     """Return the `(kind, body)` messages a run that closed as `status` reports.
 
     That is a report, and for a `blocked` run its question. The report is the worker's summary, or the harness's note,
@@ -894,18 +941,20 @@ def run_messages(status: str, result_json: str | None) -> list[tuple[str, str]]:
     urls = [str(u) for u in prs.values() if isinstance(u, str) and u] if isinstance(prs, dict) else []
     found = [("report", "\n".join([summary, *urls]))]
     question = _text(result.get("question"))
-    if status == "blocked" and question:
+    if status == RunStatus.BLOCKED and question:
         found.append(("question", question))
     return found
 
 
-def close_run(conn: sqlite3.Connection, config: Config, run: sqlite3.Row, status: str, result_json: str | None) -> bool:
+def close_run(
+    conn: sqlite3.Connection, config: Config, run: sqlite3.Row, status: RunStatus, result_json: str | None
+) -> bool:
     """Close a running run as `status`, recording its messages and its `run.ended` event with it, in one transaction.
 
     Returns:
         True if this closed the run. False if it was already closed: nothing is recorded.
     """
-    return db.finish_run(
+    return db.finish_ticket_run(
         conn,
         int(run["id"]),
         status,

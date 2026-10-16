@@ -3,7 +3,6 @@ import { createFileRoute } from '@tanstack/react-router'
 import { GitPullRequest } from 'lucide-react'
 import type { ReactNode } from 'react'
 
-import { LinkOutIcon } from '@/components/link-out-icon'
 import { ApiError } from '@/api/client'
 import { pullRequestQuery } from '@/api/queries'
 import type { PullRequestDetail } from '@/api/types'
@@ -15,15 +14,18 @@ import { Field, Fields } from '@/components/fields'
 import { GrantLimits } from '@/components/grant-limits'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { ReviewRequestStatus } from '@/components/review-request'
 import { ReviewsTable } from '@/components/reviews-table'
 import { RunsTable } from '@/components/runs-table'
 import { Chip, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { LinkOutButton } from '@/components/ticket-links'
 import { TicketTitle } from '@/components/ticket-title'
-import { Button } from '@/components/ui/button'
 import { addressOf, onGitHub } from '@/lib/links'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { pullRequestLabel } from '@/lib/pull-request-label'
+import { None } from '@/components/none'
+import { NO_TICKET } from '@/lib/words'
 
 interface PullRequestSearch {
     url?: string | undefined
@@ -88,7 +90,18 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
             <PageHeader
                 title={title}
                 chips={pr.phase ? <Chip word={pr.phase} /> : undefined}
-                links={<PullRequestOut url={pr.url} />}
+                // The PR on its host, as a ticket's page shows its links out: the title names it, so this says where it
+                // goes.
+                links={
+                    <nav aria-label="Links out" className="mt-2 flex flex-wrap gap-2">
+                        <LinkOutButton
+                            href={pr.url}
+                            label={onGitHub(pr.url) ? 'on GitHub' : addressOf(pr.url)}
+                            icon={GitPullRequest}
+                            hint="The PR"
+                        />
+                    </nav>
+                }
             >
                 What canopy knows of this PR: its ticket when it has one, canopy&apos;s reviews of it, the runs that
                 pushed to it, and the decisions naming it.
@@ -103,7 +116,7 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                     <Fields>
                         <Field label="ticket" className="flex items-baseline gap-2">
                             {pr.ticket_key === null ? (
-                                <span className="text-muted-foreground">none: canopy has only reviewed it</span>
+                                <None reason={NO_TICKET} />
                             ) : (
                                 <>
                                     <TicketLink ticketKey={pr.ticket_key} className="shrink-0" />
@@ -128,7 +141,9 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                         )}
                         <CostTotalRow cost={cost} />
                     </Fields>
-                    {/* The PR's one action: a grant of another review when it is at its review limit. */}
+                    {/* The PR's actions: stopping the operator's review request, and a grant of another review
+                        when it is at its review limit. */}
+                    <ReviewRequestStatus url={pr.url} request={pr.review_request} className="border-t" />
                     {reviewLimit !== null && (
                         <GrantLimits limits={[reviewLimit]} ticketKey={pr.ticket_key} className="border-t" />
                     )}
@@ -178,24 +193,5 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                 </Panel>
             </div>
         </>
-    )
-}
-
-/** The PR on its host, as a ticket's page shows its links out; the title names it, so this says where it goes. */
-function PullRequestOut({ url }: { url: string }) {
-    return (
-        <nav aria-label="Links out" className="mt-2 flex flex-wrap gap-2">
-            <Button
-                asChild
-                variant="outline"
-                size="sm"
-                className="max-w-full gap-1.5 font-mono text-xs font-normal text-accent"
-            >
-                <a href={url} target="_blank" rel="noreferrer noopener" title="The PR">
-                    <LinkOutIcon href={url} icon={GitPullRequest} className="size-4" />
-                    <span className="truncate">{onGitHub(url) ? 'on GitHub' : addressOf(url)}</span>
-                </a>
-            </Button>
-        </nav>
     )
 }

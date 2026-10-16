@@ -6,17 +6,10 @@ sending some to a worker, as `canopy send review:ID`.
 
 from pathlib import Path
 
-import pytest
-
 from canopy.core import db, review_diff
-from canopy.serve import mock, mock_reviews
+from canopy.serve import mock_reviews
 from canopy.serve.backend import Backend
-from tests.canopy.test_serve import SECRET, client, signed_in
-
-
-@pytest.fixture
-def backend(tmp_path: Path) -> Backend:
-    return mock.seed(tmp_path / "mock")
+from tests.canopy.web_helpers import SECRET, client, signed_in
 
 
 def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> None:
@@ -29,8 +22,9 @@ def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> 
     ]
     assert (listed[0]["sha"], listed[0]["ticket_key"], listed[0]["repo"]) == (mock_reviews.SHA_88, "ABC-099", "web")
     assert listed[2]["ticket_key"] is None  # a PR review.query matched, with no ticket
-    # Its worst finding, which colors its verdict: none for a clean review or one that reported nothing.
-    assert [r["worst"] for r in listed] == ["major", None, None, "blocking"]
+    # Its worst finding, which colors its verdict, and how many are that bad, which its verdict says: none for a clean
+    # review or one that reported nothing.
+    assert [(r["worst"], r["worst_count"]) for r in listed] == [("major", 1), (None, 0), (None, 0), ("blocking", 1)]
 
 
 def test_a_review_anchors_its_findings_on_its_diff(backend: Backend) -> None:

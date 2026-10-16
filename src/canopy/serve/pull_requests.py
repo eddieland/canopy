@@ -1,8 +1,9 @@
 """The PRs the journal knows, as the web UI's pull requests pages show them (DESIGN §22).
 
-A PR is the subject here: the loop's own, by their tickets' units, and every one canopy reviewed. Its page gathers what
-the journal holds about it from elsewhere: the runs that pushed to it, canopy's reviews of it, which open the reviews
-pages (reviews.py), and the decisions naming it. Reads only; a rationale and a run's summary are untrusted text.
+A PR is the subject here: the loop's own, by their tickets' units, every one canopy reviewed, and every one the operator
+asked canopy to review. Its page gathers what the journal holds about it from elsewhere: the operator's review request,
+the runs that pushed to it, canopy's reviews of it, which open the reviews pages (reviews.py), and the decisions naming
+it. Reads only; a rationale and a run's summary are untrusted text.
 """
 
 from __future__ import annotations
@@ -10,14 +11,15 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, conversation, db
+from canopy.core import contract, conversation, db, review_requests
 from canopy.serve.reviews import summary
-from canopy.serve.schema import CostTotal, PullRequest, PullRequestDetail
+from canopy.serve.schema import CostTotal, PullRequest, PullRequestDetail, ReviewRequest
 from canopy.serve.views import decision, limit, run
 
 if TYPE_CHECKING:
     import sqlite3
 
+    from canopy.core import records
     from canopy.core.context import Context
     from canopy.serve.backend import Backend
 
@@ -51,7 +53,7 @@ def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail 
     if rows:
         found = _pull_request(ctx.conn, rows[0], reviews)
     elif decisions:
-        found = PullRequest(url=url, active_at=db.parse_time(str(decisions[0]["created_at"])))
+        found = PullRequest(url=url, active_at=db.parse_time(decisions[0].created_at))
     else:
         return None
     runs: list[sqlite3.Row] = _runs(ctx.conn, found.ticket_key, url) if found.ticket_key is not None else []
@@ -66,8 +68,25 @@ def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail 
     )
 
 
+def review_request(row: records.ReviewRequest) -> ReviewRequest:
+    """A review request as the API shows it.
+
+    Returns:
+        The request: when and where it was made, and when and why it ended, if it has.
+    """
+    return ReviewRequest.model_validate(
+        {
+            "created_at": db.parse_time(row.created_at),
+            "channel": row.channel,
+            "ended_at": db.parse_time(row.ended_at) if row.ended_at else None,
+            "end_reason": row.end_reason,
+        }
+    )
+
+
 def _pull_request(conn: sqlite3.Connection, row: sqlite3.Row, reviews: list[sqlite3.Row]) -> PullRequest:
     # A PR no unit records takes its ticket and repository from its reviews: an agent PR's ticket may be forgotten.
+    request = review_requests.latest_request(conn, str(row["url"]))
     key = row["ticket_key"] or next((r["ticket_key"] for r in reviews if r["ticket_key"]), None)
     repo = row["repo"] or next((r["repo"] for r in reviews if r["repo"]), None)
     title = " ".join(conversation.printable(str(row["title"])).split()) if row["title"] else ""
@@ -83,6 +102,7 @@ def _pull_request(conn: sqlite3.Connection, row: sqlite3.Row, reviews: list[sqli
         running_run=int(running["id"]) if running is not None else None,
         reviews=len(reviews),
         latest_review=summary(reviews[0]) if reviews else None,
+        review_request=review_request(request) if request is not None else None,
     )
 
 

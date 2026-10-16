@@ -10,12 +10,13 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.core.vocab import RunStatus
 from canopy.infra import procs
 from tests.canopy.helpers import (
     InlineRunner,
     commit_and_push,
+    decisions,
     in_tick,
-    journal,
     lifelock_left,
     pool,
     slot_of,
@@ -23,15 +24,6 @@ from tests.canopy.helpers import (
     worker_does,
 )
 from tests.conftest import CanopyEnv, GitPool, pool_state
-
-
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return journal(canopy_env)
-
-
-def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
-    return [(str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 def test_dispatch_leases_records_and_spawns(
@@ -480,9 +472,9 @@ def test_dry_run_refuses_what_a_live_dispatch_would(
                 runs_dir=canopy_env.state_dir / "runs",
             )
             if status == "running":
-                assert db.claim_run(conn, run_id, os.getpid())
+                assert db.claim_run(conn, "runs", run_id, os.getpid())
             else:
-                assert db.finish_run(conn, run_id, status, None)
+                assert db.finish_run(conn, "runs", run_id, RunStatus(status), None)
 
         past_run("LIMIT", "fix-ci", "done")
         past_run("LIMIT", "fix-ci", "done")
@@ -504,7 +496,7 @@ def test_dry_run_refuses_what_a_live_dispatch_would(
         ]:
             assert main(["dispatch", "--repo", "repo", *args], runner=runner) == code, args
 
-        assert [(d["ticket_key"], d["action"]) for d in db.decisions_for_tick(conn, tick_id)] == [
+        assert [(d.ticket_key, d.action) for d in db.decisions_for_tick(conn, tick_id)] == [
             ("LIMIT", "refused:attempt_limit"),
             ("LIMIT", "attention:attempt_limit"),
             ("COOL", "refused:cooldown"),

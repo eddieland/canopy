@@ -17,13 +17,14 @@ from typing import TYPE_CHECKING, TypedDict
 from canopy.core import chore_result as result
 from canopy.core import chore_window as window
 from canopy.core import db
+from canopy.core.vocab import ChoreRunStatus
 
 if TYPE_CHECKING:
     from canopy.core.config import Chore, Config
     from canopy.core.workspace import Workspace
 
 # Chore run statuses that raise `chore_failed`: the chore could not check, or left no usable result.
-FAILED = frozenset({"failed", "unknown", "timeout", "crashed"})
+FAILED = frozenset({ChoreRunStatus.FAILED, ChoreRunStatus.UNKNOWN, ChoreRunStatus.TIMEOUT, ChoreRunStatus.CRASHED})
 FAILED_REASON = "chore_failed"
 # How many of a chore's runs to read back at a time. A finding open longer than that reads further back.
 _HISTORY_RUNS = 200

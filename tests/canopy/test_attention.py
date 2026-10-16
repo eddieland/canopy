@@ -15,15 +15,9 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.config import ConfigError, load
 from canopy.loop import attention
-from tests.canopy.helpers import journal
 from tests.conftest import CanopyEnv
 
 NOW = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
-
-
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return journal(canopy_env)
 
 
 def item(key: str, reason: str, detail: str, age: timedelta) -> attention.Item:
@@ -57,9 +51,13 @@ def test_render_empty() -> None:
 
 
 @contextmanager
-def overseer_records(*items: tuple[str, str]) -> Iterator[None]:
-    """Until the block ends, the fake overseer records each (key, reason) as needing attention and ends the tick."""
+def overseer_records(*items: tuple[str, str], waiting: tuple[str, ...] = ()) -> Iterator[None]:
+    """Until the block ends, the fake overseer records each (key, reason) as needing attention and ends the tick.
+
+    Each key in `waiting` it decides to wait on instead, as it must for a ticket in the journal it records nothing for.
+    """
     commands = [["canopy", "attention", key, reason, "--detail", f"{key} detail"] for key, reason in items]
+    commands += [["canopy", "decide", key, "wait", "--rationale", "nothing to do yet"] for key in waiting]
     with mock.patch.dict(
         os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(commands), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
     ):
@@ -90,7 +88,7 @@ def test_every_tick_rewrites_attention_md(canopy_env: CanopyEnv, treehouse_state
     assert text.endswith(": PROJ-3 detail\n")
     assert path.stat().st_mode & 0o777 == 0o600
 
-    with overseer_records():
+    with overseer_records(waiting=("PROJ-3",)):
         assert main(["tick", "--dry-run"]) == 0
     assert "Nothing needs you." in path.read_text()
 
@@ -120,7 +118,7 @@ def test_notify_gets_new_and_resolved_items_once(
             assert main(["tick"]) == 0
             assert len(messages(notified)) == 1
 
-    with overseer_records(("PROJ-4", "ready_to_merge")):
+    with overseer_records(("PROJ-4", "ready_to_merge"), waiting=("PROJ-3",)):
         assert main(["tick"]) == 0
     assert messages(notified)[1] == "canopy attention: 0 new, 1 resolved\n- PROJ-3 needs_reviewer\n" + listing
 

@@ -1,12 +1,14 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
 import { choreQuery } from '@/api/queries'
 import type { ChoreDetail, ChoreRun, ChoreSpend, ChoreSpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreFindingRow } from '@/components/chore-finding'
+import { ChoreRunLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
+import { Copyable } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
 import { OrderToggle } from '@/components/order-toggle'
@@ -14,10 +16,10 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } fro
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunDot, Word } from '@/components/status'
-import { choreLine, runsText, windowText } from '@/lib/chores'
+import { cadenceText, choreLine, findingsReadout, runsText, windowText } from '@/lib/chores'
 import { costText } from '@/lib/cost-total'
 import { ordered, useListOrder } from '@/lib/list-order'
-import { choreRef, choreRunRef } from '@/lib/refs'
+import { choreRef } from '@/lib/refs'
 import { rowLineFrom } from '@/lib/rows'
 import { RUN_TEXT } from '@/lib/run-state'
 import { useNow } from '@/lib/time'
@@ -79,7 +81,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                     </PanelHeader>
                     <Fields>
                         <Field label="at most" mono>
-                            every {chore.every_minutes} minutes
+                            {cadenceText(chore.every_minutes)}
                         </Field>
                         <Field label="starts" mono>
                             {windowText(chore)}
@@ -94,7 +96,9 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                 </Panel>
                 <Panel className="2xl:col-start-1 2xl:row-start-2" data-testid="chore-findings">
                     <PanelHeader label="Open findings">
-                        <span className="readout text-xs text-muted-foreground">{chore.findings.length}</span>
+                        <span className="readout text-xs text-muted-foreground" data-testid="chore-findings-count">
+                            {findingsReadout(chore.findings)}
+                        </span>
                     </PanelHeader>
                     {chore.findings.length === 0 ? (
                         <Empty>no open findings now: its latest ok run found nothing</Empty>
@@ -143,19 +147,13 @@ function Chore({ detail }: { detail: ChoreDetail }) {
 /** A chore run: its state, id (opening its page), findings, cost, and when; what it said; its session. */
 function RunRow({ name, run }: { name: string; run: ChoreRun }) {
     return (
-        <ListRow kind="own-run" data-testid={`chore-run-${run.id}`}>
+        <ListRow kind="own-run" className="group/copy" data-testid={`chore-run-${run.id}`}>
             <span className={cn('flex items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
                 <RunDot state={run.state} />
                 <Word word={run.status} />
             </span>
             <span className="flex items-center gap-3">
-                <Link
-                    to="/chores/$name/runs/$id"
-                    params={{ name, id: String(run.id) }}
-                    className="readout min-w-28 text-xs text-accent underline-offset-4 hover:underline"
-                >
-                    {choreRunRef(name, run.id)}
-                </Link>
+                <ChoreRunLink name={name} id={run.id} className="min-w-28" />
                 {run.status === 'ok' && (
                     <span className="readout text-xs text-muted-foreground">
                         {run.findings === 1 ? '1 finding' : `${run.findings} findings`}
@@ -170,7 +168,9 @@ function RunRow({ name, run }: { name: string; run: ChoreRun }) {
                 className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs text-muted-foreground"
             >
                 {run.session_id && (
-                    <span title="open its transcript with the runtime's tools">session {run.session_id}</span>
+                    <Copyable text={run.session_id} label="session id" reveal>
+                        <span title="open its transcript with the runtime's tools">session {run.session_id}</span>
+                    </Copyable>
                 )}
                 <span title="the run's output">log {run.log_path}</span>
             </RowLine>

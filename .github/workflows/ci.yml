@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# Every uv command refuses a uv.lock that is out of date with pyproject.toml, not only the explicit `uv sync
+# --locked`: the `uv run` calls after it, in make and npm scripts, would otherwise re-lock and sync quietly.
+env:
+  UV_LOCKED: "1"
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -98,7 +103,7 @@ jobs:
         if: needs.changes.outputs.code != 'false'
         run: make check
 
-  # The sandbox canary (HOST_ISOLATION §6): the shipped wrapper and policy templates under the real srt, with
+  # The sandbox canary (DESIGN §24, The canary): the shipped wrapper and policy templates under the real srt, with
   # bubblewrap on Linux and sandbox-exec on macOS, set up the way docs/SANDBOX.md tells the operator to.
   sandbox-canary:
     runs-on: ${{ matrix.os }}
@@ -159,6 +164,54 @@ jobs:
         run: |
           uv run python -c 'import tempfile; print("system temp directory:", tempfile.gettempdir())'
           make sandbox-canary
+
+  # The pool contract (ROADMAP M45, DESIGN §18 What a pool guarantees) against real treehouse, built at the commit
+  # `make treehouse` pins. Go is needed only here, as Node is for the sandbox canary: canopy itself never runs it.
+  pool-contract:
+    runs-on: ${{ matrix.os }}
+    needs: changes
+    if: ${{ !cancelled() }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Check out repository
+        if: needs.changes.outputs.code != 'false'
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up uv and Python 3.12
+        if: needs.changes.outputs.code != 'false'
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Set up Go
+        if: needs.changes.outputs.code != 'false'
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Install dependencies
+        if: needs.changes.outputs.code != 'false'
+        run: uv sync --locked
+
+      - name: Build treehouse at the pinned commit
+        if: needs.changes.outputs.code != 'false'
+        run: |
+          make treehouse
+          echo "$(go env GOPATH)/bin" >>"$GITHUB_PATH"
+
+      - name: Pool contract
+        if: needs.changes.outputs.code != 'false'
+        run: |
+          treehouse --version
+          make pool-contract
 
   # The web UI end to end: Playwright against the build, served by FastAPI (ui/AGENTS.md).
   ui-e2e:

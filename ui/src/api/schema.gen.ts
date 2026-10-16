@@ -221,6 +221,48 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/loop/notice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Set a notice to workers
+         * @description `canopy notice TEXT --for DURATION`: every run dispatched from now on hears it until it lapses.
+         *
+         *     It replaces the notice in force. A blank text is refused `empty`, and one over the bound `too_long`.
+         */
+        post: operations["setNotice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/loop/notice/clear": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Clear the notice to workers
+         * @description `canopy notice --clear`: runs dispatched from now on hear none.
+         */
+        post: operations["clearNotice"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/loop/pause": {
         parameters: {
             query?: never;
@@ -345,6 +387,51 @@ export type paths = {
          *     is refused `unknown`; one that is not a PR's, `bad_ref`.
          */
         post: operations["grantPullRequest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pull-request/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask for a PR to be reviewed
+         * @description `canopy start URL --review`: review a PR the loop does not own, once, at its head (DESIGN §21).
+         *
+         *     It reviews nothing now: the next tick does, in whichever of the workspace's repositories the PR is in. Refused as
+         *     the CLI refuses it: `reviews_off`, `bad_pr`, and `loop_pr`.
+         */
+        post: operations["startPullRequestReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pull-request/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop reviewing a PR
+         * @description `canopy stop URL`: end the PR's open review request. A review of it already running finishes.
+         *
+         *     Refused `not_requested` for a PR with no open request, and `bad_pr` for a URL that is not a PR's.
+         */
+        post: operations["stopPullRequestReview"];
         delete?: never;
         options?: never;
         head?: never;
@@ -936,6 +1023,11 @@ export type components = {
              * @description The ticket it is about, when it is about one; a chore's and a repository's items have none.
              */
             ticket_key: string | null;
+            /**
+             * Ticket Title
+             * @description That ticket's title, as the overseer named it (DESIGN §13); None until it does, or when it is about none.
+             */
+            ticket_title: string | null;
         };
         /**
          * AttentionUpdated
@@ -1041,6 +1133,18 @@ export type components = {
              */
             log_path: string;
             /**
+             * New Tokens
+             * @description The tokens the runtime reported its model took in or wrote anew, every kind but cache reads; None when it
+             *     reported nothing.
+             */
+            new_tokens: number | null;
+            /**
+             * Peak Context
+             * @description The most tokens one of its model calls was sent, from the cache or not; None when the runtime reported nothing,
+             *     or recorded it before canopy kept it.
+             */
+            peak_context: number | null;
+            /**
              * Session Id
              * @description The runtime's session, for opening its transcript with the runtime's own tools.
              */
@@ -1063,11 +1167,6 @@ export type components = {
              * @description The harness's note or the agent's summary, line breaks kept, cut at 300 characters.
              */
             summary: string | null;
-            /**
-             * Tokens
-             * @description How many tokens the agent runtime reported it used; None when it reported nothing.
-             */
-            tokens: number | null;
         };
         /**
          * ChoreRunDetail
@@ -1781,17 +1880,25 @@ export type components = {
         LimitKind: "implement" | "fix-ci" | "resume" | "review";
         /**
          * LoopState
-         * @description Whether the loop is paused: no tick starts until the operator resumes it. A tick running when paused finishes.
+         * @description Whether the loop is paused, and the notice to workers in force.
+         *
+         *     While paused, no tick starts until the operator resumes it; a tick running when paused finishes.
          */
         LoopState: {
+            /** @description The notice to workers in force; None without one. */
+            notice: components["schemas"]["WorkerNotice"] | null;
             /** @description The pause; None when the loop is not paused. */
             paused: components["schemas"]["Pause"] | null;
         };
         /**
          * LoopUpdated
-         * @description The loop was paused or resumed. The payload is what `GET /loop` returns.
+         * @description The loop was paused or resumed, or a notice to workers was set, cleared, or lapsed.
+         *
+         *     The payload is what `GET /loop` returns.
          */
         LoopUpdated: {
+            /** @description The notice to workers in force; None without one. */
+            notice: components["schemas"]["WorkerNotice"] | null;
             /** @description The pause; None when the loop is not paused. */
             paused: components["schemas"]["Pause"] | null;
             /**
@@ -1895,6 +2002,40 @@ export type components = {
             workspace_root: string;
         };
         /**
+         * NoticeChanged
+         * @description What setting or clearing a notice did, and the state it left.
+         */
+        NoticeChanged: {
+            /**
+             * Already
+             * @description For a clear, whether no notice was in force, so nothing changed; always false for a set.
+             */
+            already: boolean;
+            /** @description The state it left. */
+            loop: components["schemas"]["LoopState"];
+        };
+        /**
+         * @description How the operator set the notice.
+         * @enum {string}
+         */
+        NoticeChannel: "cli" | "web";
+        /**
+         * NoticeRequest
+         * @description A notice to set, as `canopy notice TEXT --for DURATION` sets it, replacing the one in force.
+         */
+        NoticeRequest: {
+            /**
+             * Minutes
+             * @description How long it lasts, in minutes; four hours when None.
+             */
+            minutes?: number | null;
+            /**
+             * Text
+             * @description What to tell the workers. Bounded again in code at 1024 bytes, after stripping (DESIGN §8).
+             */
+            text: string;
+        };
+        /**
          * Pause
          * @description The operator paused the loop (DESIGN §6): since when, and through which channel.
          */
@@ -1977,7 +2118,7 @@ export type components = {
             /**
              * Active At
              * Format: date-time
-             * @description The newest of its ticket's last sighting and its review runs' starts and ends.
+             * @description The newest of its ticket's last sighting, its review runs' starts and ends, and its review requests'.
              */
             active_at: string;
             /**
@@ -1997,6 +2138,8 @@ export type components = {
              * @description The PR's repository, as the workspace names it.
              */
             repo: string | null;
+            /** @description The operator's latest review request on it, open or ended; None when they never made one. */
+            review_request: components["schemas"]["ReviewRequest"] | null;
             /**
              * Reviews
              * @description How many review runs it has had, however they ended.
@@ -2277,6 +2420,60 @@ export type components = {
          */
         ReviewImpact: "low" | "normal" | "high";
         /**
+         * ReviewRequest
+         * @description The operator's request to review a PR the loop does not own (DESIGN §21): open, or how it ended.
+         */
+        ReviewRequest: {
+            /**
+             * Channel
+             * @description Where it was made: `cli` or `web`.
+             */
+            channel: string;
+            /**
+             * Created At
+             * Format: date-time
+             * @description When the operator made it.
+             */
+            created_at: string;
+            /**
+             * End Reason
+             * @description Why it ended: a `done` review of the PR; the PR merged or closed first, or is in none of the workspace's
+             *     repositories (the overseer's reading); or the operator stopped it. None while it is open.
+             */
+            end_reason: ("reviewed" | "merged" | "closed" | "unknown_repo" | "stopped") | null;
+            /**
+             * Ended At
+             * @description When it ended; None while it is open.
+             */
+            ended_at: string | null;
+        };
+        /**
+         * ReviewRequested
+         * @description What a review request recorded: the open request, and whether it was already open or replaced another.
+         */
+        ReviewRequested: {
+            /**
+             * Already
+             * @description Whether it was already open, so nothing new was recorded.
+             */
+            already: boolean;
+            /** @description The PR's open request. */
+            request: components["schemas"]["ReviewRequest"];
+        };
+        /**
+         * ReviewRequestStopped
+         * @description What stopping a review request did: the request as it was, and a review of the PR still running.
+         */
+        ReviewRequestStopped: {
+            /** @description The request it ended, as `stopped`. */
+            request: components["schemas"]["ReviewRequest"];
+            /**
+             * Running Review
+             * @description A review run of the PR still running, which finishes; None when none is.
+             */
+            running_review: number | null;
+        };
+        /**
          * ReviewSendRequest
          * @description Some of a review run's findings to send to a worker, by number, with the submission id the form drew.
          */
@@ -2388,6 +2585,12 @@ export type components = {
             verdict: components["schemas"]["ReviewVerdict"] | null;
             /** @description The severity of the worst finding it reported, which colors its verdict; None when it reported none. */
             worst: components["schemas"]["FindingSeverity"] | null;
+            /**
+             * Worst Count
+             * @description How many of its findings are of the worst severity, which its verdict says in words (`3 findings, 1 major`).
+             * @default 0
+             */
+            worst_count: number;
         };
         /**
          * @description A review run's verdict (DESIGN §21).
@@ -2399,6 +2602,11 @@ export type components = {
          * @description One worker or split run (`run:ID`).
          */
         Run: {
+            /**
+             * @description While it runs, its worker's latest tool call; None before the first, for a template that prints no events, and
+             *     once it ends.
+             */
+            activity: components["schemas"]["RunActivity"] | null;
             /**
              * Branch
              * @description The branch it works on.
@@ -2429,6 +2637,18 @@ export type components = {
              * @description Where its log is: from the workspace root when under it, as a worktree's path is.
              */
             log_path: string;
+            /**
+             * New Tokens
+             * @description The tokens the runtime reported its model took in or wrote anew, every kind but cache reads; None when it
+             *     reported nothing.
+             */
+            new_tokens: number | null;
+            /**
+             * Peak Context
+             * @description The most tokens one of its model calls was sent, from the cache or not; None when the runtime reported nothing,
+             *     or recorded it before canopy kept it.
+             */
+            peak_context: number | null;
             /**
              * Private
              * @description Whether it works a ticket started in canopy, whose conversation never reaches the tracker.
@@ -2474,16 +2694,33 @@ export type components = {
              */
             ticket_title: string | null;
             /**
-             * Tokens
-             * @description How many tokens the agent runtime reported it used; None when it reported nothing.
-             */
-            tokens: number | null;
-            /**
              * Worktrees
              * @description The worktrees a running run holds, from the workspace root when under it.
              * @default []
              */
             worktrees: string[];
+        };
+        /**
+         * RunActivity
+         * @description A running run's latest tool call, as `_run` read it from the worker's events (DESIGN §8).
+         */
+        RunActivity: {
+            /**
+             * At
+             * Format: date-time
+             * @description When `_run` read it.
+             */
+            at: string;
+            /**
+             * Did
+             * @description What the call did, on one line: a shell call's command, else the runtime's title; empty when it gave neither.
+             */
+            did: string;
+            /**
+             * Tool
+             * @description The tool's name, as the runtime names it: `bash`, `read`, an MCP server's tool.
+             */
+            tool: string;
         };
         /**
          * @description A run's status, in five groups the UI colors (DESIGN §22). `blocked` asked a question; `failed` is every ending a human must look at (failed, crashed, unpushed, unknown, timeout); `stopped` is the operator's.
@@ -2629,6 +2866,12 @@ export type components = {
              */
             days: number;
             /**
+             * Done
+             * @description How many tickets the loop marked done in the window, merged or closed.
+             * @default 0
+             */
+            done: number;
+            /**
              * Idle Share
              * @description Idle ticks' share of what the live ticks that ended cost, from 0 to 1; None when they cost nothing, or reported
              *     no cost, so there is nothing to share.
@@ -2645,16 +2888,40 @@ export type components = {
              */
             per_day: components["schemas"]["SpendDay"][];
             /**
+             * Per Done
+             * @description The window's whole spend, the overseer's and chores' included, over the tickets marked done in it, in US
+             *     dollars; None when none was, or nothing reported a cost.
+             */
+            per_done: number | null;
+            /**
+             * Pull Requests
+             * @description Each PR a run that started in the window pushed to, or a review run of it started in it, the costliest first.
+             * @default []
+             */
+            pull_requests: components["schemas"]["SpendPullRequest"][];
+            /**
              * Since
              * Format: date-time
              * @description When the window starts: midnight UTC on its first day.
              */
             since: string;
             /**
+             * Tickets
+             * @description Each ticket with a run or review run that started in the window, or marked done in it, the costliest first.
+             * @default []
+             */
+            tickets: components["schemas"]["SpendTicket"][];
+            /**
              * Ticks
              * @description The ticks that ended in it, a row per group, in a fixed order: idle, busy, hand_run, not_ok, dry_run.
              */
             ticks: components["schemas"]["SpendTicks"][];
+            /**
+             * Tools
+             * @description What each kind's tool calls returned, by tool, the most characters first: a row per kind and tool.
+             * @default []
+             */
+            tools: components["schemas"]["SpendTool"][];
             /** @description The whole window's costs. */
             totals: components["schemas"]["SpendCosts"];
             /**
@@ -2721,6 +2988,12 @@ export type components = {
              * @description The day, `YYYY-MM-DD`, in UTC.
              */
             day: string;
+            /**
+             * Done
+             * @description How many tickets the loop marked done on it.
+             * @default 0
+             */
+            done: number;
         };
         /**
          * @description What a tick that ended bought (DESIGN §6, Idle pacing; §11): `idle` and `busy` are the loop's word on an `ok` tick, `hand_run` an `ok` tick no loop ran, `not_ok` a live one that closed otherwise, and `dry_run` a dry run, whatever the loop said of it.
@@ -2732,6 +3005,84 @@ export type components = {
          * @enum {string}
          */
         SpendKind: "overseer" | "workers" | "chores" | "reviews";
+        /**
+         * SpendPullRequest
+         * @description What the runs that pushed to one PR and the review runs of it, started in the window, cost.
+         */
+        SpendPullRequest: {
+            /**
+             * Cost Usd
+             * @description What those cost, in US dollars; None when none reported a cost.
+             */
+            cost_usd: number | null;
+            /**
+             * Phase
+             * @description Its unit's phase (DESIGN §7), `merged` once it merged; None for a PR no unit of the loop's has.
+             */
+            phase: string | null;
+            /**
+             * Reviews
+             * @description How many review runs of it started in the window.
+             */
+            reviews: number;
+            /**
+             * Runs
+             * @description How many runs that pushed to it started in the window: a run that pushed to two PRs counts on each.
+             */
+            runs: number;
+            /**
+             * Ticket Key
+             * @description The ticket that owns it: its unit's, else one a run or review named; None for a PR canopy only reviewed.
+             */
+            ticket_key: string | null;
+            /**
+             * Url
+             * @description The PR.
+             */
+            url: string;
+        };
+        /**
+         * SpendTicket
+         * @description What one ticket's own runs that started in the window cost, and whether it was marked done in the window.
+         */
+        SpendTicket: {
+            /**
+             * Cost Usd
+             * @description What those cost, in US dollars; None when none reported a cost. Not the overseer's, which is no ticket's.
+             */
+            cost_usd: number | null;
+            /**
+             * Done
+             * @description How the loop marked it done in the window (DESIGN §7): its PRs merged, or the tracker closed it, which a
+             *     tracker may do when its PR merges. None when it was not marked done in the window.
+             */
+            done: ("merged" | "closed") | null;
+            /**
+             * Done At
+             * @description When it was marked done; None when it was not, in the window.
+             */
+            done_at: string | null;
+            /**
+             * Key
+             * @description The ticket.
+             */
+            key: string;
+            /**
+             * Reviews
+             * @description How many review runs naming it started in the window.
+             */
+            reviews: number;
+            /**
+             * Runs
+             * @description How many of its worker and split runs started in the window, a running one included.
+             */
+            runs: number;
+            /**
+             * Title
+             * @description Its title, as the overseer named it; None before it did.
+             */
+            title: string | null;
+        };
         /**
          * SpendTicks
          * @description How many ended ticks of the window are in a group, and what their overseers cost.
@@ -2749,6 +3100,45 @@ export type components = {
              * @description How many ticks.
              */
             ticks: number;
+        };
+        /**
+         * SpendTool
+         * @description What one tool's calls in one kind's runs that started in the window put into their context (DESIGN §13).
+         */
+        SpendTool: {
+            /**
+             * Calls
+             * @description How many of its calls ended.
+             */
+            calls: number;
+            /**
+             * Errors
+             * @description How many of those ended in an error.
+             */
+            errors: number;
+            /**
+             * Est Tokens
+             * @description `result_chars` over 4: an estimate of their tokens, since the runtime does not say which of a call's tokens a
+             *     tool's result was.
+             */
+            est_tokens: number;
+            /** @description The kind of run that called it; the overseer's include dry runs. */
+            kind: components["schemas"]["SpendKind"];
+            /**
+             * Result Chars
+             * @description The characters they returned, output or error, which each later model call of the run reads again.
+             */
+            result_chars: number;
+            /**
+             * Runs
+             * @description How many of those runs called it.
+             */
+            runs: number;
+            /**
+             * Tool
+             * @description The tool's name as the runtime gives it, an MCP server's prefixed with the server's: untrusted text.
+             */
+            tool: string;
         };
         /**
          * SpendUnpriced
@@ -2928,6 +3318,18 @@ export type components = {
              *     records it, just after the tick ends. Its change is sent on the stream, which marks the spend page stale.
              */
             idle: boolean | null;
+            /**
+             * New Tokens
+             * @description The tokens the runtime reported the overseer's model took in or wrote anew, every kind but cache reads; None
+             *     when it reported nothing.
+             */
+            new_tokens: number | null;
+            /**
+             * Peak Context
+             * @description The most tokens one of the overseer's model calls was sent, from the cache or not; None when the runtime
+             *     reported nothing, or recorded it before canopy kept it.
+             */
+            peak_context: number | null;
             /**
              * Session Id
              * @description The overseer's session, when the runtime reported it (§13).
@@ -3453,6 +3855,33 @@ export type components = {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * WorkerNotice
+         * @description The operator's notice to workers in force (`canopy notice`, DESIGN §8).
+         *
+         *     Every run dispatched while it is in force hears it, and the overseer holds a failed check it explains.
+         */
+        WorkerNotice: {
+            /** @description How it was set. */
+            channel: components["schemas"]["NoticeChannel"];
+            /**
+             * Lapses At
+             * Format: date-time
+             * @description When it lapses, unless the operator clears it or sets another first.
+             */
+            lapses_at: string;
+            /**
+             * Since
+             * Format: date-time
+             * @description When it was set.
+             */
+            since: string;
+            /**
+             * Text
+             * @description What the operator told the workers: the operator's own words.
+             */
+            text: string;
         };
         /**
          * Worktree
@@ -4413,6 +4842,158 @@ export interface operations {
             };
         };
     };
+    setNotice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoticeRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoticeChanged"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 256 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    clearNotice: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoticeChanged"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 256 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     pauseLoop: {
         parameters: {
             query?: never;
@@ -4787,6 +5368,178 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Granted"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 256 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a plain https:// URL of at most 300 characters. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    startPullRequestReview: {
+        parameters: {
+            query: {
+                /** @description The PR's plain https:// URL, at most 300 characters. */
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRequested"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 256 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a plain https:// URL of at most 300 characters. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    stopPullRequestReview: {
+        parameters: {
+            query: {
+                /** @description The PR's plain https:// URL, at most 300 characters. */
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRequestStopped"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

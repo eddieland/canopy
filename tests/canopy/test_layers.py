@@ -1,9 +1,11 @@
-"""The package layers of DESIGN §5 (D041), checked on every import in `src/canopy`, `TYPE_CHECKING` ones included."""
+"""The package layers of DESIGN §5 (D041), checked on every import in `src/canopy`, `TYPE_CHECKING` ones included;
+and the tests' one rule of the same kind: a test module imports from no other."""
 
 import ast
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[2] / "src" / "canopy"
+TESTS = Path(__file__).resolve().parents[1]
 
 # Top to bottom. A module may import from its own package and from any package in a lower layer. It may not import
 # from a higher layer or from another package in its own layer: features stay independent of each other, and shared
@@ -109,4 +111,37 @@ if TYPE_CHECKING:
         "canopy.runs imports canopy.setup.init, which is not in a lower layer",
         "imports canopy_notify_slack, a separate program canopy runs only as a command",
         "canopy.runs imports canopy.loop.tick, which is not in a lower layer",
+    ]
+
+
+def test_no_test_module_imports_another() -> None:
+    """What two test modules share lives in a helpers module (`tests/canopy/helpers.py`) or a conftest, not in one."""
+    found = [v for path in sorted(TESTS.rglob("*.py")) for v in imported_tests(path, path.read_text())]
+    assert not found, "\n".join(found)
+
+
+def imported_tests(path: Path, source: str) -> list[str]:
+    """Each import in `source`, the text of the module at `path`, of a test module."""
+    found: list[str] = []
+    for node in ast.walk(ast.parse(source, filename=str(path))):
+        names: list[str] = []
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            names = [node.module, *(f"{node.module}.{alias.name}" for alias in node.names)]
+        where = f"{path.relative_to(TESTS.parent)}:{getattr(node, 'lineno', 0)}"
+        found.extend(f"{where}: imports {n}, a test module" for n in names if n.rpartition(".")[2].startswith("test_"))
+    return found
+
+
+def test_the_check_catches_a_test_module_imported_either_way() -> None:
+    source = """
+from tests.canopy.helpers import in_tick
+from tests.canopy.test_loop import context
+from tests.canopy import test_web
+"""
+    found = imported_tests(TESTS / "canopy" / "test_example.py", source)
+    assert [v.split(": ", 1)[1] for v in found] == [
+        "imports tests.canopy.test_loop, a test module",
+        "imports tests.canopy.test_web, a test module",
     ]

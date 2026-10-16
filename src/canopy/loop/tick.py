@@ -1,18 +1,18 @@
-"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, check `canopy`, run the overseer, close, publish."""
+"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, check `canopy`, run and check the overseer, publish."""
 
 from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from canopy.chores import reconcile as chore_reconcile
-from canopy.core import agent_output, chore_view, conversation, db, definitions, treehouse
+from canopy.core import agent_output, chore_view, conversation, db, definitions, notice, pools
 from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import attention, state
+from canopy.loop import attention, duties, state
 from canopy.reviews import reconcile as review_reconcile
 from canopy.reviews import view as review_view
 from canopy.runs import policy, reconcile
@@ -28,6 +28,10 @@ DONE_LINE = "CANOPY_TICK_DONE"
 CANOPY_CHECK = ("canopy", "--version")
 CANOPY_CHECK_TIMEOUT_SECONDS = 60
 CANOPY_UNAVAILABLE = attention.UNAVAILABLE
+# How long a ticket marked done stays in the state block's `recently_done`, so the overseer leaves it out while a human
+# has yet to close it in the tracker (DESIGN §7). One still open after that is read again and marked done again, which
+# lists it for as long once more.
+RECENTLY_DONE_DAYS = 30
 
 
 @dataclass(frozen=True)
@@ -58,36 +62,29 @@ def run(ctx: Context, *, dry_run: bool) -> Outcome:
         return Outcome(None, "lock_busy", "another tick holds the lock")
 
 
-def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
-    applied = db.migrate(ctx.conn, resources.migrations_dir())
-    abandoned = db.abandon_unfinished_ticks(ctx.conn)
-    tick_id = db.start_tick(ctx.conn, dry_run=dry_run)
-    log = logs.for_tick(tick_id)
-    log.info("tick started", extra={"dry_run": dry_run, "repo": ctx.repo, "migrations_applied": applied})
-    if abandoned:
-        log.warning("closed ticks left running by a dead tick process", extra={"abandoned_ticks": abandoned})
+def state_block(
+    ctx: Context, *, tick_id: int, dry_run: bool, now: datetime, reconciled: reconcile.Reconciled, query_due: bool
+) -> str:
+    """Read the journal for tick `tick_id` and render the overseer's state block from it (DESIGN §6 step 4).
 
-    def finish(status: str, summary: str, usage: agent_output.Usage | None = None) -> Outcome:
-        db.finish_tick(ctx.conn, tick_id, status, summary)
-        spent = {"cost_usd": usage.cost_usd, "tokens": usage.tokens} if usage is not None else {}
-        log.info("tick finished", extra={"status": status, "summary": summary, **spent})
-        return Outcome(tick_id, status, summary, usage)
+    `reconciled` is what reconcile left: the capacity, and each repository's leased slots.
 
-    try:
-        # Reviews first: a review whose `_review` is gone returns its slot, and then frees worker capacity.
-        review_reconcile.run(ctx, log)
-        reconciled = reconcile.run(ctx, log)
-    except treehouse.TreehouseError as e:
-        log.exception("reconcile failed", extra={"error": str(e)})
-        return finish("reconcile_failed", str(e))
-    chore_reconcile.run(ctx, log)
-    # Before anything reads a message or a run: the harness items and the state block see at least every message, and
-    # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
-    db.set_tick_read(ctx.conn, tick_id)
-    _record_harness_items(ctx, tick_id)
+    Returns:
+        The `## State` section, the overseer's whole message.
+    """
+    block, _ = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due)
+    return block
 
-    now = datetime.now(UTC)
-    running = db.running_runs(ctx.conn)
+
+def _render(
+    ctx: Context, *, tick_id: int, dry_run: bool, now: datetime, reconciled: reconcile.Reconciled, query_due: bool
+) -> tuple[str, duties.Duties]:
+    """Render the state block, and read what it asks of the overseer from the same journal reads (DESIGN §6 step 5).
+
+    Returns:
+        The `## State` section, and the overseer's duties this tick.
+    """
+    running = db.running_runs(ctx.conn, "runs")
     last_runs = db.latest_runs(ctx.conn)
     # A stopped ticket waits on the operator alone: listed by key, it gets no decision every tick (DESIGN §22).
     stopped = conversation.stopped(ctx.conn)
@@ -96,6 +93,8 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     operator = {
         str(t["key"]): found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None
     }
+    recently_done = db.recently_done(ctx.conn, db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS)))
+    chores = chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now)
     block = state.state_block(
         ctx.config,
         ctx.repo_root,
@@ -107,6 +106,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         running=running,
         tickets=tickets,
         stopped=stopped,
+        recently_done=recently_done,
         units=db.all_units(ctx.conn),
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, [int(r["id"]) for r in [*running, *last_runs.values()]]),
@@ -116,13 +116,59 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         now=now,
         split_attempts=policy.split_attempts(ctx.conn),
         split_children=db.open_split_children(ctx.conn),
-        chores=chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now),
+        chores=chores,
         reviews=review_view.state_section(ctx.conn, ctx.config, now),
+        notices=notice.recent(ctx.conn, now),
         private=private,
         operator=operator,
         mirror_delimiter=conversation.body_delimiter(),
         attention=attention.for_overseer(ctx.conn),
+        query_due=query_due,
     )
+    owed = duties.owed(
+        ctx.conn,
+        tick_id,
+        query_due=query_due,
+        tickets=tickets,
+        stopped=stopped,
+        recently_done=recently_done,
+        chores=chores,
+    )
+    return block, owed
+
+
+def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
+    applied = db.migrate(ctx.conn, resources.migrations_dir())
+    abandoned = db.abandon_unfinished_ticks(ctx.conn)
+    tick_id = db.start_tick(ctx.conn, dry_run=dry_run)
+    log = logs.for_tick(tick_id)
+    log.info("tick started", extra={"dry_run": dry_run, "repo": ctx.repo, "migrations_applied": applied})
+    if abandoned:
+        log.warning("closed ticks left running by a dead tick process", extra={"abandoned_ticks": abandoned})
+
+    def finish(status: str, summary: str, usage: agent_output.Usage | None = None) -> Outcome:
+        db.finish_tick(ctx.conn, tick_id, status, summary)
+        spent = usage.spent() if usage is not None else {}
+        log.info("tick finished", extra={"status": status, "summary": summary, **spent})
+        return Outcome(tick_id, status, summary, usage)
+
+    try:
+        # Reviews first: a review whose `_review` is gone returns its slot, and then frees worker capacity.
+        review_reconcile.run(ctx, log)
+        reconciled = reconcile.run(ctx, log)
+    except pools.PoolError as e:
+        log.exception("reconcile failed", extra={"error": str(e)})
+        return finish("reconcile_failed", str(e))
+    chore_reconcile.run(ctx, log)
+    # Before anything reads a message or a run: the harness items and the state block see at least every message, and
+    # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
+    db.set_tick_read(ctx.conn, tick_id)
+    _record_harness_items(ctx, tick_id)
+
+    now = datetime.now(UTC)
+    query_due = _query_due(ctx, now)
+    db.set_tick_query(ctx.conn, tick_id, due=query_due)
+    block, owed = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due)
     unavailable = _check_canopy(ctx, tick_id, log)
     if unavailable is not None:
         detail = f"{unavailable}; the overseer did not run. Make `canopy --version` work where the loop runs"
@@ -137,12 +183,34 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     prefix = "dry run; " if dry_run else ""
     # A tick-wide skip (mcp_unavailable, tracker_unsupported) means the overseer could not see the world. Closing it
     # `ok` would make its empty list the attention list and notify every open item as resolved.
-    skips = [str(d["rationale"]) for d in decisions if d["ticket_key"] is None and d["action"] == "skip"]
+    skips = [d.rationale for d in decisions if d.ticket_key is None and d.action == "skip"]
     if skips:
         return finish("skipped", f"{prefix}overseer skipped the tick: {'; '.join(skips)}", usage)
-    actions = Counter(str(d["action"]) for d in decisions)
+    # A duty left undone fails the tick as a missing done line does: closing it `ok` would resolve the items of every
+    # ticket it left out and count a query it never ran (DESIGN §6 step 5).
+    undone = duties.undone(ctx.conn, tick_id, owed)
+    if undone:
+        log.error("overseer left duties undone", extra={"undone": undone, "dry_run": dry_run})
+        return finish("overseer_failed", f"{prefix}overseer left duties undone: {'; '.join(undone)}", usage)
+    actions = Counter(d.action for d in decisions)
     counts = ", ".join(f"{action}={n}" for action, n in sorted(actions.items())) or "none"
     return finish("ok", f"{prefix}{actions.total()} decisions: {counts}", usage)
+
+
+def _query_due(ctx: Context, now: datetime) -> bool:
+    """Whether this tick runs the tracker query (DESIGN §7, Spacing the query).
+
+    Every tick does with `tracker.query_every_minutes` at 0. Otherwise one does once that long has passed since the
+    newest live `ok` tick that ran it started, or when none has.
+
+    Returns:
+        True if the overseer runs the query this tick.
+    """
+    every = ctx.config.tracker.query_every_minutes
+    if every == 0:
+        return True
+    last = db.last_query_at(ctx.conn)
+    return last is None or now - db.parse_time(last) >= timedelta(minutes=every)
 
 
 def _record_harness_items(ctx: Context, tick_id: int) -> None:
@@ -241,7 +309,9 @@ def _run_overseer(
     logs.write_private(out_path, f"{result.stdout}\n--- stderr ---\n{result.stderr}")
 
     output = agent_output.read(result.stdout)
-    db.set_tick_report(ctx.conn, tick_id, output.session_id, output.usage)
+    db.set_tick_report(
+        ctx.conn, tick_id, output.session_id, output.usage, digest=definitions_dir.name, tools=output.tools
+    )
     if result.timed_out:
         failure = f"overseer timed out after {timeout_minutes} minutes"
     elif result.returncode != 0:

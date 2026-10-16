@@ -68,3 +68,31 @@ export function bySeverity(items: AttentionItem[]): AttentionItem[] {
         return age === 0 ? a.id.localeCompare(b.id) : age
     })
 }
+
+/** One part of the attention list's count: what is broken, what waits on the operator's answer, or the rest. */
+export interface BreakdownPart {
+    /** Which part: the failure color's, the operator's, or the muted rest, chores' findings among them. */
+    kind: 'failed' | 'waiting' | 'other'
+    /** The part's words, the same wherever the count is said: `broken`, `waiting on you`, `other`. */
+    label: string
+    /** How many items it holds, never 0. */
+    count: number
+}
+
+/**
+ * The list's count split as the Attention counter and the nav's badge both say it, most severe first, each part only
+ * when it holds an item. A finding counts as `other`.
+ */
+export function breakdown(counts: Record<Severity, number>): BreakdownPart[] {
+    const parts: BreakdownPart[] = [
+        { kind: 'failed', label: 'broken', count: counts.failed },
+        { kind: 'waiting', label: 'waiting on you', count: counts.waiting },
+        { kind: 'other', label: 'other', count: counts.other + counts.finding },
+    ]
+    return parts.filter(({ count }) => count > 0)
+}
+
+/** The breakdown in words: `1 broken, 1 waiting on you, 3 other`, or `nothing` when the list is empty. */
+export function breakdownText(parts: readonly BreakdownPart[]): string {
+    return parts.length === 0 ? 'nothing' : parts.map(({ count, label }) => `${count} ${label}`).join(', ')
+}

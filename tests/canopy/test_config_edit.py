@@ -16,10 +16,8 @@ from canopy.core import conversation
 from canopy.core.context import Context
 from canopy.loop import reread
 from canopy.serve import config_edit
-from tests.canopy.test_web import ctx, refused, signed_in_client
+from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv, user_toml
-
-__all__ = ["ctx"]  # the fixture, used by name
 
 COMMENTED = (
     user_toml()
@@ -327,7 +325,7 @@ def test_a_save_says_every_still_sets_the_pace(ctx: Context, canopy_env: CanopyE
     from canopy.serve.app import create_app  # noqa: PLC0415
     from canopy.serve.auth import Sessions  # noqa: PLC0415
     from canopy.serve.options import ServeOptions  # noqa: PLC0415
-    from tests.canopy.test_web import ORIGIN, SECRET  # noqa: PLC0415
+    from tests.canopy.web_helpers import ORIGIN, SECRET  # noqa: PLC0415
 
     options = ServeOptions(port=8765)
     sessions = Sessions(SECRET, port=options.port, base_path="", hosts=options.hosts)

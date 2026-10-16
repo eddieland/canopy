@@ -1,6 +1,7 @@
 import { useRouterState } from '@tanstack/react-router'
 import { X } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
+import type { CSSProperties } from 'react'
 
 import { HatDrawing } from '@/components/hat'
 import { useFits } from '@/hooks/use-fits'
@@ -141,7 +142,7 @@ function Bubble({ tip, shown, onAnother }: { tip: string; shown: boolean; onAnot
                 className="absolute top-2 right-2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
                 data-testid="buddy-close"
             >
-                <X className="size-3.5" />
+                <X className="size-4" />
             </button>
             {/* The tail: a square turned on its corner, its two outer edges bordered, tucked under the bubble's. */}
             <span
@@ -153,9 +154,10 @@ function Bubble({ tip, shown, onAnother }: { tip: string; shown: boolean; onAnot
 }
 
 /**
- * Sprig itself: a paperclip's bent wire, a sprig of leaf on top, the hat it wears (bought in Settings), and googly eyes
- * under brows that rise with each new tip. The eyes blink now and then and look toward the pointer, but under reduced
- * motion, which keeps them still.
+ * Sprig itself: a paperclip's bent wire, a sprig of leaf on top, the hat it wears (bought in Settings), googly eyes
+ * under brows that rise with each new tip, and a keyboard in front of its foot, to help vibe code on. The eyes blink
+ * now and then and look toward the pointer, and the keys are typed on in bursts, but under reduced motion, which keeps
+ * them still.
  */
 function Figure({ cue, hat }: { cue: string; hat: HatId | null }) {
     const figure = useRef<SVGSVGElement>(null)
@@ -205,6 +207,7 @@ function Figure({ cue, hat }: { cue: string; hat: HatId | null }) {
                 strokeLinejoin="round"
                 className="text-muted-foreground"
             />
+            <Keyboard />
             {hat === null ? null : <HatDrawing id={hat} />}
             <g key={cue} className="animate-buddy-brows text-foreground">
                 <path
@@ -232,4 +235,81 @@ function Figure({ cue, hat }: { cue: string; hat: HatId | null }) {
             </g>
         </svg>
     )
+}
+
+/** The keyboard's top face, a trapezoid seen from above and in front: its back edge, then its front edge. */
+const DECK = { back: { y: 74, left: 7, right: 41 }, front: { y: 83, left: 2, right: 46 } }
+/** How far the case stands below the front edge of its top face. */
+const LIP = 2.5
+/** A key's height, and the gap between two keys. */
+const KEY = { height: 2, gap: 0.5 }
+/** Each row of keys, back to front: where its top is, and the width of each key, as shares of the row. */
+const ROWS: readonly { y: number; keys: readonly number[] }[] = [
+    { y: 75.3, keys: Array.from({ length: 9 }, () => 1) },
+    { y: 77.9, keys: Array.from({ length: 9 }, () => 1) },
+    { y: 80.5, keys: [1, 1, 4.5, 1, 1] },
+]
+/** The case's outline: the top face, and the lip under its front edge. */
+const CASE = [
+    `M${DECK.back.left} ${DECK.back.y} H${DECK.back.right}`,
+    `L${DECK.front.right} ${DECK.front.y} V${DECK.front.y + LIP}`,
+    `H${DECK.front.left} V${DECK.front.y} Z`,
+].join(' ')
+/** The keys Sprig presses in each burst, in the order it presses them: a row, then a key in it. The space bar last. */
+const TYPED: readonly (readonly [number, number])[] = [
+    [0, 2],
+    [1, 6],
+    [0, 4],
+    [1, 1],
+    [0, 7],
+    [2, 2],
+]
+
+/**
+ * The keyboard Sprig vibe codes on, in front of the foot of its wire: a case seen from above, three rows of keys, the
+ * last a space bar. A few keys light in the accent as Sprig types on them, a burst every few seconds.
+ */
+function Keyboard() {
+    return (
+        <g data-keyboard>
+            <path
+                d={CASE}
+                strokeWidth="1"
+                strokeLinejoin="round"
+                className="fill-buddy-keyboard stroke-buddy-keyboard"
+            />
+            {ROWS.map((row, r) =>
+                keysOf(row).map((key, k) => {
+                    const typed = TYPED.findIndex(([tr, tk]) => tr === r && tk === k)
+                    return (
+                        <rect
+                            key={`${r}-${k}`}
+                            x={key.x}
+                            y={row.y}
+                            width={key.width}
+                            height={KEY.height}
+                            rx="0.4"
+                            className={cn('fill-buddy-key', typed >= 0 && 'animate-buddy-key')}
+                            style={typed >= 0 ? ({ '--key': typed } as CSSProperties) : undefined}
+                        />
+                    )
+                }),
+            )}
+        </g>
+    )
+}
+
+/** Where each key of a row sits across it: the row spans the top face at its height, less a margin each side. */
+function keysOf(row: { y: number; keys: readonly number[] }): { x: number; width: number }[] {
+    const { back, front } = DECK
+    const share = (row.y + KEY.height / 2 - back.y) / (front.y - back.y)
+    const left = back.left + (front.left - back.left) * share + 1.2
+    const right = back.right + (front.right - back.right) * share - 1.2
+    const unit = (right - left - KEY.gap * (row.keys.length - 1)) / row.keys.reduce((sum, keys) => sum + keys, 0)
+    let x = left
+    return row.keys.map((keys) => {
+        const key = { x, width: unit * keys }
+        x += key.width + KEY.gap
+        return key
+    })
 }

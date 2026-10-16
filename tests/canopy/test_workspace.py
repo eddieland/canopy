@@ -3,7 +3,6 @@
 import contextlib
 import json
 import os
-import sqlite3
 from pathlib import Path
 from unittest import mock
 
@@ -11,17 +10,14 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, db, definitions, workspace
+from canopy.core.vocab import RunStatus
 from canopy.loop import attention
 from canopy.setup import workspace as setup_workspace
 from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools, th
-from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, wait_for_run, worker_does
+from tests.canopy.helpers import InlineRunner, commit_and_push, decisions, in_tick, wait_for_run, worker_does
 from tests.conftest import CanopyEnv, git
 
 LABEL = "agent-ready-tester"
-
-
-def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
-    return [(str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 def dispatch(key: str, *args: str) -> list[str]:
@@ -202,6 +198,7 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(ws: Ws, treehous
             "attention:repo_missing",
             f"{ws.root / 'repos' / 'docs'} has no clone; run `canopy workspace sync` in {ws.root}",
         ),
+        ("queried", "the query returned no open ticket"),
         ("dispatch:implement", f"dry run: not dispatched; would work on agent/PROJ-1-work in api; label {LABEL}"),
         (
             "refused:unknown_repo",
@@ -281,7 +278,7 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
         )
 
         # The ticket has a unit in api only: resuming it in web has no branch to continue there (DESIGN §18).
-        db.finish_run(conn, 1, "done", "{}")
+        db.finish_run(conn, "runs", 1, RunStatus.DONE, "{}")
         resume = ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "resume", "--repo", "web"]
         assert main(resume, runner=runner) == 1
         assert decisions(conn, tick_id)[-1] == (
@@ -331,7 +328,8 @@ def test_reconcile_returns_leases_in_each_pool(ws: Ws, treehouse_state: Path, ag
             env={"TREEHOUSE_ROOT": str(ws.root)},
         ).ok
         conn.execute("UPDATE runs SET pid = 999999999")  # _run is gone
-    with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+    wait = json.dumps([["canopy", "decide", "PROJ-1", "wait", "--rationale", "its run crashed"]])
+    with mock.patch.dict(os.environ, {"FAKE_AGENT_COMMANDS": wait, "FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
         assert main(["tick", "--dry-run"]) == 0
 
     run = db.get_run(conn, 1)
@@ -361,7 +359,7 @@ def test_init_workspace_writes_the_skeleton(
         assert f"wrote   {root / config.WORKSPACE_FILE_NAME}" in out
         assert f"updated {root / '.gitignore'}" in out
         assert "The map lists no repositories yet." in out
-        assert (root / ".gitignore").read_text() == "*.pyc\n/repos/\n/.treehouse/\n/desks/\n/.canopy/\n"
+        assert (root / ".gitignore").read_text() == "*.pyc\n/repos/\n/.treehouse/\n/pools/\n/desks/\n/.canopy/\n"
         assert (root / "MAP.md").read_text().startswith("# Workspace map")
         found = workspace.load(root)
         assert (found.name, found.repos) == ("acme", ())
@@ -398,6 +396,21 @@ def test_sync_clones_missing_repositories_and_reports_a_different_origin(
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(("gone", str(tmp_path / "nowhere.git"))))
     assert main(["workspace", "sync"]) == 1
     assert "gone: failed: git clone exited 128" in capsys.readouterr().out
+
+
+def test_sync_turns_off_gits_automatic_maintenance_in_every_clone_but_not_in_a_dry_run(ws: Ws, tmp_path: Path) -> None:
+    extra = bare_origin(tmp_path / "origins" / "docs.git", tmp_path)
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(("api", str(ws.origins["api"])), ("docs", str(extra))))
+    off = {"maintenance.auto=false", "gc.auto=0"}
+
+    def local_config(name: str) -> set[str]:
+        return set(git("config", "--local", "--list", cwd=ws.clone(name)).splitlines())
+
+    assert main(["workspace", "sync", "--dry-run"]) == 0
+    assert not off & local_config("api")
+    assert main(["workspace", "sync"]) == 0
+    assert off <= local_config("api")  # a clone from before
+    assert off <= local_config("docs")  # and one sync made
 
 
 def test_sync_refuses_a_path_that_is_not_a_clone_and_never_prints_a_credential(

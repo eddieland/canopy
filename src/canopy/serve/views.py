@@ -9,11 +9,23 @@ from __future__ import annotations
 import math
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import chore_result, chore_view, contract, conversation, db, items, pause, search, transcript
+from canopy.core import (
+    chore_result,
+    chore_view,
+    contract,
+    conversation,
+    db,
+    items,
+    notice,
+    pause,
+    search,
+    transcript,
+)
 from canopy.core import spend as spending
 from canopy.core.items import fingerprint
+from canopy.core.vocab import ChoreRunStatus, RunStatus
 from canopy.serve.schema import (
     AttentionItem,
     ChoreDetail,
@@ -33,9 +45,11 @@ from canopy.serve.schema import (
     Message,
     MessageKind,
     MessageSource,
+    NoticeChannel,
     Pause,
     PauseChannel,
     Run,
+    RunActivity,
     RunState,
     SearchHit,
     SearchResults,
@@ -43,7 +57,10 @@ from canopy.serve.schema import (
     SpendBreakdown,
     SpendCosts,
     SpendDay,
+    SpendPullRequest,
+    SpendTicket,
     SpendTicks,
+    SpendTool,
     SpendUnpriced,
     SpendWindow,
     SpendWoken,
@@ -62,11 +79,13 @@ from canopy.serve.schema import (
     TranscriptTokens,
     TranscriptTool,
     Unit,
+    WorkerNotice,
 )
 
 if TYPE_CHECKING:
     import sqlite3
 
+    from canopy.core import records
     from canopy.core.context import Context
     from canopy.serve import backend as served
     from canopy.serve.backend import Backend
@@ -89,11 +108,9 @@ SPEND_DAY_HOURS = 24
 SPEND_MONTH_HOURS = 30 * 24
 _CHORE = "chore:"
 _PR = "pr:"
-_STATES: dict[str, RunState] = {"running": "running", "blocked": "blocked", "done": "done", "stopped": "stopped"}
-# A chore run that checked is done; every other ending raises `chore_failed` (DESIGN §19).
-_CHORE_STATES: dict[str, RunState] = {"running": "running", "ok": "done"}
 _SOURCES: dict[str, MessageSource] = {"worker": "worker", "operator": "operator", "tracker": "tracker"}
 _PAUSE_CHANNELS: dict[str, PauseChannel] = {"loop": "loop", "cli": "cli", "web": "web"}
+_NOTICE_CHANNELS: dict[str, NoticeChannel] = {"cli": "cli", "web": "web"}
 _KINDS: dict[str, MessageKind] = {"report": "report", "question": "question", "reply": "reply", "comment": "comment"}
 
 
@@ -101,8 +118,8 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
     """The attention list, as `canopy status` shows it.
 
     Returns:
-        One item per entry, its subject split into a ticket key or a chore name and its detail without control
-        characters.
+        One item per entry, its subject split into a ticket key or a chore name, with the ticket's title, and its
+        detail without control characters.
     """
     found: list[AttentionItem] = []
     for item in backend.attention(ctx):
@@ -110,11 +127,13 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
         chore = key.removeprefix(_CHORE) if key is not None and key.startswith(_CHORE) else None
         pr = key.removeprefix(_PR) if key is not None and key.startswith(_PR) else None
         ticket = key if key is not None and chore is None and pr is None else None
+        row = db.get_ticket(ctx.conn, ticket) if ticket is not None else None
         found.append(
             AttentionItem(
                 id=fingerprint(item.ticket_key, item.reason, item.repo),
                 subject=item.subject,
                 ticket_key=ticket,
+                ticket_title=_title(row["title"]) if row is not None else None,
                 chore=chore,
                 repo=item.repo,
                 reason=item.reason,
@@ -156,7 +175,7 @@ def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown
     return SpendBreakdown(
         since=db.parse_time(found.since),
         days=found.days,
-        per_day=[SpendDay(day=d.day, costs=_spend_costs(d.costs)) for d in found.per_day],
+        per_day=[SpendDay(day=d.day, costs=_spend_costs(d.costs), done=d.done) for d in found.per_day],
         totals=_spend_costs(found.totals),
         ticks=[SpendTicks(group=g.group, ticks=g.ticks, cost_usd=g.cost_usd) for g in found.ticks],
         woken=[SpendWoken(by=w.by, ticks=w.ticks, cost_usd=w.cost_usd) for w in found.woken],
@@ -164,6 +183,38 @@ def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown
         idle_share=found.idle_share,
         idle_ticks=[
             tick_of(row, int(row["decisions"])) for row in spending.idle_ticks(ctx.conn, found.since, found.until)
+        ],
+        done=found.done,
+        per_done=found.per_done,
+        tickets=[
+            SpendTicket(
+                key=t.key,
+                title=t.title,
+                runs=t.runs,
+                reviews=t.reviews,
+                cost_usd=t.cost_usd,
+                done=t.done,
+                done_at=db.parse_time(t.done_at) if t.done_at is not None else None,
+            )
+            for t in found.tickets
+        ],
+        pull_requests=[
+            SpendPullRequest(
+                url=p.url, ticket_key=p.ticket, phase=p.phase, runs=p.runs, reviews=p.reviews, cost_usd=p.cost_usd
+            )
+            for p in found.pull_requests
+        ],
+        tools=[
+            SpendTool(
+                kind=t.kind,
+                tool=t.tool,
+                runs=t.runs,
+                calls=t.calls,
+                errors=t.errors,
+                result_chars=t.result_chars,
+                est_tokens=t.est_tokens,
+            )
+            for t in found.tools
         ],
     )
 
@@ -190,15 +241,26 @@ def last_tick(ctx: Context) -> LastTick:
 
 
 def loop_state(ctx: Context) -> LoopState:
-    """Whether the operator paused the loop, since when, and through which channel.
+    """Whether the operator paused the loop, since when, and through which channel, and the notice to workers in force.
 
     Returns:
-        No pause while the loop runs. A channel the schema does not know reads as `loop`.
+        No pause while the loop runs, and no notice without one in force. A pause's channel the schema does not know
+        reads as `loop`, and a notice's as `cli`.
     """
     held = pause.paused(ctx.conn)
-    if held is None:
-        return LoopState()
-    return LoopState(paused=Pause(since=db.parse_time(held.since), channel=_PAUSE_CHANNELS.get(held.channel, "loop")))
+    paused = None
+    if held is not None:
+        paused = Pause(since=db.parse_time(held.since), channel=_PAUSE_CHANNELS.get(held.channel, "loop"))
+    told = notice.current(ctx.conn)
+    if told is None:
+        return LoopState(paused=paused)
+    worker_notice = WorkerNotice(
+        text=told.text,
+        since=db.parse_time(told.set_at),
+        lapses_at=db.parse_time(told.lapses_at),
+        channel=_NOTICE_CHANNELS.get(told.channel, "cli"),
+    )
+    return LoopState(paused=paused, notice=worker_notice)
 
 
 def tick(ctx: Context) -> Tick | None:
@@ -228,6 +290,8 @@ def tick_of(row: sqlite3.Row, decisions: int) -> Tick:
         summary=lines(str(row["summary"] or "")) or None,
         session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
+        new_tokens=new_tokens(row),
+        peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
         decisions=decisions,
         idle=None if row["idle"] is None else bool(row["idle"]),
         woken_by=str(row["woken_by"]) if row["woken_by"] is not None else None,
@@ -383,43 +447,39 @@ def transcript_entry(entry: transcript.Entry) -> TranscriptEntry:
             return TranscriptError(at=entry.at, name=entry.name, message=entry.message, call=entry.call)
 
 
-def decision(row: sqlite3.Row) -> Decision:
+def decision(row: records.Decision) -> Decision:
     """One decision, named as `canopy decisions` names it, its rationale with its line breaks.
 
     Returns:
         The decision, its subject `chore:NAME` for a chore, `pr:URL` for a PR with no ticket, else the ticket's.
     """
-    chore = str(row["chore"]) if row["chore"] is not None else None
-    pr = str(row["pr"]) if row["pr"] is not None else None
-    key = str(row["ticket_key"]) if row["ticket_key"] is not None else None
-    repo = str(row["repo"]) if row["repo"] is not None else None
-    if chore is not None:
-        subject = f"{_CHORE}{chore}"
-    elif key is None and pr is not None:
-        subject = f"{_PR}{pr}"
+    if row.chore is not None:
+        subject = f"{_CHORE}{row.chore}"
+    elif row.ticket_key is None and row.pr is not None:
+        subject = f"{_PR}{row.pr}"
     else:
-        subject = items.subject(key, repo)
+        subject = items.subject(row.ticket_key, row.repo)
     return Decision(
-        id=int(row["id"]),
-        tick_id=int(row["tick_id"]),
-        at=db.parse_time(str(row["created_at"])),
+        id=row.id,
+        tick_id=row.tick_id,
+        at=db.parse_time(row.created_at),
         subject=subject,
-        ticket_key=key,
-        repo=repo,
-        chore=chore,
-        pr=pr,
-        action=str(row["action"]),
-        rationale=lines(str(row["rationale"])),
+        ticket_key=row.ticket_key,
+        repo=row.repo,
+        chore=row.chore,
+        pr=row.pr,
+        action=row.action,
+        rationale=lines(row.rationale),
     )
 
 
 def runs(ctx: Context) -> list[Run]:
-    """Running runs, oldest first, then the ones that ended most recently, newest first.
+    """Running runs, oldest first, then the ones that ended most recently, the one that ended last first.
 
     Returns:
         The running runs with the worktrees they hold, then at most `RECENT_RUNS` that ended.
     """
-    running = db.running_runs(ctx.conn)
+    running = db.running_runs(ctx.conn, "runs")
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
     root = ctx.workspace.root
     return [
@@ -454,7 +514,7 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
         ticket_title=_title(row["ticket_title"]),
         kind=str(row["kind"]),
         status=status,
-        state=_STATES.get(status, "failed"),
+        state=_run_state(status),
         private=bool(row["private"]),
         branch=str(row["branch"]) or None,
         started_at=db.parse_time(str(row["started_at"])),
@@ -463,21 +523,57 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
         prs=contract.stored_prs(result),
         session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
-        tokens=tokens(row),
+        new_tokens=new_tokens(row),
+        peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
         worktrees=worktrees or [],
         log_path=shown_path(str(row["log_path"]), root),
+        activity=_activity(row) if status == "running" else None,
     )
 
 
-def tokens(row: sqlite3.Row) -> int | None:
-    """A run's or a chore run's tokens of every kind, or None when the runtime reported none.
+def _activity(row: sqlite3.Row) -> RunActivity | None:
+    if row["activity_tool"] is None or row["activity_at"] is None:
+        return None
+    return RunActivity(
+        tool=str(row["activity_tool"]), did=str(row["activity"] or ""), at=db.parse_time(str(row["activity_at"]))
+    )
+
+
+def _run_state(status: str) -> RunState:
+    """What the web UI colors a run that has `status` as (DESIGN §22).
+
+    Returns:
+        The run's state. A status canopy does not know reads as `failed`.
+    """
+    try:
+        known = RunStatus(status)
+    except ValueError:
+        return "failed"
+    match known:
+        case RunStatus.RUNNING:
+            return "running"
+        case RunStatus.BLOCKED:
+            return "blocked"
+        case RunStatus.DONE:
+            return "done"
+        case RunStatus.STOPPED:
+            return "stopped"
+        case RunStatus.FAILED | RunStatus.UNKNOWN | RunStatus.UNPUSHED | RunStatus.CRASHED | RunStatus.TIMEOUT:
+            return "failed"
+        case _:
+            assert_never(known)
+
+
+def new_tokens(row: sqlite3.Row) -> int | None:
+    """A run's, a chore run's, or a tick's tokens, every kind but cache reads; None when the runtime reported none.
+
+    Cache reads are left out: each model call reads again what the calls before it were sent, so their sum grows with
+    the number of calls. The peak context says how large that grew.
 
     Returns:
         The sum of the counts the runtime reported, a missing one counting as none.
     """
-    found = [
-        row[c] for c in ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
-    ]
+    found = [row[c] for c in ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_write")]
     return sum(int(t) for t in found if t is not None) if any(t is not None for t in found) else None
 
 
@@ -744,16 +840,39 @@ def chore_run(row: sqlite3.Row, root: Path) -> ChoreRun:
     return ChoreRun(
         id=int(row["id"]),
         status=status,
-        state=_CHORE_STATES.get(status, "failed"),
+        state=_chore_state(status),
         started_at=db.parse_time(str(row["started_at"])),
         ended_at=db.parse_time(str(row["ended_at"])) if row["ended_at"] else None,
         summary=said(row),
         findings=len(parsed.findings) if parsed is not None else 0,
         session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
-        tokens=tokens(row),
+        new_tokens=new_tokens(row),
+        peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
         log_path=shown_path(str(row["log_path"]), root),
     )
+
+
+def _chore_state(status: str) -> RunState:
+    """What the web UI colors a chore run that has `status` as.
+
+    Returns:
+        The run's state: a chore run that checked is done, and every other ending, which raises `chore_failed`
+        (DESIGN §19), is failed, as is a status canopy does not know.
+    """
+    try:
+        known = ChoreRunStatus(status)
+    except ValueError:
+        return "failed"
+    match known:
+        case ChoreRunStatus.RUNNING:
+            return "running"
+        case ChoreRunStatus.OK:
+            return "done"
+        case ChoreRunStatus.FAILED | ChoreRunStatus.UNKNOWN | ChoreRunStatus.TIMEOUT | ChoreRunStatus.CRASHED:
+            return "failed"
+        case _:
+            assert_never(known)
 
 
 def chore_run_detail(ctx: Context, name: str, run_id: int) -> ChoreRunDetail | None:

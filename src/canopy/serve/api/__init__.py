@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends
 from canopy.serve.api import (
     chores,
     deps,
+    docs,
     events,
     loop,
     overview,
@@ -47,6 +48,8 @@ _signed_in = APIRouter(dependencies=[Depends(deps.signed_in)], responses=refs.SI
 for _resource in _RESOURCES:
     # The stream only reads, which never waits on the write lock, and could not answer a 503 once its 200 had begun.
     _signed_in.include_router(_resource.router, responses=None if _resource is events else refs.BUSY)
+# The schema and its Swagger UI page, which are not in the schema.
+_signed_in.include_router(docs.router)
 
 router = APIRouter(responses=refs.GUARDED)
 router.include_router(session.router)

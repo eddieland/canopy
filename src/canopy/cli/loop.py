@@ -11,7 +11,8 @@ from rich.console import Console
 
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
-from canopy.core import chore_view, contract, conversation, db, pause
+from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, spent
+from canopy.core import chore_view, conversation, db, notice, pause, review_requests
 from canopy.infra import hangup, keys, lock
 from canopy.loop import attention, repeat, reread, tick
 from canopy.notify import deliver
@@ -21,9 +22,8 @@ if TYPE_CHECKING:
 
     from canopy.core.context import Context
 
-# `canopy status` lists this many runs that ended, and cuts each one's summary to this many characters.
+# `canopy status` lists this many runs that ended.
 RECENT_RUNS = 10
-SUMMARY_WIDTH = 160
 
 
 @click.command("loop")
@@ -117,9 +117,13 @@ def cmd_status(click_ctx: click.Context) -> int:
     held = pause.paused(ctx.conn)
     if held is not None:
         click.echo(f"Loop paused {attention.age(held.since)} ago ({held.channel}): no tick until `canopy resume`.")
+    told = notice.current(ctx.conn)
+    if told is not None:
+        click.echo(notice.describe(told, datetime.now(UTC)))
 
     _print_attention(attention.listed(ctx))
     _print_started(ctx)
+    _print_review_requests(ctx)
     _print_workers(ctx)
     _print_recent_runs(ctx)
     _print_chores(ctx)
@@ -173,22 +177,22 @@ def _print_started(ctx: Context) -> None:
         click.echo(f"  {named(key, title)}  {r['status']} {attention.age(str(since))} ago  phase {phase}{done}{note}")
 
 
-def phase_of(conn: sqlite3.Connection, ticket: sqlite3.Row) -> str:
-    """A ticket's phase as the operator reads it: the recorded one, else what the last tick decided, else unseen.
-
-    Returns:
-        The phase to print. When none is recorded, a note naming the last decision about the ticket, if there is one.
-    """
-    if ticket["phase"]:
-        return str(ticket["phase"])
-    decided = db.last_decision_of(conn, str(ticket["key"]))
-    return f"not recorded, last decision {decided}" if decided is not None else "not seen by a tick yet"
+def _print_review_requests(ctx: Context) -> None:
+    """A line per PR the operator asked canopy to review (DESIGN §21): when, and its latest review."""
+    requests = review_requests.open_requests(ctx.conn)
+    if not requests:
+        return
+    click.echo(f"\nReview requests ({len(requests)}):")
+    for r in requests:
+        runs = db.review_runs_of(ctx.conn, r.pr_url)
+        latest = f"latest review:{runs[0]['id']} {runs[0]['status']}" if runs else "not reviewed yet"
+        click.echo(f"  {r.pr_url}  {attention.age(r.created_at)} ago  {latest}")
 
 
 def _print_workers(ctx: Context) -> None:
-    running = db.running_runs(ctx.conn)
+    running = db.running_runs(ctx.conn, "runs")
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
-    busy = len(running) + len(db.running_review_runs(ctx.conn))
+    busy = len(running) + len(db.running_runs(ctx.conn, "review_runs"))
     click.echo(f"\nRunning workers ({busy}/{ctx.config.capacity.max_workers}):")
     for r in running:
         # A joint run holds a slot in each of its repositories.
@@ -196,15 +200,30 @@ def _print_workers(ctx: Context) -> None:
         click.echo(
             f"  {named(r['ticket_key'], r['ticket_title'])}  {r['kind']}  {attention.age(r['started_at'])}  {where}"
         )
+        # What its worker reported so far (DESIGN §8): nothing until its first event, or ever without `--format json`.
+        if r["session_id"]:
+            click.echo(f"    session {r['session_id']}{spent(r)}{_doing(r)}")
     # A review holds a slot and counts toward max_workers (DESIGN §21).
-    for r in db.running_review_runs(ctx.conn):
+    for r in db.running_runs(ctx.conn, "review_runs"):
         click.echo(f"  review  {r['pr_url']}  {attention.age(r['started_at'])}  {r['slot_path'] or ''}".rstrip())
-    if not running and not db.running_review_runs(ctx.conn):
+    if not running and not db.running_runs(ctx.conn, "review_runs"):
         click.echo("  none")
 
 
+def _doing(run: sqlite3.Row) -> str:
+    """A running run's latest tool call, as `  last bash: make check 12s ago`, or empty before its first.
+
+    Returns:
+        The tool, what it did, and how long ago, fit for the end of a line; empty when no call is recorded.
+    """
+    if run["activity_tool"] is None or run["activity_at"] is None:
+        return ""
+    did = f"{run['activity_tool']}: {run['activity']}" if run["activity"] else str(run["activity_tool"])
+    return f"  last {one_line(did)} {attention.age(str(run['activity_at']))} ago"
+
+
 def _print_recent_runs(ctx: Context) -> None:
-    """Three lines per run that ended, newest first: what it was and its PRs, what it said, and where to look."""
+    """Three lines per run that ended, the last to end first: what it was and its PRs, what it said, where to look."""
     runs = db.recent_runs(ctx.conn, RECENT_RUNS)
     click.echo(f"\nRecent runs ({len(runs)}):")
     for r in runs:
@@ -221,83 +240,18 @@ def _print_recent_runs(ctx: Context) -> None:
         click.echo("  none")
 
 
-def result_of(run: sqlite3.Row) -> dict[str, object]:
-    """A run's stored result as an object; {} when it has none or it does not parse.
-
-    Returns:
-        The parsed `result_json`, its values still untrusted, or {} when it is empty, not JSON, or not an object.
-    """
-    return contract.stored_object(run["result_json"])
-
-
-def prs_of(result: dict[str, object]) -> list[str]:
-    """The PRs a run's result named, each a plain https:// URL; anything else is not printed.
-
-    Returns:
-        The plain URLs among the result's `prs` values, or its `pr` when `prs` is not an object.
-    """
-    return contract.stored_prs(result)
-
-
-def named(key: object, title: object) -> str:
-    """A ticket as a line names it: `PROJ-1: <its title>`, or its key alone before the overseer names it.
-
-    Returns:
-        The key and its title fit for one line, or the key alone when `title` is empty or None.
-    """
-    return f"{key}: {one_line(str(title))}" if title else str(key)
-
-
-def one_line(text: str) -> str:
-    """Agent-written text, fit for one terminal line: control characters dropped, whitespace collapsed, and cut.
-
-    Returns:
-        The flattened text, cut to `SUMMARY_WIDTH` characters and ended with "..." when longer.
-    """
-    flat = " ".join("".join(c if c.isprintable() else " " for c in text).split())
-    return flat if len(flat) <= SUMMARY_WIDTH else flat[: SUMMARY_WIDTH - 3] + "..."
-
-
-def spent(row: sqlite3.Row) -> str:
-    """What a run or a tick cost, as `  $0.25, 12.3k tokens`, or "" when the runtime reported nothing.
-
-    Returns:
-        The cost with two leading spaces, to append to a line, or "" when `row` records no usage.
-    """
-    usage = db.usage_of(row)
-    return f"  {usage.describe()}" if usage is not None else ""
-
-
 def _print_chores(ctx: Context) -> None:
     """A line per configured chore, with how many findings the operator dismissed; nothing when there are none (§19)."""
     states = chore_view.states(ctx.conn, ctx.config, ctx.workspace)
     if not states:
         return
-    click.echo(f"\nChores ({len(db.running_chore_runs(ctx.conn))}/{ctx.config.capacity.max_chores} running):")
+    chores = len(db.running_runs(ctx.conn, "chore_runs"))
+    click.echo(f"\nChores ({chores}/{ctx.config.capacity.max_chores} running):")
     now = datetime.now(UTC)
     for state in states:
         dismissed = sum(f.dismissed for f in state.findings())
         note = f"; {dismissed} finding{'s' if dismissed != 1 else ''} dismissed" if dismissed else ""
         click.echo(f"  {state.name}  {chore_line(state, now)}{note}")
-
-
-def chore_line(state: chore_view.ChoreState, now: datetime) -> str:
-    """A chore's state on one line: running, or its last run and when it is due.
-
-    Returns:
-        How long the chore has been running, or its last run's status and age and when it is next due, as of `now`.
-    """
-    if state.running is not None:
-        return f"running for {attention.age(str(state.running['started_at']), now)}"
-    latest = state.latest
-    last = (
-        "never run"
-        if latest is None
-        else f"last {latest['status']} {attention.age(str(latest['started_at']), now)} ago"
-    )
-    due = state.due_at(now)
-    when = "due now" if due is None or due <= now else f"due in {attention.age(db.format_time(now), due)}"
-    return f"{last}, {when}"
 
 
 @click.command("decisions")
@@ -326,14 +280,14 @@ def cmd_decisions(click_ctx: click.Context, tick_id: int | None, ticket_key: str
         click.echo(f"  overseer output: {output}")
     rows = db.decisions_for_tick(ctx.conn, int(row["id"]))
     if ticket_key is not None:
-        rows = [decision for decision in rows if decision["ticket_key"] == ticket_key]
+        rows = [decision for decision in rows if decision.ticket_key == ticket_key]
     click.echo(f"\nDecisions ({len(rows)}):")
     keys = [attention.decided_about(d) for d in rows]
     key_width = max((len(k) for k in keys), default=0)
-    action_width = max((len(str(d["action"])) for d in rows), default=0)
+    action_width = max((len(d.action) for d in rows), default=0)
     for key, d in zip(keys, rows, strict=True):
-        rationale = " ".join(str(d["rationale"]).split())
-        click.echo(f"  {key:<{key_width}}  {d['action']:<{action_width}}  {rationale}")
+        rationale = " ".join(d.rationale.split())
+        click.echo(f"  {key:<{key_width}}  {d.action:<{action_width}}  {rationale}")
     if not rows:
         click.echo(f"  none for ticket {ticket_key}" if ticket_key is not None else "  none")
     return 0

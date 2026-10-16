@@ -129,12 +129,14 @@ detached, like `_run` (§8 step 4). `_chore` claims the run by pid, drops `CANOP
 with the timeout, records the agent's pid, parses the result, and closes the row. Output goes to
 `<state_dir>/chore-runs/<name>/<run_id>.log`. No lease, branch, or push, so nothing to return or verify. Run files are
 kept by chore, and out of `<state_dir>/chores/<name>/`: that is the agent's working directory, which a sandbox lets it
-write (HOST_ISOLATION), and its own log and prompt are not its to read back or rewrite. A run's prompt is found beside
+write (§24), and its own log and prompt are not its to read back or rewrite. A run's prompt is found beside
 the log its row names, so a run started before this layout reads its prompt where it was written.
 
 The prompt is the operator's file plus a generated `## Run` section holding one JSON object: chore name, current time,
-run id, the overseer's context, the operator's notes (below), the latest ended run (id, status, end time, summary), the
-latest `ok` run's open findings (id, title, link), so ids can be reused, and the result contract. It is written to
+run id, the overseer's context, the operator's notes (below), the operator's notice to workers in force (`notice`, null
+without one, §8), the latest ended run (id, status, end time, summary), the latest `ok` run's open findings (id, title,
+link), so ids can be reused, and the result contract. A chore hears the notice there, in the harness's section, which
+the operator's file cannot drop, so a chore needs no placeholder for it. It is written to
 `<state_dir>/chore-runs/<name>/<run_id>.prompt`, readable only by the operator.
 
 Result contract, one JSON line, last line of the agent's text (§13):
@@ -289,6 +291,7 @@ that reads one message on stdin. canopy ships a desktop sink and a Slack sink; o
 cmd = "canopy-notify-slack"            # the shipped sink; reads its webhook from a file of its own
 events = ["attention", "loop", "runs"]
 digest_every_minutes = 240
+batch_minutes = 15
 
 [notify.sinks.phone]
 cmd = "curl -sS --fail --data-binary @- https://ntfy.sh/my-private-topic"
@@ -304,8 +307,10 @@ format = "text"
 - `events` lists the groups the sink receives: `attention`, `loop`, `runs`, `chores`, `reviews`. Default
   `["attention", "loop"]`.
 - `digest_every_minutes` is optional and at least 60 (Digest, below).
+- `batch_minutes` is optional, from 1 to 1440 (Batching, below).
 - `notify.cmd = "X"` is shorthand for a sink named `default` with `cmd = "X"`, `format = "text"`,
-  `events = ["attention"]`, and no digest. Setting both `notify.cmd` and `[notify.sinks.default]` is a config error.
+  `events = ["attention"]`, no digest, and no batching. Setting both `notify.cmd` and `[notify.sinks.default]` is a
+  config error.
 
 An event is recorded only when some sink takes its group; with no `notify.cmd` and no sinks, publishing is §14
 without the notification.
@@ -349,6 +354,7 @@ its rows go at the first publish like any removed sink's, and each named sink he
 
 1. Gather the sink's attention diff if it takes `attention`, its events after its cursor in the groups it takes, and a
    digest if one is due. If there is nothing, skip the sink, moving its cursor past events of groups it does not take.
+   If the sink is batching and nothing gathered is urgent, hold it: change nothing, and go to the next sink.
 2. Render one message in the sink's format and run the command.
 3. On exit 0, record the diff in `notifications` for this sink, move the cursor to the newest event gathered, set the
    digest time, and reset the failure count. Otherwise change nothing else, log `notify command failed` with the
@@ -365,6 +371,23 @@ Bounds:
   are deleted after 7 days, except the newest `loop.failing` or `loop.recovered`, kept to tell a week-long streak from
   a new one. `loop.recovered` counts every failed tick of the streak.
 - Sinks run in turn under the tick lock: each hung sink delays the next tick by up to 60 seconds.
+
+### Batching
+
+A busy loop ticks often: a run ending wakes it `loop.min_gap_minutes` after the tick began (§6, default 1), so a burst
+of runs is a message every few minutes. A sink with `batch_minutes` sends at most one message per window, unless
+something needs the operator now:
+
+- After a delivery, the sink is batching for `batch_minutes`. What it gathers meanwhile is held: its cursor and the
+  attention it was told of stay where they were, so the first tick after the window gathers it all again, with what
+  happened since, and sends one message. A sink that has never delivered, or whose last delivery is older than the
+  window, sends at once, so the first message after a quiet spell is not late.
+- Urgent goes at once, with everything held: a new attention item, a `run.ended` whose status is `blocked` (its
+  question), `loop.failing`, and `loop.sink_failing`. A resolved item, a run started or ended otherwise, a chore or
+  review ended, `loop.recovered`, and a digest wait.
+- A held message waits for a tick: it goes at the first one after its window, up to `loop.interval_minutes` later,
+  or longer once idle pacing stretches the wait (§6). Holding does not wake the loop, since a tick runs the overseer.
+- A failed delivery starts no window, and what was urgent stays urgent, so a retry is never held.
 
 ### Digest
 
@@ -482,7 +505,8 @@ Slack sink only as a configured command.
 ### Commands
 
 - `canopy notify test [SINK]` sends a `test` message to every sink, or one, now, outside any tick, and prints each
-  result. It changes no cursor or table, and refuses when `CANOPY_TICK_ID` is set, so the overseer cannot page.
+  result. It changes no cursor or table, and refuses when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, so neither the
+  overseer nor a worker, review, or chore can page.
 - `canopy status` shows a line per sink: last delivery, consecutive failures and last error, events waiting.
 
 ### Two-way, later
@@ -519,6 +543,7 @@ Approved with M10:
 
 - Routing finer than groups, such as `crashed` to a phone and `needs_reviewer` to Slack only.
 - Digests at fixed times of day instead of an interval.
+- Batching that folds a run's `run.started` into its `run.ended` when both are held, one line instead of two.
 - Reminders for items open longer than some threshold.
 - Links to tickets. `tracker.ticket_url` (§17) links them in the web UI; a sink's message could link its ticket too.
 - A sink secret read from a command (a password manager's CLI) instead of a file.
@@ -531,12 +556,15 @@ journal, and posts nothing: no comment on the PR or the ticket, no GitHub review
 changes, pushes, or merges. Human review stays the gate (§3). The operator reads reviews with `canopy review show`
 until the web UI shows them as a PR review of canopy's own (ROADMAP M32).
 
-Two kinds of PR get reviews, and neither needs a ticket:
+Three kinds of PR get reviews, and none needs a ticket:
 
 - **The loop's own PRs.** With `review.agent_prs` on, a ticket's PR is reviewed once its checks pass, before the
   overseer asks a human for review. Findings go back to a worker through `resume`, which carries them in its prompt.
 - **PRs the operator names with `review.query`.** Reviewed and nothing else: the loop never pushes to them, fixes
   them, or opens a ticket for them. The review in the journal is the whole output, for the operator alone.
+- **PRs the operator asks for one at a time** (ROADMAP M42): `canopy start URL --review`, or the web UI's pull
+  requests page, for one review of a coworker's PR at its head, without writing a search into `review.query`
+  (Review requests, below). Reviewed as a `review.query` match is, and nothing else.
 
 Why nothing is posted: a review on the PR speaks for the operator, in their name, to everyone who reads the PR, and
 an adversarial reader is wrong often enough that the operator wants to see its findings before anyone else does. Kept
@@ -571,16 +599,21 @@ max_reviews_per_pr = 3     # shared; the repository may only lower it
 - `agent_prs` defaults to false. `query` is the VCS host's PR search syntax, empty by default. Reviews are on when
   `max_reviews` is above 0 and either is set.
 - `review.query` authorizes, unlike `tracker.query` (§17). Without an author filter it reviews other people's PRs in
-  the operator's name; allowed, and the operator's choice (TRUST_MODEL §7).
+  the operator's name; allowed, and the operator's choice (TRUST_MODEL §7). A review request authorizes the same way,
+  for one PR.
 - `low_impact` is plain language for the reviewer, like a chore's `when`: which changes it may call `low`. Without it,
   the reviewer never reports `low`.
-- `review_cmd` follows the command template rules (§12). A different model from `worker_cmd` is recommended.
+- `review_cmd` follows the command template rules (§12). A different model from `worker_cmd` is recommended. To
+  sandbox it, prefix it with `canopy-sandbox review` (§24, docs/SANDBOX.md): that policy reads the
+  checkout through the run directory's link and writes none of it.
 
 ### Off unless configured
 
-With no `[review]` table, neither `agent_prs` nor `query` set, or `capacity.max_reviews = 0`, nothing about reviews
-reaches the overseer: no `reviews` key in the state block, §7's phase table unchanged, and every `canopy review run`
-refuses as `reviews_off`. A test holds this. With `agent_prs` off the phase table is also unchanged, and a loop PR
+With no `[review]` table, neither `agent_prs` nor `query` set, and no open review request, or with
+`capacity.max_reviews = 0`, nothing about reviews reaches the overseer: no `reviews` key in the state block, §7's
+phase table unchanged, and every `canopy review run` refuses as `reviews_off`. A test holds this. An open request
+turns reviews on by itself, and once the last one ends they are off again (`core/review_requests.py`'s
+`reviews_on`). With `agent_prs` off the phase table is also unchanged, and a loop PR
 that `query` matches is reviewed like any other match: a review in the journal, no `resume`.
 
 ### Running a review
@@ -588,10 +621,11 @@ that `query` matches is reviewed like any other match: a review in the journal, 
 `canopy review run --pr URL --sha SHA [--ticket KEY] [--repo NAME] [--context '<text>']` requires `CANOPY_TICK_ID` like
 `dispatch` (D020). `URL` is the PR's `https://` URL, an opaque string the harness never parses. `SHA` is the full head
 commit the overseer read. `--ticket` links an agent PR to its ticket. The run records its purpose: `own` with
-`--ticket`, one of the loop's own PRs, and `query` without, a `review.query` match (ROADMAP M42 adds `request`). The
-harness cannot tell that a PR without a ticket matched the query, since the overseer runs the query; `query` means a
-review of a PR the loop does not own, which is all a purpose decides until M42. Under the dispatch lock, it refuses,
-recording `refused:<guard>`, on the first of:
+`--ticket`, one of the loop's own PRs; `request` without, for a PR with the operator's open review request; and
+`query` otherwise, a `review.query` match. The harness cannot tell that a PR without a ticket matched the query, since
+the overseer runs the query; `query` means a review of a PR the loop does not own and the operator did not ask for by
+name. Only an `own` review's findings can go to a worker. Under the dispatch lock, it refuses, recording
+`refused:<guard>`, on the first of:
 
 - `reviews_off`: see above.
 - `bad_pr`: `URL` is not a plain `https://` URL of at most 300 characters, `SHA` is not 40 or 64 lowercase hex
@@ -630,8 +664,9 @@ failed lease deletes the row and refuses as `no_slot`), renders the prompt (`bad
    `crashed`. A running review's lease is never returned as stale.
 
 The prompt is `prompts/reviewer.md` (or the override), with the PR URL, the commit, the checkout path, the ticket key
-and tracker provider for an agent PR, `review.low_impact`, the attempt number and limit, the overseer's context, and
-the result contract. The reviewer:
+and tracker provider for an agent PR, `review.low_impact`, the attempt number and limit, the overseer's context, the
+operator's notice to workers in force (`{{NOTICE}}`, `None.` without one; an override without it is `bad_prompt` while
+one is in force, §8), and the result contract. A failed check the notice explains is not a finding. The reviewer:
 
 - reads the PR's description and discussion, the diff, as much of the checkout as it needs, and for an agent PR the
   ticket;
@@ -670,7 +705,9 @@ The state block gains `reviews`: whether `agent_prs` is on, whether a query is s
 and for each PR reviewed in the last 14 days (at most 50, newest first) its URL, linked ticket, review runs so far, the
 review runs the operator granted it past the policy's limit if any (`granted`, §22), and latest run: id, commit, status,
 verdict, impact, the titles of the findings the operator has not dismissed and how many were (`dismissed_findings`,
-Dismissing a finding below), start and end, and `reviewed_at`, its end in the `review` cursor's form (§7).
+Dismissing a finding below), start and end, and `reviewed_at`, its end in the `review` cursor's form (§7). It also
+has `requests`, each open review request: the PR's URL, when it was made, its review runs
+so far, any `granted`, and its latest run as above, or none before the first (Review requests, below).
 
 For the loop's own PRs, the phase table (§7) gains two rows between `ci_red` and `green_unreviewed`, used only when
 `agent_prs` is on. Findings are `review_findings` only when `trust.trusted_reviewers` lists `canopy:review`; otherwise
@@ -697,10 +734,59 @@ For PRs from `review.query`, the overseer runs the query each tick and keeps onl
 PRs it reads for tickets); `_review` could not fetch another repository's commit from `origin`. The prompt says so; a
 `repo:` qualifier saves the reads. For each open match whose head commit has no `done` review, it runs a review or
 records `canopy review wait --pr URL --rationale "<text>"` (say, checks still running, or a draft). Nothing else is
-decided about these PRs.
+decided about these PRs. `review wait` and `attention --pr` take only a plain https:// URL of at most 300 characters,
+and refuse anything else as misuse, exit 2, recording nothing; `review run` records a malformed one as `refused:bad_pr`.
 
-Review decisions are `decisions` rows with the PR's URL in the `pr` column: `dispatch:review`, `wait`,
+Review decisions are `decisions` rows with the PR's URL in the `pr` column: `dispatch:review`, `wait`, `review:end`,
 `refused:<guard>`, and `attention:<reason>`. An agent PR's rows also carry its ticket key.
+
+### Review requests
+
+Asked for by the operator (2026-10-14, ROADMAP M42): hand canopy a coworker's PR to review without writing a search into
+`review.query`, which lives in the user file and reads one repository's PRs. A request asks for one review, at the
+PR's head. Watching a PR, reviewing it again at each new commit until it merges, was in M42's sketch and is deferred:
+the operator judged it more than MVP needs (2026-10-16), and asking again after a push reviews the new head.
+
+- A request is a journal fact, like a start record (§22): the PR's URL, when and through which channel it was made,
+  and when and why it ended. At most one is open per PR; asking again records nothing. It names no repository: the
+  overseer finds the PR's when it runs the review (below), as it does for `review.query`'s matches. It ends `reviewed`
+  when a review of the PR ends `done`, in the same transaction that closes the review run (`db.finish_run`), or
+  when `canopy review run` refuses `reviewed` for it: its head already had a `done` review when the request was made,
+  and that review answers it (the overseer runs one at a reviewed head for a request still open). It ends `merged`,
+  `closed`, or `unknown_repo` when the overseer reads that the PR merged or closed before a review of it, or is in none
+  of the workspace's cloned repositories, and `stopped` when the operator ends it.
+- `canopy start URL --review` makes one, D075's verb on a PR reference; `canopy stop URL` ends it, a review already
+  running finishing; `canopy show URL` shows the latest with the PR's reviews, and `canopy status` lists the open
+  ones. `start` on a PR without `--review` stays M14's, refused `unsupported`, so a missing flag never turns a review
+  into work on someone else's branch.
+- Like `start`, `reply`, and `grant`, both refuse as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set: a
+  request authorizes a review as `review.query` does, so an agent steered by a PR's text could otherwise point the
+  reviewer, and the operator's spend, at any PR. `start` also refuses, recording nothing: `reviews_off` when
+  `capacity.max_reviews` is 0, `bad_pr` for anything but a PR's plain `https://` URL (`REPO#N` too, since a review run
+  is keyed by the URL), and `loop_pr` for a PR a ticket's unit records, which `review.agent_prs` covers. `stop` refuses
+  `not_requested` for a PR with no open request.
+- The overseer reads each requested PR through MCP each tick, as it reads `review.query`'s matches, and finds its
+  repository the same way: the one whose map `url`, which the state block's `repositories` carries, names the same host,
+  owner, and repository as the PR's URL. The harness never parses the URL (principle 5); `canopy review run` still
+  refuses a repository missing from the map or not cloned (`unknown_repo`), and a wrong one fails that review when its
+  commit cannot be fetched. For an open PR whose head commit has no `done` review, it runs `canopy review run --pr URL
+  --sha SHA --repo NAME`, or records `canopy review wait` (checks still running, a draft). For a PR that merged or
+  closed first, or is in none of the workspace's cloned repositories, it records `canopy review end --pr URL --reason
+  merged|closed|unknown_repo`, which needs `CANOPY_TICK_ID`, records `review:end`, and refuses `not_requested` for a PR
+  with no open request; otherwise the request would stay open, and be read, every tick. A dry run checks the same and
+  ends nothing. A steered overseer could end one early; that costs a review, never adds one, and the PR's page shows who
+  ended it and why.
+- A review that ends other than `done` leaves the request open, so a later tick retries within the per-PR limit, as
+  `review_failed` says. Every guard of `canopy review run` holds unchanged: one `done` review per commit,
+  `policy.max_reviews_per_pr` (`review_limit` names `canopy grant URL review`), the daily limit, and capacity.
+- What follows is what follows a `review.query` review: findings in the journal, posted nowhere (D114), no worker, no
+  ticket, and `review.ended` (§20) to the operator's sinks. A PR from a fork is reviewed like any other; `_review`
+  fetches its commit from the repository's `origin` and pushes nothing.
+- The web UI's pull requests page takes a PR's URL, with `Review`, and a PR's page shows its request, with `Stop`
+  (§22). `POST /pull-request/start` and `POST /pull-request/stop` go through the same code as the CLI, so
+  with the same refusals.
+- Not settled: `REPO#N`, which needs a PR's URL from the repository's map (M14's references); whether a requested PR's
+  review waits for its checks to pass, left to the overseer's `wait` for now.
 
 ### Attention
 
@@ -818,8 +904,9 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
 
 ### Journal
 
-- `review_runs`: id, tick id, PR URL, commit, ticket key (nullable), its purpose (`own` or `query`, 0023; runs from
-  before are `own` where their ticket's unit in their repository had their PR), slot, lease id and holder, the base
+- `review_runs`: id, tick id, PR URL, commit, ticket key (nullable), its purpose (`own`, `request`, or `query`, 0023;
+  runs from before are `own` where their ticket's unit in their repository had their PR), slot, lease id and holder,
+  the base
   branch it was leased on (nullable, 0016), pid of `_review`, pid of
   the agent, started and ended times, status, `result_json` (validated, text cut to its limits), log path, and what
   the runtime reported (§13): `session_id`, `cost_usd`, and tokens by kind, as `runs` has them, NULL when it reported
@@ -827,6 +914,9 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
   and branch. The web UI's spend counts review runs.
 - `decisions.pr`: nullable.
 - `review_dismissals`: review run, finding number, when dismissed, and channel; at most one row per run and number.
+- `review_requests` (0029): id, PR URL, when it was made and through which channel, when it ended and why
+  (`reviewed`, `merged`, `closed`, `unknown_repo`, or `stopped`); at most one open row per
+  URL, kept once ended.
 - The `review` cursor (§7) also covers review runs: a `resume` for a review's findings passes
   `--cursor review=` with the run's `reviewed_at`.
 
@@ -839,7 +929,10 @@ and the reviewer's working directory is outside it), T6 (the reviewer has no wri
 through the journal and a resumed worker's prompt), T7 (every review key user-only except
 `policy.max_reviews_per_pr`), §6 (never submit a PR review; never push to or edit a PR the loop is only reviewing),
 and §7 (a reviewer definition that runs commands runs the PR's code). D114 removed the review comment and its T5
-marker, with the operator's approval.
+marker, with the operator's approval. M42 adds, with its approval note: T1 (a review request authorizes a
+review as `review.query` does, made only through the operator's channels and refused inside a run), T8 (making and
+ending one are among the web channel's writes), and §7 (`review.query`'s note on other people's PRs covers requests
+too).
 
 ### Open
 

@@ -20,11 +20,24 @@ export const RUN_TEXT: Record<RunState, string> = {
     failed: 'text-status-failed',
 }
 
+/**
+ * Each run state in the operator's words, wherever the UI names a state rather than a run's own status: a filter,
+ * a counter. `blocked` asked a question, so it reads `waiting on you`, as the rail, the tickets list, and the
+ * conversation say it. The URL and the journal keep `blocked`.
+ */
+export const RUN_WORD: Record<RunState, string> = {
+    running: 'running',
+    blocked: 'waiting on you',
+    stopped: 'stopped',
+    done: 'done',
+    failed: 'failed',
+}
+
 /** One ticket's runs on the runs page: the latest, which says where the ticket stands, over the ones before it. */
 export interface TicketRuns {
     /** The ticket's latest run: its running one, else the one that ended last. */
     latest: Run
-    /** Its runs before that, newest first. */
+    /** Its runs before that, the one that ended last first. */
     earlier: Run[]
 }
 
@@ -33,8 +46,8 @@ export interface TicketRuns {
  * that asked a question, got its answer, and asked again is one entry, not two blocked ones.
  */
 export function byTicket(runs: Run[]): TicketRuns[] {
-    // The server sends the running runs first, then the rest newest first, and runs one worker per ticket at a time:
-    // a ticket's first run in the list is its latest.
+    // The server sends the running runs first, then the rest by the one that ended last, and runs one worker per ticket
+    // at a time: a ticket's first run in the list is its latest.
     const groups = new Map<string, TicketRuns>()
     for (const run of runs) {
         const group = groups.get(run.ticket_key)

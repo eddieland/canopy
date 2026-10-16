@@ -65,7 +65,8 @@ If code and the design disagree, the design doc wins until a decision entry says
   validating config and anything parsed from another program's output (D026), `hypothesis` for property tests of input
   validators (dev only), `pytest-xdist` to run the tests in parallel (dev only), `rich` for terminal output
   (D043), `fastapi` and `uvicorn` for the web UI's server (D074, only in `canopy.serve`), `tomlkit` for its edits to
-  the user config (D119, only in `canopy.serve`), and `httpx2` for its test client (D079, dev only).
+  the user config (D121, only in `canopy.serve`), and `httpx2` for its test client (D079, dev only), and `syrupy` for
+  snapshot tests (dev only).
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
   and npm; `make check` runs its checks, and `make ui-e2e` its Playwright tests.
 - Nothing tracker- or VCS-API-specific is ever imported. No Jira client, no GitHub client. Connectivity to those
@@ -98,6 +99,8 @@ If code and the design disagree, the design doc wins until a decision entry says
   features, and only `cli/` imports click; `tests/canopy/test_layers.py` fails otherwise. A new package gets a layer
   there and a line in DESIGN §5. A separate program (a notification sink) is a uv workspace member, not a package.
 - No global mutable state. Pass a `Context` (config, db connection, paths).
+- Config is not downgrade-compatible. An unknown key stays an error, so an older release rejects a key a newer one
+  added; that is expected, since a release already out cannot be fixed. A review finding about it needs no code.
 - Every module is in newspaper order, so it reads top-down from what to how: the docstring, then the public names
   other modules use, most important first, then the private helper functions, each below the first function that
   calls it. What Python needs at import time comes first regardless: constants, type aliases, and anything used as a
@@ -109,6 +112,16 @@ If code and the design disagree, the design doc wins until a decision entry says
   squashed into `0001_init.sql` once, for v0.1 (D068); that is not a precedent for editing one.
   A new migration adds its hash to `SHIPPED` in `tests/canopy/test_db.py`, and a row to `SEED` for each table it
   creates; a test there applies every migration to a journal with data in it and fails on any row lost.
+- A query that returns a table's whole rows reads them as that table's row type in `core/records.py`
+  (`records.fetch_all`, `records.fetch_one`), not as `sqlite3.Row`. A new table gets its row type in the PR that adds
+  it, and an old one when a PR already changes its queries. `tests/canopy/test_records.py` holds each row type to its
+  table, so a migration that adds a column to a typed table adds the field too.
+- A run's status and kind and a ticket's phase are closed vocabularies in `core/vocab.py`, each a `StrEnum`. New code
+  writes and compares them through its members, not bare strings, and converts a value read from the journal where it
+  branches on it. A branch over one is a `match` ending in `case _: assert_never(...)`, so a new value fails the type
+  check until every branch handles it. click matches an enum choice by its name, so a `click.Choice` over one takes its
+  values. A table made from M36 on constrains each `status`, `kind`, and `phase` column with `CHECK (column IN (...))`;
+  `tests/canopy/test_db.py` fails on one that does not.
 - Hard guards live in code, judgment lives in prompts. Capacity limits, attempt limits, cooldowns, "never merge", and
   "one worker per ticket" are enforced by the harness regardless of what the overseer asks for.
 - Log with `logging`, JSON lines to `.canopy/canopy.log` in the workspace. Every tick has an id that appears in every
@@ -138,6 +151,12 @@ If code and the design disagree, the design doc wins until a decision entry says
   directory, with HOME pointed there; commands that name a repository pass `--repo repo`). Each fake's docstring lists
   the env vars and state keys it reads. The fake agent can run commands (`FAKE_AGENT_COMMANDS`), which is how a test
   plays an overseer calling `canopy decide`.
+- What two test modules share lives in one place, never in a test module: `tests/canopy/conftest.py` for fixtures
+  (`conn`, the workspace's journal; `ctx`; the web UI's mock `backend`; `ws`), `tests/canopy/helpers.py` for helpers
+  (`in_tick`, `decisions`, `dispatch_and_run`, and scripting the fake agents: `overseer_does(canopy(...))`,
+  `worker_does`), and `web_helpers.py` and `review_helpers.py` beside it. A test module imports from no other;
+  `tests/canopy/test_layers.py` fails otherwise. Look there before writing a helper, and move one there once a second
+  module needs it.
 - A test opens a journal through `canopy_env.journal()`, or the `journals` fixture for one outside a workspace, never
   `db.connect` directly: those close it when the test ends. A connection, file, or pipe left open raises a
   ResourceWarning, which fails the test like any other warning.
@@ -146,6 +165,10 @@ If code and the design disagree, the design doc wins until a decision entry says
   `src/canopy`.
 - One end-to-end test runs `canopy tick --dry-run` against the fakes and asserts on the `decisions` and `ticks`
   tables.
+- What canopy renders whole, such as the overseer's state block, is held by a snapshot test: a journal written by hand,
+  the output compared with syrupy's `snapshot` fixture, recorded in the test's `__snapshots__/` directory.
+  `make snapshots` records the ones that differ, and the diff is reviewed with the change. A snapshot holds canopy's
+  output, never a model's.
 - Prompts are not unit-tested. `canopy tick --dry-run` writes the overseer's plan to the `decisions` table; that table
   is the evaluation corpus for prompt changes. Do not add prompt "tests" that assert on model output.
 
@@ -156,7 +179,7 @@ If code and the design disagree, the design doc wins until a decision entry says
   tick after another (D042). A milestone that adds a listener follows TRUST_MODEL T8 (D055).
 - A tracker adapter interface. The tracker is a prompt and config concern.
 - A runtime plugin interface. The agent runtime is a command template in config.
-- Sandboxing beyond what ROADMAP M26 lists. It plugs into the command template; see HOST_ISOLATION.
+- Sandboxing beyond what ROADMAP M26 lists. It plugs into the command template; see DESIGN §24.
 - A bot identity. MVP runs as the operator.
 - Anything that approves or merges PRs, or transitions tickets to Done.
 - Retry logic inside the worker. A worker may push again for a fix it finds (D116), but never polls CI or retries a

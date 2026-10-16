@@ -11,6 +11,7 @@ import { Field, Fields } from '@/components/fields'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
+import { RunDoing } from '@/components/run-doing'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
@@ -19,8 +20,9 @@ import { TranscriptPanel } from '@/components/transcript'
 import { runRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
-import { tokenCount } from '@/lib/transcript'
+import { RUN_TOKENS_TITLE, runTokens } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
+import { None } from '@/components/none'
 
 /** One run: what it worked on, how it ended, and its session's transcript. */
 export const Route = createFileRoute('/runs/$id')({
@@ -62,7 +64,7 @@ function Loaded({ id }: { id: number }) {
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <RunPanel run={data} />
-                <TranscriptPanel transcript={transcript} running={data.state === 'running'} />
+                <TranscriptPanel transcript={transcript} running={data.state === 'running'} live />
             </div>
         </>
     )
@@ -98,7 +100,7 @@ function RunPanel({ run }: { run: Run }) {
                     </span>
                 </Field>
                 <Field label="branch" mono>
-                    {run.branch === null ? 'none' : <Copyable text={run.branch} label="branch" />}
+                    {run.branch === null ? <None /> : <Copyable text={run.branch} label="branch" />}
                 </Field>
                 <Field label="started" mono>
                     <span className="flex items-baseline gap-2">
@@ -109,7 +111,12 @@ function RunPanel({ run }: { run: Run }) {
                 <Field label="ended" mono>
                     {run.ended_at === null ? 'still running' : <Timestamp at={run.ended_at} />}
                 </Field>
-                <Field label="summary">{run.summary ? <RichText text={run.summary} /> : 'none'}</Field>
+                {run.activity && (
+                    <Field label="last call">
+                        <RunDoing activity={run.activity} />
+                    </Field>
+                )}
+                <Field label="summary">{run.summary ? <RichText text={run.summary} /> : <None />}</Field>
                 {run.prs.length > 0 && (
                     <Field label="pull requests" mono>
                         <span className="flex flex-wrap gap-x-4">
@@ -121,7 +128,7 @@ function RunPanel({ run }: { run: Run }) {
                 )}
                 <Field label="spent" mono>
                     <Cost usd={run.cost_usd} />
-                    {run.tokens === null ? '' : `, ${tokenCount(run.tokens)} tokens`}
+                    <span title={RUN_TOKENS_TITLE}>{runTokens(run.new_tokens, run.peak_context)}</span>
                 </Field>
                 {run.worktrees.length > 0 && (
                     <Field label="worktrees" mono>

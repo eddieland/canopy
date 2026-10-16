@@ -38,6 +38,7 @@ from pydantic import (
 )
 
 from canopy.core import contract
+from canopy.core.vocab import PoolKind
 
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
@@ -281,7 +282,7 @@ class Section(BaseModel):
     """Base for config tables: unknown keys are errors, values are frozen, defaults are validated."""
 
     # validate_default: defaults go through the same validators as file values, so `~/.canopy` is expanded.
-    model_config = ConfigDict(extra="forbid", frozen=True, validate_default=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, validate_default=True, defer_build=True)
 
 
 # A part of an OpenCode tool name: an MCP server's name or one of its tools', as OpenCode sanitizes them. They are
@@ -395,11 +396,19 @@ class Tracker(Section):
     # Empty means no link. Shared: the tracker's address is the team's, and a link runs nothing.
     ticket_url: Annotated[StrictStr, Scope.SHARED, link_template(TICKET_KEY)] = ""
     labels: Annotated[tuple[NonBlank, ...], Scope.USER, Field(min_length=1)]
+    # The least time between ticks that run `query` (DESIGN §7, Spacing the query): a tick sooner than that after the
+    # last live one that ran it works the tickets the journal knows and leaves the query out. 0 runs it every tick.
+    # User-only: it sets the operator's spend, and how long a newly labeled ticket can wait to be found.
+    query_every_minutes: Annotated[Count, Scope.USER] = 0
     # The tracker's MCP server, as the operator's OpenCode config names it, and the tools of it a private worker may
     # call (DESIGN §22). Empty and unset mean the provider's defaults. User-only: they decide what a private worker can
     # write, which a shared workspace file must not (TRUST_MODEL T7).
     mcp_server: Annotated[StrictStr, Scope.USER, AfterValidator(_server_name)] = ""
     read_tools: Annotated[tuple[ToolPart, ...] | None, Scope.USER] = None
+    # Whether a labeled ticket canopy has never worked is started privately by its first dispatch, as if the operator
+    # had run `canopy start` (DESIGN §22, D119). User-only: it turns a label into a start record, which a shared file
+    # must not.
+    private: Annotated[StrictBool, Scope.USER] = False
 
     def tools(self) -> TrackerTools | None:
         """The server and tools a private worker gets, or None if neither config nor a default names any.
@@ -510,6 +519,16 @@ class Capacity(Section):
             The repository's entry in `repo_slots`, else `slots_per_repo`, which is None when pools are unmanaged.
         """
         return self.repo_slots.get(repo, self.slots_per_repo)
+
+
+class Pools(Section):
+    """The `[pools]` table: which pool makes a workspace's worktrees (DESIGN §18, ROADMAP M45).
+
+    User-only, as the pools' sizes are: it decides what runs on the operator's machine. Switching is safe with runs in
+    flight, since a lease always goes back to the pool that made it.
+    """
+
+    backend: Annotated[PoolKind, Scope.USER] = PoolKind.TREEHOUSE
 
 
 class Runtime(Section):
@@ -666,6 +685,8 @@ EventGroup = Literal["attention", "loop", "runs", "chores", "reviews"]
 # The sink `notify.cmd` stands for.
 DEFAULT_SINK = "default"
 MIN_DIGEST_MINUTES = 60
+# A sink batching for longer than a day would hold everything but what needs the operator now.
+MAX_BATCH_MINUTES = 1440
 
 
 def _sink_name(value: str) -> str:
@@ -687,6 +708,8 @@ class Sink(Section):
     format: Literal["json", "text"] = "json"
     events: tuple[EventGroup, ...] = ("attention", "loop")
     digest_every_minutes: Annotated[StrictInt, Field(ge=MIN_DIGEST_MINUTES)] | None = None
+    # After a delivery, what does not need the operator now waits this long, then goes out in one message.
+    batch_minutes: Annotated[StrictInt, Field(ge=1, le=MAX_BATCH_MINUTES)] | None = None
 
 
 SinkName = Annotated[str, AfterValidator(_sink_name)]
@@ -806,6 +829,7 @@ class Config(Section):
     policy: Policy
     trust: Trust
     capacity: Capacity
+    pools: Pools
     runtime: Runtime
     loop: Loop
     review: Review
@@ -826,6 +850,7 @@ SECTIONS: dict[str, type[Section]] = {
     "policy": Policy,
     "trust": Trust,
     "capacity": Capacity,
+    "pools": Pools,
     "runtime": Runtime,
     "loop": Loop,
     "review": Review,

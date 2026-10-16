@@ -7,6 +7,7 @@ Guards are code and the overseer cannot talk its way past them (DESIGN §4, TRUS
 from __future__ import annotations
 
 import contextlib
+import functools
 import json
 import re
 import sys
@@ -16,8 +17,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, outbox, prompts, treehouse
+from canopy.core import conversation, db, notice, outbox, pools, prompts
 from canopy.core.context import DISPATCH_LOCK
+from canopy.core.vocab import PoolKind, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
 from canopy.runs import policy
@@ -38,6 +40,8 @@ JOINT_PR_NOTE = "one per repository, listed under Repositories"
 # A prompt carries at most this much of `MAP.md`.
 MAX_MAP = 20_000
 RUNS_DIR = "runs"
+# The kind a notice to workers can hold (DESIGN §8): a dispatch of it refuses when the notice moved mid-tick.
+FIX_CI = RunKind.FIX_CI
 
 
 class Refusal(Exception):  # noqa: N818  (a refusal is an outcome the overseer is told about, not an error)
@@ -57,7 +61,10 @@ class Refusal(Exception):  # noqa: N818  (a refusal is an outcome the overseer i
 
 @dataclass(frozen=True)
 class Started:
-    """A dispatched run: its branch, the slots it leased, one per repository, and the desk a joint run works in."""
+    """A dispatched run: its branch, the slots it leased, one per repository, and the desk a joint run works in.
+
+    `starts` says the run started its ticket privately, under `tracker.private` (DESIGN §22).
+    """
 
     run_id: int
     branch: str
@@ -65,11 +72,20 @@ class Started:
     pid: int
     label: str
     desk: Path | None = None
+    starts: bool = False
 
     @property
     def repos(self) -> tuple[str, ...]:
         """The repositories the run works in."""
         return tuple(s.repo or "" for s in self.slots)
+
+
+@dataclass(frozen=True)
+class Leased:
+    """A slot a dispatch leased, and the pool that made the lease, which it goes back to (DESIGN §18)."""
+
+    lease: pools.Lease
+    pool: PoolKind
 
 
 @dataclass(frozen=True)
@@ -80,6 +96,7 @@ class Plan:
     repositories are the names of the units it covers, in the order the dispatch named them. A run over several is a
     joint run (DESIGN §18). A split has no branch (""): it reads the repositories it names and changes none of them. A
     private run works a ticket the operator started; its start record authorizes it, and it has no label (DESIGN §22).
+    A run that `starts` the ticket is its first, under `tracker.private`: it is private, and writes the start record.
     """
 
     branch: str
@@ -87,6 +104,7 @@ class Plan:
     label: str
     repos: tuple[str, ...]
     private: bool = False
+    starts: bool = False
 
     @property
     def joint(self) -> bool:
@@ -127,6 +145,7 @@ def start(
     # One dispatch at a time, so two cannot both pass the capacity check. Held from the plan, which reads the ticket's
     # branch, across the leases and the spawn: two first implements must not each name a branch.
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
+        _check_notice(ctx, tick_id, kind)
         plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base, request=request)
         attempt, limit = _guard(ctx, key, kind, plan.repos)
         leases = _lease_all(ctx, key, plan.repos)
@@ -176,11 +195,12 @@ def check(
     # Each stands for a run this dry run would have started: a worker run, or a review, which holds a slot too. A
     # review of a PR with no ticket is named by its PR, so it counts toward capacity and blocks no ticket.
     planned = [
-        str(d["ticket_key"] or f"pr:{d['pr']}")
+        d.ticket_key or f"pr:{d.pr}"
         for d in db.decisions_for_tick(ctx.conn, tick_id)
-        if str(d["action"]).startswith("dispatch:") and (d["ticket_key"] is not None or d["pr"] is not None)
+        if d.action.startswith("dispatch:") and (d.ticket_key is not None or d.pr is not None)
     ]
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
+        _check_notice(ctx, tick_id, kind)
         plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base, request=request)
         _guard(ctx, key, kind, plan.repos, planned=planned)
     return plan
@@ -311,6 +331,7 @@ def _plan(
     private = _check_start(ctx, key, kind)
     # A started ticket's start record authorizes it, checked in code; a public ticket's `--label` is a claim (D051).
     configured = "" if private else _check_label(ctx.config.tracker.labels, key, label)
+    starts = not private and _starts_privately(ctx, key, kind)
     if kind == policy.SPLIT and request is None:
         raise Refusal(
             "unauthorized",
@@ -330,7 +351,7 @@ def _plan(
     branch = _branch(ctx, key, kind, slug, names)
     if base is not None:
         _check_base(ctx.config.trust.branch_prefix, branch, base)
-    return Plan(branch=branch, base=base, label=configured, repos=names, private=private)
+    return Plan(branch=branch, base=base, label=configured, repos=names, private=private or starts, starts=starts)
 
 
 def _check_start(ctx: Context, key: str, kind: str) -> bool:
@@ -358,6 +379,29 @@ def _check_start(ctx: Context, key: str, kind: str) -> bool:
     if ctx.config.tracker.tools() is None:
         raise Refusal(
             "no_read_tools", "no tracker tools are known for a private worker; set tracker.mcp_server and read_tools"
+        )
+    return True
+
+
+def _starts_privately(ctx: Context, key: str, kind: str) -> bool:
+    """Return whether this dispatch starts a labeled ticket privately, under `tracker.private` (DESIGN §22).
+
+    Only a ticket canopy never ran is started so: one already worked in public keeps its conversation on the tracker.
+    A split works no unit and leaves the ticket public; its children are started by their own first dispatch.
+
+    Returns:
+        True if the run will be private and write the ticket's start record, False if it stays public.
+
+    Raises:
+        Refusal: no tracker tools are known for a private worker (`no_read_tools`).
+    """
+    if not ctx.config.tracker.private or kind == policy.SPLIT or db.has_runs(ctx.conn, key):
+        return False
+    if ctx.config.tracker.tools() is None:
+        raise Refusal(
+            "no_read_tools",
+            "tracker.private is set, but no tracker tools are known for a private worker; set tracker.mcp_server and "
+            "read_tools",
         )
     return True
 
@@ -462,7 +506,7 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence
     """
     ticket = db.get_ticket(ctx.conn, key)
     recorded = str(ticket["branch"]) if ticket is not None and ticket["branch"] else None
-    if kind == "implement":
+    if kind == RunKind.IMPLEMENT:
         if recorded is None:
             slug = DEFAULT_SLUG if slug is None else slug
             if not valid_slug(slug):
@@ -498,6 +542,27 @@ def _check_base(prefix: str, branch: str, base: str) -> None:
         raise Refusal("bad_base", f"{branch} cannot be stacked on itself")
 
 
+def _check_notice(ctx: Context, tick_id: int, kind: str) -> None:
+    """Refuse a `fix-ci` when the operator set or cleared a notice to workers after this tick read the journal.
+
+    The overseer decided from a state block without it, and a `fix-ci` at a failure the notice explains spends an
+    attempt that never resets (D030); the loop's next tick, which the notice wakes, decides with it (DESIGN §8).
+
+    Raises:
+        Refusal: (`notice_changed`) the notice moved after the tick's read.
+    """
+    if kind != FIX_CI:
+        return
+    tick = db.get_tick(ctx.conn, tick_id)
+    read = tick["read_at"] if tick is not None else None
+    if read is not None and notice.moved_after(ctx.conn, str(read)):
+        raise Refusal(
+            "notice_changed",
+            "the operator set or cleared a notice to workers after this tick read the journal; the next tick decides "
+            "fix-ci with it",
+        )
+
+
 def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: Sequence[str] = ()) -> tuple[int, int]:
     """Refuse unless a `kind` run for `key` over `repos` may start now. Returns the run's attempt number and limit.
 
@@ -514,7 +579,7 @@ def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: 
             attempt limit (`attempt_limit`) or a unit in its fix-ci cooldown (`cooldown`), or the workers are at
             capacity (`capacity`). A refusal about one unit names its repository.
     """
-    running = db.running_runs(ctx.conn)
+    running = db.running_runs(ctx.conn, "runs")
     for run in running:
         if run["ticket_key"] == key:
             raise Refusal("running", f"run {run['id']} is already working {key}")
@@ -556,41 +621,39 @@ def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[s
         Refusal: `capacity`, when running runs, review runs, and those in `planned` number `max_workers` or more.
     """
     max_workers = ctx.config.capacity.max_workers
-    busy = len(running) + len(db.running_review_runs(ctx.conn)) + len(planned)
+    busy = len(running) + len(db.running_runs(ctx.conn, "review_runs")) + len(planned)
     if busy >= max_workers:
         planned_note = f", counting {len(planned)} this dry run dispatched" if planned else ""
         raise Refusal("capacity", f"{busy} of {max_workers} workers are running{planned_note}")
 
 
-def _lease_all(ctx: Context, key: str, repos: Sequence[str]) -> list[tuple[str, treehouse.Lease]]:
+def _lease_all(ctx: Context, key: str, repos: Sequence[str]) -> list[tuple[str, Leased]]:
     """Lease a slot in each repository's pool, or none: a lease that fails returns those already made (DESIGN §18).
 
     Returns:
-        Each repository's name and its lease, in the order of `repos`.
+        Each repository's name and its lease, with the pool that made it, in the order of `repos`.
 
     Raises:
         Refusal: `no_slot`, when a repository's pool could not lease a slot.
     """
-    leases: list[tuple[str, treehouse.Lease]] = []
+    kind = ctx.config.pools.backend
+    leases: list[tuple[str, Leased]] = []
     for repo in repos:
         try:
-            leases.append((repo, treehouse.lease(ctx.runner, key, pool=ctx.pool(repo))))
-        except treehouse.TreehouseError as e:
+            leases.append((repo, Leased(ctx.pool(repo).lease(key), kind)))
+        except pools.PoolError as e:
             _return_all(ctx, leases)
             raise Refusal("no_slot", f"{repo}: {e}") from e
     return leases
 
 
-def _return_all(ctx: Context, leases: Sequence[tuple[str, treehouse.Lease]]) -> None:
+def _return_all(ctx: Context, leases: Sequence[tuple[str, Leased]]) -> None:
     """Return slots a dispatch leased and cannot use. A return that fails is left to the next tick's reconcile."""
-    for repo, lease in leases:
-        with contextlib.suppress(treehouse.TreehouseError):
-            treehouse.return_slot(
-                ctx.runner,
-                lease.path,
-                lease_id=lease.lease_id,
-                lease_holder=lease.lease_holder,
-                pool=ctx.workspace.pool(repo),
+    for repo, leased in leases:
+        lease = leased.lease
+        with contextlib.suppress(pools.PoolError):
+            ctx.pool_of(leased.pool, repo).return_slot(
+                lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder
             )
 
 
@@ -601,7 +664,7 @@ def _spawn(
     key: str,
     kind: str,
     plan: Plan,
-    leases: Sequence[tuple[str, treehouse.Lease]],
+    leases: Sequence[tuple[str, Leased]],
     attempt: int,
     limit: int,
     context: str | None,
@@ -614,12 +677,13 @@ def _spawn(
     slots = tuple(
         db.RunSlot(
             repo=repo,
-            slot_path=lease.path,
-            lease_id=lease.lease_id,
-            lease_holder=lease.lease_holder,
-            base_branch=plan.base if plan.base is not None else lease.base_branch,
+            slot_path=leased.lease.path,
+            lease_id=leased.lease.lease_id,
+            lease_holder=leased.lease.lease_holder,
+            base_branch=plan.base if plan.base is not None else leased.lease.base_branch,
+            pool=leased.pool,
         )
-        for repo, lease in leases
+        for repo, leased in leases
     )
     desk = desk_path(ctx, key) if plan.joint else None
     split = kind == policy.SPLIT
@@ -665,21 +729,17 @@ def _spawn(
         values["CONVERSATION"] = conversation.prompt_conversation(ctx.conn, key)
     else:
         values["OPERATOR_MESSAGES"] = conversation.prompt_operator_messages(ctx.conn, key)
+        values["PREVIOUS_RUNS"] = conversation.prompt_previous_runs(ctx.conn, key)
         if not split and conversation.has_operator_messages(ctx.conn, key):
             required = (*required, *prompts.REQUIRED_OPERATOR)
     if review is not None:
         required = (*required, *prompts.REQUIRED_REVIEW)
     try:
-        prompt = prompts.render_worker(cfg, kind, values, required=required, private=plan.private)
+        prompt = prompts.render_worker(
+            cfg, kind, values, required=required, private=plan.private, notice=notice.for_prompt(ctx.conn)
+        )
     except (OSError, prompts.PromptError) as e:
         raise Refusal("bad_prompt", str(e)) from e
-
-    def check_start() -> None:
-        # Again inside the run's insert: `canopy stop` marks the record in a transaction of its own, so whichever
-        # commits first wins (DESIGN §22).
-        if plan.private != conversation.is_started(conversation.start_of(ctx.conn, key)):
-            what = "was stopped" if plan.private else "was started privately"
-            raise Refusal("stopped" if plan.private else "private", f"{key} {what} while this dispatch was planned")
 
     run_id = db.insert_run(
         ctx.conn,
@@ -692,7 +752,7 @@ def _spawn(
         works_units=not split,
         started=outbox.run_started(cfg, key=key, kind=kind, branch=branch, attempt=attempt, limit=limit),
         private=plan.private,
-        check=check_start,
+        check=functools.partial(_check_start_again, ctx, key, plan),
     )
     run = db.get_run(ctx.conn, run_id)
     if run is None:
@@ -704,10 +764,25 @@ def _spawn(
         pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run["log_path"]))
     except (OSError, procs.ProcError) as e:
         note = json.dumps({"harness": f"could not start the worker: {e}"})
-        conversation.close_run(ctx.conn, cfg, run, "crashed", note)
+        conversation.close_run(ctx.conn, cfg, run, RunStatus.CRASHED, note)
         raise Refusal("spawn_failed", str(e)) from e
-    db.claim_run(ctx.conn, run_id, pid)
-    return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk)
+    db.claim_run(ctx.conn, "runs", run_id, pid)
+    return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
+
+
+def _check_start_again(ctx: Context, key: str, plan: Plan) -> None:
+    """Check the start record again inside the run's insert, writing it for a run that starts the ticket (DESIGN §22).
+
+    `canopy stop` marks the record in a transaction of its own, so whichever commits first wins.
+
+    Raises:
+        Refusal: the ticket was stopped (`stopped`), or started privately (`private`), since the dispatch was planned.
+    """
+    if plan.starts and conversation.start_of(ctx.conn, key) is None:
+        db.set_start(ctx.conn, conversation.TICKET, key, status="started", channel=conversation.LABEL)
+    if plan.private != conversation.is_started(conversation.start_of(ctx.conn, key)):
+        what = "was stopped" if plan.private else "was started privately"
+        raise Refusal("stopped" if plan.private else "private", f"{key} {what} while this dispatch was planned")
 
 
 def _unit_prs(ctx: Context, key: str) -> dict[str, str]:

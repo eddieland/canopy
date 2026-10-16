@@ -5,10 +5,13 @@ import {
     forgotText,
     grantedText,
     notedText,
+    noticeSetText,
     reloadedText,
     repliedText,
     reviewDismissedText,
+    reviewRequestedText,
     reviewSentText,
+    reviewStoppedText,
     startedText,
     stoppedText,
 } from './outcomes'
@@ -24,11 +27,19 @@ describe('outcomes', () => {
     })
 
     it('say what a reload found, when the loop runs on it, and what waits for a restart', () => {
-        expect(reloadedText({ changed: [], restart: [], after_tick: false })).toBe(
-            'Nothing changed. The loop runs on it from now on.',
+        const notice = { text: 'CI is down.', since: '2026-10-08T11:50:00Z', lapses_at: '2026-10-08T15:50:00Z' }
+        expect(noticeSetText({ already: false, loop: { paused: null, notice: { ...notice, channel: 'web' } } })).toBe(
+            'Notice set: runs dispatched from now on hear it until it lapses. The loop ticks soon.',
+        )
+        const unchanged = 'Nothing changed: the config files say what the loop already runs on.'
+        expect(reloadedText({ changed: [], restart: [], after_tick: false })).toBe(unchanged)
+        // A running tick delays nothing when there is nothing to apply.
+        expect(reloadedText({ changed: [], restart: [], after_tick: true })).toBe(unchanged)
+        expect(reloadedText({ changed: ['capacity.max_workers'], restart: [], after_tick: false })).toBe(
+            'capacity.max_workers changed. The loop runs on the new config now.',
         )
         expect(reloadedText({ changed: ['capacity.max_workers'], restart: [], after_tick: true })).toBe(
-            'capacity.max_workers changed. The loop reads it again once the running tick ends.',
+            'capacity.max_workers changed. The loop runs on the new config once the running tick ends.',
         )
         expect(
             reloadedText({
@@ -68,6 +79,22 @@ describe('outcomes', () => {
         expect(grantedText('https://example.test/o/r/pull/1', { kind: 'review', repo: null, runs: 3, limit: 4 })).toBe(
             'https://example.test/o/r/pull/1 has had 3 review runs, and may now have 4. ' +
                 'The next tick decides whether to review it.',
+        )
+    })
+
+    it('say what a review request did, as canopy start URL --review and canopy stop URL do', () => {
+        const pr = 'https://example.test/o/r/pull/12'
+        const request = { created_at: '2026-10-15T12:00:00Z', channel: 'web', ended_at: null, end_reason: null }
+        expect(reviewRequestedText(pr, { request, already: false })).toBe(
+            `${pr} is requested for review. The next tick reviews its head, once.`,
+        )
+        expect(reviewRequestedText(pr, { request, already: true })).toBe(`${pr} was already requested for review.`)
+        expect(reviewStoppedText(pr, { request, running_review: null })).toBe(
+            `${pr}'s review request is stopped; nothing reviews it now.`,
+        )
+        expect(reviewStoppedText(pr, { request, running_review: 4 })).toBe(
+            `${pr}'s review request is stopped; nothing reviews it now. ` +
+                'Review run 4 of it is still running and will finish.',
         )
     })
 

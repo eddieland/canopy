@@ -22,12 +22,12 @@ Everything below is for an agent helping the operator in their own session.
 - Read, explain, and suggest. Do not start ticks or loops yourself: `canopy loop` runs until Ctrl-C and would hang your
   session, and `canopy tick` runs the overseer, which spends money. Suggest the command and let the operator run it,
   unless they ask you to run a single `canopy tick --dry-run`.
-- `canopy dispatch`, `canopy decide`, `canopy attention`, `canopy ticket set`, and `canopy mirror` are the overseer's
-  tools. They refuse to run outside a tick, by design. There is no way to dispatch a ticket by hand; the way to get a
-  ticket worked is its queue label, or `canopy start` (below).
-- `canopy start`, `stop`, `reply`, `forget`, `grant`, `pause`, and `resume` are the operator's own: they authorize work,
-  answer workers, and hold the loop. Suggest them; run one only when the operator asks you to, with the words they gave
-  you.
+- `canopy dispatch`, `canopy decide`, `canopy queried`, `canopy attention`, `canopy ticket set`, and `canopy mirror`
+  are the overseer's tools. They refuse to run outside a tick, by design. There is no way to dispatch a ticket by hand;
+  the way to get a ticket worked is its queue label, or `canopy start` (below).
+- `canopy start`, `stop`, `reply`, `forget`, `grant`, `pause`, `resume`, and `notice` are the operator's own: they
+  authorize work, answer workers, hold the loop, and tell every later run about an outage. Suggest them; run one only
+  when the operator asks you to, with the words they gave you.
 - Never edit the journal (`canopy.db`) or anything under the state directory. Read it with `sqlite3 -readonly`.
 - The journal is what the loop saw and did. The tracker and GitHub are the truth about tickets and PRs. When they
   disagree, the journal is stale, not wrong about the world.
@@ -48,11 +48,14 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy dismiss chore:NAME ID` | Keeps a finding off the attention list until the chore stops reporting it; `--undo`. |
 | `canopy dismiss review:ID N` | Holds a review's finding N back from workers and the overseer; `--undo`. |
 | `canopy send review:ID N...` | Sends findings N... to a worker: a reply on the review's ticket, the operator's go-ahead. |
+| `canopy start URL --review` | Has canopy review someone else's PR once, at its head; nothing is posted. |
+| `canopy stop URL` | Ends a PR's review request; a review already running finishes. `canopy show URL` shows it and its reviews. |
 | `canopy review show [ID]` | canopy's PR reviews of the last 14 days; with ID, one in full, each finding's detail too. |
 | `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
 | `canopy grant KEY KIND` | Lets a ticket at its attempt limit have one more run of KIND; `--runs N` for more. |
 | `canopy grant URL review` | Lets the PR at URL, at `max_reviews_per_pr`, have one more review; `--runs N` for more. |
 | `canopy pause`, `canopy resume` | The loop starts no tick until resumed; running workers keep going. `p` in the loop too. |
+| `canopy notice 'TEXT' [--for 4h]` | Every run dispatched until it lapses hears TEXT, such as a CI outage; `--clear` lifts it. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run; `--no-record` records nothing. |
@@ -91,7 +94,9 @@ Work through these in order and stop at the first that explains it.
 
 1. Did a recent tick run at all? `canopy status` shows the last tick. `skipped` usually means the overseer could not
    reach an MCP server (`mcp_unavailable: <which>`); `canopy_unavailable`, `overseer_failed`, and `reconcile_failed`
-   have a summary, and `ticks/<id>.log` has the detail. A failed or skipped tick decides nothing.
+   have a summary, and `ticks/<id>.log` has the detail. A failed or skipped tick decides nothing. An `overseer_failed`
+   summary that says `left duties undone` names what the overseer skipped (the query, a ticket, or a chore); what that
+   tick dispatched still runs.
 2. What did the overseer decide about KEY?
 
    ```sh
@@ -145,6 +150,7 @@ no dismissing one, except a chore's finding (below). Reasons:
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong. Read the run log the detail names. |
 | `chore_failed` | A chore's latest run could not check (failed, timed out, crashed): read its log. |
 | `review_failed`, `review_limit` | A PR's review failed or hit its limit. `canopy review show` lists them; at the limit, `canopy grant URL review`. |
+| `notice_rerun` | A check failed during an outage your notice named, and the notice has ended: rerun the check. |
 | `repo_missing` | A repository in the workspace map has no clone: run `canopy workspace sync`. |
 | `canopy_unavailable` | `canopy --version` failed where the loop runs, so the overseer did not run: fix the install or PATH. |
 | `multi_repo` | Independent pieces in several repositories, or a split not done: decide. Ask for a split below. |
@@ -228,8 +234,9 @@ When the operator asks you to look into findings or turn them into tickets:
 ## Getting a ticket worked
 
 Add the operator's queue label (`tracker.labels` in the user config, `agent-ready-<user>` by default) to an open ticket
-that `tracker.query` finds. The next live tick with free capacity dispatches it. To preview, run
-`canopy tick --dry-run` and then `canopy decisions`.
+that `tracker.query` finds. The next live tick with free capacity that runs the query dispatches it: every tick, unless
+`tracker.query_every_minutes` spaces the query out. To preview, run `canopy tick --dry-run` and then
+`canopy decisions`.
 
 Or start it privately: `canopy start KEY`. A started ticket needs no label, and its conversation stays in canopy's
 journal: workers read the ticket but never comment on, label, or edit it, and ask their questions through canopy. A

@@ -2,16 +2,19 @@ import { useState } from 'react'
 
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
+import { Copyable } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
+import { Disclosure } from '@/components/disclosure'
 import { LinkedText } from '@/components/linked-text'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ListRow, RowLine } from '@/components/rows'
+import { RunDoing } from '@/components/run-doing'
 import { RunLink } from '@/components/run-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { rowLineFrom } from '@/lib/rows'
 import { RUN_TEXT } from '@/lib/run-state'
 import type { TicketRuns } from '@/lib/run-state'
@@ -22,7 +25,8 @@ const WORKTREES_SHOWN = 3
 
 /**
  * Runs, one row each: state, the ticket and its title, the run's id (opening its page) and kind, cost, when, and what
- * it said. `ticket` leaves out the ticket and its title, for a ticket's own page.
+ * it said, or while it runs, its latest tool call. `ticket` leaves out the ticket and its title, for a ticket's own
+ * page.
  */
 export function RunsTable({ runs, ticket = true }: { runs: Run[]; ticket?: boolean }) {
     return (
@@ -50,7 +54,7 @@ export function TicketRunsTable({ groups }: { groups: TicketRuns[] }) {
 
 function RunRow({ run, ticket }: { run: Run; ticket: boolean }) {
     return (
-        <ListRow kind={ticket ? 'run' : 'own-run'} data-testid={`run-${run.id}`}>
+        <ListRow kind={ticket ? 'run' : 'own-run'} className="group/copy" data-testid={`run-${run.id}`}>
             <RunBody run={run} ticket={ticket} />
         </ListRow>
     )
@@ -61,21 +65,17 @@ function TicketRow({ group }: { group: TicketRuns }) {
     const { latest, earlier } = group
     return (
         <Collapsible asChild open={open} onOpenChange={setOpen}>
-            <ListRow kind="run" data-testid={`run-${latest.id}`}>
+            <ListRow kind="run" className="group/copy" data-testid={`run-${latest.id}`}>
                 <RunBody run={latest} ticket />
                 {earlier.length > 0 && (
                     <>
                         <RowLine from="title">
-                            <CollapsibleTrigger
-                                className={cn(
-                                    'rounded-sm font-mono text-xs text-accent underline-offset-4 outline-none',
-                                    'hover:underline focus-visible:ring-3 focus-visible:ring-ring/50',
-                                )}
-                            >
-                                {open
-                                    ? 'hide earlier runs'
-                                    : `${earlier.length} earlier ${earlier.length === 1 ? 'run' : 'runs'}`}
-                            </CollapsibleTrigger>
+                            <Disclosure
+                                open={open}
+                                what={`${earlier.length} earlier ${earlier.length === 1 ? 'run' : 'runs'}`}
+                                // In line with the title above it, and no taller than a line of text.
+                                className="-my-1 -ml-2"
+                            />
                         </RowLine>
                         <CollapsibleContent asChild>
                             <ul
@@ -132,6 +132,11 @@ function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
             </span>
             <RunReadouts run={run} />
             {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className={rowLineFrom(under)} />}
+            {run.activity && (
+                <RowLine from={under}>
+                    <RunDoing activity={run.activity} />
+                </RowLine>
+            )}
             {(run.prs.length > 0 || run.worktrees.length > 0 || run.session_id) && (
                 <RowLine from={under} className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs">
                     {run.prs.map((pr) => (
@@ -139,9 +144,9 @@ function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
                     ))}
                     <RunWorktrees paths={run.worktrees} />
                     {run.session_id && (
-                        <span className="text-muted-foreground" title="its transcript is on the run's page">
-                            session {run.session_id}
-                        </span>
+                        <Copyable text={run.session_id} label="session id" reveal className="text-muted-foreground">
+                            <span title="its transcript is on the run's page">session {run.session_id}</span>
+                        </Copyable>
                     )}
                 </RowLine>
             )}

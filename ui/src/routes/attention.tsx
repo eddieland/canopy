@@ -8,6 +8,7 @@ import { attentionQuery, choreQuery, pullRequestQuery, ticketQuery, ticketsQuery
 import type { AttentionItem } from '@/api/types'
 import { AllClear } from '@/components/all-clear'
 import { Age } from '@/components/age'
+import { ChoreFindingText } from '@/components/chore-finding'
 import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
 import { Conversation } from '@/components/conversation'
@@ -16,13 +17,14 @@ import { useDismissFinding } from '@/components/dismiss-finding'
 import { GrantLimits } from '@/components/grant-limits'
 import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
-import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton, ThreadScroll } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReplyForm } from '@/components/reply-form'
 import { InlineCode } from '@/components/rich-text'
 import { Chip, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
 import { TicketLink } from '@/components/ticket-link'
+import { TicketTitle } from '@/components/ticket-title'
 import { WorkingNow } from '@/components/working-now'
 import { answered } from '@/lib/acknowledged'
 import { bySeverity, severity } from '@/lib/attention'
@@ -32,6 +34,7 @@ import type { Listed } from '@/lib/leaving'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
 import { phaseLabel, phaseWord } from '@/lib/phase'
+import type { Tone } from '@/lib/tone'
 
 interface AttentionSearch {
     item?: string | undefined
@@ -47,12 +50,12 @@ export const Route = createFileRoute('/attention')({
     component: AttentionPage,
 })
 
-// Written out so Tailwind finds them: what is broken in the failure color, what waits on the operator in theirs.
-const TONE: Record<Severity, string> = {
-    failed: 'border-status-failed/40 bg-status-failed/10 text-status-failed',
-    waiting: 'border-status-blocked/40 bg-status-blocked/10 text-status-blocked',
-    other: '',
-    finding: '',
+// A reason chip's tone: what is broken in the failure color, what waits on the operator in theirs, the rest plain.
+const TONE: Record<Severity, Tone> = {
+    failed: 'failed',
+    waiting: 'blocked',
+    other: 'plain',
+    finding: 'plain',
 }
 
 // How long a cleared item's row plays its exit before it is let go: `animate-leave` in src/index.css, and a little
@@ -194,7 +197,7 @@ function Row({ item, selected, done }: { item: AttentionItem; selected: boolean;
     )
 }
 
-/** What a row of the list says: the item's reason, its subject and age, and its detail. */
+/** What a row of the list says: the item's reason, its subject and age, its ticket's title, and its detail. */
 function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
     return (
         <>
@@ -207,7 +210,9 @@ function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
                 </span>
                 <Age at={item.since} className="ml-auto" />
             </span>
-            <span className="line-clamp-2 text-sm break-words">
+            {/* The title is the row's name and the detail its preview, as an inbox's subject over its first line. */}
+            {item.ticket_key !== null && <TicketTitle title={item.ticket_title} className="font-semibold" />}
+            <span className="line-clamp-2 text-sm break-words text-muted-foreground">
                 <InlineCode text={item.detail} links={false} />
             </span>
         </>
@@ -219,12 +224,12 @@ function RowContent({ item, done }: { item: AttentionItem; done: boolean }) {
  * chip says `finding` and the head line names the id beside its chore.
  */
 function ReasonChip({ item }: { item: AttentionItem }) {
-    return item.finding ? <Chip>finding</Chip> : <Chip className={TONE[severity(item)]} word={item.reason} />
+    return item.finding ? <Chip>finding</Chip> : <Chip tone={TONE[severity(item)]} word={item.reason} />
 }
 
 /** On an `awaiting_reply` item the operator has answered: it stays until a tick reads the answer. */
 function Answered() {
-    return <Chip className="border-status-running/40 text-status-running">answered</Chip>
+    return <Chip tone="running">answered</Chip>
 }
 
 /**
@@ -248,17 +253,22 @@ function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
     )
 }
 
-/** What the item says: its reason, subject, and age, an action beside them, and its detail with any notice below. */
+/**
+ * What the item says: its reason, subject, and age, an action beside them, and its detail, or a `body` in its place,
+ * with any notice below.
+ */
 function Head({
     item,
     done,
     action,
     notice,
+    body,
 }: {
     item: AttentionItem
     done: boolean
     action?: ReactNode
     notice?: ReactNode
+    body?: ReactNode
 }) {
     return (
         <div className="flex flex-col gap-2 border-b p-3">
@@ -269,9 +279,11 @@ function Head({
                 <Age at={item.since} className="ml-auto" />
                 {action}
             </div>
-            <p className="text-sm break-words whitespace-pre-wrap">
-                <InlineCode text={item.detail} />
-            </p>
+            {body ?? (
+                <p className="text-sm break-words whitespace-pre-wrap">
+                    <InlineCode text={item.detail} />
+                </p>
+            )}
             {done && (
                 <p className="text-sm text-muted-foreground" data-testid="answered-note">
                     You answered it. The item leaves at the next tick, when the loop reads your reply.
@@ -282,15 +294,27 @@ function Head({
     )
 }
 
-/** A chore's finding's head: as any item's, with the button that dismisses it beside its age. */
+/**
+ * A chore's finding's head: as any item's, with the button that dismisses it beside its age, and the finding as its
+ * chore's page shows it: the item's detail runs its title and link together and leaves out what it says of itself.
+ * Until the chore's page is read, or once the finding is gone from it, the item's detail stands in.
+ */
 function FindingHead({ item, chore, done }: { item: AttentionItem; chore: string; done: boolean }) {
     const { button, notice } = useDismissFinding(chore, item.reason, false)
-    return <Head item={item} done={done} action={button} notice={notice} />
+    const { data } = useQuery(choreQuery(chore))
+    const finding = data?.chore.findings.find((f) => f.id === item.reason)
+    const body = finding === undefined ? undefined : <ChoreFindingText finding={finding} />
+    return <Head item={item} done={done} action={button} notice={notice} body={body} />
 }
 
 function Subject({ item }: { item: AttentionItem }) {
     if (item.ticket_key !== null) {
-        return <TicketLink ticketKey={item.ticket_key} />
+        return (
+            <>
+                <TicketLink ticketKey={item.ticket_key} className="shrink-0" />
+                <TicketTitle title={item.ticket_title} className="font-semibold" />
+            </>
+        )
     }
     if (item.chore !== null) {
         return (
@@ -370,14 +394,16 @@ function Thread({ ticketKey }: { ticketKey: string }) {
                     </span>
                 </span>
             </PanelHeader>
-            {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
-            {order === 'newest' && <WorkingNow ticketKey={ticket.key} />}
-            {messages.length === 0 ? (
-                <Empty>no messages yet: what you and its workers say shows here</Empty>
-            ) : (
-                <Conversation messages={ordered('conversation', order, messages)} waiting={ticket.awaiting} />
-            )}
-            {order === 'oldest' && <WorkingNow ticketKey={ticket.key} />}
+            <ThreadScroll key={ticket.key} label="Conversation" end={order === 'oldest' ? 'bottom' : 'top'}>
+                {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
+                {order === 'newest' && <WorkingNow ticketKey={ticket.key} />}
+                {messages.length === 0 ? (
+                    <Empty>no messages yet: what you and its workers say shows here</Empty>
+                ) : (
+                    <Conversation messages={ordered('conversation', order, messages)} waiting={ticket.awaiting} />
+                )}
+                {order === 'oldest' && <WorkingNow ticketKey={ticket.key} />}
+            </ThreadScroll>
             <ReplyForm
                 key={ticket.key}
                 target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}

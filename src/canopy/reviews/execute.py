@@ -16,9 +16,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import agent_output, conversation, db, definitions, hostgit, outbox, review_diff, treehouse
+from canopy.core import agent_output, conversation, db, definitions, hostgit, outbox, pools, review_diff
 from canopy.core import review_result as result
 from canopy.core.config import render_command
+from canopy.core.vocab import PoolKind, ReviewRunStatus
 from canopy.infra import logs, procs, stopping
 from canopy.reviews import start
 
@@ -46,7 +47,7 @@ class _SetupError(Exception):
 class Outcome:
     """How a review run ended: its status and the validated result, with a note when the harness decided the status."""
 
-    status: str
+    status: ReviewRunStatus
     result: result.ReviewResult | None
     note: str = ""
 
@@ -70,31 +71,31 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     run = db.get_review_run(ctx.conn, run_id)
     if run is None:
         raise ReviewError(f"no review run {run_id}")
-    if not db.claim_review_run(ctx.conn, run_id, os.getpid()):
+    if not db.claim_run(ctx.conn, "review_runs", run_id, os.getpid()):
         raise ReviewError(f"review run {run_id} is not waiting to start: it is {run['status']} or another has it")
     log = logs.for_tick(int(run["tick_id"]))
     fields = {"review_run_id": run_id, "pr": run["pr_url"], "sha": run["sha"]}
     log.info("review run started", extra=fields)
-    outcome = Outcome("crashed", None, "the review run stopped before its reviewer finished")
+    outcome = Outcome(ReviewRunStatus.CRASHED, None, "the review run stopped before its reviewer finished")
     with stopping.StopOnSignal() as stop:
         try:
             outcome = _work(ctx, run, out, log)
         except stopping.Stopped as e:
-            outcome = Outcome("crashed", None, str(e))
+            outcome = Outcome(ReviewRunStatus.CRASHED, None, str(e))
         except _Unreviewable as e:
-            outcome = Outcome("failed", None, str(e))
+            outcome = Outcome(ReviewRunStatus.FAILED, None, str(e))
         except _SetupError as e:
-            outcome = Outcome("crashed", None, str(e))
+            outcome = Outcome(ReviewRunStatus.CRASHED, None, str(e))
             log.error("review run not started", extra={**fields, "error": str(e)})  # noqa: TRY400
         except Exception as e:
-            outcome = Outcome("crashed", None, f"{type(e).__name__}: {e}")
+            outcome = Outcome(ReviewRunStatus.CRASHED, None, f"{type(e).__name__}: {e}")
             log.exception("review run failed", extra=fields)
         finally:
             stop.armed = False
             clean_up(ctx, run, log)
             stored = outcome.result_json()
             ended = outbox.review_ended(ctx.config, run, outcome.status, stored)
-            if not db.finish_review_run(ctx.conn, run_id, outcome.status, stored, event=ended):
+            if not db.finish_run(ctx.conn, "review_runs", run_id, outcome.status, stored, event=ended):
                 log.warning("review run was already closed; its outcome is not recorded", extra=fields)
             procs.drop_lifelock(Path(run["log_path"]))
             log.info("review run finished", extra={**fields, "status": outcome.status})
@@ -109,11 +110,11 @@ def judged(ctx: Context, parsed: result.ReviewResult) -> Outcome:
         as normal, with a note saying so.
     """
     if parsed.status != "done":
-        return Outcome("failed", parsed)
+        return Outcome(ReviewRunStatus.FAILED, parsed)
     if parsed.impact == "low" and not ctx.config.review.low_impact.strip():
         note = "reported low impact, but review.low_impact is not set; recorded as normal"
-        return Outcome("done", parsed.model_copy(update={"impact": "normal"}), note)
-    return Outcome("done", parsed)
+        return Outcome(ReviewRunStatus.DONE, parsed.model_copy(update={"impact": "normal"}), note)
+    return Outcome(ReviewRunStatus.DONE, parsed)
 
 
 def clean_up(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> None:
@@ -124,14 +125,10 @@ def clean_up(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> None:
         return
     fields = {"review_run_id": run["id"], "slot": run["slot_path"]}
     try:
-        outcome = treehouse.return_slot(
-            ctx.runner,
-            Path(str(run["slot_path"])),
-            lease_id=str(run["lease_id"]),
-            lease_holder=str(run["lease_holder"]),
-            pool=ctx.workspace.pool(run["repo"]),
+        outcome = ctx.pool_of(PoolKind(run["pool"]), run["repo"]).return_slot(
+            Path(str(run["slot_path"])), lease_id=str(run["lease_id"]), lease_holder=str(run["lease_holder"])
         )
-    except treehouse.TreehouseError as e:
+    except pools.PoolError as e:
         # The next tick's reconcile returns a canopy lease no running run holds.
         log.error("review slot not returned", extra={**fields, "error": str(e)})  # noqa: TRY400
         return
@@ -154,12 +151,8 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     if shadowing:
         raise _SetupError(definitions.shadowing_message(shadowing))
     prompt = start.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
-    argv = render_command(
-        ctx.config.runtime.review_cmd,
-        prompt,
-        definitions.ensure(ctx.state_dir, ctx.config),
-        f"review {run['pr_url']}",
-    )
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config)
+    argv = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, f"review {run['pr_url']}")
     timeout_minutes = ctx.config.runtime.review_timeout_minutes
     log.info(
         "running reviewer",
@@ -172,7 +165,7 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
         # The operator's commands refuse inside canopy's own runs (DESIGN §22).
         env={conversation.RUN_ID_ENV: f"review-{run_id}"},
         timeout=timeout_minutes * 60,
-        on_start=lambda pid: db.set_review_agent_pid(ctx.conn, run_id, pid),
+        on_start=lambda pid: db.set_agent_pid(ctx.conn, "review_runs", run_id, pid),
     )
     out.write(f"--- reviewer stdout ---\n{done.stdout}\n--- reviewer stderr ---\n{done.stderr}\n")
     out.write(f"--- reviewer exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
@@ -180,14 +173,16 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
     output = agent_output.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
-        db.set_review_run_report(ctx.conn, run_id, output.session_id, output.usage)
-        spent = {"cost_usd": output.usage.cost_usd, "tokens": output.usage.tokens} if output.usage else {}
+        db.set_run_report(
+            ctx.conn, "review_runs", run_id, output.session_id, output.usage, digest=snapshot.name, tools=output.tools
+        )
+        spent = output.usage.spent() if output.usage else {}
         log.info("reviewer reported", extra={"review_run_id": run_id, "session_id": output.session_id, **spent})
     if done.timed_out:
-        return Outcome("timeout", None, f"the reviewer timed out after {timeout_minutes} minutes")
+        return Outcome(ReviewRunStatus.TIMEOUT, None, f"the reviewer timed out after {timeout_minutes} minutes")
     parsed = result.parse(output.text)
     if parsed is None:
-        return Outcome("unknown", None, "the reviewer's last line was not a valid result")
+        return Outcome(ReviewRunStatus.UNKNOWN, None, "the reviewer's last line was not a valid result")
     return judged(ctx, parsed)
 
 

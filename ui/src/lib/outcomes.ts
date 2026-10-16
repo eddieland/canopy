@@ -3,8 +3,11 @@ import type {
     Dismissed,
     Forgot,
     Granted,
+    NoticeChanged,
     Replied,
     ReviewDismissed,
+    ReviewRequested,
+    ReviewRequestStopped,
     ReviewSent,
     Started,
     Stopped,
@@ -115,15 +118,43 @@ export function repliedText(key: string, replied: Replied): string {
     return `Message ${replied.message_id} on ${key} already says this${answered}; nothing new recorded.`
 }
 
+/** What setting a notice did, as `canopy notice` says it: the runs that hear it. The banner says until when. */
+export function noticeSetText(changed: NoticeChanged): string {
+    if (changed.loop.notice === null) {
+        return 'The notice lapsed already: runs dispatched from now on hear none.'
+    }
+    return 'Notice set: runs dispatched from now on hear it until it lapses. The loop ticks soon.'
+}
+
 /** What a reload found, as the loop's terminal says it: the keys that changed, when the loop runs on them, and which
- * wait for a restart. */
+ * wait for a restart. With nothing changed there is nothing to apply, so it says only that. */
 export function reloadedText(reload: ConfigReload): string {
-    const what = reload.changed.length === 0 ? 'Nothing changed' : `${reload.changed.join(', ')} changed`
+    if (reload.changed.length === 0) {
+        return 'Nothing changed: the config files say what the loop already runs on.'
+    }
+    const what = `${reload.changed.join(', ')} changed`
     const when = reload.after_tick
-        ? 'The loop reads it again once the running tick ends.'
-        : 'The loop runs on it from now on.'
+        ? 'The loop runs on the new config once the running tick ends.'
+        : 'The loop runs on the new config now.'
     const count = reload.restart.length
     const restart =
         count === 0 ? '' : ` ${reload.restart.join(', ')} take${count === 1 ? 's' : ''} effect on a restart.`
     return `${what}. ${when}${restart}`
+}
+
+/** What a review request did, as `canopy start URL --review` says it: new, or already open. */
+export function reviewRequestedText(url: string, requested: ReviewRequested): string {
+    if (requested.already) {
+        return `${url} was already requested for review.`
+    }
+    return `${url} is requested for review. The next tick reviews its head, once.`
+}
+
+/** What stopping a review request did, as `canopy stop URL` says it, and a review of the PR still running. */
+export function reviewStoppedText(url: string, stopped: ReviewRequestStopped): string {
+    const head = `${url}'s review request is stopped; nothing reviews it now.`
+    if (stopped.running_review === null) {
+        return head
+    }
+    return `${head} Review run ${stopped.running_review} of it is still running and will finish.`
 }

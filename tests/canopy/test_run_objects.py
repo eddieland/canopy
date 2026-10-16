@@ -1,25 +1,31 @@
-"""The per-run object directory and how a run's slots are tidied (DESIGN §8, HOST_ISOLATION §4.2).
+"""The per-run object directory and how a run's slots are tidied (DESIGN §8, §24).
 
 A sandboxed worker cannot write the git directory its slot shares, so its new objects go to the run's own directory,
 which a sandbox wrapper names to git. These tests play that wrapper in the fake worker's commands: they set git's
 variables from `CANOPY_GIT_OBJECTS`, as `canopy-sandbox` does (`test_sandbox_wrapper.py`).
 """
 
-import os
 import sqlite3
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
 from canopy.cli.main import main
 from canopy.core import db, hostgit
 from canopy.infra.procs import SubprocessRunner
-from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, slot_of, worker_does
+from tests.canopy.helpers import (
+    DEAD_PID,
+    InlineRunner,
+    in_tick,
+    overseer_does,
+    pool,
+    slot_of,
+    waits,
+    worker_does,
+)
 from tests.conftest import CanopyEnv, GitPool, git
 
 BRANCH = "agent/PROJ-1-work"
-DEAD_PID = 4_194_305
 # What a sandbox wrapper does before git runs: new objects to the run's directory, the slot's shared ones read through.
 SANDBOXED = (
     'export GIT_OBJECT_DIRECTORY="$CANOPY_GIT_OBJECTS" '
@@ -30,11 +36,6 @@ WORKER = (
     SANDBOXED + "git -c core.hooksPath=/dev/null commit --quiet --allow-empty -m 'PROJ-1: work' && "
     "git update-ref refs/worktree/mine HEAD && git fetch --quiet --refmap= origin main"
 )
-
-
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return journal(canopy_env)
 
 
 def dispatch(conn: sqlite3.Connection, runner: InlineRunner) -> int:
@@ -115,11 +116,7 @@ def sandboxed_worker_then_kill(canopy_env: CanopyEnv, conn: sqlite3.Connection, 
     git("checkout", "--quiet", "--detach", "refs/remotes/origin/main", cwd=slot)
     objects = objects_of(canopy_env, run_id)
     objects.mkdir(mode=0o700)
-    # Without automatic maintenance: newer git (2.55 on CI) starts it in the background after the commit and the fetch,
-    # and its `maintenance.lock` comes and goes in the run's object directory while a test lists it.
-    no_maintenance = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": "maintenance.auto", "GIT_CONFIG_VALUE_0": "false"}
-    env = {"CANOPY_GIT_OBJECTS": str(objects), **no_maintenance}
-    done = SubprocessRunner().run(["sh", "-c", WORKER], cwd=slot, env=env)
+    done = SubprocessRunner().run(["sh", "-c", WORKER], cwd=slot, env={"CANOPY_GIT_OBJECTS": str(objects)})
     assert done.ok, done.stderr
     conn.execute("UPDATE runs SET pid = ? WHERE id = ?", (DEAD_PID, run_id))
 
@@ -146,7 +143,7 @@ def test_reconcile_tidies_the_slots_of_a_killed_run(
     elif rewrites == "commondir":
         (own / "commondir").write_text("/somewhere/else\n")
 
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does(*waits("PROJ-1")):
         assert main(["tick"]) == 0
 
         run = db.get_run(conn, run_id)

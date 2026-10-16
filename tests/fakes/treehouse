@@ -19,7 +19,8 @@ State lives in the JSON file named by $FAKE_TREEHOUSE_STATE; a missing file is a
     pool_dir    str, default "<state file dir>/pool". New slot directories are created under it.
     slots       list of {name, path, status, lease_id, lease_holder, leased_at, base_branch}.
                 Tests may set status to "dirty" or "in-use" to simulate those states, and `branch` (a slot without
-                one is detached) and `processes` (a list of {pid, name}) for what `status --json` reports.
+                one is detached) and `processes` (a list of {pid, name}) for what `status --json` reports. `return`
+                clears `processes`, as treehouse ends them.
     skip_reuse  list of str, default []. Slot paths `get` never reuses though available, as treehouse declines a
                 slot it cannot prove is this clone's.
     unmerged    list of str, default []. Slot paths `destroy` keeps as unmerged, though available.
@@ -185,7 +186,8 @@ def cmd_return(state: dict[str, Any], args: argparse.Namespace) -> int:
     if slot["status"] == "dirty" and not args.force:
         print(f"treehouse: worktree has uncommitted changes; retry: treehouse return --force {target}", file=sys.stderr)
         return 3
-    slot.update(status="available", lease_id="", lease_holder="", leased_at=None)
+    # treehouse ends the processes in a slot before it resets and frees it.
+    slot.update(status="available", lease_id="", lease_holder="", leased_at=None, processes=[])
     slot.pop("base_branch", None)
     return 0
 

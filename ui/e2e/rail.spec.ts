@@ -22,6 +22,23 @@ test('the rail lists the runs working now, the running ones first, on every page
     await expect(page.getByTestId('rail-run-41')).toBeVisible()
 })
 
+test('the nav lists the sections by how often the operator opens them, Settings last', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link')).toHaveText([
+        /^Attention/u,
+        'Tickets',
+        'Pull requests',
+        'Reviews',
+        'Runs',
+        'Chores',
+        'Spend',
+        'Ticks',
+        'Worktrees',
+        'Settings',
+    ])
+})
+
 test('the rail shows the spend of the last day and the last 30, and the version at its foot', async ({ page }) => {
     const spend = (await (await page.request.get('api/spend')).json()) as { day: { cost_usd: number } }
     await page.goto('ticks')

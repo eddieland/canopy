@@ -9,7 +9,8 @@ found the advisory the attention list shows and which has a note from the operat
 ticks recorded decisions about tickets, a unit, a repository, a chore, and a PR (§6). The workspace's policy allows one
 fix-ci and two reviews, so ABC-100 is at its fix-ci limit in web and PR 88 at its review limit (§22's grants). Runs 39
 and 40, tick 2, and chore run 2 left their sessions' events in their logs, as `--format json` prints them, for their
-transcripts (DESIGN §22).
+transcripts (DESIGN §22), and the running runs 41 and 43 the events their workers printed so far, with the latest tool
+call on each one's row (§8).
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -21,8 +22,9 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, config, conversation, db, treehouse, workspace
+from canopy.core import chore_view, config, conversation, db, pools, workspace
 from canopy.core.items import Item
+from canopy.core.vocab import RunStatus
 from canopy.infra import logs, resources
 from canopy.serve import mock_reviews
 from canopy.serve.backend import Backend, Granted, Limit, Reloading
@@ -36,6 +38,8 @@ if TYPE_CHECKING:
 T0 = datetime(2026, 10, 8, 12, 0, tzinfo=UTC)
 # The run whose cost `changes` moves.
 LIVE_RUN = 41
+# The running runs, whose logs hold their workers' stdout so far.
+RUNNING_LOGS = ("41", "43")
 
 _MAP_TOML = """\
 [workspace]
@@ -115,7 +119,7 @@ ATTENTION: tuple[Item, ...] = (
     Item(
         "ABC-100",
         "worker_failed",
-        "run 40 (fix-ci, agent/ABC-100-flaky-test) ended failed: the worker exited 1 without a result line; "
+        "run:40 (fix-ci, agent/ABC-100-flaky-test) ended failed: the worker exited 1 without a result line; "
         "log /home/op/.canopy/runs/40.log",
         at(-70),
     ),
@@ -153,7 +157,7 @@ def slot_path(root: Path, repo: str, slot: int) -> str:
     return str(root / ".treehouse" / _POOLS[repo] / str(slot) / repo)
 
 
-def _pools(root: Path) -> dict[str, list[treehouse.Slot]]:
+def _pools(root: Path) -> dict[str, list[pools.Slot]]:
     """What `treehouse status --json` would show for each cloned repository's pool.
 
     web: the two running runs' slots, a shell someone opened in a third, one idle, and one dirty, five for a declared
@@ -198,7 +202,7 @@ def _pools(root: Path) -> dict[str, list[treehouse.Slot]]:
     }
     return {
         repo: [
-            treehouse.Slot.model_validate({"name": str(n), "path": slot_path(root, repo, n), **slot})
+            pools.Slot.model_validate({"name": str(n), "path": slot_path(root, repo, n), **slot})
             for n, slot in enumerate(slots, start=1)
         ]
         for repo, slots in found.items()
@@ -226,10 +230,10 @@ def seed(directory: Path) -> Backend:
     ws = workspace.load(root)
     cfg = config.load(root, user_file)
     workspace.ensure_state_dir(ws.state_dir)
-    pools = _pools(root)
+    slots_by_repo = _pools(root)
 
-    def slots(_ctx: Context, pool: treehouse.Pool) -> list[treehouse.Slot]:
-        return list(pools.get(pool.cwd.name, [])) if pool.cwd is not None else []
+    def slots(_ctx: Context, repo: str) -> list[pools.Slot]:
+        return list(slots_by_repo.get(repo, []))
 
     backend = Backend(
         config=cfg,
@@ -273,7 +277,7 @@ def _end_run(ctx: Context, run: sqlite3.Row) -> bool:
     if current is None or current["status"] != "running":
         return False
     note = json.dumps({"harness": "the operator stopped the ticket (mock: no process was killed)"})
-    return conversation.close_run(ctx.conn, ctx.config, current, "stopped", note)
+    return conversation.close_run(ctx.conn, ctx.config, current, RunStatus.STOPPED, note)
 
 
 def _reload(_ctx: Context) -> Reloading:
@@ -384,6 +388,12 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             ),
             (2, at(-60), at(-59), "mock tick", 8, "ses_tick2", 0.31, 1, "timer"),
         ],
+    )
+    # Their overseers' tokens, in the proportions the runs' are below.
+    conn.execute(
+        "UPDATE ticks SET tokens_input = CAST(cost_usd * 40000 AS INTEGER), "
+        "tokens_output = CAST(cost_usd * 6000 AS INTEGER), tokens_cache_read = CAST(cost_usd * 400000 AS INTEGER), "
+        "tokens_peak_context = CAST(cost_usd * 60000 AS INTEGER)"
     )
     tickets = (
         # key, title (None: not named yet), phase, branch, last seen
@@ -498,8 +508,9 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     for run_id, key, kind, branch, started, ended, status, result, private, cost in runs:
         conn.execute(
             "INSERT INTO runs (id, tick_id, ticket_key, kind, branch, started_at, ended_at, status, result_json, "
-            "log_path, private, session_id, cost_usd, tokens_input, tokens_output) "
-            "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "log_path, private, session_id, cost_usd, tokens_input, tokens_output, tokens_cache_read, "
+            "tokens_peak_context) "
+            "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 run_id,
                 key,
@@ -515,7 +526,19 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
                 cost,
                 int(cost * 40_000),
                 int(cost * 6_000),
+                int(cost * 400_000),
+                int(cost * 60_000),
             ),
+        )
+    # What each running run's worker did last, as `_run` records it from the events its log holds (_transcripts).
+    activities = (
+        (LIVE_RUN, "bash", "npm test -- login", 27),
+        (43, "bash", "cat /home/op/acme/.treehouse/web-3f9c2a1b/2/web/.github/workflows/ci.yml", 29),
+    )
+    for run_id, tool, did, minutes in activities:
+        conn.execute(
+            "UPDATE runs SET activity_tool = ?, activity = ?, activity_at = ? WHERE id = ?",
+            (tool, did, at(minutes), run_id),
         )
     run_slots = (
         # run, repo, slot, lease, holder: run 43 is joint, a slot in web and one in mobile; 37 and 40 ended long ago
@@ -614,6 +637,7 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     )
     _chore_fixtures(conn, root)
     _decisions(conn)
+    _tools(conn)
 
 
 def _chore_fixtures(conn: sqlite3.Connection, root: Path) -> None:
@@ -643,7 +667,8 @@ def _chore_fixtures(conn: sqlite3.Connection, root: Path) -> None:
     for run_id, name, started, ended, status, result, cost in chore_runs:
         conn.execute(
             "INSERT INTO chore_runs (id, tick_id, chore, started_at, ended_at, status, result_json, log_path, "
-            "session_id, cost_usd, tokens_input, tokens_output) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "session_id, cost_usd, tokens_input, tokens_output, tokens_cache_read, tokens_peak_context) "
+            "VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 run_id,
                 name,
@@ -656,6 +681,8 @@ def _chore_fixtures(conn: sqlite3.Connection, root: Path) -> None:
                 cost,
                 int(cost * 40_000),
                 int(cost * 6_000),
+                int(cost * 400_000),
+                int(cost * 60_000),
             ),
         )
     conn.execute(
@@ -712,6 +739,41 @@ def _decisions(conn: sqlite3.Connection) -> None:
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (tick_id, at(when), key, repo, chore, pr, action, rationale),
         )
+
+
+def _tools(conn: sqlite3.Connection) -> None:
+    """What the agent runs that ended called, by tool (DESIGN §13); a running run has recorded none yet.
+
+    The overseer's PR reads and tracker searches return the most, as MEASUREMENTS 2026-10-13 found.
+    """
+    calls = (
+        # table, run, tool, calls, errors, characters returned
+        ("ticks", 1, "github_pull_request_read", 14, 0, 182_000),
+        ("ticks", 1, "jira_search", 3, 0, 81_000),
+        ("ticks", 1, "bash", 9, 1, 6_400),
+        ("ticks", 2, "github_pull_request_read", 11, 0, 143_000),
+        ("ticks", 2, "jira_search", 2, 0, 54_000),
+        ("ticks", 2, "bash", 6, 0, 3_900),
+        ("runs", 37, "bash", 41, 3, 96_000),
+        ("runs", 37, "read", 22, 0, 71_000),
+        ("runs", 37, "edit", 9, 1, 2_100),
+        ("runs", 38, "bash", 18, 0, 37_000),
+        ("runs", 38, "read", 12, 0, 40_000),
+        ("runs", 39, "bash", 27, 2, 58_000),
+        ("runs", 39, "read", 15, 0, 49_000),
+        ("runs", 39, "github_pull_request_read", 2, 0, 21_000),
+        ("runs", 40, "bash", 33, 6, 88_000),
+        ("runs", 42, "read", 8, 0, 19_000),
+        ("chore_runs", 1, "bash", 4, 0, 12_000),
+        ("chore_runs", 2, "bash", 6, 1, 15_000),
+        ("chore_runs", 3, "read", 3, 0, 4_200),
+        ("review_runs", 1, "read", 9, 0, 33_000),
+        ("review_runs", 2, "read", 7, 0, 26_000),
+        ("review_runs", 4, "bash", 5, 0, 8_800),
+    )
+    conn.executemany(
+        "INSERT INTO run_tools (run_table, run_id, tool, calls, errors, result_chars) VALUES (?, ?, ?, ?, ?, ?)", calls
+    )
 
 
 def _event(kind: str, session: str, minutes: float, **fields: object) -> str:
@@ -835,10 +897,11 @@ WARN  2026-10-08T11:00:01 +1043ms service=mcp key=jira error=timed out after 100
 
 
 def _transcripts(state_dir: Path) -> None:
-    """Write the events of run 39's, run 40's, tick 2's, and chore run 2's sessions where the loop would write them."""
+    """Write the events of runs 39 to 43's, tick 2's, and chore run 2's sessions where the loop would write them."""
     # The worktree run 39 worked in, as the operator's machine names it: the same on every start, for screenshots.
     web = "/home/op/acme/.treehouse/web-3f9c2a1b/3/web"
-    s39, s40, s2, c2 = "ses_mock39", "ses_mock40", "ses_tick2", "ses_chore2"
+    s39, s40, s41, s43 = "ses_mock39", "ses_mock40", "ses_mock41", "ses_mock43"
+    s2, c2 = "ses_tick2", "ses_chore2"
     run_39 = [
         _start(s39, -90),
         _text(s39, -89.9, "I'll read the ticket, then the search box."),
@@ -940,6 +1003,33 @@ def _transcripts(state_dir: Path) -> None:
         _start(s40, -72.4),
         _event("error", s40, -70.1, error={"name": "APIError", "data": {"message": "Rate limited: retry after 60s"}}),
     ]
+    # The running runs print as they go (DESIGN §8): what each has done so far, its cost the seeded run's.
+    w41, w43 = "/home/op/acme/.treehouse/web-3f9c2a1b/1/web", "/home/op/acme/.treehouse/web-3f9c2a1b/2/web"
+    run_41 = [
+        _start(s41, 0.5),
+        _text(s41, 0.6, "I'll read the login form first, then its tests."),
+        _tool(
+            s41,
+            1,
+            "read",
+            {
+                "status": "completed",
+                "input": {"filePath": f"{w41}/src/login/LoginForm.tsx"},
+                "output": "export function LoginForm() {}",
+                "title": "src/login/LoginForm.tsx",
+            },
+        ),
+        _step(s41, 1.1, 0.2),
+        _start(s41, 1.2),
+        _done(s41, 27, "Run the login tests", "npm test -- login", "Tests: 4 passed, 4 total\n", seconds=12),
+        _step(s41, 27.1, 0.22),
+    ]
+    run_43 = [
+        _start(s43, 5.5),
+        _text(s43, 5.6, "The retry test fails on mobile only. Reading the workflow both repositories run."),
+        _done(s43, 29, "Read the CI workflow", f"cat {w43}/.github/workflows/ci.yml", "name: ci\n", seconds=1),
+        _step(s43, 29.1, 0.12),
+    ]
     chore_2 = [
         _start(c2, -240),
         _text(c2, -239.9, "Checking each repository's lockfile against the advisories."),
@@ -995,13 +1085,13 @@ def _transcripts(state_dir: Path) -> None:
         _text(s2, -59.1, '{"status": "ok", "summary": "mock tick"}'),
         _step(s2, -59, 0.31, reason="stop"),
     ]
-    # The running runs' logs exist, as `canopy dispatch` opens them, and hold no events until their runs end.
+    # The running chore run's log exists, as `canopy chores run` opens it, and holds no events until it ends.
     none: list[str] = []
     written = (
         ("runs", "39", run_39),
         ("runs", "40", run_40),
-        ("runs", "41", none),
-        ("runs", "43", none),
+        ("runs", "41", run_41),
+        ("runs", "43", run_43),
         ("ticks", "2", tick_2),
         ("chore-runs/deps", "2", chore_2),
         ("chore-runs/build-health", "4", none),
@@ -1011,6 +1101,9 @@ def _transcripts(state_dir: Path) -> None:
         stdout = "\n".join(lines)
         if not lines:
             text = ""
+        elif directory == "runs" and name in RUNNING_LOGS:
+            # A running worker's stdout so far: no stderr or exit until it ends.
+            text = f"--- worker stdout ---\n{stdout}\n"
         elif directory == "runs":
             text = f"--- worker stdout ---\n{stdout}\n--- worker stderr ---\n\n--- worker exit 0 ---\n"
         elif directory.startswith("chore-runs/"):

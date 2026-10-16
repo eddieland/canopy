@@ -2,33 +2,15 @@
 route. Reads only."""
 
 import json
-from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 
 from canopy.core import conversation, db, search
 from canopy.core.context import Context
-from canopy.infra import resources
-from canopy.serve import mock
+from canopy.core.vocab import ChoreRunStatus, RunStatus
 from canopy.serve.backend import Backend
-from tests.canopy.test_loop import context
-from tests.canopy.test_serve import SECRET, client
-from tests.canopy.test_web import running_run
-from tests.conftest import CanopyEnv
-
-
-@pytest.fixture
-def ctx(canopy_env: CanopyEnv) -> Iterator[Context]:
-    found = context(canopy_env)
-    db.migrate(found.conn, resources.migrations_dir())
-    yield found
-    found.conn.close()
-
-
-@pytest.fixture
-def backend(tmp_path: Path) -> Backend:
-    return mock.seed(tmp_path / "mock")
+from tests.canopy.helpers import running_run
+from tests.canopy.web_helpers import SECRET, client
 
 
 def where(found: search.Found) -> list[tuple[str, str | int | None, str | None]]:
@@ -49,12 +31,12 @@ def test_a_ticket_is_found_by_its_branchs_slug_the_words_of_its_title(ctx: Conte
 def test_a_runs_report_and_question_are_found_as_its_tickets_messages(ctx: Context) -> None:
     run = running_run(ctx, "PROJ-1")
     result = {"status": "blocked", "summary": "Retries now back off exponentially.", "question": "Cap at 30s?"}
-    db.finish_run(
+    db.finish_ticket_run(
         ctx.conn,
         run,
-        "blocked",
+        RunStatus.BLOCKED,
         json.dumps(result),
-        messages=conversation.run_messages("blocked", json.dumps(result)),
+        messages=conversation.run_messages(RunStatus.BLOCKED, json.dumps(result)),
     )
 
     found = search.search(ctx.conn, "BACK OFF")
@@ -68,14 +50,20 @@ def test_a_chore_runs_summary_and_findings_and_its_notes_are_found(ctx: Context)
     tick = db.start_tick(ctx.conn, dry_run=False)
     run = db.insert_chore_run(ctx.conn, tick_id=tick, chore="deps", logs_dir=ctx.state_dir / "chores")
     finding = {"id": "npm/lodash", "title": "lodash has an advisory", "detail": "Prototype pollution in merge."}
-    db.finish_chore_run(
-        ctx.conn, run, "ok", json.dumps({"status": "ok", "summary": "Checked 3", "findings": [finding]})
+    db.finish_run(
+        ctx.conn,
+        "chore_runs",
+        run,
+        ChoreRunStatus.OK,
+        json.dumps({"status": "ok", "summary": "Checked 3", "findings": [finding]}),
     )
     # A result that is not JSON, or whose findings are not objects, is passed over rather than failing the search.
     bad = db.insert_chore_run(ctx.conn, tick_id=tick, chore="deps", logs_dir=ctx.state_dir / "chores")
-    db.finish_chore_run(ctx.conn, bad, "failed", "not json")
+    db.finish_run(ctx.conn, "chore_runs", bad, ChoreRunStatus.FAILED, "not json")
     odd = db.insert_chore_run(ctx.conn, tick_id=tick, chore="deps", logs_dir=ctx.state_dir / "chores")
-    db.finish_chore_run(ctx.conn, odd, "ok", json.dumps({"summary": "odd", "findings": ["lodash", 3]}))
+    db.finish_run(
+        ctx.conn, "chore_runs", odd, ChoreRunStatus.OK, json.dumps({"summary": "odd", "findings": ["lodash", 3]})
+    )
     db.insert_message(
         ctx.conn, conversation.CHORE, "deps", source="operator", kind="reply", channel="web", body="Ignore lodash."
     )

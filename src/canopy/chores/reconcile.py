@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import db, outbox
-from canopy.infra import procs
+from canopy.core import dead_runs, outbox
+from canopy.core.vocab import ChoreRunStatus
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -23,16 +22,12 @@ def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
         The ids of the chore runs this call closed. A run another process closed first is not among them.
     """
     closed: list[int] = []
-    for row in db.running_chore_runs(ctx.conn):
-        if procs.running(Path(row["log_path"]), row["pid"]):
-            continue
+    for row in dead_runs.find(ctx.conn, "chore_runs"):
         fields = {"chore_run_id": row["id"], "chore": row["chore"], "pid": row["pid"]}
-        if row["agent_pid"] is not None and procs.kill_group(int(row["agent_pid"])):
-            log.warning("killed the chore agent `_chore` left behind", extra={**fields, "agent_pid": row["agent_pid"]})
+        dead_runs.kill_agent("chore_runs", row, log, fields)
         note = json.dumps({"harness": "the chore process is gone"})
-        ended = outbox.chore_ended(ctx.config, row, "crashed", note)
-        if db.finish_chore_run(ctx.conn, int(row["id"]), "crashed", note, event=ended):
-            procs.drop_lifelock(Path(row["log_path"]))
+        ended = outbox.chore_ended(ctx.config, row, ChoreRunStatus.CRASHED, note)
+        if dead_runs.crash(ctx.conn, "chore_runs", row, note, event=ended):
             closed.append(int(row["id"]))
             log.warning("chore process is gone; chore run marked crashed", extra=fields)
     return closed

@@ -56,3 +56,68 @@ test('a window the page does not offer reads as the week', async ({ page }) => {
     await expect(page.getByTestId('spend-window-7')).toHaveAttribute('data-state', 'on')
     await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(7)
 })
+
+test('the nav opens the spend page on the week, its item marked', async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const nav = page.getByRole('navigation', { name: 'Main' })
+    await nav.getByRole('link', { name: 'Spend' }).click()
+    await expect(page).toHaveURL(/\/spend$/u)
+    await expect(page.getByTestId('spend-window-7')).toHaveAttribute('data-state', 'on')
+    await expect(nav.getByRole('link', { name: 'Spend' })).toHaveAttribute('data-status', 'active')
+    await expect(page.getByTestId('nav-highlight')).toHaveClass(/\bbg-section-spend\/16\b/u)
+})
+
+test("30 days' table scrolls in its panel under its column names, and a week's shows whole", async ({ page }) => {
+    await page.goto('spend?days=30')
+    await settled(page)
+    const region = page.getByTestId('spend-table-scroll')
+    await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(30)
+    const scrolls = () => region.evaluate((el) => el.scrollHeight > el.clientHeight)
+    expect(await scrolls()).toBe(true)
+
+    // Scrolled to the oldest day, the column names stay at the region's top.
+    await region.evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
+    const head = await page.getByTestId('spend-table').locator('thead').boundingBox()
+    const box = await region.boundingBox()
+    expect(head?.y).toBeCloseTo(box?.y ?? Number.NaN, 0)
+
+    await page.getByTestId('spend-window-7').click()
+    await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(7)
+    expect(await scrolls()).toBe(false)
+})
+
+test("each ticket's and PR's own runs, the costliest first, open their pages beside the tickets done", async ({
+    page,
+}) => {
+    await page.goto('spend')
+    await settled(page)
+    // The mock journal marks no ticket done, so there is nothing to divide the spend by.
+    await expect(page.getByTestId('spend-done')).toHaveText('0')
+    await expect(page.getByTestId('spend-per-done')).toHaveText('–')
+    await expect(page.getByTestId('spend-day-2026-10-08').locator('td').last()).toHaveText('0')
+
+    const tickets = page.getByTestId('spend-ticket-table').locator('tbody tr')
+    await expect(tickets).toHaveCount(6)
+    // ABC-099's run and the two reviews of its PR.
+    await expect(tickets.first()).toHaveAttribute('data-testid', 'spend-ticket-ABC-099')
+    await expect(tickets.first().locator('td').nth(1)).toHaveText('$2.76')
+
+    const prs = page.getByTestId('spend-pull-request-table').getByTestId('spend-pull-request')
+    await expect(prs).toHaveCount(4)
+    await expect(prs.last()).toContainText('none')
+    await prs.first().getByRole('link', { name: 'acme/web#88', exact: true }).click()
+    await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
+})
+
+test('the tools whose calls returned the most, by kind, the most first', async ({ page }) => {
+    await page.goto('spend')
+    await settled(page)
+    const tools = page.getByTestId('spend-tool-table').getByTestId('spend-tool')
+    await expect(tools).toHaveCount(11)
+    // The overseer's PR reads over both mock ticks, then the workers' shell calls.
+    await expect(tools.first().getByRole('cell')).toHaveText(['overseer', '25', '0', '325.0k', '81.3k'])
+    await expect(tools.first().getByRole('rowheader')).toHaveText('github_pull_request_read')
+    await expect(tools.nth(1).getByRole('rowheader')).toHaveText('bash')
+    await expect(tools.nth(1).getByRole('cell')).toHaveText(['workers', '119', '11', '279.0k', '69.8k'])
+})

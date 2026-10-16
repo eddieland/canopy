@@ -1,14 +1,14 @@
 # Running workers in a sandbox
 
-How to run canopy's workers, setup commands, and chores inside an OS sandbox, so that a worker steered by text in a
-ticket cannot read your secrets, rewrite canopy's config, or reach hosts you did not list. Everything here is your own
-config and what `canopy sandbox setup` installs: the loop sees only the command templates, and none of this is
+How to run canopy's workers, setup commands, chores, and reviews inside an OS sandbox, so that a worker steered by text
+in a ticket cannot read your secrets, rewrite canopy's config, or reach hosts you did not list. Everything here is your
+own config and what `canopy sandbox setup` installs: the loop sees only the command templates, and none of this is
 required to run it.
-For why it works this way and what it was checked against, see [HOST_ISOLATION.md](HOST_ISOLATION.md); for what it
-does and does not defend against, TRUST_MODEL T4 and T6.
+For why it works this way and what it was checked against, see DESIGN §24, [Sandboxed
+runs](design/SANDBOXING.md); for what it does and does not defend against, TRUST_MODEL T4 and T6.
 
-The sandbox is opt-in and not yet proven: ROADMAP M26 is open. The canary that checks every property (HOST_ISOLATION
-§6) runs in CI on Linux and macOS; it has yet to pass on the operator's own machines. Try it on yours with the check below
+The sandbox is opt-in and not yet proven: ROADMAP M26 is open. The canary that checks every property (DESIGN §24)
+runs in CI on Linux and macOS; it has yet to pass on the operator's own machines. Try it on yours with the check below
 before you rely on it.
 
 ## What a sandboxed run can do
@@ -21,15 +21,19 @@ allowlist. Under the shipped templates:
 | | Allowed | Refused |
 | --- | --- | --- |
 | Read | the run's worktrees and their git directories, canopy's agent definitions, the runtime's files, the toolchains you list | the rest of `$HOME`: `~/.ssh`, cloud credentials, other repositories, `~/.config/canopy`, the workspace's `.canopy/` |
-| Write | the run's worktrees, its own HEAD and index, a per-run object directory, a per-run temp directory, the runtime's data | everything else, shared git state included: no branch moves, no hooks, no git config |
+| Write | the run's worktrees, its own HEAD and index, a per-run object directory, a per-run temp directory, the role's own cache directory, the runtime's data | everything else, shared git state included: no branch moves, no hooks, no git config, none of your own caches |
 | Network | the hosts in the template's allowlist | every other host, loopback, link-local, and cloud metadata addresses |
 
 A write the policy refuses under `$HOME` may look as if it worked: `srt` puts an empty, writable `tmpfs` over a denied
 directory, and what is written there is gone when the run ends. Nothing reaches the host.
 
 What it does not cover: a worker can still send anything to a host you allowed, with the credentials it has, such as
-your GitHub token; the overseer and the reviewer (`review_cmd`) are not wrapped; and the sandbox shares the kernel,
-so it is no defense against an exploit written to escape it (HOST_ISOLATION §2, §4.3, §4.4).
+your GitHub token; the overseer is not wrapped; and the sandbox shares the kernel,
+so it is no defense against an exploit written to escape it (DESIGN §24).
+
+**Not yet closed:** the templates let a run write OpenCode's data directory, `~/.local/share/opencode`, and what a run
+writes there can make the overseer's OpenCode, or your own, run code outside the sandbox at its next start (DESIGN
+§24, Open). Until that is closed, the sandbox does not hold against a worker that knows to do it.
 
 ## 1. Run `canopy sandbox setup`
 
@@ -40,7 +44,9 @@ canopy sandbox setup
 It installs what it can without root, prints what is left as `To do:` lines, and exits 1 until nothing is. Run it
 again after each upgrade of canopy: it keeps your templates and installs a new `srt` when canopy pins one. It:
 
-- copies the policy templates to `~/.config/canopy/sandbox/`, never over one that is there;
+- copies the policy templates to `~/.config/canopy/sandbox/`, never over one that is there, and says when one that is
+  there lets a run write in your own cache directory, as templates copied before `@CACHE@` let it write
+  `~/.cache/opencode` (section 3);
 - installs `srt`, pinned by a lockfile canopy ships, with `npm ci`, into `~/.local/share/canopy/sandbox-runtime/`. That
   needs Node 22.12 or later and npm on `PATH`. A worker cannot write there, and the wrapper prefers that `srt` to any
   other on `PATH`;
@@ -83,14 +89,20 @@ template for its role from `$XDG_CONFIG_HOME/canopy/sandbox/` (`~/.config/canopy
 | `worker.json` | `worker_cmd`, `private_worker_cmd`, and `split_cmd` |
 | `setup.json` | `setup_cmd` |
 | `chore.json` | `chore_cmd` and each chore's own `cmd` |
+| `review.json` | `review_cmd` |
 
 It runs the `srt` in `~/.local/share/canopy/sandbox-runtime/` (under `$XDG_DATA_HOME` when that is set), or else the
 first on `PATH`. It drops every relative entry from `PATH`, so `git`, and any other `srt`, must be on `PATH` through
 an absolute one. `srt` runs its seccomp helper inside the sandbox, so the wrapper lets each run read `srt`'s own
 `vendor/` directory, wherever `srt` is installed.
 
-`srt` is a beta. canopy pins the version HOST_ISOLATION was checked against; to try another, install it on `PATH`
-and remove canopy's, and re-read HOST_ISOLATION's claims first.
+Each role caches in a directory of its own, `~/.cache/canopy/sandbox/<role>/` (under `$XDG_CACHE_HOME` when that is
+set), which the wrapper makes, and setup in the worker's, so that what it installs is there for the worker. The
+wrapper points the command's `XDG_CACHE_HOME` there, and `npm_config_cache`, `GOCACHE`, `GOMODCACHE`, and
+`PIP_CACHE_DIR` under it, whatever you set them to. The first sandboxed run of each role fills its cache from nothing.
+
+`srt` is a beta. canopy pins the version DESIGN §24 was checked against; to try another, install it on `PATH`
+and remove canopy's, and re-read DESIGN §24's claims first.
 
 ## 3. Fill in the templates
 
@@ -113,8 +125,16 @@ own rules are the only ones.
 
 `filesystem.allowRead` re-allows what a run must read under `$HOME`, which `denyRead` hides. Trim the toolchains to
 the ones you build with, and add any that are missing: `~/.local/bin`, `~/.nvm`, `~/.cargo`, `~/.rustup`, `~/go`,
-and `~/.local/share/uv` are there. A toolchain is readable, not writable; a cache a build writes to goes in
-`allowWrite` too. Two more you are likely to need:
+and `~/.local/share/uv` are there. A toolchain is readable, not writable.
+
+Caches go in `@CACHE@`, the role's cache directory, which the templates allow reading and writing. Never put one of
+your own caches in `allowWrite`: your own tools run what is in them, outside the sandbox, so a run that can write one
+can run code on your machine. OpenCode's is one: it imports packages and runs programs from `~/.cache/opencode`, the
+overseer's OpenCode included, which is why the templates name `@CACHE@` instead. A tool whose cache the wrapper does
+not move, such as cargo's under `~/.cargo`, writes under the `$HOME` the template hides, so its cache lasts one run;
+to keep it, point it under the cache directory, by its absolute path, in the command after the wrapper's `--`, such as
+`env CARGO_HOME=/home/you/.cache/canopy/sandbox/worker/cargo`: the template is split into words, and no shell expands
+`$HOME` in it. Two more you are likely to need:
 
 - **Push credentials.** A worker pushes from inside the sandbox, so its git credential helper does too. Add what the
   helper reads: `~/.config/gh` for `gh auth setup-git`, `~/.git-credentials` for the store helper. That token is in
@@ -124,7 +144,11 @@ and `~/.local/share/uv` are there. A toolchain is readable, not writable; a cach
   none.
 
 OpenCode's local MCP servers start inside the sandbox and inherit its policy: each one's hosts must be on the
-allowlist, and a server that reads credentials from `$HOME` needs those paths in `allowRead`.
+allowlist, and a server that reads credentials from `$HOME` needs those paths in `allowRead`. A server started with
+`npx` or `uvx` needs its registry on the allowlist (`registry.npmjs.org`, or `pypi.org` and
+`files.pythonhosted.org`), and fetches itself into the role's cache directory the first time it runs. A
+server started with `docker run` cannot work: the sandbox refuses Unix sockets, the Docker daemon's included. Use the
+server's binary, or its remote form, whose host goes on the allowlist like any other.
 
 ## 4. Push over HTTPS
 
@@ -157,6 +181,8 @@ split_cmd = '''canopy-sandbox worker --read {definitions_dir} --
     env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json --title={title} {prompt}'''
 chore_cmd = '''canopy-sandbox chore --read {definitions_dir} --
     env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json --title={title} {prompt}'''
+review_cmd = '''canopy-sandbox review --read {definitions_dir} --
+    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json --title={title} {prompt}'''
 # setup_cmd takes no placeholders; give the wrapper no --read.
 setup_cmd = "canopy-sandbox setup -- sh -c 'pnpm install --frozen-lockfile'"
 ```
@@ -165,8 +191,9 @@ setup_cmd = "canopy-sandbox setup -- sh -c 'pnpm install --frozen-lockfile'"
   sandbox.
 - A chore with a `cmd` of its own (DESIGN §19) needs the prefix there too, with `--read {definitions_dir}` only if the
   command names it: `cmd = 'canopy-sandbox chore -- opencode run --agent build-health --format json {prompt}'`.
-- Leave `overseer_cmd` and `review_cmd` as they are. The overseer needs the journal and the config the sandbox
-  denies, and `canopy-sandbox worker` refuses a command canopy does not run as a worker.
+- Leave `overseer_cmd` as it is. The overseer needs the journal and the config the sandbox denies.
+- The reviewer reads the checkout and writes nothing in it, not even a commit, so `review.json` allows reading the
+  checkout and its git directories and writing none of them, and leaves `github.com` off the allowlist.
 - If your `PATH` has a relative entry, such as `.`, name the wrapper by its absolute path: canopy runs the template
   in the slot, where a relative entry finds what the branch committed.
 
@@ -204,14 +231,16 @@ use its name in the branch line. Then run `canopy loop --ticks 1` on a ticket an
 `.canopy/runs/<id>.log`: the worker should push and open its PR as before.
 
 From a checkout of canopy, `make sandbox-canary` runs the whole canary against what `canopy sandbox setup` installed:
-every denial and positive control HOST_ISOLATION §6 lists, with the shipped templates unchanged. It needs to reach
+every denial and positive control DESIGN §24 lists, with the shipped templates unchanged. It needs to reach
 github.com.
 
 ## Troubleshooting
 
 - **`canopy-sandbox: no policy template at ...`** or **`srt is not installed`:** run `canopy sandbox setup`.
 - **`CANOPY_GIT_OBJECTS is not set`:** the wrapper's `worker` or `setup` role is on a command canopy does not run as
-  a worker or setup, such as `review_cmd`. Remove it there.
+  a worker or setup, such as `review_cmd` or a chore's. Use the `review` or `chore` role there.
+- **`... links to no worktree`:** the `review` role is on a command canopy does not run as a review, or a desk is
+  empty. Use the role the command's key names.
 - **`... is not a linked worktree`:** a worker or setup ran outside one of treehouse's slots. canopy always runs them
   in one; in the check above, run it in the worktree it makes.
 - **`... has too long a path for srt's sockets`**, or `srt`'s own **`Failed to create bridge sockets`**: on Linux,
@@ -222,10 +251,13 @@ github.com.
 - **The worker cannot push:** an SSH remote (step 4), or a credential helper whose files are not in `allowRead`
   (step 3).
 - **A build cannot fetch, or a tool cannot find its files:** a registry missing from `allowedDomains`, or a toolchain
-  missing from `allowRead`. The error is the tool's own, in the run's log. A tool that writes outside `TMPDIR` and
-  the worktree needs its directory in `allowWrite`.
-- **Bazel:** put the disk and repository caches and `--output_user_root` from [BAZEL.md](BAZEL.md) in `allowWrite`
-  of `worker.json` and `setup.json`. Expect each run's Bazel server to end with its sandbox, so a run starts its own.
+  missing from `allowRead`. The error is the tool's own, in the run's log. A tool that writes outside `TMPDIR`, the
+  worktree, and the cache directory needs its directory moved under the cache directory (step 3), or, if nothing of
+  yours runs what it writes, in `allowWrite`.
+- **Bazel:** the disk and repository caches and `--output_user_root` from [BAZEL.md](BAZEL.md) are your own builds'
+  too. In `allowWrite`, a run can leave outputs there that your builds then use, outside the sandbox; left out, each
+  run builds cold. Prefer the cold build, or a remote cache only CI writes, until DESIGN §24 settles Bazel caches of
+  the sandbox's own. Expect each run's Bazel server to end with its sandbox, so a run starts its own.
 - **A tool's git cannot write objects in the slot:** inside the sandbox, `git` on `PATH` is the wrapper's own, which
-  points git at the run's object directory in the run's worktrees (HOST_ISOLATION §4.2). A tool that runs git by its
+  points git at the run's object directory in the run's worktrees (DESIGN §24, Git state). A tool that runs git by its
   absolute path skips it, and the slot's shared object directory is read-only. Have the tool find `git` on `PATH`.

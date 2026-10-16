@@ -13,16 +13,11 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import conversation, db
 from canopy.loop.state import OverseerState, TicketState
-from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, worker_does
+from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, worker_does
 from tests.conftest import CanopyEnv, GitPool
 
 KEY = "PROJ-1"
 GO_AHEAD = "Use your best judgement on codebot's review: take the null check, skip the renames."
-
-
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return journal(canopy_env)
 
 
 def trust(canopy_env: CanopyEnv, *reviewers: str) -> None:
@@ -71,7 +66,10 @@ def test_the_overseer_reads_the_trusted_list_and_a_public_tickets_operator_messa
     db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     message = reply(conn, GO_AHEAD)
 
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    waits = [["canopy", "decide", key, "wait", "--rationale", "next tick"] for key in (KEY, "PROJ-2")]
+    with mock.patch.dict(
+        os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(waits), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
+    ):
         assert main(["tick", "--dry-run"]) == 0
         state = overseer_state(agent_log)
         assert state["trust"]["trusted_reviewers"] == ["octocat", "canopy:review"]
@@ -204,7 +202,7 @@ def test_an_override_without_the_operator_messages_fails_closed_once_there_are_s
             ["dispatch", KEY, "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"],
             runner=InlineRunner(),
         )
-        decisions = [(str(d["action"]), str(d["rationale"])) for d in db.decisions_for_tick(conn, tick_id)]
+        decisions = [(d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
         if not replied:
             assert code == 0, decisions
             return

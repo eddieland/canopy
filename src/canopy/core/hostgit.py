@@ -1,4 +1,4 @@
-"""git as the harness runs it on the host, and the `.git` link of a slot (DESIGN §8, HOST_ISOLATION §5).
+"""git as the harness runs it on the host, and the `.git` link of a slot (DESIGN §8, §24).
 
 Every slot of a pool shares one git directory with the others and with the primary clone, and a worker can write to it.
 git the harness runs there afterwards runs on the host, outside any worker: in `_run` after the worker, in the next run
@@ -6,7 +6,11 @@ or review on the pool, or in a sync. So every git the harness runs goes through 
 otherwise run from that directory unasked: hooks and the filesystem monitor. Submodule fetches and the `ext::` transport
 are off too, as a URL from that directory's config could name either. A command the config names for a filter driver
 or a transport (`remote.<name>.uploadpack`) still runs; only a git directory the worker cannot write closes that
-(HOST_ISOLATION §4.2).
+(DESIGN §24).
+
+`argv` also turns off git's automatic maintenance, which a fetch or a commit otherwise starts in the background on that
+shared directory while other slots' runs use it. The flags cover only the harness's own git; `canopy workspace sync`
+sets the same in each primary clone's config, for the worker's git and treehouse's (`AUTO_MAINTENANCE_OFF`).
 
 A worktree slot's `.git` is a file naming its git directory. A worker that rewrites it points host-side git at a
 directory of its own, whose hooks and config the flags above do not cover, so `_run` reads it before the run and puts
@@ -33,6 +37,12 @@ SAFE_FLAGS = (
     "-c",
     "protocol.ext.allow=never",
 )
+# git's automatic maintenance, as config keys and values: `maintenance.auto` for what a fetch or a commit starts, and
+# `gc.auto` for `gc --auto`, which older git runs instead. Run in the background on a pool's shared git directory, it
+# packs refs and prunes while other slots' runs use them; on CI it pruned a worktree `git worktree add` had not yet
+# locked. Maintenance an operator runs on purpose is unaffected.
+AUTO_MAINTENANCE_OFF = (("maintenance.auto", "false"), ("gc.auto", "0"))
+_MAINTENANCE_FLAGS = tuple(arg for key, value in AUTO_MAINTENANCE_OFF for arg in ("-c", f"{key}={value}"))
 # Never let git wait for credentials on a terminal nobody is watching.
 ENV = {"GIT_TERMINAL_PROMPT": "0"}
 LINK = ".git"
@@ -43,8 +53,8 @@ _LINK_PREFIX = b"gitdir:"
 
 
 def argv(*args: str) -> list[str]:
-    """Return the command line for `git <args>` with hooks, the filesystem monitor, and submodule fetches off."""
-    return ["git", *SAFE_FLAGS, *args]
+    """Return the command line for `git <args>` with hooks, fsmonitor, submodule fetches, and maintenance off."""
+    return ["git", *SAFE_FLAGS, *_MAINTENANCE_FLAGS, *args]
 
 
 def read_link(worktree: Path) -> bytes | None:

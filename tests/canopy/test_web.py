@@ -12,65 +12,22 @@ from unittest import mock
 
 import httpx2
 import pytest
-from fastapi.testclient import TestClient
 
 from canopy.cli.main import main
-from canopy.core import config, conversation, db, pause
+from canopy.core import agent_output, config, conversation, db, pause
 from canopy.core.context import Context
+from canopy.core.vocab import RunStatus
 from canopy.infra import resources
 from canopy.loop import repeat, reread, web
 from canopy.reviews import grants
 from canopy.runs import policy
 from canopy.serve import live, secret, views
-from canopy.serve.app import create_app
-from canopy.serve.auth import Sessions
-from canopy.serve.options import ServeOptions
 from canopy.serve.schema import LoopUpdated
-from tests.canopy.test_loop import FakeTime, console, context, overseer_does
+from tests.canopy.helpers import FakeTime, canopy, console, context, overseer_does, running_run
+from tests.canopy.web_helpers import ORIGIN, refused, signed_in_client
 from tests.conftest import SHARED_TOML, CanopyEnv, user_toml
 
 KEY = "PROJ-1"
-SECRET = "w" * 43
-ORIGIN = "http://127.0.0.1:8765"
-
-
-@pytest.fixture
-def ctx(canopy_env: CanopyEnv) -> Context:
-    found = context(canopy_env)
-    db.migrate(found.conn, resources.migrations_dir())
-    return found
-
-
-def signed_in_client(ctx: Context, reload: reread.Reload | None = None) -> tuple[TestClient, dict[str, str]]:
-    """A browser signed in to a server over `ctx`'s journal, as the loop builds it, and the headers a write needs."""
-    options = ServeOptions(port=8765)
-    sessions = Sessions(SECRET, port=options.port, base_path="", hosts=options.hosts)
-    c = TestClient(create_app(options, web.backend(ctx, reload or reread.Reload()), sessions), base_url=ORIGIN)
-    token = c.post("/api/session", json={"secret": SECRET}).json()["token"]
-    return c, {"x-canopy-token": token, "origin": ORIGIN}
-
-
-def refused(response: httpx2.Response) -> str:
-    assert response.status_code == 409, response.text
-    detail = response.json()["detail"]
-    return f"{detail['guard']}: {detail['reason']}"
-
-
-def running_run(ctx: Context, key: str, *, private: bool = True) -> int:
-    tick_id = db.start_tick(ctx.conn, dry_run=False)
-    db.touch_ticket(ctx.conn, key, ctx.repo)
-    run_id = db.insert_run(
-        ctx.conn,
-        tick_id=tick_id,
-        key=key,
-        kind="implement",
-        branch=f"agent/{key}-work",
-        slots=[],
-        runs_dir=ctx.state_dir / "runs",
-        private=private,
-    )
-    db.finish_tick(ctx.conn, tick_id, "ok", "test")
-    return run_id
 
 
 def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journals(ctx: Context) -> None:
@@ -101,6 +58,35 @@ def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journ
     assert not Path(run["log_path"]).is_absolute()
     assert root / run["log_path"] == Path(stored["log_path"])
     assert [root / w for w in run["worktrees"]] == [slot]
+
+
+def test_a_runs_spend_is_its_new_tokens_and_its_peak_context(ctx: Context) -> None:
+    run_id = running_run(ctx, KEY, private=False)
+    usage = agent_output.Usage(0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0)
+    db.set_run_report(ctx.conn, "runs", run_id, "ses_w1", dataclasses.replace(usage, peak_context=26_000))
+
+    c, _ = signed_in_client(ctx)
+    run = c.get(f"/api/runs/{run_id}").json()
+    assert (run["cost_usd"], run["new_tokens"], run["peak_context"]) == (0.5, 10_000, 26_000)  # no cache reads
+
+    db.set_run_report(ctx.conn, "runs", run_id, "ses_w1", usage)  # as a run recorded before the peak was kept
+    run = c.get(f"/api/runs/{run_id}").json()
+    assert (run["new_tokens"], run["peak_context"]) == (10_000, None)
+
+
+def test_a_ticks_spend_is_its_overseers_new_tokens_and_peak_context(ctx: Context) -> None:
+    tick_id = db.start_tick(ctx.conn, dry_run=False)
+    c, _ = signed_in_client(ctx)
+    tick = c.get("/api/ticks").json()[0]
+    assert (tick["new_tokens"], tick["peak_context"]) == (None, None)  # nothing reported while it runs
+
+    usage = agent_output.Usage(0.25, input=3000, output=400, reasoning=100, cache_read=20_000, cache_write=500)
+    db.set_tick_report(ctx.conn, tick_id, "ses_o1", dataclasses.replace(usage, peak_context=12_000))
+    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    tick = c.get("/api/ticks").json()[0]
+    assert (tick["cost_usd"], tick["new_tokens"], tick["peak_context"]) == (0.25, 4000, 12_000)  # no cache reads
+    detail = c.get(f"/api/ticks/{tick_id}").json()["tick"]
+    assert (detail["new_tokens"], detail["peak_context"]) == (4000, 12_000)
 
 
 def test_meta_carries_each_repositorys_branch_url_when_set(canopy_env: CanopyEnv, ctx: Context) -> None:
@@ -314,12 +300,12 @@ def test_an_item_about_a_pr_no_ticket_owns_names_the_pr(ctx: Context) -> None:
     db.record_decision(ctx.conn, tick_id, None, "attention:review_limit", "at its limit", pr=pr)
     db.finish_tick(ctx.conn, tick_id, "ok", "test")
     [item] = c.get("/api/attention").json()
-    assert (item["pr"], item["ticket_key"], item["subject"]) == (pr, None, f"pr:{pr}")
+    assert (item["pr"], item["ticket_key"], item["ticket_title"], item["subject"]) == (pr, None, None, f"pr:{pr}")
 
 
 def test_the_web_channel_pauses_and_resumes_the_loop_as_canopy_pause_and_resume_do(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
-    assert c.get("/api/loop").json() == {"paused": None}
+    assert c.get("/api/loop").json() == {"paused": None, "notice": None}
     # A write without the session's token is refused, as every other write is.
     assert c.post("/api/loop/pause", headers={"origin": ORIGIN}).status_code == 403
     assert pause.paused(ctx.conn) is None
@@ -334,7 +320,10 @@ def test_the_web_channel_pauses_and_resumes_the_loop_as_canopy_pause_and_resume_
     assert again == {**paused, "already": True}
     assert c.get("/api/loop").json() == paused["loop"]
 
-    assert c.post("/api/loop/resume", headers=headers).json() == {"already": False, "loop": {"paused": None}}
+    assert c.post("/api/loop/resume", headers=headers).json() == {
+        "already": False,
+        "loop": {"paused": None, "notice": None},
+    }
     assert pause.paused(ctx.conn) is None
     assert c.post("/api/loop/resume", headers=headers).json()["already"] is True
 
@@ -413,14 +402,15 @@ def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:
     run = db.get_run(ctx.conn, run_id)
     assert run is not None
     result = {"status": "blocked", "summary": "half done\x1b[2J", "question": "Red <b>or</b> blue?"}
-    assert conversation.close_run(ctx.conn, ctx.config, run, "blocked", json.dumps(result))
+    assert conversation.close_run(ctx.conn, ctx.config, run, RunStatus.BLOCKED, json.dumps(result))
     tick_id = db.start_tick(ctx.conn, dry_run=False)
-    db.record_decision(ctx.conn, tick_id, "PROJ-9", "attention:needs_reviewer", "https://example.test/pr/9")
+    db.record_decision(ctx.conn, tick_id, KEY, "attention:needs_reviewer", "https://example.test/pr/9")
     db.finish_tick(ctx.conn, tick_id, "ok", "test")
 
     [item] = c.get("/api/attention").json()
-    assert (item["ticket_key"], item["reason"], item["detail"]) == (
-        "PROJ-9",
+    assert (item["ticket_key"], item["ticket_title"], item["reason"], item["detail"]) == (
+        KEY,
+        "Pick a color",
         "needs_reviewer",
         "https://example.test/pr/9",
     )
@@ -450,7 +440,7 @@ def test_summaries_and_rationales_keep_their_line_breaks(ctx: Context) -> None:
     run = db.get_run(ctx.conn, running_run(ctx, KEY))
     assert run is not None
     result = {"status": "done", "summary": "Done:\r\n- one\x1b  \n- two\n\n"}
-    assert conversation.close_run(ctx.conn, ctx.config, run, "done", json.dumps(result))
+    assert conversation.close_run(ctx.conn, ctx.config, run, RunStatus.DONE, json.dumps(result))
     tick_id = db.start_tick(ctx.conn, dry_run=False)
     db.record_decision(ctx.conn, tick_id, KEY, "wait", "Checks running:\n  - lint")
     db.finish_tick(ctx.conn, tick_id, "ok", "\nOne wait.\nNothing else.\n")
@@ -602,7 +592,7 @@ def test_the_loop_serves_the_ui_and_a_web_reply_ends_its_wait(
 
     time_.on_sleep = reply_from_the_browser
     term, out = console()
-    with overseer_does():
+    with overseer_does(canopy("decide", KEY, "wait", "--rationale", "waiting on the operator")):
         statuses = repeat.run(
             ctx,
             dry_run=True,

@@ -127,10 +127,17 @@ test("a chore's finding takes a note its next run reads, and is dismissed and li
     await expect(list.getByRole('link').filter({ hasText: 'lodash-advisory' })).toHaveCount(0)
     await expect(leaving).toHaveCount(0)
 
+    // The chores list counts it apart, as canopy status does, so a chore whose findings are all dismissed reads so.
+    await page.goto('chores')
+    await expect(page.getByTestId('chore-deps').getByTestId('chore-findings')).toHaveText(
+        '0 open findings · 1 dismissed',
+    )
+
     await page.goto('chores/deps')
     await expect(page.getByTestId('chore-notes').locator('[data-source=operator]').last()).toContainText(
         'until 2026-10-15',
     )
+    await expect(page.getByTestId('chore-findings-count')).toHaveText('0 · 1 dismissed')
     const finding = page.getByTestId('finding-lodash-advisory')
     await expect(finding).toContainText('dismissed')
     await finding.getByTestId('undismiss-lodash-advisory').click()
@@ -148,7 +155,7 @@ test('the settings page asks the loop to read its config again and says what it 
     await page.getByTestId('config-reload').click()
     // The mock runs no loop, so its config never changes.
     await expect(page.getByRole('status').filter({ hasText: 'Nothing changed' })).toContainText(
-        'The loop runs on it from now on.',
+        'the config files say what the loop already runs on.',
     )
 })
 
@@ -241,7 +248,7 @@ test('forget asks for the key typed out, then forgets the branch and PR', async 
             'agent/ABC-103-billing-v2, https://github.com/acme/web/pull/91.',
     )
     await expect(challenge).toHaveCount(0)
-    await expect(page.getByText('none yet')).toBeVisible()
+    await expect(page.locator('dt:text-is("branch") + dd')).toHaveText('none')
 })
 
 test('starting a ticket from the list opens it, private', async ({ page }) => {
@@ -275,6 +282,38 @@ test('the header pauses the loop and resumes it, as canopy pause and resume do',
     await control.getByRole('button', { name: 'Resume' }).click()
     await expect(control).toHaveAttribute('data-paused', 'false')
     await expect(control).not.toContainText('paused')
+})
+
+test('settings sets a notice to workers, every page shows it, and its banner clears it', async ({ page }) => {
+    await page.goto('settings')
+    await expect(page.getByTestId('worker-notice')).toHaveCount(0)
+    const set = page.getByTestId('notice-set')
+    await expect(set).toBeDisabled()
+    await page.getByTestId('notice-text').fill('Artifactory is down: CI builds will likely fail.')
+    await page.getByTestId('notice-lasts-1h').click()
+    await set.click()
+    await expect(page.getByText('Notice set: runs dispatched from now on hear it until it lapses.')).toBeVisible()
+    await expect(page.getByTestId('notice-text')).toHaveValue('')
+    const banner = page.getByTestId('worker-notice')
+    await expect(banner).toContainText('Notice to workers: Artifactory is down: CI builds will likely fail.')
+    await expect(banner.getByText(/^Every run dispatched until /u)).toHaveAttribute('title', /from the web UI$/u)
+
+    // The notice is the journal's: another page reads it back, as the next dispatch does.
+    await page.goto('runs')
+    await expect(banner).toBeVisible()
+    await banner.getByRole('button', { name: 'Clear' }).click()
+    await expect(banner).toHaveCount(0)
+    await page.reload()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Runs')
+    await expect(banner).toHaveCount(0)
+})
+
+test('an oversized notice is refused, naming its guard', async ({ page }) => {
+    await page.goto('settings')
+    await page.getByTestId('notice-text').fill('x'.repeat(1025))
+    await page.getByTestId('notice-set').click()
+    await expect(page.getByRole('alert')).toContainText('refused (too_long)')
+    await expect(page.getByTestId('worker-notice')).toHaveCount(0)
 })
 
 test("a review's finding is dismissed on its card, and kept again", async ({ page }) => {
@@ -322,10 +361,10 @@ test('a ticket at its attempt limit is granted one more run from its page, as ca
 
 test("a PR at its review limit is granted one more review from its ticket's attention item", async ({ page }) => {
     await page.goto('attention')
-    await page.getByTestId('attention-list').getByText('pull/88 waits on a reviewer').click()
+    await page.getByTestId('attention-list').getByText('acme/web#88 waits on a reviewer').click()
     const limits = page.getByTestId('attention-detail').getByTestId('grant-limits')
-    await expect(limits).toContainText('reviews of web#88')
-    await limits.getByTestId('grant-reviews of web#88').click()
+    await expect(limits).toContainText('reviews of acme/web#88')
+    await limits.getByTestId('grant-reviews of acme/web#88').click()
     await expect(limits.getByRole('status')).toHaveText(
         'https://github.com/acme/web/pull/88 has had 2 review runs, and may now have 3. ' +
             'The next tick decides whether to review it.',
@@ -333,4 +372,76 @@ test("a PR at its review limit is granted one more review from its ticket's atte
     await page.goto('pull-requests/pr?url=https%3A%2F%2Fgithub.com%2Facme%2Fweb%2Fpull%2F88')
     await expect(page.getByTestId('pull-request-reviews')).toBeVisible()
     await expect(page.getByTestId('grant-limits')).toHaveCount(0)
+})
+
+test('a long conversation scrolled away from its end stays put as a message arrives', async ({ page }) => {
+    // Thirty copies of its first messages, then any added since, so the reply arrives at the end of a long thread.
+    // The first ones kept, and new ones told apart by id: the server sends only the latest 100, so after many runs a
+    // reply pushes the oldest out, and neither a count nor what it sends now stays the same.
+    let first: { id: number }[] | undefined
+    await page.route('**/api/tickets/ABC-103', async (route) => {
+        const response = await route.fetch()
+        const body = (await response.json()) as { messages: { id: number }[] }
+        const seeded = (first ??= body.messages)
+        const known = new Set(seeded.map((m) => m.id))
+        // Ids past any reply the server will have taken, so a copy never shares one with a real message.
+        const padding = Array.from({ length: 30 }, (_, i) => ({ ...seeded[i % seeded.length], id: 1_000_000 + i }))
+        body.messages = [...padding, ...body.messages.filter((m) => !known.has(m.id))]
+        await route.fulfill({ response, json: body })
+    })
+    await page.goto('tickets/ABC-103')
+    const region = page.getByRole('region', { name: 'Conversation' })
+    await expect(page.getByTestId('message-1000029')).toBeAttached()
+    // Scrolled as a reader scrolls: the thread hears it on the next frame, so wait for that before anything grows.
+    await region.evaluate(async (el) => {
+        el.scrollTop = 100
+        await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    resolve()
+                })
+            })
+        })
+    })
+    await expect(region).toHaveJSProperty('scrollTop', 100)
+    const form = page.getByRole('form', { name: 'Reply' })
+    // Its own text, since the server keeps every reply sent to it: a run before this one may have sent the same.
+    const text = `keep my place ${crypto.randomUUID()}`
+    await form.getByRole('textbox').fill(text)
+    await form.getByRole('button', { name: 'Reply' }).click()
+    await expect(page.getByTestId('conversation').getByText(text)).toBeAttached()
+    await expect(region).toHaveJSProperty('scrollTop', 100)
+    // The reply's `ticket.changed` refetches the ticket, which can still be in the handler when the page closes and
+    // disposes its response: drop it, since it comes after everything this test checks.
+    await page.unrouteAll({ behavior: 'ignoreErrors' })
+})
+
+test("a coworker's PR is requested from the pull requests page and stopped from its own, as the CLI does", async ({
+    page,
+}) => {
+    const pr = 'https://github.com/acme/web/pull/120'
+    await page.goto('pull-requests')
+    const form = page.getByTestId('review-request-form')
+    // One of the loop's own PRs is refused, as `canopy start URL --review` refuses it.
+    await form.getByLabel('PR URL').fill('https://github.com/acme/web/pull/88')
+    await form.getByTestId('review-request-submit').click()
+    await expect(form.getByRole('alert')).toContainText('refused (loop_pr)')
+
+    await form.getByLabel('PR URL').fill(pr)
+    await expect(form.getByTestId('review-request-submit')).toHaveAttribute('title', 'canopy start URL --review')
+    await form.getByTestId('review-request-submit').click()
+    await expect(form.getByRole('status')).toHaveText(
+        `${pr} is requested for review. The next tick reviews its head, once.`,
+    )
+    const row = page.getByTestId('pull-requests').getByTestId('pull-request').filter({ hasText: 'acme/web#120' })
+    await expect(row).toContainText('requested')
+
+    await row.getByRole('link', { name: 'acme/web#120', exact: true }).click()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#120')
+    const request = page.getByTestId('review-request')
+    await expect(request).toContainText('canopy reviews its head once')
+    await request.getByTestId('review-request-stop').click()
+    await expect(request.getByRole('status')).toHaveText(`${pr}'s review request is stopped; nothing reviews it now.`)
+    await expect(request).toContainText('Your review request ended')
+    await expect(request.getByTestId('review-request-stop')).toHaveCount(0)
 })

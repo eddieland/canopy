@@ -43,9 +43,13 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
     await missing.locator('summary').click()
     await expect(missing).toContainText('File not found:')
 
-    await transcript.getByRole('button', { name: 'Open all' }).click()
+    // All open is one toggle: on opens every call, off closes them all.
+    const allOpen = transcript.getByRole('button', { name: 'All open' })
+    await allOpen.click()
+    await expect(allOpen).toHaveAttribute('aria-pressed', 'true')
     await expect(transcript.locator('details[open]')).toHaveCount(7)
-    await transcript.getByRole('button', { name: 'Close all' }).click()
+    await allOpen.click()
+    await expect(allOpen).toHaveAttribute('aria-pressed', 'false')
     await expect(transcript.locator('details[open]')).toHaveCount(0)
 
     await page.getByRole('link', { name: 'ABC-099', exact: true }).first().click()
@@ -70,8 +74,11 @@ test('a search keeps the rows with a line that holds it, marked, and opens the c
     const pr = rows.filter({ hasText: 'github_create_pull_request' })
     await expect(pr.locator('pre mark')).toHaveText('debounce')
     await expect(pr.locator('pre mark .text-syntax-string')).toHaveText('debounce')
-    // Close all closes them too, and a new search opens what it finds again.
-    await transcript.getByRole('button', { name: 'Close all' }).click()
+    // All open is on while a search holds what it found open, and turned off it closes them too; a new search opens
+    // what it finds again.
+    const allOpen = transcript.getByRole('button', { name: 'All open' })
+    await expect(allOpen).toHaveAttribute('aria-pressed', 'true')
+    await allOpen.click()
     await expect(transcript.locator('details[open]')).toHaveCount(0)
     await find.fill('debounces input')
     await expect(transcript.locator('details[open]')).toHaveCount(1)
@@ -129,16 +136,20 @@ test('by call, each model call opens to what it was sent and what it did, as tex
     await expect(transcript.locator('input')).toHaveCount(0)
     await expect(second.getByRole('region', { name: 'call 2 output' })).toContainText('There is no search hook yet.')
 
-    await transcript.getByRole('button', { name: 'Close all' }).click()
+    // All open, turned on and off, opens every call and then closes them all, the two opened by hand included.
+    const allOpen = transcript.getByRole('button', { name: 'All open' })
+    await allOpen.click()
+    await expect(transcript.getByTestId('transcript-call-body')).toHaveCount(3)
+    await allOpen.click()
     await expect(transcript.getByTestId('transcript-call-body')).toHaveCount(0)
-    await transcript.getByRole('button', { name: 'Open all' }).click()
+    await allOpen.click()
     await expect(transcript.getByTestId('transcript-call-body')).toHaveCount(3)
 
     await toggle.click()
     await expect(transcript.getByTestId('transcript-entries')).toBeVisible()
 })
 
-test("a failed run's transcript ends in the runtime's error, and a running one's waits for it to end", async ({
+test("a failed run's transcript ends in the runtime's error, and a running one's is what it printed so far", async ({
     page,
 }) => {
     await page.goto('runs/40')
@@ -149,7 +160,11 @@ test("a failed run's transcript ends in the runtime's error, and a running one's
 
     await page.goto('runs/41')
     await settled(page)
-    await expect(page.getByTestId('transcript')).toContainText('the session’s events reach the log when it ends')
+    // Its latest tool call is on its row, and the calls so far in its transcript.
+    await expect(page.getByTestId('run-doing')).toContainText('bashnpm test -- login')
+    const tools = page.getByTestId('transcript').getByTestId('transcript-tool')
+    await expect(tools).toHaveCount(2)
+    await expect(tools.last()).toContainText('npm test -- login')
 })
 
 test("a tick's page shows its overseer's session under its decisions", async ({ page }) => {
@@ -175,14 +190,14 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
     await tools.nth(1).locator('summary').click()
     await expect(tools.nth(1).locator('pre').last()).toContainText('{\n  "state": "pending",')
 
-    // A model call opens to its tokens by kind; Open all opens only the tool calls.
+    // A model call opens to its tokens by kind; All open opens only the tool calls.
     const call = transcript.getByTestId('transcript-step')
     await expect(call).toHaveCount(1)
     const split = call.locator('dl')
     await expect(split).toBeHidden()
     await call.locator('summary').click()
     await expect(split).toHaveText('input2.3kcache read6.5kcache write512output930reasoning310')
-    await transcript.getByRole('button', { name: 'Open all' }).click()
+    await transcript.getByRole('button', { name: 'All open' }).click()
     await expect(transcript.locator('details[open]')).toHaveCount(4)
     await expect(split).toBeHidden()
 })
@@ -197,7 +212,7 @@ test("a tick's output shows as written when asked, stderr included, and a tick t
     const text = output.getByTestId('tick-output-text')
     await expect(text).toHaveCount(0)
 
-    await output.getByRole('button', { name: 'Show' }).click()
+    await output.getByRole('button', { name: 'Show output' }).click()
     await expect(text).toContainText('--- stderr ---')
     await expect(text).toContainText('service=mcp key=jira error=timed out after 1000ms listing prompts')
     // The session's events too, as the runtime printed them: lines of JSON, as text.
@@ -211,12 +226,12 @@ test("a tick's output shows as written when asked, stderr included, and a tick t
     // It opens at its end, where stderr is.
     await expect.poll(() => text.evaluate((el) => el.scrollTop + el.clientHeight >= el.scrollHeight - 1)).toBe(true)
 
-    await output.getByRole('button', { name: 'Hide' }).click()
+    await output.getByRole('button', { name: 'Hide output' }).click()
     await expect(text).toHaveCount(0)
 
     await page.goto('ticks/1')
     await settled(page)
-    await expect(page.getByTestId('tick-output')).toContainText('none kept')
+    await expect(page.getByTestId('tick-output')).toContainText('no output kept')
     await expect(page.getByTestId('tick-output').getByRole('button')).toHaveCount(0)
 })
 
@@ -224,7 +239,7 @@ test("a tick's output lays its JSON out when asked, and that tick's panel rememb
     await page.goto('ticks/2')
     await settled(page)
     const output = page.getByTestId('tick-output')
-    await output.getByRole('button', { name: 'Show' }).click()
+    await output.getByRole('button', { name: 'Show output' }).click()
     const text = output.getByTestId('tick-output-text')
     const pretty = output.getByRole('button', { name: 'Pretty' })
     const read = () => text.evaluate((el) => el.textContent)
@@ -245,7 +260,7 @@ test("a tick's output lays its JSON out when asked, and that tick's panel rememb
     expect(await page.evaluate(() => globalThis.localStorage.getItem('canopy-pretty-output'))).toBe('[2]')
     await page.reload()
     await settled(page)
-    await output.getByRole('button', { name: 'Show' }).click()
+    await output.getByRole('button', { name: 'Show output' }).click()
     await expect(pretty).toHaveAttribute('aria-pressed', 'true')
     expect(await read()).toContain('{\n  "type": "text",')
 

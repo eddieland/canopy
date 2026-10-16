@@ -12,6 +12,8 @@ the prompt or the guards it relies on, the install scenarios before a release. A
 issue with the tick id, and its decisions (`canopy decisions TICK`). A run that measures something, such as spend or
 latency, goes in `MEASUREMENTS.md` as a dated section.
 
+Toy repositories to run them against, apart from real work and cheap to reset, are planned in `TOY_REPOS.md`.
+
 ## Canaries
 
 Opt-in tests that run a real model under the pinned OpenCode. Run all of them after any OpenCode upgrade, and before
@@ -101,6 +103,12 @@ relying on a permission they check.
   branch's commits). Dismiss one finding, tick another, and send it to a worker: expect the next tick to dispatch
   `resume --review-run` for that run, the worker to address the sent finding and leave the rest, and nothing of the
   review or the message on the PR or the ticket.
+- **S37. A coworker's PR, reviewed on request** (M42). With no `review.query` and `review.agent_prs` off, ask for one
+  coworker's open PR to be reviewed from the CLI (`canopy start URL --review`), and another, in a second repository of
+  the workspace, from the web UI's pull requests page. Expect each reviewed at its head, in its own repository, and
+  its request to end `reviewed` (`canopy show URL`). Ask for one more on a PR that then merges before the next tick,
+  and one on a PR in a repository the workspace does not have: expect the overseer's `canopy review end` to end them
+  `merged` and `unknown_repo`. Nothing is posted on any PR.
 
 ## Chores and notifications
 
@@ -133,10 +141,12 @@ relying on a permission they check.
   new limit. Then close the terminal window: expect the loop gone, as before. Under `nohup`, expect it to outlive the
   window and still reload on `kill -HUP`.
 - **S33. The overseer's prompt from the cache** (M34). Run two `canopy tick --dry-run` a minute apart, and read each
-  tick's first model call from its log: the first `step_finish` event in `<state_dir>/ticks/<id>.log`, its
-  `part.tokens.cache.write` and `part.tokens.cache.read`. Expect the second tick's write near the state block's size,
-  a few thousand tokens, and its read to hold the prompt, the provider skill, and the tools; the first tick, cold,
-  writes them all. Run it after a change to the overseer's definition or prompt, or an OpenCode upgrade, which may
+  tick's first model call from the journal: `SELECT id, tokens_first_call, tokens_first_cache_write, definitions_digest
+  FROM ticks ORDER BY id DESC LIMIT 2` (DESIGN §13; the first `step_finish` event in `<state_dir>/ticks/<id>.log` holds
+  the same). Expect the second tick's write near the state block's size, a few thousand tokens, and the rest of its
+  first call, nearly all read from the cache, to hold the prompt, the provider skill, and the tools; the first tick,
+  cold, writes them all. Over a longer stretch, `canopy spend --json`'s `first_calls` gives each snapshot's median first
+  call and cold share. Run it after a change to the overseer's definition or prompt, or an OpenCode upgrade, which may
   change where OpenCode puts an agent's body. Then, after a working session of `canopy loop`, re-measure with
   MEASUREMENTS' prompt: expect the median tick that starts within the cache's lifetime of the one before at least 15%
   cheaper than on 2026-10-13 at the same price, with no change in what the ticks decided. If the second tick's write
@@ -151,6 +161,12 @@ relying on a permission they check.
   from a query on the journal over the same UTC days: `SELECT sum(cost_usd) FILTER (WHERE idle = 1) / sum(cost_usd)
   FROM ticks WHERE dry_run = 0 AND status != 'running' AND started_at >= date('now', '-6 days')`, the ticks that ended,
   as the share counts. Expect all three to agree, and each day's total on the page to match the CLI's.
+- **S37. A notice during a CI outage** (M35). During a CI outage, real or staged (a check that fails fetching a
+  dependency), set a notice from the CLI (`canopy notice 'TEXT' --for 1h`) or the web UI's settings page. Expect the
+  banner on every page and the line in `canopy status`; the next worker's summary to take the notice into account; the
+  overseer to record `wait` for the `ci_red` unit whose check the outage failed, naming the notice, with no `fix-ci`;
+  once the notice lapses, `notice_rerun` on the attention list until the operator reruns the check, and no `fix-ci`
+  before that newer run; and the next worker's prompt after the lapse to carry `None.` for the notice.
 
 ## The web UI
 
@@ -160,11 +176,16 @@ relying on a permission they check.
   or was not dispatched in a given tick; expect it to match `canopy decisions`.
 - **S30. A session's transcript** (M15, M27). Open a worker run's page and a tick's page. Expect the tool calls
   `opencode export <id>` shows for the same session id, and, for a failed run, its runtime error.
+- **S38. A running run, watched live** (M27, taken on request 2026-10-15). While a worker runs under the pinned
+  OpenCode, open its row on the runs page and its run's page. Expect its latest tool call on the row within seconds of
+  the call ending, its cost moving at each model call, and its transcript growing as it goes, matching
+  `opencode export <id>` for what it has done so far; and `canopy status` naming the same call. A row that shows
+  nothing until the run ends means OpenCode is buffering its events, not printing them as they happen.
 - **S32. Search** (M31). After a week of `canopy loop`, type into the web UI's search box a word of a ticket's title,
   then a phrase from a run's summary. Expect the ticket, by its branch, and the run's report among the hits, each
   opening the page that holds it. Then search for something nothing matches: expect the answer in under a second, and
   time `GET /search` in the browser's network tab. Over a quarter of a second is the cue to revisit FTS5 (DESIGN §22).
-- **S37. Limits and trust from the web UI** (M41). While `canopy loop` runs, change `capacity.slots_per_repo` and remove
+- **S40. Limits and trust from the web UI** (M41). While `canopy loop` runs, change `capacity.slots_per_repo` and remove
   a trusted reviewer on the web UI's Settings, Limits and trust page. Expect the next tick to lease under the new size
   and its overseer's state block to carry the shorter list, and `~/.config/canopy/config.toml` to keep its comments,
   with only those two values changed. Then try a count past its ceiling and adding a reviewer back by hand-crafting the

@@ -44,6 +44,9 @@ in order:
      ticket whose latest question has no operator message after it (§22), `chore_failed` for each configured chore
      whose latest ended run did not end `ok` (§19), and `repo_missing` for each mapped repository with no clone.
 4. **Render the state block**, the overseer's whole message: a generated `## State` section holding one JSON object.
+   The object is compact JSON, one line with no space after `,` or `:`: the block is written fresh every tick and
+   re-read on every step, and on a six-ticket block it is about 29% fewer tokens than `indent=2` (1,902 against
+   2,705 for the JSON, by the Claude tokenizer the `anthropic` SDK bundled up to 0.34; 2026-10-16).
    The overseer's prompt, `prompts/overseer.md` or the operator's override (§12), is not in it: it is the body of the
    overseer's agent definition in the definitions snapshot (§13), so the runtime sends it as the system prompt, after
    the tool schemas and before the message. The provider caches by content, not by session, so a tick that starts
@@ -55,19 +58,23 @@ in order:
    The object holds, in order from what changes rarely to what changes every tick, for a runtime that caches part of a
    message: workspace root; the workspace (name, the path of `MAP.md` if any); tracker config (provider, query, labels,
    needs-human label); trust config (authorized repliers, branch prefix, PR label); policy (limits and stacking); the
-   repositories (name, path, summary, whether cloned, its pool's leased slots, §18); the `tickets` rows not marked done,
-   except those the operator stopped; `stopped`; split children (§18); chores and reviews when configured; the
-   overseer's open attention items (below); then capacity, running workers and their repositories, the mirror limit and
-   delimiter, tick id, current time, and whether it is a dry run. Each ticket has its phase, branch, and comment,
-   message, and mirror cursors (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors,
-   runs so far of each kind, the runs of each kind the operator granted past the policy's limit if any (`granted`, §8),
-   and when fix-ci may next run if still ahead; and its latest run (id, kind, status, branch, each repository it leased
-   in with its starting base, start and end). A ticket the operator started has a `private` object (§22): when it was
-   started, its message cursor, the operator's messages newer than it, and the question awaiting a reply, if any.
-   `stopped` names the tickets the operator stopped, by key alone: none is a candidate, whatever its labels, and the
-   overseer records nothing for one, so a ticket stopped for weeks adds no decision to every tick. `chores` (§19) is
-   present only when chores are configured. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter
-   (§22).
+   repositories (name, path, the map's clone `url`, summary, whether cloned, its pool's leased slots, §18); the
+   `tickets` rows not marked done, except those the operator stopped; `stopped`; `recently_done` (§7); split children
+   (§18); chores and reviews when configured; the operator's notices to workers in force or lately ended (§8), when
+   there are any; the overseer's open attention items (below); then capacity, running workers and their repositories,
+   the mirror limit and delimiter, whether this tick runs the tracker query (`query_due`, §7), tick id, current time,
+   and whether it is a dry run. Each ticket has its phase, branch, and comment, message, and mirror cursors (§22); its
+   units (§18), each with repository, branch, PR, phase, review and ci cursors, runs so far of each kind, the runs of
+   each kind the operator granted past the policy's limit if any (`granted`, §8), and when fix-ci may next run if still
+   ahead; and its latest run (id, kind, status, branch, each repository it leased in with its starting base, start and
+   end). A ticket the operator started has a `private` object (§22): when it was started, its message cursor, the
+   operator's messages newer than it, and the question awaiting a reply, if any. `stopped` names the tickets the
+   operator stopped, by key alone: none is a candidate, whatever its labels, and the overseer records nothing for one,
+   so a ticket stopped for weeks adds no decision to every tick. `recently_done` names the tickets marked done in the
+   last 30 days, each with the time of its newest `done` decision (§7). `chores` (§19) is present only when chores are
+   configured. `notices` (§8) is present only when the operator set one in the last seven days: each one's text, when it
+   was set, until when it was or is in force, and whether it is now, newest first, at most five. `mirror` holds the
+   per-tick mirror limit and this tick's heredoc delimiter (§22).
 
    `attention` lists the open items the overseer recorded (§14): each one's ticket, or `pr` for a PR with no ticket,
    its repository, its reason, and since when, but not its detail, which may quote a comment. The harness's own
@@ -95,9 +102,9 @@ in order:
    for the overseer, and costs a process start (about 0.4 seconds) per tick.
 
    Then run the overseer with `overseer_cmd`, cwd = the workspace root (§18), timeout
-   `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `attention`, and
-   `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go to
-   `<state_dir>/ticks/<tick id>.log`, readable only by the operator (and its end on the tick's page, §22), never to
+   `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `queried`,
+   `attention`, and `mirror` refuse if it is unset or names a tick that is not running (D020). Its stdout and stderr go
+   to `<state_dir>/ticks/<tick id>.log`, readable only by the operator (and its end on the tick's page, §22), never to
    the journal. The session id goes on the `ticks` row at the first event of stdout that names one, read as the
    overseer prints it, so a running tick shows its session (§22) rather than none until the overseer ends. The session
    id and cost the runtime reported (§13) go there again when it ends, whether or not the run succeeded. The run
@@ -110,6 +117,33 @@ in order:
    check would find in a rationale; a line that only mentions it does not count. A successful run that recorded a
    tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`) closes the tick as `skipped`, which leaves the attention
    list standing, so an outage does not resolve and re-raise every item.
+
+   **The overseer's duties** (`loop/duties.py`). Any other successful run is then checked for the duties a tick owes,
+   from the decisions the overseer recorded after the harness's own: when `query_due` was true, a `queried` decision
+   (`canopy queried`, below); a decision of its own for every ticket in the state block's `tickets` and every ticket a
+   `queried` decision names, except those in `stopped` or `recently_done`, where a decision is any the overseer
+   records about the ticket (a `decide`, a dispatch, a review run or wait, an attention item, or a refusal), and a
+   mirror is not one; and a chore run, wait, or refusal for every chore due and not running. A duty left undone closes
+   the tick as `overseer_failed`, with a summary naming each one, as a missing done line does. Closing it `ok` would
+   make its list the attention list, so every item of a ticket it left out would read as resolved and be notified so,
+   and a query it never ran would count as run until the spacing passed again. Failed, it leaves the list standing,
+   the query stays due, and the next tick's block carries every ticket left out. Its dispatches stand, as any failed
+   tick's do. A ticket that came into the journal some other way while the overseer ran, such as one the operator
+   started, is owed nothing until the next tick shows it.
+
+   Taken on request (2026-10-15): the prompt alone did not hold a cheaper overseer to the procedure; it stopped running
+   the query and read only the block's tickets, which stalls new work with no tick failing (MEASUREMENTS 2026-10-15
+   F31). The check makes each duty a command the journal records, so leaving one out is seen. It holds the overseer to
+   doing each duty, not to doing it well: it cannot see whether a decision was right, whether the query was read to
+   the end, or whether `queried` names everything it returned. Those wait on a connector (ROADMAP M36, M37). The
+   duties it cannot see at all (mirroring, recording attention items again, titles, cursors, `review.query`) the
+   prompt lists beside the checked ones, as equally binding.
+
+   `canopy queried [KEY]...` records, as one tick-wide decision `queried`, that the tick ran the tracker query, and
+   each open ticket it returned, or none. It touches each one into the journal at once (§11), so a ticket the query
+   found is in the next block's `tickets` even if this tick ends without deciding it. The rationale names the keys in
+   a form `loop/duties.py` writes and reads back; a result that does not fit in one is refused, and recorded in
+   several calls. It is a quiet decision for idle pacing and the loop's output, as a wait is.
 
    In `--dry-run` (D036), the state block says so. `canopy dispatch` checks the live guards (§8), counting each
    dispatch this dry run already recorded as a running run, and records refusals the same way. An allowed dispatch
@@ -148,6 +182,13 @@ The file is removed once the run's row is closed, by whichever process closed it
 lives, so a closed one needs no file, and without this every run would leave an empty `<id>.lock` beside its log for
 good. It is never removed earlier: a `running` row with no file would be asked after by its pid instead.
 
+Every kind of detached run has the same lifecycle, written once: its table is one of a closed set in `core/db.py`
+(`runs`, `chore_runs`, `review_runs`), and claiming a run by pid, recording its agent's pid, its report, and closing it
+take the table as an argument, never a string from input. Reconcile's shared part is `core/dead_runs.py`: the running
+rows whose process is gone, their agents killed, and a run closed `crashed` with its lifelock's file removed. Each kind
+adds only what is its own (a worker run's messages and slots, a review's slot), and a new kind of detached run adds its
+table to the set rather than another copy, so a fix to the claim or to the crash rule is made once.
+
 ### The loop
 
 `canopy loop [--dry-run] [--every MINUTES] [--ticks N] [--defer MINUTES] [--no-serve]` is how ticks are meant to run
@@ -165,7 +206,8 @@ good. It is never removed earlier: a `running` row with no file would be asked a
    the row left `running` as `abandoned`.
 4. Print the tick's status, duration, and summary; each decision except `wait` and attention items, with its
    rationale; attention items added (`+`) and resolved (`-`); running workers, the list's size, what the tick's
-   overseer cost in dollars and tokens when the runtime reported it, and the wait that follows.
+   overseer cost in dollars, tokens, and peak context when the runtime reported it (§13), and the wait that
+   follows.
 5. Wait, measured from the end of the tick, for `--every`, else `loop.interval_minutes`, whatever the tick's status,
    lengthened after idle ticks and ended at a gate (Idle pacing, below). This pacing rule is `pacing.wait`; it does
    not read tick cost (ROADMAP M13, deferred). An operator message recorded since the tick began, such as a
@@ -264,7 +306,8 @@ A tick is **idle** when all of these hold, each read from the journal by the loo
 - The attention list after it is the list before it, compared as the loop's per-tick block already compares them.
 - No ticket or unit changed its phase, branch, a cursor, or `done`, and no ticket was seen for the first time.
 - No run, chore run, or review run started or ended, and the operator recorded no message, started or stopped no ticket
-  (`starts`), and granted no attempts or reviews, after the previous tick read the journal for the overseer's state
+  (`starts`), granted no attempts or reviews, and set or cleared no notice to workers (§8), after the previous tick read
+  the journal for the overseer's state
   (`ticks.read_at` and `ticks.message_id`, §6 step 3). Something the previous tick could not have seen keeps this one
   from counting as idle, even when it happened while the previous tick was still running. The previous tick is the
   journal's, whatever ran it; one that never read the journal, such as a `reconcile_failed` tick or the first tick of
@@ -284,10 +327,11 @@ longer interval, it is no error and idle pacing is off. The count lives in the l
 starts at `base`, and a hand-run `canopy tick` between the loop's ticks counts like any other.
 
 Whatever pacing chose, the wait ends no later than the earliest harness gate still ahead when the tick ends, both what
-the state block shows: a `fix-ci` cooldown's end (§8) and a configured chore's `due_at` (§19). A gate opening is acted
-on when it opens, even sooner than `base`, though no sooner than `loop.min_gap_minutes` after the tick began. One
-already open, such as a chore the overseer passed over because its `when` says not now, sets no deadline, so it cannot
-make the loop spin.
+the state block shows: a `fix-ci` cooldown's end (§8), a configured chore's `due_at` (§19), and the lapse of the notice
+to workers in force (§8), so a check held for the notice is looked at again when it lapses. A gate opening is acted on
+when it opens, even sooner than `base`, though no sooner than `loop.min_gap_minutes` after the tick began. One already
+open, such as a chore the overseer passed over because its `when` says not now, sets no deadline, so it cannot make
+the loop spin.
 
 Besides the operator's acts (§22), the wait ends early, with the same floor (`loop.min_gap_minutes`), when a run, chore
 run, or review run ended after the tick read the journal for the overseer's state (`ticks.read_at`): after anything
@@ -309,7 +353,7 @@ idle, so it resets idle pacing's count (MEASUREMENTS 2026-10-12 F5, 2026-10-13 F
 the `loop waits` line's `churn` lists, for an `ok` tick, each ticket's or unit's phase it changed
 (`PROJ-1 (api) phase ci_running -> ci_red`) and each attention item it added (`+PROJ-1 needs_reviewer`) or dropped
 (`-`), when, since the previous tick read the journal, no run, chore run, or review run started or ended, the operator
-recorded no message, start, stop, or grant, and no gate came due (the earliest gate ahead of that read is not before
+recorded no message, start, stop, grant, or notice, and no gate came due (the earliest gate ahead of that read is not before
 this tick's). Otherwise, and on a tick that changed neither, it is empty. A ticket seen for the first time is new, not
 churn. The list cannot tell a flap from the world or the config changing (a review the tracker's MCP read, CI going
 red): the `decisions` table can, by the rationales either side, and prompt changes follow only when it shows a pattern.
@@ -318,7 +362,8 @@ The journal records the same on each tick the loop ran, for spend (ROADMAP M33; 
 spend page, §22, read it): `ticks.idle`, whether the tick was idle
 by the rule above, and `ticks.woken_by`, what ended the wait before it: `start` (the loop's first tick, after any
 `--defer` ran its length), `timer` (the wait ran its length), `gate` (a gate shortened it and it ran out), `message`,
-`starts` (a ticket started or stopped), `grant`, `run`, or `key`. A pause does not change it: a tick held past its
+`starts` (a ticket started or stopped), `grant`, `notice` (a notice to workers set or cleared, §8), `run`, or `key`. A
+pause does not change it: a tick held past its
 deadline until the operator resumed records what it would have without the pause, and one the operator ran during the
 pause records `key`. The loop classifies every tick with idle pacing off too, though only pacing counts them, so the
 journal says what the overseer's spend bought whatever the pacing; a `loop waits` line's `idle` is then the tick's
@@ -353,7 +398,7 @@ model-written text, and the Slack sink escapes it. It stays out of `attention.md
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |
 | `conflicted` | PR open, GitHub reports it conflicts with its base | dispatch `resume` to bring the base in |
 | `ci_running` | PR open, checks pending | wait |
-| `ci_red` | PR open, checks failed, newer than cursor | dispatch `fix-ci`; at the attempt limit, attention; in cooldown, wait |
+| `ci_red` | PR open, checks failed, newer than cursor | dispatch `fix-ci`; at the attempt limit, attention; in cooldown, wait; held for a notice, wait (§8) |
 | `review_pending` | with `review.agent_prs`: checks pass, no approval, head commit not reviewed (§21) | review it |
 | `review_findings` | with `review.agent_prs` and `canopy:review` trusted: findings on the head's review, newer than the cursor | as comments (§7) |
 | `changes_requested` | a trusted reviewer's comments or requested changes newer than cursor | dispatch `resume` with the comments; if the overseer judges a comment needs a human (design pushback, scope), attention instead |
@@ -435,6 +480,30 @@ always comparable. A cursor an earlier canopy wrote is an id, or `run:<id>`; the
 time and write it, and to treat a cursor that names nothing as empty. Until it has, that unit's review state is as
 ambiguous as before.
 
+The overseer runs the configured query every tick, before it reads any ticket, even when the state block already
+lists tickets. The block holds only tickets the loop has seen, so the query is the only way a newly labeled ticket
+becomes a candidate, and a tick that skips it reads the tickets it knows, finds nothing wrong, and closes `ok`: the
+queue stalls with nothing failing. A cheaper model run as the overseer did that on the operator's queue (2026-10-15),
+reading the block's tickets and never the query. The prompt's step 1 says so, as its section on `review.query`
+already did for reviews. Once it has, it records the result with `canopy queried`, and a tick whose block said the
+query was due fails without one (§6 step 5); a connector running the query in code (ROADMAP M36) would also check that
+the result is complete.
+
+**Spacing the query.** The query is one of a tick's dearest reads (tracker searches and issue reads were 28% of the tool
+results the overseer read, MEASUREMENTS 2026-10-13), and tickets enter the queue slowly: a human labels one and waits.
+So the operator may space it out with `tracker.query_every_minutes`. At 0, the default, every tick runs it, as above.
+Otherwise the harness sets the state block's `query_due` to true only when that long has passed since the newest live
+tick that closed `ok` with `query_due` true started, or when there is none, and records it on the tick
+(`ticks.query_due`). On a tick where it is false, the overseer does not run the query and works the tickets in the state
+block alone, by the same rules: it still reads each one, mirrors its comments, follows its PRs, and dispatches it. A dry
+run does not count as having run it, being a preview, and neither does a tick that skipped or failed, which may not have
+read the result to the end; a tick from before the column did run it. What the operator gives up is how soon a newly
+labeled ticket is found: up to `query_every_minutes`, plus the loop's wait, after it is labeled. Idle pacing does not
+treat the next query as a gate: the setting is the least time between queries, not a schedule, so the loop keeps backing
+off on idle ticks, and the first tick after the spacing has passed runs it. A private ticket the operator starts is in
+the state block already, so it never waits on the query. `review.query` is not spaced: it is the operator's own list of
+PRs, and its cost has not been measured apart.
+
 "Closed" means whatever the tracker calls finished: Jira status category Done, GitHub issue state closed, and so on. The
 provider skill says which.
 
@@ -447,6 +516,28 @@ done, and every tick read it again and recorded a `skip` for it. A closed ticket
 the state block, gets no decision at all, so a query that matches closed tickets adds nothing to every tick. A PR
 still open on a closed ticket is the operator's, like the tracker transition. A reopened ticket is found again by the
 configured query; a private one (§22) comes back when the operator starts it again, which clears done.
+
+A ticket marked done is not in `tickets`, so the state block alone cannot tell the overseer that one the query returns
+is finished. A ticket whose PR merged is the common case: canopy marks it done, and a human has not yet moved it to
+done in the tracker, so the query still finds it open and labeled. The overseer read every such ticket again each
+tick, looked for its PRs, mirrored all its comments again (it has no mirror cursor in the block), and recorded `done`
+again. Those decisions are not waits, so no such tick was idle and idle pacing never backed off: over the first three
+days of live use, 176 repeated `done` decisions and 257 repeated mirrors in 152 ticks, with the loop at its base
+interval all night. The state block therefore names each ticket marked done in the last 30 days in `recently_done`,
+with the time of its newest `done` decision, and the overseer leaves such a ticket out of the union and records
+nothing for it, as for `stopped`, whatever the tracker says. A ticket still open 30 days after its `done` decision
+drops out of the list; the next tick reads it, marks it done again, and that decision lists it for another 30 days.
+The 30 days bound the list by the tickets a human might not have closed yet, not by every ticket the loop ever
+finished.
+
+Not listed: a ticket whose newest `done` decision has the rationale `closed`, since the tracker reports it closed and
+the rule above already records nothing for it, so once it is reopened the query finds it again as before; and a ticket
+marked done with no `done` decision since the operator last forgot it (§22), whose done mark the overseer has not
+explained. One cut off between `ticket set --done` and its decision is read again by the next tick, which marks it
+done again, as before this list. A merged ticket reopened in the tracker for follow-up was never worked again: the
+overseer found its merged PR and marked it done again each tick. Listed, it is left out instead, and the operator
+brings it back with `canopy forget`, which clears the done mark, so the query finds it as a ticket the journal has not
+seen.
 
 ## 8. Dispatch and the worker contract
 
@@ -467,7 +558,7 @@ dispatch names at least one, in a workspace of one repository too.
      instead, in code, and a `--label` given for it is ignored.
    - `stopped`: the ticket's start record is stopped (§22), whatever label is passed. `private`: a `split` of a
      started ticket, since a split creates tickets in the tracker. `no_read_tools`: a started ticket when no tracker
-     tools are known for its worker (§22).
+     tools are known for its worker (§22), or a labeled one its dispatch would start under `tracker.private`.
    - `bad_request`: `--request` on a kind other than `split`.
    - `unknown_repo`: no `--repo`, or one not in the map or with no primary clone; for a split's child, any repository
      but the one the split recorded for it. Naming a repository the ticket has no unit in yet adds that unit (§18,
@@ -532,6 +623,16 @@ dispatch names at least one, in a workspace of one repository too.
      cannot drop it, and so is a file that is missing, not UTF-8, or over 4 KiB: every run's prompt carries it, and a
      worker without it would work as if the operator had never written it. It is the operator's own text, an
      instruction like their messages, and the prompt's obligations come before it.
+   - Every prompt but a split's carries `{{NOTICE}}`, the operator's notice in force (Notices to workers, below), or
+     `None.` without one. While one is in force, a prompt without the placeholder is `bad_prompt`.
+   - A public ticket's `implement`, `fix-ci`, and `resume` prompts carry `{{PREVIOUS_RUNS}}`: its latest three ended
+     runs since any forget, oldest first, each with its kind, how it ended, and the messages it recorded (step 7):
+     its report, and a `blocked` run's question. Each run starts a fresh session (A fresh session per run, below), so
+     this is how a worker learns what the runs before it concluded. A report is worker text, written after reading
+     the ticket, PRs, and CI logs, so the prompt calls it data to check against the branch and PR, and keeps it off
+     the ticket and PRs, since it may repeat the operator's messages. A summary and a question are each at most 2000
+     characters, so the section is bounded. A private ticket's prompt has the same reports in `{{CONVERSATION}}`. An
+     override without the placeholder still renders: nothing in it is a check the worker must make.
    - Every `implement`, `fix-ci`, and `resume` prompt carries `{{COMMIT_ATTRIBUTION}}`, the instruction for its
      commits' attribution: keep the runtime's trailer, or add the one rendered from `trust.commit_trailer_name` and
      `trust.commit_trailer_email` (§12); with `trust.commit_trailer` off, keep the runtime's and add none.
@@ -542,7 +643,8 @@ dispatch names at least one, in a workspace of one repository too.
    - A started ticket's run renders the kind's private variant, `worker-<kind>-private.md` (§22): no label check, no
      tracker writes, and `{{CONVERSATION}}`, the ticket's latest journal messages, which an override must keep.
      The start record is read again in the transaction that inserts the run, so a `canopy stop` that commits first
-     refuses the dispatch (`stopped`) and its leases are returned.
+     refuses the dispatch (`stopped`) and its leases are returned. Under `tracker.private`, a labeled ticket's first
+     dispatch writes the record there and its run is private from the first (§22).
    - The prompt is written to `<state_dir>/runs/<run_id>.prompt`, readable only by the operator.
 4. Spawn `python -m canopy _run <run_id>` with canopy's own interpreter, detached (`setsid`, stdin from `/dev/null`,
    stdout and stderr appended to `<state_dir>/runs/<run_id>.log`, cwd the workspace root), holding its lifelock
@@ -575,7 +677,15 @@ dispatch names at least one, in a workspace of one repository too.
    `CANOPY_RUN_ID` set to the run's id, `CANOPY_GIT_OBJECTS` to the object directory, and cwd = the slot, or for a
    joint run the desk (§18), which
    `_run` makes now with one link per slot. Record the worker's pid in `runs.worker_pid`; the worker leads its own
-   process group. Its stdout and stderr go to the run log.
+   process group. Its stdout and stderr go to the run log: each line of stdout as the worker prints it, its stderr
+   once it ends. While it runs, `_run` reads each event (§13) as it comes and records on the run what they report so
+   far: the session at the first event that names one, what it has spent at each `step_finish`, and its latest tool
+   call at each `tool_use` (`runs.activity_tool`, `activity`, `activity_at`: the tool, a shell call's command or else
+   the runtime's title, and when), so a running run shows more than `running` in `canopy status` and the web UI
+   (§22), and its transcript grows as it goes. Only a row still `running` is written. A write the journal refuses is
+   logged and passed over, since raising would kill the worker; step 4 records the session and cost again. Taken on
+   request (2026-10-15); a run's events used to reach its log only as it ended, since stdout was captured whole
+   (ROADMAP M27).
 4. Parse the last line of the worker's text that starts with `{` as the result contract: its stdout, or the text of
    OpenCode's JSON events (§13). Missing or invalid means `status='unknown'`; a timeout means `status='timeout'`.
    Record the session id and cost the events reported on the run at once, also after a timeout, so a git failure after
@@ -625,19 +735,21 @@ Every git the harness runs, here, in a review (§21), and in `canopy init` and `
 -c protocol.ext.allow=never` (D107). A slot shares its git directory with the pool and the primary clone, and a worker
 can write there, so without them a hook or monitor it planted would run on the host, outside the worker, in step 2 or
 5 or in a later run or review. A command named in that directory's config (a filter driver,
-`remote.<name>.uploadpack`) still runs; closing that takes a git directory the worker cannot write (HOST_ISOLATION
-§4.2). The worker's own git is unaffected, so its push runs the repository's hooks; step 5's fallback push runs none,
-so a repository whose push needs one (Git LFS's `pre-push`) depends on the worker pushing.
+`remote.<name>.uploadpack`) still runs; closing that takes a git directory the worker cannot write (§24, Git state).
+The worker's own git is unaffected, so its push runs the repository's hooks; step 5's fallback push runs none, so a
+repository whose push needs one (Git LFS's `pre-push`) depends on the worker pushing.
+`core/hostgit.py` also adds `-c maintenance.auto=false -c gc.auto=0`, so no git the harness runs starts git's
+automatic maintenance in the background on the shared directory while other slots' runs use it. `canopy workspace
+sync` sets the same in each primary clone's config, for the worker's git and treehouse's (§18).
 
-The object directory is for a sandboxed worker (HOST_ISOLATION §4.2), which cannot write the git directory its slot
+The object directory is for a sandboxed worker (§24, Git state), which cannot write the git directory its slot
 shares, objects included. `_run` passes it as `CANOPY_GIT_OBJECTS` and never sets git's own variables for the worker:
 those reach every git its tools run, so a commit in any other repository would land there and break that repository
 once the directory goes. A sandbox wrapper, which knows its worker is sandboxed, points git at it, in the run's
-worktrees only (HOST_ISOLATION §4.2). An unsandboxed
-worker ignores it, the directory stays empty, and steps 5 and 6 run as if it did not exist. Rejected: deleting the
-directory without tidying the slots (git in the slot, and `gc` in the primary clone, then fail); letting a sandboxed
-worker write the shared object directory (it could delete objects other slots need); a temporary directory (reconcile
-could not find it after a SIGKILL).
+worktrees only. An unsandboxed worker ignores it, the directory stays empty, and steps 5 and 6 run as if it did not
+exist. Rejected: deleting the directory without tidying the slots (git in the slot, and `gc` in the primary clone, then
+fail); letting a sandboxed worker write the shared object directory (it could delete objects other slots need); a
+temporary directory (reconcile could not find it after a SIGKILL).
 
 Worker result contract, one JSON line, last line of the worker's text (§13):
 
@@ -708,6 +820,73 @@ that server can read. `fix-ci` and `split` open no PRs and ignore the key. Updat
 a stacked
 one, stays with the MCP.
 
+### A fresh session per run
+
+Every worker run starts a new session, `fix-ci` and `resume` included. None continues the session of the run before
+it, though OpenCode could (`opencode run --session`). What carries from one run to the next is the pushed branch, its
+PR, the ticket's cursors (§7), the overseer's `--context`, and what the latest runs reported (`{{PREVIOUS_RUNS}}`,
+step 3); the earlier session stays for the operator to open (§13). Decided for M15 (2026-10-16), from the runs
+measured by then (MEASUREMENTS 2026-10-15):
+
+- A prompt is rendered for its run: the notice in force, the standing instructions, the operator's messages, the
+  attempt, and the context. A continued session keeps every earlier prompt, so a lifted notice or a superseded message
+  would still read as the operator's. This is PRIOR_ART's contamination of long-lived sessions.
+- A run lands on any slot (§9), and the earlier transcript names the earlier slot's or desk's paths, which another
+  ticket's run may hold by then.
+- Feedback runs are short: `fix-ci` took a median 0.8 minutes and `resume` 1.0. By the time one starts the provider's
+  cache has expired, after `policy.fix_ci_cooldown_minutes` or a wait on review, so a continued session would write
+  the earlier run's whole context to the cache on its first call and read it back on every call after.
+- What the earlier run read, CI logs and review comments, would come along. A fresh run reads only what it needs.
+
+Revisit if `fix-ci` or `resume` runs often end `blocked` or `failed` for want of what the earlier run worked out,
+visible in their transcripts as steps spent finding it again.
+
+### Notices to workers
+
+A notice (ROADMAP M35, REQUIREMENTS R15) tells every run that builds, tests, or reads CI about something passing
+outside the work, such as "Artifactory is down: CI builds will likely fail", for as long as it lasts. The standing
+instructions (§12) carry text to workers too, but they never lapse, the overseer never reads them, and nothing shows
+they are in force, so a line about an outage outlives it or is forgotten.
+
+- A notice is a journal fact, like the pause (§6): its text, when and through which channel it was set, and when it
+  lapses (`notices`, §11; `core/notice.py`). One is in force at a time: setting another ends the one before it, and
+  `canopy notice --clear` ends it early. A lapsed notice reads as none, so nothing deletes it, and the rows stay for
+  the overseer's look back (below).
+- `canopy notice 'TEXT' [--for DURATION]` sets it, for `90m`, `4h`, `2d`, or any whole number of minutes, hours, or
+  days up to seven days; four hours without `--for`. `canopy notice` alone prints the one in force, and `canopy status`
+  names it after the pause. The web UI sets it from Settings and clears it from the banner every page shows while one
+  is in force (§22). Setting or clearing one refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set,
+  as `pause` and `reply` do: a notice reaches every later run's prompt, so an agent steered by one ticket's text could
+  otherwise write instructions into every other ticket's runs (TRUST_MODEL T1). Reading it refuses nothing.
+- Its text is bounded when it is set, at 1 KiB of UTF-8 after trimming, apart from the standing instructions' 4 KiB, so
+  no dispatch fails on a notice's size: the operator hears `too_long` at once, not from a refused run later. A blank
+  text is `empty`; a duration out of range or of another form is `bad_duration`.
+- Who hears it: `implement`, `fix-ci`, and `resume` workers, public and private, through `{{NOTICE}}`, under its own
+  heading beside the standing instructions; reviews (§21), through the reviewer's `{{NOTICE}}`; and chores (§19),
+  as `notice` in the generated `## Run` object, which the operator's file cannot drop. A split hears none: it reads
+  and writes the ticket and builds nothing. The prompt is rendered at dispatch, so a run already running keeps the
+  prompt it started with. A worker leaves a failure the notice explains alone and says so in its summary; a reviewer
+  does not count one as a finding.
+- An override written before notices existed still serves while none is in force. While one is, a prompt without
+  `{{NOTICE}}` is `bad_prompt`, as one without `{{STANDING_INSTRUCTIONS}}` is once that file is set, so an old
+  override cannot drop a notice silently. `canopy notice` names each such override when it sets one, with the kinds
+  that will refuse until the override gains the placeholder or the notice ends.
+- The overseer reads the notices in force or ended in the last seven days (§6 step 4). A failed check whose run started
+  while a notice was in force, and that the notice explains, is held: the overseer records `wait`, sends no `fix-ci`,
+  whose attempts never reset (D030), and leaves the `ci` cursor. It stays held after the notice ends until a newer run
+  of that check exists, so an ending alone never sends `fix-ci` at the outage's failure. Once the notice has ended and
+  no newer run exists, the overseer records `notice_rerun` (§14) for the operator to rerun the check; with M25 built,
+  `triage-ci` reruns it where triage is on. No guard in code: whether a failure is the one the notice names is
+  judgment, read from the check's output and the notice's words. What code does guard is the overseer deciding from a
+  stale state block: a `fix-ci` dispatched after the operator set or cleared a notice since its tick read the journal
+  is refused `notice_changed`, and the tick the notice wakes decides with it.
+- Setting or clearing a notice is an operator act, like a message: it wakes the loop's wait, keeps the next tick from
+  counting as idle, and is recorded as `woken_by` `notice` (§6). Its lapse is a gate the wait ends at, like a `fix-ci`
+  cooldown's end, so held work is looked at again when the notice lapses, not up to `loop.idle_max_minutes` later.
+
+Open: whether a notice should name repositories, so an outage in one repository's CI does not reach runs in another.
+Every notice reaches every run until real use shows the need.
+
 ## 9. Aggressive release
 
 - Slots are held only for the duration of `_run`.
@@ -730,7 +909,9 @@ Three steps, all the operator's, in the order they run:
    (§8), before treehouse touches a slot.
 2. **`post_create` hooks**, in the user-level treehouse config, run after seeding when a slot is made or reused: on
    the base, before `_run` checks out the run's branch. A failing hook is printed and the lease stands. They suit
-   setup that depends on the base alone, such as a toolchain or a warm fetch.
+   setup that depends on the base alone, such as a toolchain or a warm fetch. They are treehouse's: canopy's own pool
+   (`pools.backend = "canopy"`, §18) runs none, and what one did moves to `setup_cmd`, made to tolerate its own
+   failure where the hook's was ignored (`|| true`); BAZEL.md shows how.
 3. **`runtime.setup_cmd`**, user-only, runs in each slot of a worker run after `_run` checks out its branch (§8
    `_run` step 2), and fails the run when it fails. It suits setup that depends on the branch or must succeed:
    installing the branch's dependencies, generating code its build needs. It is split into words as `notify.cmd` is,
@@ -739,7 +920,7 @@ Three steps, all the operator's, in the order they run:
 
 `setup_cmd` runs the branch's code (a lockfile's install scripts, a generator) on the operator's machine, outside the
 agent runtime's permissions. It is the code the worker's own shell runs a moment later, but outside any sandbox around
-`worker_cmd`, so it is wrapped the same way (HOST_ISOLATION §4.4, TRUST_MODEL T4). A broken setup crashes every run it
+`worker_cmd`, so it is wrapped the same way (§24, TRUST_MODEL T4). A broken setup crashes every run it
 meets, each spending an attempt (D030) and raising `crashed` (§14), whose note names it.
 
 ### Bazel

@@ -56,7 +56,7 @@ Millis = Annotated[StrictInt, Field(ge=0, le=_MAX_MS)]
 
 
 class _Part(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
 
 class _Text(_Part):
@@ -92,7 +92,7 @@ class _Tokens(_Part):
     input: agent_output.Count = 0
     output: agent_output.Count = 0
     reasoning: agent_output.Count = 0
-    cache: _Cache = _Cache()
+    cache: _Cache = Field(default_factory=_Cache)
 
 
 class _Step(_Part):
@@ -224,6 +224,26 @@ def read(path: Path, session_id: str) -> Transcript | None:
         # The last line read may be cut short; it is not an event then.
         data = data[: data.rfind(b"\n", 0, MAX_BYTES) + 1]
     return _parse(data.decode("utf-8", errors="replace").splitlines(), session_id, truncated=truncated)
+
+
+def did(event: dict[str, object]) -> tuple[str, str] | None:
+    """What a `tool_use` event's call did, on one line, for a running run's row (DESIGN §8): its tool, and what it did.
+
+    What it did is a shell call's command, since its title is only what the agent said it was for; else the runtime's
+    title; else empty. Each is cut to `MAX_NAME` characters, control characters dropped and whitespace collapsed, as a
+    transcript's tool and title are.
+
+    Returns:
+        The tool's name and what it did, or None when `event` is not a `tool_use` event that validates.
+    """
+    if event["type"] != "tool_use":
+        return None
+    try:
+        tool = _Tool.model_validate(event.get("part"))
+    except ValidationError:
+        return None
+    command = tool.state.input.get("command")
+    return _line(tool.tool), _line(command if isinstance(command, str) else tool.state.title or "")
 
 
 def tail(path: Path) -> Tail | None:

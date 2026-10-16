@@ -1,9 +1,9 @@
 # canopy requirements
 
 The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 to R17
-on 2026-10-14), and where canopy stands on each. The design (`design/`) is how canopy meets them; this file is what it
-must meet. Where the two disagree, the conflict is listed under [Conflicts](#conflicts) until a `DECISIONS.md` entry
-settles it, and the design doc stays normative until then (AGENTS.md).
+on 2026-10-14, R18 on 2026-10-15), and where canopy stands on each. The design (`design/`) is how canopy meets them;
+this file is what it must meet. Where the two disagree, the conflict is listed under [Conflicts](#conflicts) until a
+`DECISIONS.md` entry settles it, and the design doc stays normative until then (AGENTS.md).
 
 A bare § is a section of the design (`design/`). Status words:
 
@@ -76,8 +76,9 @@ Built in code (M3), live acceptance pending. `fix-ci` and `resume` runs continue
 cursors so each failure and comment is handled once (§7, §8), attempt limits and a cooldown in code (D030).
 
 Partial on "the agent that owns the PR": each run is a fresh worker on the pushed branch with no transcript of the run
-before it. That is deliberate (PRIOR_ART: long-lived sessions fed events contaminate). Whether a feedback run should
-continue the earlier run's OpenCode session is a question for M15, answered against the decisions corpus.
+before it. That is deliberate (PRIOR_ART: long-lived sessions fed events contaminate), and M15 kept it: a feedback run
+does not continue the earlier run's OpenCode session (§8, A fresh session per run). It reads the latest runs'
+reports instead (`{{PREVIOUS_RUNS}}`).
 
 Known prompt gap that makes routing noisier than it should be (PRIOR_ART "In prompts"): CI newness is keyed on the
 check run id so a re-run counts as new. The worker's own PR replies no longer read back as new feedback: workers mark
@@ -160,6 +161,8 @@ workers can only read the tracker; questions reach the attention list (`awaiting
 operator answers with `canopy reply` or from the web UI. Its branch and PR title still name the ticket key, which a
 tracker's VCS integration may link to the ticket (DESIGN §22, Open).
 The PR still carries the commit attribution TRUST_MODEL T5 gives it: privacy covers the conversation, not authorship.
+With `tracker.private` set, a labeled ticket is started privately by its first dispatch (D119): the operator's queue
+label brings it in, and the label stays visible on the ticket.
 
 ### R12. One record of every ticket's conversation
 
@@ -196,12 +199,13 @@ the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, 
 
 ### R15. Tell every run that builds or reads CI about a passing condition, for as long as it lasts
 
-Gap (M35). Written down 2026-10-14. When something outside the work goes wrong for a while (an artifact registry
-outage, so CI builds will likely fail), the operator should be able to say so once and have every run that builds,
-tests, or reads CI hear it until it is over, without editing a file and remembering to edit it back. The overseer
-should hear it too, so it does not spend `fix-ci` attempts, which never reset (D030), on failures the notice explains.
-`paths.worker_instructions` (§12) carries text to workers today, but it never lapses, the overseer, reviews, and chores
-never read it, and nothing shows it is in force.
+Built in M35, live acceptance pending (SCENARIOS S37). Written down 2026-10-14. When something outside the work goes
+wrong for a while (an artifact registry outage, so CI builds will likely fail), the operator should be able to say so
+once and have every run that builds, tests, or reads CI hear it until it is over, without editing a file and remembering
+to edit it back. The overseer should hear it too, so it does not spend `fix-ci` attempts, which never reset (D030), on
+failures the notice explains. `paths.worker_instructions` (§12) carries text to workers, but it never lapses, the
+overseer, reviews, and chores never read it, and nothing shows it is in force; a notice to workers (`canopy notice`, or
+the web UI's settings page, §8) lapses, reaches all of them, and shows on every page while it lasts.
 
 ### R16. Change limits and tighten trust settings from the web UI
 
@@ -211,15 +215,31 @@ be able to change those from the web UI's settings page and have the loop take t
 settings may be changed from the page only toward stricter: removing an authorized replier or a trusted reviewer,
 turning `trust.rebase` off, turning the commit trailer on. Loosening one, or changing any key that runs a command,
 chooses a prompt, or moves the listener, stays an edit to the file. The Limits and trust page under Settings does
-this, within ceilings in code (§12, TRUST_MODEL T8, D118).
+this, within ceilings in code (§12, TRUST_MODEL T8, D120).
 
 ### R17. Review a coworker's PR on request, once or for as long as it is open
 
-Gap (M42). Written down 2026-10-14. The operator should be able to hand canopy someone else's PR to review: once, at
-its current commit, or watched, reviewed again at each new commit until it merges or closes. Today canopy reviews a PR
-only as the loop's own (`review.agent_prs`) or as a match of `review.query`, a standing search in the user file, so
-one PR means editing config and editing it back. The review is what any canopy review is: findings in the journal for
-the operator, posted nowhere (D114), with no worker and no ticket.
+Built in part (M42): `canopy start URL --review`, or the web UI's pull requests page, has canopy review a
+PR once, at its head (§21, Review requests); the live check is SCENARIOS S37. Watching one, reviewed again at each new
+commit until it merges, is deferred (ROADMAP's deferred list): the operator judged it more than MVP needs. Written down
+2026-10-14. The operator should be able to hand canopy someone else's PR to review: once, at its current commit, or
+watched, reviewed again at each new commit until it merges or closes. Before M42 canopy reviewed a PR only as the
+loop's own (`review.agent_prs`) or as a match of `review.query`, a standing search in the user file, so one PR meant
+editing config and editing it back. The review is what any canopy review is: findings in the journal for the
+operator, posted nowhere (D114), with no worker and no ticket.
+
+### R18. Plan a ticket before implementing it, and keep the plan
+
+Planned (M44, §25). Written down 2026-10-15. Planning should be a step canopy can take for a ticket: a run that reads
+the ticket and the code and writes down how it will do the work, before any `implement` starts. Two reasons. A worker
+that starts from an explicit plan should do better than one that plans as it goes. And the plan should be kept, so
+the operator can read it later for any ticket, as they read its conversation and runs today: on disk, as a file of its
+own outside the journal (2026-10-16), that they can read and edit with their own tools.
+
+Whether a ticket is planned is a config default the operator can change for one ticket. When a ticket is planned, the
+operator reads the plan before work starts: nothing is implemented until they approve it, and a reply asking for
+changes makes a new plan. The plan stays in canopy and is posted nowhere, so a private ticket is planned the same way.
+Today the `implement` worker plans inside its own session, and nothing of it survives but its summary.
 
 ## Nice to have
 
@@ -232,11 +252,13 @@ the operator, posted nowhere (D114), with no worker and no ticket.
 - **N3. Planner agent that splits a larger ticket into worker tasks.** Built in M8, live acceptance pending, and only on
   request: an authorized replier's comment asks for the split. The split creates child tickets
   in the tracker, blocked on each other in order, with no queue label; the operator labels each to start it (§18).
+  ROADMAP M46 replaces it: any worker files follow-up tickets, worked under its ticket's authorization, and a split
+  is a run doing that on request.
 - **N4. Copilot CLI support.** Deferred until a coworker asks. More than a config change: canopy's definitions
   directory, its permissions, and the D044 guard are written in OpenCode's terms, so a second runtime needs its own
   definitions set and its own shadowing check (ROADMAP's deferred list).
 - **N5. Docker or remote sandbox runtimes later.** Deferred. A local OS sandbox, opt-in, is ROADMAP M26
-  (`HOST_ISOLATION.md`). A remote sandbox runs agents off the operator's machine, so it would change H1 and needs its own
+  (DESIGN §24). A remote sandbox runs agents off the operator's machine, so it would change H1 and needs its own
   decision first.
 
 ## Non-goals for now

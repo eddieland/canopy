@@ -23,11 +23,12 @@ describe('stuck', () => {
 })
 
 describe('limitLabel', () => {
-    it("names a unit's kind and repository, and a PR's reviews by its repository and number", () => {
+    it("names a unit's kind and repository, and a PR's reviews by the PR's name", () => {
         expect(limitLabel(unit)).toBe('fix-ci in web')
-        expect(limitLabel(review)).toBe('reviews of web#88')
-        expect(limitLabel({ ...review, repo: null })).toBe('reviews of #88')
-        expect(limitLabel({ ...review, pr_url: 'https://example.test/x' })).toBe('reviews')
+        expect(limitLabel(review)).toBe('reviews of acme/web#88')
+        expect(limitLabel({ ...review, repo: null })).toBe('reviews of acme/web#88')
+        expect(limitLabel({ ...review, pr_url: 'https://example.test/x' })).toBe('reviews of example.test/x')
+        expect(limitLabel({ ...review, pr_url: null })).toBe('reviews')
     })
 })
 

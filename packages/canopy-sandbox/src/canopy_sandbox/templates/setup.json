@@ -1,7 +1,7 @@
 {
   "#": [
     "canopy-sandbox's template for runtime.setup_cmd, which runs the branch's code in each slot before the worker",
-    "starts (HOST_ISOLATION §4.4). canopy sandbox setup copies it to ~/.config/canopy/sandbox/setup.json; fill in",
+    "starts (DESIGN §24). canopy sandbox setup copies it to ~/.config/canopy/sandbox/setup.json; fill in",
     "your registries and trim the toolchains to yours there. Keys starting with # are comments; @NAME@ strings are",
     "the paths canopy-sandbox fills in for each run."
   ],
@@ -28,6 +28,7 @@
       "@GIT_SHARED@",
       "@OBJECTS@",
       "@TMPDIR@",
+      "@CACHE@",
       "~/.gitconfig",
       "~/.config/git",
       "~/.local/bin",
@@ -41,7 +42,8 @@
       "@WORKTREES@",
       "@GIT_OWN@",
       "@OBJECTS@",
-      "@TMPDIR@"
+      "@TMPDIR@",
+      "@CACHE@"
     ],
     "denyWrite": ["@GIT_PROTECTED@"]
   }

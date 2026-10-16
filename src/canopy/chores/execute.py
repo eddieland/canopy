@@ -18,6 +18,7 @@ from canopy.core import agent_output, conversation, db, definitions, outbox
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
 from canopy.core.config import render_command
+from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import logs, procs, stopping
 
 if TYPE_CHECKING:
@@ -51,7 +52,7 @@ class Outcome:
     `printed` is what the agent printed, None when the run ended before its agent did.
     """
 
-    status: str
+    status: ChoreRunStatus
     result: result.ChoreResult | None
     note: str = ""
     printed: Printed | None = None
@@ -76,36 +77,36 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     run = db.get_chore_run(ctx.conn, run_id)
     if run is None:
         raise ChoreError(f"no chore run {run_id}")
-    if not db.claim_chore_run(ctx.conn, run_id, os.getpid()):
+    if not db.claim_run(ctx.conn, "chore_runs", run_id, os.getpid()):
         raise ChoreError(f"chore run {run_id} is not waiting to start: it is {run['status']} or another process has it")
     log = logs.for_tick(int(run["tick_id"]) if run["tick_id"] is not None else None)
     fields = {"chore_run_id": run_id, "chore": run["chore"]}
     log.info("chore run started", extra=fields)
-    outcome = Outcome("crashed", None, "the chore run stopped before its agent finished")
+    outcome = Outcome(ChoreRunStatus.CRASHED, None, "the chore run stopped before its agent finished")
     with stopping.StopOnSignal() as stop:
         try:
             outcome = _work(ctx, run, out, log)
         except stopping.Stopped as e:
-            outcome = Outcome("crashed", None, str(e))
+            outcome = Outcome(ChoreRunStatus.CRASHED, None, str(e))
         except SetupError as e:
-            outcome = Outcome("crashed", None, str(e))
+            outcome = Outcome(ChoreRunStatus.CRASHED, None, str(e))
             log.error("chore run not started", extra={**fields, "error": str(e)})  # noqa: TRY400
         except Exception as e:
-            outcome = Outcome("crashed", None, f"{type(e).__name__}: {e}")
+            outcome = Outcome(ChoreRunStatus.CRASHED, None, f"{type(e).__name__}: {e}")
             log.exception("chore run failed", extra=fields)
         finally:
             stop.armed = False
             stored = outcome.result_json()
             ended = outbox.chore_ended(ctx.config, run, outcome.status, stored)
-            if not db.finish_chore_run(ctx.conn, run_id, outcome.status, stored, event=ended):
+            if not db.finish_run(ctx.conn, "chore_runs", run_id, outcome.status, stored, event=ended):
                 log.warning("chore run was already closed; its outcome is not recorded", extra=fields)
             procs.drop_lifelock(Path(run["log_path"]))
             log.info("chore run finished", extra={**fields, "status": outcome.status})
     return outcome
 
 
-def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, list[str]]:
-    """Return where chore `name` runs and the command that runs it with `prompt`.
+def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, list[str], str]:
+    """Return where chore `name` runs, the command that runs it with `prompt`, and the definitions snapshot's digest.
 
     Raises:
         SetupError: its `cwd` is not a directory, or OpenCode config there or above shadows one of canopy's agents.
@@ -118,19 +119,22 @@ def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, l
     if shadowing:
         raise SetupError(definitions.shadowing_message(shadowing))
     template = chore.cmd if chore.cmd is not None else ctx.config.runtime.chore_cmd
-    return cwd, render_command(template, prompt, definitions.ensure(ctx.state_dir, ctx.config), f"chore:{name}")
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config)
+    return cwd, render_command(template, prompt, snapshot, f"chore:{name}"), snapshot.name
 
 
 def outcome_of(done: procs.Result, output: agent_output.AgentOutput, chore: Chore) -> Outcome:
     """Return how a chore's agent ended: timed out, its validated result from `output`, or `unknown` without one."""
     printed = Printed(output, done.stderr, done.returncode)
     if done.timed_out:
-        return Outcome("timeout", None, f"the chore timed out after {chore.timeout_minutes} minutes", printed)
+        return Outcome(
+            ChoreRunStatus.TIMEOUT, None, f"the chore timed out after {chore.timeout_minutes} minutes", printed
+        )
     parsed = result.parse(output.text)
     if parsed is None:
         note = "the chore's last line was not a valid result; its findings are not recorded"
-        return Outcome("unknown", None, note, printed)
-    return Outcome(parsed.status, parsed, printed=printed)
+        return Outcome(ChoreRunStatus.UNKNOWN, None, note, printed)
+    return Outcome(ChoreRunStatus(parsed.status), parsed, printed=printed)
 
 
 def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) -> Outcome:
@@ -144,7 +148,7 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     run_id = int(run["id"])
     # Beside the row's log, so a run started before an upgrade moved the directory still finds its prompt.
     prompt = start.prompt_file(Path(run["log_path"])).read_text(encoding="utf-8")
-    cwd, argv = prepare(ctx, name, chore, prompt)
+    cwd, argv, digest = prepare(ctx, name, chore, prompt)
     log.info(
         "running chore",
         extra={"chore_run_id": run_id, "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": chore.timeout_minutes},
@@ -155,15 +159,17 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
         # The operator's commands refuse inside canopy's own runs (DESIGN §22).
         env={conversation.RUN_ID_ENV: f"chore-{run_id}"},
         timeout=chore.timeout_minutes * 60,
-        on_start=lambda pid: db.set_chore_agent_pid(ctx.conn, run_id, pid),
+        on_start=lambda pid: db.set_agent_pid(ctx.conn, "chore_runs", run_id, pid),
     )
     out.write(f"--- chore stdout ---\n{done.stdout}\n--- chore stderr ---\n{done.stderr}\n")
     out.write(f"--- chore exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
     output = agent_output.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
-        db.set_chore_run_report(ctx.conn, run_id, output.session_id, output.usage)
-        spent = {"cost_usd": output.usage.cost_usd, "tokens": output.usage.tokens} if output.usage else {}
+        db.set_run_report(
+            ctx.conn, "chore_runs", run_id, output.session_id, output.usage, digest=digest, tools=output.tools
+        )
+        spent = output.usage.spent() if output.usage else {}
         log.info("chore reported", extra={"chore_run_id": run_id, "session_id": output.session_id, **spent})
     return outcome_of(done, output, chore)
 

@@ -1,6 +1,8 @@
 import hashlib
 import os
+import re
 import sqlite3
+import typing
 from collections import Counter
 from collections.abc import Mapping
 from pathlib import Path
@@ -8,9 +10,9 @@ from pathlib import Path
 import pytest
 
 from canopy.core import db
+from canopy.core.agent_output import ToolUse, Usage
 from canopy.infra import resources
-from tests.canopy.helpers import journal_at, shipped_through, versions_after
-from tests.canopy.test_reconcile import DEAD_PID
+from tests.canopy.helpers import DEAD_PID, journal_at, shipped_through, versions_after
 from tests.conftest import Journals
 
 # Each shipped migration's sha256, over LF line endings. A journal applies a migration once, so an edit to a shipped
@@ -40,6 +42,15 @@ SHIPPED = {
     21: "58c9215c4a5ebe34410cc620a9feeb8f7b8fb60a9cb23fdced184000ee5b6fdc",
     22: "089e023a4a03edec3e74abb101b22e5b1e54461350e31d5122323a23db227398",
     23: "321b5eeb0950f7a6dc158d2ec0a3e3f0a0e11bf143eb432936ec9f8bd6f2c8e8",
+    24: "a59b144fa265e361eddef9a9366dc48552d723a9f03c640823297446ef3a12a0",
+    25: "ed074227c70399b039f9560b50ae9ec4e6adbc43cce5c909552f728019da73ff",
+    26: "77d395b0529f9fb1bf83d67f0d7518dec52429d972b41001ac29b08fe08ad3db",
+    27: "724265400f40f3aaeaa8afbe35981bd529a60687d194924ce4c7d3bb3b008cbc",
+    28: "3c266ae47f52ea5fffd544c191f393dfced6137ec43815d42ea3ceac1080045c",
+    29: "7b9d9b97ca0437fcda64f39906fdf2349afab356539fbeff85b7c4b4a7cc4105",
+    30: "b5c91635acb0fcc0acbfdce96241ff5cac50440c7a85d5ed621df57745fdcef5",
+    31: "429563f0913dd074cb33951d58303b4e65af768bfd43b0a02ec6ce71771cdaec",
+    32: "a69f227a77b632c3bddf0be6c71852ad3cf2747fcdec099ec10ef1cf566d7f9d",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -96,6 +107,18 @@ SEED: Mapping[str, str] = {
         "INSERT INTO review_dismissals (review_run_id, finding, dismissed_at, channel) VALUES (1, 1, 'x', 'cli')"
     ),
     "review_grants": "INSERT INTO review_grants (pr_url, runs, granted_at) VALUES ('https://e.test/pr/7', 1, 'x')",
+    "notices": (
+        "INSERT INTO notices (body, set_at, channel, lapses_at, ended_at, ended_channel) "
+        "VALUES ('CI is down.', 'x', 'cli', 'y', 'z', 'web')"
+    ),
+    "review_requests": (
+        "INSERT INTO review_requests (pr_url, created_at, channel) VALUES ('https://e.test/pr/7', 'x', 'cli')"
+    ),
+    "slots": "INSERT INTO slots (repo, name, path) VALUES ('api', '1', '/w/pools/api/1/api')",
+    "run_tools": (
+        "INSERT INTO run_tools (run_table, run_id, tool, calls, errors, result_chars) "
+        "VALUES ('runs', 1, 'bash', 2, 0, 9)"
+    ),
 }
 
 
@@ -215,6 +238,123 @@ def test_journal_newer_than_code_is_an_error(tmp_path: Path, journals: Journals)
         db.migrate(conn, resources.migrations_dir())
 
 
+# What the shared run lifecycle reads and writes in every table of detached runs (`db.claim_run` and the rest), besides
+# the column each keeps its agent's pid in.
+LIFECYCLE_COLUMNS = frozenset(
+    {
+        "id",
+        "pid",
+        "status",
+        "started_at",
+        "ended_at",
+        "result_json",
+        "log_path",
+        "session_id",
+        "cost_usd",
+        "tokens_input",
+        "tokens_output",
+        "tokens_reasoning",
+        "tokens_cache_read",
+        "tokens_cache_write",
+        "tokens_peak_context",
+        "tokens_first_call",
+        "tokens_first_cache_write",
+        "definitions_digest",
+    }
+)
+
+
+def test_every_run_table_has_what_the_shared_lifecycle_needs(tmp_path: Path, journals: Journals) -> None:
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+    assert set(typing.get_args(db.RunTable.__value__)) == set(db.RUN_TABLES)
+    assert set(db.RUN_NOUNS) == set(db.AGENT_PID) == set(db.RUN_TABLES)
+    for table in db.RUN_TABLES:
+        columns = {r["name"] for r in conn.execute("SELECT name FROM pragma_table_info(?)", (table,))}
+        assert columns >= LIFECYCLE_COLUMNS | {db.AGENT_PID[table]}, table
+
+
+def test_a_report_keeps_the_first_call_and_the_snapshot_only_with_what_the_runtime_reported(
+    tmp_path: Path, journals: Journals
+) -> None:
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+    usage = Usage(0.25, 10, 2, 0, 400, 50, peak_context=900, first_call=460, first_cache_write=50)
+    tick = db.start_tick(conn, dry_run=True)
+    db.set_tick_report(conn, tick, "ses_o1", usage, digest="0123456789abcdef")
+    row = conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone()
+    assert db.usage_of(row) == usage
+    assert row["definitions_digest"] == "0123456789abcdef"
+
+    # A plain-text overseer reported nothing: no agent canopy can tell loaded the snapshot.
+    db.set_tick_report(conn, tick, None, None, digest="0123456789abcdef")
+    row = conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone()
+    assert (row["tokens_first_call"], row["tokens_first_cache_write"], row["definitions_digest"]) == (None,) * 3
+
+    # A cost recorded before the first call was kept reads it as unknown.
+    db.set_tick_report(conn, tick, "ses_o1", Usage(0.25, 10, 2, 0, 400, 50, peak_context=900))
+    usage = db.usage_of(conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone())
+    assert usage is not None
+    assert (usage.first_call, usage.first_cache_write) == (None, None)
+
+
+def test_a_report_replaces_the_tools_a_run_recorded(tmp_path: Path, journals: Journals) -> None:
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+    tick = db.start_tick(conn, dry_run=True)
+    usage = Usage(0.25, 10, 2, 0, 400, 50)
+    db.set_tick_report(conn, tick, "s", usage, tools=[ToolUse("bash", 2, 1, 30), ToolUse("read", 1, 0, 90)])
+    assert [(t.tool, t.calls, t.errors, t.result_chars) for t in db.run_tools(conn, "ticks", tick)] == [
+        ("read", 1, 0, 90),
+        ("bash", 2, 1, 30),
+    ]
+    assert db.run_tools(conn, "runs", tick) == []  # another table's run of the same id called none
+    db.set_tick_report(conn, tick, "s", usage, tools=[ToolUse("bash", 3, 1, 40)])
+    assert [t.calls for t in db.run_tools(conn, "ticks", tick)] == [3]
+    db.set_tick_report(conn, tick, None, None)
+    assert db.run_tools(conn, "ticks", tick) == []
+
+
+# The last migration before M36. A table made after it constrains each column of a closed vocabulary (`core/vocab.py`)
+# in SQL; the tables before it list their values in comments, since a shipped migration is never edited.
+UNCHECKED_THROUGH = 26
+CLOSED_COLUMNS = frozenset({"status", "kind", "phase"})
+
+
+def unchecked(conn: sqlite3.Connection, made: set[str]) -> list[str]:
+    """The `table.column` of each closed column in the tables `made` with no `CHECK (column IN (...))`."""
+    found: list[str] = []
+    for table in sorted(made):
+        sql = str(
+            conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone()[0]
+        )
+        columns = {str(r["name"]) for r in conn.execute("SELECT name FROM pragma_table_info(?)", (table,))}
+        found.extend(
+            f"{table}.{column}"
+            for column in sorted(columns & CLOSED_COLUMNS)
+            if not re.search(rf"CHECK\s*\(\s*{column}\s+IN\s*\(", sql, re.IGNORECASE)
+        )
+    return found
+
+
+def test_a_table_made_from_m36_on_checks_its_closed_columns(tmp_path: Path, journals: Journals) -> None:
+    before = set(tables(journal_at(journals, tmp_path / "before", UNCHECKED_THROUGH)))
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+    assert unchecked(conn, set(tables(conn)) - before) == []
+
+
+def test_a_closed_column_without_a_check_is_found(tmp_path: Path, journals: Journals) -> None:
+    migrations = shipped_through(tmp_path / "migrations", UNCHECKED_THROUGH)
+    (migrations / f"{UNCHECKED_THROUGH + 1:04d}_observed.sql").write_text(
+        "CREATE TABLE checked (id INTEGER PRIMARY KEY, status TEXT NOT NULL CHECK (status IN ('ok', 'failed')));\n"
+        "CREATE TABLE unchecked (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, phase TEXT, note TEXT);\n"
+    )
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, migrations)
+    assert unchecked(conn, {"checked", "unchecked"}) == ["unchecked.kind", "unchecked.phase"]
+
+
 def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None:
     conn = fresh(journals, tmp_path)
     db.migrate(conn, resources.migrations_dir())
@@ -236,7 +376,7 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     [unit] = db.units(conn, "PROJ-1")
     assert (unit["repo"], unit["phase"], unit["last_ci_run_id"], unit["branch"]) == ("api", "ci_red", "run-7", None)
     [decision] = db.decisions_for_tick(conn, tick)
-    assert (decision["ticket_key"], decision["action"]) == ("PROJ-1", "wait")
+    assert (decision.ticket_key, decision.action) == ("PROJ-1", "wait")
     last = db.last_tick(conn)
     assert last is not None
     assert (last["id"], last["status"], last["dry_run"]) == (tick, "ok", 1)
