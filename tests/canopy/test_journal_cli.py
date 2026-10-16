@@ -14,11 +14,6 @@ from canopy.loop import attention
 from tests.conftest import CanopyEnv
 
 
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return canopy_env.journal()
-
-
 @contextmanager
 def in_tick(conn: sqlite3.Connection, *, dry_run: bool = True) -> Iterator[int]:
     """Start a tick, a dry run by default, and act inside it: CANOPY_TICK_ID names it until the block ends."""

@@ -11,21 +11,22 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import config, db
 from canopy.runs import policy
-from tests.canopy.helpers import in_tick, journal, worker_does
-from tests.canopy.test_fix_ci_resume import dispatch_and_run, prompt_of, refused
-from tests.canopy.test_loop import canopy, overseer_does
-from tests.canopy.test_mirror import state_block
-from tests.canopy.test_private import operator
+from tests.canopy.helpers import (
+    canopy,
+    dispatch_and_run,
+    dispatch_refused,
+    in_tick,
+    operator,
+    overseer_does,
+    prompt_of,
+    state_block,
+    worker_does,
+)
 from tests.conftest import CanopyEnv, GitPool
 
 KEY = "PROJ-1"
 LABEL = ("--label", "agent-ready-tester")
 FAILED = json.dumps({"status": "failed", "summary": "could not build"})
-
-
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return journal(canopy_env)
 
 
 def fail_twice(conn: sqlite3.Connection) -> None:
@@ -48,7 +49,7 @@ def test_a_grant_lets_a_unit_at_its_limit_run_again_and_every_run_still_counts(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     fail_twice(conn)
-    [first, _] = refused(conn, *LABEL, "--kind", "implement")
+    [first, _] = dispatch_refused(conn, *LABEL, "--kind", "implement")
     assert first == ("refused:attempt_limit", "PROJ-1 in repo has had 2 implement runs and the limit is 2")
 
     # The ticket has had runs in one repository, so the grant needs no --repo.
@@ -59,7 +60,7 @@ def test_a_grant_lets_a_unit_at_its_limit_run_again_and_every_run_still_counts(
     assert "This is attempt 3 of 3." in prompt_of(canopy_env, int(run["id"]))
 
     # The granted run counted like any other: the unit is at its raised limit.
-    [first, _] = refused(conn, *LABEL, "--kind", "implement")
+    [first, _] = dispatch_refused(conn, *LABEL, "--kind", "implement")
     assert first == ("refused:attempt_limit", "PROJ-1 in repo has had 3 implement runs and the limit is 3")
     # Grants add up, and are per kind: resume keeps the policy's limit.
     assert operator("grant", KEY, "implement", "--repo", "repo", "--runs", "2") == 0

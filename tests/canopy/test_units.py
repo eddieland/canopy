@@ -19,8 +19,15 @@ from canopy.loop import attention
 from canopy.runs import desks
 from canopy.runs.dispatch import DISPATCH_LOCK
 from tests.canopy.conftest import Ws, seed_pools
-from tests.canopy.helpers import InlineRunner, in_tick, wait_for_run, worker_does
-from tests.canopy.test_reconcile import overseer_does, waits
+from tests.canopy.helpers import (
+    InlineRunner,
+    decisions,
+    in_tick,
+    overseer_does,
+    wait_for_run,
+    waits,
+    worker_does,
+)
 from tests.conftest import CanopyEnv, git
 
 LABEL = "agent-ready-tester"
@@ -30,10 +37,6 @@ PRS = {"api": "https://x.test/api/pull/1", "web": "https://x.test/web/pull/2", "
 
 def dispatch(key: str, *args: str, kind: str = "implement") -> list[str]:
     return ["dispatch", key, "--label", LABEL, "--kind", kind, *args]
-
-
-def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
-    return [(d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 def push_in(repo: str, message: str = "PROJ-1: the change") -> list[list[str]]:

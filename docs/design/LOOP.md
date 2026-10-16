@@ -730,6 +730,9 @@ can write there, so without them a hook or monitor it planted would run on the h
 `remote.<name>.uploadpack`) still runs; closing that takes a git directory the worker cannot write (§24, Git state).
 The worker's own git is unaffected, so its push runs the repository's hooks; step 5's fallback push runs none, so a
 repository whose push needs one (Git LFS's `pre-push`) depends on the worker pushing.
+`core/hostgit.py` also adds `-c maintenance.auto=false -c gc.auto=0`, so no git the harness runs starts git's
+automatic maintenance in the background on the shared directory while other slots' runs use it. `canopy workspace
+sync` sets the same in each primary clone's config, for the worker's git and treehouse's (§18).
 
 The object directory is for a sandboxed worker (§24, Git state), which cannot write the git directory its slot
 shares, objects included. `_run` passes it as `CANOPY_GIT_OBJECTS` and never sets git's own variables for the worker:
@@ -808,6 +811,26 @@ goes in the result's `prs`. The overseer and later workers still read the PR thr
 that server can read. `fix-ci` and `split` open no PRs and ignore the key. Updating an existing PR, such as retargeting
 a stacked
 one, stays with the MCP.
+
+### A fresh session per run
+
+Every worker run starts a new session, `fix-ci` and `resume` included. None continues the session of the run before
+it, though OpenCode could (`opencode run --session`). What carries from one run to the next is the pushed branch, its
+PR, the ticket's cursors (§7), and the overseer's `--context`; the earlier session stays for the operator to open
+(§13). Decided for M15 (2026-10-16), from the runs measured by then (MEASUREMENTS 2026-10-15):
+
+- A prompt is rendered for its run: the notice in force, the standing instructions, the operator's messages, the
+  attempt, and the context. A continued session keeps every earlier prompt, so a lifted notice or a superseded message
+  would still read as the operator's. This is PRIOR_ART's contamination of long-lived sessions.
+- A run lands on any slot (§9), and the earlier transcript names the earlier slot's or desk's paths, which another
+  ticket's run may hold by then.
+- Feedback runs are short: `fix-ci` took a median 0.8 minutes and `resume` 1.0. By the time one starts the provider's
+  cache has expired, after `policy.fix_ci_cooldown_minutes` or a wait on review, so a continued session would write
+  the earlier run's whole context to the cache on its first call and read it back on every call after.
+- What the earlier run read, CI logs and review comments, would come along. A fresh run reads only what it needs.
+
+Revisit if `fix-ci` or `resume` runs often end `blocked` or `failed` for want of what the earlier run worked out,
+visible in their transcripts as steps spent finding it again.
 
 ### Notices to workers
 

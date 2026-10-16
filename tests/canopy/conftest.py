@@ -1,4 +1,5 @@
-"""Fixtures for tests of workspaces of several repositories (DESIGN §18), and a pool of worktrees."""
+"""Fixtures for the tests of canopy: the workspace's journal and context, the web UI's mock backend, workspaces of
+several repositories (DESIGN §18), and a pool of worktrees."""
 
 import contextlib
 import json
@@ -12,7 +13,32 @@ from unittest import mock
 import pytest
 
 from canopy.core import config, db
+from canopy.core.context import Context
+from canopy.infra import resources
+from canopy.serve import mock as serve_mock
+from canopy.serve.backend import Backend
+from tests.canopy.helpers import context
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, Journals, git, pool_state
+
+
+@pytest.fixture
+def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
+    """The workspace's journal, migrated."""
+    return canopy_env.journal()
+
+
+@pytest.fixture
+def ctx(canopy_env: CanopyEnv) -> Context:
+    """The context `canopy` builds in the workspace, over its journal, migrated."""
+    found = context(canopy_env)
+    db.migrate(found.conn, resources.migrations_dir())
+    return found
+
+
+@pytest.fixture
+def backend(tmp_path: Path) -> Backend:
+    """The web UI's mock journal, as `canopy serve --mock` serves it."""
+    return serve_mock.seed(tmp_path / "mock")
 
 
 def map_text(*repos: tuple[str, str], extra: str = "") -> str:

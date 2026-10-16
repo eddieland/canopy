@@ -3,20 +3,11 @@ session read back from the events its log holds. Reads only; every text in them 
 
 import dataclasses
 import json
-from pathlib import Path
 from unittest import mock
 
-import pytest
-
 from canopy.core import transcript
-from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
-from tests.canopy.test_serve import client
-
-
-@pytest.fixture
-def backend(tmp_path: Path) -> Backend:
-    return serve_mock.seed(tmp_path / "mock")
+from tests.canopy.web_helpers import client
 
 
 def test_a_run_page_is_the_run_as_the_runs_list_shows_it(backend: Backend) -> None:
