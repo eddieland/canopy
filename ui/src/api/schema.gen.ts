@@ -362,6 +362,51 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/pull-request/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask for a PR to be reviewed
+         * @description `canopy start URL --review`: review a PR the loop does not own, once, at its head (DESIGN §21).
+         *
+         *     It reviews nothing now: the next tick does, in whichever of the workspace's repositories the PR is in. Refused as
+         *     the CLI refuses it: `reviews_off`, `bad_pr`, and `loop_pr`.
+         */
+        post: operations["startPullRequestReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/pull-request/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop reviewing a PR
+         * @description `canopy stop URL`: end the PR's open review request. A review of it already running finishes.
+         *
+         *     Refused `not_requested` for a PR with no open request, and `bad_pr` for a URL that is not a PR's.
+         */
+        post: operations["stopPullRequestReview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pull-requests": {
         parameters: {
             query?: never;
@@ -1902,7 +1947,7 @@ export type components = {
             /**
              * Active At
              * Format: date-time
-             * @description The newest of its ticket's last sighting and its review runs' starts and ends.
+             * @description The newest of its ticket's last sighting, its review runs' starts and ends, and its review requests'.
              */
             active_at: string;
             /**
@@ -1922,6 +1967,8 @@ export type components = {
              * @description The PR's repository, as the workspace names it.
              */
             repo: string | null;
+            /** @description The operator's latest review request on it, open or ended; None when they never made one. */
+            review_request: components["schemas"]["ReviewRequest"] | null;
             /**
              * Reviews
              * @description How many review runs it has had, however they ended.
@@ -2201,6 +2248,60 @@ export type components = {
          * @enum {string}
          */
         ReviewImpact: "low" | "normal" | "high";
+        /**
+         * ReviewRequest
+         * @description The operator's request to review a PR the loop does not own (DESIGN §21): open, or how it ended.
+         */
+        ReviewRequest: {
+            /**
+             * Channel
+             * @description Where it was made: `cli` or `web`.
+             */
+            channel: string;
+            /**
+             * Created At
+             * Format: date-time
+             * @description When the operator made it.
+             */
+            created_at: string;
+            /**
+             * End Reason
+             * @description Why it ended: a `done` review of the PR; the PR merged or closed first, or is in none of the workspace's
+             *     repositories (the overseer's reading); or the operator stopped it. None while it is open.
+             */
+            end_reason: ("reviewed" | "merged" | "closed" | "unknown_repo" | "stopped") | null;
+            /**
+             * Ended At
+             * @description When it ended; None while it is open.
+             */
+            ended_at: string | null;
+        };
+        /**
+         * ReviewRequested
+         * @description What a review request recorded: the open request, and whether it was already open or replaced another.
+         */
+        ReviewRequested: {
+            /**
+             * Already
+             * @description Whether it was already open, so nothing new was recorded.
+             */
+            already: boolean;
+            /** @description The PR's open request. */
+            request: components["schemas"]["ReviewRequest"];
+        };
+        /**
+         * ReviewRequestStopped
+         * @description What stopping a review request did: the request as it was, and a review of the PR still running.
+         */
+        ReviewRequestStopped: {
+            /** @description The request it ended, as `stopped`. */
+            request: components["schemas"]["ReviewRequest"];
+            /**
+             * Running Review
+             * @description A review run of the PR still running, which finishes; None when none is.
+             */
+            running_review: number | null;
+        };
         /**
          * ReviewSendRequest
          * @description Some of a review run's findings to send to a worker, by number, with the submission id the form drew.
@@ -4890,6 +4991,178 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Granted"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 256 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a plain https:// URL of at most 300 characters. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    startPullRequestReview: {
+        parameters: {
+            query: {
+                /** @description The PR's plain https:// URL, at most 300 characters. */
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRequested"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 256 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a plain https:// URL of at most 300 characters. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    stopPullRequestReview: {
+        parameters: {
+            query: {
+                /** @description The PR's plain https:// URL, at most 300 characters. */
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReviewRequestStopped"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

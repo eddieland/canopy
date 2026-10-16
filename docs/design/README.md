@@ -116,13 +116,13 @@ canopy (harness, Python)
     loop.py        loop (serving the web UI unless --no-serve), tick, tick --dry-run, status, decisions
     spend.py       spend: each day's cost by kind, and the ticks by what they bought (§11)
     runs.py        dispatch, _run
-    conversation.py start, stop, reply, forget, grant, show: the operator's verbs on a subject (§22); pause and
-                   resume, on the loop (§6); notice, to every later run (§8)
+    conversation.py start, stop, reply, forget, grant, show: the operator's verbs on a subject (§22), a PR's review
+                   request among them (§21); pause and resume, on the loop (§6); notice, to every later run (§8)
     journal.py     decide, attention, ticket set
     workspace.py   workspace sync
     chores.py      chore run, chore wait, chore try, _chore
     notify.py      notify test
-    reviews.py     review run, review wait, review show, _review
+    reviews.py     review run, review wait, review end, review show, _review
 
   loop/            the tick (§6), which drives the features below
     tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
@@ -186,7 +186,7 @@ canopy (harness, Python)
     options.py     ServeOptions: loopback or private host, port, base path, mock data
     server.py      the server's thread for canopy loop: uvicorn without signal handlers, restarted with a backoff
     mock.py        a journal seeded from fixtures, and the changes its stream shows
-    mock_reviews.py the mock journal's review runs and the diffs beside their logs
+    mock_reviews.py the mock journal's review runs and the diffs beside their logs, and a review request
     __main__.py    python -m canopy.serve --mock: serve for development and tests, or print the OpenAPI schema
 
   setup/
@@ -202,6 +202,8 @@ canopy (harness, Python)
     chore_result.py a chore's result contract, validated with pydantic
     review_result.py a review's result contract, validated with pydantic (§21), read by reviews and the web UI
     review_diff.py a review run's diff beside its log: read bounded, parsed, and each finding anchored on it (§21)
+    review_requests.py the operator's requests to review a PR the loop does not own, with their guards (§21), which
+                   the CLI and the web UI share
     search.py      the web UI's search over the journal: tickets, messages, chore runs, decisions, ticks (§22)
     spend.py       what agent runs cost by day, kind, and what the ticks bought, for canopy spend and the web UI (§11)
     config.py      layered config: the workspace file canopy-workspace.toml and user config.toml; scopes

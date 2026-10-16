@@ -14,6 +14,7 @@ import { Field, Fields } from '@/components/fields'
 import { GrantLimits } from '@/components/grant-limits'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { ReviewRequestStatus } from '@/components/review-request'
 import { ReviewsTable } from '@/components/reviews-table'
 import { RunsTable } from '@/components/runs-table'
 import { Chip, Word } from '@/components/status'
@@ -140,7 +141,9 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                         )}
                         <CostTotalRow cost={cost} />
                     </Fields>
-                    {/* The PR's one action: a grant of another review when it is at its review limit. */}
+                    {/* The PR's actions: stopping the operator's review request, and a grant of another review
+                        when it is at its review limit. */}
+                    <ReviewRequestStatus url={pr.url} request={pr.review_request} className="border-t" />
                     {reviewLimit !== null && (
                         <GrantLimits limits={[reviewLimit]} ticketKey={pr.ticket_key} className="border-t" />
                     )}

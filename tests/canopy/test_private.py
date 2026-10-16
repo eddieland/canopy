@@ -202,8 +202,10 @@ def test_references_name_their_kind_and_a_kind_refuses_verbs_it_does_not_take() 
     conversation.check_verb(conversation.parse_ref("run:7"), "show")
     with pytest.raises(conversation.Refused, match=r"unsupported.*takes only reply, dismiss, show"):
         conversation.check_verb(conversation.parse_ref("chore:build-health"), "start")
+    # A PR takes `start` and `stop` for a review request, `grant`, and `show`; working one waits on M14.
+    conversation.check_verb(conversation.parse_ref("api#42"), "show")
     with pytest.raises(conversation.Refused, match=r"unsupported.*M14"):
-        conversation.check_verb(conversation.parse_ref("api#42"), "show")
+        conversation.check_verb(conversation.parse_ref("api#42"), "reply")
 
 
 @pytest.mark.parametrize("variable", ["CANOPY_TICK_ID", "CANOPY_RUN_ID"])

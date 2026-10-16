@@ -733,13 +733,20 @@ list, an empty state, or a skeleton by hand.
   stays disabled until the field holds the ticket's key exactly.
 - **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions, in its Work panel's foot on its
   page and under the item's head on its attention item, above the conversation either way, and in the foot of a PR's
-  Pull request panel, the PR page's one action. While something is stuck it is a block on the
+  Pull request panel, under the operator's review request. While something is stuck it is a block on the
   `status-failed` tint, the color its `attempt_limit` chip wears, so it stands out from the panel: a line in body text
   led by `At its limit.` in `status-failed`, then a row per limit whose runs have reached it, what it counts in
   monospace (`fix-ci in web`, `reviews of web#88`), its runs against it in `status-failed` (`1 of 1 runs`, and `, N
   granted` past the policy's), and an outline `Allow one more` button at the row's end, as a ticket's actions are, the
   CLI's command on hover. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
   leaves once the limit is above its runs. A limit with room left shows nothing.
+- **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
+  does not own (DESIGN §21). The pull requests page leads with a `Review a PR` panel above the list: a line saying
+  nothing is posted on the PR, the PR's URL in a monospace field, and a `Review` button beside it, the form's submit,
+  with the CLI's command on hover. It takes no repository: the overseer finds the PR's (DESIGN §21). A PR with an open
+  request wears a `requested` chip after its review in the list. On a PR's page the request is a line in the foot of its
+  Pull request panel, since when, with an outline `Stop` at its end while it is open, or how it ended once it has; what
+  Stop did goes under it (`Notice`).
 - **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posted nowhere (D114): the
   review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. A diff is a
   monospace table: the old and new line numbers, the `+` or `-` in `diff-add` or `diff-del`, and the line, its row on

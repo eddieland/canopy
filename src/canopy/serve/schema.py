@@ -1366,6 +1366,38 @@ class ReviewDetail(_Model):
     """Every review run of the same PR, newest first, this one included."""
 
 
+class ReviewRequest(_Model):
+    """The operator's request to review a PR the loop does not own (DESIGN §21): open, or how it ended."""
+
+    created_at: datetime
+    """When the operator made it."""
+    channel: str
+    """Where it was made: `cli` or `web`."""
+    ended_at: datetime | None = None
+    """When it ended; None while it is open."""
+    end_reason: Literal["reviewed", "merged", "closed", "unknown_repo", "stopped"] | None = None
+    """Why it ended: a `done` review of the PR; the PR merged or closed first, or is in none of the workspace's
+    repositories (the overseer's reading); or the operator stopped it. None while it is open."""
+
+
+class ReviewRequested(_Model):
+    """What a review request recorded: the open request, and whether it was already open or replaced another."""
+
+    request: ReviewRequest
+    """The PR's open request."""
+    already: bool
+    """Whether it was already open, so nothing new was recorded."""
+
+
+class ReviewRequestStopped(_Model):
+    """What stopping a review request did: the request as it was, and a review of the PR still running."""
+
+    request: ReviewRequest
+    """The request it ended, as `stopped`."""
+    running_review: int | None = None
+    """A review run of the PR still running, which finishes; None when none is."""
+
+
 class PullRequest(_Model):
     """A PR the journal knows (DESIGN §22): one a ticket's unit records, or one canopy reviewed, whoever's it is."""
 
@@ -1382,13 +1414,15 @@ class PullRequest(_Model):
     phase: str | None = None
     """The unit's phase as the overseer last derived it, for display; None for a PR no unit records."""
     active_at: datetime
-    """The newest of its ticket's last sighting and its review runs' starts and ends."""
+    """The newest of its ticket's last sighting, its review runs' starts and ends, and its review requests'."""
     running_run: int | None = None
     """A run of its ticket working now, whose page it opens."""
     reviews: int = 0
     """How many review runs it has had, however they ended."""
     latest_review: ReviewSummary | None = None
     """Its newest review run, or None when canopy has not reviewed it."""
+    review_request: ReviewRequest | None = None
+    """The operator's latest review request on it, open or ended; None when they never made one."""
 
 
 class PullRequestDetail(_Model):

@@ -72,17 +72,22 @@ PR = "pr"
 CHORE = "chore"
 RUN = "run"
 REVIEW = "review"
-# The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), and the rest once PR-scoped work
-# exists (ROADMAP M14). `mirror` is the overseer's, not the operator's (DESIGN §22).
+# The verbs each kind of subject takes. A PR takes `grant` (more reviews, DESIGN §21), `start --review` and `stop` (a
+# review request, `core/review_requests.py`), and `show`; working one is PR-scoped work (ROADMAP M14). `mirror` is the
+# overseer's, not the operator's (DESIGN §22).
 VERBS: Mapping[str, tuple[str, ...]] = {
     TICKET: ("start", "stop", "reply", "forget", "grant", "show", MIRROR_ACTION),
-    PR: ("grant",),
+    PR: ("grant", "start", "stop", "show"),
     CHORE: ("reply", "dismiss", "show"),
     RUN: ("show",),
     # `canopy review show ID` shows one; a reference to it serves to dismiss its findings, or send some to a worker
     # (DESIGN §21).
     REVIEW: ("dismiss", "send"),
 }
+# What a PR refuses beyond reviews: canopy works only tickets until PR-scoped work exists.
+_PR_WORK = (
+    "{ref} is a PR; canopy only reviews PRs it does not own, and works them once PR-scoped work exists (ROADMAP M14)"
+)
 _PR_SHORT_RE = re.compile(rf"({REPO_NAME_RE.pattern})#([1-9][0-9]{{0,9}})")
 _PR_URL_RE = re.compile(r"https://[^\s/]+/[^\s/]+/[^\s/]+/pull/[1-9][0-9]{0,9}/?")
 
@@ -154,7 +159,7 @@ def check_verb(ref: Ref, verb: str) -> None:
     if verb in verbs:
         return
     if ref.kind == PR:
-        raise Refused("unsupported", f"{ref} is a PR; canopy works PRs only once PR-scoped work exists (ROADMAP M14)")
+        raise Refused("unsupported", _PR_WORK.format(ref=ref))
     raise Refused("unsupported", f"{ref} is a {ref.kind}, which takes only {', '.join(verbs)}")
 
 
@@ -213,7 +218,7 @@ def start(conn: sqlite3.Connection, config: Config, ref: Ref, *, repo: str, chan
         Refused: `unsupported` for a subject that is not a ticket, `no_read_tools` when no tracker tools are known for
             a private worker to read the ticket with.
     """
-    check_verb(ref, "start")
+    _check_ticket(ref, "start")
     if config.tracker.tools() is None:
         raise Refused(
             "no_read_tools",
@@ -228,6 +233,19 @@ def start(conn: sqlite3.Connection, config: Config, ref: Ref, *, repo: str, chan
         db.set_start(conn, TICKET, ref.id, status="started", channel=channel)
         running = db.running_run_of(conn, ref.id)
     return Started(already=is_started(record), running=running)
+
+
+def _check_ticket(ref: Ref, verb: str) -> None:
+    """Refuse `verb` on anything but a ticket: on a PR, `start` and `stop` are a review request's (review_requests.py).
+
+    Raises:
+        Refused: (`unsupported`) `ref` is not a ticket.
+    """
+    check_verb(ref, verb)
+    if ref.kind == PR:
+        raise Refused("unsupported", f"{_PR_WORK.format(ref=ref)}; `canopy start {ref} --review` asks for a review")
+    if ref.kind != TICKET:
+        raise Refused("unsupported", f"{ref} is a {ref.kind}, which takes only {', '.join(VERBS[ref.kind])}")
 
 
 @dataclass(frozen=True)
@@ -250,7 +268,7 @@ def stop(conn: sqlite3.Connection, ref: Ref, *, channel: str) -> Stopped:
     Raises:
         Refused: `unsupported` for a subject that is not a ticket, `not_started` for a public ticket.
     """
-    check_verb(ref, "stop")
+    _check_ticket(ref, "stop")
     with db.transaction(conn):
         record = db.get_start(conn, TICKET, ref.id)
         if record is None:

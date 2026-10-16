@@ -83,10 +83,12 @@ about, so the same verbs serve tickets now, PRs with M14, and what comes later (
 | `canopy forget REF` | forget its branch and PRs, so its next `implement` starts over (below); public tickets too |
 | `canopy grant REF KIND [--repo NAME] [--runs N]` | allow one unit N more runs of KIND, default 1 (below); public tickets too |
 | `canopy grant URL review [--runs N]` | allow the PR at URL N more review runs, default 1 (below, §21) |
-| `canopy show REF` | its phase, PRs, recent runs, and conversation, oldest message first |
+| `canopy start URL --review` | have canopy review a PR the loop does not own, once, at its head (§21, M42) |
+| `canopy stop URL` | end that PR's review request; a review of it already running finishes (§21) |
+| `canopy show REF` | its phase, PRs, recent runs, and conversation, oldest message first; a PR's review request and reviews |
 
-`canopy status` lists what was started, with each subject's phase, beside the attention list and runs; there is no
-separate `list`.
+`canopy status` lists what was started, with each subject's phase, and the open review requests, beside the attention
+list and runs; there is no separate `list`.
 
 - `start` is private by construction: canopy cannot label a ticket (D003), so a ticket started in canopy keeps its
   conversation in the journal. The command says so when it runs, and when the next tick will pick the ticket up. A
@@ -254,7 +256,7 @@ A reference names a subject by its shape, so no kind needs a flag and no form ca
 | Reference | Subject | Verbs |
 |---|---|---|
 | `PROJ-123` | a ticket | all (M18), and the overseer's `mirror` (M19) |
-| `api#42`, or the PR's URL | a PR | `grant` (its reviews, by URL); all, once PR-scoped work exists (M14) |
+| `api#42`, or the PR's URL | a PR | `grant` (its reviews), `start --review` and `stop` (a review request), and `show`, each by URL; the rest once PR-scoped work exists (M14) |
 | `chore:NAME` | a chore (§19) | `reply` (its notes), `dismiss` (one of its findings), `show` |
 | `run:ID` | a run | `show` |
 | `review:ID` | a review run (§21) | `dismiss` (one of its findings), `send` (some to a worker); `canopy review show ID` shows one |
@@ -454,6 +456,8 @@ The API, under `{base}/api`:
 | `GET /pull-requests` | the PRs the journal knows, most recent activity first, at most 100: ticket, branch, phase, the run working it, its latest review |
 | `GET /pull-request?url=` | one PR: the runs that pushed to it, its review runs and limit, the latest 20 decisions naming it, and its total cost; 404 for one nothing names |
 | `POST /pull-request/grants?url=` | `canopy grant URL review`, for one review run |
+| `POST /pull-request/start?url=` | `canopy start URL --review`: a review request (§21) |
+| `POST /pull-request/stop?url=` | `canopy stop URL`: the PR's review request ends, and a review of it already running finishes (§21) |
 | `GET /worktrees` | each pool's slots from `treehouse status --json`, with the running run or review holding each |
 | `GET /loop` | whether the loop is paused: since when, and through which channel (§6), or not; and the notice to workers in force: its text, when and through which channel it was set, and when it lapses (§8), or none |
 | `POST /loop/pause`, `POST /loop/resume` | `canopy pause`, `canopy resume`: whether it already was, and the state left |
@@ -632,12 +636,14 @@ The pull requests pages (ROADMAP M32, asked for by the operator, 2026-10-13): a 
 the journal holds about one, spread over a ticket's units, its runs, the reviews (§21), and the decisions, is
 gathered on its page.
 
-- A PR is known by a ticket's unit (one of the loop's own, reviewed or not) or by a review run (either kind, §21).
-  `GET /pull-requests` lists each once, most recent activity first: the newest of the unit's ticket's last sighting and
-  the PR's review runs' starts and ends. Each has its URL, the ticket that owns it (a unit's, or else the one a review
-  named, as a forgotten ticket's review still does) with its title, its repository, the unit's branch and phase, the
-  run of its ticket working now, how many review runs it had, and its latest. Decisions are not a source for the
-  list: they are many, and the list is read again on every tick and every ticket change.
+- A PR is known by a ticket's unit (one of the loop's own, reviewed or not), by a review run (any purpose, §21), or
+  by the operator's review request (M42). `GET /pull-requests` lists each once, most recent activity first: the
+  newest of the unit's ticket's last sighting, the PR's review runs' starts and ends, and its review requests' making
+  and ending. Each has its URL, the ticket that owns it (a unit's, or else the one a review named, as a forgotten
+  ticket's review still does) with its title, its repository (a request's, for a PR known by nothing else), the
+  unit's branch and phase, the run of its ticket working now, how many review runs it had, its latest, and the
+  operator's latest review request on it, open or ended. Decisions are not a source for the list: they are many, and
+  the list is read again on every tick and every ticket change.
 - `GET /pull-request?url=` is one PR, named by its URL as a query parameter, since the URL is opaque (§21) and holds
   slashes; only a plain `https://` URL of at most 300 characters is looked up, anything else is a 422. A PR only
   decisions name (a `review.query` match no review has run on yet) has a page too, so it shows why (`wait`, a refusal).
@@ -647,8 +653,11 @@ gathered on its page.
   its page, and so does a review's page.
 - A PR's page shows its total cost, as a ticket's does: every run it lists, past the 20 shown, and every review run of
   it. A run that pushed to two PRs, one per repository, counts on each one's page, and once on its ticket's.
-- Reads only, and not on the event stream: the UI reads them again on `tick.updated` and `ticket.changed`. Nothing
-  here writes to a PR. Everything shown is journal text the other pages already serve, so T8 is unchanged.
+- Not on the event stream: the UI reads them again on `tick.updated` and `ticket.changed`, and after its own writes.
+  Nothing here writes to a PR. The pages write two things to the journal, through the same code as the CLI and so with
+  the same refusals: a grant of one more review (above), and a review request (M42, §21). The pull requests page leads
+  with a form taking a PR's URL, with `Review`; a PR's page shows its request in the foot of its Pull request panel,
+  with `Stop` while it is open. Making and ending one are among the web channel's writes (TRUST_MODEL T8).
 
 The transcripts (M27): what a session did, its tool calls above all, without leaving the browser for
 `opencode export`.

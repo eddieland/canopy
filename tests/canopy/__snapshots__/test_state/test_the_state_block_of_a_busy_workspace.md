@@ -40,6 +40,7 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
     {
       "name": "repo",
       "path": "/workspace/repos/repo",
+      "url": "https://example.test/acme/repo.git",
       "summary": "The only repository.",
       "cloned": true,
       "leased_slots": [
@@ -292,7 +293,8 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
       "started_last_24h": 0
     },
     "running": [],
-    "prs": []
+    "prs": [],
+    "requests": []
   },
   "notices": [
     {

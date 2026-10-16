@@ -16,13 +16,15 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, notice, outbox, prompts, treehouse
+from canopy.core import contract, db, notice, outbox, prompts, review_requests, treehouse
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import lock, logs, procs
 from canopy.reviews import grants
 
 if TYPE_CHECKING:
+    import sqlite3
+
     from canopy.core import records
     from canopy.core.context import Context
 
@@ -30,8 +32,10 @@ REVIEWS_DIR = "reviews"
 CHECKOUT_LINK = "checkout"
 DISPATCH_ACTION = "dispatch:review"
 HOLDER_KEY = "review:"
-# Why a review runs (DESIGN §21): one of the loop's own PRs, named by its ticket, or a `review.query` match.
+# Why a review runs (DESIGN §21): one of the loop's own PRs, named by its ticket, a PR with the operator's open review
+# request, or a `review.query` match.
 OWN = "own"
+REQUEST = "request"
 QUERY = "query"
 SHA_RE = re.compile(r"[0-9a-f]{40}|[0-9a-f]{64}")
 MAX_PR_URL = 300
@@ -136,7 +140,7 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             sha=request.sha,
             ticket=request.ticket,
             repo=repo,
-            purpose=OWN if request.ticket is not None else QUERY,
+            purpose=_purpose(ctx.conn, request),
             logs_dir=reviews_dir(ctx),
         )
         pool = ctx.pool(repo)
@@ -161,6 +165,17 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
                     ctx.runner, lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder, pool=pool
                 )
             raise
+
+
+def _purpose(conn: sqlite3.Connection, request: Request) -> str:
+    """Why the review runs: `own` with a ticket, checked by `_check_ours`; `request` for a PR the operator asked for.
+
+    Returns:
+        `own`, `request`, or `query`, a PR the loop does not own and the operator has no open request on.
+    """
+    if request.ticket is not None:
+        return OWN
+    return REQUEST if review_requests.open_request(conn, request.pr) is not None else QUERY
 
 
 def _spawn(
@@ -221,8 +236,11 @@ def _guard(ctx: Context, request: Request, *, planned: list[records.Decision] | 
     Raises:
         Refusal: reviews are off, or one of the shape, repository, ownership, running, and limit checks refused.
     """
-    if not ctx.config.reviews_on:
-        raise Refusal("reviews_off", "reviews are off: no [review] agent_prs or query, or capacity.max_reviews is 0")
+    if not review_requests.reviews_on(ctx.conn, ctx.config):
+        raise Refusal(
+            "reviews_off",
+            "reviews are off: no [review] agent_prs or query and no open review request, or capacity.max_reviews is 0",
+        )
     _check_shape(request)
     repo = _check_repo(ctx, request.repo)
     _check_ours(ctx, request, repo)
