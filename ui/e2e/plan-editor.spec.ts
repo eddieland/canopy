@@ -132,12 +132,19 @@ test('each toolbar control names a shortcut on hover, and that shortcut does wha
 }) => {
     const toolbar = page.getByRole('toolbar', { name: 'Format' })
     await expect(toolbar.getByRole('button', { name: 'Bold' })).toHaveAttribute('title', /^Bold \((Ctrl\+B|⌘B)\)$/u)
+    // The paragraph's style is a choice of one, in a menu that names each style's keys: each picks its style, the last
+    // going back to text.
+    const styles = ['Heading 1', 'Heading 2', 'Heading 3', 'Heading 4', 'Text']
+    const menu = toolbar.getByRole('button', { name: /^Text style/u })
+    await menu.click()
+    const styleKeys = await Promise.all(
+        styles.map((name) => page.getByRole('menuitemradio', { name, exact: true }).getAttribute('aria-keyshortcuts')),
+    )
+    await page.keyboard.press('Escape')
     await select(page, 'method')
-    // The paragraph's style is a choice of one: each shortcut picks its style, the last going back to text.
-    for (const name of ['Heading 1', 'Heading 2', 'Heading 3', 'Text']) {
-        const style = toolbar.getByRole('radio', { name, exact: true })
-        await page.keyboard.press((await style.getAttribute('aria-keyshortcuts')) ?? '')
-        await expect(style).toHaveAttribute('data-state', 'on')
+    for (const [i, name] of styles.entries()) {
+        await page.keyboard.press(styleKeys[i] ?? '')
+        await expect(menu).toHaveAccessibleName(`Text style: ${name}`)
     }
     // A mark or a block is on or off: its shortcut turns it on, and again off.
     for (const name of ['Bold', 'Italic', 'Strikethrough', 'Code', 'Bulleted list', 'Numbered list', 'Task list']) {
@@ -155,6 +162,30 @@ test('each toolbar control names a shortcut on hover, and that shortcut does wha
         await page.keyboard.press('ControlOrMeta+z')
         await expect(control, name).toHaveAttribute('aria-pressed', 'false')
     }
+})
+
+test('the style menu shows each style as the plan sets it, and leaves the cursor in the plan', async ({ page }) => {
+    await select(page, 'Out of scope')
+    const menu = page.getByRole('toolbar', { name: 'Format' }).getByRole('button', { name: /^Text style/u })
+    await expect(menu).toHaveAccessibleName('Text style: Heading 2')
+    await menu.click()
+    await expect(page.getByRole('menuitemradio', { name: 'Heading 2', exact: true })).toBeChecked()
+    await page.getByRole('menuitemradio', { name: 'Heading 4', exact: true }).click()
+    await expect(menu).toHaveAccessibleName('Text style: Heading 4')
+    await expect(plan(page)).toBeFocused()
+    await expect(plan(page).getByRole('heading', { level: 4, name: 'Out of scope' })).toBeVisible()
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    await expect(page.getByLabel('Plan Markdown')).toContainText('#### Out of scope')
+})
+
+test('an empty plan says what goes in it', async ({ page }) => {
+    await plan(page).click()
+    await page.keyboard.press('ControlOrMeta+a')
+    await page.keyboard.press('Backspace')
+    await expect(plan(page).locator('p').first()).toHaveAttribute(
+        'data-placeholder',
+        'Write the plan here, or paste its Markdown.',
+    )
 })
 
 test('the toolbar stays at the top of the page while the plan scrolls under it', async ({ page }) => {
@@ -403,8 +434,8 @@ test('clicking a commented passage opens its thread and puts the cursor there', 
     await expect(comments(page).filter({ hasText: 'name the ticket' })).toHaveAttribute('data-active', 'true')
     await expect(plan(page).locator('[data-thread=sample-2]')).toHaveClass(/plan-comment-active/u)
     // The paragraph's style shows the cursor moved from the heading it opened in.
-    const text = page.getByRole('toolbar', { name: 'Format' }).getByRole('radio', { name: 'Text' })
-    await expect(text).toHaveAttribute('data-state', 'on')
+    const menu = page.getByRole('toolbar', { name: 'Format' }).getByRole('button', { name: /^Text style/u })
+    await expect(menu).toHaveAccessibleName('Text style: Text')
 })
 
 test('a click elsewhere in the plan, or Escape, closes the open thread', async ({ page }) => {

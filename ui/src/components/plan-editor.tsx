@@ -1,19 +1,17 @@
 import { EditorContent, useEditor, useEditorState } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
 import { PluginKey } from '@tiptap/pm/state'
+import { Placeholder } from '@tiptap/extensions'
 import { BubbleMenu } from '@tiptap/react/menus'
 import {
     Bold,
+    ChevronDown,
     Code,
-    Heading1,
-    Heading2,
-    Heading3,
     Italic,
     List,
     ListOrdered,
     ListTodo,
     MessageSquarePlus,
-    Pilcrow,
     Redo2,
     SquareCode,
     Strikethrough,
@@ -27,6 +25,13 @@ import { Panel, PanelHeader } from '@/components/panel'
 import { AskForChanges, PlanThreads } from '@/components/plan-threads'
 import type { Draft } from '@/components/plan-threads'
 import { Button } from '@/components/ui/button'
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
     Toolbar,
     ToolbarButton,
@@ -94,7 +99,11 @@ export function PlanEditor({
     onAskForChanges?: (message: string) => void
 }) {
     const editor = useEditor({
-        extensions: planExtensions([PlanHighlights]),
+        extensions: planExtensions([
+            PlanHighlights,
+            // An empty plan says what goes in it rather than show a blank box (`.plan-doc` in src/index.css).
+            Placeholder.configure({ placeholder: 'Write the plan here, or paste its Markdown.' }),
+        ]),
         content: markdown,
         contentType: 'markdown',
         editable,
@@ -327,7 +336,7 @@ export function PlanEditor({
 }
 
 // The block a paragraph is, as the text style group names it.
-type BlockStyle = 'paragraph' | 'h1' | 'h2' | 'h3'
+type BlockStyle = 'paragraph' | 'h1' | 'h2' | 'h3' | 'h4'
 type MarkName = 'bold' | 'italic' | 'strike' | 'code'
 type BlockName = 'bulletList' | 'orderedList' | 'taskList' | 'blockquote' | 'codeBlock'
 
@@ -348,11 +357,13 @@ const BLOCKS: { name: BlockName; label: string; keys: string; icon: ReactNode }[
     { name: 'codeBlock', label: 'Code block', keys: 'Mod-Alt-c', icon: <SquareCode /> },
 ]
 
-const STYLES: { name: BlockStyle; label: string; keys: string; icon: ReactNode }[] = [
-    { name: 'paragraph', label: 'Text', keys: 'Mod-Alt-0', icon: <Pilcrow /> },
-    { name: 'h1', label: 'Heading 1', keys: 'Mod-Alt-1', icon: <Heading1 /> },
-    { name: 'h2', label: 'Heading 2', keys: 'Mod-Alt-2', icon: <Heading2 /> },
-    { name: 'h3', label: 'Heading 3', keys: 'Mod-Alt-3', icon: <Heading3 /> },
+// Each style shows in the menu as the plan sets it (`.plan-doc` in src/index.css), so the menu previews it.
+const STYLES: { name: BlockStyle; label: string; keys: string; preview: string }[] = [
+    { name: 'paragraph', label: 'Text', keys: 'Mod-Alt-0', preview: 'text-sm' },
+    { name: 'h1', label: 'Heading 1', keys: 'Mod-Alt-1', preview: 'text-xl font-semibold tracking-tight' },
+    { name: 'h2', label: 'Heading 2', keys: 'Mod-Alt-2', preview: 'text-base font-semibold' },
+    { name: 'h3', label: 'Heading 3', keys: 'Mod-Alt-3', preview: 'text-sm font-semibold' },
+    { name: 'h4', label: 'Heading 4', keys: 'Mod-Alt-4', preview: 'text-sm font-semibold' },
 ]
 
 const UNDO_KEYS = 'Mod-z'
@@ -435,8 +446,9 @@ function FormatBar({ editor, canComment, onComment }: { editor: Editor; canComme
             }
             case 'h1':
             case 'h2':
-            case 'h3': {
-                chain.setHeading({ level: Number(name.slice(1)) as 1 | 2 | 3 }).run()
+            case 'h3':
+            case 'h4': {
+                chain.setHeading({ level: Number(name.slice(1)) as 1 | 2 | 3 | 4 }).run()
                 break
             }
             default: {
@@ -470,30 +482,7 @@ function FormatBar({ editor, canComment, onComment }: { editor: Editor; canComme
                 <Redo2 />
             </ToolbarButton>
             <ToolbarSeparator />
-            <ToolbarToggleGroup
-                type="single"
-                aria-label="Text style"
-                value={state.style ?? ''}
-                // Pressing the style in force would leave none: a paragraph is always one of them, so it is kept.
-                onValueChange={(value: string) => {
-                    const style = STYLES.find((item) => item.name === value)
-                    if (style !== undefined) {
-                        setStyle(style.name)
-                    }
-                }}
-            >
-                {STYLES.map((style) => (
-                    <ToolbarToggleItem
-                        key={style.name}
-                        value={style.name}
-                        aria-label={style.label}
-                        title={withKeys(style.label, style.keys)}
-                        aria-keyshortcuts={ariaKeys(style.keys, APPLE)}
-                    >
-                        {style.icon}
-                    </ToolbarToggleItem>
-                ))}
-            </ToolbarToggleGroup>
+            <StyleMenu style={state.style} onStyle={setStyle} />
             <ToolbarSeparator />
             <ToolbarToggleGroup
                 type="multiple"
@@ -559,9 +548,71 @@ function FormatBar({ editor, canComment, onComment }: { editor: Editor; canComme
     )
 }
 
-// The style of the paragraph at the cursor, or undefined in a block the group does not name (a code block).
+// The paragraph's style, as a menu that names the one in force, as a document's style menu does: each style shown as
+// the plan sets it, with its shortcut. A style chosen leaves the cursor in the plan, where the menu put it; Escape
+// takes the focus back to the menu's button.
+function StyleMenu({ style, onStyle }: { style: BlockStyle | undefined; onStyle: (style: BlockStyle) => void }) {
+    const [chose, setChose] = useState(false)
+    const current = STYLES.find((item) => item.name === style)
+    return (
+        <DropdownMenu
+            onOpenChange={(open) => {
+                if (open) {
+                    setChose(false)
+                }
+            }}
+        >
+            <DropdownMenuTrigger asChild>
+                <ToolbarButton
+                    size="xs"
+                    aria-label={`Text style: ${current?.label ?? 'none'}`}
+                    title="Text style"
+                    className="min-w-24 justify-between"
+                >
+                    {current?.label ?? 'Text style'}
+                    <ChevronDown aria-hidden />
+                </ToolbarButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+                align="start"
+                onCloseAutoFocus={(event) => {
+                    if (chose) {
+                        event.preventDefault()
+                    }
+                }}
+            >
+                <DropdownMenuRadioGroup
+                    value={style ?? ''}
+                    onValueChange={(value) => {
+                        const chosen = STYLES.find((item) => item.name === value)
+                        if (chosen !== undefined) {
+                            setChose(true)
+                            onStyle(chosen.name)
+                        }
+                    }}
+                >
+                    {STYLES.map((item) => (
+                        <DropdownMenuRadioItem
+                            key={item.name}
+                            value={item.name}
+                            aria-keyshortcuts={ariaKeys(item.keys, APPLE)}
+                            className="justify-between gap-6"
+                        >
+                            <span className={item.preview}>{item.label}</span>
+                            <span aria-hidden className="font-mono text-2xs text-muted-foreground">
+                                {keysLabel(item.keys, APPLE)}
+                            </span>
+                        </DropdownMenuRadioItem>
+                    ))}
+                </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+}
+
+// The style of the paragraph at the cursor, or undefined in a block the menu does not name (a code block).
 function styleAt(editor: Editor): BlockStyle | undefined {
-    for (const level of [1, 2, 3] as const) {
+    for (const level of [1, 2, 3, 4] as const) {
         if (editor.isActive('heading', { level })) {
             return `h${level}`
         }

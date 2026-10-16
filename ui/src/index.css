@@ -741,6 +741,10 @@
         & h2 {
             @apply mt-2 text-base font-semibold;
         }
+        /* The empty plan's prompt (Placeholder in plan-editor.tsx), where its first line's text would start. */
+        & p.is-editor-empty:first-child::before {
+            @apply pointer-events-none float-left h-0 text-muted-foreground content-[attr(data-placeholder)];
+        }
         & h3,
         & h4 {
             @apply mt-1 text-sm font-semibold;
