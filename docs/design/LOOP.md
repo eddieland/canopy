@@ -99,7 +99,9 @@ in order:
    launcher's path for every install: a `uv tool install` script, `uv run`, and `python -m canopy`, none of which
    `sys.argv[0]` names reliably. It would
    also override the operator's PATH. The check runs whatever the overseer would, so every install works as it does
-   for the overseer, and costs a process start (about 0.4 seconds) per tick.
+   for the overseer. The launcher answers `--version` alone before importing the CLI (`cli/launcher.py`), so the check
+   costs an interpreter start and a metadata read, under 0.1 seconds, not a whole `canopy` start: it proves the
+   launcher and its environment start and canopy is installed in it, not that every dependency imports.
 
    Then run the overseer with `overseer_cmd`, cwd = the workspace root (§18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `queried`,
