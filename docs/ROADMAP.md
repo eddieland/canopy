@@ -794,11 +794,10 @@ no config (TRUST_MODEL T8).
 - How: the request carries a hash of the private file as the page read it. The server holds a lock from reading the
   file to replacing it, so two requests cannot both pass the check on the same hash; a file whose hash differs is
   refused as `stale`, checked again just before the replace, so a hand edit is lost only if it lands in that last
-  moment. The
-  change is applied to a copy and validated by `config.load`, as any `canopy` command would read it; a refusal writes
-  nothing and gives the loader's message. The file is replaced atomically, keeping its mode, and refused when it is a
-  symlink or not the operator's (D053's check). Then the loop is asked to reload through the existing path
-  (`loop.reread`).
+  moment. The change is applied to a copy and validated by `config.load`, as any `canopy` command would read it; a
+  refusal writes nothing and gives the loader's message. The file is replaced atomically, keeping its mode, and
+  refused when it is a symlink or not the operator's (D053's check). Then the loop is asked to reload through the
+  existing path (`loop.reread`).
 - The answer says what was saved apart from what the reload did: the keys changed, whether they wait for a running
   tick to end, and that a run already running keeps the prompt and permissions it started with, so a stricter trust
   setting reaches only runs started after it. A save whose reload was not asked for, the server stopping between the

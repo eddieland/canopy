@@ -253,6 +253,8 @@ alone, and two loops in two workspaces do not share a port. Only what serves eve
 operator's own, and that file is optional. Today one user file serves every workspace, and the workspace's own file is
 shared and perhaps committed, so it can hold none of these (TRUST_MODEL T7).
 
+## Nice to have
+
 - **N1. Local web UI on localhost.** Built in M20, live acceptance pending. Allowed under TRUST_MODEL T8 (C2, D055),
   behind the listener secret the operator signs in with. The operator expects it to become their main surface
   (C5), served by `canopy loop` with an off switch (D073). OpenCode's own attach (M15) covers sessions first.
