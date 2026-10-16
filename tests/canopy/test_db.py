@@ -53,6 +53,7 @@ SHIPPED = {
     31: "429563f0913dd074cb33951d58303b4e65af768bfd43b0a02ec6ce71771cdaec",
     32: "a69f227a77b632c3bddf0be6c71852ad3cf2747fcdec099ec10ef1cf566d7f9d",
     33: "f3f99cdfe08e5a7b05d7d8a8c6c7cc8832484e13b36ed561486617870e558174",
+    34: "18b330ab2f43affbbe58dfefd346b2602638d37758a20a29dd682ba7681718b0",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -125,6 +126,7 @@ SEED: Mapping[str, str] = {
         "INSERT INTO plans (ticket_key, run_id, created_at, status, sha256, size, approved_sha256, approved_at, "
         "approved_channel) VALUES ('OLD-1', 1, 'x', 'approved', 'a', 9, 'b', 'y', 'cli')"
     ),
+    "ticket_grants": "INSERT INTO ticket_grants (ticket_key, kind, runs, granted_at) VALUES ('OLD-1', 'plan', 1, 'x')",
 }
 
 

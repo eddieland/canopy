@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from canopy.core import db, plans
+from canopy.core.context import DISPATCH_LOCK
 from canopy.core.conversation import Refused
 from canopy.core.vocab import PlanStatus
 from tests.conftest import CanopyEnv
@@ -145,7 +146,7 @@ def test_a_new_plan_supersedes_the_current_one_and_history_keeps_both(
     conn: sqlite3.Connection, state_dir: Path
 ) -> None:
     first = proposed(conn, state_dir)
-    plans.approve(conn, state_dir, KEY, channel="cli")
+    plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
     second = proposed(conn, state_dir, "# Second\n")
     found = plans.history(conn, KEY)
     assert [(p.run_id, p.status) for p in found] == [(first, PlanStatus.SUPERSEDED), (second, PlanStatus.PROPOSED)]
@@ -174,7 +175,7 @@ def test_approval_takes_the_file_as_the_operator_left_it(conn: sqlite3.Connectio
     edited = PLAN + "\n## Out of scope\n\nThe UI.\n"
     path.write_text(edited)
 
-    plan = plans.approve(conn, state_dir, KEY, channel="web")
+    plan = plans.approve(conn, state_dir, KEY, channel="web", dispatch_lock=state_dir / DISPATCH_LOCK)
     assert plan.status is PlanStatus.APPROVED
     assert (plan.approved_sha256, plan.approved_channel) == (hashlib.sha256(edited.encode()).hexdigest(), "web")
     # What the planner wrote is kept beside it, so the edit shows.
@@ -184,29 +185,29 @@ def test_approval_takes_the_file_as_the_operator_left_it(conn: sqlite3.Connectio
 
 def test_an_edit_after_approval_needs_approving_again(conn: sqlite3.Connection, state_dir: Path) -> None:
     run_id = proposed(conn, state_dir)
-    plan = plans.approve(conn, state_dir, KEY, channel="cli")
+    plan = plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
     with pytest.raises(Refused, match="bad_plan: plan 1 of PROJ-1 is approved, and its file has not changed since"):
-        plans.approve(conn, state_dir, KEY, channel="cli")
+        plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
 
     path = plans.path_for(state_dir, KEY, run_id)
     path.write_text("# Changed\n")
     assert plans.approved_text(state_dir, plan) is None
-    again = plans.approve(conn, state_dir, KEY, channel="cli")
+    again = plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
     assert plans.approved_text(state_dir, again) == "# Changed\n"
 
     path.unlink()
     assert plans.approved_text(state_dir, again) is None
     with pytest.raises(Refused, match=f"bad_plan: plan 1's file {path} is missing, so it cannot be approved"):
-        plans.approve(conn, state_dir, KEY, channel="cli")
+        plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
 
 
 def test_approval_refuses_no_plan_and_a_file_that_is_no_longer_one(conn: sqlite3.Connection, state_dir: Path) -> None:
     with pytest.raises(Refused, match="bad_plan: PROJ-1 has no plan waiting to be approved"):
-        plans.approve(conn, state_dir, KEY, channel="cli")
+        plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
     run_id = proposed(conn, state_dir)
     plans.path_for(state_dir, KEY, run_id).write_text("x" * (plans.MAX_CHARS + 1))
     with pytest.raises(Refused, match="is over the bound, so it cannot be approved"):
-        plans.approve(conn, state_dir, KEY, channel="cli")
+        plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
     current = plans.current(conn, KEY)
     assert current is not None
     assert current.status is PlanStatus.PROPOSED
@@ -225,7 +226,7 @@ def test_superseding_leaves_the_ticket_with_no_current_plan(conn: sqlite3.Connec
 
 def test_forgetting_a_ticket_supersedes_its_plan_and_keeps_the_file(conn: sqlite3.Connection, state_dir: Path) -> None:
     run_id = proposed(conn, state_dir)
-    plans.approve(conn, state_dir, KEY, channel="cli")
+    plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
     with db.transaction(conn):
         db.forget_ticket(conn, KEY)
     assert plans.current(conn, KEY) is None

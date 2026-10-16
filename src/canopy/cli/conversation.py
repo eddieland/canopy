@@ -147,13 +147,17 @@ def cmd_notice(click_ctx: click.Context, text: str | None, duration: str | None,
 @click.command("start")
 @click.argument("ref", metavar="REF")
 @click.option("--review", is_flag=True, help="REF is a PR's URL: review it once, at its head.")
+@click.option("--plan", is_flag=True, help="Plan it first: its implement waits on a plan you approve.")
 @click.pass_context
-def cmd_start(click_ctx: click.Context, ref: str, *, review: bool) -> int:
+def cmd_start(click_ctx: click.Context, ref: str, *, review: bool, plan: bool) -> int:
     """Work a ticket privately, or with --review have canopy review someone else's PR.
 
     A ticket started here has no queue label, and nothing canopy writes reaches it. Its conversation, the workers'
     reports and questions and your replies, stays in canopy's journal: read it with `canopy show`, answer with
     `canopy reply`.
+
+    With --plan, a planner writes down how the work will be done first, and nothing is implemented until you approve
+    it with `canopy plan KEY --approve`, whatever `policy.plan` says.
 
     With --review, REF is a PR the loop does not own, by its URL. canopy reviews it once, at its head, in whichever of
     the workspace's repositories it is in; the review goes in the journal and nothing is posted on the PR.
@@ -161,15 +165,22 @@ def cmd_start(click_ctx: click.Context, ref: str, *, review: bool) -> int:
     _operator("start")
     subject = _ref(ref, "start")
     if review:
+        if plan:
+            raise click.UsageError("--plan is for a ticket; a PR's review has no plan")
         return _start_review(click_ctx, subject)
     ctx = open_context(click_ctx)
     try:
-        started = conversation.start(ctx.conn, ctx.config, subject, repo=ctx.repo, channel=CLI)
+        started = conversation.start(ctx.conn, ctx.config, subject, repo=ctx.repo, channel=CLI, plan=plan)
     except conversation.Refused as r:
         raise CliError(f"start refused ({r.guard}): {r.reason}") from None
     logs.for_tick(None).info("ticket started", extra={"ticket": subject.id, "already": started.already})
     state = "was already started" if started.already else "is started"
     click.echo(f"{subject} {state}, privately: workers read it and write nothing to it; their reports stay in canopy.")
+    if plan:
+        click.echo(
+            "It is planned first: nothing is implemented until you approve its plan with "
+            f"`canopy plan {subject} --approve`."
+        )
     if started.running is not None:
         run = started.running
         kind = "private" if run["private"] else "public, dispatched before this start, so it may write to the ticket"
@@ -315,7 +326,9 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
 
 @click.command("grant")
 @click.argument("ref", metavar="REF")
-@click.argument("kind", type=click.Choice([*(str(k) for k in policy.KINDS), grants.KIND]))
+@click.argument(
+    "kind", type=click.Choice([*(str(k) for k in (*policy.KINDS, *policy.TICKET_GRANT_KINDS)), grants.KIND])
+)
 @click.option("--repo", type=REPO, help="The repository of the ticket's unit. Needed when it has had runs in several.")
 @click.option("--runs", type=click.IntRange(min=1), default=1, show_default=True, help="How many more runs to allow.")
 @click.pass_context
@@ -323,8 +336,9 @@ def cmd_grant(click_ctx: click.Context, ref: str, kind: str, repo: str | None, r
     """Allow a ticket more runs of KIND than `policy.max_<kind>_attempts`, in one repository, or a PR more reviews.
 
     For a ticket at its attempt limit that you want the loop to keep working, or, with REF a PR's URL and KIND
-    `review`, a PR past `policy.max_reviews_per_pr` that you want reviewed again. Every run still counts toward the
-    limit; this raises that unit's or PR's limit, and only from your shell. The next tick decides whether to use it.
+    `review`, a PR past `policy.max_reviews_per_pr` that you want reviewed again. A `plan` is the ticket's, in no one
+    repository, so it takes no --repo. Every run still counts toward the limit; this raises that unit's, ticket's, or
+    PR's limit, and only from your shell. The next tick decides whether to use it.
     """
     subject = _ref(ref, "grant")
     if (subject.kind == conversation.PR) != (kind == grants.KIND):
@@ -332,6 +346,8 @@ def cmd_grant(click_ctx: click.Context, ref: str, kind: str, repo: str | None, r
     ctx = open_context(click_ctx)
     if kind == grants.KIND:
         return _grant_reviews(ctx, subject, repo=repo, runs=runs)
+    if kind in policy.TICKET_GRANT_KINDS:
+        return _grant_ticket(ctx, subject, kind, repo=repo, runs=runs)
     try:
         granted = policy.grant(ctx.conn, ctx.config, subject.id, kind, repo=repo, runs=runs)
     except conversation.Refused as r:
@@ -350,6 +366,21 @@ def _grant_mismatch(subject: Ref, kind: str) -> str:
     if kind == grants.KIND:
         return f"{subject} is a ticket; `review` takes the PR's URL: `canopy grant <URL> review`"
     return f"{subject} is a PR, which takes only `review`; {kind} takes a ticket key"
+
+
+def _grant_ticket(ctx: Context, subject: Ref, kind: str, *, repo: str | None, runs: int) -> int:
+    if repo is not None:
+        raise CliError(f"grant refused (bad_repo): a {kind}'s limit is the ticket's own; leave out --repo")
+    try:
+        granted = policy.grant_ticket(ctx.conn, ctx.config, subject.id, kind, runs=runs)
+    except conversation.Refused as r:
+        raise CliError(f"grant refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info("attempts granted", extra={"ticket": subject.id, "kind": kind, "runs": runs})
+    click.echo(
+        f"{subject} has had {granted.runs} {kind} runs, and may now have {granted.limit}. "
+        "The next tick decides whether to dispatch it."
+    )
+    return 0
 
 
 def _grant_reviews(ctx: Context, subject: Ref, *, repo: str | None, runs: int) -> int:
