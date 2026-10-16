@@ -322,7 +322,7 @@ def session_title(conn: sqlite3.Connection, key: str, kind: str) -> str:
         The title.
     """
     ticket = db.get_ticket(conn, key)
-    title = ticket["title"] if ticket is not None else None
+    title = ticket.title if ticket is not None else None
     return f"{key} {kind}: {title}" if title else f"{key} {kind}"
 
 

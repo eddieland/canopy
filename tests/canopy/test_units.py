@@ -13,7 +13,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from canopy.runs import desks
@@ -109,7 +109,7 @@ def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
         assert '"prs":{"api":"<url or null>","web":"<url or null>"}' in prompt
 
         # The next run is told each unit's PR.
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         with in_tick(conn):
             assert main(dispatch("PROJ-1", "--repo", "web", "--repo", "api", kind="resume"), runner=InlineRunner()) == 0
             prompt = (ws.state_dir / "runs" / "2.prompt").read_text()
@@ -302,7 +302,7 @@ def test_journal_commands_name_a_unit(ws: Ws, capsys: pytest.CaptureFixture[str]
         )
         ticket = db.get_ticket(conn, "PROJ-1")
         assert ticket is not None
-        assert ticket["phase"] is None  # a phase about the PR is the unit's
+        assert ticket.phase is None  # a phase about the PR is the unit's
         # A phase about the PR needs its unit; the ticket's own phases are the ticket's, --repo or not.
         assert main(["ticket", "set", "PROJ-1", "--phase", "approved"]) == 2
         assert "the approved phase belongs to one unit: name its repository with --repo" in capsys.readouterr().err
@@ -310,7 +310,7 @@ def test_journal_commands_name_a_unit(ws: Ws, capsys: pytest.CaptureFixture[str]
         capsys.readouterr()
         ticket = db.get_ticket(conn, "PROJ-1")
         assert ticket is not None
-        assert ticket["phase"] == "needs_human"
+        assert ticket.phase == "needs_human"
         assert [u["phase"] for u in db.units(conn, "PROJ-1")] == ["ci_red"]
 
         assert (
@@ -321,7 +321,7 @@ def test_journal_commands_name_a_unit(ws: Ws, capsys: pytest.CaptureFixture[str]
         )
         assert main(["attention", "PROJ-1", "multi_repo", "--detail", "api and web"]) == 0
         assert main(["attention", "PROJ-1", "needs_author", "--repo", "nope", "--detail", "x"]) == 1
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         # Two units needing an author are two items: an item is its ticket, reason, and repository.
         assert [(i.subject, i.reason) for i in attention.current(conn)] == [
             ("PROJ-1", "multi_repo"),
@@ -341,7 +341,7 @@ def test_a_merge_conflict_is_a_units_phase(ws: Ws, capsys: pytest.CaptureFixture
         assert (unit["repo"], unit["phase"]) == ("web", "conflicted")
         ticket = db.get_ticket(conn, "PROJ-1")
         assert ticket is not None
-        assert ticket["phase"] is None
+        assert ticket.phase is None
 
 
 def test_untrusted_review_is_a_units_phase(ws: Ws, capsys: pytest.CaptureFixture[str]) -> None:
@@ -356,7 +356,7 @@ def test_untrusted_review_is_a_units_phase(ws: Ws, capsys: pytest.CaptureFixture
     assert (unit["repo"], unit["phase"]) == ("api", "untrusted_review")
     ticket = db.get_ticket(conn, "PROJ-1")
     assert ticket is not None
-    assert ticket["phase"] is None
+    assert ticket.phase is None
 
 
 def test_a_joint_prompt_override_without_the_repositories_is_refused(
@@ -387,7 +387,7 @@ def test_a_killed_joint_run_is_detected_and_all_its_slots_returned(
     with worker_does(), mock.patch.dict(os.environ, {"FAKE_WORKER_SLEEP": "60"}):
         with in_tick(conn) as tick_id:
             assert main(dispatch("PROJ-1", "--repo", "api", "--repo", "web")) == 0
-            db.finish_tick(conn, tick_id, "ok", "test")
+            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
 
         deadline = time.monotonic() + 30
         run = db.get_run(conn, 1)

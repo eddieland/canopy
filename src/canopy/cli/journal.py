@@ -56,7 +56,7 @@ def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationale: str)
     current = require_tick(ctx)
     if key is not None:
         db.touch_ticket(ctx.conn, key, ctx.repo)
-    db.record_decision(ctx.conn, current["id"], key, action, rationale)
+    db.record_decision(ctx.conn, current.id, key, action, rationale)
     click.echo(f"recorded {action} for {key or 'this tick'}")
     return 0
 
@@ -79,7 +79,7 @@ def cmd_queried(click_ctx: click.Context, keys: tuple[str, ...]) -> int:
     # Into the journal at once, so the next tick's block carries each one even if this tick ends without deciding it.
     for key in found:
         db.touch_ticket(ctx.conn, key, ctx.repo)
-    db.record_decision(ctx.conn, current["id"], None, duties.QUERIED_ACTION, rationale)
+    db.record_decision(ctx.conn, current.id, None, duties.QUERIED_ACTION, rationale)
     click.echo(f"recorded the query: {len(found)} open ticket(s)")
     return 0
 
@@ -128,7 +128,7 @@ def cmd_attention(
     if reason == "review_limit" and pr is not None:
         # However the overseer words it, the item names what lifts the limit (DESIGN §21).
         detail = f"{detail}; {grants.hint(pr)}"
-    db.record_decision(ctx.conn, current["id"], key, f"{attention.ACTION_PREFIX}{reason}", detail, repo=unit, pr=pr)
+    db.record_decision(ctx.conn, current.id, key, f"{attention.ACTION_PREFIX}{reason}", detail, repo=unit, pr=pr)
     click.echo(f"recorded attention {reason} for {attention.subject(key or f'{attention.PR_PREFIX}{pr}', unit)}")
     return 0
 
@@ -190,7 +190,7 @@ def cmd_ticket_set(
     current = optional_tick(ctx)
     # A dry run must not advance cursors or mark a ticket done: the first live tick would then miss everything the dry
     # runs saw, or never see the ticket at all.
-    dry_run = current is not None and bool(current["dry_run"])
+    dry_run = current is not None and current.dry_run
     ignored = [
         *(["cursors not advanced"] if dry_run and cursor_pairs else []),
         *(["not marked done"] if dry_run and done else []),
@@ -200,7 +200,7 @@ def cmd_ticket_set(
         ctx.conn,
         key,
         ctx.repo,
-        phase=None if unit_phase is not None else phase,
+        phase=None if phase is None or unit_phase is not None else vocab.Phase(phase),
         cursors=ticket_cursors,
         done=done and not dry_run,
         title=title,
@@ -232,7 +232,7 @@ def cmd_mirror(click_ctx: click.Context, *, ref: str, comment_id: str, author: s
     """
     ctx = open_context(click_ctx)
     current = require_tick(ctx)
-    tick_id = int(current["id"])
+    tick_id = current.id
     log = logs.for_tick(tick_id)
     key: str | None = None
     try:
@@ -243,7 +243,7 @@ def cmd_mirror(click_ctx: click.Context, *, ref: str, comment_id: str, author: s
             ctx.config,
             subject,
             tick_id=tick_id,
-            dry_run=bool(current["dry_run"]),
+            dry_run=current.dry_run,
             repo=ctx.repo,
             comment_id=comment_id,
             author=author,

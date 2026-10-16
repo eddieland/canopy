@@ -34,20 +34,20 @@ def cmd_review_run(
     """Start a review of the PR at URL, at commit SHA, if its guards allow one now."""
     ctx = open_context(click_ctx)
     current = require_tick(ctx)
-    tick_id = int(current["id"])
+    tick_id = current.id
     log = logs.for_tick(tick_id)
     request = start.Request(pr=pr, sha=sha, ticket=ticket, repo=repo)
     # A malformed URL is recorded cut short; the refusal says what was wrong with it.
     pr_key = pr if len(pr) <= start.MAX_PR_URL else pr[: start.MAX_PR_URL]
     try:
-        if current["dry_run"]:
+        if current.dry_run:
             start.check(ctx, tick_id=tick_id, request=request)
             started = None
         else:
             started = start.start(ctx, tick_id=tick_id, request=request, context=context)
     except start.Refusal as r:
         db.record_decision(ctx.conn, tick_id, ticket, f"refused:{r.guard}", r.reason, pr=pr_key)
-        if r.guard == "reviewed" and not current["dry_run"] and review_requests.answered(ctx.conn, pr):
+        if r.guard == "reviewed" and not current.dry_run and review_requests.answered(ctx.conn, pr):
             # The head already has a `done` review: that answers a `once` request, which no new review would end.
             log.info("review request answered", extra={"pr": pr_key})
         if r.guard == "review_limit":
@@ -82,7 +82,7 @@ def cmd_review_wait(click_ctx: click.Context, *, pr: str, ticket: str | None, ra
     current = require_tick(ctx)
     if not review_requests.reviews_on(ctx.conn, ctx.config):
         raise CliError("reviews are off: no [review] agent_prs or query, and no open review request")
-    db.record_decision(ctx.conn, int(current["id"]), ticket, "wait", rationale, pr=pr)
+    db.record_decision(ctx.conn, current.id, ticket, "wait", rationale, pr=pr)
     click.echo(f"recorded wait for {pr}")
     return 0
 
@@ -99,8 +99,8 @@ def cmd_review_end(click_ctx: click.Context, *, pr: str, reason: str) -> int:
     """End the operator's review request on the PR at URL: it merged or closed first, or is in no repository here."""
     ctx = open_context(click_ctx)
     current = require_tick(ctx)
-    tick_id = int(current["id"])
-    dry_run = bool(current["dry_run"])
+    tick_id = current.id
+    dry_run = current.dry_run
     try:
         review_requests.end(ctx.conn, pr, reason, dry_run=dry_run)
     except conversation.Refused as r:

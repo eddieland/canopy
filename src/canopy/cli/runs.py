@@ -103,10 +103,10 @@ def cmd_dispatch(
             click_ctx,
         )
     current = require_tick(ctx)
-    tick_id = int(current["id"])
+    tick_id = current.id
     log = logs.for_tick(tick_id)
     db.touch_ticket(ctx.conn, key, ctx.repo)
-    dry_run = bool(current["dry_run"])
+    dry_run = current.dry_run
     try:
         review = _review_findings(ctx.conn, key, kind, repos, review_run)
         # A dry run checks the same guards, so its plan holds the refusals a live tick would get (D036).

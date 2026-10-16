@@ -491,8 +491,8 @@ def _check_split(ctx: Context, key: str, repos: Sequence[str], *, slug: str | No
     if child is not None:
         raise Refusal("bad_split", f"{key} was created by splitting {child['parent_key']}; it is not split again")
     ticket = db.get_ticket(ctx.conn, key)
-    if ticket is not None and ticket["branch"]:
-        raise Refusal("bad_split", f"{key} already has work on {ticket['branch']}; a started ticket is not split")
+    if ticket is not None and ticket.branch:
+        raise Refusal("bad_split", f"{key} already has work on {ticket.branch}; a started ticket is not split")
 
 
 def _check_plan(ctx: Context, key: str, *, slug: str | None, base: str | None) -> None:
@@ -545,7 +545,7 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence
             or in one of `repos` (`no_branch`).
     """
     ticket = db.get_ticket(ctx.conn, key)
-    recorded = str(ticket["branch"]) if ticket is not None and ticket["branch"] else None
+    recorded = ticket.branch if ticket is not None and ticket.branch else None
     if kind == RunKind.IMPLEMENT:
         if recorded is None:
             slug = DEFAULT_SLUG if slug is None else slug
@@ -594,8 +594,8 @@ def _check_notice(ctx: Context, tick_id: int, kind: str) -> None:
     if kind != FIX_CI:
         return
     tick = db.get_tick(ctx.conn, tick_id)
-    read = tick["read_at"] if tick is not None else None
-    if read is not None and notice.moved_after(ctx.conn, str(read)):
+    read = tick.read_at if tick is not None else None
+    if read is not None and notice.moved_after(ctx.conn, read):
         raise Refusal(
             "notice_changed",
             "the operator set or cleared a notice to workers after this tick read the journal; the next tick decides "

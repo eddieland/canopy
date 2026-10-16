@@ -13,7 +13,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, db, definitions
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from tests.canopy.helpers import (
@@ -41,7 +41,7 @@ def add_run(
     conn: sqlite3.Connection, key: str, leased: Mapping[str, str], *, pid: int | None, status: str = "running"
 ) -> int:
     tick_id = db.start_tick(conn, dry_run=False)
-    db.finish_tick(conn, tick_id, "ok", "test")
+    db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     db.touch_ticket(conn, key, "repo")
     run_id = db.insert_run(
         conn,
@@ -70,7 +70,7 @@ def add_run(
 def last_tick_decisions(conn: sqlite3.Connection) -> list[tuple[str | None, str, str]]:
     tick = db.last_tick(conn)
     assert tick is not None
-    return [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(conn, int(tick["id"]))]
+    return [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(conn, tick.id)]
 
 
 def test_dead_worker_is_crashed_and_its_slot_returned(
@@ -228,8 +228,8 @@ def test_treehouse_return_failure_stops_the_tick(
         assert main(["tick"]) == 1
         tick = db.last_tick(conn)
         assert tick is not None
-        assert tick["status"] == "reconcile_failed"
-        assert "boom" in tick["summary"]
+        assert tick.status == TickStatus.RECONCILE_FAILED
+        assert "boom" in str(tick.summary)
         assert not agent_log.exists()
 
 
@@ -285,7 +285,7 @@ def test_killed_worker_is_detected_on_the_next_tick(
     ):
         dispatch = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
         assert main(dispatch) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
 
     # Wait for both, in either order. `_run` records the worker's pid only after starting it, so the agent log can come
     # first. The log is written after the fake's stdout chatter: killing `_run` before then would break the worker's

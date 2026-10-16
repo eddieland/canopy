@@ -9,6 +9,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.core.vocab import TickStatus
 from canopy.loop import attention
 from tests.canopy.helpers import (
     InlineRunner,
@@ -226,8 +227,8 @@ def test_state_block_shows_attempts_and_the_cooldown(
 def tick_decisions(conn: sqlite3.Connection) -> list[str]:
     tick = db.last_tick(conn)
     assert tick is not None
-    assert tick["status"] == "ok", tick["summary"]
-    return [d.action for d in db.decisions_for_tick(conn, int(tick["id"]))]
+    assert tick.status == TickStatus.OK, tick.summary
+    return [d.action for d in db.decisions_for_tick(conn, tick.id)]
 
 
 def test_red_pr_gets_one_fix_per_cooldown_window_and_stops_at_the_limit(
