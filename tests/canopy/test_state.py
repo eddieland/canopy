@@ -19,7 +19,7 @@ from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 
 from canopy.core import config, conversation, db, pools, workspace
 from canopy.core.context import Context
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import procs
 from canopy.loop import tick
 from canopy.runs import policy, reconcile
@@ -164,7 +164,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, block: Snaps
             channel="cli",
             body="Keep the retry count at three.",
         )
-        db.finish_tick(conn, earlier, "ok", "")
+        db.finish_tick(conn, earlier, TickStatus.OK, "")
     with clock("09:55"):
         # PROJ-2 is being implemented now.
         db.set_ticket(conn, "PROJ-2", root, title="Add a dark mode", phase="implementing")

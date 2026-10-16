@@ -124,12 +124,12 @@ If code and the design disagree, the design doc wins until a decision entry says
   table, so a migration that adds a column to a typed table adds the field too. A status, kind, or phase column is a
   field of its `core/vocab.py` enum, so the row carries the member and refuses a value the vocabulary does not hold. A
   helper that reads the same columns from several tables, some still untyped, reads them through `records.columns`.
-- A run's status and kind and a ticket's phase are closed vocabularies in `core/vocab.py`, each a `StrEnum`. New code
-  writes and compares them through its members, not bare strings, and converts a value read from the journal where it
-  branches on it. A branch over one is a `match` ending in `case _: assert_never(...)`, so a new value fails the type
-  check until every branch handles it. click matches an enum choice by its name, so a `click.Choice` over one takes its
-  values. A table made from M36 on constrains each `status`, `kind`, and `phase` column with `CHECK (column IN (...))`;
-  `tests/canopy/test_db.py` fails on one that does not.
+- A run's and a tick's status, a run's kind, and a ticket's phase are closed vocabularies in `core/vocab.py`, each a
+  `StrEnum`. New code writes and compares them through its members, not bare strings, and converts a value read from the
+  journal where it branches on it. A branch over one is a `match` ending in `case _: assert_never(...)`, so a new value
+  fails the type check until every branch handles it. click matches an enum choice by its name, so a `click.Choice` over
+  one takes its values. A table made from M36 on constrains each `status`, `kind`, and `phase` column with
+  `CHECK (column IN (...))`; `tests/canopy/test_db.py` fails on one that does not.
 - Hard guards live in code, judgment lives in prompts. Capacity limits, attempt limits, cooldowns, "never merge", and
   "one worker per ticket" are enforced by the harness regardless of what the overseer asks for.
 - Log with `logging`, JSON lines to `.canopy/canopy.log` in the workspace. Every tick has an id that appears in every

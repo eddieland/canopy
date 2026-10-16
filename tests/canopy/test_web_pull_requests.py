@@ -8,6 +8,7 @@ import json
 import pytest
 
 from canopy.core import conversation, db
+from canopy.core.vocab import TickStatus
 from canopy.serve import mock_reviews, pull_requests
 from canopy.serve.backend import Backend
 from tests.canopy.web_helpers import client
@@ -94,7 +95,7 @@ def test_a_pr_only_decisions_name_has_a_page_and_anything_else_is_refused(backen
     with backend.open() as ctx:
         tick_id = db.start_tick(ctx.conn, dry_run=False)
         db.record_decision(ctx.conn, tick_id, None, "wait", "checks still running", pr=pr)
-        db.finish_tick(ctx.conn, tick_id, "ok", "test")
+        db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "test")
     c = client(None, backend)
     assert pr not in {p["url"] for p in c.get("/api/pull-requests").json()}  # decisions are not a source
     page = c.get("/api/pull-request", params={"url": pr}).json()

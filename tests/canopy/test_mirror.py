@@ -12,6 +12,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import conversation, db
+from canopy.core.vocab import TickStatus
 from canopy.infra import resources
 from canopy.loop import attention
 from tests.canopy.helpers import canopy, context, in_tick, journal_at, overseer_does, state_block, versions_after
@@ -70,7 +71,7 @@ def test_a_comment_is_mirrored_once_and_moves_the_mirror_cursor(
         # Again, in this tick or a later one: nothing new, whatever the overseer passes this time.
         assert mirror(*comment(), body="edited since") == 0
         assert "comment 10234 on PROJ-1 is already message 1; nothing new recorded" in capsys.readouterr().out
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     with in_tick(conn) as later:
         assert mirror(*comment()) == 0
         assert [m["id"] for m in mirrored(conn)] == [1]
@@ -136,7 +137,7 @@ def test_a_tick_mirrors_at_most_its_limit(canopy_env: CanopyEnv, conn: sqlite3.C
             assert decisions(conn, tick_id)[-1][1] == "refused:mirror_limit"
             # The rest wait for the next tick, past the cursor.
             assert mirror_cursor(conn) == "2"
-            db.finish_tick(conn, tick_id, "ok", "test")
+            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         with in_tick(conn):
             assert mirror(*comment("3")) == 0
             assert mirror_cursor(conn) == "3"
@@ -151,7 +152,7 @@ def test_a_dry_run_records_the_mirror_and_moves_no_cursor(canopy_env: CanopyEnv,
         assert action == "mirror"
         assert rationale.endswith("; dry run, mirror cursor not advanced")
         # The live tick that follows finds it mirrored, and moves the cursor.
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     with in_tick(conn):
         assert mirror(*comment()) == 0
         assert len(mirrored(conn)) == 1
@@ -249,7 +250,7 @@ def test_the_overseer_mirrors_through_a_heredoc_with_the_ticks_delimiter(
             assert not pwned.exists()
             tick = db.last_tick(conn)
             assert tick is not None
-            assert "mirror=1" in str(tick["summary"])
+            assert "mirror=1" in str(tick.summary)
 
         # The next tick's state block carries the ticket's mirror cursor, apart from its comment cursor.
         with overseer_does(canopy("decide", KEY, "wait", "--rationale", "nothing new")):

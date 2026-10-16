@@ -10,7 +10,7 @@ from typing import ClassVar
 import pytest
 
 from canopy.core import db, records
-from canopy.core.vocab import ChoreRunStatus, PoolKind, ReviewRunStatus
+from canopy.core.vocab import ChoreRunStatus, PoolKind, ReviewRunStatus, TickStatus
 from tests.canopy.helpers import in_tick
 from tests.conftest import Journals
 
@@ -189,3 +189,21 @@ def test_a_review_run_reads_its_status_and_pool_as_their_members(conn: sqlite3.C
     assert (run.id, run.status, run.pool) == (run_id, ReviewRunStatus.RUNNING, PoolKind.TREEHOUSE)
     assert isinstance(run.status, ReviewRunStatus)
     assert isinstance(run.pool, PoolKind)
+
+
+def test_a_tick_reads_its_status_as_its_member_and_its_flags_as_bools(conn: sqlite3.Connection) -> None:
+    tick_id = db.start_tick(conn, dry_run=True)
+    db.set_tick_loop(conn, tick_id, idle=False, woken_by="timer")
+    db.finish_tick(conn, tick_id, TickStatus.CANOPY_UNAVAILABLE, "canopy --version failed")
+    tick = db.get_tick(conn, tick_id)
+    assert tick is not None
+    assert (tick.status, tick.dry_run, tick.idle, tick.query_due) == (TickStatus.CANOPY_UNAVAILABLE, True, False, None)
+    assert isinstance(tick.status, TickStatus)
+
+
+def test_recent_ticks_count_each_ticks_decisions(conn: sqlite3.Connection) -> None:
+    quiet = db.start_tick(conn, dry_run=True)
+    busy = db.start_tick(conn, dry_run=True)
+    db.record_decision(conn, busy, "PROJ-1", "wait", "checks running")
+    db.record_decision(conn, busy, "PROJ-2", "wait", "checks running")
+    assert [(t.id, n) for t, n in db.recent_ticks(conn, 5)] == [(busy, 2), (quiet, 0)]

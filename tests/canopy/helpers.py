@@ -21,6 +21,7 @@ from rich.console import Console
 from canopy.cli.main import main
 from canopy.core import config, db, records, workspace
 from canopy.core.context import Context
+from canopy.core.vocab import TickStatus
 from canopy.infra import logs, procs, resources
 from tests.conftest import CanopyEnv, Journals
 
@@ -116,7 +117,7 @@ def running_run(ctx: Context, key: str, *, private: bool = True) -> int:
         runs_dir=ctx.state_dir / "runs",
         private=private,
     )
-    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "test")
     return run_id
 
 
@@ -212,7 +213,7 @@ def dispatch_in_tick(
     """In a tick of its own, run `canopy dispatch` of `key` in `repo` with `args`; the run it starts does not run."""
     with in_tick(conn) as tick_id:
         code = main(["dispatch", key, "--repo", "repo", *args], runner=runner or InlineRunner())
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         return Dispatched(code, decisions(conn, tick_id))
 
 
@@ -227,7 +228,7 @@ def dispatch_and_run(
     runner = runner or InlineRunner()
     with in_tick(conn) as tick_id:
         assert main(["dispatch", key, "--repo", "repo", *args], runner=runner) == 0, decisions(conn, tick_id)
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         run_id = int(last_run(conn)["id"])
         assert main(["_run", str(run_id)], runner=runner) == 0
     run = db.get_run(conn, run_id)

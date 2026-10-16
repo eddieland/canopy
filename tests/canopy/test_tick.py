@@ -12,6 +12,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, db, definitions
+from canopy.core.vocab import TickStatus
 from canopy.infra import lock, procs
 from canopy.loop import attention, tick
 from tests.canopy.helpers import agent_runs, canopy, in_tick, overseer_does, state_block, tools_of, tools_printed
@@ -144,7 +145,7 @@ def test_the_state_block_names_the_tickets_marked_done_lately(
         # The tracker reports a closed ticket closed, so once it is reopened the query must find it again.
         db.set_ticket(conn, "PROJ-6", repo, done=True)
         db.record_decision(conn, tick_id, "PROJ-6", "done", db.CLOSED_RATIONALE)
-        db.finish_tick(conn, tick_id, "ok", "")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "")
     # Forgotten, then marked done again with no decision of its own: the earlier one does not count.
     with db.transaction(conn):
         db.forget_ticket(conn, "PROJ-7")
@@ -156,7 +157,7 @@ def test_the_state_block_names_the_tickets_marked_done_lately(
         conn.execute("UPDATE decisions SET created_at = ? WHERE ticket_key = 'PROJ-3'", (long_ago,))
     with in_tick(conn) as tick_id:
         newest = db.record_decision(conn, tick_id, "PROJ-3", "done", "merged, still open")
-        db.finish_tick(conn, tick_id, "ok", "")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "")
     [done_at] = conn.execute("SELECT created_at FROM decisions WHERE ticket_key = 'PROJ-1'").fetchone()
     [newest_at] = conn.execute("SELECT created_at FROM decisions WHERE id = ?", (newest,)).fetchone()
     with overseer_does(canopy("decide", "PROJ-5", "wait", "--rationale", "checks pending")):
@@ -228,7 +229,7 @@ def test_a_tick_from_before_the_spacing_was_recorded_ran_the_query(
     query_every(canopy_env, 30)
     conn = canopy_env.journal()
     with in_tick(conn) as tick_id:
-        db.finish_tick(conn, tick_id, "ok", "")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "")
     assert conn.execute("SELECT query_due FROM ticks").fetchone()["query_due"] is None
     with overseer_does():
         assert main(["tick"]) == 0
@@ -580,11 +581,11 @@ def test_the_state_block_lists_the_overseers_open_attention_items(
     # The harness's own, and a chore's: the overseer never records these.
     db.record_decision(conn, earlier, "PROJ-2", "attention:worker_failed", "run 3 ended failed")
     db.record_decision(conn, earlier, None, "attention:chore_failed", "it failed", chore="nightly")
-    db.finish_tick(conn, earlier, "ok", "")
+    db.finish_tick(conn, earlier, TickStatus.OK, "")
     # The latest tick found `canopy` broken: its item is listed, but the harness raised it, not the overseer.
     broken = db.start_tick(conn, dry_run=True)
     db.record_decision(conn, broken, None, "attention:canopy_unavailable", "`canopy --version` exited 1")
-    db.finish_tick(conn, broken, "canopy_unavailable", "")
+    db.finish_tick(conn, broken, TickStatus.CANOPY_UNAVAILABLE, "")
     since = [r[0] for r in conn.execute("SELECT created_at FROM decisions ORDER BY id")]
 
     with overseer_does():
