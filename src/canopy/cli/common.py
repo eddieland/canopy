@@ -10,10 +10,9 @@ from typing import TYPE_CHECKING, override
 
 import click
 
-from canopy.core import config, db, workspace
+from canopy.core import config, conversation, db, workspace
 from canopy.core.context import Context, db_path
 from canopy.infra import logs, procs, resources
-from canopy.loop import tick
 
 if TYPE_CHECKING:
     from click.shell_completion import CompletionItem
@@ -41,7 +40,9 @@ class Group(click.Group):
             The completions click offers, less each subcommand only the overseer runs.
         """
         return [
-            item for item in super().shell_complete(ctx, incomplete) if not _overseers(self.commands.get(item.value))
+            item
+            for item in super().shell_complete(ctx, incomplete)
+            if not _overseers(self.get_command(ctx, item.value))
         ]
 
 
@@ -102,12 +103,12 @@ def optional_tick(ctx: Context) -> sqlite3.Row | None:
     Raises:
         CliError: CANOPY_TICK_ID is set but does not name a running tick.
     """
-    raw = os.environ.get(tick.TICK_ID_ENV)
+    raw = os.environ.get(conversation.TICK_ID_ENV)
     if not raw:
         return None
     row = db.get_tick(ctx.conn, int(raw)) if raw.isdigit() else None
     if row is None or row["status"] != "running":
-        raise CliError(f"{tick.TICK_ID_ENV}={raw} does not name a running tick")
+        raise CliError(f"{conversation.TICK_ID_ENV}={raw} does not name a running tick")
     return row
 
 
@@ -119,5 +120,5 @@ def require_tick(ctx: Context) -> sqlite3.Row:
     """
     row = optional_tick(ctx)
     if row is None:
-        raise CliError(f"no tick is running ({tick.TICK_ID_ENV} is not set); this command runs inside a tick")
+        raise CliError(f"no tick is running ({conversation.TICK_ID_ENV} is not set); this command runs inside a tick")
     return row

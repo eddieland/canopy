@@ -1,12 +1,17 @@
 import contextlib
+import importlib
 import os
+import pkgutil
 import sys
 from importlib.metadata import version
 from pathlib import Path
 from unittest import mock
 
+import click
 import pytest
 
+from canopy import cli as cli_package
+from canopy.cli import main as cli_main
 from canopy.cli.main import main
 from canopy.infra import procs, resources
 from tests.conftest import CanopyEnv
@@ -41,6 +46,37 @@ def test_the_cli_starts_without_the_web_server() -> None:
     result = procs.SubprocessRunner().run([sys.executable, "-c", code])
     assert result.ok, result.stderr
     assert result.stdout.strip() == "[]"
+
+
+@pytest.mark.parametrize(("argv", "loads"), [(["--version"], set[str]()), (["decide", "--help"], {"journal"})])
+def test_a_command_imports_only_its_own_module(argv: list[str], loads: set[str]) -> None:
+    # The overseer calls `canopy decide` and its kin many times a tick; each start-up pays for every module it imports.
+    code = f"import sys; from canopy.cli.main import main; main({argv!r}); print(*sys.modules, sep='\\n')"
+    result = procs.SubprocessRunner().run([sys.executable, "-c", code])
+    assert result.ok, result.stderr
+    imported = set(result.stdout.splitlines())
+    assert {f"canopy.cli.{module}" for module, _ in cli_main.COMMANDS.values()} & imported == {
+        f"canopy.cli.{module}" for module in loads
+    }
+
+
+def test_every_command_in_a_command_module_is_registered_under_its_own_name() -> None:
+    # Every click command a command module defines, by where it is defined; the root group is not one of them.
+    defined: dict[tuple[str, str], click.Command] = {}
+    for info in pkgutil.iter_modules(cli_package.__path__):
+        module = importlib.import_module(f"canopy.cli.{info.name}")
+        defined.update(
+            ((info.name, attr), v)
+            for attr, v in vars(module).items()
+            if isinstance(v, click.Command) and v is not cli_main.cli
+        )
+    subcommands = {id(sub) for c in defined.values() if isinstance(c, click.Group) for sub in c.commands.values()}
+    top_level = {where for where, c in defined.items() if id(c) not in subcommands}
+    assert set(cli_main.COMMANDS.values()) == top_level
+    for name in cli_main.COMMANDS:
+        command = cli_main.cli.get_command(click.Context(cli_main.cli), name)
+        assert command is not None
+        assert command.name == name
 
 
 def test_unknown_argument_is_a_usage_error(capsys: pytest.CaptureFixture[str]) -> None:
