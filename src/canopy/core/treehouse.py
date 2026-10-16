@@ -12,6 +12,7 @@ with `TREEHOUSE_ROOT` set to the workspace root, and `get` pins where a new slot
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -235,7 +236,7 @@ def destroy(runner: procs.Runner, path: Path, *, pool: Pool = DEFAULT_POOL) -> s
     return (result.stderr.strip() or result.stdout.strip() or f"exited {result.returncode}")[:500]
 
 
-def _run(runner: procs.Runner, args: list[str], pool: Pool) -> procs.Result:
+def _run(runner: procs.Runner, args: Sequence[str], pool: Pool) -> procs.Result:
     env = {ROOT_ENV: str(pool.root)} if pool.root is not None else None
     try:
         result = runner.run(["treehouse", *args], cwd=pool.cwd, env=env, timeout=_TIMEOUT_SECONDS)

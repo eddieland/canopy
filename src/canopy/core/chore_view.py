@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, TypedDict
@@ -329,7 +329,7 @@ class ChoreSummary(TypedDict):
     findings: list[FindingRef]
 
 
-def state_section(states_: list[ChoreState], now: datetime) -> list[ChoreSummary]:
+def state_section(states_: Iterable[ChoreState], now: datetime) -> list[ChoreSummary]:
     """Return the state block's `chores`: each configured chore, for the overseer to run or wait on (DESIGN §19)."""
     section: list[ChoreSummary] = []
     for state in states_:

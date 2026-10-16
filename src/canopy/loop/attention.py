@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
@@ -107,7 +108,7 @@ def decided_about(decision: records.Decision) -> str:
 _ItemId = tuple[str | None, str, str | None]
 
 
-def keys(items: list[Item]) -> set[_ItemId]:
+def keys(items: Iterable[Item]) -> set[_ItemId]:
     """Each item's identity, as two lists are compared: its ticket, its reason, and its repository.
 
     Returns:
@@ -306,7 +307,7 @@ def awaiting_detail(waiting: conversation.Awaiting) -> str:
     return f"{text[:1800]}; answer with `canopy reply {waiting.key}`"
 
 
-def render(items: list[Item], now: datetime) -> str:
+def render(items: Sequence[Item], now: datetime) -> str:
     """Return `attention.md`: the items grouped by reason, one line each with key, age, and detail."""
     stamp = now.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
     lines = ["# canopy attention", ""]

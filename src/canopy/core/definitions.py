@@ -25,7 +25,7 @@ import os
 import shutil
 import tempfile
 import time
-from collections.abc import Mapping
+from collections.abc import Collection, Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -250,7 +250,7 @@ def prune(state_dir: Path, keep: Path) -> list[Path]:
     return removed
 
 
-def shadowing(root: Path, names: list[str] | None = None) -> list[Path]:
+def shadowing(root: Path, names: Collection[str] | None = None) -> list[Path]:
     """Return the files in `root`'s OpenCode config that define, or may define, one of canopy's agents.
 
     That is an agent or mode file with a canopy agent's name under `.opencode/`, and an `opencode.json` or
@@ -272,7 +272,7 @@ def shadowing(root: Path, names: list[str] | None = None) -> list[Path]:
     return found
 
 
-def shadowing_message(found: list[Path]) -> str:
+def shadowing_message(found: Iterable[Path]) -> str:
     """Explain what `shadowing` found and what to do about it.
 
     Returns:
@@ -302,7 +302,7 @@ def naming_tools(root: Path, server: str) -> list[Path]:
     return [p for p in candidates if p.is_file() and needle in p.read_text(errors="replace")]
 
 
-def naming_tools_message(server: str, found: list[Path]) -> str:
+def naming_tools_message(server: str, found: Iterable[Path]) -> str:
     """Explain what `naming_tools` found and what to do about it.
 
     Returns:

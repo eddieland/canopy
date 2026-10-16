@@ -19,6 +19,7 @@ import os
 import re
 import shlex
 import tomllib
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -939,7 +940,7 @@ def load(root: Path, user_file: Path | None = None) -> Config:
 
 
 def _merge(
-    layers: tuple[tuple[Path, dict[str, object]], ...], shared_file: Path
+    layers: Iterable[tuple[Path, Mapping[str, object]]], shared_file: Path
 ) -> tuple[dict[str, dict[str, object]], dict[str, Path]]:
     """Merge the files' keys in order, later files winning. Returns the merged sections and each key's file.
 
@@ -964,7 +965,7 @@ def _merge(
     return merged, origin
 
 
-def _read(path: Path, *, skip: tuple[str, ...] = ()) -> dict[str, object]:
+def _read(path: Path, *, skip: Collection[str] = ()) -> dict[str, object]:
     """Return the file's config keys as `section.key` names. Tables named in `skip` are someone else's to read.
 
     Raises:
@@ -1014,7 +1015,7 @@ def _stricter(spec: KeySpec, value: object) -> bool:
     return value < default if spec.tighten is Tighten.LOWER else value > default
 
 
-def _describe(error: ValidationError, origin: dict[str, Path], shared_file: Path, user_file: Path) -> str:
+def _describe(error: ValidationError, origin: Mapping[str, Path], shared_file: Path, user_file: Path) -> str:
     lines: list[str] = []
     for e in error.errors():
         loc = [str(p) for p in e["loc"] if p != "[key]"]

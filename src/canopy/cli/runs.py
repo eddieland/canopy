@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import click
@@ -199,7 +200,7 @@ def cmd_dispatch(
 
 
 def _review_findings(
-    conn: sqlite3.Connection, key: str, kind: str, repos: tuple[str, ...], run_id: int | None
+    conn: sqlite3.Connection, key: str, kind: str, repos: Sequence[str], run_id: int | None
 ) -> str | None:
     """Return the worker's `{{REVIEW_FINDINGS}}` for `--review-run`, or None without it (DESIGN §21).
 

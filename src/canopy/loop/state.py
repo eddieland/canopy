@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, NotRequired, TypedDict
@@ -219,20 +219,20 @@ def state_block(
     dry_run: bool,
     capacity: Capacity,
     workspace: Workspace,
-    leased: Mapping[str, list[pools.Slot]],
-    running: list[sqlite3.Row],
-    tickets: list[sqlite3.Row],
+    leased: Mapping[str, Sequence[pools.Slot]],
+    running: Iterable[sqlite3.Row],
+    tickets: Iterable[sqlite3.Row],
     stopped: Sequence[str],
     recently_done: Sequence[sqlite3.Row] = (),
-    units: Mapping[str, list[sqlite3.Row]],
+    units: Mapping[str, Sequence[sqlite3.Row]],
     last_runs: Mapping[str, sqlite3.Row],
-    run_slots: Mapping[int, list[sqlite3.Row]],
+    run_slots: Mapping[int, Sequence[sqlite3.Row]],
     attempts: Mapping[policy.Unit, Mapping[str, int]],
     grants: Mapping[policy.Unit, Mapping[str, int]],
     fix_ci_cooldowns: Mapping[policy.Unit, datetime],
     now: datetime,
     split_attempts: Mapping[str, int],
-    split_children: list[sqlite3.Row],
+    split_children: Iterable[sqlite3.Row],
     chores: list[ChoreSummary],
     reviews: ReviewsSection | None,
     notices: Sequence[Notice] = (),

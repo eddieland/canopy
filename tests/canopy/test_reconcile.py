@@ -5,6 +5,7 @@ import os
 import signal
 import sqlite3
 import time
+from collections.abc import Mapping
 from pathlib import Path
 from unittest import mock
 
@@ -37,7 +38,7 @@ def lease(treehouse_state: Path, key: str) -> dict[str, str]:
 
 
 def add_run(
-    conn: sqlite3.Connection, key: str, leased: dict[str, str], *, pid: int | None, status: str = "running"
+    conn: sqlite3.Connection, key: str, leased: Mapping[str, str], *, pid: int | None, status: str = "running"
 ) -> int:
     tick_id = db.start_tick(conn, dry_run=False)
     db.finish_tick(conn, tick_id, "ok", "test")
