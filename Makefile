@@ -59,8 +59,9 @@ ui/node_modules: ui/package.json ui/package-lock.json
 ui-fmt: ui/node_modules ## Format ui/ with oxfmt
 	npm --prefix ui run fmt
 
+# COVERAGE=1 also measures the unit tests' coverage and writes ui/coverage/lcov.info, which CI sends to Codecov.
 ui-check: ui/node_modules ## Check ui/ without changing it: format, lint, types, generated API types, unit tests, build
-	npm --prefix ui run check
+	$(if $(COVERAGE),COVERAGE=1 )npm --prefix ui run check
 
 ui-build: ui/node_modules ## Build ui/dist, which canopy serves from a checkout and bundles into its wheel
 	npm --prefix ui run build
