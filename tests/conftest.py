@@ -28,7 +28,9 @@ SCRIPTS_DIR = Path(sys.executable).parent
 # The prefixes tests/fakes/agent records in its log's `env`. Keep in sync with it.
 RECORDED_ENV_PREFIXES = ("CANOPY_", "OPENCODE_")
 
-# Commits made under test have a fixed author, and git reads no config of the operator's or the machine's.
+# Commits made under test have a fixed author, and git reads no config of the operator's or the machine's. Nor does it
+# start automatic maintenance: newer git (2.55 on CI) runs it in the background after a commit or a fetch, where it
+# can prune a worktree that `git worktree add` has made but not yet locked, or leave a `maintenance.lock` a test sees.
 HERMETIC_GIT = {
     "GIT_AUTHOR_NAME": "canopy test",
     "GIT_COMMITTER_NAME": "canopy test",
@@ -36,6 +38,9 @@ HERMETIC_GIT = {
     "GIT_COMMITTER_EMAIL": "test@example.test",
     "GIT_CONFIG_GLOBAL": os.devnull,
     "GIT_CONFIG_NOSYSTEM": "1",
+    "GIT_CONFIG_COUNT": "1",
+    "GIT_CONFIG_KEY_0": "maintenance.auto",
+    "GIT_CONFIG_VALUE_0": "false",
 }
 
 
