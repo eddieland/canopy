@@ -132,6 +132,20 @@ keeps writing under `$HOME`, where the sandbox drops what it writes when the run
 which is read-only, so a Rust build that fetches a crate needs the crate vendored, or fetched outside the sandbox first.
 Nothing prunes the caches; with the loop stopped, delete one whenever you like.
 
+A cache too big to keep twice, such as uv's with CUDA torch in it, at several GB a version, can be shared with your
+own instead, knowingly. Set its variable in the command, after the `--`, where it overrides the wrapper's, and add
+the directory to `allowRead` and `allowWrite` in `worker.json` and `setup.json`:
+
+```toml
+worker_cmd = '''canopy-sandbox worker --read {definitions_dir} --
+    env UV_CACHE_DIR=/home/you/.cache/uv OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker
+    --format json --title={title} {prompt}'''
+```
+
+That gives up the separation for that one tool: uv uses what its cache holds without checking it again, so a
+steered worker can change the torch your own runs import. The other tools stay in the sandbox's cache. Do the same in
+`private_worker_cmd`, `split_cmd`, and `setup_cmd`, or their runs keep a copy of their own.
+
 OpenCode's local MCP servers start inside the sandbox and inherit its policy: each one's hosts must be on the allowlist,
 and a server that reads credentials from `$HOME` needs those paths in `allowRead`. A server started with `npx` or `uvx`
 needs its registry on the allowlist (`registry.npmjs.org`, or `pypi.org` and `files.pythonhosted.org`), and fetches
