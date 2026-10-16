@@ -31,6 +31,14 @@ updates:
     groups:
       ui:
         update-types: [minor, patch]
+    ignore:
+      # TypeScript 7 is the native port, with a new compiler API: typescript-eslint, which eslint-plugin-jsdoc
+      # pulls in, caps its peer below 6.1, and openapi-typescript runs on the API. Move majors by hand.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      # The types follow the Node the UI runs on (engines and CI: 22), not the newest Node.
+      - dependency-name: "@types/node"
+        update-types: [version-update:semver-major]
 
   # The srt that `canopy sandbox setup` installs. Never grouped: each bump is its own PR, so the sandbox canary in CI
   # judges it alone, and a reviewer checks the claims about srt in docs/design/SANDBOXING.md against the new version.
