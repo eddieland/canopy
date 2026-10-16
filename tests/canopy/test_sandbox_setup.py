@@ -139,6 +139,26 @@ def test_a_template_already_there_is_kept_as_it_is(machine: Machine, canopy_env:
     assert mine.read_text() == '{"edited": true}'
 
 
+def test_a_template_kept_that_lets_a_run_write_the_operators_caches_is_to_be_changed(
+    machine: Machine, canopy_env: CanopyEnv
+) -> None:
+    """Templates from before `@CACHE@` let a worker write `~/.cache/opencode`, which the overseer runs code from."""
+    machine.install(*LINUX_COMMANDS)
+    templates = canopy_env.home / ".config" / "canopy" / "sandbox"
+    templates.mkdir(parents=True)
+    old = json.loads((canopy_sandbox.TEMPLATES / "worker.json").read_text())
+    writable = ["@TMPDIR@", "~/.cache/opencode", str(canopy_env.home / ".cache" / "uv"), "~/.cache/canopy/sandbox/x"]
+    old["filesystem"]["allowWrite"] = writable
+    (templates / "worker.json").write_text(json.dumps(old))
+
+    report = sandbox.run_setup(SubprocessRunner(), "linux")
+
+    [todo] = report.todo
+    paths = f"~/.cache/opencode, {canopy_env.home / '.cache' / 'uv'}:"
+    assert todo.startswith(f"{templates / 'worker.json'} lets a sandboxed run write {paths}")
+    assert "add @CACHE@" in todo
+
+
 def test_a_lockfile_that_changed_is_installed_again(machine: Machine, canopy_env: CanopyEnv) -> None:
     machine.install(*LINUX_COMMANDS)
     sandbox.run_setup(SubprocessRunner(), "linux")

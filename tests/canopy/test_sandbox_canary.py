@@ -146,8 +146,9 @@ def sandbox_runtime(fakes_on_path: Path) -> Iterator[Path]:
 
 
 @pytest.fixture
-def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Canary:
-    """The shipped templates, unchanged, and a primary clone with two linked worktrees, all under HOME."""
+def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Iterator[Canary]:
+    """The shipped templates, unchanged, and a primary clone with two linked worktrees, all under HOME, as is the
+    operator's cache directory, with OpenCode's in it."""
     home = canopy_env.home
     templates = home / ".config" / "canopy" / "sandbox"
     templates.mkdir(parents=True)
@@ -156,6 +157,7 @@ def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Cana
     (home / ".ssh").mkdir(mode=0o700)
     (home / ".ssh" / "id_ed25519").write_text(f"{PLANTED}\n")
     (home / ".bashrc").write_text("# the operator's\n")
+    (home / ".cache" / "opencode").mkdir(parents=True)
     (canopy_env.state_dir / "secret").write_text(f"{PLANTED}\n")
     objects = canopy_env.state_dir / "runs" / "1.objects"
     objects.mkdir(parents=True)
@@ -171,15 +173,16 @@ def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Cana
     slot, other = pool / "1", pool / "2"
     git("worktree", "add", "--quiet", "--detach", str(slot), cwd=primary)
     git("worktree", "add", "--quiet", str(other), "other-branch", cwd=primary)
-    return Canary(
-        home=home,
-        state_dir=canopy_env.state_dir,
-        objects=objects,
-        primary=primary,
-        slot=slot,
-        other=other,
-        runs_root=sandbox_runtime / f"canopy-sandbox-{os.getuid()}",
-    )
+    with mock.patch.dict(os.environ, {"XDG_CACHE_HOME": str(home / ".cache")}):
+        yield Canary(
+            home=home,
+            state_dir=canopy_env.state_dir,
+            objects=objects,
+            primary=primary,
+            slot=slot,
+            other=other,
+            runs_root=sandbox_runtime / f"canopy-sandbox-{os.getuid()}",
+        )
 
 
 @pytest.mark.parametrize(
@@ -205,6 +208,8 @@ def test_a_run_cannot_read_home_or_the_state_dir(canary: Canary, script: str, ro
         pytest.param('echo pwned >> "$HOME/.config/canopy/config.toml"', "~/.config/canopy/config.toml", id="config"),
         pytest.param('echo pwned > "$1/planted"', "{state}/planted", id="state-dir"),
         pytest.param('echo pwned > "$1/runs/planted"', "{state}/runs/planted", id="state-runs"),
+        # OpenCode imports packages and runs programs from its cache: the overseer's, outside any sandbox, included.
+        pytest.param('echo pwned > "$HOME/.cache/opencode/planted"', "~/.cache/opencode/planted", id="runtime-cache"),
     ],
 )
 @pytest.mark.parametrize("role", ROLES)
@@ -215,6 +220,32 @@ def test_a_run_cannot_write_home_or_the_state_dir(canary: Canary, script: str, t
     canary.run(script, str(canary.state_dir), role=role)
 
     assert (path.read_bytes() if path.exists() else None) == before
+
+
+@pytest.mark.parametrize("role", ROLES)
+def test_a_run_keeps_its_cache_in_its_roles_own_directory(canary: Canary, role: str) -> None:
+    """A positive control: what a run's tools cache lands in the role's cache directory, and the next run reads it.
+    Setup's is the worker's, which it warms."""
+    kept = canary.home / ".cache" / "canopy" / "sandbox" / ("worker" if role == "setup" else role) / "tool" / "kept"
+
+    canary.run('mkdir -p "$XDG_CACHE_HOME/tool" && echo "$1" > "$XDG_CACHE_HOME/tool/kept"', role, role=role)
+    done = canary.run('cat "$XDG_CACHE_HOME/tool/kept"', role=role)
+
+    assert kept.read_text() == f"{role}\n"
+    assert done.stdout.splitlines()[1:] == [role]
+
+
+@pytest.mark.parametrize("role", ROLES)
+def test_a_run_cannot_read_or_write_another_roles_cache(canary: Canary, role: str) -> None:
+    """A review reads the most hostile text the loop meets: what it leaves in its cache must not reach a worker."""
+    other = canary.home / ".cache" / "canopy" / "sandbox" / ("review" if role in {"worker", "setup"} else "worker")
+    other.mkdir(parents=True)
+    (other / "secret").write_text(f"{PLANTED}\n")
+
+    done = canary.run('cat "$1/secret"; echo pwned > "$1/planted"', str(other), role=role)
+
+    assert PLANTED not in done.stdout + done.stderr
+    assert not (other / "planted").exists()
 
 
 @pytest.mark.parametrize(

@@ -421,7 +421,15 @@ overseer and harness calls, `/tmp/claude`, and exfiltration through an allowed h
 (D118).
 HOST_ISOLATION's settled parts are DESIGN §24 now, with its answered questions beside what they settled; HOST_ISOLATION
 keeps the problem, goals, and options, and points each later section there.
-Next: the canary on the operator's Linux and macOS machines.
+Giving sandboxed runs caches of their own, §24's open question on build caches, found that the templates let a run
+write `~/.cache/opencode`, from which OpenCode imports packages and runs programs, the unsandboxed overseer's
+included: a way out of the sandbox at the next tick. Each role now caches in `~/.cache/canopy/sandbox/<role>/`, setup
+in the worker's, through `@CACHE@` and the cache variables the wrapper sets; the canary checks that no run writes the
+operator's OpenCode cache or another role's, and that a role's cache persists; `canopy sandbox setup` says when a
+template it kept still writes the operator's caches. Whether OpenCode's data and state directories, which the
+templates also leave writable and the overseer also reads, are another way out is DESIGN §24's open question now.
+Next: whether OpenCode's data and state directories run code in the overseer; then the canary on the operator's Linux
+and macOS machines.
 
 ## M27. Session transcripts in the web UI
 

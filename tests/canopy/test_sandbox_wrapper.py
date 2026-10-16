@@ -41,11 +41,13 @@ PRINT_ARG = ["sh", "-c", 'printf %s "$1"', "sh"]
 
 @dataclass(frozen=True)
 class Sandbox:
-    """The fake srt's log, the templates the wrapper reads, and the temp directory it makes its run directories in."""
+    """The fake srt's log, the templates the wrapper reads, the temp directory it makes its run directories in, and
+    the operator's XDG_CACHE_HOME."""
 
     log: Path
     templates: Path
     tmp: Path
+    cache_home: Path
 
     def only_call(self) -> dict[str, Any]:
         """What srt was given, for the one run of it there was."""
@@ -55,10 +57,15 @@ class Sandbox:
     def runs_root(self) -> Path:
         return self.tmp / f"canopy-sandbox-{os.getuid()}"
 
+    def caches(self) -> Path:
+        """The directory that holds each role's cache directory."""
+        return self.cache_home / "canopy" / "sandbox"
+
 
 @pytest.fixture
 def sandbox(canopy_env: CanopyEnv, fakes_on_path: Path, tmp_path: Path) -> Iterator[Sandbox]:
-    """The shipped templates where the wrapper reads them, the fake srt on PATH, and a temp directory of the test's.
+    """The shipped templates where the wrapper reads them, the fake srt on PATH, a temp directory of the test's, and
+    XDG_CACHE_HOME in the test's HOME.
 
     Under /tmp, not tmp_path, whose path is too long for the sockets srt would make in it, which the wrapper refuses.
     """
@@ -67,11 +74,13 @@ def sandbox(canopy_env: CanopyEnv, fakes_on_path: Path, tmp_path: Path) -> Itera
     for role in ROLES:
         shutil.copy(canopy_sandbox.TEMPLATES / f"{role}.json", templates)
     log = tmp_path / "srt.jsonl"
+    cache_home = canopy_env.home / ".cache"
+    variables = {"FAKE_SRT_LOG": str(log), "XDG_CACHE_HOME": str(cache_home), **HERMETIC_GIT}
     with (
         tempfile.TemporaryDirectory(prefix="sandbox.", dir="/tmp") as tmp,
-        mock.patch.dict(os.environ, {"FAKE_SRT_LOG": str(log), "TMPDIR": tmp, **HERMETIC_GIT}),
+        mock.patch.dict(os.environ, {**variables, "TMPDIR": tmp}),
     ):
-        yield Sandbox(log, templates, Path(tmp))
+        yield Sandbox(log, templates, Path(tmp), cache_home)
 
 
 def wrap(*args: str, cwd: Path, env: Mapping[str, str] | None = None) -> procs.Result:
@@ -100,6 +109,17 @@ def objects_dir(tmp_path: Path) -> Path:
     return objects
 
 
+def caching(cache: Path) -> dict[str, str]:
+    """The cache variables the wrapper sets for a run whose role's cache directory is `cache`."""
+    return {
+        "XDG_CACHE_HOME": str(cache),
+        "npm_config_cache": str(cache / "npm"),
+        "GOCACHE": str(cache / "go-build"),
+        "GOMODCACHE": str(cache / "go-mod"),
+        "PIP_CACHE_DIR": str(cache / "pip"),
+    }
+
+
 def review_dir(parent: Path, checkout: Path) -> Path:
     """A reviewer's directory as `_review` makes it, `<parent>/reviews/3/`, with its one link, to the checkout."""
     cwd = parent / "reviews" / "3"
@@ -125,7 +145,8 @@ def test_a_worker_runs_under_a_policy_made_for_its_slot(sandbox: Sandbox, tmp_pa
     assert call["argv"] == ["--settings", settings, "--", *PRINT_ARG, PROMPT]
     own, shared = primary / ".git" / "worktrees" / "slot", primary / ".git"
     filesystem = call["settings"]["filesystem"]
-    assert filesystem["denyRead"] == ["~", str(sandbox.runs_root())]  # no run reads another's temp directory
+    # No run reads another's temp directory, or another role's cache.
+    assert filesystem["denyRead"] == ["~", str(sandbox.runs_root()), str(sandbox.caches())]
     # The shared directory entry by entry, so that its read-only binds leave this slot's own directory writable.
     entries = [*sorted(p for p in shared.iterdir() if p.name != "worktrees"), shared / "worktrees" / "other"]
     paths = [str(p) for p in (slot, own, *entries, objects)]
@@ -141,7 +162,15 @@ def test_a_worker_runs_under_a_policy_made_for_its_slot(sandbox: Sandbox, tmp_pa
     assert call["env"].pop("PATH").split(os.pathsep)[0] == bin_dir
     assert bin_dir in filesystem["allowRead"]
     assert bin_dir not in filesystem["allowWrite"]
-    assert call["env"] == {"CANOPY_GIT_OBJECTS": str(objects), "CLAUDE_CODE_TMPDIR": tmp, "TMPDIR": tmp}
+    cache = sandbox.caches() / "worker"
+    assert str(cache) in filesystem["allowRead"]
+    assert str(cache) in filesystem["allowWrite"]
+    assert call["env"] == {
+        "CANOPY_GIT_OBJECTS": str(objects),
+        "CLAUDE_CODE_TMPDIR": tmp,
+        "TMPDIR": tmp,
+        **caching(cache),
+    }
     assert Path(tmp).parent.parent == sandbox.runs_root()
     assert list(sandbox.runs_root().iterdir()) == []  # the policy and the temp directory are gone
 
@@ -275,6 +304,41 @@ def test_the_workspaces_state_is_denied_even_outside_home(sandbox: Sandbox, tmp_
     assert str(state) in sandbox.only_call()["settings"]["filesystem"]["denyRead"]
 
 
+def test_each_role_caches_in_a_directory_of_its_own_and_setup_in_the_workers(sandbox: Sandbox, tmp_path: Path) -> None:
+    """Never in the operator's caches, whatever they set them to: OpenCode, the overseer's included, runs packages
+    and programs from its cache, outside any sandbox. Setup warms the worker's."""
+    _, slot = linked_worktree(tmp_path, "repo")
+    write = ["sh", "-c", 'mkdir -p "$XDG_CACHE_HOME/tool" && echo "$1" > "$XDG_CACHE_HOME/tool/$1"', "sh"]
+    operators = {"GOMODCACHE": str(tmp_path / "go-mod"), "npm_config_cache": str(tmp_path / "npm")}
+    places = {"worker": slot, "setup": slot, "chore": tmp_path, "review": review_dir(tmp_path, slot)}
+
+    for role, cwd in places.items():
+        objects = {"CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path / role))} if role in {"worker", "setup"} else {}
+        done = wrap(role, *write, role, cwd=cwd, env={**objects, **operators})
+        assert done.ok, done.stderr
+
+    calls = [json.loads(line) for line in sandbox.log.read_text().splitlines()]
+    for call, role in zip(calls, places, strict=True):
+        cache = sandbox.caches() / ("worker" if role == "setup" else role)
+        assert {k: call["env"][k] for k in caching(cache)} == caching(cache)
+        assert str(cache) in call["settings"]["filesystem"]["allowWrite"]
+        assert str(sandbox.caches()) in call["settings"]["filesystem"]["denyRead"]
+    assert sorted(p.name for p in sandbox.caches().iterdir()) == ["chore", "review", "worker"]
+    assert sorted(p.name for p in (sandbox.caches() / "worker" / "tool").iterdir()) == ["setup", "worker"]
+    assert (sandbox.caches() / "review").stat().st_mode & 0o777 == 0o700
+
+
+def test_a_cache_directory_that_is_a_link_runs_nothing(sandbox: Sandbox, tmp_path: Path) -> None:
+    sandbox.caches().mkdir(parents=True)
+    (sandbox.caches() / "chore").symlink_to(sandbox.cache_home, target_is_directory=True)
+
+    done = wrap("chore", "true", cwd=tmp_path)
+
+    assert done.returncode == 2
+    assert "is not a directory of this user's" in done.stderr
+    assert not sandbox.log.exists()
+
+
 def test_a_run_that_locks_its_temp_directory_still_has_it_removed(sandbox: Sandbox, tmp_path: Path) -> None:
     lock = 'mkdir -p "$TMPDIR/a/b" && chmod 000 "$TMPDIR/a" "$TMPDIR"'
 
@@ -329,11 +393,12 @@ def test_a_review_reads_its_checkout_and_writes_none_of_it(sandbox: Sandbox, tmp
     entries = sorted(p for p in shared.iterdir() if p.name != "worktrees")
     paths = [str(p) for p in (cwd.resolve(), slot, own, *entries)]
     assert filesystem["allowRead"][: len(paths) + 2] == [*paths, tmp, "/defs"]
-    assert not [p for p in filesystem["allowWrite"] if p.startswith(str(tmp_path))]
+    cache = sandbox.caches() / "review"
+    assert [p for p in filesystem["allowWrite"] if p.startswith(str(tmp_path))] == [str(cache)]
     assert filesystem["allowWrite"][0] == tmp
     assert filesystem["denyWrite"] == []
     assert "github.com" not in call["settings"]["network"]["allowedDomains"]  # it pushes and fetches nothing
-    assert call["env"] == {"CLAUDE_CODE_TMPDIR": tmp, "PATH": os.environ["PATH"], "TMPDIR": tmp}
+    assert call["env"] == {"CLAUDE_CODE_TMPDIR": tmp, "PATH": os.environ["PATH"], "TMPDIR": tmp, **caching(cache)}
 
 
 @pytest.mark.parametrize("place", ["empty", "slot"])
