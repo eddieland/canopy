@@ -891,8 +891,10 @@ the state block and the overseer.
 - Whether a ticket is planned: `policy.plan`, `"off"` (default, as today) or `"approve"`, shared config that a
   repository may only tighten to `"approve"`. The operator overrides it for one ticket: `canopy plan KEY` asks for a
   plan (and makes a new one if the ticket has one), `canopy plan KEY --skip` waives it, and `canopy start KEY --plan`
-  starts a private ticket with one. Each refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, and
-  `--skip` and asking for a plan refuse as `bad_plan` once the ticket has a branch.
+  starts a private ticket with one. Asking for a plan and `--skip` supersede a waiting or approved plan at once, so
+  the next tick dispatches a new `plan` or the `implement`. Each refuses as `inside_run` when `CANOPY_TICK_ID` or
+  `CANOPY_RUN_ID` is set, and `--skip` and asking for a plan refuse as `bad_plan` while a plan run is running or once
+  the ticket has a branch.
 - Approval: `canopy plan KEY --approve` approves the newest plan; it refuses `inside_run`, and `bad_plan` when the
   newest plan is not waiting or a plan run for the ticket is running. A reply (`canopy reply KEY`) newer than the plan
   asks for changes: the overseer dispatches `plan` again with the reply in its context, and the new plan supersedes
@@ -901,7 +903,9 @@ the state block and the overseer.
 - A hard guard in code: an `implement` for a ticket that needs a plan, by `policy.plan` or its own setting, and has no
   approved plan is refused as `unplanned`. A `plan` for a ticket with a branch, or for a split's parent, is
   `bad_plan`. A `--slug`, `--base`, or `--request` on a plan is `bad_slug`, `bad_base`, or `bad_request`.
-- Phases (§7): `ready` with a plan needed and none waiting dispatches `plan`; `plan_proposed`, the newest plan waiting
+- Phases (§7): a ticket whose latest plan run ended `blocked`, with no operator message since, is `needs_human` with
+  attention `awaiting_reply`, so it is not planned again until the operator answers; `ready` with a plan needed and
+  none waiting dispatches `plan`; `plan_proposed`, the newest plan waiting
   and no operator message after it, is attention `plan_review` with no run, so the slot is free while the operator
   reads; `plan_proposed` with an operator message after it dispatches `plan` again; `ready` with an approved plan
   dispatches `implement`. The state block gains each ticket's plan: whether one is needed, and the newest plan's id,

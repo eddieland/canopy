@@ -57,13 +57,22 @@ A ticket needs a plan when its own setting says `plan`, or when it has no settin
 own setting is set only by the operator's channels (§22), never by the overseer or a worker:
 
 - `canopy plan KEY` asks for a plan for this ticket, whatever the policy. On a ticket with a plan already, waiting or
-  approved, it asks for a new one, which supersedes it.
+  approved, it asks for a new one.
 - `canopy plan KEY --skip` waives the plan for this ticket, whatever the policy, so its `implement` goes ahead.
 - `canopy start KEY --plan` starts a private ticket (§22) with its setting at `plan`.
 
+Asking for a plan and `--skip` supersede the ticket's waiting or approved plan at once, in the transaction that sets
+its setting. So after `canopy plan KEY` the ticket needs a plan and has none, and the next tick finds it `ready` and
+dispatches `plan` (Phases, below); after `--skip`, no `plan_review` waits on a plan nobody needs, and no `implement`
+carries one.
+
 Each refuses `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, so no agent run can ask for, skip, or approve
-a plan. Asking for a plan and `--skip` refuse `bad_plan` once the ticket has a branch: its `implement` has run, and a
-plan now would describe work already started (Open, below).
+a plan. Asking for a plan and `--skip` refuse `bad_plan`:
+
+- while a plan run for the ticket is running: its plan would land after the request. The operator asks again once it
+  ends.
+- once the ticket has a branch. Dispatch records the branch when it inserts the ticket's first `implement` (§8 step 2),
+  so this covers an `implement` that is running too: a plan now would describe work already started (Open, below).
 
 ### Approving a plan
 
@@ -138,10 +147,12 @@ parse records nothing, so the plan stays out of the JSON. Result contract, one J
 
 ### Phases and the overseer's part
 
-Two phases join §7's table, and `ready` splits by plan. In order, before `ready`'s own row:
+One phase, `plan_proposed`, joins §7's table, `needs_human` gains a case, and `ready` splits by plan. In order,
+before `ready`'s own row:
 
 | Phase | Derived from | Next action |
 |---|---|---|
+| `needs_human` | as `ready`, the ticket needs a plan, none is waiting or approved, and its latest plan run ended `blocked` with no operator message after it | wait; attention `awaiting_reply` |
 | `ready` | as today, the ticket needs a plan, and none is waiting or approved | dispatch `plan` |
 | `plan_proposed` | the newest plan is `proposed`, and no operator message after it | attention `plan_review`; no run |
 | `plan_proposed` | the newest plan is `proposed`, and an operator message after it | dispatch `plan` again |
@@ -154,6 +165,13 @@ use for it, and it is model-written text (T1).
 `plan_review` is an attention reason (§14) raised by the overseer every tick the plan waits. Its detail names the plan
 and how to answer: `canopy show KEY`, then `canopy plan KEY --approve` or `canopy reply KEY`. Its cause is gone once the
 plan is approved or superseded, or the ticket's plan is skipped.
+
+A `blocked` plan waits for the operator: without the `needs_human` row, a ticket with no plan waiting would be `ready`
+again at the next tick and dispatch `plan` until its attempts ran out, each run asking the same question. The planner
+cannot label the ticket or comment on it, so its question is a worker message on a public ticket as on a private one,
+and the harness raises `awaiting_reply` for it every tick, as it does for a started ticket's question (§22). The
+operator's `canopy reply` ends the wait: the ticket is `ready`, and the next `plan` carries the reply among the
+operator's messages (`{{OPERATOR_MESSAGES}}` or `{{CONVERSATION}}`, The prompt, above).
 
 ### Workers follow the plan
 
@@ -245,8 +263,6 @@ Proposed, for the operator's approval note in M44's PR, with the overseer prompt
 - Whether a ticket that already has a branch can be planned again before a large `resume`.
 - Whether plans help: compare attempts and spend per ticket (M33) on planned and unplanned tickets.
 - Whether M38 makes the plan gate the harness's decision rather than the overseer's.
-- Which phase a `blocked` plan leaves its ticket in until the operator replies, and how the next plan run hears the
-  reply.
 - Whether `canopy forget` keeps the ticket's own plan setting, as it keeps the start record.
 - Whether a committed plan file should raise an attention item, not only a note on the run.
 - Whether `fix-ci` runs should get the plan file too. They fix a failure, not the plan's work, so for now they do not.
