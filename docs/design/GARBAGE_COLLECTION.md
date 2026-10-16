@@ -2,7 +2,7 @@
 
 Part of the canopy design, normative like all of it: what canopy removes of its own history and caches, and what it
 keeps. Sections are numbered across the whole design; the [README](README.md) has the map. Previous:
-[Plans](PLANNING.md).
+[Plans](PLANNING.md). Next: [The overseer's tools](OVERSEER_TOOLS.md).
 
 ## 26. Garbage collection (M47)
 
