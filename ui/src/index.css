@@ -674,6 +674,10 @@
     .plan-margin[data-aligned] > :is([data-align], article) {
         @apply mx-2 rounded-md border;
     }
+    /* The cards that follow the placed ones (a passage gone) keep the gap between cards. */
+    .plan-margin[data-aligned] > article:not([data-align]) {
+        @apply mt-2;
+    }
 
     .plan-doc {
         @apply flex min-h-72 max-w-3xl flex-col gap-3 text-sm leading-relaxed break-words text-foreground outline-none;
