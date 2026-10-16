@@ -67,12 +67,12 @@ dispatches `plan` (Phases, below); after `--skip`, no `plan_review` waits on a p
 carries one.
 
 Each refuses `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, so no agent run can ask for, skip, or approve
-a plan. Asking for a plan and `--skip` refuse `bad_plan`:
-
-- while a plan run for the ticket is running: its plan would land after the request. The operator asks again once it
-  ends.
-- once the ticket has a branch. Dispatch records the branch when it inserts the ticket's first `implement` (§8 step 2),
-  so this covers an `implement` that is running too: a plan now would describe work already started (Open, below).
+a plan. Asking for a plan and `--skip` refuse `bad_plan` while a plan run for the ticket is running: its plan would
+land after the request. The operator asks again once it ends. Asking for a plan also refuses `bad_plan` once the ticket
+has a branch. Dispatch records the branch when it inserts the ticket's first `implement` (§8 step 2), so this covers an
+`implement` that is running too: a plan now would describe work already started (Open, below). `--skip` does not: on a
+ticket with a branch it drops the plan from the ticket's later runs, which is the way out when an approved plan's file
+is gone (`plan_changed`, below).
 
 ### Approving a plan
 
@@ -104,8 +104,9 @@ And two new guards on the worker kinds:
 - `unplanned`, on `implement`: the ticket needs a plan and has none approved. It holds whatever the overseer asks for:
   the plan gate is a guard in code, not a prompt rule (§4, principle 2).
 - `plan_changed`, on `implement` and `resume`: the approved plan's file is missing, unreadable, or no longer has its
-  approved hash. The operator approved one text, and the worker must not follow another. They approve it again as it now
-  stands, or ask for a new plan (Where plans live, below).
+  approved hash. The operator approved one text, and the worker must not follow another. They approve the file again
+  as it now stands. A file that is gone or unreadable cannot be approved, so then they ask for a new plan, or, on a
+  ticket with a branch, where a new plan is refused, `--skip` it (Where plans live, below).
 
 A plan runs as a split does (§18): in a desk of the named repositories' worktrees, each checked out at its base branch,
 detached, with no branch and no setup command, since the planner has no shell. `_run` runs `plan_cmd` in the desk,
@@ -197,17 +198,21 @@ the prompt's obligations come before it, as they come before the standing instru
 
 ### Where plans live
 
-A plan is a markdown file of its own, outside the journal: `<state_dir>/plans/<KEY>/<id>.md`, where `id` is its row in
-`plans`. The operator reads it, greps it, and edits it with their own tools, and a ticket's plans are a directory
-listing. The journal holds what canopy decides by: each plan's status, its hashes, and when and how it was approved
-(Journal, below), never its text.
+A plan is a markdown file of its own, outside the journal: `<state_dir>/plans/<KEY>/<run>.md`, where `run` is the id of
+the plan run that wrote it. The operator reads it, greps it, and edits it with their own tools, and a ticket's plans are
+a directory listing. The journal holds what canopy decides by: each plan's status, its hashes, and when and how it was
+approved (Journal, below), never its text.
 
 - **Writing it.** When a plan run ends `done`, `_run` writes the plan with `logs.write_private`: readable only by the
   operator, refusing a symlink, as it writes a run's prompt (§8 step 3). `plans/` and each ticket's directory are made
   operator-only, and one that is not, a symlink or another owner's, refuses the write, as §18 refuses such a `.canopy/`.
-  The path is built from the key and the id, never read from the journal, and a key cannot hold a path separator (§17).
-  The file is written first, under a temporary name renamed into place, and the row recorded after it with the file's
-  SHA-256 as written. A file with no row, from a `_run` that died between the two, is never read.
+  The path is built from the key and the run id, never read from the journal, and a key cannot hold a path separator
+  (§17). The run id exists before the plan does, and a plan run writes one plan, so the name is known when the file is
+  written: under a temporary name, then linked into place with a link that refuses an existing name, so no file is
+  ever overwritten. `runs` rows are never deleted, so a run id names one run. The `plans` row is recorded after the
+  file, with the file's SHA-256 as written. A file with no row, from a `_run` that died between the two, is never
+  read, and its name belongs to that run alone, so nothing later collides with it. A name already taken fails the run
+  `crashed` with a note, and nothing is recorded.
 - **Editing it.** A `proposed` plan's file is the operator's to edit, in any editor, until they approve it: they can
   fix a step rather than ask for a whole new plan. `--approve` takes the file as it then stands and records its hash
   (Approving a plan, above). `canopy show` and the web UI show the file as it is, and say when it differs from what
@@ -218,7 +223,8 @@ listing. The journal holds what canopy decides by: each plan's status, its hashe
   approving again, which is allowed on an approved plan whose file changed, or by asking for a new plan.
 - **Reading it.** Every read, by `canopy show`, the web UI, `--approve`, dispatch, and `_run`, opens a regular file
   without following links and reads at most 100,000 characters of UTF-8, as §21 reads a review's diff. A missing or
-  unreadable file is shown as such, never as an empty plan.
+  unreadable file is shown as such, never as an empty plan. A hash is of the whole file's bytes, never of a bounded
+  read: a file over the bound is no longer a plan, so `--approve` refuses it and it never matches an approved hash.
 - **Keeping it.** canopy never deletes a plan file. A superseded plan's file stays, as its row does, so a ticket's
   history of plans is on disk; `canopy forget` supersedes rows and leaves files. Removing old ones is the operator's,
   and a backup of canopy's state takes `plans/` with the journal.
