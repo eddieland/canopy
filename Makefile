@@ -30,9 +30,13 @@ lint: ## Run linters and the type checker (ruff, pyrefly strict, rumdl, editorco
 	uv run shellcheck $$(git ls-files '*.sh')
 	uv run actionlint
 
-# One worker per CPU. For one test or a debugger, run `uv run pytest` without -n: it stays serial.
+# One worker per CPU. For one test or a debugger, run `uv run pytest` without -n: it stays serial. worksteal lets an
+# idle worker take queued tests from a busy one, so a few slow tests do not leave the others waiting at the end.
+# A test still running after a minute (the slowest takes ~10s) is hung: faulthandler dumps every thread's stack and
+# ends its worker, which fails that test by name instead of stalling the run until CI's job timeout. Here, not in
+# pyproject.toml, so the opt-in canaries, which wait minutes on a real sandbox or model, keep no limit.
 test: ## Run all tests, in parallel
-	uv run pytest -q -n auto
+	uv run pytest -q -n auto --dist worksteal -o faulthandler_timeout=60 -o faulthandler_exit_on_timeout=true
 
 # Review the diff before committing it: a snapshot is what the tests hold canopy's output to (syrupy). It also deletes
 # the snapshots no test reads any more. Serial: syrupy refuses to update under xdist without an experimental file lock.
