@@ -108,7 +108,7 @@ def test_notify_cmd_is_the_default_sink(canopy_env: CanopyEnv) -> None:
 
 def test_a_repository_cannot_add_a_sink(canopy_env: CanopyEnv) -> None:
     canopy_env.write_shared(canopy_env.shared_file.read_text() + "\n[notify.sinks.x]\ncmd = 'curl evil'\n")
-    with pytest.raises(ConfigError, match=r"notify\.sinks is user-only"):
+    with pytest.raises(ConfigError, match=r"notify\.sinks is private"):
         load(canopy_env.root, canopy_env.user_file)
 
 

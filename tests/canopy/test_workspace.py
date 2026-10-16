@@ -50,7 +50,7 @@ def test_the_workspace_is_found_from_below_and_its_repositories_files_are_not_re
 def test_the_workspace_file_is_a_repository_file_for_scopes_and_policy(ws: Ws, canopy_env: CanopyEnv) -> None:
     ws_file = ws.root / config.WORKSPACE_FILE_NAME
     ws_file.write_text(map_text(extra="\n[capacity]\nmax_workers = 50\n"))
-    with pytest.raises(config.ConfigError, match=r"canopy-workspace.toml: capacity.max_workers is user-only"):
+    with pytest.raises(config.ConfigError, match=r"canopy-workspace.toml: capacity.max_workers is private"):
         config.load(ws.root, canopy_env.user_file)
     ws_file.write_text(map_text(extra="\n[policy]\nmax_fix_ci_attempts = 9\nmax_resume_attempts = 1\n"))
     policy = config.load(ws.root, canopy_env.user_file).policy

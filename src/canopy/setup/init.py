@@ -1,8 +1,8 @@
-"""What `canopy init` writes for every workspace: the user config, and the pieces `setup.workspace` builds on.
+"""What `canopy init` writes for every workspace: its private config, and the pieces `setup.workspace` builds on.
 
-The user config is written if missing and never overwritten. Nothing else is installed: agent runs load canopy's
-definitions and skills from a directory canopy owns (`definitions.py`). canopy writes nothing into a code repository
-(D016).
+The private config is written if missing and never overwritten; the user config is never written (DESIGN §12). Nothing
+else is installed: agent runs load canopy's definitions and skills from a directory canopy owns (`definitions.py`).
+canopy writes nothing into a code repository (D016).
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import json
 import os
 import re
 import tomllib
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -111,7 +112,7 @@ def sandbox_suggestion(worker_cmd: str, user_file: Path, *, text: str = SANDBOX_
 
 @dataclass
 class Report:
-    """What init wrote, updated, and left alone, the label it chose for a new user file, and old agent definitions."""
+    """What init wrote, updated, and left alone, the label a new private file got, and old agent definitions."""
 
     written: list[Path] = field(default_factory=list)
     kept: list[Path] = field(default_factory=list)
@@ -127,27 +128,73 @@ def default_label() -> str:
     return "agent-ready-" + (re.sub(r"[^A-Za-z0-9_-]+", "-", user).strip("-").lower() or "me")
 
 
-def user_config_text(label: str) -> str:
-    """Return the text of a new user config file with queue label `label`."""
-    return f"""\
-# canopy user config: personal, never committed. Overrides each workspace's canopy-workspace.toml key by key.
-# Only what is yours to decide is here; every other key keeps its default, and gets new ones as canopy changes. Keys
-# marked user-only in DESIGN §12 may be set only here. Every key, with its default:
-# https://github.com/eddieland/canopy/blob/main/examples/config.toml
+def keys_set(path: Path) -> set[str]:
+    """The `section.key` names a TOML config file sets, to leave them out of a new private file.
 
+    Returns:
+        Each key of each table, as `section.key`; empty when the file is missing or is not valid TOML.
+    """
+    try:
+        with path.open("rb") as f:
+            doc = tomllib.load(f)
+    except (OSError, tomllib.TOMLDecodeError):
+        return set()
+    return {f"{section}.{key}" for section, table in doc.items() if isinstance(table, dict) for key in table}
+
+
+def private_config_text(label: str | None, user_keys: AbstractSet[str]) -> str:
+    """Return the text of a new private config file.
+
+    It sets queue label `label`, unless None, and empty `trust.authorized_repliers` and `trust.trusted_reviewers` to
+    fill in, each unless `user_keys`, what the user file sets, holds it.
+
+    Returns:
+        The file's text: comments, and the tables of whichever of those keys it sets.
+    """
+    text = f"""\
+# canopy's private config for this workspace: yours alone, never committed. It overrides canopy-workspace.toml and
+# your user config ({config.user_config_path()}) key by key. Keep here what belongs to this workspace: its labels,
+# who may steer its workers, its chores, its pacing and capacity, its web UI's port. Keep in the user config what serves
+# every workspace: the runtime templates, the comment marks, notification sinks. Only what is yours to decide is here;
+# every other key keeps its default, and gets new ones as canopy changes. A relative paths.* value names a file in
+# this directory. Every key, with its default: https://github.com/eddieland/canopy/blob/main/examples/config.toml
+"""
+    if label is not None:
+        text += f"""
 [tracker]
 # Your queue. A ticket is yours if it carries any of these labels. Never share a label with another operator:
 # both loops would work the same tickets.
 labels = [{json.dumps(label)}]
-
-[trust]
+"""
+    trust = ""
+    if "trust.authorized_repliers" not in user_keys:
+        trust += """\
 # Tracker account ids whose ticket comments may resume your blocked work: Jira accountId, GitHub login.
 # Empty means nobody can, you included: add your own.
 authorized_repliers = []
+"""
+    if "trust.trusted_reviewers" not in user_keys:
+        trust += """\
 # GitHub logins whose PR review comments a worker may address unasked; "canopy:review" for canopy's own reviewer.
 # Empty means everyone's wait on the attention list for your go-ahead: `canopy reply KEY 'what to do about them'`.
 trusted_reviewers = []
 """
+    return text + (f"\n[trust]\n{trust}" if trust else "")
+
+
+def write_private_if_missing(path: Path, text: str, report: Report) -> None:
+    """Write `text` to `path`, readable only by the operator, unless something is there; record which in `report`.
+
+    A symlink at `path` is something there: it is kept, never followed.
+    """
+    try:
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    except FileExistsError:
+        report.kept.append(path)
+        return
+    with os.fdopen(fd, "w", encoding="utf-8") as f:
+        f.write(text)
+    report.written.append(path)
 
 
 def write_if_missing(path: Path, text: str, report: Report) -> None:

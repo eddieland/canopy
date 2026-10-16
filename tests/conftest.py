@@ -159,6 +159,14 @@ class CanopyEnv:
     def write_shared(self, text: str) -> None:
         self.shared_file.write_text(text)
 
+    @property
+    def private_file(self) -> Path:
+        """The workspace's private config file, which no test writes unless it calls `write_private`."""
+        return self.state_dir / "config.toml"
+
+    def write_private(self, text: str) -> None:
+        self.private_file.write_text(text)
+
 
 REPO_NAME = "repo"
 SHARED_TOML = f"""\

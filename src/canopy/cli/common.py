@@ -72,7 +72,7 @@ def open_context(click_ctx: click.Context, *, migrate: bool = True) -> Context:
     """
     runner = runner_of(click_ctx)
     ws = workspace.find(Path.cwd())
-    cfg = config.load(ws.root)
+    cfg = config.load(ws.root, runner=runner)
     # Logs and overseer output live here; they are for the operator only (TRUST_MODEL T2).
     workspace.ensure_state_dir(ws.state_dir)
     logs.configure(ws.state_dir)

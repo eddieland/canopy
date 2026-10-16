@@ -198,7 +198,7 @@ canopy (harness, Python)
     __main__.py    python -m canopy.serve --mock: serve for development and tests, or print the OpenAPI schema
 
   setup/
-    init.py        canopy init: the user config, branch protection text, the SSH push URL check, the sandbox hint
+    init.py        canopy init: the private config, branch protection text, the SSH push URL check, the sandbox hint
     sandbox.py     canopy sandbox setup: the wrapper's templates, the pinned srt, and what needs root
     workspace.py   canopy init: the skeleton; canopy workspace sync: converge clones and pools (§18)
 
@@ -214,7 +214,7 @@ canopy (harness, Python)
                    the CLI and the web UI share
     search.py      the web UI's search over the journal: tickets, messages, chore runs, decisions, ticks (§22)
     spend.py       what agent runs cost by day, kind, and what the ticks bought, for canopy spend and the web UI (§11)
-    config.py      layered config: the workspace file canopy-workspace.toml and user config.toml; scopes
+    config.py      layered config: canopy-workspace.toml, the user config.toml, the private .canopy/config.toml; scopes
     context.py     the Context every command passes around: config, workspace, db connection, runner
     contract.py    what every agent result contract is built from: bounded text, plain URLs, the last stdout line
     conversation.py references, start records, the operator's messages, runs' reports and questions, with the guards

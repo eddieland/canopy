@@ -119,8 +119,9 @@ summary = "Customer web app. Consumes the api's generated client from a release.
   (§17): a plain `https://` URL of at most 500 characters with `{branch}` exactly once and no other braces. An empty
   `branch_url` turns the links off. Nothing but a browser the operator clicks in follows one, and a branch that was
   never pushed links to the host's not-found page.
-- Config layers: built-in defaults, the workspace file, the user file (§12). The workspace file's policy may only
-  tighten. Nothing in the repositories is read as config: one tracker, one queue.
+- Config layers: built-in defaults, the workspace file, the user file, the workspace's private file
+  (`.canopy/config.toml`, §12). The workspace file's policy may only tighten. Nothing in the repositories is read as
+  config: one tracker, one queue.
 - A map committed to a shared repository is exposed as any file in it is (TRUST_MODEL T7). `url` is read only by the
   operator commands `canopy workspace sync`, which prints what it clones first, and `canopy workspace add`, which writes
   it, and for the web UI's branch links. Map URLs should be HTTPS (§12); `sync` warns about SSH ones and clones them
@@ -128,7 +129,7 @@ summary = "Customer web app. Consumes the api's generated client from a release.
   cannot be dispatched to.
 - `canopy init` writes, overwriting nothing: the workspace file (asking for the tracker provider), a
   `MAP.md`, a `.gitignore` covering `repos/`, `.treehouse/`, `pools/`, `desks/`, and `.canopy/` (an existing one gains only
-  missing lines), and the user file if missing. It prints the branch protection rules with every mapped repository
+  missing lines), and the private file if missing. It prints the branch protection rules with every mapped repository
   they must be configured in. `canopy init` inside a workspace does the same.
   `canopy init [NAME=]URL...` also does `canopy workspace add` with the URLs, before printing the rules.
 - `canopy workspace add [NAME=]URL...` appends a `[repos.<name>]` table per URL, with an empty summary, then syncs. The
@@ -158,8 +159,8 @@ layout. These pools are separate from the operator's interactive ones under `~/.
 There is no key to put a workspace's pools anywhere else (D033). For a fast disk, put the workspace on it. git keeps
 each worktree's index and HEAD, and every object it writes, in the primary clone's `.git`, so a pool on another disk
 than its clone still does git's work on the clone's. treehouse names a pool after the repository and a hash of its
-remote URL, so one pool root that every workspace shared (the user file serves them all) would put two workspaces'
-clones of a repository in one pool, where each sync and each declared size would count the other's slots. Build
+remote URL, so one pool root that every workspace shared (a user file key would serve them all) would put two
+workspaces' clones of a repository in one pool, where each sync and each declared size would count the other's slots. Build
 outputs need not follow the workspace: Bazel's live under `--output_user_root`, wherever the operator's `.bazelrc`
 puts it (§9).
 
@@ -172,19 +173,20 @@ one ticket can hold a slot in several pools.
 
 ### Declared repositories and slots
 
-The map declares the repositories; the user file declares each pool's slots (D066). `canopy workspace sync` converges
-on both, and a tick never grows a pool past its declared size.
+The map declares the repositories; the operator's config declares each pool's slots (D066): the workspace's private
+file for its own pools, or the user file for every workspace's. `canopy workspace sync` converges on both, and a tick
+never grows a pool past its declared size.
 
 ```toml
-# ~/.config/canopy/config.toml
+# .canopy/config.toml, or ~/.config/canopy/config.toml for every workspace
 [capacity]
-slots_per_repo = 2      # every repository's pool, in any workspace
+slots_per_repo = 2      # every repository's pool
 [capacity.repo_slots]
 api = 4                 # by repository name; wins over slots_per_repo
 ```
 
-- Pool sizes are user-only (§12). `repo_slots` may name repositories this map does not list. With neither key (the
-  default) a pool is unmanaged: treehouse's `max_trees` bounds it and sync leaves it alone.
+- Pool sizes are private (§12). `repo_slots` may name repositories this map does not list, as a user file's does. With
+  neither key (the default) a pool is unmanaged: treehouse's `max_trees` bounds it and sync leaves it alone.
 - **Leases stay within the size.** Before `treehouse get`, dispatch (§8) and a review (§21) read the pool. If as many
   slots as its declared size are busy, the lease is refused as `no_slot` without asking treehouse; a size of 0 refuses
   every lease. If treehouse makes a slot anyway (the available ones are not reusable, such as one recorded for another
@@ -307,7 +309,7 @@ and records a worktree it finds in the pool directory as held; `destroy` runs `g
 ### canopy's pool
 
 canopy's own pool (`core/pool.py`, ROADMAP M45) keeps every guarantee above, and is held to them by the same cases.
-`pools.backend` (§12), user-only, chooses which pool makes a workspace's worktrees: `"treehouse"`, the default until M45
+`pools.backend` (§12), private, chooses which pool makes a workspace's worktrees: `"treehouse"`, the default until M45
 changes it, or `"canopy"`. Every caller reaches either through `pools.Pool` and none learns which it has.
 
 - **A lease goes back where it came from.** The journal records which pool made each lease, `run_slots.pool` and

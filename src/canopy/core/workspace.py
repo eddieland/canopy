@@ -20,7 +20,7 @@ from typing import Annotated
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError
 
-from canopy.core import treehouse
+from canopy.core import hostgit, treehouse
 from canopy.core.config import (
     WORKSPACE_FILE_NAME,
     WORKSPACE_MAP_TABLES,
@@ -213,19 +213,9 @@ def old_repo_file(start: Path) -> Path | None:
     Returns:
         The file's path, or None if `start` is in no checkout or its root has no such file.
     """
-    checkout = git_root(start)
+    checkout = hostgit.git_root(start)
     path = checkout / OLD_REPO_FILE_NAME if checkout is not None else None
     return path if path is not None and path.is_file() else None
-
-
-def git_root(start: Path) -> Path | None:
-    """The nearest directory at or above `start` holding `.git`, a directory or a worktree's file, or None.
-
-    Returns:
-        The checkout's root, resolved, or None if `start` is in no checkout.
-    """
-    start = start.resolve()
-    return next((d for d in (start, *start.parents) if (d / ".git").exists()), None)
 
 
 def load(root: Path) -> Workspace:

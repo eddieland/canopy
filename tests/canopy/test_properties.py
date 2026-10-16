@@ -172,10 +172,10 @@ def test_workspace_policy_never_loosens_the_defaults(tmp_path: Path, attempts: i
 def test_every_config_key_declares_a_scope() -> None:
     assert {*config.SECTIONS, *config.TABLE_SECTIONS} == set(config.Config.model_fields)
     for spec in config.SPECS.values():
-        assert spec.scope in (config.Scope.SHARED, config.Scope.USER)
-    user_only = {name for name, spec in config.SPECS.items() if spec.scope is config.Scope.USER}
+        assert spec.scope in (config.Scope.SHARED, config.Scope.PRIVATE)
+    private = {name for name, spec in config.SPECS.items() if spec.scope is config.Scope.PRIVATE}
     # TRUST_MODEL §6: commands, prompt paths, capacity, labels, and repliers never come from a shared file.
-    assert user_only >= {
+    assert private >= {
         "runtime.overseer_cmd",
         "runtime.worker_cmd",
         "notify.cmd",
@@ -195,8 +195,8 @@ def test_every_config_key_declares_a_scope() -> None:
 
 
 @pytest.mark.parametrize("name", sorted(config.SPECS))
-def test_workspace_file_cannot_set_user_only_keys(tmp_path: Path, name: str) -> None:
-    if config.SPECS[name].scope is not config.Scope.USER:
+def test_workspace_file_cannot_set_private_keys(tmp_path: Path, name: str) -> None:
+    if config.SPECS[name].scope is not config.Scope.PRIVATE:
         return
     if name in config.TABLE_SECTIONS:
         extra = f'[{name}.x]\nprompt = "~/x"\n'
@@ -206,7 +206,7 @@ def test_workspace_file_cannot_set_user_only_keys(tmp_path: Path, name: str) -> 
     (tmp_path / config.WORKSPACE_FILE_NAME).write_text(f'[tracker]\nprovider = "jira"\nquery = "q"\n{extra}')
     user = tmp_path / "config.toml"
     user.write_text('[tracker]\nlabels = ["mine"]\n')
-    with pytest.raises(config.ConfigError, match="user-only"):
+    with pytest.raises(config.ConfigError, match="is private"):
         config.load(tmp_path, user)
 
 

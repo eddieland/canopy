@@ -210,8 +210,8 @@ the web UI's settings page, §8) lapses, reaches all of them, and shows on every
 
 ### R16. Change limits and tighten trust settings from the web UI
 
-Gap (M41). Written down 2026-10-14. The operator changes some settings often enough that opening the user config file
-is friction: a pool's slots, how many workers run at once, an attempt limit, how often the loop ticks. They should be
+Gap (M41). Written down 2026-10-14. The operator changes some settings often enough that opening a config file is
+friction: a pool's slots, how many workers run at once, an attempt limit, how often the loop ticks. They should be
 able to change those from the web UI's settings page and have the loop take them up, as a reload does today. Trust
 settings may be changed from the page only toward stricter: removing an authorized replier or a trusted reviewer,
 turning `trust.rebase` off, turning the commit trailer on. Loosening one, or changing any key that runs a command,
@@ -246,12 +246,13 @@ document; asking for changes gives the planner each comment with the passage it 
 
 ### R19. Configure each workspace on its own
 
-Planned (M49). Written down 2026-10-16. Most of what the operator sets belongs to one workspace: its queue labels,
-who may steer its workers, its capacity and pools, its chores and reviews, how often its loop runs, and the port its
-web UI listens on. Those settings should live with the workspace, so that changing one workspace's leaves every other
-alone, and two loops in two workspaces do not share a port. Only what serves every workspace stays in a file of the
-operator's own, and that file is optional. Today one user file serves every workspace, and the workspace's own file is
-shared and perhaps committed, so it can hold none of these (TRUST_MODEL T7).
+Built in M49, live acceptance pending. Written down 2026-10-16. Most of what the operator sets belongs to one
+workspace: its queue labels, who may steer its workers, its capacity and pools, its chores and reviews, how often its
+loop runs, and the port its web UI listens on. Those settings should live with the workspace, so that changing one
+workspace's leaves every other alone, and two loops in two workspaces do not share a port. Only what serves every
+workspace stays in a file of the operator's own, and that file is optional. The workspace file is shared and perhaps
+committed, so it can hold none of these (TRUST_MODEL T7); each workspace's private file, `.canopy/config.toml`, does,
+and the user file is optional (§12).
 
 ## Nice to have
 
@@ -302,5 +303,5 @@ DESIGN §10).
   own surface moves to the web UI once M20 is built, and private tickets (R11) are answered there or with the CLI.
   Coworkers' surface is unchanged: labels, ticket comments, and PR review. Principle 6 says so since M20.
 - **C6. Repositories that refuse merge commits vs pushes that are never forced (R4, R9).** Settled by the operator on
-  2026-10-13 (issue #293, D056): with `trust.rebase`, user-only and off by default, workers rebase onto their base and
+  2026-10-13 (issue #293, D056): with `trust.rebase`, private and off by default, workers rebase onto their base and
   push with `--force-with-lease`, the only force their definitions allow. Without it, they merge, as before.

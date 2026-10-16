@@ -23,9 +23,9 @@ controls below keep the blast radius to "a branch nobody merged."
 ## 3. Actors
 
 - **Operator**: the developer running canopy. Fully trusted.
-- **Authorized repliers**: accounts listed in `trust.authorized_repliers` in the operator's user config.
+- **Authorized repliers**: accounts listed in `trust.authorized_repliers` in the operator's own config.
   Their ticket comments may resume blocked work. Trusted to instruct workers.
-- **Trusted reviewers**: accounts listed in `trust.trusted_reviewers` in the operator's user config (D089). Their PR
+- **Trusted reviewers**: accounts listed in `trust.trusted_reviewers` in the operator's own config (D089). Their PR
   review feedback may send a worker back to the PR without the operator's go-ahead. It is still data about what to
   change, never instruction: being trusted decides whether a worker looks, not what it obeys.
 - **Org members**: anyone who can write ticket descriptions, comments, PR
@@ -81,7 +81,7 @@ Controls:
   prompt's. Jira's issue edit cannot change status. Label writes replace the whole set and are not atomic; the
   tracker skills read the set immediately before writing it.
 - Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
-- Review feedback from anyone not in `trust.trusted_reviewers` (user-only, empty by default) starts no run on its own
+- Review feedback from anyone not in `trust.trusted_reviewers` (private, empty by default) starts no run on its own
   (D089). The overseer records `untrusted_review` and keeps its `review` cursor before it until the operator answers in
   canopy, with `canopy reply` or the web UI; the `resume` worker addresses such a comment only as an operator message
   about it says, and is told who is trusted. Both checks are agent judgment, as label checks are (D051): the harness
@@ -95,7 +95,7 @@ Controls:
 - A private ticket (DESIGN §22, M18) is authorized by its start record, and its replies by operator messages, both
   written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
   `canopy reply` in the operator's shell, later the web UI behind the listener secret (T8). With `tracker.private`
-  set (user-only), a labeled ticket canopy never ran is started by its first dispatch instead, on the overseer's
+  set (private), a labeled ticket canopy never ran is started by its first dispatch instead, on the overseer's
   `--label` claim, which the harness checks against config as for any public dispatch (D119). No worker re-reads the
   labels for it, then or later, and removing the label does not stop it: an overseer that claims a label a ticket
   does not carry starts it for good, with nothing but its own read to catch it, until the operator runs `canopy stop`.
@@ -144,7 +144,7 @@ Controls:
 - The reviewer (DESIGN §21) reads the most hostile text the loop meets, a diff by anyone `review.query` matches or the
   operator asks for by name. What it writes is data wherever it goes: the overseer classifies its findings as it
   classifies review comments, and a resumed worker reads them in its prompt as it reads any review comment.
-  `review.query` authorizes a review, and only the operator writes it (user-only, T7). A review request (`canopy start
+  `review.query` authorizes a review, and only the operator writes it (private, T7). A review request (`canopy start
   URL --review`, ROADMAP M42) authorizes one review of one PR the same way: a journal fact made only through the
   operator's channels, the CLI and the web UI, refused as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set,
   so an agent steered by a PR's text cannot point the reviewer, and the operator's spend, at another PR. The overseer
@@ -241,10 +241,10 @@ Controls now:
   denies, does not make it run.
 - `runtime.setup_cmd` (DESIGN §9) runs on the host in each slot of a worker run, after the run's branch is checked out
   and before the worker starts. It runs that branch's code, which a worker wrote (install scripts, generators), outside
-  the agent runtime's permissions. It is user-only (T7), and the code is what the worker's own shell runs a moment
+  the agent runtime's permissions. It is private (T7), and the code is what the worker's own shell runs a moment
   later; with the sandbox below, it runs in one too, under the `setup` role (HOST_ISOLATION §4.4). treehouse's
   `post_create` hooks run on the base, and its seeding copies only ignored files from the operator's primary clone,
-  chosen by the committed `.worktreeinclude` or the operator's own (`paths.worktree_include`, user-only).
+  chosen by the committed `.worktreeinclude` or the operator's own (`paths.worktree_include`, private).
 - A review checks out code the loop did not write. The harness runs nothing from it, and the reviewer's working
   directory is a directory of canopy's outside the checkout, holding one link to it, so the runtime loads no
   configuration from the checkout. The shipped `canopy-reviewer` cannot run commands or edit, and reads only through
@@ -259,8 +259,9 @@ Controls now:
   data: no ref another slot shares, and no hook, git config, `.git` link, or `commondir` that git on the host later
   reads. A review writes none of its checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
   permissions stay as defense in depth.
-- The prefix is in the user config, which no repository or workspace file can set (T7) and no sandboxed run can write,
-  so neither removes it. The harness never learns whether a run is sandboxed: it runs the template (D023, D118).
+- The prefix is in the user file or the workspace's private file, which no repository or workspace file can set (T7)
+  and no sandboxed run can write, so neither removes it. The harness never learns whether a run is sandboxed: it runs
+  the template (D023, D118).
 - With or without the sandbox, the harness's own steps after a worker run read nothing it could have planted: every
   git the harness runs has hooks and the filesystem monitor off (D107); a run that changed a slot's `.git` link or
   `commondir` is `crashed`, and no git runs in its slots until both are put back (DESIGN §8); and a slot whose run
@@ -286,9 +287,9 @@ but must be distinguishable:
 
 - Branches under `agent/`.
 - Commits carry a trailer: `Co-authored-by: canopy worker <noreply@...>`, whose name and address the operator may
-  change in the user file (`trust.commit_trailer_*`, user-only), or the runtime's own attribution. Never hidden: a
+  change in their own config (`trust.commit_trailer_*`, private), or the runtime's own attribution. Never hidden: a
   worker never strips the runtime's. The operator may turn canopy's trailer off (`trust.commit_trailer = false`, also
-  user-only), as when the runtime's own attribution suffices or the team's tooling rejects the trailer; with a runtime
+  private), as when the runtime's own attribution suffices or the team's tooling rejects the trailer; with a runtime
   that adds none, the commits then carry no trailer, and the branch prefix and PR mark the work. A shared file can
   neither turn it off nor rename it.
 - PRs labeled `agent` where the runtime gives the worker a GitHub tool that sets labels (D084); every PR title carries
@@ -300,7 +301,7 @@ but must be distinguishable:
   `trust.comment_suffix`, whichever are set (DESIGN §8, D069). The overseer and workers never read a comment carrying
   them as an authorized reply, a split request, or review feedback. The marks only take authority away, so forging
   them gains nothing: they silence the comment that carries them, and a comment without them is judged as before. They
-  are user-only, so a repository cannot pick marks that silence people. They are a prompt obligation; a worker that
+  are private, so a repository cannot pick marks that silence people. They are a prompt obligation; a worker that
   omits them leaves its comment reading as the operator's, which the attempt limits bound.
 
 ### T6. Data exfiltration by a compromised worker
@@ -381,30 +382,39 @@ private ticket, whose worker cannot write to it.
 
 canopy reads no config from a code repository (D016): a commit to one, or a checkout of someone else's unreviewed
 branch, cannot change what the harness does. Its shared config is the workspace file, `canopy-workspace.toml` (DESIGN
-§12, §18), read on every tick. A workspace may itself be a repository the operator shares with a team, so anyone who
-can push there can change that file, and a checkout of an unreviewed branch of it carries their version. Unlike build
-scripts a worker runs (T4), this file is read by the harness itself, outside any worktree and before any agent starts.
-If it could set the runtime commands, `notify.cmd`, chores, the review query, prompt paths, capacity, queue labels, or
-authorized repliers, one commit would be enough to run commands on operators' machines, raise their spend, or pick who
-steers their workers.
+§12, §18), read on every tick. The operator's own config is the user file, which serves every workspace, and each
+workspace's private file, `.canopy/config.toml` under its root. A workspace may itself be a repository the operator
+shares with a team, so anyone who can push there can change that file, and a checkout of an unreviewed branch of it
+carries their version. Unlike build scripts a worker runs (T4), this file is read by the harness itself, outside any
+worktree and before any agent starts. If it could set the runtime commands, `notify.cmd`, chores, the review query,
+prompt paths, capacity, queue labels, or authorized repliers, one commit would be enough to run commands on operators'
+machines, raise their spend, or pick who steers their workers.
 
 The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
 data, like ticket text. URLs are read only by `canopy workspace sync`, a command the operator runs, which prints each
 clone before making it; a tick never clones or changes a remote. Dropping a repository from the map makes the
 operator's next sync remove its clone under `repos/` and its slots, but only when nothing in them would be lost: a clean
 clone with no stash and no commit its remote lacks, and slots treehouse destroys unforced (D066). A pool's size is
-user-only (`capacity`), so the map cannot grow the operator's pools.
+private (`capacity`), so the map cannot grow the operator's pools.
 
 Controls, in code:
 
-- Those keys are user-only (DESIGN §12) and are read only from the operator's own user config file. A workspace file
-  that sets one is a config error and the tick does not run.
+- Those keys are private (DESIGN §12) and are read only from the operator's own files: the user file, in the user
+  config directory, and the workspace's private file, in its state directory. A workspace file that sets one is a
+  config error and the tick does not run.
 - `policy.*` values from the workspace file apply only when stricter than the built-in defaults.
 - No file in a code repository is read as canopy config; a `canopy.toml` there is named as not read, never loaded.
 - `trust.branch_prefix` must be non-empty and end in `/`.
 - A workspace's state is under its root, so it may be inside a checkout. canopy refuses a state directory that is not
   private to the operator (a symlink, someone else's, or open to others), and refuses to load a definitions snapshot
-  that is not, so a committed `.canopy/` cannot supply a journal or agent definitions (D053).
+  that is not (D053). That checks permissions, not provenance: a `.canopy/` checked out under umask 077 passes it. So
+  whenever config is loaded, canopy also refuses a state directory any of whose files git tracks, by one
+  `git ls-files` at the workspace root (none tracked when the root is in no repository; a refusal when git fails
+  otherwise). A committed `.canopy/` therefore supplies no private file, journal, or agent definitions.
+- The private file is opened without following a symlink, and must be a regular file of the operator's that no one
+  else can write. A relative `paths.*` value in it resolves against the state directory, never the workspace root,
+  where a file anyone who can push may change would choose a prompt; in the user file a `paths.*` value must be
+  absolute or start with `~`.
 
 OpenCode config is read by the agent runtime, in the workspace root for the overseer and in the worktree for a
 worker, so it too comes from whoever can push. canopy's agent definitions are therefore not repository config:
@@ -425,11 +435,11 @@ nothing. The query can still widen what the overseer reads: it reads every ticke
 before it checks for a label, so a widened query puts tickets nobody labeled, any the operator's tracker account can
 see, in front of the model, where their text can try to steer it (T1). It cannot make one a candidate. Settled
 (2026-10-15, the operator's choice): the query stays in the workspace file, beside the map it is about, and an operator
-who shares the workspace with people they do not trust overrides it in the user file. Checking labels in code before
+who shares the workspace with people they do not trust overrides it in the private file. Checking labels in code before
 any ticket reaches the overseer closes this with ROADMAP M37. The provider also picks the default tracker server and
 tools a private ticket's worker gets (T6): a repository that names another provider leaves the real tracker's server
 undenied in that definition. An operator who works private tickets in a repository they do not control sets
-`tracker.mcp_server` and `tracker.read_tools`, which are user-only, to pin them. Through the runtime's own config it can
+`tracker.mcp_server` and `tracker.read_tools`, which are private, to pin them. Through the runtime's own config it can
 also add skills (prompt text, like the repository's other docs), MCP servers, plugins (code in the agent process, the
 same exposure as the build scripts a worker runs, T4), agents under other names, and permission rules for permissions
 canopy's definitions leave unset. The shadowing check matches file names and text: an `opencode.json` that builds an
@@ -446,8 +456,8 @@ listening. The operator runs on a private network (a VPC), so the controls are k
 
 Controls:
 
-- A listener binds to a loopback address, or to a private-network address the operator sets in the user config
-  (user-only, T7). Never a wildcard address (`0.0.0.0`, `::`) and never a public one; canopy refuses to start one
+- A listener binds to a loopback address, or to a private-network address the operator sets in their own config
+  (private, T7). Never a wildcard address (`0.0.0.0`, `::`) and never a public one; canopy refuses to start one
   otherwise. Loopback is the default.
 - Every listener requires the operator's listener secret, read from a file in the operator's config directory that is
   the operator's and unreadable by others (the same check as D053). The secret is never in config, the journal, logs,

@@ -734,7 +734,7 @@ def test_serve_bind_must_be_loopback_or_private(canopy_env: CanopyEnv, bind: str
 
 def test_serve_is_user_only(canopy_env: CanopyEnv) -> None:
     canopy_env.write_shared(canopy_env.shared_file.read_text() + '\n[serve]\nbind = "10.0.0.5"\n')
-    with pytest.raises(config.ConfigError, match="user-only"):
+    with pytest.raises(config.ConfigError, match="is private"):
         config.load(canopy_env.root, canopy_env.user_file)
 
 

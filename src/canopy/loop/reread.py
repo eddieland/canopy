@@ -57,7 +57,7 @@ class Reread:
 
 
 def load(ctx: Context) -> Reread:
-    """Read the workspace file and the user config again, as `canopy` commands do, and compare them with `ctx`'s.
+    """Read the workspace file and the config files again, as `canopy` commands do, and compare them with `ctx`'s.
 
     Returns:
         The config and workspace map as their files say now, and the keys that differ from `ctx`'s, with
@@ -67,7 +67,7 @@ def load(ctx: Context) -> Reread:
         ConfigError: either does not load. The message names the file.
     """
     ws = workspace.load(ctx.repo_root)
-    cfg = config.load(ctx.repo_root)
+    cfg = config.load(ctx.repo_root, runner=ctx.runner)
     changed = config.changed(ctx.config, cfg)
     if ws != ctx.ws:
         changed.append(WORKSPACE_MAP)

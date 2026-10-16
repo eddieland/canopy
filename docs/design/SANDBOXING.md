@@ -29,7 +29,7 @@ profile behind the same wrapper is the fallback if `srt` changes under us; the h
 
 ### The wrapper
 
-The operator sets, in the user config only:
+The operator sets, in the user file or the workspace's private file (§12), never the workspace file:
 
 ```toml
 [runtime]
@@ -79,7 +79,7 @@ the desk (§8, §18), and:
    the process that made it is gone. `srt`'s seccomp helper runs inside the sandbox, so the wrapper re-allows reading
    `srt`'s `vendor/` directory wherever `srt` is installed, or a template that denies `$HOME` would hide it.
 
-Because `worker_cmd` is a user-only key (TRUST_MODEL T7), a repository cannot remove the prefix. Because the sandbox
+Because `worker_cmd` is a private key (TRUST_MODEL T7), a repository cannot remove the prefix. Because the sandbox
 denies writes to `~/.config/canopy`, a worker cannot remove it either.
 
 ### What is wrapped
@@ -90,7 +90,7 @@ denies writes to `~/.config/canopy`, a worker cannot remove it either.
 | `runtime.setup_cmd` | `setup` | It runs the branch's code in the slot just before the worker (§9). |
 | `runtime.chore_cmd`, a chore's `cmd` | `chore` | A chore using the operator's own tools has a shell for them (§19). |
 | `review_cmd` | `review` | It reads the most hostile text the loop meets, a diff by anyone `review.query` matches (T1). |
-| `overseer_cmd` | none | It acts through `canopy`, which needs the journal, the lock, and the user config. |
+| `overseer_cmd` | none | It acts through `canopy`, which needs the journal, the lock, and the operator's config. |
 | `notify.cmd`, `git`, `treehouse` | none | The harness's own calls; what they read of a run is below. |
 
 The overseer's sandbox would have to allow exactly what the policy denies. It has no edit or write tools, and its bash

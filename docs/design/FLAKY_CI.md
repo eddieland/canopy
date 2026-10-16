@@ -153,7 +153,7 @@ Proposed, for the operator's approval note in M25's PR:
 - T6: residual: `gh run rerun` takes any run id in any repository the operator's `gh` reaches, so a steered triage can
   rerun another workflow's failed run, a deploy's included, which deploys the commit it ran on again. The harness
   cannot check a run id (D003). `canopy-worker`'s bash allows the same today; M25 takes it away.
-- T7: `runtime.triage_*` is user-only, and a repository cannot raise `max_triage_ci_attempts` from 0. The skill is
+- T7: `runtime.triage_*` is private, and a repository cannot raise `max_triage_ci_attempts` from 0. The skill is
   read from the primary clone, never the PR's branch. Residual: a repository's skill steers verdicts, as repository
   skills steer every run (§13).
 - §6: never rerun CI except in a triage run, and never more than `policy.max_triage_ci_attempts` triage runs per unit.
