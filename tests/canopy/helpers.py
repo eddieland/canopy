@@ -332,6 +332,21 @@ def private_worker_does(*commands: list[str], result: dict[str, object]) -> Iter
         yield
 
 
+@contextmanager
+def planner_does(*commands: list[str], plan: str, result: Mapping[str, object] | None = None) -> Iterator[None]:
+    """Until the block ends, the fake planner runs `commands`, then ends with `plan` and its result line in one message.
+
+    `result` defaults to a `done` one. The planner runs with `--format json`, so its final message is the plan
+    (DESIGN §25).
+    """
+    line = json.dumps(result if result is not None else {"status": "done", "summary": "planned it"})
+    final = f"{plan}\n{line}" if plan else line
+    with mock.patch.dict(
+        os.environ, {"FAKE_PLANNER_COMMANDS": json.dumps(list(commands)), "FAKE_PLANNER_RESULT": final}
+    ):
+        yield
+
+
 def blocked_result() -> dict[str, object]:
     """A worker's result: blocked on KEY's `work` branch in `repo`, with no PR, asking QUESTION."""
     return {

@@ -7,9 +7,11 @@ runs](SANDBOXING.md). Next: [Garbage collection](GARBAGE_COLLECTION.md).
 ## 25. Plans before implementing (M44)
 
 Designed, and built only in part (ROADMAP M44, REQUIREMENTS R18): the plan editor (Commenting on a plan, below) is in,
-over mock data, and so are plans' files and rows (Where plans live and Journal, below; `core/plans.py`), which nothing
-writes yet. Until M44 lands, a ticket's first run is its `implement`, and §7, §8, §12, §14, §20, and §22 describe
-canopy as it is. This section says what changes in each.
+over mock data, and so are plans' files and rows (Where plans live and Journal, below; `core/plans.py`), and plan runs:
+`canopy dispatch --kind plan`, the planner, its prompt, and `_run` writing the plan (Dispatch, The prompt, and Agent
+definition, below). Nothing dispatches a plan yet, since the overseer's prompt and the phases do not name one, and no
+`implement` waits on one. Until M44 lands, a ticket's first run is its `implement`, and §7, §8, §12, §14, §20, and §22
+describe canopy as it is. This section says what changes in each.
 
 Today the `implement` worker plans inside its own session, and nothing of that plan survives but the run's summary. A
 **plan** is a run of its own that reads the ticket and the code and writes down how the work will be done, before any
@@ -114,7 +116,11 @@ A plan runs as a split does (§18): in a desk of the named repositories' worktre
 detached, with no branch and no setup command, since the planner has no shell. `_run` runs `plan_cmd` in the desk,
 parses and validates the plan's result (below), and skips push verification, since a plan pushes nothing. Slots are
 returned and the desk removed on every exit path; reconcile treats a dead plan run like any other. A plan counts toward
-`capacity.max_workers` with workers and reviews: it is an agent run, with spend.
+`capacity.max_workers` with workers and reviews: it is an agent run, with spend. It works in a desk even over one
+repository, so the copy of the plan it replaces (The prompt, below) is in no repository.
+
+Under `tracker.private` (§22), a ticket's first plan starts it privately, as its first `implement` would: otherwise a
+plan, which posts nothing, would be the ticket's first run, and the ticket would stay public for good.
 
 ### The prompt
 
@@ -127,11 +133,14 @@ returned and the desk removed on every exit path; reconcile treats a dead plan r
 - the open risks.
 
 It carries the key, the repositories and their base branches (`{{REPOSITORIES}}`), the operator's messages
-(`{{OPERATOR_MESSAGES}}`, or `{{CONVERSATION}}` on a private ticket), `{{STANDING_INSTRUCTIONS}}`, `{{NOTICE}}`, and the
-bound on a plan's length. On a re-plan, `_run` copies the plan it replaces from its file to `.canopy-plan.md` at the
-desk's root (The worker's copy, below), and the prompt says so; the operator's reply to it is among the messages. On a
+(`{{OPERATOR_MESSAGES}}`, which on a private ticket holds its conversation), `{{STANDING_INSTRUCTIONS}}`, `{{NOTICE}}`,
+and the bound on a plan's length. On a re-plan, `_run` copies the plan it replaces, the ticket's current plan, from its
+file as it stands, the operator's edits included, to `.canopy-plan.md` at the desk's root (The worker's copy, below),
+and the prompt says that a file there is the plan it replaces; the operator's reply to it is among the messages. On a
 public ticket the planner checks the queue label first, as every worker does (§8 step 3); a private ticket has no
-label to check. It treats the ticket's text and the code as data (TRUST_MODEL T1).
+label to check. One prompt serves both: `{{AUTHORIZATION}}` is the label check on a public ticket and says there is
+none on a private one, and an override must carry it, `{{REPOSITORIES}}`, and `{{OPERATOR_MESSAGES}}`. It treats the
+ticket's text and the code as data (TRUST_MODEL T1).
 
 The plan is the planner's final message (§13): the plan as markdown, then the result line. A plan of tens of thousands
 of characters escaped into one JSON string is easy for a model to get wrong, and a run whose result line does not

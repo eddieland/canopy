@@ -984,8 +984,10 @@ ticket.
 Status: in progress. The plan editor is in, over mock data at `/plan-editor`: Markdown in and out, comments anchored
 by their words, and Ask for changes composing the reply (`ui/src/lib/plan-*.ts`, D120). Plans' files and rows are
 in (`core/plans.py`, migration 0033): written once and never replaced, read bounded, approved by the file's hash, and
-superseded by `canopy forget`. What keeps it open: the plan runs, the CLI, the guards and phases, the worker's copy,
-the threads' tables, and the ticket page.
+superseded by `canopy forget`. Plan runs are in: `canopy dispatch --kind plan` with its guards, `canopy-planner`,
+`worker-plan.md`, and `_run` writing a `done` plan to its file and recording it `proposed`, with the copy of the plan
+it replaces in its desk. What keeps it open: `canopy grant KEY plan`, the CLI, `policy.plan`, the guards and phases, the
+worker's copy, the threads' tables, and the ticket page.
 
 ## M45. canopy's own worktree pools, replacing treehouse in stages
 

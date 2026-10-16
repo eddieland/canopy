@@ -86,7 +86,7 @@ template for its role from `$XDG_CONFIG_HOME/canopy/sandbox/` (`~/.config/canopy
 
 | Template | Used for |
 | --- | --- |
-| `worker.json` | `worker_cmd`, `private_worker_cmd`, and `split_cmd` |
+| `worker.json` | `worker_cmd`, `private_worker_cmd`, `split_cmd`, and `plan_cmd` |
 | `setup.json` | `setup_cmd` |
 | `chore.json` | `chore_cmd` and each chore's own `cmd` |
 | `review.json` | `review_cmd` |
@@ -179,6 +179,8 @@ private_worker_cmd = '''canopy-sandbox worker --read {definitions_dir} --
     --title={title} {prompt}'''
 split_cmd = '''canopy-sandbox worker --read {definitions_dir} --
     env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json --title={title} {prompt}'''
+plan_cmd = '''canopy-sandbox worker --read {definitions_dir} --
+    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json --title={title} {prompt}'''
 chore_cmd = '''canopy-sandbox chore --read {definitions_dir} --
     env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json --title={title} {prompt}'''
 review_cmd = '''canopy-sandbox review --read {definitions_dir} --

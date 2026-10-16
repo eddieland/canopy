@@ -25,6 +25,7 @@ WORKER: dict[str, str] = {
     RunKind.FIX_CI: "worker-fix-ci.md",
     RunKind.RESUME: "worker-resume.md",
     RunKind.SPLIT: "worker-split.md",
+    RunKind.PLAN: "worker-plan.md",
 }
 # A private ticket's worker prompts (DESIGN §22): no label check, since the harness checked the start record, and
 # nothing written to the ticket. Each must carry the conversation, the only way the worker hears the operator's replies;
@@ -48,6 +49,10 @@ REQUIRED_JOINT = ("REPOSITORIES", "PRS")
 # Placeholders a split's prompt must also use: its repositories, and the comment that asked for the split, which the
 # splitter reads to check who asked. An override without it would split on the overseer's word alone.
 REQUIRED_SPLIT = ("REPOSITORIES", "REQUEST")
+# Placeholders a plan's prompt must use (DESIGN §25), for a public ticket and a private one alike: its repositories, the
+# planner's own authorization check, which names the queue labels on a public ticket (D051), and the operator's
+# messages, which carry a reply asking for changes to the plan it replaces.
+REQUIRED_PLAN = ("REPOSITORIES", "AUTHORIZATION", "OPERATOR_MESSAGES")
 # The kinds whose workers open PRs. With `runtime.pr_skill` set, their prompts must say how, through `{{OPEN_PR}}`: an
 # override that still names the GitHub MCP would open the PRs the operator set the skill to avoid.
 OPENS_PRS = (RunKind.IMPLEMENT, RunKind.RESUME)
@@ -81,10 +86,11 @@ REQUIRED_NO_TRAILER = ("COMMIT_ATTRIBUTION",)
 # repositories refuse.
 REQUIRED_REBASE = ("BRANCH_UPDATE",)
 # The prompt files that carry `{{NOTICE}}`, and the run kinds each serves: every worker's but a split's, public and
-# private, and the reviewer's.
+# private, the planner's, and the reviewer's.
 _HEARS_NOTICE: dict[str, list[str]] = {
     **{WORKER[k]: [str(k)] for k in WORKER_PRIVATE},
     **{WORKER_PRIVATE[k]: [f"{k} (private)"] for k in WORKER_PRIVATE},
+    WORKER[RunKind.PLAN]: [str(RunKind.PLAN)],
     REVIEWER: ["review"],
 }
 
@@ -98,6 +104,25 @@ def worker_comment(prefix: str, suffix: str) -> str:
     if suffix:
         marks.append(f"ends with `{suffix}`")
     return f"{' and '.join(marks)} outside any quote"
+
+
+def plan_authorization(key: str, labels: Sequence[str], *, private: bool) -> str:
+    """Return the planner's `{{AUTHORIZATION}}`: the label check on a public ticket, or why a private one has none.
+
+    The planner writes nothing anywhere, so a plan it should not have written costs only its spend; the check keeps the
+    rule every worker follows (D051). A private ticket's start record was checked by the harness (DESIGN §22).
+    """
+    if private:
+        return (
+            f"The operator started {key} in canopy, which authorized this run; there is no label to check. Its "
+            "conversation stays with the operator."
+        )
+    named = ", ".join(f"`{label}`" for label in labels)
+    return (
+        f"Before any other work, read {key} through the tracker. If it is closed, or carries none of the labels "
+        f"{named}, the overseer should not have dispatched you: write no plan, and report `failed` with a summary that "
+        "starts `not authorized:` and says which it was."
+    )
 
 
 def trusted_reviewers(reviewers: Sequence[str]) -> str:
@@ -229,9 +254,10 @@ def render_worker(
 
     Replacement is one pass, so a value that itself contains `{{NAME}}` is left as it is. A placeholder with no value
     is an error: an override with a typo must not reach a worker half rendered. So is a prompt that lacks one of
-    `REQUIRED_WORKER`, or of `required`, and, with `runtime.pr_skill` set, a prompt for a kind that opens PRs that lacks
-    `REQUIRED_PR_SKILL`. A `private` prompt is a private ticket's, which must carry `REQUIRED_PRIVATE` in place of
-    `REQUIRED_WORKER`: it checks no label. `{{STANDING_INSTRUCTIONS}}` comes from the config, not `values`, and with
+    `REQUIRED_WORKER` (`REQUIRED_PLAN` for a plan's), or of `required`, and, with `runtime.pr_skill` set, a prompt for
+    a kind that opens PRs that lacks `REQUIRED_PR_SKILL`. A `private` prompt is a private ticket's, which must carry
+    `REQUIRED_PRIVATE` in place of `REQUIRED_WORKER`: it checks no label. A plan has one prompt for both, which carries
+    its own check. `{{STANDING_INSTRUCTIONS}}` comes from the config, not `values`, and with
     `paths.worker_instructions` set every prompt but a split's must carry it. `{{COMMIT_ATTRIBUTION}}` and
     `{{COMMIT_TRAILER}}` come from the config too: with `trust.commit_trailer_name` or `trust.commit_trailer_email`
     changed from the default every prompt for a kind that commits must carry one of them, and with
@@ -254,6 +280,8 @@ def render_worker(
     noticed = REQUIRED_NOTICE if notice is not None and instructed else ()
     required = (*pr_skill, *standing, *rebase, *noticed, *required)
     one_of = _required_attribution(config) if kind in COMMITS else ()
+    if kind == RunKind.PLAN:
+        return render(config, WORKER[kind], values, required=(*REQUIRED_PLAN, *required))
     if private:
         return render(config, WORKER_PRIVATE[kind], values, required=(*REQUIRED_PRIVATE, *required), one_of=one_of)
     return render(config, WORKER[kind], values, required=(*REQUIRED_WORKER, *required), one_of=one_of)

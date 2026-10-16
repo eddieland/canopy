@@ -165,7 +165,7 @@ class Run(_Model):
     ticket_title: str | None = None
     """The ticket's title, as the overseer named it (DESIGN §13); None until it does."""
     kind: str
-    """implement | fix-ci | resume | split"""
+    """implement | fix-ci | resume | split | plan"""
     status: str
     """The journal's status: running, done, blocked, failed, crashed, unpushed, unknown, timeout, stopped."""
     state: RunState

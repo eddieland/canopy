@@ -297,6 +297,36 @@ def test_the_reviewer_keeps_its_read_tools(tool: str) -> None:
     assert _allowed(_rules("canopy-reviewer"), tool)
 
 
+@pytest.mark.parametrize(
+    ("tool", "allowed"),
+    [
+        ("atlassian_getJiraIssue", True),
+        ("atlassian_listJiraIssueComments", True),
+        ("atlassian_addCommentToJiraIssue", False),
+        ("atlassian_editJiraIssue", False),
+        ("atlassian_transitionJiraIssue", False),
+        ("atlassian_createJiraIssue", False),
+        ("atlassian_someWriteToolNoPatternNames", False),
+        ("github_add_issue_comment", False),
+        ("github_create_pull_request", False),
+        ("github_issue_write", False),
+        ("github_pull_request_read", True),
+    ],
+)
+def test_the_planner_reads_the_ticket_and_writes_nothing(canopy_env: CanopyEnv, tool: str, *, allowed: bool) -> None:
+    # Rendered with the tracker's server and read tools: every other tool of the server is denied by its wildcard, so
+    # a write tool no pattern names fails closed (DESIGN §25, TRUST_MODEL T6).
+    path = f"agents/{definitions.PLANNER}.md"
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
+    assert _allowed(_rules_in(rendered), tool) is allowed
+
+
+def test_the_planner_has_no_edit_shell_or_subagent_tools() -> None:
+    frontmatter = (resources.agents_dir() / f"{definitions.PLANNER}.md").read_text().split("---")[1]
+    for tool in ("edit", "bash", "task", "external_directory"):
+        assert f"\n  {tool}: deny\n" in frontmatter
+
+
 def test_the_overseer_definition_carries_its_prompt_and_the_trackers_skill(canopy_env: CanopyEnv) -> None:
     # The prompt is the agent's system prompt, cached across ticks; the tick's message is the state block (DESIGN §6).
     snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
