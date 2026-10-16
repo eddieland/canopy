@@ -38,7 +38,16 @@ import { anchorFor, anchorsOf, highlightsKey, PlanHighlights, withHighlight } fr
 import type { Range } from '@/lib/plan-highlights'
 import { alignComments } from '@/lib/plan-margin'
 import { planExtensions } from '@/lib/plan-schema'
-import { addReply, addThread, inPlanOrder, removeThread, setResolved, withAnchors } from '@/lib/plan-threads'
+import {
+    addReply,
+    addThread,
+    editReply,
+    editThread,
+    inPlanOrder,
+    removeThread,
+    setResolved,
+    withAnchors,
+} from '@/lib/plan-threads'
 import type { PlanThread } from '@/lib/plan-threads'
 import { isApple } from '@/lib/send-key'
 import { ariaKeys, keysLabel } from '@/lib/shortcut'
@@ -300,6 +309,13 @@ export function PlanEditor({
                         }
                         onResolve={(id, resolved) => onThreadsChange(setResolved(threads, id, resolved))}
                         onDelete={(id) => onThreadsChange(removeThread(threads, id))}
+                        onEdit={(id, body, replyId) =>
+                            onThreadsChange(
+                                replyId === undefined
+                                    ? editThread(threads, id, body)
+                                    : editReply(threads, id, replyId, body),
+                            )
+                        }
                     />
                     {editable && onAskForChanges !== undefined && (
                         <AskForChanges threads={threads} starts={starts} onAsk={onAskForChanges} />

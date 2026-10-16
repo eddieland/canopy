@@ -6,6 +6,8 @@ import {
     addReply,
     addThread,
     changeRequest,
+    editReply,
+    editThread,
     inPlanOrder,
     removeThread,
     setResolved,
@@ -30,6 +32,16 @@ describe('threads', () => {
         expect(replied[0]?.replies.map((r) => r.body)).toEqual(['Or both.'])
         expect(setResolved(replied, 'a', true)[0]?.resolved).toBe(true)
         expect(removeThread(replied, 'a').map((t) => t.id)).toEqual(['b'])
+    })
+
+    it('edits a comment or one reply, and only that, without changing the list it was given', () => {
+        const threads = addReply(two(), 'a', { id: 'r1', body: 'Or both.', at: AT })
+        const edited = editThread(threads, 'a', 'Page it instead?')
+        expect(threads[0]?.body).toBe('Page instead?')
+        expect(edited.map((t) => t.body)).toEqual(['Page it instead?', 'Name the route.'])
+        const reply = editReply(edited, 'a', 'r1', 'Or do both.')
+        expect(reply[0]?.replies.map((r) => r.body)).toEqual(['Or do both.'])
+        expect(edited[0]?.replies.map((r) => r.body)).toEqual(['Or both.'])
     })
 
     it('keeps the same list when no anchor moved', () => {

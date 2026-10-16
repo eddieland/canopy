@@ -322,7 +322,9 @@ ticket's page.
   is edited, a passage's highlight moves with the text around it, and its anchor follows its words. On a new plan,
   each thread is looked for again by its words, the text around it choosing between copies. A passage that is gone is
   found nowhere, and its thread says `passage gone` rather than move to other words: a reworded passage may no longer
-  be what the comment was about.
+  be what the comment was about. While a thread is open, its comment and each reply can be edited in place; Ask for
+  changes sends what they say then. Nothing marks one edited, since the journal keeps a comment's body alone, and only
+  the operator writes there.
 - **Ask for changes** sends the open threads, in the order the plan reads, as one operator message: each passage
   quoted (cut at 160 characters), its comment and replies, then the operator's note on the whole plan, if any
   (`changeRequest` in `ui/src/lib/plan-threads.ts`). It is a reply, through `canopy reply`'s code and within its

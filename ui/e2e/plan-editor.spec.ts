@@ -353,8 +353,37 @@ test('deleting a comment asks first, in its place, and Keep or Escape keeps it',
     await expect(plan(page).locator('[data-thread=sample-1]')).toHaveCount(0)
 })
 
+test('a comment and a reply are edited in place, and the planner reads what they say now', async ({ page }) => {
+    // By its id: while its comment is in the form, the card's text no longer holds it.
+    const thread = page.locator('article[data-thread=sample-1]')
+    await thread.getByRole('button', { name: 'Edit comment' }).click()
+    const comment = thread.getByRole('form', { name: 'Edit comment' }).getByRole('textbox')
+    await expect(comment).toBeFocused()
+    await expect(comment).toHaveValue(
+        'Does the proxy in front of web buffer responses? If it does, streaming buys nothing.',
+    )
+    await comment.fill('Does the proxy buffer responses?')
+    await thread.getByRole('button', { name: 'Save' }).click()
+    await expect(thread).toContainText('Does the proxy buffer responses?')
+    await thread.getByRole('button', { name: 'Edit reply' }).click()
+    const reply = thread.getByRole('form', { name: 'Edit reply' }).getByRole('textbox')
+    await reply.fill('It buffers up to 2 MB.')
+    await page.keyboard.press('Escape')
+    await expect(thread).toContainText('It buffers up to 1 MB.')
+    await thread.getByRole('button', { name: 'Edit reply' }).click()
+    await reply.fill('It buffers up to 2 MB.')
+    await thread.getByRole('button', { name: 'Save' }).click()
+    await expect(thread).toContainText('It buffers up to 2 MB.')
+    await page.getByRole('form', { name: 'Ask for changes' }).getByRole('button', { name: 'Ask for changes' }).click()
+    await expect(page.getByLabel('Change request')).toContainText('Does the proxy buffer responses?')
+    await expect(page.getByLabel('Change request')).toContainText('Reply: It buffers up to 2 MB.')
+})
+
 test('Ask for changes sends the open comments, each on its passage, with the note', async ({ page }) => {
-    await comments(page).filter({ hasText: 'proxy in front' }).getByRole('button', { name: 'Reply' }).click()
+    await comments(page)
+        .filter({ hasText: 'proxy in front' })
+        .getByRole('button', { name: 'Reply', exact: true })
+        .click()
     const reply = page.getByRole('form', { name: 'Reply' })
     await reply.getByRole('textbox').fill('And a test that reads the first row before the last is written.')
     await reply.getByRole('button', { name: 'Reply' }).click()
