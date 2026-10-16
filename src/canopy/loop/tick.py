@@ -91,11 +91,9 @@ def _render(
     last_runs = db.latest_runs(ctx.conn)
     # A stopped ticket waits on the operator alone: listed by key, it gets no decision every tick (DESIGN §22).
     stopped = conversation.stopped(ctx.conn)
-    tickets = [t for t in db.open_tickets(ctx.conn) if str(t["key"]) not in stopped]
-    private = {str(t["key"]): found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
-    operator = {
-        str(t["key"]): found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None
-    }
+    tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped]
+    private = {t.key: found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
+    operator = {t.key: found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None}
     recently_done = db.recently_done(ctx.conn, db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS)))
     chores = chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now)
     block = state.state_block(

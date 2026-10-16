@@ -22,7 +22,7 @@ from enum import StrEnum
 from typing import Any, ClassVar
 
 # Imported for real, not under TYPE_CHECKING: `typing.get_type_hints` resolves a row type's fields when it is read.
-from canopy.core.vocab import ChoreRunStatus, PlanStatus, PoolKind, ReviewRunStatus, TickStatus  # noqa: TC001
+from canopy.core.vocab import ChoreRunStatus, Phase, PlanSetting, PlanStatus, PoolKind, ReviewRunStatus, TickStatus  # noqa: TC001
 
 # What a column's value is converted with, by its field's type.
 _Convert = Callable[[object], object]
@@ -74,6 +74,35 @@ class Tick(Row):
     tokens_first_call: int | None
     tokens_first_cache_write: int | None
     definitions_digest: str | None
+
+
+@dataclass(frozen=True)
+class Ticket(Row):
+    """A ticket canopy has seen (DESIGN §6): its own phase, branch, and cursors, and where any forget left it."""
+
+    TABLE: ClassVar[str] = "tickets"
+
+    key: str
+    # The workspace root.
+    repo: str
+    first_seen_at: str
+    last_seen_at: str
+    # The ticket's own last derived phase, for display only; never read as truth.
+    phase: Phase | None
+    # Fixed by its first implement, and the same in every unit.
+    branch: str | None
+    last_comment_id: str | None
+    needs_human_since: str | None
+    done: bool
+    last_message_id: int | None
+    last_mirrored_id: str | None
+    # When the operator last forgot the ticket's work, and its newest run and message then (DESIGN §22).
+    forgotten_at: str | None
+    forgotten_run_id: int | None
+    forgotten_message_id: int | None
+    title: str | None
+    # The ticket's own plan setting, overriding `policy.plan`; None when unset (DESIGN §25).
+    plan_setting: PlanSetting | None
 
 
 @dataclass(frozen=True)

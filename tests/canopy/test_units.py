@@ -302,7 +302,7 @@ def test_journal_commands_name_a_unit(ws: Ws, capsys: pytest.CaptureFixture[str]
         )
         ticket = db.get_ticket(conn, "PROJ-1")
         assert ticket is not None
-        assert ticket["phase"] is None  # a phase about the PR is the unit's
+        assert ticket.phase is None  # a phase about the PR is the unit's
         # A phase about the PR needs its unit; the ticket's own phases are the ticket's, --repo or not.
         assert main(["ticket", "set", "PROJ-1", "--phase", "approved"]) == 2
         assert "the approved phase belongs to one unit: name its repository with --repo" in capsys.readouterr().err
@@ -310,7 +310,7 @@ def test_journal_commands_name_a_unit(ws: Ws, capsys: pytest.CaptureFixture[str]
         capsys.readouterr()
         ticket = db.get_ticket(conn, "PROJ-1")
         assert ticket is not None
-        assert ticket["phase"] == "needs_human"
+        assert ticket.phase == "needs_human"
         assert [u["phase"] for u in db.units(conn, "PROJ-1")] == ["ci_red"]
 
         assert (
@@ -341,7 +341,7 @@ def test_a_merge_conflict_is_a_units_phase(ws: Ws, capsys: pytest.CaptureFixture
         assert (unit["repo"], unit["phase"]) == ("web", "conflicted")
         ticket = db.get_ticket(conn, "PROJ-1")
         assert ticket is not None
-        assert ticket["phase"] is None
+        assert ticket.phase is None
 
 
 def test_untrusted_review_is_a_units_phase(ws: Ws, capsys: pytest.CaptureFixture[str]) -> None:
@@ -356,7 +356,7 @@ def test_untrusted_review_is_a_units_phase(ws: Ws, capsys: pytest.CaptureFixture
     assert (unit["repo"], unit["phase"]) == ("api", "untrusted_review")
     ticket = db.get_ticket(conn, "PROJ-1")
     assert ticket is not None
-    assert ticket["phase"] is None
+    assert ticket.phase is None
 
 
 def test_a_joint_prompt_override_without_the_repositories_is_refused(

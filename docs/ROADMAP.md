@@ -768,8 +768,8 @@ Status: not started.
 
 ## M41. Limits and trust settings from the web UI
 
-REQUIREMENTS R16, DESIGN §12 and §22. Needs M20. Asked for by the operator (2026-10-14): change a pool's slots or a
-trust setting from the web UI without opening the user config file. Today the web channel asks for a reload and writes
+REQUIREMENTS R16, DESIGN §12 and §22. Needs M20 and M49. Asked for by the operator (2026-10-14): change a pool's slots
+or a trust setting from the web UI without opening a config file. Today the web channel asks for a reload and writes
 no config (TRUST_MODEL T8).
 
 - Which keys: an allowlist in code, by name, never a section's wildcard. Limits, raised or lowered: the counts in
@@ -784,17 +784,20 @@ no config (TRUST_MODEL T8).
 - Ceilings: no count can be raised from the page past a ceiling in code, such as `capacity.max_workers` at 8; the file
   can set any value. A raise within the ceilings outlives a new secret too; that residual is spend, and the page and
   the log show it.
-- Where it writes: the user file only, never the workspace file (shared, perhaps committed, T7). Edited in place,
-  keeping the operator's comments and layout, so a TOML writer joins the runtime dependencies with its DECISIONS
-  entry; `tomllib` only reads. Rejected: a file of canopy's own layered after the user file (a hand edit to the user
-  file would be silently overridden), and writing the file anew with the stdlib (its comments lost).
-- How: the request carries a hash of the user file as the page read it. The server holds a lock from reading the file
-  to replacing it, so two requests cannot both pass the check on the same hash; a file whose hash differs is refused
-  as `stale`, checked again just before the replace, so a hand edit is lost only if it lands in that last moment. The
-  change is applied to a copy and validated by `config.load`, as any `canopy` command would read it; a refusal writes
-  nothing and gives the loader's message. The file is replaced atomically, keeping its mode, and refused when it is a
-  symlink or not the operator's (D053's check). Then the loop is asked to reload through the existing path
-  (`loop.reread`).
+- Where it writes: the workspace's private file (M49) only, never the workspace file (shared, perhaps committed, T7)
+  nor the user file, which serves every workspace. A key whose value came from the user file is written to the
+  private file, where it shadows the user file's for this workspace alone, and the page says so before the save.
+  Edited in place, keeping the operator's comments and layout, so a TOML writer joins the runtime dependencies with
+  its DECISIONS entry; `tomllib` only reads. Rejected: a file of canopy's own layered after the private file (a hand
+  edit to the private file would be silently overridden), and writing the file anew with the stdlib (its comments
+  lost).
+- How: the request carries a hash of the private file as the page read it. The server holds a lock from reading the
+  file to replacing it, so two requests cannot both pass the check on the same hash; a file whose hash differs is
+  refused as `stale`, checked again just before the replace, so a hand edit is lost only if it lands in that last
+  moment. The change is applied to a copy and validated by `config.load`, as any `canopy` command would read it; a
+  refusal writes nothing and gives the loader's message. The file is replaced atomically, keeping its mode, and
+  refused when it is a symlink or not the operator's (D053's check). Then the loop is asked to reload through the
+  existing path (`loop.reread`).
 - The answer says what was saved apart from what the reload did: the keys changed, whether they wait for a running
   tick to end, and that a run already running keeps the prompt and permissions it started with, so a stricter trust
   setting reaches only runs started after it. A save whose reload was not asked for, the server stopping between the
@@ -805,7 +808,7 @@ no config (TRUST_MODEL T8).
 - Each change is logged with channel `web`, the key, and its old and new values.
 - Slots: a changed `capacity.slots_per_repo` or `capacity.repo_slots` bounds leases from the next tick. Making or
   removing slots is still `canopy workspace sync`, which the page names; the web UI runs no sync.
-- API: `GET /config`, each editable key's value, the file it came from, its ceiling, and the user file's hash;
+- API: `GET /config`, each editable key's value, the file it came from, its ceiling, and the private file's hash;
   `PATCH /config`, the changed keys and that hash. The settings page edits them, beside Reload.
 - TRUST_MODEL T8: "It cannot write config" becomes the allowlist, ceilings, and stricter-only keys above, and its
   residual gains a stolen session raising limits up to their ceilings, which outlives a new secret until the operator
@@ -814,14 +817,14 @@ no config (TRUST_MODEL T8).
   the trust boundary relies on), and one for the TOML writer.
 - Tests with the fakes: an allowed key written and reloaded, the file's comments kept; a key outside the allowlist, a
   stricter-only key loosened, a count over its ceiling, a stale hash, two requests on one hash, an invalid value, and
-  a symlinked user file each refused with the file unchanged; the workspace file never written; Playwright for the
-  form.
+  a symlinked private file each refused with the file unchanged; neither the workspace file nor the user file ever
+  written; Playwright for the form.
 - Open: the ceilings' values; whether the page also shows the keys it cannot edit, read-only, with the file each came
   from.
 
 Accept: the tests above pass. Live: while `canopy loop` runs, the operator changes `capacity.slots_per_repo` and
 removes a trusted reviewer from the settings page; the next tick leases under the new size and reads the shorter list;
-and the user file keeps its comments, with only those two values changed.
+and the private file keeps its comments, with only those two values changed.
 
 Status: not started.
 
@@ -1249,6 +1252,63 @@ PRs, a stage starting only once the one before has passed its check, recorded on
   completion filter with them. Tests that drove a command drive its tool. D020 names the tools alone.
 - Open: tool results as JSON rather than the CLI's text (§27, Open).
 - Check: `make install-check`'s dry tick passes against the fakes, its overseer acting through the tools.
+
+Status: not started.
+
+## M49. Config per workspace
+
+REQUIREMENTS R19, DESIGN §12 and §18, TRUST_MODEL T7, D016, D053, D066. Asked for by the operator (2026-10-16): most
+settings live with the workspace they serve, not in one user file every workspace shares. Needs nothing; taken before
+M41, so that the settings page writes the file this milestone adds.
+
+- Why: the user file serves every workspace, but most of its keys belong to one. The queue labels; the authorized
+  repliers and trusted reviewers, each in its tracker's identity format; `review.query`; `runtime.setup_cmd` and
+  `runtime.pr_skill`; `tracker.mcp_server`; chores; the loop's pacing; and capacity, which each workspace's journal
+  already counts on its own. Two `canopy loop`s in two workspaces take `serve.port` from the one file and collide.
+- The file: `<state_dir>/config.toml`, the workspace's **private file**, the operator's alone. Layered last: defaults,
+  the workspace file, the user file, then the private file, key by key; `[chores]` comes whole from the last file that
+  sets it, as today. User-only keys become **private** keys: set in the user file or the private file, never in the
+  shared workspace file. §12's table renames the scope and changes no key's.
+- The user file becomes optional, for what serves every workspace: the runtime templates, the comment marks, the
+  commit trailer, notification sinks. Without it canopy reads the private file alone; without either, the error names
+  the private file and `canopy init`. An existing user file keeps working unchanged, so nothing migrates.
+- What stays in the user config directory, as files rather than keys: the secrets (`listener-secret`, `slack-webhook`,
+  `slack-token`) and the sandbox templates (`sandbox/<role>.json`), which every workspace's runs share.
+  `paths.prompt_overrides` still defaults to `prompts/` there.
+- No key is held to the user file, the commit trailer and the comment marks included (the operator, 2026-10-16): a
+  workspace whose team marks agent work its own way sets its own.
+- A `paths.*` value in the private file may be relative, and resolves against the state directory:
+  `worker_instructions = "worker-instructions.md"` names `<state_dir>/worker-instructions.md`, private and under the
+  provenance check below. Not against the workspace root, which may be a shared checkout, where a file anyone who can
+  push may change would choose a prompt (T7). In the user file a `paths.*` value stays absolute or starts with `~`.
+- Provenance: D053 checks permissions, not provenance, so a `.canopy/` checked out of a shared workspace repository
+  under umask 077 passes it. Today that plants a journal; with the private file it would run commands
+  (`runtime.worker_cmd`). So canopy refuses a state directory any of whose paths git tracks: one `git ls-files` at the
+  workspace root through `core/hostgit.py` whenever config is loaded, none tracked when the root is in no repository,
+  and a refusal when git fails otherwise. That closes the journal's half of the residual too. The private file itself
+  is opened without following a symlink and must be a regular file of the operator's, not group or world writable.
+- `canopy init` writes the private file instead of the user file, with the labels and the empty trust lists to fill
+  in when no user file sets them, and still no key whose default serves. It never overwrites either file.
+- Errors name the file: a private key in the workspace file says to set it in the private file, and a validation
+  error names the files a key may come from. `loop.reread` reads the private file like any `canopy` command.
+- Sandbox: no new path. The private file is under `.canopy/`, which the templates already deny (§24); the canary adds
+  it to what a sandboxed run can neither read nor write. An unsandboxed run can write it, as it can the user file
+  today: TRUST_MODEL's residual for unsandboxed runs is unchanged.
+- Docs, in the PR that builds it, with the operator's approval note: TRUST_MODEL T7 (private keys from the user file
+  or the private file, and the provenance control); DESIGN §12 (layers, scopes, the file, the `paths.*` rule) and
+  §18 (pool sizes in either file); `README.md` and `docs/GETTING_STARTED.md`, where `canopy init` writes; D016 edited
+  in place, and D066 to "Pool sizes are private config".
+- Tests with the fakes: a key in the private file wins over the same key in the user file and the workspace file; a
+  private key in the workspace file is refused, naming the private file; a private file and no user file runs; with
+  neither, the error names `canopy init`; a tracked `.canopy/config.toml`, and a tracked journal, refused in a
+  workspace that is a git repository; a symlinked, foreign, or group-writable private file refused; `canopy init`
+  writes the private file, not the user file; a reload takes up a change to the private file; two workspaces' private
+  files set different `serve.port`s and each loads its own; a relative `paths.*` value in the private file resolves
+  under the state directory, and one in the user file is still refused.
+
+Accept: the tests above pass, and `make install-check`, with `canopy init` writing the private file. Live: the
+operator moves the keys that belong to one workspace into its private file, leaving the rest in the user file; the
+loop there runs as before, and a second workspace with its own private file reads its own labels and port.
 
 Status: not started.
 

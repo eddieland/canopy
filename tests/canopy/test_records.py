@@ -10,7 +10,7 @@ from typing import ClassVar
 import pytest
 
 from canopy.core import db, records
-from canopy.core.vocab import ChoreRunStatus, PoolKind, ReviewRunStatus, TickStatus
+from canopy.core.vocab import ChoreRunStatus, Phase, PlanSetting, PoolKind, ReviewRunStatus, TickStatus
 from tests.canopy.helpers import in_tick
 from tests.conftest import Journals
 
@@ -207,3 +207,14 @@ def test_recent_ticks_count_each_ticks_decisions(conn: sqlite3.Connection) -> No
     db.record_decision(conn, busy, "PROJ-1", "wait", "checks running")
     db.record_decision(conn, busy, "PROJ-2", "wait", "checks running")
     assert [(t.id, n) for t, n in db.recent_ticks(conn, 5)] == [(busy, 2), (quiet, 0)]
+
+
+def test_a_ticket_reads_its_phase_and_plan_setting_as_members_and_done_as_a_flag(conn: sqlite3.Connection) -> None:
+    db.set_ticket(conn, "PROJ-1", "/ws", phase=Phase.CI_RED, done=True)
+    conn.execute("UPDATE tickets SET plan_setting = 'skip' WHERE key = 'PROJ-1'")
+    ticket = db.get_ticket(conn, "PROJ-1")
+    assert ticket is not None
+    assert (ticket.phase, ticket.plan_setting, ticket.done) == (Phase.CI_RED, PlanSetting.SKIP, True)
+    assert isinstance(ticket.phase, Phase)
+    assert isinstance(ticket.plan_setting, PlanSetting)
+    assert db.open_tickets(conn) == []

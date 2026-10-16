@@ -20,7 +20,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db, notice
 from canopy.core.context import Context
-from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, TickStatus
+from canopy.core.vocab import ChoreRunStatus, Phase, ReviewRunStatus, TickStatus
 from canopy.infra import resources
 from canopy.loop import pacing, repeat, tick
 from tests.canopy.helpers import FakeKeys, FakeTime, canopy, chore_toml, console, context, overseer_does
@@ -134,7 +134,7 @@ def listed(conn: sqlite3.Connection, tick_id: int) -> None:
 
 
 def seen_ticket(conn: sqlite3.Connection, _tick_id: int) -> None:
-    db.set_ticket(conn, KEY, "/r", phase="ci_running")
+    db.set_ticket(conn, KEY, "/r", phase=Phase.CI_RUNNING)
     db.set_unit(conn, KEY, "/r", "r", phase="ci_running", cursors={"ci": "1"}, pr_url=PR)
 
 
@@ -194,7 +194,7 @@ def reviews_granted(conn: sqlite3.Connection, _tick_id: int) -> None:
     conn.execute("INSERT INTO review_grants (pr_url, runs, granted_at) VALUES (?, 1, ?)", (PR, db.now()))
 
 
-def sets_ticket(*, phase: str | None = None, done: bool = False) -> Step:
+def sets_ticket(*, phase: Phase | None = None, done: bool = False) -> Step:
     return lambda conn, _tick_id: db.set_ticket(conn, KEY, "/r", phase=phase, done=done)
 
 
@@ -229,7 +229,7 @@ def notice_cleared(conn: sqlite3.Connection, _tick_id: int) -> None:
         pytest.param(Case(during=listed), id="attention item added"),
         pytest.param(Case(setup=listed), id="attention item resolved"),
         pytest.param(Case(during=seen_ticket), id="ticket first seen"),
-        pytest.param(Case(setup=seen_ticket, during=sets_ticket(phase="ci_red")), id="phase changed"),
+        pytest.param(Case(setup=seen_ticket, during=sets_ticket(phase=Phase.CI_RED)), id="phase changed"),
         pytest.param(Case(setup=seen_ticket, during=sets_branch), id="branch changed"),
         pytest.param(Case(setup=seen_ticket, during=moves_ci_cursor), id="unit cursor moved"),
         pytest.param(Case(setup=seen_ticket, during=sets_ticket(done=True)), id="done flag"),
@@ -270,7 +270,7 @@ def both(*steps: Step) -> Step:
     return run
 
 
-RELABELLED = both(seen_ticket, sets_ticket(phase="ci_red"))
+RELABELLED = both(seen_ticket, sets_ticket(phase=Phase.CI_RED))
 
 
 @pytest.mark.parametrize(

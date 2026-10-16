@@ -181,7 +181,7 @@ def test_queried_records_the_query_and_touches_each_ticket(canopy_env: CanopyEnv
     ]
     assert duties.queried_keys(recorded[0][2]) == ["PROJ-3", "PROJ-1"]
     assert duties.queried_keys(recorded[1][2]) == []
-    assert [t["key"] for t in db.open_tickets(conn)] == ["PROJ-1", "PROJ-3"]
+    assert [t.key for t in db.open_tickets(conn)] == ["PROJ-1", "PROJ-3"]
 
 
 def test_queried_refuses_outside_a_tick_a_bad_key_and_a_result_too_long_for_one_call(canopy_env: CanopyEnv) -> None:

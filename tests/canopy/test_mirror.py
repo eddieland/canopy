@@ -44,8 +44,7 @@ def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str | None, 
 def mirror_cursor(conn: sqlite3.Connection, key: str = KEY) -> str | None:
     ticket = db.get_ticket(conn, key)
     assert ticket is not None
-    cursor: str | None = ticket["last_mirrored_id"]
-    return cursor
+    return ticket.last_mirrored_id
 
 
 def test_a_comment_is_mirrored_once_and_moves_the_mirror_cursor(
@@ -87,7 +86,7 @@ def test_a_comment_is_mirrored_once_and_moves_the_mirror_cursor(
         # The comment cursor is the phases', and mirroring never moves it.
         ticket = db.get_ticket(conn, KEY)
         assert ticket is not None
-        assert ticket["last_comment_id"] is None
+        assert ticket.last_comment_id is None
 
 
 def test_the_body_is_read_from_stdin_and_cut_to_its_bound(
