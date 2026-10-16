@@ -238,6 +238,8 @@ operator, posted nowhere (D114), with no worker and no ticket.
 - **N3. Planner agent that splits a larger ticket into worker tasks.** Built in M8, live acceptance pending, and only on
   request: an authorized replier's comment asks for the split. The split creates child tickets
   in the tracker, blocked on each other in order, with no queue label; the operator labels each to start it (§18).
+  ROADMAP M46 replaces it: any worker files follow-up tickets, worked under its ticket's authorization, and a split
+  is a run doing that on request.
 - **N4. Copilot CLI support.** Deferred until a coworker asks. More than a config change: canopy's definitions
   directory, its permissions, and the D044 guard are written in OpenCode's terms, so a second runtime needs its own
   definitions set and its own shadowing check (ROADMAP's deferred list).
