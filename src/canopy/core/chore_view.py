@@ -6,7 +6,6 @@ history, and nothing about it reaches the overseer, the attention list, or notif
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import threading
 from collections.abc import Callable, Iterator, Mapping
@@ -16,7 +15,7 @@ from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import chore_result as result
 from canopy.core import chore_window as window
-from canopy.core import db
+from canopy.core import contract, db
 from canopy.core.vocab import ChoreRunStatus
 
 if TYPE_CHECKING:
@@ -277,16 +276,7 @@ def failed_items(conn: sqlite3.Connection, config: Config, workspace: Workspace)
 
 
 def _detail(run: sqlite3.Row) -> str:
-    note = ""
-    if run["result_json"]:
-        try:
-            stored: object = json.loads(str(run["result_json"]))
-        except json.JSONDecodeError:
-            stored = None
-        if isinstance(stored, dict):
-            harness: object = stored.get("harness")
-            summary: object = stored.get("summary")
-            note = str(harness or summary or "")
+    note = contract.stored_note(contract.stored_object(run["result_json"]))
     text = f"chore run {run['id']} ended {run['status']}"
     if note:
         text += f": {note}"
@@ -333,13 +323,13 @@ def state_section(states_: list[ChoreState], now: datetime) -> list[ChoreSummary
         latest_summary: LatestRun | None = None
         if latest is not None:
             stored = result.stored(latest["result_json"])
-            harness = _harness(latest["result_json"])
+            harness = contract.stored_object(latest["result_json"]).get("harness")
             latest_summary = {
                 "run_id": latest["id"],
                 "status": latest["status"],
                 "started_at": latest["started_at"],
                 "ended_at": latest["ended_at"],
-                "summary": harness or (stored.summary if stored is not None else None),
+                "summary": str(harness) if harness else (stored.summary if stored is not None else None),
             }
         due = state.due_at(now)
         section.append(
@@ -357,16 +347,3 @@ def state_section(states_: list[ChoreState], now: datetime) -> list[ChoreSummary
             }
         )
     return section
-
-
-def _harness(result_json: object) -> str | None:
-    if not isinstance(result_json, str) or not result_json:
-        return None
-    try:
-        stored: object = json.loads(result_json)
-    except json.JSONDecodeError:
-        return None
-    if isinstance(stored, dict):
-        harness: object = stored.get("harness")
-        return str(harness) if harness else None
-    return None

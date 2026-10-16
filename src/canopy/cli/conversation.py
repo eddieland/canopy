@@ -20,7 +20,7 @@ import click
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
 from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, spent
-from canopy.core import chore_view, conversation, db, notice, pause, prompts, review_requests
+from canopy.core import chore_view, contract, conversation, db, notice, pause, prompts, review_requests
 from canopy.core.vocab import RunKind
 from canopy.infra import logs
 from canopy.loop import attention
@@ -611,7 +611,7 @@ def _show_chore(ctx: Context, name: str) -> None:
     click.echo(f"chore:{name}: {chore_line(state, datetime.now(UTC))}")
     latest = state.latest_ended
     if latest is not None:
-        said = one_line(str(result_of(latest).get("harness") or result_of(latest).get("summary") or ""))
+        said = one_line(contract.stored_note(result_of(latest)))
         click.echo(f"  latest run {latest['id']} {latest['status']}" + (f": {said}" if said else ""))
         session = f"session {latest['session_id']}" if latest["session_id"] else "no session reported"
         click.echo(f"  {session}{spent(latest)}")
