@@ -14,15 +14,18 @@ import { cn } from '@/lib/utils'
  * `canopy grant` on what is stuck at a limit (DESIGN §22): a row for each of `limits` whose runs have reached it, a
  * ticket's unit's runs of one kind or a PR's review runs, with a button that allows one more. Every run still counts,
  * and the grant dispatches nothing: the next tick decides. Nothing at all while nothing is at its limit and nothing
- * was granted here. `ticketKey` is the ticket the units are of; a PR's own page has none.
+ * was granted here. `ticketKey` is the ticket the units are of; a PR's own page has none. On a PR's page, `ownPr` is
+ * the PR, which its review limit then leaves unnamed.
  */
 export function GrantLimits({
     limits,
     ticketKey,
+    ownPr,
     className,
 }: {
     limits: readonly Limit[]
     ticketKey: string | null
+    ownPr?: string
     className?: string
 }) {
     const client = useQueryClient()
@@ -56,11 +59,10 @@ export function GrantLimits({
                                 key={`${limit.kind} ${limit.repo ?? ''} ${limit.pr_url ?? ''}`}
                                 className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm"
                             >
-                                <span className="font-mono text-xs font-medium">{limitLabel(limit)}</span>
+                                <span className="font-mono text-xs font-medium">{limitLabel(limit, ownPr)}</span>
                                 <span className="readout text-xs text-status-failed">{limitCount(limit)}</span>
                                 <Button
                                     variant="outline"
-                                    size="sm"
                                     className="ml-auto"
                                     title={command(ticketKey, limit)}
                                     onClick={() => grant.mutate(limit)}

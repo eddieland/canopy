@@ -393,6 +393,7 @@ test("a coworker's PR is requested from the pull requests page and stopped from 
     await expect(row).toContainText('requested')
 
     await row.getByRole('link', { name: 'acme/web#120', exact: true }).click()
+    // canopy only reviews it, so it has no ticket's title to lead with.
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#120')
     const request = page.getByTestId('review-request')
     await expect(request).toContainText('canopy reviews its head once')

@@ -13,16 +13,21 @@ import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
 import { RunDoing } from '@/components/run-doing'
 import { Chip, RunDot, Word } from '@/components/status'
-import { TicketLink } from '@/components/ticket-link'
-import { TicketTitle } from '@/components/ticket-title'
+import { TicketField } from '@/components/ticket-field'
 import { Timestamp } from '@/components/timestamp'
 import { TranscriptPanel } from '@/components/transcript'
+import { runDescription } from '@/lib/descriptions'
 import { runRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
 import { RUN_TOKENS_TITLE, runTokens } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 import { None } from '@/components/none'
+
+// What every run's page shows, on its title's hover: its description is the run's state.
+const HELP =
+    "What the worker did, from its session's events in the run's log: its text, each tool call with its input and " +
+    'output, and what each model call cost.'
 
 /** One run: what it worked on, how it ended, and its session's transcript. */
 export const Route = createFileRoute('/runs/$id')({
@@ -58,9 +63,13 @@ function Loaded({ id }: { id: number }) {
     }
     return (
         <>
-            <PageHeader title={runRef(data.id)} chips={data.private && <Chip>private</Chip>}>
-                What the worker did, from its session&apos;s events in the run&apos;s log: its text, each tool call with
-                its input and output, and what each model call cost.
+            <PageHeader
+                title={runRef(data.id)}
+                subject={data.ticket_title}
+                help={HELP}
+                chips={data.private && <Chip>private</Chip>}
+            >
+                {runDescription(data)}
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <RunPanel run={data} />
@@ -91,14 +100,8 @@ function RunPanel({ run }: { run: Run }) {
                 </span>
             </PanelHeader>
             <Fields>
-                <Field label="ticket">
-                    <span className="flex items-center gap-2">
-                        <TicketLink ticketKey={run.ticket_key} />
-                        <Chip word={run.kind} />
-                        {run.private && <Chip>private</Chip>}
-                        <TicketTitle title={run.ticket_title} />
-                    </span>
-                </Field>
+                {/* Private is the page's chip, beside its title: said once. */}
+                <TicketField ticketKey={run.ticket_key} title={run.ticket_title} kind={run.kind} />
                 <Field label="branch" mono>
                     {run.branch === null ? <None /> : <Copyable text={run.branch} label="branch" />}
                 </Field>

@@ -25,12 +25,16 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
 
     await ours.getByRole('link', { name: 'acme/web#88', exact: true }).click()
     await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#88')
+    // Its title leads with its ticket's, after the PR's name, and its description is its state.
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#88 Debounce search input')
+    await expect(page.locator('main header p')).toHaveText('ABC-099 · 2 reviews')
     await expect(nav.getByRole('link', { name: 'Pull requests' })).toHaveAttribute('data-status', 'active')
     // The run that opened it, its two reviews, and what the loop decided about it.
     await expect(page.getByTestId('pull-request-runs').getByRole('link', { name: 'run:39' })).toBeVisible()
     await expect(page.getByTestId('pull-request-reviews').getByRole('link', { name: /^review:/u })).toHaveCount(2)
     await expect(page.getByTestId('pull-request-decisions')).toContainText('needs reviewer')
+    // Its title names it, and nothing else on its page does: not its runs, its decisions, or its review limit.
+    await expect(page.locator('main').getByText('acme/web#88')).toHaveCount(1)
 
     // The link out under the title says where it goes, rather than naming the PR again.
     const out = page.locator('main header').getByRole('navigation', { name: 'Links out' }).getByRole('link')
@@ -41,9 +45,9 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     await page.getByTestId('pull-request-review-4').getByRole('link', { name: 'review:4' }).click()
     await expect(page).toHaveURL(/\/reviews\/4$/u)
     // The URL changes before the new page replaces the old, which links to its PR too: wait for the review's title.
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:4')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:4 acme/web#88 Debounce search input')
     await page.getByRole('link', { name: 'acme/web#88', exact: true }).click()
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#88')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#88 Debounce search input')
 })
 
 test('a PR the journal does not know says so, and a decision about a PR opens its page', async ({ page }) => {
@@ -77,6 +81,7 @@ test('a PR named on a run, a review, a decision, or a ticket opens its page in o
         const inward = page.locator('a[href*="pull-requests/pr"]')
         await scope.getByRole('link', { name, exact: true }).and(inward).first().click()
         await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
-        await expect(page.getByRole('heading', { level: 1 })).toHaveText(name)
+        // The PR's name leads its title, before its ticket's title when it has one.
+        await expect(page.getByRole('heading', { level: 1 })).toHaveText(new RegExp(`^${name}( |$)`, 'u'))
     }
 })

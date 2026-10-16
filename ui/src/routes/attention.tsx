@@ -388,6 +388,8 @@ function Thread({ ticketKey }: { ticketKey: string }) {
             />
             <PanelHeader label="Conversation">
                 <span className="flex items-center gap-2">
+                    {/* The chip a ticket's page wears by its title: whether its conversation reaches the ticket. */}
+                    <Chip>{ticket.private ? 'private' : 'public'}</Chip>
                     {messages.length > 1 && <OrderToggle list="conversation" />}
                     <span className="readout text-xs text-muted-foreground">
                         <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} /> · {messages.length}

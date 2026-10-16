@@ -133,7 +133,7 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
                 id=fingerprint(item.ticket_key, item.reason, item.repo),
                 subject=item.subject,
                 ticket_key=ticket,
-                ticket_title=_title(row.title) if row is not None else None,
+                ticket_title=ticket_title(row.title) if row is not None else None,
                 chore=chore,
                 repo=item.repo,
                 reason=item.reason,
@@ -511,7 +511,7 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
     return Run(
         id=int(row["id"]),
         ticket_key=str(row["ticket_key"]),
-        ticket_title=_title(row["ticket_title"]),
+        ticket_title=ticket_title(row["ticket_title"]),
         kind=str(row["kind"]),
         status=status,
         state=_run_state(status),
@@ -597,7 +597,7 @@ def lines(text: str) -> str:
     return "\n".join(line.rstrip() for line in conversation.printable(text).splitlines()).strip("\n")
 
 
-def _title(value: object) -> str | None:
+def ticket_title(value: object) -> str | None:
     """A ticket's title on one line. `canopy ticket set` stored it so; this keeps a page from relying on that.
 
     Returns:
@@ -630,7 +630,7 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
     running = db.running_run_of(conn, key)
     return TicketSummary(
         key=key,
-        title=_title(row["title"]),
+        title=ticket_title(row["title"]),
         private=record is not None,
         start=status,
         phase=str(row["phase"]) if row["phase"] else None,

@@ -13,9 +13,18 @@ import { cn } from '@/lib/utils'
 
 /**
  * Decisions, one row each: what it was about (or, on its subject's page, which tick), the action, and under it the
- * rationale. A rationale is the overseer's text: untrusted, laid out as `RichText`, which renders it as text.
+ * rationale. A rationale is the overseer's text: untrusted, laid out as `RichText`, which renders it as text. `ownPr`
+ * leaves out the PR whose page it is, which a decision would name beside its action.
  */
-export function Decisions({ decisions, byTick = false }: { decisions: Decision[]; byTick?: boolean }) {
+export function Decisions({
+    decisions,
+    byTick = false,
+    ownPr,
+}: {
+    decisions: Decision[]
+    byTick?: boolean
+    ownPr?: string
+}) {
     return (
         <ul className="divide-y" data-testid="decisions">
             {decisions.map((decision) => (
@@ -27,8 +36,10 @@ export function Decisions({ decisions, byTick = false }: { decisions: Decision[]
                     {byTick ? <TickLink id={decision.tick_id} /> : <Subject decision={decision} />}
                     <span className="flex min-w-0 items-center gap-3">
                         <Chip tone={actionTone(decision.action)} className="min-w-0 shrink" word={decision.action} />
-                        {/* A PR that is the row's subject is named there already. */}
-                        {decision.pr && (byTick || !prIsSubject(decision)) && <PullRequestLink url={decision.pr} />}
+                        {/* A PR that is the row's subject, or the page's, is named there already. */}
+                        {decision.pr && decision.pr !== ownPr && (byTick || !prIsSubject(decision)) && (
+                            <PullRequestLink url={decision.pr} />
+                        )}
                     </span>
                     {byTick && <Age at={decision.at} variant="ago" className="text-right" />}
                     <RichText text={decision.rationale} lines={SUMMARY_LINES} className={rowLineFrom('action')} />

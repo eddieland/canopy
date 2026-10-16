@@ -17,19 +17,22 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } fro
 import { ReviewRequestStatus } from '@/components/review-request'
 import { ReviewsTable } from '@/components/reviews-table'
 import { RunsTable } from '@/components/runs-table'
-import { Chip, Word } from '@/components/status'
-import { TicketLink } from '@/components/ticket-link'
+import { Chip } from '@/components/status'
+import { TicketField } from '@/components/ticket-field'
 import { LinkOutButton } from '@/components/ticket-links'
-import { TicketTitle } from '@/components/ticket-title'
+import { pullRequestDescription } from '@/lib/descriptions'
 import { addressOf, onGitHub } from '@/lib/links'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { pullRequestLabel } from '@/lib/pull-request-label'
-import { None } from '@/components/none'
-import { NO_TICKET } from '@/lib/words'
 
 interface PullRequestSearch {
     url?: string | undefined
 }
+
+// What every PR's page shows, on its title's hover: its description is the PR's state.
+const HELP =
+    "What canopy knows of this PR: its ticket when it has one, canopy's reviews of it, the runs that pushed to it, " +
+    'and the decisions naming it.'
 
 /** One PR: what it is, canopy's reviews of it, the runs that pushed to it, and the decisions naming it. */
 export const Route = createFileRoute('/pull-requests/pr')({
@@ -89,6 +92,8 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
         <>
             <PageHeader
                 title={title}
+                subject={pr.ticket_title}
+                help={HELP}
                 chips={pr.phase ? <Chip word={pr.phase} /> : undefined}
                 // The PR on its host, as a ticket's page shows its links out: the title names it, so this says where it
                 // goes.
@@ -103,8 +108,7 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                     </nav>
                 }
             >
-                What canopy knows of this PR: its ticket when it has one, canopy&apos;s reviews of it, the runs that
-                pushed to it, and the decisions naming it.
+                {pullRequestDescription(pr, reviews.length)}
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <Panel>
@@ -114,16 +118,7 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                         </span>
                     </PanelHeader>
                     <Fields>
-                        <Field label="ticket" className="flex items-baseline gap-2">
-                            {pr.ticket_key === null ? (
-                                <None reason={NO_TICKET} />
-                            ) : (
-                                <>
-                                    <TicketLink ticketKey={pr.ticket_key} className="shrink-0" />
-                                    <TicketTitle title={pr.ticket_title} />
-                                </>
-                            )}
-                        </Field>
+                        <TicketField ticketKey={pr.ticket_key} title={pr.ticket_title} />
                         {pr.repo && (
                             <Field label="repository" mono>
                                 {pr.repo}
@@ -134,18 +129,18 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                                 <Copyable text={pr.branch} label="branch" />
                             </Field>
                         )}
-                        {pr.phase && (
-                            <Field label="phase" mono>
-                                <Word word={pr.phase} />
-                            </Field>
-                        )}
                         <CostTotalRow cost={cost} />
                     </Fields>
                     {/* The PR's actions: stopping the operator's review request, and a grant of another review
                         when it is at its review limit. */}
                     <ReviewRequestStatus url={pr.url} request={pr.review_request} className="border-t" />
                     {reviewLimit !== null && (
-                        <GrantLimits limits={[reviewLimit]} ticketKey={pr.ticket_key} className="border-t" />
+                        <GrantLimits
+                            limits={[reviewLimit]}
+                            ticketKey={pr.ticket_key}
+                            ownPr={pr.url}
+                            className="border-t"
+                        />
                     )}
                 </Panel>
                 <Panel data-testid="pull-request-reviews">
@@ -172,7 +167,7 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                         <Empty>no runs yet: none of its ticket&apos;s runs has pushed to it</Empty>
                     ) : (
                         <PanelScroll label="Runs">
-                            <RunsTable runs={ordered('pr-runs', runsOrder, runs)} ticket={false} />
+                            <RunsTable runs={ordered('pr-runs', runsOrder, runs)} ticket={false} ownPr={pr.url} />
                         </PanelScroll>
                     )}
                 </Panel>
@@ -187,7 +182,11 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                         <Empty>no decisions yet: no tick has named it</Empty>
                     ) : (
                         <PanelScroll label="Decisions">
-                            <Decisions decisions={ordered('pr-decisions', decisionsOrder, decisions)} byTick />
+                            <Decisions
+                                decisions={ordered('pr-decisions', decisionsOrder, decisions)}
+                                byTick
+                                ownPr={pr.url}
+                            />
                         </PanelScroll>
                     )}
                 </Panel>
