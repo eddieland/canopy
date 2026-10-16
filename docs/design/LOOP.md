@@ -58,25 +58,23 @@ in order:
    The object holds, in order from what changes rarely to what changes every tick, for a runtime that caches part of a
    message: workspace root; the workspace (name, the path of `MAP.md` if any); tracker config (provider, query, labels,
    needs-human label); trust config (authorized repliers, branch prefix, PR label); policy (limits and stacking); the
-   repositories (name, path, summary, whether cloned, its pool's leased slots, §18); the `tickets` rows not marked done,
-   except those the operator stopped; `stopped`; `recently_done` (§7); split children (§18); chores and reviews when
-   configured; the operator's notices to workers in force or lately ended (§8), when there are any; the overseer's
-   open attention items (below); then capacity, running workers and their repositories, the mirror limit and
-   delimiter, whether this tick runs the tracker query (`query_due`, §7), tick id, current time, and whether it is a
-   dry run. Each ticket has its phase, branch, and comment,
-   message, and mirror cursors (§22); its units (§18), each with repository, branch, PR, phase, review and ci cursors,
-   runs so far of each kind, the runs of each kind the operator granted past the policy's limit if any (`granted`, §8),
-   and when fix-ci may next run if still ahead; and its latest run (id, kind, status, branch, each repository it leased
-   in with its starting base, start and end). A ticket the operator started has a `private` object (§22): when it was
-   started, its message cursor, the operator's messages newer than it, and the question awaiting a reply, if any.
-   `stopped` names the tickets the operator stopped, by key alone: none is a candidate, whatever its labels, and the
-   overseer records nothing for one, so a ticket stopped for weeks adds no decision to every tick. `recently_done`
-   names the tickets marked done in the last 30 days, each with the time of its newest `done` decision (§7). `chores`
-   (§19) is
-   present only when chores are configured. `notices` (§8) is present only when the operator set one in the last
-   seven days: each one's text, when it was set, until when it was or is in force, and whether it is now, newest first,
-   at most five. `mirror` holds the per-tick mirror limit and this tick's heredoc delimiter
-   (§22).
+   repositories (name, path, the map's clone `url`, summary, whether cloned, its pool's leased slots, §18); the
+   `tickets` rows not marked done, except those the operator stopped; `stopped`; `recently_done` (§7); split children
+   (§18); chores and reviews when configured; the operator's notices to workers in force or lately ended (§8), when
+   there are any; the overseer's open attention items (below); then capacity, running workers and their repositories,
+   the mirror limit and delimiter, whether this tick runs the tracker query (`query_due`, §7), tick id, current time,
+   and whether it is a dry run. Each ticket has its phase, branch, and comment, message, and mirror cursors (§22); its
+   units (§18), each with repository, branch, PR, phase, review and ci cursors, runs so far of each kind, the runs of
+   each kind the operator granted past the policy's limit if any (`granted`, §8), and when fix-ci may next run if still
+   ahead; and its latest run (id, kind, status, branch, each repository it leased in with its starting base, start and
+   end). A ticket the operator started has a `private` object (§22): when it was started, its message cursor, the
+   operator's messages newer than it, and the question awaiting a reply, if any. `stopped` names the tickets the
+   operator stopped, by key alone: none is a candidate, whatever its labels, and the overseer records nothing for one,
+   so a ticket stopped for weeks adds no decision to every tick. `recently_done` names the tickets marked done in the
+   last 30 days, each with the time of its newest `done` decision (§7). `chores` (§19) is present only when chores are
+   configured. `notices` (§8) is present only when the operator set one in the last seven days: each one's text, when it
+   was set, until when it was or is in force, and whether it is now, newest first, at most five. `mirror` holds the
+   per-tick mirror limit and this tick's heredoc delimiter (§22).
 
    `attention` lists the open items the overseer recorded (§14): each one's ticket, or `pr` for a PR with no ticket,
    its repository, its reason, and since when, but not its detail, which may quote a comment. The harness's own

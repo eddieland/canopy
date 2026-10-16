@@ -52,6 +52,20 @@ class Decision(Row):
     pr: str | None
 
 
+@dataclass(frozen=True)
+class ReviewRequest(Row):
+    """The operator's request to review a PR the loop does not own (DESIGN §21): open, or how it ended."""
+
+    TABLE: ClassVar[str] = "review_requests"
+
+    id: int
+    pr_url: str
+    created_at: str
+    channel: str
+    ended_at: str | None
+    end_reason: str | None
+
+
 def fetch_all[R: Row](conn: sqlite3.Connection, row_type: type[R], sql: str, params: Sequence[object] = ()) -> list[R]:
     """Run `sql` and build each row it returns as `row_type`.
 

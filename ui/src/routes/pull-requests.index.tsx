@@ -8,6 +8,7 @@ import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReviewLink } from '@/components/review-link'
+import { ReviewRequestForm } from '@/components/review-request'
 import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, RunDot } from '@/components/status'
@@ -30,9 +31,14 @@ function PullRequestsPage() {
     return (
         <>
             <PageHeader title="Pull requests">
-                The loop&apos;s own PRs and every PR canopy reviewed, most recent activity first. A PR&apos;s page has
-                its ticket, the runs that pushed to it, canopy&apos;s reviews of it, and what the loop decided.
+                The loop&apos;s own PRs, every PR canopy reviewed, and every PR you asked it to review, most recent
+                activity first. A PR&apos;s page has its ticket, the runs that pushed to it, canopy&apos;s reviews of
+                it, and what the loop decided.
             </PageHeader>
+            <Panel className="mb-6">
+                <PanelHeader label="Review a PR" />
+                <ReviewRequestForm />
+            </Panel>
             <Panel>
                 <PanelHeader label="Pull requests">
                     <span className="flex items-center gap-2">
@@ -60,7 +66,8 @@ function PullRequestsPage() {
 
 /**
  * A PR: the PR (`org/repo#123` for GitHub's), its ticket and title (or `none`, for any PR canopy only reviews),
- * its unit's phase, the run working it now, its latest review's verdict, and its age.
+ * its unit's phase, the run working it now, its latest review's verdict and whether the operator's review request on
+ * it is open, and its age.
  */
 function Row({ pr }: { pr: PullRequest }) {
     const review = pr.latest_review
@@ -105,6 +112,7 @@ function Row({ pr }: { pr: PullRequest }) {
                 ) : (
                     'not reviewed'
                 )}
+                {pr.review_request !== null && pr.review_request.ended_at === null && <Chip>requested</Chip>}
             </span>
             <Age at={pr.active_at} variant="ago" className="text-right" />
         </ListRow>

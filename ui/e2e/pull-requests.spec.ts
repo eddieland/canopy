@@ -14,12 +14,14 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     await expect(page).toHaveURL(/\/pull-requests$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Pull requests')
     const rows = page.getByTestId('pull-requests').getByTestId('pull-request')
-    await expect(rows).toHaveCount(3)
+    await expect(rows).toHaveCount(4)
     const ours = rows.filter({ hasText: 'acme/web#88' })
     await expect(ours).toContainText('Debounce search input')
     await expect(ours.getByTestId('pull-request-review')).toContainText('review:4')
     // A PR canopy only reviews has no ticket, whoever asked for the review.
     await expect(rows.filter({ hasText: 'acme/api#12' })).toContainText('none: canopy only reviews it')
+    // One the operator asked canopy to review is listed before its first review.
+    await expect(rows.filter({ hasText: 'acme/web#95' })).toContainText('requested')
 
     await ours.getByRole('link', { name: 'acme/web#88', exact: true }).click()
     await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)

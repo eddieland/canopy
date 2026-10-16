@@ -371,3 +371,33 @@ test('a long conversation scrolled away from its end stays put as a message arri
     // disposes its response: drop it, since it comes after everything this test checks.
     await page.unrouteAll({ behavior: 'ignoreErrors' })
 })
+
+test("a coworker's PR is requested from the pull requests page and stopped from its own, as the CLI does", async ({
+    page,
+}) => {
+    const pr = 'https://github.com/acme/web/pull/120'
+    await page.goto('pull-requests')
+    const form = page.getByTestId('review-request-form')
+    // One of the loop's own PRs is refused, as `canopy start URL --review` refuses it.
+    await form.getByLabel('PR URL').fill('https://github.com/acme/web/pull/88')
+    await form.getByTestId('review-request-submit').click()
+    await expect(form.getByRole('alert')).toContainText('refused (loop_pr)')
+
+    await form.getByLabel('PR URL').fill(pr)
+    await expect(form.getByTestId('review-request-submit')).toHaveAttribute('title', 'canopy start URL --review')
+    await form.getByTestId('review-request-submit').click()
+    await expect(form.getByRole('status')).toHaveText(
+        `${pr} is requested for review. The next tick reviews its head, once.`,
+    )
+    const row = page.getByTestId('pull-requests').getByTestId('pull-request').filter({ hasText: 'acme/web#120' })
+    await expect(row).toContainText('requested')
+
+    await row.getByRole('link', { name: 'acme/web#120', exact: true }).click()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#120')
+    const request = page.getByTestId('review-request')
+    await expect(request).toContainText('canopy reviews its head once')
+    await request.getByTestId('review-request-stop').click()
+    await expect(request.getByRole('status')).toHaveText(`${pr}'s review request is stopped; nothing reviews it now.`)
+    await expect(request).toContainText('Your review request ended')
+    await expect(request.getByTestId('review-request-stop')).toHaveCount(0)
+})

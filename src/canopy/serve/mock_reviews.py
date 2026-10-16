@@ -2,7 +2,7 @@
 
 PR 88 (ABC-099) was reviewed twice: its first commit had a blocking finding, its second has two smaller ones, anchored
 on its diff. The operator's own API PR, which `review.query` matched, was reviewed clean; PR 91's review never
-reported a result.
+reported a result. A coworker's PR 95 waits on its review, at the operator's request.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 PR_88 = "https://github.com/acme/web/pull/88"
 PR_91 = "https://github.com/acme/web/pull/91"
 PR_12 = "https://github.com/acme/api/pull/12"
+PR_95 = "https://github.com/acme/web/pull/95"
 SHA_88_FIRST = "5e1c0d2a" + "7" * 32
 SHA_88 = "9b2f4c61" + "3" * 32
 SHA_91 = "c47a91e0" + "5" * 32
@@ -167,3 +168,8 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
         )
         if diff is not None:
             logs.write_private(review_diff.path_for(log_path), diff)
+    # A coworker's PR the operator asked canopy to review from the web UI (DESIGN §21).
+    conn.execute(
+        "INSERT INTO review_requests (pr_url, created_at, channel) VALUES (?, ?, 'web')",
+        (PR_95, at(-20)),
+    )

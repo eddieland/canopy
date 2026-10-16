@@ -12,7 +12,7 @@ from rich.console import Console
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
 from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, spent
-from canopy.core import chore_view, conversation, db, notice, pause
+from canopy.core import chore_view, conversation, db, notice, pause, review_requests
 from canopy.infra import hangup, keys, lock
 from canopy.loop import attention, repeat, reread, tick
 from canopy.notify import deliver
@@ -123,6 +123,7 @@ def cmd_status(click_ctx: click.Context) -> int:
 
     _print_attention(attention.listed(ctx))
     _print_started(ctx)
+    _print_review_requests(ctx)
     _print_workers(ctx)
     _print_recent_runs(ctx)
     _print_chores(ctx)
@@ -174,6 +175,18 @@ def _print_started(ctx: Context) -> None:
         note = f"  awaiting your reply to message {waiting['id']}" if waiting is not None else ""
         title = ticket["title"] if ticket is not None else None
         click.echo(f"  {named(key, title)}  {r['status']} {attention.age(str(since))} ago  phase {phase}{done}{note}")
+
+
+def _print_review_requests(ctx: Context) -> None:
+    """A line per PR the operator asked canopy to review (DESIGN §21): when, and its latest review."""
+    requests = review_requests.open_requests(ctx.conn)
+    if not requests:
+        return
+    click.echo(f"\nReview requests ({len(requests)}):")
+    for r in requests:
+        runs = db.review_runs_of(ctx.conn, r.pr_url)
+        latest = f"latest review:{runs[0]['id']} {runs[0]['status']}" if runs else "not reviewed yet"
+        click.echo(f"  {r.pr_url}  {attention.age(r.created_at)} ago  {latest}")
 
 
 def _print_workers(ctx: Context) -> None:
