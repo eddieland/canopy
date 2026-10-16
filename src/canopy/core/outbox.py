@@ -169,16 +169,18 @@ def run_ended(
     return build
 
 
-def chore_ended(config: Config, run: sqlite3.Row, status: ChoreRunStatus, result_json: str | None) -> Event | None:
-    """Return the `chore.ended` event for a chore run, or None if no sink takes chores."""
+def chore_ended(
+    config: Config, chore: str, run_id: int, status: ChoreRunStatus, result_json: str | None
+) -> Event | None:
+    """Return the `chore.ended` event for run `run_id` of `chore`, or None if no sink takes chores."""
     if not config.notify.takes(CHORES):
         return None
     result = _object(result_json)
     findings = result.get("findings")
     summary = result.get("harness") or result.get("summary")
     fields: ChoreEnded = {
-        "chore": run["chore"],
-        "run": run["id"],
+        "chore": chore,
+        "run": run_id,
         "status": status,
         "summary": cut(summary, SUMMARY_LIMIT) if summary else None,
         "findings": len(findings) if isinstance(findings, list) else 0,

@@ -19,7 +19,7 @@ from unittest import mock
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import config, db, workspace
+from canopy.core import config, db, records, workspace
 from canopy.core.context import Context
 from canopy.infra import logs, procs, resources
 from tests.conftest import CanopyEnv, Journals
@@ -175,15 +175,16 @@ def wait_for_run(conn: sqlite3.Connection, run_id: int, timeout: float = 30) -> 
     raise AssertionError(f"run {run_id} still running after {timeout}s")
 
 
-def lifelock_left(row: sqlite3.Row, timeout: float = 30) -> bool:
+def lifelock_left(row: sqlite3.Row | records.Row, timeout: float = 30) -> bool:
     """Whether the lifelock file of a closed run is still there once its process has exited.
 
     The process closes its row, then removes the file, then exits, so the file is looked for only after the exit.
     """
     deadline = time.monotonic() + timeout
-    while procs.alive(int(row["pid"])) and time.monotonic() < deadline:
+    values = records.columns(row)
+    while procs.alive(int(values["pid"])) and time.monotonic() < deadline:
         time.sleep(0.05)
-    return procs.lifelock(Path(row["log_path"])).exists()
+    return procs.lifelock(Path(values["log_path"])).exists()
 
 
 def pool(treehouse_state: Path) -> list[dict[str, object]]:

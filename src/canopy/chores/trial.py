@@ -23,8 +23,7 @@ from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import lock, logs, procs
 
 if TYPE_CHECKING:
-    import sqlite3
-
+    from canopy.core import records
     from canopy.core.config import Chore
     from canopy.core.context import Context
 
@@ -111,7 +110,7 @@ def record(ctx: Context, prepared: Prepared) -> Recorded:
         run = db.get_chore_run(ctx.conn, run_id)
         if run is None:
             raise TrialError(f"chore run {run_id} vanished")
-        log_path = Path(run["log_path"])
+        log_path = Path(run.log_path)
         try:
             held = lock.take(procs.lifelock(log_path))
         except (OSError, lock.LockBusyError) as e:
@@ -145,7 +144,7 @@ def run_recorded(ctx: Context, recorded: Recorded) -> execute.Outcome:
         if run is None:
             raise execute.ChoreError(f"no chore run {recorded.run_id}")
         # Opened as `spawn` opens a detached run's log: appended, readable only by the operator, never through a link.
-        fd = os.open(Path(run["log_path"]), os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
+        fd = os.open(Path(run.log_path), os.O_WRONLY | os.O_CREAT | os.O_APPEND | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, "a", encoding="utf-8") as out:
             return execute.execute(ctx, recorded.run_id, out=out)
     finally:
@@ -167,13 +166,13 @@ def run_unrecorded(ctx: Context, prepared: Prepared) -> execute.Outcome:
     return execute.outcome_of(done, agent_output.read(done.stdout), prepared.chore)
 
 
-def _crash(ctx: Context, run: sqlite3.Row, e: Exception) -> str:
+def _crash(ctx: Context, run: records.ChoreRun, e: Exception) -> str:
     """Close a recorded try that could not start as `crashed`, as `start` closes a run it could not spawn.
 
     Returns:
         What went wrong, for the error the caller raises.
     """
     note = json.dumps({"harness": f"could not start the try: {e}"})
-    ended = outbox.chore_ended(ctx.config, run, ChoreRunStatus.CRASHED, note)
-    db.finish_run(ctx.conn, "chore_runs", int(run["id"]), ChoreRunStatus.CRASHED, note, event=ended)
-    return f"chore run {run['id']} could not start: {e}"
+    ended = outbox.chore_ended(ctx.config, run.chore, run.id, ChoreRunStatus.CRASHED, note)
+    db.finish_run(ctx.conn, "chore_runs", run.id, ChoreRunStatus.CRASHED, note, event=ended)
+    return f"chore run {run.id} could not start: {e}"

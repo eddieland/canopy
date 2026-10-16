@@ -22,8 +22,7 @@ from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import logs, procs, stopping
 
 if TYPE_CHECKING:
-    import sqlite3
-
+    from canopy.core import records
     from canopy.core.config import Chore
     from canopy.core.context import Context
 
@@ -78,9 +77,9 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     if run is None:
         raise ChoreError(f"no chore run {run_id}")
     if not db.claim_run(ctx.conn, "chore_runs", run_id, os.getpid()):
-        raise ChoreError(f"chore run {run_id} is not waiting to start: it is {run['status']} or another process has it")
-    log = logs.for_tick(int(run["tick_id"]) if run["tick_id"] is not None else None)
-    fields = {"chore_run_id": run_id, "chore": run["chore"]}
+        raise ChoreError(f"chore run {run_id} is not waiting to start: it is {run.status} or another process has it")
+    log = logs.for_tick(run.tick_id)
+    fields = {"chore_run_id": run_id, "chore": run.chore}
     log.info("chore run started", extra=fields)
     outcome = Outcome(ChoreRunStatus.CRASHED, None, "the chore run stopped before its agent finished")
     with stopping.StopOnSignal() as stop:
@@ -97,10 +96,10 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
         finally:
             stop.armed = False
             stored = outcome.result_json()
-            ended = outbox.chore_ended(ctx.config, run, outcome.status, stored)
+            ended = outbox.chore_ended(ctx.config, run.chore, run_id, outcome.status, stored)
             if not db.finish_run(ctx.conn, "chore_runs", run_id, outcome.status, stored, event=ended):
                 log.warning("chore run was already closed; its outcome is not recorded", extra=fields)
-            procs.drop_lifelock(Path(run["log_path"]))
+            procs.drop_lifelock(Path(run.log_path))
             log.info("chore run finished", extra={**fields, "status": outcome.status})
     return outcome
 
@@ -137,17 +136,17 @@ def outcome_of(done: procs.Result, output: agent_output.AgentOutput, chore: Chor
     return Outcome(ChoreRunStatus(parsed.status), parsed, printed=printed)
 
 
-def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) -> Outcome:
-    name = str(run["chore"])
+def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapter) -> Outcome:
+    name = run.chore
     # Read the config this process loaded: a chore deleted since its run started does not run. The overseer's run
     # needs it configured; the operator's try, with no tick, only defined, as `canopy chore try` checked.
-    chores = view.configured if run["tick_id"] is not None else view.defined
+    chores = view.configured if run.tick_id is not None else view.defined
     chore = chores(ctx.config, ctx.workspace).get(name)
     if chore is None:
         raise SetupError(f"chore {name} is no longer configured for this workspace")
-    run_id = int(run["id"])
+    run_id = run.id
     # Beside the row's log, so a run started before an upgrade moved the directory still finds its prompt.
-    prompt = start.prompt_file(Path(run["log_path"])).read_text(encoding="utf-8")
+    prompt = start.prompt_file(Path(run.log_path)).read_text(encoding="utf-8")
     cwd, argv, digest = prepare(ctx, name, chore, prompt)
     log.info(
         "running chore",
