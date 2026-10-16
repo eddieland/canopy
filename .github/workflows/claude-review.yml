@@ -24,8 +24,14 @@ concurrency:
 
 jobs:
   gate:
-    # A fork's pull request gets no secrets, so it would only fail.
-    if: ${{ !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository }}
+    # A fork's pull request gets no secrets, so it would only fail. Nor does Dependabot's: it gets only Dependabot
+    # secrets, and a version bump is not worth the subscription's usage.
+    if: >-
+      ${{
+        !github.event.pull_request.draft
+        && github.event.pull_request.head.repo.full_name == github.repository
+        && github.event.pull_request.user.login != 'dependabot[bot]'
+      }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
