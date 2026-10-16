@@ -114,7 +114,9 @@ If code and the design disagree, the design doc wins until a decision entry says
 - A query that returns a table's whole rows reads them as that table's row type in `core/records.py`
   (`records.fetch_all`, `records.fetch_one`), not as `sqlite3.Row`. A new table gets its row type in the PR that adds
   it, and an old one when a PR already changes its queries. `tests/canopy/test_records.py` holds each row type to its
-  table, so a migration that adds a column to a typed table adds the field too.
+  table, so a migration that adds a column to a typed table adds the field too. A status, kind, or phase column is a
+  field of its `core/vocab.py` enum, so the row carries the member and refuses a value the vocabulary does not hold. A
+  helper that reads the same columns from several tables, some still untyped, reads them through `records.columns`.
 - A run's status and kind and a ticket's phase are closed vocabularies in `core/vocab.py`, each a `StrEnum`. New code
   writes and compares them through its members, not bare strings, and converts a value read from the journal where it
   branches on it. A branch over one is a `match` ending in `case _: assert_never(...)`, so a new value fails the type
