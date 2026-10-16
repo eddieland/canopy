@@ -31,6 +31,10 @@ What it does not cover: a worker can still send anything to a host you allowed, 
 your GitHub token; the overseer is not wrapped; and the sandbox shares the kernel,
 so it is no defense against an exploit written to escape it (DESIGN §24).
 
+**Not yet closed:** the templates let a run write OpenCode's data directory, `~/.local/share/opencode`, and what a run
+writes there can make the overseer's OpenCode, or your own, run code outside the sandbox at its next start (DESIGN
+§24, Open). Until that is closed, the sandbox does not hold against a worker that knows to do it.
+
 ## 1. Run `canopy sandbox setup`
 
 ```sh

@@ -356,11 +356,21 @@ there without reading `TMPDIR`.
 - SSH pushes. `srt`'s per-path `allowUnixSockets` is macOS-only; on Linux the only switch is `allowAllUnixSockets`,
   which lifts the block entirely. Whether to support SSH inside the sandbox at all (allow the agent socket, or push
   from the host in `_run`), or leave it to unsandboxed runs, is undecided.
-- The runtime's data and state directories. The templates leave `~/.local/share/opencode` and
-  `~/.local/state/opencode` writable, for sessions and OAuth tokens, and the overseer's OpenCode reads them too. Its
-  data directory holds, among others, the git directories of its snapshots, which OpenCode runs git in with its own
-  flags, not D107's. Whether anything there runs as code in the overseer is not yet traced; if it does, sandboxed runs
-  need data of their own too, with the credentials they need copied or passed in.
+- The runtime's data directory is a way out. The templates leave `~/.local/share/opencode` writable, for sessions and
+  OAuth tokens, and the overseer's OpenCode, and the operator's own, read it outside any sandbox. Traced in OpenCode's
+  source at 1.19.0, a run that writes there can make either run code on the host:
+  - `auth.json`: for each `wellknown` entry, OpenCode fetches `<url>/.well-known/opencode` and merges the config it
+    returns as global config, whose `plugin` packages it installs and imports (unless run with `--pure`) and whose
+    local `mcp` servers it starts. The URL is the entry's key, so a worker names its own.
+  - `opencode.db`: OpenCode merges the remote config of the active console account, `<url>/api/config`, the same way.
+  - `snapshot/<project>/<worktree hash>/`: OpenCode runs `git add` and `git gc` in that git directory with only its
+    own `-c` flags, and configures one only when it makes it, so a config planted first, with `core.fsmonitor` say,
+    runs. It reaches the overseer only when the workspace is inside a git repository, since OpenCode snapshots only
+    there, but reaches the operator's own sessions in any repository.
+
+  The state directory is not: `model.json` picks a default model among those configured, only when none is, and the
+  rest is bookkeeping. Closing it means data of the sandbox's own, as for caches, which leaves sandboxed runs without
+  the credentials `opencode auth login` and MCP OAuth keep there; how they get them is the operator's call.
 - Bazel's caches. §9 shares them across slots, and BAZEL.md through the operator's own `~/.bazelrc`, so its own
   builds share them too. A sandboxed run may not write them (Caches, above), so it builds cold, until a bazelrc that
   only sandboxed runs read points them under the cache directory.

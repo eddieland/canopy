@@ -428,8 +428,11 @@ in the worker's, through `@CACHE@` and the cache variables the wrapper sets; the
 operator's OpenCode cache or another role's, and that a role's cache persists; `canopy sandbox setup` says when a
 template it kept still writes the operator's caches. Whether OpenCode's data and state directories, which the
 templates also leave writable and the overseer also reads, are another way out is DESIGN §24's open question now.
-Next: whether OpenCode's data and state directories run code in the overseer; then the canary on the operator's Linux
-and macOS machines.
+Tracing it found that the data directory is: a `wellknown` entry in `auth.json`, the active account in `opencode.db`,
+and a planted snapshot git directory each make the overseer's OpenCode, or the operator's, run what a worker chose;
+the state directory is not (DESIGN §24, Open).
+Next: data of the sandbox's own, once the operator settles how sandboxed runs get their credentials; then the canary on
+the operator's Linux and macOS machines.
 
 ## M27. Session transcripts in the web UI
 
