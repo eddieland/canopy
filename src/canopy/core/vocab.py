@@ -1,4 +1,4 @@
-"""The journal's closed vocabularies: a run's status and kind, a ticket's phase, a plan's, and where a lease came from.
+"""The journal's closed vocabularies: run statuses and kinds, a ticket's phase, a plan's, a start's, a lease's pool.
 
 Each is a `StrEnum`, so a member is the string the journal stores and compares equal to it, and a misspelled one is a
 type error rather than a silent wrong decision. Code that branches on one matches it with `typing.assert_never` in the
@@ -124,6 +124,16 @@ class PlanSetting(StrEnum):
 
     PLAN = "plan"
     SKIP = "skip"
+
+
+class StartStatus(StrEnum):
+    """Whether the operator's start of a subject stands, `starts.status` (DESIGN §22).
+
+    A stop never deletes the record, so a stopped ticket stays private.
+    """
+
+    STARTED = "started"
+    STOPPED = "stopped"
 
 
 class PoolKind(StrEnum):

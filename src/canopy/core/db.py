@@ -14,10 +14,10 @@ from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, assert_never
 
 from canopy.core import agent_output, records
-from canopy.core.vocab import PlanStatus, PoolKind
+from canopy.core.vocab import PlanStatus, PoolKind, StartStatus
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -1489,35 +1489,42 @@ def latest_message_id(conn: sqlite3.Connection, *, source: str | None = None, su
     return int(row[0] or 0)
 
 
-def get_start(conn: sqlite3.Connection, subject_kind: str, subject_id: str) -> sqlite3.Row | None:
+def get_start(conn: sqlite3.Connection, subject_kind: str, subject_id: str) -> records.Start | None:
     """Return a subject's start record, or None if the operator never started it."""
-    row: sqlite3.Row | None = conn.execute(
-        "SELECT * FROM starts WHERE subject_kind = ? AND subject_id = ?", (subject_kind, subject_id)
-    ).fetchone()
-    return row
+    return records.fetch_one(
+        conn,
+        records.Start,
+        "SELECT * FROM starts WHERE subject_kind = ? AND subject_id = ?",
+        (subject_kind, subject_id),
+    )
 
 
-def starts(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+def starts(conn: sqlite3.Connection) -> list[records.Start]:
     """Return every start record, by subject."""
-    return conn.execute("SELECT * FROM starts ORDER BY subject_kind, subject_id").fetchall()
+    return records.fetch_all(conn, records.Start, "SELECT * FROM starts ORDER BY subject_kind, subject_id")
 
 
-def set_start(conn: sqlite3.Connection, subject_kind: str, subject_id: str, *, status: str, channel: str) -> None:
+def set_start(
+    conn: sqlite3.Connection, subject_kind: str, subject_id: str, *, status: StartStatus, channel: str
+) -> None:
     """Mark a subject started or stopped, creating its record on its first start. Call inside a transaction."""
     ts = now()
-    if status == "started":
-        conn.execute(
-            "INSERT INTO starts (subject_kind, subject_id, status, started_at, channel) "
-            "VALUES (?, ?, 'started', ?, ?) ON CONFLICT (subject_kind, subject_id) DO UPDATE SET status = 'started', "
-            "started_at = excluded.started_at, stopped_at = NULL, channel = excluded.channel",
-            (subject_kind, subject_id, ts, channel),
-        )
-    else:
-        conn.execute(
-            "UPDATE starts SET status = 'stopped', stopped_at = ?, channel = ? "
-            "WHERE subject_kind = ? AND subject_id = ?",
-            (ts, channel, subject_kind, subject_id),
-        )
+    match status:
+        case StartStatus.STARTED:
+            conn.execute(
+                "INSERT INTO starts (subject_kind, subject_id, status, started_at, channel) "
+                "VALUES (?, ?, 'started', ?, ?) ON CONFLICT (subject_kind, subject_id) DO UPDATE SET "
+                "status = 'started', started_at = excluded.started_at, stopped_at = NULL, channel = excluded.channel",
+                (subject_kind, subject_id, ts, channel),
+            )
+        case StartStatus.STOPPED:
+            conn.execute(
+                "UPDATE starts SET status = 'stopped', stopped_at = ?, channel = ? "
+                "WHERE subject_kind = ? AND subject_id = ?",
+                (ts, channel, subject_kind, subject_id),
+            )
+        case _:
+            assert_never(status)
 
 
 def running_run_of(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:

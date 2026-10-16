@@ -10,7 +10,7 @@ from typing import ClassVar
 import pytest
 
 from canopy.core import db, records
-from canopy.core.vocab import ChoreRunStatus, PoolKind, ReviewRunStatus
+from canopy.core.vocab import ChoreRunStatus, PoolKind, ReviewRunStatus, StartStatus
 from tests.canopy.helpers import in_tick
 from tests.conftest import Journals
 
@@ -189,3 +189,17 @@ def test_a_review_run_reads_its_status_and_pool_as_their_members(conn: sqlite3.C
     assert (run.id, run.status, run.pool) == (run_id, ReviewRunStatus.RUNNING, PoolKind.TREEHOUSE)
     assert isinstance(run.status, ReviewRunStatus)
     assert isinstance(run.pool, PoolKind)
+
+
+def test_a_start_reads_its_status_as_its_member(conn: sqlite3.Connection) -> None:
+    with db.transaction(conn):
+        db.set_start(conn, db.SUBJECT_TICKET, "PROJ-1", status=StartStatus.STARTED, channel="cli")
+    started = db.get_start(conn, db.SUBJECT_TICKET, "PROJ-1")
+    assert started is not None
+    assert (started.status, started.stopped_at, started.channel) == (StartStatus.STARTED, None, "cli")
+    with db.transaction(conn):
+        db.set_start(conn, db.SUBJECT_TICKET, "PROJ-1", status=StartStatus.STOPPED, channel="web")
+    [stopped] = db.starts(conn)
+    assert (stopped.status, stopped.started_at, stopped.channel) == (StartStatus.STOPPED, started.started_at, "web")
+    assert isinstance(stopped.status, StartStatus)
+    assert stopped.stopped_at is not None

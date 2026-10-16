@@ -20,7 +20,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db, notice
 from canopy.core.context import Context
-from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus
+from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, StartStatus
 from canopy.infra import resources
 from canopy.loop import pacing, repeat, tick
 from tests.canopy.helpers import FakeKeys, FakeTime, canopy, chore_toml, console, context, overseer_does
@@ -170,11 +170,11 @@ def operator_reply(conn: sqlite3.Connection, _tick_id: int) -> None:
 
 
 def ticket_started(conn: sqlite3.Connection, _tick_id: int) -> None:
-    db.set_start(conn, db.SUBJECT_TICKET, KEY, status="started", channel="web")
+    db.set_start(conn, db.SUBJECT_TICKET, KEY, status=StartStatus.STARTED, channel="web")
 
 
 def ticket_stopped(conn: sqlite3.Connection, _tick_id: int) -> None:
-    db.set_start(conn, db.SUBJECT_TICKET, KEY, status="stopped", channel="cli")
+    db.set_start(conn, db.SUBJECT_TICKET, KEY, status=StartStatus.STOPPED, channel="cli")
 
 
 def started_long_ago(conn: sqlite3.Connection, tick_id: int) -> None:

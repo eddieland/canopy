@@ -162,20 +162,20 @@ def _print_attention(items: Sequence[attention.Item]) -> None:
 
 def _print_started(ctx: Context) -> None:
     """A line per ticket the operator started (DESIGN §22): its state, its phase, and whether it waits on a reply."""
-    records = [r for r in db.starts(ctx.conn) if r["subject_kind"] == conversation.TICKET]
+    records = [r for r in db.starts(ctx.conn) if r.subject_kind == conversation.TICKET]
     if not records:
         return
     click.echo(f"\nStarted ({len(records)}):")
     for r in records:
-        key = str(r["subject_id"])
+        key = r.subject_id
         ticket = db.get_ticket(ctx.conn, key)
         phase = phase_of(ctx.conn, ticket) if ticket is not None else "not seen by a tick yet"
         done = ", done" if ticket is not None and ticket["done"] else ""
-        since = r["started_at"] if r["status"] == "started" else r["stopped_at"]
-        waiting = conversation.latest_question(ctx.conn, key) if r["status"] == "started" else None
+        waiting = conversation.latest_question(ctx.conn, key) if conversation.is_started(r) else None
         note = f"  awaiting your reply to message {waiting['id']}" if waiting is not None else ""
         title = ticket["title"] if ticket is not None else None
-        click.echo(f"  {named(key, title)}  {r['status']} {attention.age(str(since))} ago  phase {phase}{done}{note}")
+        since = attention.age(r.stopped_at or r.started_at)
+        click.echo(f"  {named(key, title)}  {r.status} {since} ago  phase {phase}{done}{note}")
 
 
 def _print_review_requests(ctx: Context) -> None:

@@ -16,7 +16,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import agent_output, config, conversation, db, pause
 from canopy.core.context import Context
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunStatus, StartStatus
 from canopy.infra import resources
 from canopy.loop import repeat, reread, web
 from canopy.reviews import grants
@@ -132,7 +132,7 @@ def test_the_web_channel_starts_stops_and_replies_through_the_cli_guards(ctx: Co
     assert started.json() == {"already": False, "running_run": None, "running_private": None}
     record = conversation.start_of(ctx.conn, KEY)
     assert record is not None
-    assert (record["status"], record["channel"]) == ("started", "web")
+    assert (record.status, record.channel) == (StartStatus.STARTED, "web")
     assert c.post(f"/api/tickets/{KEY}/start", headers=headers).json()["already"] is True
 
     too_long = {"body": "x" * (conversation.MAX_OPERATOR + 1), "submission": "form-0002"}
@@ -158,7 +158,7 @@ def test_the_web_channel_starts_stops_and_replies_through_the_cli_guards(ctx: Co
     assert stopped == {"already": False, "running_run": None, "ended": False}
     record = conversation.start_of(ctx.conn, KEY)
     assert record is not None
-    assert (record["status"], record["channel"]) == ("stopped", "web")
+    assert (record.status, record.channel) == (StartStatus.STOPPED, "web")
 
 
 def test_stop_now_from_the_web_ends_the_run_as_canopy_stop_now_does(ctx: Context) -> None:

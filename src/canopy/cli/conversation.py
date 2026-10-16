@@ -507,10 +507,9 @@ def _show_ticket(ctx: Context, key: str) -> None:
     if record is None:
         how = "public: its queue label authorizes it; its conversation is on the ticket, and copied here"
     else:
-        since = record["started_at"] if record["status"] == "started" else record["stopped_at"]
-        how = f"private, {record['status']} {attention.age(str(since))} ago"
+        how = f"private, {record.status} {attention.age(record.stopped_at or record.started_at)} ago"
         # The channel is the latest start's or stop's; `label` is a first dispatch under `tracker.private` (§22).
-        how += " by its first dispatch, on its queue label" if record["channel"] == conversation.LABEL else ""
+        how += " by its first dispatch, on its queue label" if record.channel == conversation.LABEL else ""
     click.echo(f"{key}: {how}")
     if ticket is not None and ticket["title"]:
         click.echo(f"  title {one_line(str(ticket['title']))}")
