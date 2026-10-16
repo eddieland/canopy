@@ -818,8 +818,9 @@ list, an empty state, or a skeleton by hand.
   line's tint too. Shiki tokenizes each hunk's new side and old side whole, with its TextMate grammar, in the browser
   (`src/lib/highlight.ts`, D121), 200 lines at a time from the grammar state the last left, the page running between
   them, so a long diff never holds a click; a line shows plain until its file's grammar has loaded, then the same
-  characters colored, and stays plain for a language canopy does not map, a line of 1000 characters or more, or a
-  grammar that fails. A diff over 2,000 lines folds (`DIFF_BUDGET`, `src/lib/review-folds.ts`), since one at the
+  characters colored, and stays plain for a language canopy does not map, a file of more than 2,000 lines (more than the
+  page draws of a diff at first, below, so mostly folded away; `highlightLanguage`), a line of 1000 characters or more,
+  or a grammar that fails. A diff over 2,000 lines folds (`DIFF_BUDGET`, `src/lib/review-folds.ts`), since one at the
   server's bounds drawn whole is 150,000 elements, seconds to show and seconds for every click after: the page draws the
   10 lines either side of each finding's line, then whole files in order while they fit, then the first lines of the
   rest, and says so in a muted line above the first file. Each run of lines it leaves out is a fold, a row on

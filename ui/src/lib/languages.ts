@@ -4,6 +4,9 @@
 
 import type { LanguageRegistration } from 'shiki/core'
 
+import type { DiffFile } from '@/api/types'
+import { DIFF_BUDGET, lineCount } from '@/lib/review-folds'
+
 /** A grammar's loader: a Shiki language module, imported on demand. */
 type Loader = () => Promise<{ default: LanguageRegistration[] }>
 
@@ -101,6 +104,15 @@ export function languageOf(path: string): Language | undefined {
     const dot = name.lastIndexOf('.')
     // A dotfile's name is not its extension: `.env` names no language.
     return dot > 0 ? BY_EXTENSION[name.slice(dot + 1).toLowerCase()] : undefined
+}
+
+/**
+ * The language to highlight `file` in: its language, unless its hunks hold more lines than the page draws of a diff at
+ * first (`DIFF_BUDGET`). A file that long is mostly folded away, and reading it costs the page seconds of work for
+ * lines no one may open, so it stays plain, as a line too long for the grammar does; its grammar never loads.
+ */
+export function highlightLanguage(file: DiffFile): Language | undefined {
+    return lineCount(file) > DIFF_BUDGET.page ? undefined : languageOf(file.path)
 }
 
 /** The loader of `language`'s grammar, which Shiki's `loadLanguage` takes as it is. */
