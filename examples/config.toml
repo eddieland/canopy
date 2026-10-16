@@ -55,6 +55,10 @@ worker_timeout_minutes = 45
 # Put it where your runtime reads skills (a $HOME skill must be a single SKILL.md), and any program it runs on the PATH
 # of the shell that runs canopy. If a worker cannot find it, the run fails rather than using the MCP.
 # pr_skill = "acme-open-pr"
+# Optional: a skill of yours that resume workers follow when they address review feedback, such as how to answer each
+# reviewer or bot (DESIGN §8). It shapes how they address feedback, never whose: that stays trust.trusted_reviewers. If
+# a worker cannot find it, the run fails rather than addressing the feedback without it.
+# review_skill = "acme-fix-pr"
 # Optional: run in each slot once the run's branch is checked out, before the worker, with CANOPY_REPO naming the
 # repository; a failure or timeout ends the run crashed (DESIGN §9). It runs the branch's code on this machine. No
 # shell runs it: write `sh -c '...'` for one. Splits and reviews run none.

@@ -197,6 +197,52 @@ def test_a_pr_skill_does_not_constrain_kinds_that_open_no_pr(canopy_env: CanopyE
     assert text == "Fix CI on PROJ-1 for `agent-ready-alice`\n"
 
 
+def with_review_skill(env: CanopyEnv, skill: str) -> None:
+    env.write_user(env.user_file.read_text().replace("[runtime]\n", f"[runtime]\nreview_skill = '{skill}'\n", 1))
+
+
+def test_review_skill_is_nothing_or_the_skill_within_the_prompt() -> None:
+    assert not prompts.review_skill("")
+    text = prompts.review_skill("fix-pr")
+    assert "load the skill `fix-pr` and follow it" in text
+    # The skill shapes how feedback is addressed, never whose (D089).
+    assert "the trusted reviewers and the operator's messages above still decide whose feedback you address" in text
+    # A missing skill fails the run rather than addressing feedback without it.
+    assert "report `failed` with a summary that starts `no review skill:`" in text
+
+
+@pytest.mark.parametrize("private", [False, True])
+def test_shipped_resume_prompts_name_the_review_skill_after_the_trusted_reviewers(
+    canopy_env: CanopyEnv, *, private: bool
+) -> None:
+    values = {**PROMPT_VALUES, "CONVERSATION": "None.", "REVIEW_SKILL": "<follow the skill>"}
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "resume", values, private=private)
+    assert "that it waits on the operator.\n\n<follow the skill>\n\n## Notice from the operator" in text
+
+
+def test_with_a_review_skill_a_resume_override_must_name_it(canopy_env: CanopyEnv) -> None:
+    # An override without the placeholder would address feedback without the skill the operator set: fail closed.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "worker-resume.md").write_text("Resume {{KEY}} for {{LABELS}}\n")
+    assert prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "resume", PROMPT_VALUES) == (
+        "Resume PROJ-1 for `agent-ready-alice`\n"
+    )
+    with_review_skill(canopy_env, "fix-pr")
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{REVIEW_SKILL\}\}"):
+        prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "resume", PROMPT_VALUES)
+
+
+@pytest.mark.parametrize("kind", ["implement", "fix-ci"])
+def test_a_review_skill_does_not_constrain_kinds_that_address_no_review(canopy_env: CanopyEnv, kind: str) -> None:
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}\n")
+    with_review_skill(canopy_env, "fix-pr")
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES)
+    assert text == "Work PROJ-1 for `agent-ready-alice`\n"
+
+
 def with_trailer(env: CanopyEnv, name: str, email: str) -> None:
     env.write_user(
         env.user_file.read_text() + f'\n[trust]\ncommit_trailer_name = "{name}"\ncommit_trailer_email = "{email}"\n'

@@ -718,6 +718,7 @@ def _spawn(
         "WORKER_COMMENT": prompts.worker_comment(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
         "MARK_COMMENTS": prompts.mark_comments(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
         "OPEN_PR": prompts.open_pr(cfg.runtime.pr_skill),
+        "REVIEW_SKILL": prompts.review_skill(cfg.runtime.review_skill),
     }
     # A joint run's worker learns its repositories only from these, so an override without them fails closed. A
     # splitter's own check of who asked for the split needs the request.
