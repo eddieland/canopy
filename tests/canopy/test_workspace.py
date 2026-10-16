@@ -3,7 +3,6 @@
 import contextlib
 import json
 import os
-import sqlite3
 from pathlib import Path
 from unittest import mock
 
@@ -15,14 +14,10 @@ from canopy.core.vocab import RunStatus
 from canopy.loop import attention
 from canopy.setup import workspace as setup_workspace
 from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools, th
-from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, wait_for_run, worker_does
+from tests.canopy.helpers import InlineRunner, commit_and_push, decisions, in_tick, wait_for_run, worker_does
 from tests.conftest import CanopyEnv, git
 
 LABEL = "agent-ready-tester"
-
-
-def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
-    return [(d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 def dispatch(key: str, *args: str) -> list[str]:
@@ -401,6 +396,21 @@ def test_sync_clones_missing_repositories_and_reports_a_different_origin(
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(("gone", str(tmp_path / "nowhere.git"))))
     assert main(["workspace", "sync"]) == 1
     assert "gone: failed: git clone exited 128" in capsys.readouterr().out
+
+
+def test_sync_turns_off_gits_automatic_maintenance_in_every_clone_but_not_in_a_dry_run(ws: Ws, tmp_path: Path) -> None:
+    extra = bare_origin(tmp_path / "origins" / "docs.git", tmp_path)
+    (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(("api", str(ws.origins["api"])), ("docs", str(extra))))
+    off = {"maintenance.auto=false", "gc.auto=0"}
+
+    def local_config(name: str) -> set[str]:
+        return set(git("config", "--local", "--list", cwd=ws.clone(name)).splitlines())
+
+    assert main(["workspace", "sync", "--dry-run"]) == 0
+    assert not off & local_config("api")
+    assert main(["workspace", "sync"]) == 0
+    assert off <= local_config("api")  # a clone from before
+    assert off <= local_config("docs")  # and one sync made
 
 
 def test_sync_refuses_a_path_that_is_not_a_clone_and_never_prints_a_credential(

@@ -64,6 +64,8 @@ MAX_TIME = 64
 # How much of a ticket's conversation a private worker's prompt carries: its latest messages, oldest first.
 PROMPT_MESSAGES = 20
 PROMPT_CHARS = 30_000
+# How many of a ticket's latest runs a public worker's prompt reports (`prompt_previous_runs`).
+PREVIOUS_RUNS = 3
 # How many of the operator's notes to a chore its prompt carries: the latest, oldest first (DESIGN §19).
 CHORE_NOTES = 10
 
@@ -855,6 +857,25 @@ def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
     return _bounded([_prompt_message(m) for m in rows], "No messages yet.")
 
 
+def prompt_previous_runs(conn: sqlite3.Connection, key: str) -> str:
+    """Return a public worker's `{{PREVIOUS_RUNS}}`: what the ticket's latest runs reported, oldest first.
+
+    Each run's kind, how it ended, its report, and a `blocked` run's question, as the run recorded them
+    (`run_messages`). Every run starts a fresh session, so this is how a worker learns what the runs before it
+    concluded (DESIGN §8). A private worker reads the same reports in its conversation. Runs from before the operator
+    forgot the ticket's work are left out. A summary and a question are each at most 2000 characters
+    (`worker.MAX_TEXT`), so the section is bounded.
+    """
+    blocks: list[str] = []
+    for run in db.ended_runs_of(conn, key, PREVIOUS_RUNS):
+        ended = f" at {run['ended_at']}" if run["ended_at"] else ""
+        lines = [f"Run {run['id']}, `{run['kind']}`, ended `{run['status']}`{ended}."]
+        for m in db.run_messages(conn, int(run["id"])):
+            lines += [f"Its {m['kind']}:", _quoted(str(m["body"]))]
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks) or "None: no earlier run of this ticket has ended."
+
+
 class ChoreNote(TypedDict):
     """One of the operator's notes to a chore, as its prompt carries it (DESIGN §19)."""
 
@@ -897,8 +918,12 @@ def _prompt_message(m: sqlite3.Row) -> str:
         what = f"{whose} tracker comment {m['comment_id']}, data"
     else:
         what = f"an earlier worker's {m['kind']}" + (f", run {m['run_id']}" if m["run_id"] else "")
-    body = "\n".join(f"> {line}" for line in printable(str(m["body"])).splitlines() or [""])
-    return f"Message {m['id']}, {what}, at {m['at']}:\n{body}"
+    return f"Message {m['id']}, {what}, at {m['at']}:\n{_quoted(str(m['body']))}"
+
+
+def _quoted(text: str) -> str:
+    # A message's body as a quote, one `> ` line per line, without control characters.
+    return "\n".join(f"> {line}" for line in printable(text).splitlines() or [""])
 
 
 # A run's messages

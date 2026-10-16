@@ -12,7 +12,6 @@ from unittest import mock
 
 import httpx2
 import pytest
-from fastapi.testclient import TestClient
 
 from canopy.cli.main import main
 from canopy.core import agent_output, config, conversation, db, pause
@@ -23,55 +22,12 @@ from canopy.loop import repeat, reread, web
 from canopy.reviews import grants
 from canopy.runs import policy
 from canopy.serve import live, secret, views
-from canopy.serve.app import create_app
-from canopy.serve.auth import Sessions
-from canopy.serve.options import ServeOptions
 from canopy.serve.schema import LoopUpdated
-from tests.canopy.test_loop import FakeTime, canopy, console, context, overseer_does
+from tests.canopy.helpers import FakeTime, canopy, console, context, overseer_does, running_run
+from tests.canopy.web_helpers import ORIGIN, refused, signed_in_client
 from tests.conftest import SHARED_TOML, CanopyEnv, user_toml
 
 KEY = "PROJ-1"
-SECRET = "w" * 43
-ORIGIN = "http://127.0.0.1:8765"
-
-
-@pytest.fixture
-def ctx(canopy_env: CanopyEnv) -> Context:
-    found = context(canopy_env)
-    db.migrate(found.conn, resources.migrations_dir())
-    return found
-
-
-def signed_in_client(ctx: Context, reload: reread.Reload | None = None) -> tuple[TestClient, dict[str, str]]:
-    """A browser signed in to a server over `ctx`'s journal, as the loop builds it, and the headers a write needs."""
-    options = ServeOptions(port=8765)
-    sessions = Sessions(SECRET, port=options.port, base_path="", hosts=options.hosts)
-    c = TestClient(create_app(options, web.backend(ctx, reload or reread.Reload()), sessions), base_url=ORIGIN)
-    token = c.post("/api/session", json={"secret": SECRET}).json()["token"]
-    return c, {"x-canopy-token": token, "origin": ORIGIN}
-
-
-def refused(response: httpx2.Response) -> str:
-    assert response.status_code == 409, response.text
-    detail = response.json()["detail"]
-    return f"{detail['guard']}: {detail['reason']}"
-
-
-def running_run(ctx: Context, key: str, *, private: bool = True) -> int:
-    tick_id = db.start_tick(ctx.conn, dry_run=False)
-    db.touch_ticket(ctx.conn, key, ctx.repo)
-    run_id = db.insert_run(
-        ctx.conn,
-        tick_id=tick_id,
-        key=key,
-        kind="implement",
-        branch=f"agent/{key}-work",
-        slots=[],
-        runs_dir=ctx.state_dir / "runs",
-        private=private,
-    )
-    db.finish_tick(ctx.conn, tick_id, "ok", "test")
-    return run_id
 
 
 def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journals(ctx: Context) -> None:

@@ -13,12 +13,19 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db, hostgit
 from canopy.infra.procs import SubprocessRunner
-from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, slot_of, worker_does
-from tests.canopy.test_reconcile import overseer_does, waits
+from tests.canopy.helpers import (
+    DEAD_PID,
+    InlineRunner,
+    in_tick,
+    overseer_does,
+    pool,
+    slot_of,
+    waits,
+    worker_does,
+)
 from tests.conftest import CanopyEnv, GitPool, git
 
 BRANCH = "agent/PROJ-1-work"
-DEAD_PID = 4_194_305
 # What a sandbox wrapper does before git runs: new objects to the run's directory, the slot's shared ones read through.
 SANDBOXED = (
     'export GIT_OBJECT_DIRECTORY="$CANOPY_GIT_OBJECTS" '
@@ -29,11 +36,6 @@ WORKER = (
     SANDBOXED + "git -c core.hooksPath=/dev/null commit --quiet --allow-empty -m 'PROJ-1: work' && "
     "git update-ref refs/worktree/mine HEAD && git fetch --quiet --refmap= origin main"
 )
-
-
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return journal(canopy_env)
 
 
 def dispatch(conn: sqlite3.Connection, runner: InlineRunner) -> int:
