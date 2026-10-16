@@ -112,6 +112,7 @@ canopy (harness, Python)
   __main__.py      python -m canopy, how dispatch starts _run from the same installation
 
   cli/             the command line; only cli imports click, and only __main__ imports cli
+    launcher.py    the console script and python -m canopy: `--version` alone without importing the CLI (§6)
     main.py        main(), exit codes, the root group, which imports a command's module only when it runs
     common.py      opening the Context, refusals, the tick named by CANOPY_TICK_ID
     params.py      validated parameter types: ticket keys, reasons, slugs, cursors, bounded text

@@ -11,6 +11,7 @@ import click
 import pytest
 
 from canopy import cli as cli_package
+from canopy.cli import launcher
 from canopy.cli import main as cli_main
 from canopy.cli.main import main
 from canopy.infra import procs, resources
@@ -20,6 +21,36 @@ from tests.conftest import CanopyEnv
 def test_version(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["--version"]) == 0
     assert capsys.readouterr().out.strip() == f"canopy {version('canopy')}"
+
+
+def test_the_console_script_answers_version_without_loading_the_cli() -> None:
+    # Every tick runs `canopy --version` (DESIGN §6); click, the config, and pydantic are most of a start-up.
+    code = (
+        "import sys; sys.argv = ['canopy', '--version']; from canopy.cli import launcher; "
+        "code = launcher.main(); print(code, *sys.modules, sep='\\n')"
+    )
+    result = procs.SubprocessRunner().run([sys.executable, "-c", code])
+    assert result.ok, result.stderr
+    said, code, *imported = result.stdout.splitlines()
+    assert (said, code) == (f"canopy {version('canopy')}", "0")
+    assert {"click", "pydantic", "canopy.cli.main", "canopy.core.config"}.isdisjoint(imported)
+
+
+def test_python_m_canopy_answers_version_as_the_console_script_does() -> None:
+    result = procs.SubprocessRunner().run([sys.executable, "-m", "canopy", "--version"])
+    assert result.ok, result.stderr
+    assert result.stdout == f"canopy {version('canopy')}\n"
+
+
+@pytest.mark.parametrize("argv", [["--help"], ["--version", "--help"], ["--help", "--version"]])
+def test_the_console_script_hands_anything_but_version_alone_to_the_cli(
+    capsys: pytest.CaptureFixture[str], argv: list[str]
+) -> None:
+    with mock.patch.object(sys, "argv", ["canopy", *argv]):
+        assert launcher.main() == 0
+    out = capsys.readouterr().out
+    # click handles the flag it reads first.
+    assert out.startswith("Usage: canopy") if argv[0] == "--help" else out == f"canopy {version('canopy')}\n"
 
 
 @pytest.mark.parametrize("argv", [["--help"], ["-h"], []])
