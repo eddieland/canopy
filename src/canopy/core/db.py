@@ -1145,25 +1145,28 @@ def set_review_slot(
     )
 
 
-def get_review_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
+def get_review_run(conn: sqlite3.Connection, run_id: int) -> records.ReviewRun | None:
     """Return the review run with `run_id`, or None."""
-    row: sqlite3.Row | None = conn.execute("SELECT * FROM review_runs WHERE id = ?", (run_id,)).fetchone()
-    return row
+    return records.fetch_one(conn, records.ReviewRun, "SELECT * FROM review_runs WHERE id = ?", (run_id,))
 
 
-def review_runs_of(conn: sqlite3.Connection, pr_url: str) -> list[sqlite3.Row]:
+def review_runs_of(conn: sqlite3.Connection, pr_url: str) -> list[records.ReviewRun]:
     """Return a PR's review runs, newest first."""
-    return conn.execute("SELECT * FROM review_runs WHERE pr_url = ? ORDER BY id DESC", (pr_url,)).fetchall()
+    return records.fetch_all(
+        conn, records.ReviewRun, "SELECT * FROM review_runs WHERE pr_url = ? ORDER BY id DESC", (pr_url,)
+    )
 
 
-def recent_review_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
+def recent_review_runs(conn: sqlite3.Connection, limit: int) -> list[records.ReviewRun]:
     """Return the latest `limit` review runs, newest first."""
-    return conn.execute("SELECT * FROM review_runs ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+    return records.fetch_all(conn, records.ReviewRun, "SELECT * FROM review_runs ORDER BY id DESC LIMIT ?", (limit,))
 
 
-def review_runs_since(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
+def review_runs_since(conn: sqlite3.Connection, since: str) -> list[records.ReviewRun]:
     """Return the review runs started at or after `since`, newest first."""
-    return conn.execute("SELECT * FROM review_runs WHERE started_at >= ? ORDER BY id DESC", (since,)).fetchall()
+    return records.fetch_all(
+        conn, records.ReviewRun, "SELECT * FROM review_runs WHERE started_at >= ? ORDER BY id DESC", (since,)
+    )
 
 
 def is_unit_pr(conn: sqlite3.Connection, key: str, pr_url: str, *, repo: str | None = None) -> bool:
@@ -1175,14 +1178,14 @@ def is_unit_pr(conn: sqlite3.Connection, key: str, pr_url: str, *, repo: str | N
     return conn.execute(query, params).fetchone() is not None
 
 
-def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict[str, list[sqlite3.Row]]:
+def review_runs_of_prs(conn: sqlite3.Connection, pr_urls: Sequence[str]) -> dict[str, list[records.ReviewRun]]:
     """Return the review runs of each of `pr_urls` that has any, by URL, each list newest first."""
-    found: dict[str, list[sqlite3.Row]] = {}
+    found: dict[str, list[records.ReviewRun]] = {}
     marks = ", ".join("?" * len(pr_urls))
     query = f"SELECT * FROM review_runs WHERE pr_url IN ({marks}) ORDER BY id DESC"  # noqa: S608  (only `?`s)
     # SQLite takes an empty list, `IN ()`, as matching nothing.
-    for row in conn.execute(query, tuple(pr_urls)):
-        found.setdefault(str(row["pr_url"]), []).append(row)
+    for run in records.fetch_all(conn, records.ReviewRun, query, tuple(pr_urls)):
+        found.setdefault(run.pr_url, []).append(run)
     return found
 
 

@@ -22,7 +22,7 @@ from enum import StrEnum
 from typing import Any, ClassVar
 
 # Imported for real, not under TYPE_CHECKING: `typing.get_type_hints` resolves a row type's fields when it is read.
-from canopy.core.vocab import ChoreRunStatus  # noqa: TC001
+from canopy.core.vocab import ChoreRunStatus, PoolKind, ReviewRunStatus  # noqa: TC001
 
 # What a column's value is converted with, by its field's type.
 _Convert = Callable[[object], object]
@@ -87,6 +87,45 @@ class ChoreRun(Row):
     tokens_first_call: int | None
     tokens_first_cache_write: int | None
     definitions_digest: str | None
+
+
+@dataclass(frozen=True)
+class ReviewRun(Row):
+    """A run of a reviewer on one PR at one commit (DESIGN §21): the slot it leased, and how it ended."""
+
+    TABLE: ClassVar[str] = "review_runs"
+
+    id: int
+    tick_id: int
+    pr_url: str
+    sha: str
+    ticket_key: str | None
+    # The repository whose pool the slot came from; None in a workspace of one.
+    repo: str | None
+    slot_path: str | None
+    lease_id: str | None
+    lease_holder: str | None
+    pid: int | None
+    agent_pid: int | None
+    started_at: str
+    ended_at: str | None
+    status: ReviewRunStatus
+    result_json: str | None
+    log_path: str
+    session_id: str | None
+    cost_usd: float | None
+    tokens_input: int | None
+    tokens_output: int | None
+    tokens_reasoning: int | None
+    tokens_cache_read: int | None
+    tokens_cache_write: int | None
+    base_branch: str | None
+    purpose: str
+    tokens_peak_context: int | None
+    tokens_first_call: int | None
+    tokens_first_cache_write: int | None
+    definitions_digest: str | None
+    pool: PoolKind
 
 
 @dataclass(frozen=True)

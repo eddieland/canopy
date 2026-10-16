@@ -76,7 +76,7 @@ def test_a_diff_that_is_a_link_is_not_followed(backend: Backend, tmp_path: Path)
     with backend.open() as ctx:
         row = db.get_review_run(ctx.conn, 2)
     assert row is not None
-    path = review_diff.path_for(str(row["log_path"]))
+    path = review_diff.path_for(row.log_path)
     elsewhere = tmp_path / "elsewhere.diff"
     elsewhere.write_text(mock_reviews.DIFF_88)
     path.unlink()

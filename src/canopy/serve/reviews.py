@@ -27,8 +27,7 @@ from canopy.serve.schema import (
 from canopy.serve.views import lines
 
 if TYPE_CHECKING:
-    import sqlite3
-
+    from canopy.core import records
     from canopy.core.context import Context
 
 # How many review runs the reviews list carries, newest first.
@@ -56,64 +55,59 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
     row = db.get_review_run(ctx.conn, run_id)
     if row is None:
         return None
-    stored = result.stored(row["result_json"])
+    stored = result.stored(row.result_json)
     dismissed = db.review_dismissals(ctx.conn, run_id)
-    note = contract.stored_object(row["result_json"]).get("harness")
-    found = review_diff.read(review_diff.path_for(str(row["log_path"])))
+    note = contract.stored_object(row.result_json).get("harness")
+    found = review_diff.read(review_diff.path_for(row.log_path))
     diff = _diff(found) if found is not None else None
     return ReviewDetail(
         review=summary(row),
         summary=lines(stored.summary) or None if stored is not None else None,
         note=lines(note) or None if isinstance(note, str) else None,
-        base_branch=str(row["base_branch"]) if row["base_branch"] else None,
+        base_branch=row.base_branch or None,
         findings=[_finding(f, found, i in dismissed) for i, f in enumerate(stored.findings, 1)]
         if stored is not None
         else [],
         diff=diff,
-        runs=[summary(r) for r in db.review_runs_of(ctx.conn, str(row["pr_url"]))],
-        sendable=row["status"] == "done" and conversation.own_pr(ctx.conn, row),
+        runs=[summary(r) for r in db.review_runs_of(ctx.conn, row.pr_url)],
+        sendable=row.status is ReviewRunStatus.DONE and conversation.own_pr(ctx.conn, row),
     )
 
 
-def summary(row: sqlite3.Row) -> ReviewSummary:
+def summary(row: records.ReviewRun) -> ReviewSummary:
     """One review run's row, as the reviews list shows it.
 
     Returns:
         The run's summary. Its verdict and impact are None, and its findings 0, when it has no valid result.
     """
-    stored = result.stored(row["result_json"])
-    status = str(row["status"])
+    stored = result.stored(row.result_json)
     worst = _worst(stored.findings) if stored is not None else None
     return ReviewSummary(
-        id=int(row["id"]),
-        pr_url=str(row["pr_url"]),
-        sha=str(row["sha"]),
-        ticket_key=str(row["ticket_key"]) if row["ticket_key"] else None,
-        repo=str(row["repo"]) if row["repo"] else None,
-        status=status,
-        state=_review_state(status),
+        id=row.id,
+        pr_url=row.pr_url,
+        sha=row.sha,
+        ticket_key=row.ticket_key or None,
+        repo=row.repo or None,
+        status=row.status,
+        state=_review_state(row.status),
         verdict=stored.verdict if stored is not None else None,
         impact=stored.impact if stored is not None else None,
         findings=len(stored.findings) if stored is not None else 0,
         worst=worst,
         worst_count=sum(f.severity == worst for f in stored.findings) if stored is not None else 0,
-        started_at=db.parse_time(str(row["started_at"])),
-        ended_at=db.parse_time(str(row["ended_at"])) if row["ended_at"] else None,
-        cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
+        started_at=db.parse_time(row.started_at),
+        ended_at=db.parse_time(row.ended_at) if row.ended_at else None,
+        cost_usd=row.cost_usd,
     )
 
 
-def _review_state(status: str) -> RunState:
+def _review_state(status: ReviewRunStatus) -> RunState:
     """What the web UI colors a review run that has `status` as.
 
     Returns:
-        The run's state: every ending but `done` is failed, as is a status canopy does not know.
+        The run's state: every ending but `done` is failed.
     """
-    try:
-        known = ReviewRunStatus(status)
-    except ValueError:
-        return "failed"
-    match known:
+    match status:
         case ReviewRunStatus.RUNNING:
             return "running"
         case ReviewRunStatus.DONE:
@@ -121,7 +115,7 @@ def _review_state(status: str) -> RunState:
         case ReviewRunStatus.FAILED | ReviewRunStatus.UNKNOWN | ReviewRunStatus.TIMEOUT | ReviewRunStatus.CRASHED:
             return "failed"
         case _:
-            assert_never(known)
+            assert_never(status)
 
 
 def _worst(findings: Iterable[result.Finding]) -> FindingSeverity | None:

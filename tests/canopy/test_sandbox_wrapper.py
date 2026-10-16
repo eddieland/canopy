@@ -612,7 +612,7 @@ def test_canopys_sandboxed_reviewer_reads_the_checkout_through_the_wrapper(
 
     row = db.get_review_run(conn, run_id)
     assert row is not None
-    assert row["status"] == "done", Path(row["log_path"]).read_text()
+    assert row.status == "done", Path(row.log_path).read_text()
     call = sandbox.only_call()
     assert call["cwd"] == str(canopy_env.state_dir / "reviews" / str(run_id))
     filesystem = call["settings"]["filesystem"]

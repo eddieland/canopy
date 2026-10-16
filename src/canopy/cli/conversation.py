@@ -240,7 +240,7 @@ def _stop_review(click_ctx: click.Context, subject: Ref) -> int:
     logs.for_tick(None).info("review request stopped", extra={"pr": subject.id, "channel": CLI})
     click.echo(f"{subject}'s review request is stopped; nothing reviews it now.")
     if stopped.running is not None:
-        click.echo(f"Review run {stopped.running['id']} of it is still running and will finish.")
+        click.echo(f"Review run {stopped.running.id} of it is still running and will finish.")
     return 0
 
 
@@ -489,14 +489,14 @@ def _show_pr(ctx: Context, url: str) -> None:
             click.echo(f"  review request: {made}, ended {attention.age(request.ended_at)} ago ({request.end_reason})")
     click.echo(f"\nReviews ({len(runs)}):")
     for r in runs:
-        when = f"started {attention.age(str(r['started_at']))} ago"
-        if r["ended_at"]:
-            when = f"ended {attention.age(str(r['ended_at']))} ago"
-        click.echo(f"  review:{r['id']}  {str(r['sha'])[:12]}  {r['status']}  {when}")
+        when = f"started {attention.age(r.started_at)} ago"
+        if r.ended_at:
+            when = f"ended {attention.age(r.ended_at)} ago"
+        click.echo(f"  review:{r.id}  {r.sha[:12]}  {r.status}  {when}")
     if not runs:
         click.echo("  none yet")
     else:
-        click.echo(f"\nRead one with `canopy review show {runs[0]['id']}`.")
+        click.echo(f"\nRead one with `canopy review show {runs[0].id}`.")
 
 
 def _show_ticket(ctx: Context, key: str) -> None:
