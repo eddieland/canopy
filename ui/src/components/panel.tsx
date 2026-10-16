@@ -150,9 +150,18 @@ export function Panel({ className, ...props }: ComponentProps<'section'>) {
 /**
  * A panel's title row: a label on the left, anything on the right. Half a step toward `surface-raised`, with its label
  * in `foreground`, so it reads as the head of the rows under it; half, so a ghost button's hover in it still shows.
- * In a panel too narrow for both on one line, what is on the right wraps under the label.
+ * In a panel too narrow for both on one line, what is on the right wraps under the label. A `sticky` header stays at
+ * the top of the page while its panel scrolls under it, as an editor's toolbar does.
  */
-export function PanelHeader({ label, children }: { label: string; children?: ReactNode }) {
+export function PanelHeader({
+    label,
+    sticky = false,
+    children,
+}: {
+    label: string
+    sticky?: boolean
+    children?: ReactNode
+}) {
     return (
         <div
             className={cn(
@@ -160,6 +169,8 @@ export function PanelHeader({ label, children }: { label: string; children?: Rea
                 'bg-surface-raised/50',
                 // Inside the panel's border, so a radius a pixel smaller than the panel's.
                 'first:rounded-t-[calc(var(--radius-md)-1px)]',
+                // Over the panel's own rows, so opaque: the same half step, laid over the panel's surface.
+                sticky && 'sticky top-0 z-10 bg-surface bg-linear-to-b from-surface-raised/50 to-surface-raised/50',
             )}
         >
             <span className="panel-label font-medium whitespace-nowrap text-foreground">{label}</span>

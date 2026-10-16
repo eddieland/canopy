@@ -45,6 +45,9 @@ import { ariaKeys, keysLabel } from '@/lib/shortcut'
 const APPLE = isApple(navigator.userAgent)
 // The selection's bubble, by its key, so opening a comment can hide it.
 const BUBBLE = new PluginKey('planBubble')
+// How far below the top of the page the editor keeps what it scrolls into view, in pixels: the sticky toolbar's height
+// (`min-h-9`) and a little air. A passage's highlight keeps the same as its scroll margin (`.plan-comment`).
+const TOOLBAR_CLEARANCE = 48
 // The shortcut that comments on the selection (`PlanHighlights`).
 const COMMENT_KEYS = 'Mod-Alt-m'
 
@@ -90,6 +93,10 @@ export function PlanEditor({
         // What a render shows is selected below (`useEditorState`), so a keystroke re-renders only what it changes.
         shouldRerenderOnTransaction: false,
         editorProps: {
+            // What the editor scrolls into view (the cursor as it types, a passage shown from its comment) stays clear
+            // of the toolbar, which sticks over the top of the page.
+            scrollMargin: { top: TOOLBAR_CLEARANCE, bottom: 16, left: 0, right: 0 },
+            scrollThreshold: { top: TOOLBAR_CLEARANCE, bottom: 16, left: 0, right: 0 },
             attributes: {
                 class: 'plan-doc',
                 'aria-label': 'Plan',
@@ -194,7 +201,10 @@ export function PlanEditor({
         editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id }))
         const range = highlightsKey.getState(editor.state)?.ranges.get(id)
         if (fromCard && range !== undefined) {
-            editor.chain().setTextSelection(range.from).scrollIntoView().run()
+            editor.commands.setTextSelection(range.from)
+            // By its highlight: ProseMirror scrolls to its selection only while the page's selection is in the editor,
+            // and the card's button holds it now. Its scroll margin keeps it clear of the toolbar (`src/index.css`).
+            editor.view.dom.querySelector(`[data-thread="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest' })
         } else if (!fromCard) {
             // The thread's card, not its highlight in the plan, which carries the same attribute.
             document.querySelector(`article[data-thread="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest' })
@@ -205,7 +215,7 @@ export function PlanEditor({
     return (
         <div className="grid min-w-0 items-start gap-6 2xl:grid-cols-[minmax(0,1fr)_24rem]">
             <Panel>
-                <PanelHeader label="Plan">
+                <PanelHeader label="Plan" sticky>
                     {editable && <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />}
                 </PanelHeader>
                 <EditorContent editor={editor} className="px-6 py-4" />

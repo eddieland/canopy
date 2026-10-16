@@ -142,6 +142,51 @@ test('each toolbar control names a shortcut on hover, and that shortcut does wha
     }
 })
 
+test('the toolbar stays at the top of the page while the plan scrolls under it', async ({ page }) => {
+    const toolbar = page.getByRole('toolbar', { name: 'Format' })
+    await select(page, 'template cache')
+    await plan(page).locator('blockquote').scrollIntoViewIfNeeded()
+    await page.locator('.page-scroll').evaluate((scroller) => scroller.scrollBy(0, 400))
+    const top = await page.locator('.page-scroll').evaluate((scroller) => scroller.getBoundingClientRect().top)
+    await expect.poll(async () => (await toolbar.boundingBox())?.y).toBeGreaterThanOrEqual(top)
+    await expect(toolbar).toBeInViewport()
+    await toolbar.getByRole('button', { name: 'Bold' }).click()
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    await expect(page.getByLabel('Plan Markdown')).toContainText('a **template cache**')
+})
+
+test('a comment shows its passage in the plan, clear of the toolbar', async ({ page }) => {
+    const card = comments(page).filter({ hasText: 'proxy in front' })
+    await card.scrollIntoViewIfNeeded()
+    const passage = plan(page).locator('[data-thread=sample-1]')
+    await expect(passage).not.toBeInViewport()
+    await card.getByRole('button', { name: "streams the report's rows" }).click()
+    await expect(passage).toBeInViewport()
+    const toolbar = await page.getByRole('toolbar', { name: 'Format' }).boundingBox()
+    expect((await passage.boundingBox())?.y).toBeGreaterThanOrEqual((toolbar?.y ?? 0) + (toolbar?.height ?? 0))
+})
+
+// The narrowest window the UI is laid out for (e2e/narrow.spec.ts): the toolbar's header must still fit on one line
+// there, within the 48px the editor keeps clear under it (TOOLBAR_CLEARANCE in src/components/plan-editor.tsx).
+test.describe('on half a monitor', () => {
+    test.use({ viewport: { width: 820, height: 900 } })
+
+    test('the stuck toolbar fits in the space the editor keeps clear, and covers no passage it shows', async ({
+        page,
+    }) => {
+        const header = page.getByRole('toolbar', { name: 'Format' }).locator('xpath=..')
+        const card = comments(page).filter({ hasText: 'proxy in front' })
+        await card.scrollIntoViewIfNeeded()
+        const stuck = await header.boundingBox()
+        expect(stuck?.height).toBeLessThan(48)
+        const passage = plan(page).locator('[data-thread=sample-1]')
+        await card.getByRole('button', { name: "streams the report's rows" }).click()
+        await expect(passage).toBeInViewport()
+        const box = await header.boundingBox()
+        expect((await passage.boundingBox())?.y).toBeGreaterThanOrEqual((box?.y ?? 0) + (box?.height ?? 0))
+    })
+})
+
 test('resolving a thread folds it away and takes its highlight off the plan', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'name the ticket' })
     await thread.getByRole('button', { name: 'Resolve' }).click()

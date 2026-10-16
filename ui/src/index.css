@@ -761,7 +761,8 @@
         }
         /* A commented passage, on the accent's tint; the one open, or being commented on, deeper and underlined. */
         & .plan-comment {
-            @apply cursor-pointer rounded-xs bg-accent/14;
+            /* Clear of the sticky toolbar when a comment shows its passage: TOOLBAR_CLEARANCE in plan-editor.tsx. */
+            @apply cursor-pointer scroll-mt-12 rounded-xs bg-accent/14;
         }
         & .plan-comment-active {
             @apply bg-accent/28 underline decoration-accent decoration-2 underline-offset-4;

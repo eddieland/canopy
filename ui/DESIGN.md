@@ -177,7 +177,9 @@ Rules:
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`,
   on `surface-raised` at half strength with its label in `foreground` at weight 500, so it stands apart from the rows
   under it; half, so a ghost button's hover in it still shows. In a panel too narrow for one line, what is on its
-  right wraps under the label. The page header's trail starts in its section's color; a panel's label never takes
+  right wraps under the label. A `sticky` header, an editor's toolbar, stays at the top of the page while its panel
+  scrolls under it, the same half step laid over `surface` so that the rows under it do not show through. The page
+  header's trail starts in its section's color; a panel's label never takes
   one. A page's main list is named for its page's noun (Reviews on
   Reviews, Attention on Attention), and a chore's notes are Notes. A panel is named for its noun, never for how it is
   cut, and counts what it lists: a list of runs is Runs on every page, the runs page's, a ticket's, a chore's, and a
@@ -649,19 +651,21 @@ list, an empty state, or a skeleton by hand.
   groups split by hairlines: undo and redo, the paragraph's style (a choice of one), the marks and the blocks (each on
   or off, raised while on at the cursor), then `Comment`, enabled while text is selected. Each control's tooltip names
   it and the shortcut the editor binds to it, on this keyboard (`Bold (⌘B)`, `Bold (Ctrl+B)` elsewhere), and declares
-  the same keys as `aria-keyshortcuts`. A selection also shows a `Comment` bubble over it. A commented passage sits on
-  the accent's tint at 14%; the open one, or the one being commented on, at 28% and underlined in the accent; clicking a
-  passage opens its thread, and the cursor leaving it, or Escape, closes it. A thread is its passage quoted (two lines,
-  a hairline in the accent at its left, the whole on hover; a button that shows it in the plan), the comment and its
-  replies as text with their ages, and ghost `xs` actions, `Reply`, `Resolve` (`Reopen`), and `Delete`; the open thread
-  sits on the accent's tint, as a selected row does. A thread whose passage is gone carries a `passage gone` chip and
-  stays in the list, last. Resolved threads fold under a `Disclosure` (`Show 2 resolved`). A comment or reply form sends
-  on the key Settings names, as a reply does, and Escape drops it. A form takes the cursor when it opens, after any
-  words it holds. `Comment` again, on new words, moves an empty comment to them; one half written stays on its passage,
-  and the cursor goes back to it, so its words are never lost or carried to other words. The comments end in
-  `Ask for changes`: a note on the whole plan and the button, with how many open comments go with it, or how far over a
-  reply's bound the request is. Until plans reach a ticket's page (M44), the editor is on `/plan-editor`, over a sample
-  plan on mock data only, with what the planner would read and the plan's Markdown under it.
+  the same keys as `aria-keyshortcuts`. The plan's header, with the toolbar, is `sticky`, and what the editor scrolls
+  into view (the cursor as it types, a passage a comment shows) stops 48px below it. A selection also shows a `Comment`
+  bubble over it. A commented passage sits on the accent's tint at 14%; the open one, or the one being commented on, at
+  28% and underlined in the accent; clicking a passage opens its thread, and the cursor leaving it, or Escape, closes
+  it. A thread is its passage quoted (two lines, a hairline in the accent at its left, the whole on hover; a button that
+  shows it in the plan), the comment and its replies as text with their ages, and ghost `xs` actions, `Reply`, `Resolve`
+  (`Reopen`), and `Delete`; the open thread sits on the accent's tint, as a selected row does. A thread whose passage is
+  gone carries a `passage gone` chip and stays in the list, last. Resolved threads fold under a `Disclosure`
+  (`Show 2 resolved`). A comment or reply form sends on the key Settings names, as a reply does, and Escape drops it. A
+  form takes the cursor when it opens, after any words it holds. `Comment` again, on new words, moves an empty comment
+  to them; one half written stays on its passage, and the cursor goes back to it, so its words are never lost or carried
+  to other words. The comments end in `Ask for changes`: a note on the whole plan and the button, with how many open
+  comments go with it, or how far over a reply's bound the request is. Until plans reach a ticket's page (M44), the
+  editor is on `/plan-editor`, over a sample plan on mock data only, with what the planner would read and the plan's
+  Markdown under it.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then how often it may start and its window (`cadenceText`: `every 360 minutes`, as
   the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed
