@@ -54,6 +54,20 @@ export function addReply(threads: PlanThread[], id: string, reply: PlanReply): P
     return threads.map((thread) => (thread.id === id ? { ...thread, replies: [...thread.replies, reply] } : thread))
 }
 
+/** `threads` with thread `id`'s comment saying `body` instead. */
+export function editThread(threads: PlanThread[], id: string, body: string): PlanThread[] {
+    return threads.map((thread) => (thread.id === id ? { ...thread, body } : thread))
+}
+
+/** `threads` with reply `replyId` of thread `id` saying `body` instead. */
+export function editReply(threads: PlanThread[], id: string, replyId: string, body: string): PlanThread[] {
+    return threads.map((thread) =>
+        thread.id === id
+            ? { ...thread, replies: thread.replies.map((reply) => (reply.id === replyId ? { ...reply, body } : reply)) }
+            : thread,
+    )
+}
+
 /** `threads` with thread `id` resolved, or reopened. */
 export function setResolved(threads: PlanThread[], id: string, resolved: boolean): PlanThread[] {
     return threads.map((thread) => (thread.id === id ? { ...thread, resolved } : thread))
