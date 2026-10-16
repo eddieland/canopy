@@ -584,8 +584,8 @@ def said(row: sqlite3.Row | records.Row) -> str | None:
     Returns:
         At most `SUMMARY_LENGTH` characters, or None when the result says nothing.
     """
-    result = contract.stored_object(records.columns(row)["result_json"])
-    return lines(str(result.get("harness") or result.get("summary") or ""))[:SUMMARY_LENGTH].rstrip() or None
+    note = contract.stored_note(contract.stored_object(records.columns(row)["result_json"]))
+    return lines(note)[:SUMMARY_LENGTH].rstrip() or None
 
 
 def lines(text: str) -> str:

@@ -17,13 +17,12 @@ After every tick, `publish` rewrites `<state_dir>/attention.md` and hands the li
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 
-from canopy.core import chore_view, conversation, db
+from canopy.core import chore_view, contract, conversation, db
 from canopy.core.items import Item, age, fingerprint, one_line, subject
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs
@@ -278,16 +277,7 @@ def from_runs(conn: sqlite3.Connection) -> list[RunItem]:
 
 
 def _detail(run: sqlite3.Row) -> str:
-    note = ""
-    if run["result_json"]:
-        try:
-            result: object = json.loads(str(run["result_json"]))
-        except json.JSONDecodeError:
-            result = None
-        if isinstance(result, dict):
-            harness: object = result.get("harness")
-            summary: object = result.get("summary")
-            note = str(harness or summary or "")
+    note = contract.stored_note(contract.stored_object(run["result_json"]))
     # A split works on no branch. The run is named as `canopy show` reads it, and as the web UI names it.
     what = f"{run['kind']}, {run['branch']}" if run["branch"] else str(run["kind"])
     text = f"run:{run['id']} ({what}) ended {run['status']}"
