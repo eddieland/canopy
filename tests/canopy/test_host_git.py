@@ -10,45 +10,15 @@ from pathlib import Path
 
 import pytest
 
-from canopy.cli.main import main
-from canopy.core import db, hostgit
+from canopy.core import hostgit
 from canopy.infra.procs import SubprocessRunner
-from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, slot_of, worker_does
+from tests.canopy.helpers import WORK, dispatch_and_run, pool, slot_of, worker_does
 from tests.conftest import CanopyEnv, GitPool, git
 
 PACKAGE = Path(__file__).resolve().parents[2] / "src" / "canopy"
 # The worker's own git is not under test: it runs with the flags too, so only host-side git could fire a hook.
 WORKER_COMMIT = hostgit.argv("commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work")
 HOOKS = ("post-checkout", "reference-transaction", "pre-push", "post-index-change")
-
-
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return journal(canopy_env)
-
-
-def dispatch_and_run(conn: sqlite3.Connection) -> sqlite3.Row:
-    runner = InlineRunner()
-    with in_tick(conn) as tick_id:
-        args = [
-            "dispatch",
-            "PROJ-1",
-            "--repo",
-            "repo",
-            "--label",
-            "agent-ready-tester",
-            "--kind",
-            "implement",
-            "--slug",
-            "work",
-        ]
-        assert main(args, runner=runner) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
-        run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
-        assert main(["_run", str(run_id)], runner=runner) == 0
-        row = db.get_run(conn, run_id)
-        assert row is not None
-        return row
 
 
 def plant(primary: Path, fired: Path) -> None:
@@ -86,7 +56,7 @@ def test_host_git_runs_no_hook_or_monitor_from_the_shared_git_directory(
     plant(primary, fired)
     # Left unpushed, so `_run` fetches, checks out, reads refs, and pushes: every git step it has.
     with worker_does(WORKER_COMMIT):
-        run = dispatch_and_run(conn)
+        run = dispatch_and_run(conn, *WORK)
     assert run["status"] == "done"
     slot = Path(slot_of(conn, run["id"])["slot_path"])
     assert git_pool.remote_head("agent/PROJ-1-work") == git("rev-parse", "HEAD", cwd=slot)
@@ -113,7 +83,7 @@ def test_a_worker_that_rewrites_the_git_link_crashes_the_run_and_the_link_is_put
     _, slots = worktree_pool
     links = {slot: (slot / ".git").read_bytes() for slot in slots}
     with worker_does(WORKER_COMMIT, ["sh", "-c", rewrite]):
-        run = dispatch_and_run(conn)
+        run = dispatch_and_run(conn, *WORK)
 
     assert run["status"] == "crashed"
     slot = Path(slot_of(conn, run["id"])["slot_path"])
@@ -162,7 +132,7 @@ def test_a_worker_that_rewrites_commondir_crashes_the_run_and_commondir_is_put_b
     fired = tmp_path / "fired"
     commondirs = {slot: hostgit.own_git_dir(slot, (slot / ".git").read_bytes()) for slot in slots}
     with worker_does(WORKER_COMMIT, ["sh", "-c", plant_common_dir(fired)]):
-        run = dispatch_and_run(conn)
+        run = dispatch_and_run(conn, *WORK)
 
     assert run["status"] == "crashed"
     slot = Path(slot_of(conn, run["id"])["slot_path"])

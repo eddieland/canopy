@@ -2,34 +2,15 @@
 route. Reads only."""
 
 import json
-from collections.abc import Iterator
-from pathlib import Path
 
 import pytest
 
 from canopy.core import conversation, db, search
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, RunStatus
-from canopy.infra import resources
-from canopy.serve import mock
 from canopy.serve.backend import Backend
-from tests.canopy.test_loop import context
-from tests.canopy.test_serve import SECRET, client
-from tests.canopy.test_web import running_run
-from tests.conftest import CanopyEnv
-
-
-@pytest.fixture
-def ctx(canopy_env: CanopyEnv) -> Iterator[Context]:
-    found = context(canopy_env)
-    db.migrate(found.conn, resources.migrations_dir())
-    yield found
-    found.conn.close()
-
-
-@pytest.fixture
-def backend(tmp_path: Path) -> Backend:
-    return mock.seed(tmp_path / "mock")
+from tests.canopy.helpers import running_run
+from tests.canopy.web_helpers import SECRET, client
 
 
 def where(found: search.Found) -> list[tuple[str, str | int | None, str | None]]:

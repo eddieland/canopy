@@ -35,7 +35,7 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.infra import procs
 from canopy.infra.procs import SubprocessRunner
-from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, slot_of, worker_does
+from tests.canopy.helpers import InlineRunner, in_tick, pool, slot_of, worker_does
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, git, user_toml
 
 pytestmark = pytest.mark.skipif(
@@ -437,7 +437,7 @@ def test_canopys_sandboxed_worker_is_pushed(
     shutil.copy(canopy_sandbox.TEMPLATES / "worker.json", templates)
     prefix = f"{WRAPPER} worker --read {{definitions_dir}} -- env"
     canopy_env.write_user(user_toml().replace("\nworker_cmd = 'env", f"\nworker_cmd = '{prefix}"))
-    conn: sqlite3.Connection = journal(canopy_env)
+    conn: sqlite3.Connection = canopy_env.journal()
     commit = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"]
     with worker_does(commit):
         runner = InlineRunner()

@@ -18,13 +18,12 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db
+from canopy.core import db, notice
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus
 from canopy.infra import resources
 from canopy.loop import pacing, repeat, tick
-from tests.canopy.test_chores import chore_toml
-from tests.canopy.test_loop import FakeKeys, FakeTime, canopy, console, context, overseer_does
+from tests.canopy.helpers import FakeKeys, FakeTime, canopy, chore_toml, console, context, overseer_does
 from tests.conftest import CanopyEnv
 
 KEY = "PROJ-1"
@@ -207,6 +206,19 @@ def sets_branch(conn: sqlite3.Connection, _tick_id: int) -> None:
     conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-x' WHERE key = ?", (KEY,))
 
 
+def notice_set(conn: sqlite3.Connection, _tick_id: int) -> None:
+    notice.set_notice(conn, "Artifactory is down.", minutes=60, channel="cli")
+
+
+def notice_set_long_ago(conn: sqlite3.Connection, tick_id: int) -> None:
+    notice_set(conn, tick_id)
+    conn.execute("UPDATE notices SET set_at = ?", (ago(hours=1),))
+
+
+def notice_cleared(conn: sqlite3.Connection, _tick_id: int) -> None:
+    assert notice.clear(conn, channel="web") is not None
+
+
 @pytest.mark.parametrize(
     "case",
     [
@@ -228,6 +240,8 @@ def sets_branch(conn: sqlite3.Connection, _tick_id: int) -> None:
         pytest.param(Case(setup=started_long_ago, during=ticket_stopped), id="ticket stopped"),
         pytest.param(Case(during=attempts_granted), id="attempts granted"),
         pytest.param(Case(during=reviews_granted), id="reviews granted"),
+        pytest.param(Case(during=notice_set), id="notice set"),
+        pytest.param(Case(setup=notice_set_long_ago, during=notice_cleared), id="notice cleared"),
         pytest.param(Case(status="overseer_failed"), id="not ok"),
         pytest.param(Case(previous_read=False), id="no previous read"),
     ],

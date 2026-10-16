@@ -1,10 +1,7 @@
 """The overseer's duties, checked when a tick ends (DESIGN §6 step 5), and `canopy queried`, which records the query."""
 
-import json
 import os
 import sqlite3
-from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
 
@@ -13,30 +10,14 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db
 from canopy.loop import attention, duties
-from tests.canopy.helpers import in_tick
-from tests.canopy.test_chores import chore_toml
-from tests.canopy.test_mirror import state_block
+from tests.canopy.helpers import canopy, chore_toml, in_tick, overseer_does, state_block
 from tests.conftest import CanopyEnv
 
 LABEL = "agent-ready-tester"
 
 
-@contextmanager
-def overseer_does(*commands: list[str], queried: str = "[]") -> Iterator[None]:
-    """Until the block ends, the fake overseer records `queried` when the query is due, then runs `commands`."""
-    with mock.patch.dict(
-        os.environ,
-        {
-            "FAKE_OVERSEER_COMMANDS": json.dumps([["canopy", *c] for c in commands]),
-            "FAKE_OVERSEER_QUERIED": queried,
-            "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE",
-        },
-    ):
-        yield
-
-
 def wait(key: str) -> list[str]:
-    return ["decide", key, "wait", "--rationale", "nothing new"]
+    return canopy("decide", key, "wait", "--rationale", "nothing new")
 
 
 def last_tick(conn: sqlite3.Connection) -> sqlite3.Row:
@@ -96,12 +77,12 @@ def test_a_query_not_due_needs_no_record(canopy_env: CanopyEnv) -> None:
 @pytest.mark.usefixtures("treehouse_state", "agent_log")
 def test_a_ticket_left_out_fails_the_tick_and_keeps_its_attention_item(canopy_env: CanopyEnv) -> None:
     conn = canopy_env.journal()
-    needs_reviewer = ["attention", "PROJ-1", "needs_reviewer", "--detail", "https://example.test/pr/1"]
+    needs_reviewer = canopy("attention", "PROJ-1", "needs_reviewer", "--detail", "https://example.test/pr/1")
     with overseer_does(needs_reviewer, wait("PROJ-2")):
         assert main(["tick"]) == 0
     # A mirror is not a decision, and PROJ-2 gets none at all.
     mirror = ["mirror", "PROJ-1", "--comment", "10", "--author", "acct-1", "--at", "2026-10-15T10:00:00Z"]
-    with overseer_does([*mirror, "--body", "hello"]):
+    with overseer_does(canopy(*mirror, "--body", "hello")):
         assert main(["tick"]) == 1
     failed = last_tick(conn)
     assert failed["status"] == "overseer_failed"
@@ -151,7 +132,7 @@ def test_a_due_chore_left_undecided_fails_the_tick(canopy_env: CanopyEnv) -> Non
     with overseer_does():
         assert main(["tick"]) == 1
     assert last_tick(conn)["summary"] == "overseer left duties undone: no run or wait for chore build-health"
-    with overseer_does(["chore", "wait", "build-health", "--rationale", "not now"]):
+    with overseer_does(canopy("chore", "wait", "build-health", "--rationale", "not now")):
         assert main(["tick"]) == 0
 
 
@@ -159,7 +140,7 @@ def test_a_due_chore_left_undecided_fails_the_tick(canopy_env: CanopyEnv) -> Non
 def test_a_tick_wide_skip_is_not_held_to_the_duties(canopy_env: CanopyEnv) -> None:
     conn = canopy_env.journal()
     seen(conn, canopy_env, "PROJ-1")
-    with overseer_does(["decide", "skip", "--rationale", "mcp_unavailable: tracker"], queried="skip"):
+    with overseer_does(canopy("decide", "skip", "--rationale", "mcp_unavailable: tracker"), queried="skip"):
         assert main(["tick"]) == 1
     assert last_tick(conn)["status"] == "skipped"
 

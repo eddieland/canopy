@@ -18,7 +18,17 @@ from canopy.cli.main import main
 from canopy.core import config, db
 from canopy.infra import procs
 from tests.canopy.conftest import Ws, seed_pools
-from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, slot_of, wait_for_run, worker_does
+from tests.canopy.helpers import (
+    WORK,
+    InlineRunner,
+    agent_runs,
+    dispatch_and_run,
+    in_tick,
+    pool,
+    slot_of,
+    wait_for_run,
+    worker_does,
+)
 from tests.conftest import CanopyEnv, GitPool, git, user_toml
 
 LABEL = "agent-ready-tester"
@@ -48,21 +58,6 @@ def dispatch(*args: str, kind: str = "implement") -> list[str]:
     return ["dispatch", "PROJ-1", *repos, "--label", LABEL, "--kind", kind, *args]
 
 
-def dispatch_and_run(conn: sqlite3.Connection, runner: InlineRunner) -> sqlite3.Row:
-    with in_tick(conn) as tick_id:
-        assert main(dispatch("--slug", "work"), runner=runner) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
-        run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
-        assert main(["_run", str(run_id)], runner=runner) == 0
-        row = db.get_run(conn, run_id)
-        assert row is not None
-        return row
-
-
-def agent_runs(agent_log: Path) -> list[dict[str, object]]:
-    return [json.loads(line) for line in agent_log.read_text().splitlines()] if agent_log.exists() else []
-
-
 def treehouse_calls(treehouse_state: Path) -> list[list[str]]:
     found: list[list[str]] = json.loads(treehouse_state.read_text()).get("calls", [])
     return found
@@ -88,11 +83,6 @@ class SetupTimesOut(InlineRunner):
         return super().run(args, cwd=cwd, env=env, stdin=stdin, timeout=timeout, on_start=on_start, on_line=on_line)
 
 
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return journal(canopy_env)
-
-
 # The setup command
 
 
@@ -111,7 +101,7 @@ def test_setup_runs_in_the_slot_on_the_runs_branch_before_the_worker(
     git("checkout", "--quiet", "--detach", cwd=seed)
     setup_is(canopy_env, SETUP)
     with worker_does(["test", "-e", ".setup-done"]):
-        run = dispatch_and_run(conn, InlineRunner())
+        run = dispatch_and_run(conn, *WORK, runner=InlineRunner())
 
     assert run["status"] == "done"
     out = capsys.readouterr().out
@@ -133,7 +123,7 @@ def test_a_failing_setup_crashes_the_run_before_its_worker_and_returns_the_slot(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     setup_is(canopy_env, "sh -c 'echo cannot fetch >&2; exit 3'")
-    run = dispatch_and_run(conn, InlineRunner())
+    run = dispatch_and_run(conn, *WORK, runner=InlineRunner())
 
     assert run["status"] == "crashed"
     assert json.loads(run["result_json"]) == {"harness": "repo: setup exited 3; see the run log"}
@@ -150,7 +140,7 @@ def test_a_setup_that_times_out_crashes_the_run(
     conn: sqlite3.Connection,
 ) -> None:
     setup_is(canopy_env, "sh -c 'sleep 3600'", "setup_timeout_minutes = 5")
-    run = dispatch_and_run(conn, SetupTimesOut())
+    run = dispatch_and_run(conn, *WORK, runner=SetupTimesOut())
 
     assert run["status"] == "crashed"
     assert json.loads(run["result_json"]) == {"harness": "repo: setup timed out after 5 minutes; see the run log"}
@@ -162,7 +152,7 @@ def test_a_setup_that_cannot_start_crashes_the_run(
     canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
 ) -> None:
     setup_is(canopy_env, "no-such-setup-command --all")
-    run = dispatch_and_run(conn, InlineRunner())
+    run = dispatch_and_run(conn, *WORK, runner=InlineRunner())
 
     assert run["status"] == "crashed"
     assert json.loads(run["result_json"])["harness"].startswith("repo: setup could not start: ")
@@ -257,7 +247,7 @@ def test_every_lease_passes_the_operators_include_file(
     manifest.write_text("user.bazelrc\n.env.local\n")
     configure(canopy_env, paths="worktree_include = '~/.config/canopy/worktreeinclude'")
     with worker_does(["true"]):
-        run = dispatch_and_run(conn, InlineRunner())
+        run = dispatch_and_run(conn, *WORK, runner=InlineRunner())
 
     [get] = [c for c in treehouse_calls(treehouse_state) if c[0] == "get"]
     # Absolute, with ~ expanded: treehouse reads a relative one from the repository.
@@ -273,7 +263,7 @@ def test_without_an_include_file_treehouse_reads_the_committed_one(
     conn: sqlite3.Connection,
 ) -> None:
     with worker_does(["true"]):
-        dispatch_and_run(conn, InlineRunner())
+        dispatch_and_run(conn, *WORK, runner=InlineRunner())
     [get] = [c for c in treehouse_calls(treehouse_state) if c[0] == "get"]
     assert "--include-file" not in get
 

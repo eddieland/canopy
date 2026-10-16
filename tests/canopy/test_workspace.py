@@ -3,7 +3,6 @@
 import contextlib
 import json
 import os
-import sqlite3
 from pathlib import Path
 from unittest import mock
 
@@ -15,14 +14,10 @@ from canopy.core.vocab import RunStatus
 from canopy.loop import attention
 from canopy.setup import workspace as setup_workspace
 from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools, th
-from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, wait_for_run, worker_does
+from tests.canopy.helpers import InlineRunner, commit_and_push, decisions, in_tick, wait_for_run, worker_does
 from tests.conftest import CanopyEnv, git
 
 LABEL = "agent-ready-tester"
-
-
-def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
-    return [(d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 def dispatch(key: str, *args: str) -> list[str]:

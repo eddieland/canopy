@@ -21,7 +21,6 @@ import anyio
 import httpx2
 import pytest
 import uvicorn
-from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from starlette.types import Message, Receive, Scope, Send
 
@@ -50,6 +49,7 @@ from canopy.serve.schema import (
 )
 from canopy.serve.spa import content_security_policy
 from canopy.serve.sse import QuietLeaving
+from tests.canopy.web_helpers import ORIGIN, SECRET, client, signed_in
 from tests.conftest import Journals
 
 INDEX = """<!doctype html>
@@ -62,8 +62,6 @@ INDEX = """<!doctype html>
   <body><div id="root"></div></body>
 </html>
 """
-SECRET = "s3cret-" + "x" * 40
-ORIGIN = "http://127.0.0.1:8765"
 
 
 @pytest.fixture
@@ -74,26 +72,6 @@ def ui(tmp_path: Path) -> Path:
     (root / "assets" / "index-abc123.js").write_text("console.log(1)")
     (root / "favicon.svg").write_text("<svg/>")
     return root
-
-
-@pytest.fixture
-def backend(tmp_path: Path) -> Backend:
-    return serve_mock.seed(tmp_path / "mock")
-
-
-def client(ui_dir: Path | None, backend: Backend, *, key: str | None = None, **options: object) -> TestClient:
-    opts = ServeOptions.model_validate({"ui_dir": ui_dir, "mock": True, "mock_event_seconds": None, **options})
-    sessions = Sessions(key, port=opts.port, base_path=opts.base_path, hosts=opts.hosts)
-    return TestClient(create_app(opts, backend, sessions), base_url="http://127.0.0.1:8765")
-
-
-def signed_in(c: TestClient, *, base: str = "") -> dict[str, str]:
-    """Sign `c` in; return the headers a write needs."""
-    response = c.post(f"{base}/api/session", json={"secret": SECRET})
-    assert response.status_code == 200
-    token = response.json()["token"]
-    assert isinstance(token, str)
-    return {"x-canopy-token": token, "origin": ORIGIN}
 
 
 # Serving the app

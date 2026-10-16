@@ -23,8 +23,8 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.infra import procs
 from canopy.infra.procs import SubprocessRunner
-from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, slot_of, worker_does
-from tests.canopy.test_reviews import CLEAN, PR, reviewer_reports, run_inline
+from tests.canopy.helpers import DEAD_PID, InlineRunner, in_tick, pool, slot_of, worker_does
+from tests.canopy.review_helpers import CLEAN, PR, reviewer_reports, run_inline
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, git, user_toml
 
 # The command the install puts beside python, which is how canopy runs it: never `python -m`, which would put the
@@ -33,7 +33,6 @@ WRAPPER = Path(sys.executable).parent / "canopy-sandbox"
 ROLES = ("worker", "setup", "chore", "review")
 FAKES = Path(__file__).resolve().parents[1] / "fakes"
 SRT_PACKAGE = "@anthropic-ai/sandbox-runtime"
-DEAD_PID = 4_194_305  # above Linux's largest pid_max
 # Quotes, a line break, and what a shell would expand: the command must receive it as it was given (§5 item 3).
 PROMPT = 'it\'s "quoted"\n$(touch pwned) `id` $HOME \\ ; | & *'
 PRINT_ARG = ["sh", "-c", 'printf %s "$1"', "sh"]
@@ -492,7 +491,7 @@ def test_canopys_sandboxed_worker_commits_through_the_wrapper_and_is_pushed(
     primary, _ = worktree_pool
     prefix = f"{WRAPPER} worker --read {{definitions_dir}} -- env"
     canopy_env.write_user(user_toml().replace("\nworker_cmd = 'env", f"\nworker_cmd = '{prefix}"))
-    conn: sqlite3.Connection = journal(canopy_env)
+    conn: sqlite3.Connection = canopy_env.journal()
     commit = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"]
     with worker_does(commit):
         runner = InlineRunner()
@@ -530,7 +529,7 @@ def test_canopys_sandboxed_reviewer_reads_the_checkout_through_the_wrapper(
     review_cmd = f"review_cmd = '{template} --agent canopy-reviewer {{prompt}}'"
     user = canopy_env.user_file.read_text().replace("[runtime]\n", f"[runtime]\n{review_cmd}\n", 1)
     canopy_env.write_user(user + "\n[review]\nagent_prs = true\n")
-    conn: sqlite3.Connection = journal(canopy_env)
+    conn: sqlite3.Connection = canopy_env.journal()
     db.set_unit(conn, "PROJ-1", str(canopy_env.root), "repo", pr_url=PR)
     sha = git("rev-parse", "main", cwd=git_pool.origin)
 

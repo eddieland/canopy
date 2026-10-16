@@ -14,34 +14,23 @@ from canopy.cli.main import main
 from canopy.core import conversation, db, notice, prompts
 from canopy.core.config import load
 from canopy.core.context import Context
-from canopy.infra import resources
 from canopy.loop import pacing, reread, web
 from canopy.serve import live
 from canopy.serve.schema import LoopUpdated
-from tests.canopy.helpers import InlineRunner, in_tick, journal
-from tests.canopy.test_idle_pacing import Case, was_idle
-from tests.canopy.test_loop import context
-from tests.canopy.test_mirror import state_block
-from tests.canopy.test_prompts import VALUES
-from tests.canopy.test_tick import overseer_does
-from tests.canopy.test_web import refused, signed_in_client
-from tests.canopy.test_worker_instructions import dispatch
+from tests.canopy.helpers import (
+    IMPLEMENT,
+    PROMPT_VALUES,
+    InlineRunner,
+    dispatch_in_tick,
+    in_tick,
+    overseer_does,
+    state_block,
+)
+from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
 
 OUTAGE = "Artifactory is down: CI builds that fetch dependencies will likely fail."
 SECTION = "## Notice from the operator\n\n"
-
-
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return journal(canopy_env)
-
-
-@pytest.fixture
-def ctx(canopy_env: CanopyEnv) -> Context:
-    found = context(canopy_env)
-    db.migrate(found.conn, resources.migrations_dir())
-    return found
 
 
 def notice_of(prompt: str) -> str:
@@ -75,7 +64,7 @@ def test_the_next_worker_hears_the_notice_in_force_and_no_other(
         lapse(conn)
     elif then is not None:
         assert main(then) == 0
-    code, decisions = dispatch(conn)
+    code, decisions = dispatch_in_tick(conn, *IMPLEMENT)
     assert code == 0, decisions
     assert notice_of(worker_prompt(canopy_env, conn)) == heard
 
@@ -88,7 +77,7 @@ def test_every_shipped_prompt_that_builds_carries_the_notice(
     private: bool,  # noqa: FBT001  (a parametrized fixture)
 ) -> None:
     cfg = load(canopy_env.root, canopy_env.user_file)
-    values = {**VALUES, "CONVERSATION": "No messages yet."}
+    values = {**PROMPT_VALUES, "CONVERSATION": "No messages yet."}
     text = prompts.render_worker(cfg, kind, values, private=private, notice=OUTAGE)
     assert notice_of(text) == OUTAGE
     assert notice_of(prompts.render_worker(cfg, kind, values, private=private)) == "None."
@@ -97,7 +86,7 @@ def test_every_shipped_prompt_that_builds_carries_the_notice(
 def test_a_split_hears_no_notice(canopy_env: CanopyEnv) -> None:
     # A splitter files child tickets and builds nothing, so an outage is nothing to it, and no override of it refuses.
     cfg = load(canopy_env.root, canopy_env.user_file)
-    text = prompts.render_worker(cfg, "split", VALUES, required=prompts.REQUIRED_SPLIT, notice=OUTAGE)
+    text = prompts.render_worker(cfg, "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT, notice=OUTAGE)
     assert OUTAGE not in text
     assert "Notice from the operator" not in text
 
@@ -142,14 +131,14 @@ def test_an_override_without_the_placeholder_refuses_only_while_a_notice_is_in_f
         err = capsys.readouterr().err
         assert f"your override {override} has no {{{{NOTICE}}}}: implement runs refuse (bad_prompt)" in err
         assert "reviewer.md" not in err
-    code, decisions = dispatch(conn)
+    code, decisions = dispatch_in_tick(conn, *IMPLEMENT)
     if not in_force:
         assert code == 0, decisions
         return
     assert code == 1
-    [decision] = decisions
-    assert decision.action == "refused:bad_prompt"
-    assert "missing required placeholder {{NOTICE}}" in decision.rationale
+    [(action, rationale)] = decisions
+    assert action == "refused:bad_prompt"
+    assert "missing required placeholder {{NOTICE}}" in rationale
 
 
 @pytest.mark.parametrize(
@@ -261,22 +250,6 @@ def test_notices_ended_more_than_a_week_ago_leave_the_state_block(conn: sqlite3.
     assert [n.text for n in notice.recent(conn, now)] == ["3 days"]
 
 
-def test_setting_or_clearing_a_notice_makes_the_next_tick_not_idle(canopy_env: CanopyEnv) -> None:
-    def notice_set(conn: sqlite3.Connection, _tick_id: int) -> None:
-        notice.set_notice(conn, OUTAGE, minutes=60, channel="cli")
-
-    def notice_set_long_ago(conn: sqlite3.Connection, _tick_id: int) -> None:
-        notice_set(conn, _tick_id)
-        conn.execute("UPDATE notices SET set_at = ?", (db.format_time(datetime.now(UTC) - timedelta(hours=1)),))
-
-    def notice_cleared(conn: sqlite3.Connection, _tick_id: int) -> None:
-        assert notice.clear(conn, channel="web") is not None
-
-    ctx = context(canopy_env)
-    assert not was_idle(ctx, Case(during=notice_set))
-    assert not was_idle(ctx, Case(setup=notice_set_long_ago, during=notice_cleared))
-
-
 @pytest.mark.parametrize(
     ("minutes", "expected"),
     [pytest.param(10, 600, id="lapses within the wait"), pytest.param(None, 3600, id="lapsed")],
@@ -348,7 +321,7 @@ def test_the_stream_sends_a_notice_and_its_lapse_which_commits_nothing(ctx: Cont
 
 def test_the_cli_line_drops_control_characters(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
     # The text may come from the web channel; the operator's terminal reads it as text, never as escape sequences.
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     notice.set_notice(conn, "\x1b[2J\x1b]0;owned\x07CI is\ndown.", minutes=60, channel="web")
     assert main(["notice"]) == 0
     out = capsys.readouterr().out

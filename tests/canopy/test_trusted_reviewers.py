@@ -13,16 +13,11 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import conversation, db
 from canopy.loop.state import OverseerState, TicketState
-from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, worker_does
+from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, worker_does
 from tests.conftest import CanopyEnv, GitPool
 
 KEY = "PROJ-1"
 GO_AHEAD = "Use your best judgement on codebot's review: take the null check, skip the renames."
-
-
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return journal(canopy_env)
 
 
 def trust(canopy_env: CanopyEnv, *reviewers: str) -> None:

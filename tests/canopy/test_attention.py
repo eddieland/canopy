@@ -15,15 +15,9 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.config import ConfigError, load
 from canopy.loop import attention
-from tests.canopy.helpers import journal
 from tests.conftest import CanopyEnv
 
 NOW = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
-
-
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return journal(canopy_env)
 
 
 def item(key: str, reason: str, detail: str, age: timedelta) -> attention.Item:

@@ -5,58 +5,38 @@ import pytest
 from canopy.core import prompts, vocab
 from canopy.core.config import load
 from canopy.infra import resources
+from tests.canopy.helpers import PROMPT_VALUES
 from tests.conftest import CanopyEnv
 
 # A row of the overseer prompt's phase table: `| `phase` | evidence | action |`.
 _PHASE_ROW = re.compile(r"^\| `([a-z_]+)` \|", re.MULTILINE)
 
-VALUES = {
-    "KEY": "PROJ-1",
-    "SLOT": "/pool/1/repo",
-    "BRANCH": "agent/PROJ-1-work",
-    "BASE": "main",
-    "STACKING": "This ticket is not stacked on another ticket's branch.",
-    "TRACKER_PROVIDER": "jira",
-    "NEEDS_HUMAN_LABEL": "needs-human",
-    "PR_LABEL": "agent",
-    "TIMEOUT_MINUTES": "45",
-    "ATTEMPT": "1",
-    "MAX_ATTEMPTS": "2",
-    "PR_URL": "https://example.test/pr/1",
-    "REPOSITORIES": "This run works in one repository:\n- `repo` at `/pool/1/repo`: branch `agent/PROJ-1-work`",
-    "PRS": '{"repo":"<url or null>"}',
-    "CONTEXT": "None.",
-    "AUTHORIZED_REPLIERS": "`alice`",
-    "LABELS": "`agent-ready-alice`",
-    "REQUEST": "10234",
-    "MAP": "/ws/MAP.md",
-    "WORKER_COMMENT": "starts with `CANOPY:` outside any quote",
-    "MARK_COMMENTS": "In every comment and reply you post, start it with `CANOPY:` and a space.",
-    "OPEN_PR": "Open each PR through the GitHub MCP.",
-    "TRUSTED_REVIEWERS": "`octocat`",
-    "OPERATOR_MESSAGES": "No messages from the operator.",
-    "REVIEW_FINDINGS": "None.",
-}
 UNIT_KINDS = sorted(k for k in prompts.WORKER if k != "split")
 
 
 @pytest.mark.parametrize("kind", UNIT_KINDS)
 def test_shipped_worker_prompts_render_completely(canopy_env: CanopyEnv, kind: str) -> None:
-    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES)
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES)
     assert "{{" not in text
     assert "}}" not in text
     assert '"branch":"agent/PROJ-1-work","prs":{"repo":"<url or null>"}' in text
     assert "attempt 1 of 2" in text
     # A joint run's worker learns its repositories from these, so the shipped prompts have them, and every public
     # worker hears the operator's messages (D093).
-    prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES, required=prompts.REQUIRED_JOINT)
-    prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES, required=prompts.REQUIRED_OPERATOR)
-    prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES, required=prompts.REQUIRED_STANDING)
+    prompts.render_worker(
+        load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES, required=prompts.REQUIRED_JOINT
+    )
+    prompts.render_worker(
+        load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES, required=prompts.REQUIRED_OPERATOR
+    )
+    prompts.render_worker(
+        load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES, required=prompts.REQUIRED_STANDING
+    )
 
 
 def test_the_shipped_split_prompt_renders_completely(canopy_env: CanopyEnv) -> None:
     cfg = load(canopy_env.root, canopy_env.user_file)
-    text = prompts.render_worker(cfg, "split", VALUES, required=prompts.REQUIRED_SPLIT)
+    text = prompts.render_worker(cfg, "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT)
     assert "{{" not in text
     assert "Read comment 10234 on PROJ-1." in text
     assert text.rstrip().endswith('"children":{"<child key>":"<repository name>"}}')
@@ -69,7 +49,7 @@ def test_a_split_prompt_needs_the_request(canopy_env: CanopyEnv) -> None:
     (overrides / "worker-split.md").write_text("Split {{KEY}} over {{REPOSITORIES}} for {{LABELS}}\n")
     cfg = load(canopy_env.root, canopy_env.user_file)
     with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{REQUEST\}\}"):
-        prompts.render_worker(cfg, "split", VALUES, required=prompts.REQUIRED_SPLIT)
+        prompts.render_worker(cfg, "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT)
 
 
 def test_rendering_is_one_pass(canopy_env: CanopyEnv) -> None:
@@ -77,14 +57,14 @@ def test_rendering_is_one_pass(canopy_env: CanopyEnv) -> None:
     overrides.mkdir()
     (overrides / "worker-implement.md").write_text("{{KEY}} {{BRANCH}} {{LABELS}}\n")
     cfg = load(canopy_env.root, canopy_env.user_file)
-    text = prompts.render_worker(cfg, "implement", {**VALUES, "KEY": "{{BRANCH}}"})
+    text = prompts.render_worker(cfg, "implement", {**PROMPT_VALUES, "KEY": "{{BRANCH}}"})
     assert text == "{{BRANCH}} agent/PROJ-1-work `agent-ready-alice`\n"
 
 
 def test_unknown_placeholder_is_an_error(canopy_env: CanopyEnv) -> None:
     cfg = load(canopy_env.root, canopy_env.user_file)
     with pytest.raises(prompts.PromptError, match=r"unknown placeholder \{\{REPOSITORIES\}\}"):
-        prompts.render_worker(cfg, "implement", {k: v for k, v in VALUES.items() if k != "REPOSITORIES"})
+        prompts.render_worker(cfg, "implement", {k: v for k, v in PROMPT_VALUES.items() if k != "REPOSITORIES"})
 
 
 @pytest.mark.parametrize("kind", sorted(prompts.WORKER))
@@ -95,7 +75,7 @@ def test_worker_prompt_without_the_labels_is_an_error(canopy_env: CanopyEnv, kin
     (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} on {{BRANCH}}\n")
     cfg = load(canopy_env.root, canopy_env.user_file)
     with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{LABELS\}\}"):
-        prompts.render_worker(cfg, kind, VALUES)
+        prompts.render_worker(cfg, kind, PROMPT_VALUES)
 
 
 def test_a_joint_run_needs_the_repositories(canopy_env: CanopyEnv) -> None:
@@ -104,9 +84,9 @@ def test_a_joint_run_needs_the_repositories(canopy_env: CanopyEnv) -> None:
     overrides.mkdir()
     (overrides / "worker-implement.md").write_text("Work {{KEY}} in {{SLOT}} for {{LABELS}}; PR {{PR_URL}}\n")
     cfg = load(canopy_env.root, canopy_env.user_file)
-    assert prompts.render_worker(cfg, "implement", VALUES).startswith("Work PROJ-1 in /pool/1/repo")
+    assert prompts.render_worker(cfg, "implement", PROMPT_VALUES).startswith("Work PROJ-1 in /pool/1/repo")
     with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{REPOSITORIES\}\}, \{\{PRS\}\}"):
-        prompts.render_worker(cfg, "implement", VALUES, required=prompts.REQUIRED_JOINT)
+        prompts.render_worker(cfg, "implement", PROMPT_VALUES, required=prompts.REQUIRED_JOINT)
 
 
 def test_the_shipped_reviewer_prompt_renders_completely(canopy_env: CanopyEnv) -> None:
@@ -162,7 +142,7 @@ def test_comment_marks_name_every_mark_set(prefix: str, suffix: str, recognized:
 @pytest.mark.parametrize("kind", sorted(prompts.WORKER))
 def test_shipped_worker_prompts_mark_and_recognize_worker_comments(canopy_env: CanopyEnv, kind: str) -> None:
     # Everything posts as the operator, so a worker's own reply must not read back as feedback or a reply (D069).
-    values = {**VALUES, "MARK_COMMENTS": "<mark them>", "WORKER_COMMENT": "<is marked>"}
+    values = {**PROMPT_VALUES, "MARK_COMMENTS": "<mark them>", "WORKER_COMMENT": "<is marked>"}
     text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values)
     assert "<mark them>" in text
     # A fix-ci worker reads checks, never a comment that could instruct it, so only the others need to recognize one.
@@ -188,7 +168,9 @@ def test_open_pr_names_the_mcp_or_only_the_skill() -> None:
     [("implement", "Never target another branch."), ("resume", "with the ticket key in the\ntitle.")],
 )
 def test_shipped_prompts_that_open_prs_say_how(canopy_env: CanopyEnv, kind: str, before: str) -> None:
-    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, {**VALUES, "OPEN_PR": "<how>"})
+    text = prompts.render_worker(
+        load(canopy_env.root, canopy_env.user_file), kind, {**PROMPT_VALUES, "OPEN_PR": "<how>"}
+    )
     assert f"{before} <how>" in text
 
 
@@ -198,10 +180,12 @@ def test_with_a_pr_skill_an_override_must_say_how_to_open_prs(canopy_env: Canopy
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; open a PR through the GitHub MCP\n")
-    assert prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES).startswith("Work PROJ-1")
+    assert prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES).startswith(
+        "Work PROJ-1"
+    )
     with_pr_skill(canopy_env, "acme-pr")
     with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{OPEN_PR\}\}"):
-        prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES)
+        prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES)
 
 
 def test_a_pr_skill_does_not_constrain_kinds_that_open_no_pr(canopy_env: CanopyEnv) -> None:
@@ -209,7 +193,7 @@ def test_a_pr_skill_does_not_constrain_kinds_that_open_no_pr(canopy_env: CanopyE
     overrides.mkdir()
     (overrides / "worker-fix-ci.md").write_text("Fix CI on {{KEY}} for {{LABELS}}\n")
     with_pr_skill(canopy_env, "acme-pr")
-    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "fix-ci", VALUES)
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "fix-ci", PROMPT_VALUES)
     assert text == "Fix CI on PROJ-1 for `agent-ready-alice`\n"
 
 
@@ -228,7 +212,7 @@ def without_trailer(env: CanopyEnv) -> None:
 def test_shipped_prompts_that_commit_name_the_configured_trailer(
     canopy_env: CanopyEnv, kind: str, *, private: bool
 ) -> None:
-    values = {**VALUES, "CONVERSATION": "None."}
+    values = {**PROMPT_VALUES, "CONVERSATION": "None."}
     text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
     assert "`Co-authored-by: canopy worker <noreply@canopy.invalid>`" in text
     with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
@@ -243,12 +227,14 @@ def test_with_a_custom_trailer_an_override_must_name_it(canopy_env: CanopyEnv, k
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; add the canopy worker trailer\n")
-    assert prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES).startswith("Work PROJ-1")
+    assert prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES).startswith(
+        "Work PROJ-1"
+    )
     with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
     with pytest.raises(
         prompts.PromptError, match=r"missing required placeholder \{\{COMMIT_ATTRIBUTION\}\} or \{\{COMMIT_TRAILER\}\}"
     ):
-        prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES)
+        prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES)
 
 
 @pytest.mark.parametrize("kind", prompts.COMMITS)
@@ -257,7 +243,7 @@ def test_with_a_custom_trailer_an_older_override_naming_it_still_renders(canopy_
     overrides.mkdir()
     (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; add `{{COMMIT_TRAILER}}`\n")
     with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
-    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES)
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES)
     assert text.endswith("add `Co-authored-by: Acme Agent <agent@acme.test>`\n")
 
 
@@ -265,7 +251,7 @@ def test_with_a_custom_trailer_an_older_override_naming_it_still_renders(canopy_
 @pytest.mark.parametrize("kind", prompts.COMMITS)
 def test_with_the_trailer_off_shipped_prompts_add_none(canopy_env: CanopyEnv, kind: str, *, private: bool) -> None:
     without_trailer(canopy_env)
-    values = {**VALUES, "CONVERSATION": "None."}
+    values = {**PROMPT_VALUES, "CONVERSATION": "None."}
     text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
     assert "Co-authored-by" not in text
     assert (
@@ -281,21 +267,25 @@ def test_with_the_trailer_off_an_override_must_carry_the_attribution(canopy_env:
     (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; add `{{COMMIT_TRAILER}}`\n")
     without_trailer(canopy_env)
     with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{COMMIT_ATTRIBUTION\}\}$"):
-        prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES)
+        prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES)
     (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}. {{COMMIT_ATTRIBUTION}}\n")
     assert "add no co-author trailer" in prompts.render_worker(
-        load(canopy_env.root, canopy_env.user_file), kind, VALUES
+        load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES
     )
 
 
 def test_the_trailer_off_does_not_constrain_a_split(canopy_env: CanopyEnv) -> None:
     without_trailer(canopy_env)
-    prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "split", VALUES, required=prompts.REQUIRED_SPLIT)
+    prompts.render_worker(
+        load(canopy_env.root, canopy_env.user_file), "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT
+    )
 
 
 def test_a_custom_trailer_does_not_constrain_a_split(canopy_env: CanopyEnv) -> None:
     with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
-    prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "split", VALUES, required=prompts.REQUIRED_SPLIT)
+    prompts.render_worker(
+        load(canopy_env.root, canopy_env.user_file), "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT
+    )
 
 
 def with_rebase(env: CanopyEnv) -> None:
@@ -307,7 +297,7 @@ def with_rebase(env: CanopyEnv) -> None:
 def test_shipped_prompts_that_commit_say_how_to_bring_a_base_in(
     canopy_env: CanopyEnv, kind: str, *, private: bool
 ) -> None:
-    values = {**VALUES, "CONVERSATION": "None."}
+    values = {**PROMPT_VALUES, "CONVERSATION": "None."}
     text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
     assert "merge `origin/<base>` into it. Never rebase" in text
     assert "--force-with-lease" not in text
@@ -324,15 +314,19 @@ def test_with_rebase_an_override_must_say_how_to_bring_a_base_in(canopy_env: Can
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / prompts.WORKER[kind]).write_text("Work {{KEY}} for {{LABELS}}; merge the base in\n")
-    assert prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES).startswith("Work PROJ-1")
+    assert prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES).startswith(
+        "Work PROJ-1"
+    )
     with_rebase(canopy_env)
     with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{BRANCH_UPDATE\}\}"):
-        prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, VALUES)
+        prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES)
 
 
 def test_rebase_does_not_constrain_a_split(canopy_env: CanopyEnv) -> None:
     with_rebase(canopy_env)
-    prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "split", VALUES, required=prompts.REQUIRED_SPLIT)
+    prompts.render_worker(
+        load(canopy_env.root, canopy_env.user_file), "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT
+    )
 
 
 def test_shipped_overseer_prompt_reads_the_comment_marks(canopy_env: CanopyEnv) -> None:
@@ -351,10 +345,10 @@ def test_trusted_reviewers_name_canopys_reviewer_in_words_and_say_when_nobody_is
 
 def test_shipped_resume_prompts_gate_untrusted_reviewers(canopy_env: CanopyEnv) -> None:
     cfg = load(canopy_env.root, canopy_env.user_file)
-    public = prompts.render_worker(cfg, "resume", VALUES)
+    public = prompts.render_worker(cfg, "resume", PROMPT_VALUES)
     assert "Trusted reviewers: `octocat`." in public
     assert "## Messages from the operator\n\nNo messages from the operator.\n" in public
-    private = prompts.render_worker(cfg, "resume", {**VALUES, "CONVERSATION": "No messages yet."}, private=True)
+    private = prompts.render_worker(cfg, "resume", {**PROMPT_VALUES, "CONVERSATION": "No messages yet."}, private=True)
     assert "Trusted reviewers: `octocat`." in private
 
 

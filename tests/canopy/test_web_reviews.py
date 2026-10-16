@@ -6,17 +6,10 @@ sending some to a worker, as `canopy send review:ID`.
 
 from pathlib import Path
 
-import pytest
-
 from canopy.core import db, review_diff
-from canopy.serve import mock, mock_reviews
+from canopy.serve import mock_reviews
 from canopy.serve.backend import Backend
-from tests.canopy.test_serve import SECRET, client, signed_in
-
-
-@pytest.fixture
-def backend(tmp_path: Path) -> Backend:
-    return mock.seed(tmp_path / "mock")
+from tests.canopy.web_helpers import SECRET, client, signed_in
 
 
 def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> None:

@@ -18,7 +18,7 @@ from canopy.core.config import ConfigError, load
 from canopy.core.items import fingerprint
 from canopy.notify import journal as notify_journal
 from canopy.notify import message
-from tests.canopy.helpers import WORKER_DONE, InlineRunner, in_tick, journal, worker_does
+from tests.canopy.helpers import WORKER_DONE, InlineRunner, in_tick, worker_does
 from tests.conftest import CanopyEnv, GitPool
 
 LABEL = "agent-ready-tester"
@@ -119,7 +119,7 @@ def test_notify_cmd_is_the_sink_named_default(
     tmp_path: Path,
 ) -> None:
     """`notify.cmd` is the sink `default`: what was notified as `default` is not notified again."""
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     conn.execute(
         "INSERT INTO notifications (sink, fingerprint, ticket_key, reason, repo, sent_at) "
         "VALUES ('default', ?, 'PROJ-3', 'needs_reviewer', NULL, 'x')",
@@ -154,7 +154,7 @@ def test_a_json_sink_hears_about_runs(
     add_sink(canopy_env, sink_script, "slack", out, extra='events = ["attention", "loop", "runs"]\n')
     with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
         tick()  # the sink's first publish: from here on it hears every event
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     question = "Should the retry be per request or per session?\nThe ticket says both."
     blocked = json.dumps({"status": "blocked", "branch": "agent/PROJ-1-work", "summary": "x", "question": question})
     with in_tick(conn) as tick_id, worker_does(result=blocked):
@@ -207,7 +207,7 @@ def test_a_json_sink_hears_about_runs(
 
 
 def test_without_sinks_no_event_is_recorded(canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path) -> None:
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     with in_tick(conn), worker_does():
         runner = InlineRunner()
         assert (
@@ -234,7 +234,7 @@ def test_a_failing_sink_does_not_hold_back_another_and_catches_up(
         with overseer_records(*((f"PROJ-{n}", "needs_reviewer") for n in range(1, i + 1))):
             tick()
     # Every delivery to slack failed, so it was told nothing; desk heard each change and, once, that slack is failing.
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     assert conn.execute("SELECT count(*) FROM notifications WHERE sink = 'slack'").fetchone()[0] == 0
     desk_messages = messages(desk)
     assert len(desk_messages) == 4
@@ -295,7 +295,7 @@ def test_a_long_failing_streak_is_one_streak(
         for _ in range(3):
             tick(ok=False)
         assert len(messages(out)) == 1
-        conn = journal(canopy_env)
+        conn = canopy_env.journal()
         conn.execute("UPDATE notify_events SET at = ?", (db.format_time(datetime.now(UTC) - timedelta(days=8)),))
         conn.executemany(
             "INSERT INTO ticks (started_at, ended_at, status) VALUES (?, ?, 'overseer_failed')",
@@ -325,7 +325,7 @@ def test_a_digest_arrives_on_its_interval_even_when_quiet(
         assert ": 1 ticks (ok 1)\n  nothing ran\n  nothing needs you\n  workers running: 0\n" in first
         tick()
         assert len(messages(out)) == 1  # not due again yet
-        conn = journal(canopy_env)
+        conn = canopy_env.journal()
         earlier = db.format_time(datetime.now(UTC) - timedelta(minutes=61))
         conn.execute("UPDATE notify_sinks SET last_digest_at = ?", (earlier,))
         tick()
@@ -356,7 +356,7 @@ def test_a_batching_sink_holds_what_is_not_urgent_until_its_window_ends(
     with overseer_records(("PROJ-9", "needs_reviewer")):
         tick()  # the first delivery goes at once
     assert len(messages(out)) == 1
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     run_worker(conn, "PROJ-1")
     with overseer_records(("PROJ-9", "needs_reviewer"), waiting=("PROJ-1",)):
         tick()
@@ -397,7 +397,7 @@ def test_a_batching_sink_sends_what_needs_the_operator_at_once_with_what_it_held
     add_sink(canopy_env, sink_script, "slack", out, extra='events = ["attention", "runs"]\nbatch_minutes = 30\n')
     with overseer_records(("PROJ-9", "needs_reviewer")):
         tick()
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     run_worker(conn, "PROJ-1")
     with overseer_records(("PROJ-9", "needs_reviewer"), waiting=("PROJ-1",)):
         tick()
@@ -432,7 +432,7 @@ def test_a_batching_sink_hears_the_loop_failing_at_once_with_what_it_held(
     add_sink(canopy_env, sink_script, "desk", out, extra='events = ["attention", "loop", "runs"]\nbatch_minutes = 30\n')
     with overseer_records(("PROJ-9", "needs_reviewer")):
         tick()
-    run_worker(journal(canopy_env), "PROJ-1")
+    run_worker(canopy_env.journal(), "PROJ-1")
     with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "gave up"}):
         tick(ok=False)
         tick(ok=False)
@@ -457,7 +457,7 @@ def test_a_batching_sink_hears_another_sink_failing_at_once_with_what_it_held(
     Path(f"{down}.exit").write_text("1")
     with overseer_records(("PROJ-9", "needs_reviewer")):
         tick()
-    run_worker(journal(canopy_env), "PROJ-1")
+    run_worker(canopy_env.journal(), "PROJ-1")
     with overseer_records(("PROJ-9", "needs_reviewer"), waiting=("PROJ-1",)):
         tick()
         assert len(messages(desk)) == 1  # the runs are held
@@ -475,7 +475,7 @@ def test_a_json_digest_names_each_ticket_by_its_title(
 ) -> None:
     out = tmp_path / "digest.txt"
     add_sink(canopy_env, sink_script, "daily", out, extra="events = []\ndigest_every_minutes = 60\n")
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     blocked = json.dumps({"status": "blocked", "summary": "x", "question": "Which?"})
     with in_tick(conn) as tick_id, worker_does(result=blocked):
         assert main(["ticket", "set", "PROJ-1", "--title", "Retry failed checkouts"]) == 0
@@ -509,7 +509,7 @@ def test_bounds_count_what_they_leave_out(
     assert lines[0] == "canopy attention: 25 new, 0 resolved"
     assert sum(line.startswith("+ ") for line in lines) == 20
     assert lines[-2] == f"... and 5 more: see {canopy_env.state_dir / 'attention.md'} and `canopy status`"
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     assert conn.execute("SELECT count(*) FROM notifications WHERE sink = 's'").fetchone()[0] == 25
 
 
@@ -520,7 +520,7 @@ def test_stale_events_are_counted_not_listed_and_a_new_sink_gets_no_backlog(
     sink_script: Path,
     tmp_path: Path,
 ) -> None:
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     old = tmp_path / "old.txt"
     add_sink(canopy_env, sink_script, "old", old, extra='events = ["runs"]\n')
     with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
@@ -546,7 +546,7 @@ def test_removed_sinks_are_forgotten_and_passed_events_pruned(
     sink_script: Path,
     tmp_path: Path,
 ) -> None:
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     before = canopy_env.user_file.read_text()
     add_sink(canopy_env, sink_script, "s", tmp_path / "s.txt", extra='events = ["attention", "runs"]\n')
     with overseer_records(("PROJ-1", "needs_reviewer")):
@@ -582,7 +582,7 @@ def test_notify_test_sends_now_and_changes_nothing(
     assert main(["notify", "test", "a"]) == 0
     assert main(["notify", "test", "nope"]) == 1
     assert "no sink named 'nope'; configured: a, b" in capsys.readouterr().err
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     assert conn.execute("SELECT count(*) FROM notify_sinks").fetchone()[0] == 0
     # Neither the overseer nor a worker, review, or chore it started may page the operator.
     for name in ("CANOPY_TICK_ID", "CANOPY_RUN_ID"):
@@ -613,7 +613,7 @@ def test_chore_runs_reach_a_sink_that_takes_chores(
         os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(wait), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
     ):
         tick()
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     chore = json.dumps({"status": "ok", "summary": "all clear", "findings": []})
     # The chore's result stays set through the next tick, as the overseer's does.
     with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE", "FAKE_CHORE_RESULT": chore}):

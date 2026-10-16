@@ -5,8 +5,6 @@ import os
 import signal
 import sqlite3
 import time
-from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
 
@@ -17,31 +15,18 @@ from canopy.core import config, db, definitions
 from canopy.core.vocab import RunStatus
 from canopy.infra import lock, procs
 from canopy.loop import attention
-from tests.canopy.helpers import commit_and_push, in_tick, journal, pool, wait_for_run, worker_does
+from tests.canopy.helpers import (
+    DEAD_PID,
+    canopy,
+    commit_and_push,
+    in_tick,
+    overseer_does,
+    pool,
+    wait_for_run,
+    waits,
+    worker_does,
+)
 from tests.conftest import CanopyEnv, GitPool, pool_state
-
-# Above Linux's largest pid_max, so never a live process.
-DEAD_PID = 4_194_305
-
-
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return journal(canopy_env)
-
-
-@contextmanager
-def overseer_does(*commands: list[str]) -> Iterator[None]:
-    """Until the block ends, the fake overseer runs `canopy` with each of `commands` and then ends its tick."""
-    commands_json = json.dumps([["canopy", *c] for c in commands])
-    with mock.patch.dict(
-        os.environ, {"FAKE_OVERSEER_COMMANDS": commands_json, "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
-    ):
-        yield
-
-
-def waits(*keys: str) -> list[list[str]]:
-    """The commands an overseer runs to wait on each of `keys`, as it must on a ticket it has nothing to do for."""
-    return [["decide", key, "wait", "--rationale", "nothing to do yet"] for key in keys]
 
 
 def lease(treehouse_state: Path, key: str) -> dict[str, str]:
@@ -257,7 +242,10 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
 ) -> None:
     """M2 acceptance, against the fakes: label to pushed branch, slot returned, a correct `runs` row."""
     dispatch = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
-    with overseer_does([*dispatch, "--slug", "add-login"]), worker_does(*commit_and_push("agent/PROJ-1-add-login")):
+    with (
+        overseer_does(canopy(*dispatch, "--slug", "add-login")),
+        worker_does(*commit_and_push("agent/PROJ-1-add-login")),
+    ):
         assert main(["tick"]) == 0
     assert capsys.readouterr().out.startswith("tick 1: ok: 2 decisions: dispatch:implement=1, queried=1")
 

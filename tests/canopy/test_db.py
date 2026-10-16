@@ -12,8 +12,7 @@ import pytest
 from canopy.core import db
 from canopy.core.agent_output import Usage
 from canopy.infra import resources
-from tests.canopy.helpers import journal_at, shipped_through, versions_after
-from tests.canopy.test_reconcile import DEAD_PID
+from tests.canopy.helpers import DEAD_PID, journal_at, shipped_through, versions_after
 from tests.conftest import Journals
 
 # Each shipped migration's sha256, over LF line endings. A journal applies a migration once, so an edit to a shipped

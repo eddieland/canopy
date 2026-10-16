@@ -4,19 +4,13 @@ Nothing here writes to a PR; a review request is the journal's.
 """
 
 import json
-from pathlib import Path
 
 import pytest
 
 from canopy.core import conversation, db
-from canopy.serve import mock, mock_reviews, pull_requests
+from canopy.serve import mock_reviews, pull_requests
 from canopy.serve.backend import Backend
-from tests.canopy.test_serve import client
-
-
-@pytest.fixture
-def backend(tmp_path: Path) -> Backend:
-    return mock.seed(tmp_path / "mock")
+from tests.canopy.web_helpers import client
 
 
 def test_the_list_has_each_pr_once_with_its_ticket_branch_and_latest_review(backend: Backend) -> None:

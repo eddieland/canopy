@@ -2,7 +2,6 @@
 note the operator writes there, which the chore's next prompt carries as `canopy reply chore:NAME`'s does."""
 
 import dataclasses
-from pathlib import Path
 from typing import Any
 
 import pytest
@@ -11,15 +10,10 @@ from canopy.chores import start
 from canopy.core import chore_view, conversation, db
 from canopy.serve import mock
 from canopy.serve.backend import Backend
-from tests.canopy.test_chores import run_section
-from tests.canopy.test_serve import SECRET, client, signed_in
+from tests.canopy.helpers import json_block
+from tests.canopy.web_helpers import SECRET, client, signed_in
 
 NOTE = "Leave out lodash-advisory until 2026-10-15: the date picker's upgrade is merging."
-
-
-@pytest.fixture
-def backend(tmp_path: Path) -> Backend:
-    return mock.seed(tmp_path / "mock")
 
 
 def at(minutes: int) -> str:
@@ -167,7 +161,7 @@ def test_a_note_from_the_web_is_recorded_as_the_cli_records_one_and_the_next_pro
         assert (note["body"], note["submission"]) == (NOTE, "web:note-0001")
         state = chore_view.state_of(ctx.conn, "deps", ctx.config.chores["deps"])
         prompt = start.render("Check deps.", state, None, None, conversation.chore_notes(ctx.conn, "deps"), held=None)
-    notes: list[dict[str, Any]] = run_section(prompt)["operator_notes"]
+    notes: list[dict[str, Any]] = json_block(prompt)["operator_notes"]
     assert [(n["id"], n["note"]) for n in notes] == [
         (8, "Leave out the docs site's lockfile: it is never deployed."),
         (9, NOTE),
