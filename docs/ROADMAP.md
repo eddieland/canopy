@@ -1036,8 +1036,8 @@ is enough.
 Accept: each stage's check, in order. Then `make install-check` and `make binary` pass with no `treehouse` on `PATH`,
 and a fresh install from README on a machine with no Go runs a day of `canopy loop`.
 
-Status: in progress. Stage 1's suite passes against the fake and against real treehouse at the pinned commit on Linux;
-its check waits on the CI job's first run on macOS. Stage 2 is built: canopy's pool passes every contract case, and
+Status: in progress. Stage 1 passed its check 2026-10-16: the contract suite passes against the fake, and against real
+treehouse at the pinned commit in CI on Linux and macOS. Stage 2 is built: canopy's pool passes every contract case, and
 reconcile's shadow logs `pool_shadow_mismatch`; its check, a week of `canopy loop` with the shadow on, is the
 operator's. Stage 3's choice is built too, ahead of stage 2's check at the operator's request (2026-10-16):
 `pools.backend` picks the pool, each lease goes back to the pool the journal says made it, and sync moves idle slots
