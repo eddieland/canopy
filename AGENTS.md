@@ -91,9 +91,9 @@ If code and the design disagree, the design doc wins until a decision entry says
 - Fully typed. `pyrefly` strict clean, the test fakes included.
 - A parameter takes the most general type its body needs; a return keeps the concrete type it builds. `Iterable` for
   one pass; `Collection` for `len`, `in`, or more than one pass; `Sequence` for indexing, slicing, `reversed`, or an
-  order the output keeps; `Mapping` for a dict only read. Membership in a set of strings takes `collections.abc.Set`,
-  imported as `AbstractSet`: a `Collection[str]` lets a bare `str` through and makes `in` a substring test. A
-  parameter stays concrete when the function mutates, stores, or returns it, or hands it to `json.dumps` or
+  order the output keeps; `Mapping` for a dict only read. A `set` or `frozenset` tested with `in` becomes
+  `collections.abc.Set`, imported as `AbstractSet`, not `Collection`: a `Collection[str]` would also take a bare
+  `str`, where `in` is a substring test. A parameter stays concrete when the function mutates, stores, or returns it, or hands it to `json.dumps` or
   `isinstance`; a click command's parameters stay the tuple click passes. No linter checks this, so review does.
 - Deterministic core. The Python code never calls an LLM. It runs agent processes and reads their output.
 - Every external process (`treehouse`, `git`, the agent runtime, `notify`) goes through `src/canopy/infra/procs.py`.
