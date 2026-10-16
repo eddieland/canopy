@@ -15,6 +15,16 @@ import type { PlanThread } from '@/lib/plan-threads'
 import { sends, useSendKey } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
 
+/** A comment being written: the passage it is on and what it says so far. */
+export interface Draft {
+    /** The passage, quoted. */
+    quote: string
+    /** What the comment says so far. */
+    body: string
+    /** Counts each time the operator asks to comment, so the form opens again, and takes the focus, on each. */
+    opened: number
+}
+
 /** What the operator can do with a plan's threads, from its comments column. */
 export interface ThreadActions {
     /** Shows a thread's passage in the plan and marks it the one open. */
@@ -40,6 +50,7 @@ export function PlanThreads({
     active,
     draft,
     editable,
+    onDraftChange,
     onDraftSubmit,
     onDraftCancel,
     ...actions
@@ -50,10 +61,12 @@ export function PlanThreads({
     found: ReadonlySet<string>
     /** The thread open, if any. */
     active: string | undefined
-    /** The passage a comment is being written on, if one is. */
-    draft: string | undefined
+    /** The comment being written, if one is. */
+    draft: Draft | undefined
     /** Whether the operator can comment, reply, and resolve; without it the threads are read only. */
     editable: boolean
+    /** Called with what the comment being written says, as the operator types it. */
+    onDraftChange: (body: string) => void
     /** Adds the comment being written. */
     onDraftSubmit: (body: string) => void
     /** Drops the comment being written. */
@@ -66,8 +79,16 @@ export function PlanThreads({
         <div className="flex flex-col">
             {draft !== undefined && (
                 <div className="border-b bg-accent/14 px-3 py-2.5">
-                    <Quote text={draft} />
-                    <CommentForm label="Comment" submit="Comment" onSubmit={onDraftSubmit} onCancel={onDraftCancel} />
+                    <Quote text={draft.quote} />
+                    <CommentForm
+                        key={draft.opened}
+                        label="Comment"
+                        submit="Comment"
+                        value={draft.body}
+                        onValueChange={onDraftChange}
+                        onSubmit={onDraftSubmit}
+                        onCancel={onDraftCancel}
+                    />
                 </div>
             )}
             {open.length === 0 && draft === undefined && (
@@ -274,20 +295,26 @@ function Said({ body, at }: { body: string; at: string }) {
 }
 
 // A comment or a reply being written. It sends on the key Settings names, as a reply to a ticket does, and Escape
-// drops it.
+// drops it. It keeps its own words, or the caller's through `value` and `onValueChange`, which outlive the form.
 function CommentForm({
     label,
     submit,
+    value,
+    onValueChange,
     onSubmit,
     onCancel,
 }: {
     label: string
     submit: string
+    value?: string
+    onValueChange?: (body: string) => void
     onSubmit: (body: string) => void
     onCancel: () => void
 }) {
     const sendKey = useSendKey()
-    const [body, setBody] = useState('')
+    const [own, setOwn] = useState('')
+    const body = value ?? own
+    const setBody = onValueChange ?? setOwn
 
     function send(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
@@ -317,8 +344,12 @@ function CommentForm({
                 maxLength={MAX_COMMENT}
                 onChange={(event) => setBody(event.target.value)}
                 onKeyDown={onKey}
-                // The form opens on a click that asks for it, so the field takes the focus at once.
-                ref={(field) => field?.focus()}
+                // The form opens on a click that asks for it, so the field takes the focus at once, after any words it
+                // holds already.
+                ref={(field) => {
+                    field?.focus()
+                    field?.setSelectionRange(field.value.length, field.value.length)
+                }}
                 className="min-h-16"
             />
             <div className="flex items-center justify-end gap-1">
