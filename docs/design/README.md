@@ -141,7 +141,8 @@ canopy (harness, Python)
     desks.py       a joint run's desk: one link per worktree it leased (§18)
     tidy.py        a run's object directory, and each slot put back before it is returned: its `.git` link and
                    `commondir`, and no ref or reflog naming the run's own objects (§8)
-    reconcile.py   dead runs marked crashed, their slots and desks cleaned up, stale leases returned, the capacity left
+    reconcile.py   dead runs marked crashed, their slots and desks cleaned up, stale leases returned, the capacity
+                   left; the shadow of canopy's pool over treehouse's slots (§18)
     halt.py        canopy stop --now: a stopped ticket's run killed and closed as reconcile closes a dead one (§22)
 
   chores/          the operator's recurring chores (§19); what the web UI reads of them is in core (chore_*.py)
@@ -222,7 +223,9 @@ canopy (harness, Python)
     definitions.py the snapshot of agents/ and skills/ that agent runs load (§13), the private worker's rendered from
                    config; the guards against shadowing them and against naming the tracker's tools (§22)
     prompts.py     prompt files and overrides; rendering worker prompts
+    pools.py       what a worktree pool is to every caller: slots, leases, returns, and the Pool protocol (§18)
     treehouse.py   status, get --lease, return, destroy; a Pool per repository, with its declared size (§18)
+    pool.py        canopy's own pool: worktrees it makes, leases in the journal's slots table (§18, ROADMAP M45)
     hostgit.py     git as the harness runs it: hooks, the filesystem monitor, and submodule fetches off; a slot's
                    `.git` link and `commondir`, read and put back (§8)
     workspace.py   the workspace: its map, repositories, their pools, the private state directory (§18)
@@ -230,6 +233,7 @@ canopy (harness, Python)
   infra/           plumbing that knows nothing about tickets or agents
     procs.py       the only module that runs subprocesses (lint-enforced); a timeout kills the whole process group;
                    a child's PWD names its cwd (OpenCode runs tools in PWD); detached spawns and pid liveness
+    cwds.py        the processes working in a directory, from /proc or lsof, and ending them: what keeps a slot busy
     lock.py        flock on <state_dir>/lock; a tick that cannot lock exits 0 with a log line
     stopping.py    SIGTERM, SIGHUP, and SIGINT become an exception the cleanup of _run and _chore catches
     hangup.py      whether the controlling terminal hung up, to tell that SIGHUP from a reload's

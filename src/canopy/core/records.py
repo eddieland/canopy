@@ -66,6 +66,22 @@ class ReviewRequest(Row):
     end_reason: str | None
 
 
+@dataclass(frozen=True)
+class PoolSlot(Row):
+    """A slot of one of canopy's own pools (DESIGN §18): where it is, and its lease while it has one."""
+
+    TABLE: ClassVar[str] = "slots"
+
+    repo: str
+    name: str
+    path: str
+    lease_id: str | None
+    lease_holder: str | None
+    leased_at: str | None
+    base: str
+    seeded: str
+
+
 def fetch_all[R: Row](conn: sqlite3.Connection, row_type: type[R], sql: str, params: Sequence[object] = ()) -> list[R]:
     """Run `sql` and build each row it returns as `row_type`.
 
