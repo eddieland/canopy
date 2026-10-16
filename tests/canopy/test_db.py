@@ -446,7 +446,7 @@ def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: 
     assert (review_run["session_id"], review_run["cost_usd"], review_run["tokens_input"]) == (None, None, None)
     chore_run = db.get_chore_run(conn, 1)
     assert chore_run is not None
-    assert (chore_run["session_id"], chore_run["cost_usd"], chore_run["tokens_input"]) == (None, None, None)
+    assert (chore_run.session_id, chore_run.cost_usd, chore_run.tokens_input) == (None, None, None)
     run = db.get_run(conn, 1)
     assert run is not None
     assert (run["session_id"], run["cost_usd"], run["tokens_input"]) == (None, None, None)

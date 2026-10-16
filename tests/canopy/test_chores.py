@@ -114,12 +114,12 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
         assert main(["chore", "run", "build-health", "--context", "Look at build 90"]) == 0
         deadline = time.monotonic() + 30
         row = db.get_chore_run(conn, 1)
-        while row is not None and row["status"] == "running" and time.monotonic() < deadline:
+        while row is not None and row.status == "running" and time.monotonic() < deadline:
             time.sleep(0.05)
             row = db.get_chore_run(conn, 1)
         assert row is not None
-        assert row["status"] == "ok", Path(row["log_path"]).read_text()
-        assert result.stored(row["result_json"]) == result.ChoreResult.model_validate(OK)
+        assert row.status == "ok", Path(row.log_path).read_text()
+        assert result.stored(row.result_json) == result.ChoreResult.model_validate(OK)
         assert chore_decisions(conn, tick_id) == [
             ("build-health", "dispatch:chore", "chore run 1; context=Look at build 90")
         ]
@@ -139,7 +139,7 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
         # Run files are kept by chore, out of its working directory.
         runs = canopy_env.state_dir / "chore-runs" / "build-health"
         assert runs.stat().st_mode & 0o777 == 0o700
-        assert row["log_path"] == str(runs / "1.log")
+        assert row.log_path == str(runs / "1.log")
         assert (runs / "1.prompt").stat().st_mode & 0o777 == 0o600
         assert not (cwd / "1.log").exists()
         # Its lifelock goes with it: a run leaves its log and prompt behind, and nothing else.
@@ -234,8 +234,8 @@ def test_an_invalid_result_is_unknown_and_records_no_findings(
     run_id = run_inline(conn, report)
     row = db.get_chore_run(conn, run_id)
     assert row is not None
-    assert row["status"] == "unknown"
-    assert result.stored(row["result_json"]) is None
+    assert row.status == "unknown"
+    assert result.stored(row.result_json) is None
 
 
 def test_long_text_is_cut_to_its_limits() -> None:
@@ -327,11 +327,11 @@ def test_a_finding_is_aged_from_the_first_ok_run_that_reported_it(
     assert third is not None
     cfg = load(canopy_env.root, canopy_env.user_file)
     found = {f.finding.id: f.since for f in view.open_findings(conn, cfg, workspace.load(canopy_env.root))}
-    assert found == {FINDING["id"]: first["started_at"], "stuck/pr-7": third["started_at"]}
+    assert found == {FINDING["id"]: first.started_at, "stuck/pr-7": third.started_at}
     # A finding open longer than one page of history reads back further.
     with mock.patch.object(view, "_HISTORY_RUNS", 1):
         found = {f.finding.id: f.since for f in view.open_findings(conn, cfg, workspace.load(canopy_env.root))}
-        assert found == {FINDING["id"]: first["started_at"], "stuck/pr-7": third["started_at"]}
+        assert found == {FINDING["id"]: first.started_at, "stuck/pr-7": third.started_at}
 
 
 def test_a_shadowing_config_above_the_cwd_stops_the_chore(canopy_env: CanopyEnv, chores: Path, agent_log: Path) -> None:
@@ -345,8 +345,8 @@ def test_a_shadowing_config_above_the_cwd_stops_the_chore(canopy_env: CanopyEnv,
     run_id = run_inline(conn, OK)
     run = db.get_chore_run(conn, run_id)
     assert run is not None
-    assert run["status"] == "crashed"
-    assert "canopy-chore.md" in json.loads(run["result_json"])["harness"]
+    assert run.status == "crashed"
+    assert "canopy-chore.md" in json.loads(run.result_json)["harness"]
     assert not agent_log.exists() or "canopy-chore" not in agent_log.read_text()
 
 
@@ -385,8 +385,8 @@ def test_a_chore_that_times_out(canopy_env: CanopyEnv, chores: Path) -> None:
         assert main(["_chore", "1"], runner=InlineRunner(timeout_agent=True)) == 0
         row = db.get_chore_run(conn, 1)
         assert row is not None
-        assert row["status"] == "timeout"
-        assert json.loads(row["result_json"]) == {"harness": "the chore timed out after 1 minutes"}
+        assert row.status == "timeout"
+        assert json.loads(row.result_json) == {"harness": "the chore timed out after 1 minutes"}
 
 
 def test_a_killed_chore_run_is_crashed_on_the_next_tick(
@@ -398,12 +398,13 @@ def test_a_killed_chore_run_is_crashed_on_the_next_tick(
         db.finish_tick(conn, tick_id, "ok", "test")
     deadline = time.monotonic() + 30
     row = db.get_chore_run(conn, 1)
-    while (row is None or row["agent_pid"] is None) and time.monotonic() < deadline:
+    while (row is None or row.agent_pid is None) and time.monotonic() < deadline:
         time.sleep(0.05)
         row = db.get_chore_run(conn, 1)
     assert row is not None
-    assert row["agent_pid"] is not None, "`_chore` never started the agent"
-    pid, agent_pid = int(row["pid"]), int(row["agent_pid"])
+    pid, agent_pid = row.pid, row.agent_pid
+    assert agent_pid is not None, "`_chore` never started the agent"
+    assert pid is not None
     os.kill(pid, signal.SIGKILL)
     while procs.alive(pid) and time.monotonic() < deadline:
         time.sleep(0.05)
@@ -411,8 +412,8 @@ def test_a_killed_chore_run_is_crashed_on_the_next_tick(
     tick()
     crashed = db.get_chore_run(conn, 1)
     assert crashed is not None
-    assert crashed["status"] == "crashed"
-    assert not procs.lifelock(Path(crashed["log_path"])).exists()
+    assert crashed.status == "crashed"
+    assert not procs.lifelock(Path(crashed.log_path)).exists()
     while procs.alive(agent_pid) and time.monotonic() < deadline:
         time.sleep(0.05)
     assert not procs.alive(agent_pid)
@@ -457,7 +458,7 @@ def test_try_runs_a_chore_in_the_foreground_and_records_it(
     def holding(ctx: Context, run_id: int, *, out: TextIO) -> execute.Outcome:
         run = db.get_chore_run(ctx.conn, run_id)
         assert run is not None
-        held.append(lock.held(procs.lifelock(Path(run["log_path"]))))
+        held.append(lock.held(procs.lifelock(Path(run.log_path))))
         return run_chore(ctx, run_id, out=out)
 
     run_chore = execute.execute
@@ -475,8 +476,8 @@ def test_try_runs_a_chore_in_the_foreground_and_records_it(
     # A run like the overseer's, with no tick and no decision: its result is the chore's latest.
     row = db.get_chore_run(conn, 2)
     assert row is not None
-    assert (row["tick_id"], row["status"], row["pid"]) == (None, "ok", os.getpid())
-    assert "--- chore stdout ---" in Path(row["log_path"]).read_text()
+    assert (row.tick_id, row.status, row.pid) == (None, "ok", os.getpid())
+    assert "--- chore stdout ---" in Path(row.log_path).read_text()
     assert [d["action"] for d in conn.execute("SELECT action FROM decisions")] == ["dispatch:chore"]
     assert open_ids(canopy_env, conn) == []
     [state] = view.states(conn, load(canopy_env.root, canopy_env.user_file), workspace.load(canopy_env.root))
@@ -489,10 +490,10 @@ def test_try_runs_a_chore_in_the_foreground_and_records_it(
     assert tried["env"]["CANOPY_RUN_ID"] == "chore-2"
     run = json_block(tried["argv"][3])
     assert (run["run_id"], run["context"]) == (2, "Look at build 91")
-    assert json_block(start.prompt_file(Path(row["log_path"])).read_text()) == run
+    assert json_block(start.prompt_file(Path(row.log_path)).read_text()) == run
     # The try held its run's lifelock, as a detached `_chore` does, and removed it once the row was closed.
     assert held == [True]
-    assert not procs.lifelock(Path(row["log_path"])).exists()
+    assert not procs.lifelock(Path(row.log_path)).exists()
     # It sees what a run starting now would: the latest run and its open findings.
     assert run["previous_run"]["run_id"] == 1
     assert [f["id"] for f in run["open_findings"]] == [FINDING["id"]]
@@ -538,7 +539,7 @@ def test_try_works_with_chores_off_and_reports_a_bad_result(
         assert "chore try build-health: unknown (" in capsys.readouterr().out
         row = db.get_chore_run(conn, 1)
         assert row is not None
-        assert row["status"] == "unknown"
+        assert row.status == "unknown"
 
 
 def test_try_refuses_while_the_chore_runs_unless_it_records_nothing(
@@ -682,13 +683,13 @@ def test_a_chore_run_records_what_it_cost(
         run_id = run_inline(conn, OK)
         row = db.get_chore_run(conn, run_id)
         assert row is not None
-        assert row["status"] == "ok"  # the result line is read from the text events
-        assert row["session_id"] == "ses_chore"
+        assert row.status == "ok"  # the result line is read from the text events
+        assert row.session_id == "ses_chore"
         usage = db.usage_of(row)
         assert usage is not None
         assert usage.cost_usd == 0.25  # two model calls at 0.125
         assert (usage.first_call, usage.first_cache_write) == (5500, 500)
-        assert (canopy_env.state_dir / definitions.RUNTIME_DIR / row["definitions_digest"]).is_dir()
+        assert (canopy_env.state_dir / definitions.RUNTIME_DIR / row.definitions_digest).is_dir()
         assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
 
         capsys.readouterr()

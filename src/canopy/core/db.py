@@ -809,25 +809,28 @@ def set_tick_session(conn: sqlite3.Connection, tick_id: int, session_id: str) ->
     conn.execute("UPDATE ticks SET session_id = ? WHERE id = ?", (session_id, tick_id))
 
 
-def usage_of(row: sqlite3.Row) -> Usage | None:
+def usage_of(row: sqlite3.Row | records.Row) -> Usage | None:
     """What a run, chore run, review run, or tick row says its agent cost, or None when the runtime reported nothing.
 
     Returns:
         The row's cost and token counts, a missing count read as 0 and a missing peak context or first call as
         unknown, or None when it has no cost.
     """
-    if row["cost_usd"] is None:
+    values = records.columns(row)
+    if values["cost_usd"] is None:
         return None
     return agent_output.Usage(
-        cost_usd=float(row["cost_usd"]),
-        input=int(row["tokens_input"] or 0),
-        output=int(row["tokens_output"] or 0),
-        reasoning=int(row["tokens_reasoning"] or 0),
-        cache_read=int(row["tokens_cache_read"] or 0),
-        cache_write=int(row["tokens_cache_write"] or 0),
-        peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
-        first_call=int(row["tokens_first_call"]) if row["tokens_first_call"] is not None else None,
-        first_cache_write=int(row["tokens_first_cache_write"]) if row["tokens_first_cache_write"] is not None else None,
+        cost_usd=float(values["cost_usd"]),
+        input=int(values["tokens_input"] or 0),
+        output=int(values["tokens_output"] or 0),
+        reasoning=int(values["tokens_reasoning"] or 0),
+        cache_read=int(values["tokens_cache_read"] or 0),
+        cache_write=int(values["tokens_cache_write"] or 0),
+        peak_context=int(values["tokens_peak_context"]) if values["tokens_peak_context"] is not None else None,
+        first_call=int(values["tokens_first_call"]) if values["tokens_first_call"] is not None else None,
+        first_cache_write=int(values["tokens_first_cache_write"])
+        if values["tokens_first_cache_write"] is not None
+        else None,
     )
 
 
@@ -975,20 +978,21 @@ def insert_chore_run(conn: sqlite3.Connection, *, tick_id: int | None, chore: st
     return run_id
 
 
-def get_chore_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
+def get_chore_run(conn: sqlite3.Connection, run_id: int) -> records.ChoreRun | None:
     """Return the chore run with `run_id`, or None."""
-    row: sqlite3.Row | None = conn.execute("SELECT * FROM chore_runs WHERE id = ?", (run_id,)).fetchone()
-    return row
+    return records.fetch_one(conn, records.ChoreRun, "SELECT * FROM chore_runs WHERE id = ?", (run_id,))
 
 
 def chore_runs(
     conn: sqlite3.Connection, chore: str, limit: int = 1000, *, before: int | None = None
-) -> list[sqlite3.Row]:
+) -> list[records.ChoreRun]:
     """Return `chore`'s runs, newest first: at most `limit`, and only those before run id `before` if it is given."""
-    return conn.execute(
+    return records.fetch_all(
+        conn,
+        records.ChoreRun,
         "SELECT * FROM chore_runs WHERE chore = ? AND id < ? ORDER BY id DESC LIMIT ?",
         (chore, before if before is not None else 2**63 - 1, limit),
-    ).fetchall()
+    )
 
 
 def chore_costs_since(conn: sqlite3.Connection, chore: str, since: str) -> tuple[int, list[float]]:
