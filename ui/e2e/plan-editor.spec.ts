@@ -286,6 +286,20 @@ test('inline Markdown pasted into a sentence stays in it, and prose or a Shift p
     await expect(plan(page).getByText('**Spreadsheets** and `.ods`, which the ticket')).toBeVisible()
 })
 
+test('Markdown pasted into a code block stays code, as its characters', async ({ page }) => {
+    await plan(page).locator('blockquote p').click()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Enter')
+    await page.getByRole('button', { name: 'Code block', exact: true }).click()
+    await paste(page, '- name: web\n- name: api\n# both deploy')
+    await expect(plan(page).locator('pre')).toContainText('- name: web')
+    await expect(plan(page).locator('li').filter({ hasText: 'name: web' })).toHaveCount(0)
+    await expect(plan(page).getByRole('heading', { name: 'both deploy' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    await expect(page.getByLabel('Plan Markdown')).toContainText('```\n- name: web\n- name: api\n# both deploy\n```')
+})
+
 test.describe('copying out of the plan', () => {
     test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
 
