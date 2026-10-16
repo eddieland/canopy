@@ -125,7 +125,6 @@ class TrustState(TypedDict):
     comment_prefix: str
     comment_suffix: str
     branch_prefix: str
-    pr_label: str
 
 
 class PolicyState(TypedDict):
@@ -339,7 +338,6 @@ def state_block(
             "comment_prefix": config.trust.comment_prefix,
             "comment_suffix": config.trust.comment_suffix,
             "branch_prefix": config.trust.branch_prefix,
-            "pr_label": config.trust.pr_label,
         },
         "policy": {
             "max_implement_attempts": config.policy.max_implement_attempts,

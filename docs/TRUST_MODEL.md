@@ -407,8 +407,8 @@ that repeats one of canopy's permission patterns can put its own rules after it 
 - A command template that runs one of canopy's agents must name canopy's definitions directory, so OpenCode never falls
   back to its default agent, which allows everything.
 
-Residual: the repository still chooses the tracker provider, the query, `needs_human_label`, `pr_label`, the branch
-prefix, and `tracker.ticket_url`. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled PRs,
+Residual: the repository still chooses the tracker provider, the query, `needs_human_label`, the branch prefix,
+and `tracker.ticket_url`. The query cannot authorize (§5 T1), so the worst case is wasted ticks, mislabeled tickets,
 agent branches under an unexpected prefix, which branch protection (§7) still governs, or the web UI's ticket links
 leading to an `https://` site other than the tracker: the UI shows each link's address, and following one runs
 nothing. The query can still widen what the overseer reads: it reads every ticket a query returns, text and comments,

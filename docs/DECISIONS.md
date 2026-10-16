@@ -86,7 +86,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D010. Everything runs as the operator
 
-- No bot account. Agent work is marked by branch prefix, PR label, and a commit trailer the operator may turn off.
+- No bot account. Agent work is marked by branch prefix and a commit trailer the operator may turn off.
 - Revisit: when audit or compliance requires a distinct identity.
 
 ## D014. Tracker-agnostic: MCP plus a contract, with optional provider skills

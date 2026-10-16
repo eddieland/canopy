@@ -57,7 +57,7 @@ in order:
 
    The object holds, in order from what changes rarely to what changes every tick, for a runtime that caches part of a
    message: workspace root; the workspace (name, the path of `MAP.md` if any); tracker config (provider, query, labels,
-   needs-human label); trust config (authorized repliers, branch prefix, PR label); policy (limits and stacking); the
+   needs-human label); trust config (authorized repliers, branch prefix); policy (limits and stacking); the
    repositories (name, path, the map's clone `url`, summary, whether cloned, its pool's leased slots, §18); the
    `tickets` rows not marked done, except those the operator stopped; `stopped`; `recently_done` (§7); split children
    (§18); chores and reviews when configured; the operator's notices to workers in force or lately ended (§8), when
@@ -598,7 +598,7 @@ dispatch names at least one, in a workspace of one repository too.
    row (kind, branch, started_at, whether it is private) and a `run_slots` row per slot (repository, slot path, lease
    id, holder, and base branch: `--base` if given, else treehouse's). Each repository becomes a unit of the ticket, with
    the run's branch.
-3. Render the worker prompt for the kind with: KEY, tracker provider, branch name, PR label, needs-human label, timeout,
+3. Render the worker prompt for the kind with: KEY, tracker provider, branch name, needs-human label, timeout,
    the attempt number (one more than the most runs of the kind in any unit covered) and that unit's limit, a
    `{{REPOSITORIES}}` section listing each repository's path, base branch, journaled PR, and summary, the authorized
    repliers, the trusted reviewers and, on a public ticket, the operator's latest messages (§7), the queue labels,
@@ -816,7 +816,7 @@ a repository's could stand in for the operator's. Any program it runs must be on
 canopy, which workers inherit. It changes only how the PR is opened; every other obligation above still holds. The
 branch is `{{BRANCH}}`, pushed as the obligations above say, and `_run` still checks it is on origin (step 5). A program
 that pushes by itself is past the bash rules, which match the command text, so branch protection governs (TRUST_MODEL
-T1). The PR targets the listed base, carries the ticket key and `trust.pr_label` with no closing keywords, and its URL
+T1). The PR targets the listed base, carries the ticket key with no closing keywords, and its URL
 goes in the result's `prs`. The overseer and later workers still read the PR through the GitHub MCP, so it must be one
 that server can read. `fix-ci` and `split` open no PRs and ignore the key. Updating an existing PR, such as retargeting
 a stacked
