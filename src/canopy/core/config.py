@@ -38,6 +38,7 @@ from pydantic import (
 )
 
 from canopy.core import contract
+from canopy.core.vocab import PoolKind
 
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
@@ -281,7 +282,7 @@ class Section(BaseModel):
     """Base for config tables: unknown keys are errors, values are frozen, defaults are validated."""
 
     # validate_default: defaults go through the same validators as file values, so `~/.canopy` is expanded.
-    model_config = ConfigDict(extra="forbid", frozen=True, validate_default=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, validate_default=True, defer_build=True)
 
 
 # A part of an OpenCode tool name: an MCP server's name or one of its tools', as OpenCode sanitizes them. They are
@@ -518,6 +519,16 @@ class Capacity(Section):
             The repository's entry in `repo_slots`, else `slots_per_repo`, which is None when pools are unmanaged.
         """
         return self.repo_slots.get(repo, self.slots_per_repo)
+
+
+class Pools(Section):
+    """The `[pools]` table: which pool makes a workspace's worktrees (DESIGN §18, ROADMAP M45).
+
+    User-only, as the pools' sizes are: it decides what runs on the operator's machine. Switching is safe with runs in
+    flight, since a lease always goes back to the pool that made it.
+    """
+
+    backend: Annotated[PoolKind, Scope.USER] = PoolKind.TREEHOUSE
 
 
 class Runtime(Section):
@@ -818,6 +829,7 @@ class Config(Section):
     policy: Policy
     trust: Trust
     capacity: Capacity
+    pools: Pools
     runtime: Runtime
     loop: Loop
     review: Review
@@ -838,6 +850,7 @@ SECTIONS: dict[str, type[Section]] = {
     "policy": Policy,
     "trust": Trust,
     "capacity": Capacity,
+    "pools": Pools,
     "runtime": Runtime,
     "loop": Loop,
     "review": Review,

@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, StrictStr, ValidationError
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr, ValidationError
 
 from canopy.core import treehouse
 from canopy.core.config import (
@@ -75,7 +75,7 @@ def _url(value: str) -> str:
 
 
 class _Table(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, defer_build=True)
 
 
 class _WorkspaceTable(_Table):
@@ -91,7 +91,7 @@ class _RepoTable(_Table):
 
 
 class _Map(_Table):
-    workspace: _WorkspaceTable = _WorkspaceTable()
+    workspace: _WorkspaceTable = Field(default_factory=_WorkspaceTable)
     repos: dict[RepoName, _RepoTable] = {}
 
 
@@ -137,7 +137,7 @@ class Workspace:
             return None
         return next((r for r in self.repos if r.name == name), None)
 
-    def pool(self, name: str | None) -> treehouse.Pool:
+    def treehouse_pool(self, name: str | None) -> treehouse.Pool:
         """Return where treehouse runs for repository `name`'s pool.
 
         A workspace's pools are under its root, whichever `treehouse.toml` its repositories have. A repository with no
@@ -145,7 +145,9 @@ class Workspace:
         run in it can be closed, though nothing new can be leased there.
         """
         repo = self.repo(name)
-        cwd = repo.path if repo is not None and repo.cloned else self.root
+        clone = repo.path if repo is not None else (self.root / REPOS_DIR / name if name else None)
+        # A clone the map no longer lists still has its pool, which sync empties before it removes the clone.
+        cwd = clone if clone is not None and (clone / ".git").exists() else self.root
         return treehouse.Pool(cwd=cwd, root=self.root)
 
 

@@ -1,6 +1,7 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help all check fmt lint test snapshots ui-fmt ui-check ui-e2e ui-build install-check sandbox-canary treehouse
+.PHONY: help all check fmt lint test snapshots ui-fmt ui-check ui-e2e ui-build install-check sandbox-canary
+.PHONY: pool-contract treehouse
 
 ##@ General
 
@@ -31,8 +32,11 @@ lint: ## Run linters and the type checker (ruff, pyrefly strict, rumdl, editorco
 	uv run actionlint
 
 # One worker per CPU. For one test or a debugger, run `uv run pytest` without -n: it stays serial.
+# A test still running after a minute (the slowest takes ~10s) is hung: faulthandler dumps every thread's stack and
+# ends its worker, which fails that test by name instead of stalling the run until CI's job timeout. Here, not in
+# pyproject.toml, so the opt-in canaries, which wait minutes on a real sandbox or model, keep no limit.
 test: ## Run all tests, in parallel
-	uv run pytest -q -n auto
+	uv run pytest -q -n auto -o faulthandler_timeout=60 -o faulthandler_exit_on_timeout=true
 
 # Review the diff before committing it: a snapshot is what the tests hold canopy's output to (syrupy). It also deletes
 # the snapshots no test reads any more. Serial: syrupy refuses to update under xdist without an experimental file lock.
@@ -68,6 +72,12 @@ install-check: ## Install canopy into an empty HOME and run it against the fakes
 # its own job, on Linux (DESIGN §24, The canary, docs/SANDBOX.md).
 sandbox-canary: ## Check that the sandbox holds: the shipped wrapper and templates under the real srt
 	CANOPY_SANDBOX_CANARY=1 uv run pytest -q -n auto tests/canopy/test_sandbox_canary.py
+
+# Not part of check: it needs real treehouse on PATH (`make treehouse`). `make test` runs the same suite against the
+# fake, and against real treehouse too when it is on PATH; this fails where that skips. CI runs it as its own job, on
+# Linux and macOS (ROADMAP M45, DESIGN §18 What a pool guarantees).
+pool-contract: ## Check that real treehouse keeps every guarantee canopy takes from a pool
+	CANOPY_POOL_CONTRACT=1 uv run pytest -q -n auto tests/canopy/test_pool_contract.py
 
 ##@ Setup
 

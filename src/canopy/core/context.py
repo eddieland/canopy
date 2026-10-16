@@ -6,9 +6,12 @@ import dataclasses
 import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import chore_view, db, treehouse
+from canopy.core import chore_view, db, pools, treehouse
+from canopy.core.pool import CanopyPool
+from canopy.core.vocab import PoolKind
+from canopy.core.workspace import REPOS_DIR
 from canopy.infra import lock, procs
 
 # Held by every command that may start a detached run, so two cannot both pass a capacity check (DESIGN §8, §19).
@@ -45,18 +48,53 @@ class Context:
         """The workspace root: the directory the overseer runs in."""
         return self.ws.root
 
-    def pool(self, repo: str | None) -> treehouse.Pool:
-        """Where treehouse runs for repository `repo`'s pool, with the size `capacity` declares for it.
-
-        Every pool gets the operator's own `.worktreeinclude`, if `paths.worktree_include` names one (DESIGN §9).
+    def pool(self, repo: str) -> pools.Pool:
+        """Repository `repo`'s pool, made by the backend `pools.backend` names (DESIGN §18).
 
         Returns:
-            The workspace's pool for `repo`, sized from `capacity` when `repo` is given.
+            The pool, sized from `capacity` and seeding from the operator's own `.worktreeinclude`, if
+            `paths.worktree_include` names one (DESIGN §9).
         """
-        pool = dataclasses.replace(self.workspace.pool(repo), include_file=self.config.paths.worktree_include)
-        if repo is None:
-            return pool
-        return dataclasses.replace(pool, slots=self.config.capacity.slots_for(repo))
+        return self.pool_of(self.config.pools.backend, repo)
+
+    def pool_of(self, kind: PoolKind, repo: str | None) -> pools.Pool:
+        """Repository `repo`'s pool as backend `kind` makes it: the pool a lease it made goes back to.
+
+        A repository whose clone is gone still has a pool that can return a slot: treehouse finds it from the slot's
+        own path, and canopy's from its row.
+
+        Returns:
+            The pool, sized and seeding as `pool` says.
+        """
+        slots = self.config.capacity.slots_for(repo) if repo is not None else None
+        include = self.config.paths.worktree_include
+        match kind:
+            case PoolKind.TREEHOUSE:
+                where = dataclasses.replace(self.workspace.treehouse_pool(repo), slots=slots, include_file=include)
+                return treehouse.TreehousePool(self.runner, where)
+            case PoolKind.CANOPY:
+                return self.canopy_pool(repo or "")
+            case _:
+                assert_never(kind)
+
+    def canopy_pool(self, repo: str) -> CanopyPool:
+        """Repository `repo`'s pool as canopy's own pool makes it, whatever `pools.backend` names (DESIGN §18).
+
+        Returns:
+            The pool, sized and seeding as `pool` says. A repository the map does not list has its clone where sync
+            would have made it, `repos/<name>`.
+        """
+        found = self.workspace.repo(repo)
+        clone = found.path if found is not None else self.workspace.root / REPOS_DIR / repo
+        return CanopyPool(
+            self.runner,
+            self.conn,
+            repo,
+            self.workspace.root,
+            clone,
+            slots=self.config.capacity.slots_for(repo),
+            include_file=self.config.paths.worktree_include,
+        )
 
     @property
     def state_dir(self) -> Path:

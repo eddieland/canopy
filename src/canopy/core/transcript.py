@@ -56,7 +56,7 @@ Millis = Annotated[StrictInt, Field(ge=0, le=_MAX_MS)]
 
 
 class _Part(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
 
 class _Text(_Part):
@@ -92,7 +92,7 @@ class _Tokens(_Part):
     input: agent_output.Count = 0
     output: agent_output.Count = 0
     reasoning: agent_output.Count = 0
-    cache: _Cache = _Cache()
+    cache: _Cache = Field(default_factory=_Cache)
 
 
 class _Step(_Part):

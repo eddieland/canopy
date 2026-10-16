@@ -16,7 +16,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db, notice, outbox, prompts, review_requests, treehouse
+from canopy.core import contract, db, notice, outbox, pools, prompts, review_requests
 from canopy.core import review_result as result
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import lock, logs, procs
@@ -101,9 +101,9 @@ def holder(run_id: int) -> str:
     """The lease holder of a review run's slot: `canopy:review:<id>`.
 
     Returns:
-        The holder string treehouse records on the lease.
+        The holder the pool records on the lease.
     """
-    return treehouse.holder_for(f"{HOLDER_KEY}{run_id}")
+    return pools.holder_for(f"{HOLDER_KEY}{run_id}")
 
 
 def check(ctx: Context, *, tick_id: int, request: Request) -> str:
@@ -145,8 +145,8 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
         )
         pool = ctx.pool(repo)
         try:
-            lease = treehouse.lease(ctx.runner, f"{HOLDER_KEY}{run_id}", pool=pool)
-        except treehouse.TreehouseError as e:
+            lease = pool.lease(f"{HOLDER_KEY}{run_id}")
+        except pools.PoolError as e:
             db.delete_review_run(ctx.conn, run_id)
             raise Refusal("no_slot", str(e)) from e
         db.set_review_slot(
@@ -156,14 +156,13 @@ def start(ctx: Context, *, tick_id: int, request: Request, context: str | None) 
             lease_id=lease.lease_id,
             lease_holder=lease.lease_holder,
             base_branch=lease.base_branch,
+            pool=ctx.config.pools.backend,
         )
         try:
             return _spawn(ctx, run_id, request, lease, attempt=attempt, context=context)
         except BaseException:
-            with contextlib.suppress(treehouse.TreehouseError):
-                treehouse.return_slot(
-                    ctx.runner, lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder, pool=pool
-                )
+            with contextlib.suppress(pools.PoolError):
+                pool.return_slot(lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
             raise
 
 
@@ -179,7 +178,7 @@ def _purpose(conn: sqlite3.Connection, request: Request) -> str:
 
 
 def _spawn(
-    ctx: Context, run_id: int, request: Request, lease: treehouse.Lease, *, attempt: int, context: str | None
+    ctx: Context, run_id: int, request: Request, lease: pools.Lease, *, attempt: int, context: str | None
 ) -> Started:
     cfg = ctx.config
     values = {

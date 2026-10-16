@@ -882,7 +882,7 @@ Status: not started.
 
 REQUIREMENTS R18, DESIGN §25, and the parts of §7, §8, §14, §20, and §22 it changes. Asked for by the operator
 (2026-10-15), and taken next, ahead of M36: a ticket can be planned before it is implemented, the operator approves
-the plan before work starts, and the plan stays in the journal to read later. Today the `implement` worker plans
+the plan before work starts, and the plan is kept on disk to read later. Today the `implement` worker plans
 inside its own session, and only its summary survives. M36 to M40 take up the new phases and kind as they reshape
 the state block and the overseer.
 
@@ -908,13 +908,17 @@ the state block and the overseer.
   plan (and makes a new one if the ticket has one), `canopy plan KEY --skip` waives it, and `canopy start KEY --plan`
   starts a private ticket with one. Asking for a plan and `--skip` supersede a waiting or approved plan at once, so
   the next tick dispatches a new `plan` or the `implement`. Each refuses as `inside_run` when `CANOPY_TICK_ID` or
-  `CANOPY_RUN_ID` is set, and `--skip` and asking for a plan refuse as `bad_plan` while a plan run is running or once
-  the ticket has a branch.
-- Approval: `canopy plan KEY --approve` approves the newest plan; it refuses `inside_run`, and `bad_plan` when the
-  newest plan is not waiting or a plan run for the ticket is running. A reply (`canopy reply KEY`) newer than the plan
-  asks for changes: the overseer dispatches `plan` again with the reply in its context, and the new plan supersedes
-  the old. An approval after such a reply, before the new plan run starts, wins: it is the operator's later word, and
-  the reply reaches the `implement` as an operator message, as any message does.
+  `CANOPY_RUN_ID` is set, and `--skip` and asking for a plan refuse as `bad_plan` while a plan run is running.
+  Asking for a plan also refuses once the ticket has a branch; `--skip` there drops the plan from later runs.
+- Approval: `canopy plan KEY --approve` approves the newest plan as its file stands, the operator's edits included,
+  and records the file's hash; it refuses `inside_run`, and `bad_plan` when the newest plan is not waiting (unless it
+  is approved and its file changed since), a plan run for the ticket is running, or its file is missing or no longer
+  a plan. `implement` and `resume` refuse `plan_changed` when the approved plan's file is missing, unreadable, or no
+  longer has its approved hash; the operator approves it again, or, for a file that is gone, asks for a new plan or
+  `--skip`s it. A reply (`canopy reply KEY`) newer than the plan asks for changes: the overseer dispatches `plan` again
+  with the reply in its context, and the new plan supersedes the old. An approval after such a reply, before the new
+  plan run starts, wins: it is the operator's later word, and the reply reaches the `implement` as an operator
+  message, as any message does.
 - A hard guard in code: an `implement` for a ticket that needs a plan, by `policy.plan` or its own setting, and has no
   approved plan is refused as `unplanned`. A `plan` for a ticket with a branch, or for a split's parent, is
   `bad_plan`. A `--slug`, `--base`, or `--request` on a plan is `bad_slug`, `bad_base`, or `bad_request`.
@@ -937,28 +941,35 @@ the state block and the overseer.
   every plan, oldest first, the newest with its open comments. The web UI's ticket page shows the newest plan in the
   plan editor (§25, Commenting on a plan), where the operator edits it and comments on its passages, with `Approve`,
   `Ask for changes` (the open comments, each with its passage, and a note, as one reply), and `Skip`, and lists
-  earlier plans. `POST /tickets/{key}/plan` with
-  `approve`, `request`, or `skip`, through the same code as the CLI, so with the same refusals. A `plan.proposed`
-  event goes to the operator's sinks (§20), with the ticket's title and no plan text.
-- Journal: a migration adds `plans` (id, ticket key, run id, body, created at, status `proposed`, `approved`, or
-  `superseded`, approved at and channel) and the ticket's own plan setting (unset, `plan`, or `skip`), set only by the
-  operator's channels. A plan row records who wrote it, its run or the operator's channel, since an edit in the web
-  UI saves a new plan. `plan_threads` and `plan_replies` hold the operator's comments, the ticket's, anchored by their
-  passage's words. `canopy forget` supersedes a waiting or approved plan, so a forgotten ticket is planned again
-  under `"approve"`. Its hash joins `SHIPPED`, and a row per table `SEED`, in `tests/canopy/test_db.py`.
+  earlier plans. `POST /tickets/{key}/plan` with `approve`, `request`, or `skip`, through the same code as the CLI,
+  so with the same refusals. A `plan.proposed` event goes to the operator's sinks (§20), with the ticket's title and
+  no plan text.
+- Storage: each plan is a file of its own, `<state_dir>/plans/<KEY>/<run>.md`, named for its plan run, operator-only,
+  never deleted by canopy (§25, Where plans live). A migration adds `plans` (id, ticket key, run id, created at, status
+  `proposed`, `approved`, or `superseded`, the SHA-256 and size of the file as written, the approved hash, approved at
+  and channel; no body) and the ticket's own plan setting (unset, `plan`, or `skip`), set only by the operator's
+  channels. `plan_threads` and `plan_replies` hold the operator's comments, the ticket's, anchored by their passage's
+  words. The web UI's editor saves an edit to the plan's file, refusing one the file changed under. `canopy forget`
+  supersedes a waiting or approved plan, so a forgotten ticket is planned again under `"approve"`. Its hash joins
+  `SHIPPED`, and a row per table `SEED`, in `tests/canopy/test_db.py`.
 - TRUST_MODEL: T1 says an approved plan is data, not an operator instruction; T3 counts plan runs toward capacity and
   attempts; T6 gives the planner no write scope; T8 adds the plan route to the web channel's writes. With the
   operator's approval note in the PR, for those, the overseer prompt, the new prompt, and the `canopy-planner`
   definition.
-- Tests with the fakes: under `"approve"`, a dry-run tick dispatches `plan` for a ready ticket; a `done` plan is
-  recorded `proposed` and raises `plan_review`; `implement` is refused `unplanned` until `canopy plan --approve`, then
+- Tests with the fakes: under `"approve"`, a dry-run tick dispatches `plan` for a ready ticket; a `done` plan is written
+  to its file and recorded `proposed`, and raises `plan_review`; an edit to the file before `--approve` is what the
+  worker gets; an edit after it makes `implement` refuse `plan_changed` until approved again, as does a missing file,
+  which `--skip` gets past on a ticket with a branch; an edit between dispatch and `_run`'s check crashes the run before
+  the worker starts; a symlinked `plans/` or ticket directory refuses the write; a plan file with no row is never read,
+  and a name already taken is never overwritten; `implement` is refused `unplanned` until `canopy plan --approve`, then
   finds `.canopy-plan.md` in its cwd, ignored by git, and the plan's headings in its prompt, and the file is gone once
   the slot is returned; a pushed head holding the file gets a harness note; a reply makes the next plan supersede the
   first; `--skip` lets `implement` through; an empty plan or one over the bound is `unknown`; a `blocked` plan records
   its question; `plan`, `--skip`, and `--approve` refuse inside a run; the planner's definition denies the tracker's
-  write tools; the web route approves; a comment and an edit saved through the web routes reach the next plan's
-  prompt; Playwright for the ticket page's buttons. The editor's own tests are in: a plan written back as read, HTML
-  and images kept as characters, anchors that survive edits and find nothing for a passage that is gone, and the
+  write tools; the web route approves; a comment asked for through the web route reaches the next plan's prompt; an
+  edit saved from the web UI is the file `--approve` takes, and one the file changed under is refused; Playwright for
+  the ticket page's buttons. The editor's own tests are in: a plan written back as read, HTML and images kept as
+  characters, anchors that survive edits and find nothing for a passage that is gone, and the
   change request (Vitest), and commenting, editing, resolving, and asking for changes in a browser (Playwright).
 - Open: a plan-and-go mode (`policy.plan = "auto"`) that implements without waiting, if the operator wants plans
   without the gate; whether a ticket that already has a branch can be planned again before a large `resume`; whether
@@ -994,19 +1005,24 @@ What every stage holds to:
 - **The host stays safe.** Every git canopy's pool runs goes through `hostgit.argv` (D107), and a step in a slot after
   a run comes after `_run`'s link and `commondir` check (D118).
 
-What treehouse does that canopy relies on or works around, from its source (read at `d40678e`; stage 1 checks each
-against the pinned `1185dc6`):
+What treehouse does that canopy relies on or works around, from its source at the pinned `1185dc6` (checked in stage
+1; DESIGN §18, What a pool guarantees, lists what the contract suite holds it to):
 
-- Reuse and return reset a slot with `read-tree --reset -u` and `clean -fd`, no `-x`: ignored files (build outputs,
-  `node_modules`, Bazel's links) survive, and untracked files and unpushed commits do not.
+- Reuse and return reset a slot with `read-tree --reset -u` and `clean -fd`, no `-x`, and move HEAD to the base's tip,
+  detached: ignored files (build outputs, `node_modules`, Bazel's links) survive, except those seeding wrote, which
+  the reset removes first; untracked files and commits no branch holds do not.
 - A slot is reused only when it is unleased, a worktree of this clone, clean (`status --porcelain
-  --untracked-files=all`), and has no process with its cwd inside it.
+  --untracked-files=all`), has no process with its cwd inside it, and its HEAD is merged (an ancestor, or the same
+  content as a squash) into the base or the base it was last leased on. A clean slot holding unmerged commits shows
+  `available` and is passed over.
 - `return` is conditional on the lease id and holder (exit 1 otherwise) and forced, so exit 3 never happens. It ends
-  processes in the slot first.
-- Seeding copies the ignored files `.worktreeinclude` (or `--include-file`) selects, on every lease, and fails a lease
-  whose seed target already exists.
-- `destroy` keeps a slot that is leased, in use, dirty, or unmerged into the default branch, and calls `ls-remote`
-  first. `status` writes treehouse's state and may move files out of a slot it recovers.
+  processes in the slot first (SIGTERM, then SIGKILL after two seconds), and parks the slot on its lease's base.
+- Seeding copies the untracked, ignored files `.worktreeinclude` (or `--include-file`) selects, on every lease. A
+  seed target already in the slot fails the lease, and treehouse then holds a reused slot under a `quarantined:`
+  holder. A symlink is written as a regular file holding its target.
+- `destroy` keeps a slot that is leased, in use, dirty, unverifiable, or unmerged into the default branch, and runs
+  `git fetch` and `ls-remote` on `origin` first. `status` rewrites treehouse's state, forgets a slot whose directory
+  is gone, and records a worktree it finds unrecorded as held; it moves no file.
 
 **Stage 1, the contract.** No behavior changes.
 
@@ -1022,7 +1038,9 @@ against the pinned `1185dc6`):
 **Stage 2, canopy's pool in shadow.** Built beside treehouse, wired to no caller.
 
 - Leases are journal rows: a migration adds `slots` (repository, name, path, lease id and holder, leased at, base,
-  the paths seeding wrote), written in the same transaction as the run it is for, under the tick and dispatch locks.
+  the paths seeding wrote). A lease claims its row under the pool's own lock before it touches the worktree, in a
+  transaction of its own rather than the run's, since the run is recorded only after its slots are leased; a lease
+  with no run is reconcile's to return, as treehouse's is (DESIGN §18, canopy's pool).
 - Layout: `<workspace>/pools/<repo>/<N>/<repo>`, with no hash of the remote, since a workspace's repository names are
   unique. The declared size is the only limit; a pool with none declared stops at 16, treehouse's default
   `max_trees`.
@@ -1063,7 +1081,12 @@ is enough.
 Accept: each stage's check, in order. Then `make install-check` and `make binary` pass with no `treehouse` on `PATH`,
 and a fresh install from README on a machine with no Go runs a day of `canopy loop`.
 
-Status: not started.
+Status: in progress. Stage 1 passed its check 2026-10-16: the contract suite passes against the fake, and against real
+treehouse at the pinned commit in CI on Linux and macOS. Stage 2 is built: canopy's pool passes every contract case, and
+reconcile's shadow logs `pool_shadow_mismatch`; its check, a week of `canopy loop` with the shadow on, is the
+operator's. Stage 3's choice is built too, ahead of stage 2's check at the operator's request (2026-10-16):
+`pools.backend` picks the pool, each lease goes back to the pool the journal says made it, and sync moves idle slots
+across on a switch. The default stays `"treehouse"` until stage 3's live check passes.
 
 ## M46. Workers file follow-up tickets
 
