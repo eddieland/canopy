@@ -46,6 +46,12 @@ function plan(page: Page): Locator {
     return page.getByRole('textbox', { name: 'Plan', exact: true })
 }
 
+// How far apart, in pixels, the tops of two elements are.
+async function topGap(a: Locator, b: Locator): Promise<number> {
+    const [boxA, boxB] = await Promise.all([a.boundingBox(), b.boundingBox()])
+    return Math.abs((boxA?.y ?? 0) - (boxB?.y ?? Infinity))
+}
+
 function comments(page: Page): Locator {
     return page.getByRole('article')
 }
@@ -155,15 +161,67 @@ test('the toolbar stays at the top of the page while the plan scrolls under it',
     await expect(page.getByLabel('Plan Markdown')).toContainText('a **template cache**')
 })
 
-test('a comment shows its passage in the plan, clear of the toolbar', async ({ page }) => {
+test('each comment sits beside its passage, and moves with it as the plan is edited above', async ({ page }) => {
     const card = comments(page).filter({ hasText: 'proxy in front' })
-    await card.scrollIntoViewIfNeeded()
     const passage = plan(page).locator('[data-thread=sample-1]')
-    await expect(passage).not.toBeInViewport()
-    await card.getByRole('button', { name: "streams the report's rows" }).click()
-    await expect(passage).toBeInViewport()
-    const toolbar = await page.getByRole('toolbar', { name: 'Format' }).boundingBox()
-    expect((await passage.boundingBox())?.y).toBeGreaterThanOrEqual((toolbar?.y ?? 0) + (toolbar?.height ?? 0))
+    await expect.poll(() => topGap(card, passage)).toBeLessThanOrEqual(1)
+    await plan(page).getByRole('heading', { level: 1 }).click()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('A paragraph that moves every passage under it down.')
+    await expect.poll(() => topGap(card, passage)).toBeLessThanOrEqual(1)
+})
+
+test('typing in the middle of a comment being written edits it in place', async ({ page }) => {
+    await select(page, "Excel's own format")
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    const field = page.getByRole('form', { name: 'Comment' }).getByRole('textbox')
+    await expect(field).toBeFocused()
+    await page.keyboard.type('abc')
+    await page.keyboard.press('ArrowLeft')
+    await page.keyboard.press('ArrowLeft')
+    await page.keyboard.type('X')
+    await expect(field).toHaveValue('aXbc')
+})
+
+test('a comment opens beside its passage, without the page moving', async ({ page }) => {
+    // As the operator would find it: in the middle of the window.
+    await plan(page)
+        .getByText("Excel's own format")
+        .evaluate((element) => element.scrollIntoView({ block: 'center' }))
+    await select(page, "Excel's own format")
+    const scroller = page.locator('.page-scroll')
+    const before = await scroller.evaluate((element) => element.scrollTop)
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    const form = page.getByRole('form', { name: 'Comment' })
+    await expect(form.getByRole('textbox')).toBeFocused()
+    expect(await scroller.evaluate((element) => element.scrollTop)).toBe(before)
+    const draft = page.locator('[data-align=draft]')
+    const passage = plan(page).locator('.plan-comment-active').filter({ hasText: "Excel's own format" })
+    await expect.poll(() => topGap(draft, passage)).toBeLessThanOrEqual(1)
+})
+
+// Where the page is too narrow for the comments beside the plan, they sit under it, as a list.
+test.describe('with the comments under the plan', () => {
+    test.use({ viewport: { width: 1000, height: 800 } })
+
+    test('the comments are a list under the plan, none placed at its passage', async ({ page }) => {
+        const doc = await plan(page).boundingBox()
+        const first = await comments(page).first().boundingBox()
+        expect(first?.y).toBeGreaterThan((doc?.y ?? 0) + (doc?.height ?? 0))
+        await expect(page.locator('.plan-margin[data-aligned]')).toHaveCount(0)
+    })
+
+    test('a comment shows its passage in the plan, clear of the toolbar', async ({ page }) => {
+        const card = comments(page).filter({ hasText: 'proxy in front' })
+        await card.scrollIntoViewIfNeeded()
+        const passage = plan(page).locator('[data-thread=sample-1]')
+        await expect(passage).not.toBeInViewport()
+        await card.getByRole('button', { name: "streams the report's rows" }).click()
+        await expect(passage).toBeInViewport()
+        const toolbar = await page.getByRole('toolbar', { name: 'Format' }).boundingBox()
+        expect((await passage.boundingBox())?.y).toBeGreaterThanOrEqual((toolbar?.y ?? 0) + (toolbar?.height ?? 0))
+    })
 })
 
 // The narrowest window the UI is laid out for (e2e/narrow.spec.ts): the toolbar's header must still fit on one line
