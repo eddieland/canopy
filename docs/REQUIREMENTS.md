@@ -160,6 +160,8 @@ workers can only read the tracker; questions reach the attention list (`awaiting
 operator answers with `canopy reply` or from the web UI. Its branch and PR title still name the ticket key, which a
 tracker's VCS integration may link to the ticket (DESIGN §22, Open).
 The PR still carries the commit attribution TRUST_MODEL T5 gives it: privacy covers the conversation, not authorship.
+With `tracker.private` set, a labeled ticket is started privately by its first dispatch (D119): the operator's queue
+label brings it in, and the label stays visible on the ticket.
 
 ### R12. One record of every ticket's conversation
 
