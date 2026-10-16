@@ -9,6 +9,7 @@ from unittest import mock
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.core.vocab import TickStatus
 from tests.canopy.helpers import InlineRunner, in_tick
 from tests.conftest import GitPool, git
 
@@ -43,7 +44,7 @@ def run_inline(
         assert main(review(*args, sha=sha, pr=pr), runner=InlineRunner()) == 0
         run_id = int(conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
         assert main(["_review", str(run_id)], runner=runner or InlineRunner()) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     return run_id
 
 

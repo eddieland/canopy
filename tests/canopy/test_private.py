@@ -14,7 +14,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, conversation, db, definitions, outbox
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import procs, resources
 from canopy.loop import attention, repeat
 from canopy.serve import views
@@ -147,7 +147,7 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(  # noqa: P
             assert "the operator's reply to message" in prompt
             ticket = db.get_ticket(conn, KEY)
             assert ticket is not None
-            assert ticket["last_message_id"] == db.latest_message_id(conn, source="operator")
+            assert ticket.last_message_id == db.latest_message_id(conn, source="operator")
             # The reply answered the question: the next tick raises no `awaiting_reply`, and acknowledges the reply.
             assert conversation.awaiting(conn) == []
             acknowledged = db.acknowledged_message_id(conn)
@@ -625,7 +625,7 @@ def test_a_ticket_a_tick_decided_about_without_recording_a_phase_is_seen(
     def in_a_tick(*args: str) -> None:
         with in_tick(conn) as tick_id:
             assert main(list(args)) == 0
-            db.finish_tick(conn, tick_id, "ok", "test")
+            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
 
     assert operator("start", KEY) == 0
     assert phase_line() == "not seen by a tick yet"

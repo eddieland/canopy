@@ -63,7 +63,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
     ticket = db.get_ticket(ctx.conn, row.ticket_key) if row.ticket_key else None
     return ReviewDetail(
         review=summary(row),
-        ticket_title=ticket_title(ticket["title"]) if ticket is not None else None,
+        ticket_title=ticket_title(ticket.title) if ticket is not None else None,
         summary=lines(stored.summary) or None if stored is not None else None,
         note=lines(note) or None if isinstance(note, str) else None,
         base_branch=row.base_branch or None,

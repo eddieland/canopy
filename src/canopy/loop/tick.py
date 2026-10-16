@@ -5,12 +5,13 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from canopy.chores import reconcile as chore_reconcile
 from canopy.core import agent_output, chore_view, conversation, db, definitions, notice, pools
 from canopy.core.config import render_command
 from canopy.core.items import one_line
+from canopy.core.vocab import TickStatus
 from canopy.infra import lock, logs, procs, resources
 from canopy.loop import attention, duties, state
 from canopy.reviews import reconcile as review_reconcile
@@ -27,11 +28,13 @@ DONE_LINE = "CANOPY_TICK_DONE"
 # the overseer (DESIGN §6). When it fails, the tick closes with this status and raises an item of the same name.
 CANOPY_CHECK = ("canopy", "--version")
 CANOPY_CHECK_TIMEOUT_SECONDS = 60
-CANOPY_UNAVAILABLE = attention.UNAVAILABLE
 # How long a ticket marked done stays in the state block's `recently_done`, so the overseer leaves it out while a human
 # has yet to close it in the tracker (DESIGN §7). One still open after that is read again and marked done again, which
 # lists it for as long once more.
 RECENTLY_DONE_DAYS = 30
+# How a tick ended: the status it closed its row with, or, with no row, `lock_busy` when another tick held the lock and
+# `error` when `canopy loop` caught the tick raising.
+type OutcomeStatus = TickStatus | Literal["lock_busy", "error"]
 
 
 @dataclass(frozen=True)
@@ -39,7 +42,7 @@ class Outcome:
     """How a tick ended."""
 
     tick_id: int | None
-    status: str  # ok | skipped | canopy_unavailable | overseer_failed | reconcile_failed | lock_busy
+    status: OutcomeStatus
     summary: str
     usage: agent_output.Usage | None = None  # what the overseer cost, when the runtime reported it
 
@@ -88,11 +91,9 @@ def _render(
     last_runs = db.latest_runs(ctx.conn)
     # A stopped ticket waits on the operator alone: listed by key, it gets no decision every tick (DESIGN §22).
     stopped = conversation.stopped(ctx.conn)
-    tickets = [t for t in db.open_tickets(ctx.conn) if str(t["key"]) not in stopped]
-    private = {str(t["key"]): found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
-    operator = {
-        str(t["key"]): found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None
-    }
+    tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped]
+    private = {t.key: found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
+    operator = {t.key: found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None}
     recently_done = db.recently_done(ctx.conn, db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS)))
     chores = chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now)
     block = state.state_block(
@@ -146,7 +147,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     if abandoned:
         log.warning("closed ticks left running by a dead tick process", extra={"abandoned_ticks": abandoned})
 
-    def finish(status: str, summary: str, usage: agent_output.Usage | None = None) -> Outcome:
+    def finish(status: TickStatus, summary: str, usage: agent_output.Usage | None = None) -> Outcome:
         db.finish_tick(ctx.conn, tick_id, status, summary)
         spent = usage.spent() if usage is not None else {}
         log.info("tick finished", extra={"status": status, "summary": summary, **spent})
@@ -158,7 +159,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         reconciled = reconcile.run(ctx, log)
     except pools.PoolError as e:
         log.exception("reconcile failed", extra={"error": str(e)})
-        return finish("reconcile_failed", str(e))
+        return finish(TickStatus.RECONCILE_FAILED, str(e))
     chore_reconcile.run(ctx, log)
     # Before anything reads a message or a run: the harness items and the state block see at least every message, and
     # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
@@ -172,12 +173,12 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     unavailable = _check_canopy(ctx, tick_id, log)
     if unavailable is not None:
         detail = f"{unavailable}; the overseer did not run. Make `canopy --version` work where the loop runs"
-        db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{CANOPY_UNAVAILABLE}", detail)
-        return finish(CANOPY_UNAVAILABLE, unavailable)
+        db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{attention.UNAVAILABLE}", detail)
+        return finish(TickStatus.CANOPY_UNAVAILABLE, unavailable)
     # The state block is the whole message: the prompt is in the overseer's definition, cached across ticks (DESIGN §6).
     failure, usage = _run_overseer(ctx, tick_id, block, dry_run=dry_run, log=log)
     if failure is not None:
-        return finish("overseer_failed", failure, usage)
+        return finish(TickStatus.OVERSEER_FAILED, failure, usage)
 
     decisions = db.decisions_for_tick(ctx.conn, tick_id)
     prefix = "dry run; " if dry_run else ""
@@ -185,16 +186,16 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     # `ok` would make its empty list the attention list and notify every open item as resolved.
     skips = [d.rationale for d in decisions if d.ticket_key is None and d.action == "skip"]
     if skips:
-        return finish("skipped", f"{prefix}overseer skipped the tick: {'; '.join(skips)}", usage)
+        return finish(TickStatus.SKIPPED, f"{prefix}overseer skipped the tick: {'; '.join(skips)}", usage)
     # A duty left undone fails the tick as a missing done line does: closing it `ok` would resolve the items of every
     # ticket it left out and count a query it never ran (DESIGN §6 step 5).
     undone = duties.undone(ctx.conn, tick_id, owed)
     if undone:
         log.error("overseer left duties undone", extra={"undone": undone, "dry_run": dry_run})
-        return finish("overseer_failed", f"{prefix}overseer left duties undone: {'; '.join(undone)}", usage)
+        return finish(TickStatus.OVERSEER_FAILED, f"{prefix}overseer left duties undone: {'; '.join(undone)}", usage)
     actions = Counter(d.action for d in decisions)
     counts = ", ".join(f"{action}={n}" for action, n in sorted(actions.items())) or "none"
-    return finish("ok", f"{prefix}{actions.total()} decisions: {counts}", usage)
+    return finish(TickStatus.OK, f"{prefix}{actions.total()} decisions: {counts}", usage)
 
 
 def _query_due(ctx: Context, now: datetime) -> bool:
