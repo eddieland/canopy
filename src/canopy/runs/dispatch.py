@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, notice, outbox, prompts, treehouse
+from canopy.core import conversation, db, notice, outbox, pools, prompts, treehouse
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.vocab import RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
@@ -619,7 +619,7 @@ def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[s
         raise Refusal("capacity", f"{busy} of {max_workers} workers are running{planned_note}")
 
 
-def _lease_all(ctx: Context, key: str, repos: Sequence[str]) -> list[tuple[str, treehouse.Lease]]:
+def _lease_all(ctx: Context, key: str, repos: Sequence[str]) -> list[tuple[str, pools.Lease]]:
     """Lease a slot in each repository's pool, or none: a lease that fails returns those already made (DESIGN §18).
 
     Returns:
@@ -628,7 +628,7 @@ def _lease_all(ctx: Context, key: str, repos: Sequence[str]) -> list[tuple[str, 
     Raises:
         Refusal: `no_slot`, when a repository's pool could not lease a slot.
     """
-    leases: list[tuple[str, treehouse.Lease]] = []
+    leases: list[tuple[str, pools.Lease]] = []
     for repo in repos:
         try:
             leases.append((repo, treehouse.lease(ctx.runner, key, pool=ctx.pool(repo))))
@@ -638,7 +638,7 @@ def _lease_all(ctx: Context, key: str, repos: Sequence[str]) -> list[tuple[str, 
     return leases
 
 
-def _return_all(ctx: Context, leases: Sequence[tuple[str, treehouse.Lease]]) -> None:
+def _return_all(ctx: Context, leases: Sequence[tuple[str, pools.Lease]]) -> None:
     """Return slots a dispatch leased and cannot use. A return that fails is left to the next tick's reconcile."""
     for repo, lease in leases:
         with contextlib.suppress(treehouse.TreehouseError):
@@ -658,7 +658,7 @@ def _spawn(
     key: str,
     kind: str,
     plan: Plan,
-    leases: Sequence[tuple[str, treehouse.Lease]],
+    leases: Sequence[tuple[str, pools.Lease]],
     attempt: int,
     limit: int,
     context: str | None,

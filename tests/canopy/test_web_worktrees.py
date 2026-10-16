@@ -5,7 +5,7 @@ import json
 import threading
 from pathlib import Path
 
-from canopy.core import db, treehouse, workspace
+from canopy.core import db, pools, treehouse, workspace
 from canopy.core.context import Context
 from canopy.serve import mock
 from tests.canopy.helpers import running_run
@@ -134,7 +134,7 @@ def test_a_workspace_s_pools_are_read_at_once(tmp_path: Path) -> None:
     # Both cloned pools must be inside treehouse together for either to get past the barrier.
     both = threading.Barrier(2, timeout=5)
 
-    def slots(ctx: Context, pool: treehouse.Pool) -> list[treehouse.Slot]:
+    def slots(ctx: Context, pool: treehouse.Pool) -> list[pools.Slot]:
         both.wait()
         return backend.slots(ctx, pool)
 

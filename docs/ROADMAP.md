@@ -1017,7 +1017,9 @@ What treehouse does that canopy relies on or works around, from its source at th
 **Stage 2, canopy's pool in shadow.** Built beside treehouse, wired to no caller.
 
 - Leases are journal rows: a migration adds `slots` (repository, name, path, lease id and holder, leased at, base,
-  the paths seeding wrote), written in the same transaction as the run it is for, under the tick and dispatch locks.
+  the paths seeding wrote). A lease claims its row under the pool's own lock before it touches the worktree, in a
+  transaction of its own rather than the run's, since the run is recorded only after its slots are leased; a lease
+  with no run is reconcile's to return, as treehouse's is (DESIGN §18, canopy's pool).
 - Layout: `<workspace>/pools/<repo>/<N>/<repo>`, with no hash of the remote, since a workspace's repository names are
   unique. The declared size is the only limit; a pool with none declared stops at 16, treehouse's default
   `max_trees`.
@@ -1059,7 +1061,9 @@ Accept: each stage's check, in order. Then `make install-check` and `make binary
 and a fresh install from README on a machine with no Go runs a day of `canopy loop`.
 
 Status: in progress. Stage 1 passed its check 2026-10-16: the contract suite passes against the fake, and against real
-treehouse at the pinned commit in CI on Linux and macOS.
+treehouse at the pinned commit in CI on Linux and macOS. Stage 2 is built: canopy's pool passes every contract case, and
+reconcile's shadow logs `pool_shadow_mismatch`; its check, a week of `canopy loop` with the shadow on, is the
+operator's.
 
 ## M46. Workers file follow-up tickets
 

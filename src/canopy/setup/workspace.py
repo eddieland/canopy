@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-from canopy.core import definitions, hostgit, treehouse, workspace
+from canopy.core import definitions, hostgit, pools, treehouse, workspace
 from canopy.core.config import REPO_NAME_RE, WORKSPACE_FILE_NAME, WORKSPACE_STATE_DIR
 from canopy.infra import procs
 from canopy.setup import init
@@ -334,18 +334,18 @@ def converge_pool(
     return Checked(repo, "slots", f"{want} of {want}")
 
 
-def _return_sync_leases(runner: procs.Runner, slots: list[treehouse.Slot], pool: treehouse.Pool) -> bool:
+def _return_sync_leases(runner: procs.Runner, slots: list[pools.Slot], pool: treehouse.Pool) -> bool:
     """Return the slots a sync that died left leased. Returns whether there were any.
 
     Raises:
         treehouse.TreehouseError: one could not be returned.
     """
-    left = [s for s in slots if s.lease_holder == treehouse.SYNC_HOLDER and s.lease_id]
+    left = [s for s in slots if s.lease_holder == pools.SYNC_HOLDER and s.lease_id]
     for slot in left:
         outcome = treehouse.return_slot(
             runner, slot.path, lease_id=slot.lease_id, lease_holder=slot.lease_holder, pool=pool
         )
-        if outcome is not treehouse.ReturnOutcome.RETURNED:
+        if outcome is not pools.ReturnOutcome.RETURNED:
             raise treehouse.TreehouseError(f"returning {slot.path}, left leased by a sync, said {outcome.value}")
     return bool(left)
 
@@ -354,7 +354,7 @@ def _fill(
     runner: procs.Runner,
     repo: workspace.Repo,
     pool: treehouse.Pool,
-    slots: list[treehouse.Slot],
+    slots: list[pools.Slot],
     want: int,
     *,
     dry_run: bool,
@@ -367,12 +367,12 @@ def _fill(
     if dry_run:
         return Checked(repo, "slots", f"{len(slots)} of {want}, would make {want - len(slots)}")
     known = {s.path for s in slots}
-    held: list[treehouse.Lease] = []
+    held: list[pools.Lease] = []
     error: treehouse.TreehouseError | None = None
     try:
         # Each lease holds a different slot, so `want` leases are always enough to reach `want` slots.
         while len(known) < want and len(held) < want:
-            leased = treehouse.lease_as(runner, treehouse.SYNC_HOLDER, pool=pool, fetch=False)
+            leased = treehouse.lease_as(runner, pools.SYNC_HOLDER, pool=pool, fetch=False)
             held.append(leased)
             known.add(leased.path)
     except treehouse.TreehouseError as e:
@@ -385,24 +385,24 @@ def _fill(
         hint = "treehouse's max_trees (treehouse.toml, or ~/.config/treehouse/config.toml) may be lower"
         detail += f": {error} ({hint})"
     if unreturned:
-        detail += f"; {unreturned} still leased as {treehouse.SYNC_HOLDER}, returned by the next sync"
+        detail += f"; {unreturned} still leased as {pools.SYNC_HOLDER}, returned by the next sync"
     return Checked(repo, "failed" if error is not None or unreturned else "slots", detail)
 
 
-def _return_leases(runner: procs.Runner, held: list[treehouse.Lease], pool: treehouse.Pool) -> int:
+def _return_leases(runner: procs.Runner, held: list[pools.Lease], pool: treehouse.Pool) -> int:
     """Return sync's leases. Returns how many could not be returned."""
     unreturned = 0
     for leased in held:
-        outcome: treehouse.ReturnOutcome | None = None
+        outcome: pools.ReturnOutcome | None = None
         with contextlib.suppress(treehouse.TreehouseError):
             outcome = treehouse.return_slot(
                 runner, leased.path, lease_id=leased.lease_id, lease_holder=leased.lease_holder, pool=pool
             )
-        unreturned += outcome is not treehouse.ReturnOutcome.RETURNED
+        unreturned += outcome is not pools.ReturnOutcome.RETURNED
     return unreturned
 
 
-def _slot_order(slot: treehouse.Slot) -> tuple[int, str]:
+def _slot_order(slot: pools.Slot) -> tuple[int, str]:
     # treehouse names slots 1, 2, ...; the highest are removed first, so the pool keeps its lowest names.
     return (int(slot.name) if slot.name.isdigit() else -1, slot.name)
 
@@ -411,7 +411,7 @@ def _trim(
     runner: procs.Runner,
     repo: workspace.Repo,
     pool: treehouse.Pool,
-    slots: list[treehouse.Slot],
+    slots: list[pools.Slot],
     want: int,
     *,
     dry_run: bool,
@@ -425,7 +425,7 @@ def _trim(
         and the pool is still over `want`.
     """
     surplus = len(slots) - want
-    idle = sorted((s for s in slots if s.status == treehouse.AVAILABLE), key=_slot_order, reverse=True)
+    idle = sorted((s for s in slots if s.status == pools.AVAILABLE), key=_slot_order, reverse=True)
     if dry_run:
         names = ", ".join(s.name for s in idle[:surplus]) or "none"
         return Checked(repo, "slots", f"{len(slots)} of {want}, would remove {names}")
@@ -483,9 +483,7 @@ def remove(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, 
     return Checked(repo, "removed", f"{repo.path} and its {len(slots)} slots")
 
 
-def _removable(
-    runner: procs.Runner, repo: workspace.Repo, pool: treehouse.Pool
-) -> tuple[str | None, list[treehouse.Slot]]:
+def _removable(runner: procs.Runner, repo: workspace.Repo, pool: treehouse.Pool) -> tuple[str | None, list[pools.Slot]]:
     """Say why the clone cannot be removed, or None, and return its pool's slots.
 
     Returns:
@@ -500,7 +498,7 @@ def _removable(
         slots = treehouse.status(runner, pool=pool)
     except treehouse.TreehouseError as e:
         return f"its pool cannot be read: {e}", []
-    busy = [f"slot {s.name} is {s.status}" for s in slots if s.status != treehouse.AVAILABLE]
+    busy = [f"slot {s.name} is {s.status}" for s in slots if s.status != pools.AVAILABLE]
     return ("; ".join(busy) if busy else None), slots
 
 
