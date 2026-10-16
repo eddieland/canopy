@@ -32,7 +32,7 @@ def end(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> bool:
         True once the run is closed, or False if it had already ended: nothing changes.
 
     Raises:
-        treehouse.TreehouseError: a slot could not be returned; the next tick's reconcile returns it.
+        pools.PoolError: a slot could not be returned; the next tick's reconcile returns it.
     """
     for column in ("pid", "worker_pid"):
         pid = run[column]

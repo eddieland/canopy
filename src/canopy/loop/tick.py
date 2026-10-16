@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from canopy.chores import reconcile as chore_reconcile
-from canopy.core import agent_output, chore_view, conversation, db, definitions, notice, treehouse
+from canopy.core import agent_output, chore_view, conversation, db, definitions, notice, pools
 from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.infra import lock, logs, procs, resources
@@ -156,7 +156,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         # Reviews first: a review whose `_review` is gone returns its slot, and then frees worker capacity.
         review_reconcile.run(ctx, log)
         reconciled = reconcile.run(ctx, log)
-    except treehouse.TreehouseError as e:
+    except pools.PoolError as e:
         log.exception("reconcile failed", extra={"error": str(e)})
         return finish("reconcile_failed", str(e))
     chore_reconcile.run(ctx, log)

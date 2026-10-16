@@ -152,6 +152,7 @@ to do instead.
 | `trust.commit_trailer`, `trust.commit_trailer_name`, `trust.commit_trailer_email` | user-only | whether and whom the operator's commits credit (§8) |
 | `trust.rebase` | user-only | lets workers replace a branch's history (§8, TRUST_MODEL T1) |
 | `capacity.*` | user-only | the operator's machine and spend |
+| `pools.backend` | user-only | which program makes worktrees on the operator's machine (§18) |
 | `loop.*` | user-only | how often the overseer runs: the operator's spend |
 | `runtime.*` | user-only | commands run on the operator's machine |
 | `notify.*` | user-only | a command run on the operator's machine |
@@ -197,6 +198,9 @@ query_every_minutes = 0 # the least time between ticks that run the query; 0 run
 
 [capacity]
 max_workers = 2
+
+[pools]
+backend = "treehouse"   # or "canopy": canopy's own pool makes the worktrees (§18, ROADMAP M45)
 
 [runtime]
 overseer_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json
@@ -313,6 +317,8 @@ Rules:
   line `canopy init` does (D117).
 - `capacity.slots_per_repo` and `[capacity.repo_slots]` declare each repository's pool size in a workspace (§18).
   Unset (the default) leaves pools unmanaged. User-only, so a team's map cannot grow the operator's disk use.
+- `pools.backend` names the pool that makes the workspace's worktrees: `"treehouse"` (the default) or `"canopy"`,
+  canopy's own (§18). Switching is safe with runs in flight; `canopy workspace sync` carries the idle slots over.
 - Remotes should be HTTPS with a credential helper, not SSH: a sandboxed worker cannot reach the SSH agent socket.
   `canopy workspace sync`, which `canopy init` runs
   for the URLs it is given, runs `git remote get-url --push --all origin` in each primary clone, which applies

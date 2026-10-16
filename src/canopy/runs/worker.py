@@ -23,9 +23,9 @@ from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
 
 from pydantic import BaseModel, ConfigDict, StrictStr
 
-from canopy.core import agent_output, contract, conversation, db, definitions, hostgit, pools, transcript, treehouse
+from canopy.core import agent_output, contract, conversation, db, definitions, hostgit, pools, transcript
 from canopy.core.config import render_command, setup_words
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import PoolKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
 from canopy.runs import desks, dispatch, policy, tidy
@@ -218,7 +218,7 @@ class _Slot:
     """One of a run's slots: the repository it is in, the worktree, its lease, git in it, and its `.git` link.
 
     `link` is what the worktree's `.git` file held when the run started, before any git step, or None if it is not a
-    file (DESIGN §8).
+    file (DESIGN §8). `pool` is the pool that made the lease, which the slot goes back to (DESIGN §18).
     """
 
     repo: str
@@ -228,6 +228,7 @@ class _Slot:
     base: str
     git: _Git
     link: bytes | None
+    pool: PoolKind
 
     def rewritten(self) -> Path | None:
         """Return the file that says where the slot's git is, if the worker changed it: the `.git` file, or `commondir`.
@@ -273,6 +274,7 @@ class _Slot:
             str(row["base_branch"]),
             _Git(ctx.runner, path, repo),
             hostgit.read_link(path),
+            PoolKind(row["pool"]),
         )
 
 
@@ -721,14 +723,10 @@ def _objects(ctx: Context, run: sqlite3.Row) -> Path:
 def _return_slot(ctx: Context, run: sqlite3.Row, slot: _Slot, log: logs.TickAdapter) -> None:
     fields = {"run_id": run["id"], "slot": str(slot.path), "lease_id": slot.lease_id, "repo": slot.repo}
     try:
-        outcome = treehouse.return_slot(
-            ctx.runner,
-            slot.path,
-            lease_id=slot.lease_id,
-            lease_holder=slot.lease_holder,
-            pool=ctx.workspace.pool(slot.repo),
+        outcome = ctx.pool_of(slot.pool, slot.repo).return_slot(
+            slot.path, lease_id=slot.lease_id, lease_holder=slot.lease_holder
         )
-    except treehouse.TreehouseError as e:
+    except pools.PoolError as e:
         # The next tick's reconcile returns a canopy lease with no running run.
         log.error("slot not returned", extra={**fields, "error": str(e)})  # noqa: TRY400
         return

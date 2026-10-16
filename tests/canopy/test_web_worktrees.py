@@ -3,10 +3,12 @@
 import dataclasses
 import json
 import threading
+from collections.abc import Sequence
 from pathlib import Path
 
-from canopy.core import db, pools, treehouse, workspace
+from canopy.core import db, pools, workspace
 from canopy.core.context import Context
+from canopy.core.vocab import PoolKind
 from canopy.serve import mock
 from tests.canopy.helpers import running_run
 from tests.canopy.web_helpers import client, signed_in_client
@@ -37,7 +39,13 @@ def test_each_slot_shows_what_holds_it_and_what_runs_in_it(ctx: Context, treehou
         purpose="query", logs_dir=ctx.state_dir / "reviews",
     )  # fmt: skip
     db.set_review_slot(
-        ctx.conn, review_id, slot=Path("/pool/2"), lease_id="lease-review", lease_holder="canopy:r", base_branch="main"
+        ctx.conn,
+        review_id,
+        slot=Path("/pool/2"),
+        lease_id="lease-review",
+        lease_holder="canopy:r",
+        base_branch="main",
+        pool=PoolKind.TREEHOUSE,
     )
     db.finish_tick(ctx.conn, tick_id, "ok", "test")
     slots = [
@@ -134,9 +142,9 @@ def test_a_workspace_s_pools_are_read_at_once(tmp_path: Path) -> None:
     # Both cloned pools must be inside treehouse together for either to get past the barrier.
     both = threading.Barrier(2, timeout=5)
 
-    def slots(ctx: Context, pool: treehouse.Pool) -> list[pools.Slot]:
+    def slots(ctx: Context, repo: str) -> Sequence[pools.Slot]:
         both.wait()
-        return backend.slots(ctx, pool)
+        return backend.slots(ctx, repo)
 
     c = client(None, dataclasses.replace(backend, slots=slots))
     assert [len(p["worktrees"]) for p in c.get("/api/worktrees").json()] == [0, 2, 5]

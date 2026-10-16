@@ -16,10 +16,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import agent_output, conversation, db, definitions, hostgit, outbox, review_diff, treehouse
+from canopy.core import agent_output, conversation, db, definitions, hostgit, outbox, pools, review_diff
 from canopy.core import review_result as result
 from canopy.core.config import render_command
-from canopy.core.vocab import ReviewRunStatus
+from canopy.core.vocab import PoolKind, ReviewRunStatus
 from canopy.infra import logs, procs, stopping
 from canopy.reviews import start
 
@@ -125,14 +125,10 @@ def clean_up(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> None:
         return
     fields = {"review_run_id": run["id"], "slot": run["slot_path"]}
     try:
-        outcome = treehouse.return_slot(
-            ctx.runner,
-            Path(str(run["slot_path"])),
-            lease_id=str(run["lease_id"]),
-            lease_holder=str(run["lease_holder"]),
-            pool=ctx.workspace.pool(run["repo"]),
+        outcome = ctx.pool_of(PoolKind(run["pool"]), run["repo"]).return_slot(
+            Path(str(run["slot_path"])), lease_id=str(run["lease_id"]), lease_holder=str(run["lease_holder"])
         )
-    except treehouse.TreehouseError as e:
+    except pools.PoolError as e:
         # The next tick's reconcile returns a canopy lease no running run holds.
         log.error("review slot not returned", extra={**fields, "error": str(e)})  # noqa: TRY400
         return

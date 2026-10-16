@@ -17,18 +17,22 @@ from __future__ import annotations
 import contextlib
 import json
 import shutil
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-from canopy.core import definitions, hostgit, pools, treehouse, workspace
+from canopy.core import definitions, hostgit, pool, pools, workspace
 from canopy.core.config import REPO_NAME_RE, WORKSPACE_FILE_NAME, WORKSPACE_STATE_DIR
 from canopy.infra import procs
 from canopy.setup import init
 
 GITIGNORE = ".gitignore"
 # Everything under the root that is canopy's or treehouse's, never the workspace repository's.
-IGNORED = tuple(f"/{d}/" for d in (workspace.REPOS_DIR, workspace.POOLS_DIR, workspace.DESKS_DIR, WORKSPACE_STATE_DIR))
+IGNORED = tuple(
+    f"/{d}/"
+    for d in (workspace.REPOS_DIR, workspace.POOLS_DIR, pool.POOLS_DIR, workspace.DESKS_DIR, WORKSPACE_STATE_DIR)
+)
 _CLONE_TIMEOUT_SECONDS = 1800
 _GIT_TIMEOUT_SECONDS = 30
 
@@ -137,8 +141,9 @@ class Checked:
     """What sync found or did for one repository, and what to tell the operator.
 
     For a clone: `cloned`, `present`, `to clone` in a dry run, or `failed`. For a pool: `slots`, `failed`, or `kept`
-    when treehouse keeps a surplus slot with work in it. For a clone the map no longer lists: `removed`, `to remove` in
-    a dry run, or `kept` when it has work to lose.
+    when the pool keeps a surplus slot with work in it; after a switch of `pools.backend`, `moved` or `to move` for
+    treehouse's idle slots moved into canopy's pool, and `removed` or `to remove` for canopy's idle slots removed. For
+    a clone the map no longer lists: `removed`, `to remove` in a dry run, or `kept` when it has work to lose.
     """
 
     repo: workspace.Repo
@@ -307,9 +312,7 @@ def _same_url(a: str, b: str) -> bool:
     return norm(a) == norm(b)
 
 
-def converge_pool(
-    runner: procs.Runner, pool: treehouse.Pool, repo: workspace.Repo, want: int, *, dry_run: bool
-) -> Checked:
+def converge_pool(pool: pools.Pool, repo: workspace.Repo, want: int, *, dry_run: bool) -> Checked:
     """Make or remove slots until `repo`'s pool, `pool`, has `want`.
 
     Slots are made by leasing as `canopy-sync` until the pool is big enough, then returning every one of those leases;
@@ -322,39 +325,36 @@ def converge_pool(
         pool could not be read or grown.
     """
     try:
-        slots = treehouse.status(runner, pool=pool)
-        if not dry_run and _return_sync_leases(runner, slots, pool):
-            slots = treehouse.status(runner, pool=pool)
+        slots = pool.status()
+        if not dry_run and _return_sync_leases(slots, pool):
+            slots = pool.status()
         if len(slots) < want:
-            return _fill(runner, repo, pool, slots, want, dry_run=dry_run)
+            return _fill(repo, pool, slots, want, dry_run=dry_run)
         if len(slots) > want:
-            return _trim(runner, repo, pool, slots, want, dry_run=dry_run)
-    except treehouse.TreehouseError as e:
+            return _trim(repo, pool, slots, want, dry_run=dry_run)
+    except pools.PoolError as e:
         return Checked(repo, "failed", f"its pool: {e}")
     return Checked(repo, "slots", f"{want} of {want}")
 
 
-def _return_sync_leases(runner: procs.Runner, slots: list[pools.Slot], pool: treehouse.Pool) -> bool:
+def _return_sync_leases(slots: Sequence[pools.Slot], pool: pools.Pool) -> bool:
     """Return the slots a sync that died left leased. Returns whether there were any.
 
     Raises:
-        treehouse.TreehouseError: one could not be returned.
+        pools.PoolError: one could not be returned.
     """
     left = [s for s in slots if s.lease_holder == pools.SYNC_HOLDER and s.lease_id]
     for slot in left:
-        outcome = treehouse.return_slot(
-            runner, slot.path, lease_id=slot.lease_id, lease_holder=slot.lease_holder, pool=pool
-        )
+        outcome = pool.return_slot(slot.path, lease_id=slot.lease_id, lease_holder=slot.lease_holder)
         if outcome is not pools.ReturnOutcome.RETURNED:
-            raise treehouse.TreehouseError(f"returning {slot.path}, left leased by a sync, said {outcome.value}")
+            raise pools.PoolError(f"returning {slot.path}, left leased by a sync, said {outcome.value}")
     return bool(left)
 
 
 def _fill(
-    runner: procs.Runner,
     repo: workspace.Repo,
-    pool: treehouse.Pool,
-    slots: list[pools.Slot],
+    pool: pools.Pool,
+    slots: Sequence[pools.Slot],
     want: int,
     *,
     dry_run: bool,
@@ -368,36 +368,34 @@ def _fill(
         return Checked(repo, "slots", f"{len(slots)} of {want}, would make {want - len(slots)}")
     known = {s.path for s in slots}
     held: list[pools.Lease] = []
-    error: treehouse.TreehouseError | None = None
+    error: pools.PoolError | None = None
     try:
         # Each lease holds a different slot, so `want` leases are always enough to reach `want` slots.
         while len(known) < want and len(held) < want:
-            leased = treehouse.lease_as(runner, pools.SYNC_HOLDER, pool=pool, fetch=False)
+            leased = pool.lease_as(pools.SYNC_HOLDER, fetch=False)
             held.append(leased)
             known.add(leased.path)
-    except treehouse.TreehouseError as e:
+    except pools.PoolError as e:
         error = e
     finally:
-        unreturned = _return_leases(runner, held, pool)
+        unreturned = _return_leases(held, pool)
     made = len(known) - len(slots)
     detail = f"{len(known)} of {want}, made {made}"
     if error is not None:
-        hint = "treehouse's max_trees (treehouse.toml, or ~/.config/treehouse/config.toml) may be lower"
+        hint = "if treehouse makes the pool, its max_trees (treehouse.toml or ~/.config/treehouse/) may be lower"
         detail += f": {error} ({hint})"
     if unreturned:
         detail += f"; {unreturned} still leased as {pools.SYNC_HOLDER}, returned by the next sync"
     return Checked(repo, "failed" if error is not None or unreturned else "slots", detail)
 
 
-def _return_leases(runner: procs.Runner, held: list[pools.Lease], pool: treehouse.Pool) -> int:
+def _return_leases(held: list[pools.Lease], pool: pools.Pool) -> int:
     """Return sync's leases. Returns how many could not be returned."""
     unreturned = 0
     for leased in held:
         outcome: pools.ReturnOutcome | None = None
-        with contextlib.suppress(treehouse.TreehouseError):
-            outcome = treehouse.return_slot(
-                runner, leased.path, lease_id=leased.lease_id, lease_holder=leased.lease_holder, pool=pool
-            )
+        with contextlib.suppress(pools.PoolError):
+            outcome = pool.return_slot(leased.path, lease_id=leased.lease_id, lease_holder=leased.lease_holder)
         unreturned += outcome is not pools.ReturnOutcome.RETURNED
     return unreturned
 
@@ -408,10 +406,9 @@ def _slot_order(slot: pools.Slot) -> tuple[int, str]:
 
 
 def _trim(
-    runner: procs.Runner,
     repo: workspace.Repo,
-    pool: treehouse.Pool,
-    slots: list[pools.Slot],
+    pool: pools.Pool,
+    slots: Sequence[pools.Slot],
     want: int,
     *,
     dry_run: bool,
@@ -434,7 +431,7 @@ def _trim(
     for slot in idle:
         if len(removed) == surplus:
             break
-        why = treehouse.destroy(runner, slot.path, pool=pool)
+        why = pool.destroy(slot.path)
         if why is None:
             removed.append(slot.name)
         else:
@@ -449,6 +446,62 @@ def _trim(
     return Checked(repo, "slots", f"{detail}; {left - want} over, busy; a later sync removes them once idle")
 
 
+def move_slots(source: pools.Pool, into: pool.CanopyPool, repo: workspace.Repo, *, dry_run: bool) -> Checked | None:
+    """Move each idle slot of treehouse's pool, `source`, into canopy's, `into`, keeping its ignored files.
+
+    What a switch to `pools.backend = "canopy"` asks of sync (DESIGN §18, ROADMAP M45): the slots and their build
+    caches carry over. A slot that is not idle stays where it is, its lease goes back to treehouse when its run ends,
+    and a later sync moves it.
+
+    Returns:
+        None when treehouse's pool has no idle slot; else `moved`, `to move` in a dry run, or `kept` with each slot
+        that could not move, or when treehouse's pool cannot be read.
+    """
+    try:
+        idle = sorted((s for s in source.status() if s.status == pools.AVAILABLE), key=_slot_order)
+    except pools.PoolError as e:
+        hint = "remove .treehouse/ once it holds nothing you need"
+        return Checked(repo, "kept", f"treehouse's pool cannot be read, so its idle slots stay ({hint}): {e}")
+    if not idle:
+        return None
+    if dry_run:
+        return Checked(repo, "to move", f"{len(idle)} idle treehouse slots into {pool.POOLS_DIR}/")
+    moved: list[str] = []
+    kept: list[str] = []
+    for slot in idle:
+        try:
+            into.move_in(slot.path)
+        except pools.PoolError as e:
+            kept.append(f"slot {slot.name} stays in treehouse's pool: {e}")
+        else:
+            moved.append(slot.name)
+    detail = f"moved {len(moved)} of {len(idle)} idle treehouse slots into {pool.POOLS_DIR}/"
+    return Checked(repo, "kept", "; ".join((detail, *kept))) if kept else Checked(repo, "moved", detail)
+
+
+def drop_idle(source: pools.Pool, repo: workspace.Repo, *, dry_run: bool) -> Checked | None:
+    """Remove each idle slot of canopy's pool, `source`, after a switch back to treehouse.
+
+    Switching back costs only warm caches (ROADMAP M45): treehouse makes fresh slots, and canopy's are removed as
+    sync's trim removes a slot, so one with anything to lose is kept.
+
+    Returns:
+        None when canopy's pool has no idle slot; else `removed`, `to remove` in a dry run, or `kept` with each slot
+        the pool kept, or when the pool cannot be read.
+    """
+    try:
+        idle = sorted((s for s in source.status() if s.status == pools.AVAILABLE), key=_slot_order)
+    except pools.PoolError as e:
+        return Checked(repo, "kept", f"canopy's pool cannot be read, so its idle slots stay: {e}")
+    if not idle:
+        return None
+    if dry_run:
+        return Checked(repo, "to remove", f"{len(idle)} idle slots of canopy's pool")
+    kept = [f"slot {s.name} kept: {why}" for s in idle if (why := source.destroy(s.path)) is not None]
+    detail = f"removed {len(idle) - len(kept)} of {len(idle)} idle slots of canopy's pool"
+    return Checked(repo, "kept", "; ".join((detail, *kept))) if kept else Checked(repo, "removed", detail)
+
+
 def undeclared(ws: workspace.Workspace) -> list[workspace.Repo]:
     """Return what is under `repos/` that the map does not list, which sync removes. Dot entries are left alone."""
     repos_dir = ws.root / workspace.REPOS_DIR
@@ -459,14 +512,12 @@ def undeclared(ws: workspace.Workspace) -> list[workspace.Repo]:
     return [workspace.Repo(name=p.name, path=p) for p in sorted(found)]
 
 
-def remove(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, *, dry_run: bool) -> Checked:
-    """Remove a clone the map no longer lists, and its pool's slots, unless anything in them could be lost.
+def remove(runner: procs.Runner, pool: pools.Pool, repo: workspace.Repo, *, dry_run: bool) -> Checked:
+    """Remove a clone the map no longer lists, and its slots in `pool`, unless anything in them could be lost.
 
     Returns:
-        `removed`, `to remove` in a dry run, or `kept` with what could be lost or the slot treehouse kept.
+        `removed`, `to remove` in a dry run, or `kept` with what could be lost or the slot the pool kept.
     """
-    # Not in the map, so its pool is found from the clone itself.
-    pool = treehouse.Pool(cwd=repo.path, root=ws.root)
     blocked, slots = _removable(runner, repo, pool)
     if blocked is not None:
         return Checked(repo, "kept", blocked)
@@ -474,8 +525,8 @@ def remove(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, 
         return Checked(repo, "to remove", f"{repo.path} and its {len(slots)} slots")
     for slot in slots:
         try:
-            why = treehouse.destroy(runner, slot.path, pool=pool)
-        except treehouse.TreehouseError as e:
+            why = pool.destroy(slot.path)
+        except pools.PoolError as e:
             why = str(e)
         if why is not None:
             return Checked(repo, "kept", f"slot {slot.name} kept: {why}")
@@ -483,7 +534,7 @@ def remove(runner: procs.Runner, ws: workspace.Workspace, repo: workspace.Repo, 
     return Checked(repo, "removed", f"{repo.path} and its {len(slots)} slots")
 
 
-def _removable(runner: procs.Runner, repo: workspace.Repo, pool: treehouse.Pool) -> tuple[str | None, list[pools.Slot]]:
+def _removable(runner: procs.Runner, repo: workspace.Repo, pool: pools.Pool) -> tuple[str | None, Sequence[pools.Slot]]:
     """Say why the clone cannot be removed, or None, and return its pool's slots.
 
     Returns:
@@ -495,8 +546,8 @@ def _removable(runner: procs.Runner, repo: workspace.Repo, pool: treehouse.Pool)
     if unsaved:
         return f"{unsaved}; push or discard it, then sync again", []
     try:
-        slots = treehouse.status(runner, pool=pool)
-    except treehouse.TreehouseError as e:
+        slots = pool.status()
+    except pools.PoolError as e:
         return f"its pool cannot be read: {e}", []
     busy = [f"slot {s.name} is {s.status}" for s in slots if s.status != pools.AVAILABLE]
     return ("; ".join(busy) if busy else None), slots

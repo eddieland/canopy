@@ -180,6 +180,52 @@ class CanopyPool:
                 self.conn.execute("DELETE FROM slots WHERE path = ?", (str(path),))
         return None
 
+    def move_in(self, path: Path) -> Path:
+        """Move the worktree at `path`, an idle slot of another pool of this clone, into this pool as an idle slot.
+
+        `git worktree move` keeps everything in the slot, its ignored files too, so a switch from treehouse keeps the
+        slots' build caches warm (ROADMAP M45, stage 3). The emptied directory it was in is removed.
+
+        Returns:
+            The slot's new path.
+
+        Raises:
+            PoolError: It is not a worktree of this clone canopy can vouch for, has changes or a process in it, the
+                pool is at its bound, or git could not move it.
+        """
+        with self._locked():
+            if not _sound(self.clone, path):
+                raise PoolError(f"{path} is not a worktree of {self.clone} whose git link canopy can vouch for")
+            if self._dirty(path):
+                raise PoolError(f"{path} has changes")
+            try:
+                if cwds.inside(self.runner, path):
+                    raise PoolError(f"{path} has a process in it")
+            except cwds.CwdError as e:
+                raise PoolError(str(e)) from e
+            rows = self._rows()
+            bound = self.slots if self.slots is not None else MAX_SLOTS
+            if len(rows) >= bound:
+                raise PoolError(self._full(len(rows), bound))
+            number = max((int(r.name) for r in rows if r.name.isdigit()), default=0) + 1
+            while (self.directory / str(number)).exists():
+                number += 1
+            target = self.directory / str(number) / self.repo
+            target.parent.mkdir(parents=True)
+            try:
+                self._git.run(self.clone, "worktree", "move", str(path), str(target))
+            except PoolError:
+                with contextlib.suppress(OSError):
+                    target.parent.rmdir()
+                raise
+            with db.transaction(self.conn):
+                self.conn.execute(
+                    "INSERT INTO slots (repo, name, path) VALUES (?, ?, ?)", (self.repo, str(number), str(target))
+                )
+            with contextlib.suppress(OSError):
+                path.parent.rmdir()
+        return target
+
     def _lease(self, holder: str, *, base: str | None, fetch: bool, refuse_busy: bool) -> Lease:
         manifest = self._manifest_file()
         if fetch and self._git.ok(self.clone, "remote", "get-url", "origin"):

@@ -137,7 +137,7 @@ class Workspace:
             return None
         return next((r for r in self.repos if r.name == name), None)
 
-    def pool(self, name: str | None) -> treehouse.Pool:
+    def treehouse_pool(self, name: str | None) -> treehouse.Pool:
         """Return where treehouse runs for repository `name`'s pool.
 
         A workspace's pools are under its root, whichever `treehouse.toml` its repositories have. A repository with no
@@ -145,7 +145,9 @@ class Workspace:
         run in it can be closed, though nothing new can be leased there.
         """
         repo = self.repo(name)
-        cwd = repo.path if repo is not None and repo.cloned else self.root
+        clone = repo.path if repo is not None else (self.root / REPOS_DIR / name if name else None)
+        # A clone the map no longer lists still has its pool, which sync empties before it removes the clone.
+        cwd = clone if clone is not None and (clone / ".git").exists() else self.root
         return treehouse.Pool(cwd=cwd, root=self.root)
 
 

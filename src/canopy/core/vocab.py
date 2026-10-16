@@ -1,4 +1,4 @@
-"""The journal's closed vocabularies: a run's status and kind, and a ticket's phase.
+"""The journal's closed vocabularies: a run's status and kind, a ticket's phase, and the pool a lease came from.
 
 Each is a `StrEnum`, so a member is the string the journal stores and compares equal to it, and a misspelled one is a
 type error rather than a silent wrong decision. Code that branches on one matches it with `typing.assert_never` in the
@@ -107,3 +107,10 @@ UNIT_PHASES = frozenset(
         Phase.MERGED,
     }
 )
+
+
+class PoolKind(StrEnum):
+    """Which pool made a worktree lease, `run_slots.pool` and `review_runs.pool`, and `pools.backend` (DESIGN §18)."""
+
+    TREEHOUSE = "treehouse"
+    CANOPY = "canopy"

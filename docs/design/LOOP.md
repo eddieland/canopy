@@ -909,7 +909,9 @@ Three steps, all the operator's, in the order they run:
    (§8), before treehouse touches a slot.
 2. **`post_create` hooks**, in the user-level treehouse config, run after seeding when a slot is made or reused: on
    the base, before `_run` checks out the run's branch. A failing hook is printed and the lease stands. They suit
-   setup that depends on the base alone, such as a toolchain or a warm fetch.
+   setup that depends on the base alone, such as a toolchain or a warm fetch. They are treehouse's: canopy's own pool
+   (`pools.backend = "canopy"`, §18) runs none, and what one did moves to `setup_cmd`, made to tolerate its own
+   failure where the hook's was ignored (`|| true`); BAZEL.md shows how.
 3. **`runtime.setup_cmd`**, user-only, runs in each slot of a worker run after `_run` checks out its branch (§8
    `_run` step 2), and fails the run when it fails. It suits setup that depends on the branch or must succeed:
    installing the branch's dependencies, generating code its build needs. It is split into words as `notify.cmd` is,
