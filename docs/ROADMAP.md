@@ -1327,7 +1327,8 @@ what they learn, for later runs on the same ticket and, through the operator, fo
 REQUIREMENTS entry yet. Off by default, and with it off nothing a run, a tick, or the overseer reads changes. Writing
 and reading are switched apart (the operator, 2026-10-16): a tier can record memories that no agent reads, and the
 operator turns reading on once what was recorded has been judged. Four stages, in order, each in its own PRs, a stage
-starting only once the one before has passed its check, recorded on the `Status:` line.
+starting only once the one before has passed its last check (stages 1 and 2 have two, at `record` and then at `use`),
+each check recorded on the `Status:` line as it passes.
 
 - Why: `{{PREVIOUS_RUNS}}` is ticket memory already, but it forgets by position (the latest three runs), it is
   narrative, and a wrong conclusion stays until it scrolls out. Workspace-wide, only the operator writes text every run
@@ -1362,9 +1363,11 @@ starting only once the one before has passed its check, recorded on the `Status:
     once.
 - Recording, at `record`: workers write and no agent reads, so the operator can fill a tier and judge what it holds
   before any of it reaches a prompt.
-  - `{{MEMORY_CONTRACT}}` asks for the write fields alone (`notes`, `proposals`), not `drop_notes`, `memory_used`, or
-    `memory_wrong`: a worker shown no memory has no key to drop and no id to cite. An override needs that one
-    placeholder.
+  - `{{MEMORY_CONTRACT}}` asks for each field only while the tier that owns it allows it, so tiers at different modes
+    need no rule of their own: `notes` while ticket notes are not off, and `drop_notes` only while they are at `use`;
+    `proposals` while proposals are not off; `memory_used` and `memory_wrong` while either tier is at `use`, citing
+    only ids a tier at `use` rendered. A worker shown no memory has no key to drop and no id to cite. An override needs
+    `{{MEMORY_CONTRACT}}` for a tier at `record`, and that tier's digest placeholder too at `use`.
   - `{{TICKET_MEMORY}}` and `{{WORKSPACE_LESSONS}}` render as the empty string, as when off, so no worker is told a
     memory exists.
   - Everything on the write side runs as at `use`: the bounds, superseding by key (a worker writing a key it never saw
@@ -1443,11 +1446,13 @@ starting only once the one before has passed its check, recorded on the `Status:
 - TRUST_MODEL T1, with the `use` half: a worker may write notes its own ticket's later runs read as data, the same
   exposure as its reports in `{{PREVIOUS_RUNS}}`, with one new property: a note outlives the tracker comment that
   steered it, bounded by the ticket's life and by `forget`. With the operator's approval note.
-- Tests with the fakes: with `memory` unset, every worker prompt kind and the state block match their snapshots
-  before this milestone, and a result carrying `notes` stores nothing. At `record`: a note is stored and is in no
-  prompt of any kind; each prompt kind differs from its snapshot when off only by the contract, which asks for
-  `notes` alone; `memory_used`, `memory_wrong`, and `drop_notes` a worker sends anyway change nothing; the run's mode is
-  journaled with no ids; the readout, bands, and run lists say recording (Vitest, and Playwright against the mock
+- Tests with the fakes: with `memory` unset, every worker prompt kind and the state block match their snapshots before
+  this milestone, and a result carrying `notes` stores nothing. At `record`: a note is stored and is in no prompt of any
+  kind; each prompt kind differs from its snapshot when off only by the contract, which asks for `notes` alone;
+  `memory_used`, `memory_wrong`, and `drop_notes` a worker sends anyway change nothing; the run's mode is journaled with
+  no ids; the readout, bands, and run lists say recording, and a recorded note holding markdown, a link, or (written to
+  the journal by hand, past the bounds) zero-width and bidi characters shows as plain text with those characters
+  visible, in `canopy memory list` and on the memory, ticket, and run pages (Vitest, and Playwright against the mock
   journal). At `use`: a note reaches the same ticket's next run and no other ticket's; a note recorded at `record` is
   served once the key is `use`; a key supersedes; a run cannot write or retire another ticket's note; an id never
   rendered is ignored; a secret-like or bidi body is refused; the digest's cap and its count; done and forget
@@ -1482,18 +1487,21 @@ operator's approval note.
   `lesson_review`: renew, graduate into the repository's AGENTS.md or a skill through a ticket and a PR the operator
   merges, or drop it. A lesson never lapses on its own: it is the operator's word. `memory_wrong` on a lesson raises
   `lesson_wrong`; only the operator retires it. At `record` no `lesson_review` is raised, since no run can use a
-  lesson; once the key is `use`, one approved more than 90 days before comes up for review at the first tick, the
-  review the operator wants before an old lesson is served anyway.
+  lesson; once the key is `use`, those approved more than 90 days before come up for review at the first tick, the
+  review the operator wants before an old lesson is served anyway, as one `lesson_review` item naming them all, not one
+  each, so the switch raises no burst.
 - The surfaces above, for proposals and lessons, beside ticket notes'.
 - TRUST_MODEL T1: workspace memory is operator text; agents only propose it, and `promote` refuses in any run, like
   `notice`. The residual is D076's: until workers are sandboxed (M26), a steered worker's bash runs as the operator
   and could insert a `lesson` row, as it could a `notices` row.
 - Tests with the fakes: with `memory.proposals` off, a result carrying `proposals` stores nothing and no prompt changes;
   at `record`, a proposal is stored, a promoted lesson is in no prompt of any kind, no `lesson_review` is raised, and
-  the surfaces say recording; at `use`, a pending proposal is in no prompt of any kind; promote and reject refuse with
-  `CANOPY_RUN_ID` set; the cap refuses the 21st; expiry at 14 days; `memory_proposal` at done; a promoted lesson reaches
-  every worker prompt and no review or chore; `lesson_review` at the review date and its push on use; a lesson for one
-  repository stays out of another's runs.
+  the surfaces say recording; with ticket notes at `use` and proposals at `record`, the contract asks for `memory_used`
+  and `memory_wrong` citing notes alone, and a lesson id in them changes nothing; the switch to `use` raises one
+  `lesson_review` for every lesson past its date; at `use`, a pending proposal is in no prompt of any kind; promote and
+  reject refuse with `CANOPY_RUN_ID` set; the cap refuses the 21st; expiry at 14 days; `memory_proposal` at done; a
+  promoted lesson reaches every worker prompt and no review or chore; `lesson_review` at the review date and its push on
+  use; a lesson for one repository stays out of another's runs.
 - Check, recording: a month of the operator's loop at `record`: proposals a week, the share promoted, edited at
   promotion, rejected, and expired, and the median time to review, a dated section of `MEASUREMENTS.md`.
 - Check, in use: two weeks at `use`: the `memory_used` and `memory_wrong` rates on lessons and what each
