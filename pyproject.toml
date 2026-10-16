@@ -114,6 +114,8 @@ dev = [
     "ruff>=0.16",
     "rumdl>=0.2.78",
     "shellcheck-py>=0.11.0.1",
+    # Snapshot tests: what canopy renders whole, held to a file under a test's `__snapshots__/` (AGENTS.md, Testing).
+    "syrupy>=6.1.1",
 ]
 
 [tool.ruff]
@@ -225,8 +227,8 @@ search-path = ["src", "packages/canopy-notify-slack/src", "packages/canopy-sandb
 line-length = 120
 # Agent definitions open with front matter and CLAUDE.md with an include, not a heading.
 disable = ["MD041"]
-# Generated design explorations, kept as they were rendered.
-exclude = ["docs/ui-explorations"]
+# Generated design explorations, kept as they were rendered, and test snapshots, compared byte for byte.
+exclude = ["docs/ui-explorations", "**/__snapshots__"]
 
 [tool.rumdl.MD013]
 tables = false
