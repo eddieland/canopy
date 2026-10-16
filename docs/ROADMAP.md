@@ -940,6 +940,97 @@ later the plan is still on the ticket's page. Nothing about the plan appears on 
 
 Status: not started.
 
+## M45. canopy's own worktree pools, replacing treehouse in stages
+
+D002, D107, D118. DESIGN §8, §9, §18, and §24. Needs M17, and M26's `commondir` check, which is in. Asked for by the
+operator (2026-10-13): drop treehouse, so installing canopy needs no Go and its leases live in the journal. Asked again
+(2026-10-16): slowly, with a lot of verification before treehouse goes.
+
+Four stages, in order, each in its own PRs. A stage starts only once the one before has passed its check, recorded on
+the `Status:` line. Until the last stage, treehouse stays installed and one config setting goes back to it.
+
+What every stage holds to:
+
+- **One interface, two pools.** `core/treehouse.py`'s four operations (`status`, `lease`, `return_slot`, `destroy`)
+  become the interface every caller uses. treehouse is one implementation and `core/pool.py` the other; no caller
+  learns which one it has.
+- **The contract is the spec.** One test suite states each guarantee as a case, written against the interface, and
+  runs it against real treehouse, the fake, and canopy's pool. A behavior with no case is not a guarantee. Where
+  canopy's pool differs on purpose, DESIGN §18 says so and the case says which pool expects what.
+- **The host stays safe.** Every git canopy's pool runs goes through `hostgit.argv` (D107), and a step in a slot after
+  a run comes after `_run`'s link and `commondir` check (D118).
+
+What treehouse does that canopy relies on or works around, from its source (read at `d40678e`; stage 1 checks each
+against the pinned `1185dc6`):
+
+- Reuse and return reset a slot with `read-tree --reset -u` and `clean -fd`, no `-x`: ignored files (build outputs,
+  `node_modules`, Bazel's links) survive, and untracked files and unpushed commits do not.
+- A slot is reused only when it is unleased, a worktree of this clone, clean (`status --porcelain
+  --untracked-files=all`), and has no process with its cwd inside it.
+- `return` is conditional on the lease id and holder (exit 1 otherwise) and forced, so exit 3 never happens. It ends
+  processes in the slot first.
+- Seeding copies the ignored files `.worktreeinclude` (or `--include-file`) selects, on every lease, and fails a lease
+  whose seed target already exists.
+- `destroy` keeps a slot that is leased, in use, dirty, or unmerged into the default branch, and calls `ls-remote`
+  first. `status` writes treehouse's state and may move files out of a slot it recovers.
+
+**Stage 1, the contract.** No behavior changes.
+
+- `tests/canopy/test_pool_contract.py`: a case for each guarantee above and each one `core/treehouse.py`'s callers
+  depend on (reconcile, dispatch, reviews, sync, the worktrees page). It runs against the fake on every `make check`,
+  and against real treehouse when `treehouse` is on `PATH` (`make pool-contract`).
+- A CI job, Linux and macOS, that builds treehouse at the pinned commit with `make treehouse` and runs the suite. Go
+  is a CI-only dependency, like Node for the sandbox canary. Where the fake and real treehouse disagree, the fake is
+  fixed.
+- DESIGN §18 gains "What a pool guarantees", the list the suite checks, each line naming its case.
+- Check: the suite passes against real treehouse on both platforms and against the fake.
+
+**Stage 2, canopy's pool in shadow.** Built beside treehouse, wired to no caller.
+
+- Leases are journal rows: a migration adds `slots` (repository, name, path, lease id and holder, leased at, base,
+  the paths seeding wrote), written in the same transaction as the run it is for, under the tick and dispatch locks.
+- Layout: `<workspace>/pools/<repo>/<N>/<repo>`, with no hash of the remote, since a workspace's repository names are
+  unique. The declared size is the only limit; a pool with none declared stops at 16, treehouse's default
+  `max_trees`.
+- Lease, reuse, return, and seeding as treehouse does them (above). Processes in a slot are found through `/proc` on
+  Linux and `lsof` through `procs` on macOS, so no new dependency. `destroy` uses the fetched refs, no network call.
+- The contract suite runs against canopy's pool too, every case, nothing skipped for one pool only, plus real-git
+  tests for two leases at once and a crash between `worktree add` and the journal row.
+- Shadow: each tick's reconcile also classifies every treehouse slot with canopy's own checks and logs a
+  `pool_shadow_mismatch` line wherever they disagree. It changes nothing. Each mismatch the operator explains becomes
+  a contract case, and canopy's checks are fixed until it passes.
+- Check, live: a week of `canopy loop` on the real queue with the shadow on, whose every mismatch is explained, has a
+  case, and passes.
+
+**Stage 3, by choice, then by default.**
+
+- `pools.backend`, user-only (§12): `"treehouse"` (default) or `"canopy"`. The journal records which pool made each
+  lease, and a lease is always returned through that pool, so switching with runs in flight is safe.
+- Switching to canopy, `canopy workspace sync` moves each idle treehouse slot into `pools/` with `git worktree move`,
+  keeping its ignored files. Switching back costs only warm caches: treehouse makes fresh slots and sync removes
+  canopy's idle ones.
+- `post_create` does not run under canopy's pool; the operator's guide says how to move a hook to `runtime.setup_cmd`
+  (§9).
+- Check, live, before the default changes: a week on `"canopy"` in which a Bazel or `node_modules` cache in a reused
+  slot survives, no slot is left leased without a live run, and one switch back and forward with a run in flight
+  loses nothing. Then the default becomes `"canopy"`, in its own PR.
+
+**Stage 4, treehouse removed,** once a tagged release has shipped with `"canopy"` as the default.
+
+- Goes: treehouse's implementation, `pools.backend` (a config still setting it is warned about, then ignored), the
+  fake and its fixture, `make treehouse` and the CI job, README's install step, and the mock's pool hashes.
+- Docs: D002 (rewritten as settled), D033's last `Rejected` line, D066's first bullet, DESIGN §8, §9, §18, §22, and
+  §24, REQUIREMENTS R2, README, GETTING_STARTED, PRIOR_ART, and TRUST_MODEL, with the operator's approval note.
+
+Open: whether a seeded symlink is copied as a link (treehouse writes its target text into a regular file), checked
+against TRUST_MODEL T4; whether sync warms a new slot (what `post_create` did for M17) or the first run's `setup_cmd`
+is enough.
+
+Accept: each stage's check, in order. Then `make install-check` and `make binary` pass with no `treehouse` on `PATH`,
+and a fresh install from README on a machine with no Go runs a day of `canopy loop`.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Spend-paced loop (M13): when, with M39 built, overseer spend per day still runs past what the operator will pay
