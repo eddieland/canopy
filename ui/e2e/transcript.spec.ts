@@ -13,7 +13,10 @@ test("a run's id opens its page, and its transcript opens each tool call to its 
     await settled(page)
     await page.getByTestId('run-39').getByRole('link', { name: 'run:39' }).click()
     await expect(page).toHaveURL(/\/runs\/39$/u)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('run:39')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('run:39 Debounce search input')
+    // Its description is its state; what every run's page shows is the title's help, on hover.
+    await expect(page.locator('main header p')).toHaveText('done · implement · ABC-099')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('title', /^What the worker did/u)
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Runs' })).toHaveAttribute(
         'data-status',
         'active',
@@ -171,9 +174,11 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
     await page.goto('ticks/2')
     await settled(page)
     const transcript = page.getByTestId('transcript')
-    await expect(transcript).toContainText('session ses_tick2')
     const tools = transcript.getByTestId('transcript-tool')
     await expect(tools).toHaveCount(4)
+    // Its session is named once, in the Tick panel's overseer field, not again over the transcript.
+    await expect(page.locator('main')).toContainText('session ses_tick2')
+    await expect(transcript).not.toContainText('session ses_tick2')
     await expect(transcript).toContainText('4 tool calls, 1 refused')
 
     // A shell call's line is its command, with what it printed when that is one short line.

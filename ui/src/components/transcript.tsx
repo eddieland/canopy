@@ -55,15 +55,18 @@ const NO_WORDS: readonly string[] = []
  * sent and what it did. In order, a search keeps the rows with a line that holds it, its matches marked, and opens a
  * tool call whose input or output holds it. All of it is agent output, rendered as text. `running` says the session
  * has not ended: its events reach the log when it does, or with `live`, a worker run's, as the runtime prints them.
+ * Its header names the session, but for `session={false}`, on a page whose identity panel names it already.
  */
 export function TranscriptPanel({
     transcript,
     running,
     live = false,
+    session = true,
 }: {
     transcript: Transcript | undefined
     running: boolean
     live?: boolean
+    session?: boolean
 }) {
     const [grouped, setGrouped] = useState(false)
     const [typed, setTyped] = useState('')
@@ -101,7 +104,7 @@ export function TranscriptPanel({
         <Panel className="min-h-40" data-testid="transcript">
             <PanelHeader label="Transcript">
                 <span className="flex flex-wrap items-center gap-3">
-                    {transcript?.session_id && (
+                    {session && transcript?.session_id && (
                         <Copyable
                             text={transcript.session_id}
                             label="session id"
@@ -112,7 +115,7 @@ export function TranscriptPanel({
                             </span>
                         </Copyable>
                     )}
-                    {transcript?.session_id && (entries.length > 1 || calls.calls.length > 0 || tools) && (
+                    {session && transcript?.session_id && (entries.length > 1 || calls.calls.length > 0 || tools) && (
                         // The session is what the transcript is; the modes after the rule are how it is shown.
                         <span aria-hidden className="hidden h-4 w-px bg-border sm:inline" />
                     )}

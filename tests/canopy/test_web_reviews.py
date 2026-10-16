@@ -28,8 +28,12 @@ def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> 
 
 
 def test_a_review_anchors_its_findings_on_its_diff(backend: Backend) -> None:
-    found = client(None, backend).get("/api/reviews/4").json()
+    c = client(None, backend)
+    found = c.get("/api/reviews/4").json()
     assert found["review"]["impact"] == "normal"
+    # Its ticket's title, so its page can lead with it; none for a PR with no ticket.
+    assert found["ticket_title"] == "Debounce search input"
+    assert c.get("/api/reviews/2").json()["ticket_title"] is None
     assert found["base_branch"] == "main"
     assert found["summary"].startswith("Stale requests are aborted now.")
     files = found["diff"]["files"]
