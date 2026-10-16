@@ -544,20 +544,21 @@ def test_the_stream_sends_the_chores_again_when_the_loop_reads_its_config_again(
 
 
 def test_a_change_to_a_ticket_sends_the_list_and_names_the_ticket(served: int, backend: Backend) -> None:
-    def reply_soon() -> None:
-        time.sleep(0.3)
-        with backend.open() as ctx:
-            ctx.conn.execute(
-                "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
-                "VALUES ('ticket', 'ABC-103', '2026-10-08T13:00:00.000Z', 'operator', 'reply', 'cli', 'later')"
-            )
-
-    threading.Thread(target=reply_soon, daemon=True).start()
     found: list[StreamEvent] = []
+    replied = False
     with httpx2.stream("GET", f"http://127.0.0.1:{served}/api/events", timeout=10) as response:
         for line in response.iter_lines():
             if line.startswith("data: "):
                 found.append(StreamEvent.model_validate_json(line.removeprefix("data: ")))
+            # The reply goes in once the first list has been sent, not after a fixed wait: a reply the first read
+            # already saw would change nothing the stream sent, and no TicketChanged would ever come.
+            if not replied and any(isinstance(e.root, TicketsUpdated) for e in found):
+                replied = True
+                with backend.open() as ctx:
+                    ctx.conn.execute(
+                        "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
+                        "VALUES ('ticket', 'ABC-103', '2026-10-08T13:00:00.000Z', 'operator', 'reply', 'cli', 'later')"
+                    )
             if any(isinstance(e.root, TicketChanged) for e in found):
                 break
     changed = next(e.root for e in found if isinstance(e.root, TicketChanged))

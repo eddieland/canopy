@@ -70,6 +70,10 @@ jobs:
     needs: changes
     if: ${{ !cancelled() }}
     timeout-minutes: 15
+    permissions:
+      contents: read
+      # For the OIDC token the Codecov upload authenticates with.
+      id-token: write
     steps:
       - name: Check out repository
         if: needs.changes.outputs.code != 'false'
@@ -98,10 +102,20 @@ jobs:
         run: uv sync --locked
 
       # `make all` would run `fmt`, which rewrites files; `make check` only verifies.
-      # It includes `ruff format --check`, so unformatted code still fails.
+      # It includes `ruff format --check`, so unformatted code still fails. COVERAGE=1 writes coverage.xml.
       - name: Lint, type check, and test
         if: needs.changes.outputs.code != 'false'
-        run: make check
+        run: make check COVERAGE=1
+
+      # Codecov authenticates with the run's OIDC token, so no secret is needed; the repository only has to be added
+      # on codecov.io. An upload that fails warns and leaves the check green: Codecov being down never blocks a PR.
+      - name: Upload coverage to Codecov
+        if: needs.changes.outputs.code != 'false'
+        uses: codecov/codecov-action@v7.1.1
+        with:
+          files: coverage.xml
+          use_oidc: true
+          fail_ci_if_error: false
 
   # The sandbox canary (DESIGN §24, The canary): the shipped wrapper and policy templates under the real srt, with
   # bubblewrap on Linux and sandbox-exec on macOS, set up the way docs/SANDBOX.md tells the operator to.
