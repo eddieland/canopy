@@ -145,6 +145,21 @@ test('clicking a commented passage opens its thread and puts the cursor there', 
     await expect(text).toHaveAttribute('data-state', 'on')
 })
 
+test('a click elsewhere in the plan, or Escape, closes the open thread', async ({ page }) => {
+    const passage = plan(page).locator('[data-thread=sample-2]')
+    const thread = comments(page).filter({ hasText: 'name the ticket' })
+    await passage.click()
+    await expect(thread).toHaveAttribute('data-active', 'true')
+    await plan(page).getByRole('heading', { level: 1 }).click()
+    await expect(thread).toHaveAttribute('data-active', 'false')
+    await expect(plan(page).locator('.plan-comment-active')).toHaveCount(0)
+    await passage.click()
+    await expect(thread).toHaveAttribute('data-active', 'true')
+    await page.keyboard.press('Escape')
+    await expect(thread).toHaveAttribute('data-active', 'false')
+    await expect(plan(page).locator('.plan-comment-active')).toHaveCount(0)
+})
+
 test('commenting again with nothing written moves the comment, and typing goes into it', async ({ page }) => {
     await select(page, 'iter_rows()')
     await page.keyboard.press('ControlOrMeta+Alt+m')
