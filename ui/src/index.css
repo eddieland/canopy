@@ -662,3 +662,109 @@
         animation: none !important;
     }
 }
+
+/*
+ * A plan in its editor (src/components/plan-editor.tsx): Markdown laid out as a document, in the page's type and
+ * tokens. The editor writes these elements itself, from the plan's schema (src/lib/plan-schema.ts), so they are styled
+ * here by tag rather than by classes on each.
+ */
+@layer components {
+    .plan-doc {
+        @apply flex min-h-72 max-w-3xl flex-col gap-3 text-sm leading-relaxed break-words text-foreground outline-none;
+
+        & h1 {
+            @apply mt-2 text-xl font-semibold tracking-tight;
+        }
+        & h2 {
+            @apply mt-2 text-base font-semibold;
+        }
+        & h3,
+        & h4 {
+            @apply mt-1 text-sm font-semibold;
+        }
+        & :is(h1, h2, h3, h4):first-child {
+            @apply mt-0;
+        }
+        & ul {
+            @apply flex list-disc flex-col gap-1 pl-5;
+        }
+        & ol {
+            @apply flex list-decimal flex-col gap-1 pl-5;
+        }
+        & li > :is(ul, ol) {
+            @apply mt-1;
+        }
+        & ul[data-type='taskList'] {
+            @apply list-none pl-0;
+        }
+        & ul[data-type='taskList'] li {
+            @apply flex items-start gap-2;
+        }
+        & ul[data-type='taskList'] li > label {
+            @apply mt-0.5 flex shrink-0 items-center;
+        }
+        & ul[data-type='taskList'] input[type='checkbox'] {
+            @apply size-3.5 accent-(--accent);
+        }
+        & ul[data-type='taskList'] li > div {
+            @apply min-w-0 flex-1;
+        }
+        & ul[data-type='taskList'] li[data-checked='true'] > div {
+            @apply text-muted-foreground line-through;
+        }
+        & blockquote {
+            @apply border-l-2 pl-3 text-muted-foreground;
+        }
+        & code {
+            @apply rounded-xs bg-surface-raised px-1 py-px font-mono text-xs;
+        }
+        & pre {
+            @apply overflow-x-auto rounded-md border bg-surface-raised px-3 py-2 font-mono text-xs leading-relaxed;
+        }
+        & pre code {
+            @apply bg-transparent p-0;
+        }
+        & hr {
+            @apply my-1 border-t;
+        }
+        & table {
+            @apply w-full border-collapse text-left text-sm;
+        }
+        & :is(th, td) {
+            @apply border px-2 py-1 align-top;
+        }
+        & th {
+            @apply bg-surface-raised/50 font-medium;
+        }
+        & :is(th, td) > p {
+            @apply m-0;
+        }
+        & .tableWrapper {
+            @apply overflow-x-auto;
+        }
+        & strong {
+            @apply font-semibold;
+        }
+        /* A link keeps its address, on hover, but is not one (D113). */
+        & .plan-link {
+            @apply underline decoration-muted-foreground underline-offset-4;
+        }
+        /* What a planner wrote as HTML or an image, as its characters (src/lib/plan-schema.ts). */
+        & .plan-verbatim {
+            @apply rounded-xs bg-surface-raised px-1 font-mono text-xs text-muted-foreground;
+        }
+        & .plan-verbatim-block {
+            @apply text-muted-foreground;
+        }
+        & .ProseMirror-selectednode {
+            @apply ring-2 ring-ring;
+        }
+        /* A commented passage, on the accent's tint; the one open, or being commented on, deeper and underlined. */
+        & .plan-comment {
+            @apply cursor-pointer rounded-xs bg-accent/14;
+        }
+        & .plan-comment-active {
+            @apply bg-accent/28 underline decoration-accent decoration-2 underline-offset-4;
+        }
+    }
+}

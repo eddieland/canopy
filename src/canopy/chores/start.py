@@ -127,10 +127,10 @@ def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Star
         try:
             notes = conversation.chore_notes(ctx.conn, name)
             prompt = render(body, state, run_id, context, notes, held=notice.for_prompt(ctx.conn))
-            logs.write_private(prompt_file(Path(run["log_path"])), prompt)
+            logs.write_private(prompt_file(Path(run.log_path)), prompt)
             # `python -m canopy`, not `canopy` from PATH: the child is this same installation.
             argv = [sys.executable, "-m", "canopy", "_chore", str(run_id)]
-            pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run["log_path"]))
+            pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run.log_path))
         except (OSError, procs.ProcError) as e:
             note = json.dumps({"harness": f"could not start the chore: {e}"})
             db.finish_run(
@@ -139,7 +139,7 @@ def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Star
                 run_id,
                 ChoreRunStatus.CRASHED,
                 note,
-                event=outbox.chore_ended(ctx.config, run, ChoreRunStatus.CRASHED, note),
+                event=outbox.chore_ended(ctx.config, name, run_id, ChoreRunStatus.CRASHED, note),
             )
             raise Refusal("spawn_failed", str(e)) from e
         db.claim_run(ctx.conn, "chore_runs", run_id, pid)
@@ -203,11 +203,11 @@ def render(
     previous = state.latest_ended
     previous_summary = None
     if previous is not None:
-        stored = result.stored(previous["result_json"])
+        stored = result.stored(previous.result_json)
         previous_summary = {
-            "run_id": previous["id"],
-            "status": previous["status"],
-            "ended_at": previous["ended_at"],
+            "run_id": previous.id,
+            "status": previous.status,
+            "ended_at": previous.ended_at,
             "summary": stored.summary if stored is not None else None,
         }
     run = {

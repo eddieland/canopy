@@ -1,4 +1,4 @@
-"""The keys the web UI's settings page edits in the operator's user config, and the save (DESIGN §12, §22, D120).
+"""The keys the web UI's settings page edits in the operator's user config, and the save (DESIGN §12, §22, D121).
 
 Only the keys `EDITABLE` names, never a section's wildcard: a key added to a section later is not editable until it
 is named here. A limit may be raised or lowered, but the page cannot loosen one past its bound, a count's ceiling or a

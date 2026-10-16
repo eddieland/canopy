@@ -215,7 +215,7 @@ be able to change those from the web UI's settings page and have the loop take t
 settings may be changed from the page only toward stricter: removing an authorized replier or a trusted reviewer,
 turning `trust.rebase` off, turning the commit trailer on. Loosening one, or changing any key that runs a command,
 chooses a prompt, or moves the listener, stays an edit to the file. The Limits and trust page under Settings does
-this, within ceilings in code (§12, TRUST_MODEL T8, D120).
+this, within ceilings in code (§12, TRUST_MODEL T8, D121).
 
 ### R17. Review a coworker's PR on request, once or for as long as it is open
 
@@ -240,6 +240,8 @@ Whether a ticket is planned is a config default the operator can change for one 
 operator reads the plan before work starts: nothing is implemented until they approve it, and a reply asking for
 changes makes a new plan. The plan stays in canopy and is posted nowhere, so a private ticket is planned the same way.
 Today the `implement` worker plans inside its own session, and nothing of it survives but its summary.
+2026-10-16: the operator reads a plan as a document, edits it in place, and comments on its passages, as on a shared
+document; asking for changes gives the planner each comment with the passage it is on.
 
 ## Nice to have
 

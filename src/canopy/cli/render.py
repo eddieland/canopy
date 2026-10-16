@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from canopy.core import contract, db
+from canopy.core import contract, db, records
 from canopy.loop import attention
 
 if TYPE_CHECKING:
@@ -48,13 +48,13 @@ def phase_of(conn: sqlite3.Connection, ticket: sqlite3.Row) -> str:
     return f"not recorded, last decision {decided}" if decided is not None else "not seen by a tick yet"
 
 
-def result_of(run: sqlite3.Row) -> dict[str, object]:
+def result_of(run: sqlite3.Row | records.Row) -> dict[str, object]:
     """A run's stored result as an object; {} when it has none or it does not parse.
 
     Returns:
         The parsed `result_json`, its values still untrusted, or {} when it is empty, not JSON, or not an object.
     """
-    return contract.stored_object(run["result_json"])
+    return contract.stored_object(records.columns(run)["result_json"])
 
 
 def prs_of(result: dict[str, object]) -> list[str]:
@@ -66,7 +66,7 @@ def prs_of(result: dict[str, object]) -> list[str]:
     return contract.stored_prs(result)
 
 
-def spent(row: sqlite3.Row) -> str:
+def spent(row: sqlite3.Row | records.Row) -> str:
     """What a run or a tick cost, as `  $0.25, 12.3k tokens`, or "" when the runtime reported nothing.
 
     Returns:
@@ -83,13 +83,9 @@ def chore_line(state: chore_view.ChoreState, now: datetime) -> str:
         How long the chore has been running, or its last run's status and age and when it is next due, as of `now`.
     """
     if state.running is not None:
-        return f"running for {attention.age(str(state.running['started_at']), now)}"
+        return f"running for {attention.age(state.running.started_at, now)}"
     latest = state.latest
-    last = (
-        "never run"
-        if latest is None
-        else f"last {latest['status']} {attention.age(str(latest['started_at']), now)} ago"
-    )
+    last = "never run" if latest is None else f"last {latest.status} {attention.age(latest.started_at, now)} ago"
     due = state.due_at(now)
     when = "due now" if due is None or due <= now else f"due in {attention.age(db.format_time(now), due)}"
     return f"{last}, {when}"

@@ -65,7 +65,7 @@ If code and the design disagree, the design doc wins until a decision entry says
   validating config and anything parsed from another program's output (D026), `hypothesis` for property tests of input
   validators (dev only), `pytest-xdist` to run the tests in parallel (dev only), `rich` for terminal output
   (D043), `fastapi` and `uvicorn` for the web UI's server (D074, only in `canopy.serve`), `tomlkit` for its edits to
-  the user config (D121, only in `canopy.serve`), and `httpx2` for its test client (D079, dev only), and `syrupy` for
+  the user config (D122, only in `canopy.serve`), and `httpx2` for its test client (D079, dev only), and `syrupy` for
   snapshot tests (dev only).
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
   and npm; `make check` runs its checks, and `make ui-e2e` its Playwright tests.
@@ -115,7 +115,9 @@ If code and the design disagree, the design doc wins until a decision entry says
 - A query that returns a table's whole rows reads them as that table's row type in `core/records.py`
   (`records.fetch_all`, `records.fetch_one`), not as `sqlite3.Row`. A new table gets its row type in the PR that adds
   it, and an old one when a PR already changes its queries. `tests/canopy/test_records.py` holds each row type to its
-  table, so a migration that adds a column to a typed table adds the field too.
+  table, so a migration that adds a column to a typed table adds the field too. A status, kind, or phase column is a
+  field of its `core/vocab.py` enum, so the row carries the member and refuses a value the vocabulary does not hold. A
+  helper that reads the same columns from several tables, some still untyped, reads them through `records.columns`.
 - A run's status and kind and a ticket's phase are closed vocabularies in `core/vocab.py`, each a `StrEnum`. New code
   writes and compares them through its members, not bare strings, and converts a value read from the journal where it
   branches on it. A branch over one is a `match` ending in `case _: assert_never(...)`, so a new value fails the type

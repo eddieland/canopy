@@ -26,7 +26,7 @@ def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
         fields = {"chore_run_id": row["id"], "chore": row["chore"], "pid": row["pid"]}
         dead_runs.kill_agent("chore_runs", row, log, fields)
         note = json.dumps({"harness": "the chore process is gone"})
-        ended = outbox.chore_ended(ctx.config, row, ChoreRunStatus.CRASHED, note)
+        ended = outbox.chore_ended(ctx.config, str(row["chore"]), int(row["id"]), ChoreRunStatus.CRASHED, note)
         if dead_runs.crash(ctx.conn, "chore_runs", row, note, event=ended):
             closed.append(int(row["id"]))
             log.warning("chore process is gone; chore run marked crashed", extra=fields)

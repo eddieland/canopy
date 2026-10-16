@@ -493,7 +493,7 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   nothing else. A reload reads only the operator's own files, and a `serve.*` change waits for a restart, so the
   listener's bind and port never change under it. A forget must carry the ticket's key typed out, checked in code. A
   grant allows one more run a request, with `canopy grant`'s guards. It cannot run a chore.
-- Its config writes (DESIGN §12, §22, D120) are an allowlist in code, by key name, never a section's wildcard, so a key
+- Its config writes (DESIGN §12, §22, D121) are an allowlist in code, by key name, never a section's wildcard, so a key
   added later is not writable until it is named. Limits may be raised or lowered, but not past a bound in code (a
   count's ceiling, such as `capacity.max_workers` at 32, or a pace's floor): the counts in `capacity`, the attempt
   limits and the fix-CI cooldown in `policy`, and `loop.interval_minutes` and `loop.idle_max_minutes`. Trust settings

@@ -290,7 +290,7 @@ run started from (§8, TRUST_MODEL T1). It applies to every repository the opera
 it lets a worker replace a branch's history: a shared file must not decide that.
 
 **From the web UI.** The Limits and trust page under Settings (§22) edits a few keys of the user file in place, and no
-others (D120, TRUST_MODEL T8). They are named one by one in `canopy/serve/config_edit.py`, never by section, so a key
+others (D121, TRUST_MODEL T8). They are named one by one in `canopy/serve/config_edit.py`, never by section, so a key
 added to a section later is not editable until it is named there. A limit may be raised or lowered, but the page cannot
 loosen it past its bound; the file can set any value, and the page may still tighten a value the file set past the
 bound. A trust key moves only toward stricter: a config write outlives the listener secret, and a replier added through
@@ -318,7 +318,7 @@ repositories with a count of their own and takes a name to give another one, so 
 shows the few that differ from `capacity.slots_per_repo`. A save:
 
 - writes the user file only, never the workspace file (T7), a shared `policy.*` key included: the user file wins;
-- is edited in place with tomlkit (D121), so the operator's comments, order, and layout stay; a list loses its removed
+- is edited in place with tomlkit (D122), so the operator's comments, order, and layout stay; a list loses its removed
   entries where they stand, keeping the rest and their comments. A file tomlkit would not write back byte for byte, as
   read, is refused `not_roundtrip` before anything changes, so a save differs from the file only in the values set;
 - keeps the file as it was beside it, `config.toml.bak` with the file's mode, replacing the previous save's: the way
