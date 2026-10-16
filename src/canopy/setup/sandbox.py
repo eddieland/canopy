@@ -1,6 +1,7 @@
 """`canopy sandbox setup`: what running agents in a sandbox needs on this machine (DESIGN §24, docs/SANDBOX.md).
 
-It copies `canopy-sandbox`'s policy templates to where the wrapper reads them, never over one already there; installs
+It copies `canopy-sandbox`'s policy templates to where the wrapper reads them, never over one already there, and
+notes one there that lacks a placeholder the shipped one names, as a template from an older canopy does; installs
 the `srt` that the wrapper's lockfile pins, with `npm ci`, into a directory of canopy's own, which no sandbox can
 write; and checks what it cannot install, because that needs root: bubblewrap, socat, and ripgrep on Linux, ripgrep
 on macOS, and unprivileged user namespaces. It also checks what srt itself only warns about, in a debug log nobody
@@ -62,12 +63,17 @@ NPM_TIMEOUT = 600
 
 @dataclass
 class Report:
-    """What setup wrote and kept, what it did about srt, and each thing left for the operator to do, as a paragraph."""
+    """What setup wrote and kept, what it did about srt, and each thing left for the operator to do, as a paragraph.
+
+    `notes` are for the operator to read, not to do: a kept template that lacks a placeholder the shipped one names,
+    which an operator may have taken out on purpose.
+    """
 
     written: list[Path] = field(default_factory=list)
     kept: list[Path] = field(default_factory=list)
     runtime: str = ""
     todo: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
 
 
 def run_setup(runner: procs.Runner, platform: str = sys.platform) -> Report:
@@ -108,13 +114,45 @@ def _copy_templates(report: Report) -> None:
         target.mkdir(mode=0o700, parents=True, exist_ok=True)
         for role in canopy_sandbox.ROLES:
             path = target / f"{role}.json"
+            shipped = (canopy_sandbox.TEMPLATES / path.name).read_text(encoding="utf-8")
             if path.exists():
                 report.kept.append(path)
+                _note_missing_placeholders(path, shipped, report)
                 continue
-            path.write_text((canopy_sandbox.TEMPLATES / path.name).read_text(encoding="utf-8"), encoding="utf-8")
+            path.write_text(shipped, encoding="utf-8")
             report.written.append(path)
     except OSError as e:
         report.todo.append(f"the policy templates could not be copied: {e}")
+
+
+def _note_missing_placeholders(path: Path, shipped: str, report: Report) -> None:
+    """Note what a kept template leaves out that the shipped one names: a template from an older canopy, most often.
+
+    One that is not JSON is left to the wrapper, which refuses it with the reason.
+    """
+    try:
+        kept = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError:
+        return
+    missing = sorted(_placeholders(json.loads(shipped)) - _placeholders(kept))
+    if missing:
+        them = "them" if len(missing) > 1 else "it"
+        report.notes.append(
+            f"{path} does not name {', '.join(missing)}, which the template this canopy ships does (docs/SANDBOX.md, "
+            f"step 3). Add {them} where {canopy_sandbox.TEMPLATES / path.name} has {them}, unless you left {them} out "
+            "on purpose."
+        )
+
+
+def _placeholders(node: object) -> set[str]:
+    """Return the placeholders a template's lists name, outside its comments, the keys that start with `#`."""
+    if isinstance(node, dict):
+        items: dict[object, object] = node
+        return {name for key, value in items.items() if not str(key).startswith("#") for name in _placeholders(value)}
+    if isinstance(node, list):
+        elements: list[object] = node
+        return set[str]().union(*(_placeholders(e) for e in elements))
+    return {node} if isinstance(node, str) and canopy_sandbox.PLACEHOLDER.fullmatch(node) else set()
 
 
 def _install_runtime(runner: procs.Runner, report: Report) -> None:

@@ -6,6 +6,7 @@ or npm is installed on the machine running the tests does not matter.
 
 import json
 import os
+import shutil
 import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -137,6 +138,24 @@ def test_a_template_already_there_is_kept_as_it_is(machine: Machine, canopy_env:
 
     assert mine in report.kept
     assert mine.read_text() == '{"edited": true}'
+
+
+def test_a_kept_template_without_a_placeholder_the_shipped_one_names_is_noted(
+    machine: Machine, canopy_env: CanopyEnv
+) -> None:
+    """A template from an older canopy lacks what a newer one added: a note says so, and nothing is left to do."""
+    machine.install(*LINUX_COMMANDS)
+    target = canopy_env.home / ".config" / "canopy" / "sandbox"
+    target.mkdir(parents=True)
+    old = (canopy_sandbox.TEMPLATES / "worker.json").read_text().replace('"@CACHE@",', "")
+    (target / "worker.json").write_text(old)
+    shutil.copy(canopy_sandbox.TEMPLATES / "chore.json", target)
+
+    report = sandbox.run_setup(SubprocessRunner(), "linux")
+
+    [note] = report.notes
+    assert note.startswith(f"{target / 'worker.json'} does not name @CACHE@,")
+    assert report.todo == []
 
 
 def test_a_lockfile_that_changed_is_installed_again(machine: Machine, canopy_env: CanopyEnv) -> None:

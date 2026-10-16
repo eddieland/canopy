@@ -20,7 +20,7 @@
     "#": [
       "The reviewer starts in <workspace>/.canopy/reviews/<id>/, which links to the checkout. The checkout and its git",
       "directories are readable and not writable: the diff it reads was written by the PR's author. If your",
-      "workspace is outside HOME, add it to denyRead."
+      "workspace is outside HOME, add it to denyRead. @CACHE@ is the reviewer's own cache, which no worker reads."
     ],
     "denyRead": ["~"],
     "allowRead": [
@@ -29,6 +29,7 @@
       "@GIT_OWN@",
       "@GIT_SHARED@",
       "@TMPDIR@",
+      "@CACHE@",
       "@READ@",
       "~/.gitconfig",
       "~/.config/git",
@@ -41,6 +42,7 @@
     ],
     "allowWrite": [
       "@TMPDIR@",
+      "@CACHE@",
       "~/.local/share/opencode",
       "~/.local/state/opencode",
       "~/.cache/opencode"

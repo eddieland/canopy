@@ -178,7 +178,8 @@ def sandbox_group() -> None:
 def cmd_sandbox_setup(click_ctx: click.Context) -> int:
     """Install what sandboxed runs need, and say what is left to do.
 
-    Copies canopy-sandbox's policy templates to ~/.config/canopy/sandbox/, keeping any already there. Installs the srt
+    Copies canopy-sandbox's policy templates to ~/.config/canopy/sandbox/, keeping any already there, and notes one
+    that lacks a placeholder the shipped one names, as a template from an older canopy does. Installs the srt
     canopy pins, with npm, in ~/.local/share/canopy/sandbox-runtime/. Checks what needs root, and prints how to do it:
     bubblewrap, socat, and ripgrep on Linux, ripgrep on macOS, and user namespaces. Changes no config: prefix your
     command templates with canopy-sandbox to use the sandbox. Run it again after upgrading canopy. Exits 1 while
@@ -191,6 +192,8 @@ def cmd_sandbox_setup(click_ctx: click.Context) -> int:
         click.echo(f"kept    {path}")
     if report.runtime:
         click.echo(report.runtime)
+    for item in report.notes:
+        click.echo(f"\nNote: {item}")
     for item in report.todo:
         click.echo(f"\nTo do: {item}")
     user_file = config.user_config_path()

@@ -25,6 +25,9 @@ In order, it:
    another's temp directory, and the workspace's `.canopy/` when the run's directories name it, in case the workspace
    is outside the HOME the template denies. It allows reading `srt`'s own `vendor/`
    directory, whose seccomp helper runs inside the sandbox, wherever `srt` is installed.
+   When the template lets the command write the role's cache, `@CACHE@`, it makes that directory and points the
+   build and package tools that keep a cache under HOME at it, overriding where the caller pointed them: a cache the
+   operator's own builds read is not one a sandboxed run may write.
 4. For a worker or setup, puts a `git` of its own first on the command's PATH, in the run's directory, which the
    command may read but not write. It runs the real git, pointed at the run's object directory, `CANOPY_GIT_OBJECTS`,
    with each worktree's shared objects as alternates, when the repository git would act on is one of the run's
@@ -49,6 +52,9 @@ A placeholder is a whole string in one of the template's lists, and expands to z
     @OBJECTS@        the run's object directory
     @TMPDIR@         the run's temp directory, the command's TMPDIR
     @READ@           each `--read` path
+    @CACHE@          the role's cache, `$XDG_CACHE_HOME/canopy/sandbox/<group>/` (`~/.cache/...` when that is
+                     unset), kept from run to run; a worker and setup share the `build` one, and a chore and a
+                     review each have their own
 
 `@GIT_SHARED@` names entries, not the directory, because of how `srt` (checked at 0.0.79) restores paths under a
 denied directory such as HOME: it binds each `allowWrite` path back, then each `allowRead` path read-only, so a common
@@ -184,6 +190,23 @@ GIT_LOCATION = (
     "GIT_SHALLOW_FILE",
     "GIT_WORK_TREE",
 )
+# The cache each role writes, by the directory under `$XDG_CACHE_HOME/canopy/sandbox/` that holds it. A worker and setup
+# share one, since setup fetches what the worker then builds with, in the same slot and with the same trust. A review
+# reads the most hostile text the loop meets, so nothing it writes is one a worker reads; a chore is the operator's own.
+CACHE_GROUPS = {"worker": "build", "setup": "build", "chore": "chore", "review": "review"}
+# What points a tool at a cache of its own, and the directory under the role's cache it is given. Each one keeps its
+# cache under HOME by default, where the templates deny it, so without this a run fetches everything again and a tool
+# whose cache sits under a toolchain the template keeps read-only, as Go's modules under `~/go` do, fails. Not
+# XDG_CACHE_HOME: OpenCode keeps its own cache there, which the templates name, and would fetch it all again.
+CACHE_ENV = {
+    "GOCACHE": "go-build",
+    "GOMODCACHE": "go-mod",
+    "PIP_CACHE_DIR": "pip",
+    "PRE_COMMIT_HOME": "pre-commit",
+    "UV_CACHE_DIR": "uv",
+    "YARN_CACHE_FOLDER": "yarn",
+    "npm_config_cache": "npm",
+}
 # The npm package srt comes in; its `vendor/` holds the seccomp helper the sandbox runs (find_srt, vendor_dirs).
 SRT_PACKAGE = "@anthropic-ai/sandbox-runtime"
 # Where srt puts the sandbox's TMPDIR. Unset, it is /tmp/claude, which every sandboxed run shares.
@@ -238,12 +261,14 @@ def run(argv: list[str]) -> int:
         check_socket_room(tmp)
         tmp.mkdir(mode=0o700)
         bin_dir = git_shim(run_dir, trees, objects) if objects is not None else None
-        policy = fill(template, placeholders(cwd, trees, objects, tmp, reads))
+        cache = cache_dir(role)
+        policy = fill(template, placeholders(cwd, trees, objects, tmp, reads, cache=cache))
         readable = [*vendor_dirs(srt), *([bin_dir] if bin_dir is not None else [])]
-        check(policy, [run_dir.parent, *state_dirs(objects, cwd)], readable)
+        check(policy, [run_dir.parent, cache.parent, *state_dirs(objects, cwd)], readable)
+        caches = make_cache_dir(cache) if writable(policy, cache) else None
         settings = run_dir / "policy.json"
         settings.write_text(json.dumps(policy, indent=2) + "\n", encoding="utf-8")
-        return run_srt(srt, settings, command, environment(os.environ, bin_dir, tmp))
+        return run_srt(srt, settings, command, environment(os.environ, bin_dir, tmp, caches))
     except SandboxError as e:
         print(f"canopy-sandbox: {e}", file=sys.stderr)
         return 2
@@ -438,8 +463,23 @@ def check_socket_room(tmp: Path) -> None:
         )
 
 
+def cache_dir(role: str) -> Path:
+    """Return the cache a run as `role` writes: `$XDG_CACHE_HOME/canopy/sandbox/<group>`.
+
+    A relative XDG_CACHE_HOME is ignored, as the XDG spec says: the wrapper runs in the slot, so it would name a
+    directory the branch can commit.
+
+    Returns:
+        The directory, under `~/.cache` when XDG_CACHE_HOME is unset, empty, or relative. It may not exist.
+    """
+    base = Path(os.environ.get("XDG_CACHE_HOME", "")).expanduser()
+    if not base.is_absolute():
+        base = Path.home() / ".cache"
+    return base / "canopy" / "sandbox" / CACHE_GROUPS[role]
+
+
 def placeholders(
-    cwd: Path, trees: list[Worktree], objects: Path | None, tmp: Path, reads: list[Path]
+    cwd: Path, trees: list[Worktree], objects: Path | None, tmp: Path, reads: list[Path], *, cache: Path
 ) -> dict[str, list[str]]:
     """Return what each placeholder expands to for this run.
 
@@ -455,6 +495,7 @@ def placeholders(
         "@OBJECTS@": [objects] if objects is not None else [],
         "@TMPDIR@": [tmp],
         "@READ@": reads,
+        "@CACHE@": [cache],
     }
     return {name: list(dict.fromkeys(str(p) for p in paths)) for name, paths in values.items()}
 
@@ -508,8 +549,9 @@ def check(policy: object, denied: list[Path], readable: list[Path]) -> None:
     """Refuse a policy `srt` would run without a sandbox, or with the network open; deny `denied`, allow `readable`.
 
     `denied` holds the directory of every run's directory: the system temp directory is outside HOME, so without it one
-    run could read another's temp directory, a private ticket's included. It holds the workspace's `.canopy/` too, when
-    known, for a workspace outside HOME. The run's own directories in them are re-allowed by the template. `readable`
+    run could read another's temp directory, a private ticket's included. It holds the directory of every role's cache,
+    for an XDG_CACHE_HOME outside HOME, and the workspace's `.canopy/` too, when known, for a workspace outside HOME.
+    The run's own directories in them are re-allowed by the template. `readable`
     holds what runs inside the sandbox from a denied directory: `srt`'s own helper, under the HOME the template may
     deny, and the run's `git`, in the run's directory.
 
@@ -531,6 +573,44 @@ def check(policy: object, denied: list[Path], readable: list[Path]) -> None:
     if not isinstance(allow, list):
         raise SandboxError("the policy template's filesystem.allowRead is not a list")
     allow.extend(str(p) for p in readable if str(p) not in allow)
+
+
+def writable(policy: object, path: Path) -> bool:
+    """Whether `policy`, as `check` passed it, names `path` itself in its `allowWrite`.
+
+    A template from before `@CACHE@`, or one an operator took it out of, keeps the run's tools where they were.
+
+    Returns:
+        True when the command may write `path`.
+    """
+    sections: dict[object, object] = policy if isinstance(policy, dict) else {}
+    filesystem = sections.get("filesystem")
+    allowed = filesystem.get("allowWrite") if isinstance(filesystem, dict) else None
+    return isinstance(allowed, list) and str(path) in allowed
+
+
+def make_cache_dir(cache: Path) -> Path:
+    """Make the role's cache, private to the user, unless it is there.
+
+    A run of the role may write anything inside it, a link included, and the next run of the role reads it: that is
+    what a cache is. Nothing on the host reads it, and the wrapper makes only the directory itself, which no run can
+    replace, since none may write the directory that holds it.
+
+    Returns:
+        The directory.
+
+    Raises:
+        SandboxError: it could not be made, or it is a link or not the user's own directory.
+    """
+    try:
+        cache.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        cache.mkdir(mode=0o700, exist_ok=True)
+        info = cache.lstat()
+    except OSError as e:
+        raise SandboxError(f"the cache {cache} could not be made: {e}") from None
+    if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
+        raise SandboxError(f"the cache {cache} is not a directory of this user's; remove it")
+    return cache
 
 
 def state_dirs(objects: Path | None, cwd: Path) -> list[Path]:
@@ -560,15 +640,20 @@ def vendor_dirs(srt: Path) -> list[Path]:
     return [vendor] if name == SRT_PACKAGE and vendor.is_dir() else []
 
 
-def environment(current: Mapping[str, str], bin_dir: Path | None, tmp: Path) -> dict[str, str]:
+def environment(
+    current: Mapping[str, str], bin_dir: Path | None, tmp: Path, cache: Path | None = None
+) -> dict[str, str]:
     """Return the command's environment: the wrapper's, scrubbed at start, plus the run's directories.
 
     Returns:
-        The environment to run `srt` with: TMPDIR the run's, and `bin_dir`, which holds the run's git, first on PATH.
+        The environment to run `srt` with: TMPDIR the run's, each tool's cache in `cache` when given, and `bin_dir`,
+        which holds the run's git, first on PATH.
     """
     env = dict(current)
     env[SRT_TMPDIR] = str(tmp)
     env["TMPDIR"] = str(tmp)
+    if cache is not None:
+        env.update({name: str(cache / sub) for name, sub in CACHE_ENV.items()})
     if bin_dir is not None:
         env["PATH"] = os.pathsep.join(p for p in (str(bin_dir), env.get("PATH", "")) if p)
     return env
