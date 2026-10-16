@@ -631,6 +631,7 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     )
     _chore_fixtures(conn, root)
     _decisions(conn)
+    _tools(conn)
 
 
 def _chore_fixtures(conn: sqlite3.Connection, root: Path) -> None:
@@ -732,6 +733,41 @@ def _decisions(conn: sqlite3.Connection) -> None:
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             (tick_id, at(when), key, repo, chore, pr, action, rationale),
         )
+
+
+def _tools(conn: sqlite3.Connection) -> None:
+    """What the agent runs that ended called, by tool (DESIGN §13); a running run has recorded none yet.
+
+    The overseer's PR reads and tracker searches return the most, as MEASUREMENTS 2026-10-13 found.
+    """
+    calls = (
+        # table, run, tool, calls, errors, characters returned
+        ("ticks", 1, "github_pull_request_read", 14, 0, 182_000),
+        ("ticks", 1, "jira_search", 3, 0, 81_000),
+        ("ticks", 1, "bash", 9, 1, 6_400),
+        ("ticks", 2, "github_pull_request_read", 11, 0, 143_000),
+        ("ticks", 2, "jira_search", 2, 0, 54_000),
+        ("ticks", 2, "bash", 6, 0, 3_900),
+        ("runs", 37, "bash", 41, 3, 96_000),
+        ("runs", 37, "read", 22, 0, 71_000),
+        ("runs", 37, "edit", 9, 1, 2_100),
+        ("runs", 38, "bash", 18, 0, 37_000),
+        ("runs", 38, "read", 12, 0, 40_000),
+        ("runs", 39, "bash", 27, 2, 58_000),
+        ("runs", 39, "read", 15, 0, 49_000),
+        ("runs", 39, "github_pull_request_read", 2, 0, 21_000),
+        ("runs", 40, "bash", 33, 6, 88_000),
+        ("runs", 42, "read", 8, 0, 19_000),
+        ("chore_runs", 1, "bash", 4, 0, 12_000),
+        ("chore_runs", 2, "bash", 6, 1, 15_000),
+        ("chore_runs", 3, "read", 3, 0, 4_200),
+        ("review_runs", 1, "read", 9, 0, 33_000),
+        ("review_runs", 2, "read", 7, 0, 26_000),
+        ("review_runs", 4, "bash", 5, 0, 8_800),
+    )
+    conn.executemany(
+        "INSERT INTO run_tools (run_table, run_id, tool, calls, errors, result_chars) VALUES (?, ?, ?, ?, ?, ?)", calls
+    )
 
 
 def _event(kind: str, session: str, minutes: float, **fields: object) -> str:

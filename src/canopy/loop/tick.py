@@ -309,7 +309,9 @@ def _run_overseer(
     logs.write_private(out_path, f"{result.stdout}\n--- stderr ---\n{result.stderr}")
 
     output = agent_output.read(result.stdout)
-    db.set_tick_report(ctx.conn, tick_id, output.session_id, output.usage, digest=definitions_dir.name)
+    db.set_tick_report(
+        ctx.conn, tick_id, output.session_id, output.usage, digest=definitions_dir.name, tools=output.tools
+    )
     if result.timed_out:
         failure = f"overseer timed out after {timeout_minutes} minutes"
     elif result.returncode != 0:

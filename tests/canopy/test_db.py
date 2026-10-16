@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from canopy.core import db
-from canopy.core.agent_output import Usage
+from canopy.core.agent_output import ToolUse, Usage
 from canopy.infra import resources
 from tests.canopy.helpers import DEAD_PID, journal_at, shipped_through, versions_after
 from tests.conftest import Journals
@@ -50,6 +50,7 @@ SHIPPED = {
     29: "7b9d9b97ca0437fcda64f39906fdf2349afab356539fbeff85b7c4b4a7cc4105",
     30: "b5c91635acb0fcc0acbfdce96241ff5cac50440c7a85d5ed621df57745fdcef5",
     31: "429563f0913dd074cb33951d58303b4e65af768bfd43b0a02ec6ce71771cdaec",
+    32: "a69f227a77b632c3bddf0be6c71852ad3cf2747fcdec099ec10ef1cf566d7f9d",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -114,6 +115,10 @@ SEED: Mapping[str, str] = {
         "INSERT INTO review_requests (pr_url, created_at, channel) VALUES ('https://e.test/pr/7', 'x', 'cli')"
     ),
     "slots": "INSERT INTO slots (repo, name, path) VALUES ('api', '1', '/w/pools/api/1/api')",
+    "run_tools": (
+        "INSERT INTO run_tools (run_table, run_id, tool, calls, errors, result_chars) "
+        "VALUES ('runs', 1, 'bash', 2, 0, 9)"
+    ),
 }
 
 
@@ -291,6 +296,23 @@ def test_a_report_keeps_the_first_call_and_the_snapshot_only_with_what_the_runti
     usage = db.usage_of(conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone())
     assert usage is not None
     assert (usage.first_call, usage.first_cache_write) == (None, None)
+
+
+def test_a_report_replaces_the_tools_a_run_recorded(tmp_path: Path, journals: Journals) -> None:
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+    tick = db.start_tick(conn, dry_run=True)
+    usage = Usage(0.25, 10, 2, 0, 400, 50)
+    db.set_tick_report(conn, tick, "s", usage, tools=[ToolUse("bash", 2, 1, 30), ToolUse("read", 1, 0, 90)])
+    assert [(t.tool, t.calls, t.errors, t.result_chars) for t in db.run_tools(conn, "ticks", tick)] == [
+        ("read", 1, 0, 90),
+        ("bash", 2, 1, 30),
+    ]
+    assert db.run_tools(conn, "runs", tick) == []  # another table's run of the same id called none
+    db.set_tick_report(conn, tick, "s", usage, tools=[ToolUse("bash", 3, 1, 40)])
+    assert [t.calls for t in db.run_tools(conn, "ticks", tick)] == [3]
+    db.set_tick_report(conn, tick, None, None)
+    assert db.run_tools(conn, "ticks", tick) == []
 
 
 # The last migration before M36. A table made after it constrains each column of a closed vocabulary (`core/vocab.py`)

@@ -13,7 +13,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, NamedTuple
+from typing import Any, Literal, NamedTuple, cast
 from unittest import mock
 
 from rich.console import Console
@@ -126,6 +126,24 @@ def last_run(conn: sqlite3.Connection) -> sqlite3.Row:
     row = conn.execute("SELECT * FROM runs ORDER BY id DESC LIMIT 1").fetchone()
     assert row is not None
     return row
+
+
+type ToolRow = tuple[str, int, int, int]
+
+
+def tools_of(conn: sqlite3.Connection, table: db.RunTable | Literal["ticks"], run_id: int) -> list[ToolRow]:
+    """A run's tool rollup, as (tool, calls, errors, result characters), the most characters first."""
+    return [(t.tool, t.calls, t.errors, t.result_chars) for t in db.run_tools(conn, table, run_id)]
+
+
+def tools_printed(agent_log: Path, agent: str) -> list[ToolRow]:
+    """The rollup of what the fake `agent` (`canopy-worker`, ...) ran: each command a `bash` call returning its stdout.
+
+    Its one run in `agent_log`; empty when it ran no command.
+    """
+    [run] = [r for r in agent_runs(agent_log) if agent in cast("list[str]", r["argv"])]
+    ran = cast("list[dict[str, str]]", run["commands"])
+    return [("bash", len(ran), 0, sum(len(c["stdout"]) for c in ran))] if ran else []
 
 
 def slot_of(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row:

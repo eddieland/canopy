@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { spendBreakdownQuery } from '@/api/queries'
-import type { SpendBreakdown, SpendDay, SpendPullRequest, SpendTicket } from '@/api/types'
+import type { SpendBreakdown, SpendDay, SpendPullRequest, SpendTicket, SpendTool } from '@/api/types'
 import { Cost } from '@/components/cost'
 import { None } from '@/components/none'
 import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
@@ -27,6 +27,7 @@ import {
     spendWindow,
 } from '@/lib/spend'
 import type { SpendWindowDays } from '@/lib/spend'
+import { tokenCount } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 import { NO_TICKET } from '@/lib/words'
 
@@ -38,6 +39,12 @@ interface SpendSearch {
 const PER_DONE_HINT =
     "The window's whole spend, the overseer's and chores' included, over the tickets marked done in it: what getting " +
     'them done cost, the runs of tickets still open included'
+
+// What a tool's returned characters and its estimated tokens count, on hover.
+const RETURNED_HINT =
+    'The characters its calls returned, output or error: each later model call of the run reads them again'
+const EST_TOKENS_HINT =
+    "The characters over 4, an estimate: the runtime does not say which of a model call's tokens a tool returned"
 
 // Each kind of run in words, as `canopy spend` counts the runs that reported no cost.
 const KIND_LABEL = {
@@ -67,8 +74,8 @@ function SpendPage() {
             <PageHeader title="Spend">
                 What agent runs cost each UTC day, as the runtime reported it: the overseer, with idle ticks apart, and
                 the workers, chores, and reviews it started; and beside it, the tickets the loop marked done and what
-                each ticket&apos;s and PR&apos;s own runs cost. As{' '}
-                <code className="font-mono text-xs">canopy spend --days {days}</code> prints it.
+                each ticket&apos;s and PR&apos;s own runs cost; and which tools put the most into the runs&apos;
+                context. As <code className="font-mono text-xs">canopy spend --days {days}</code> prints it.
             </PageHeader>
             <Panel data-testid="spend-totals">
                 <PanelHeader label="Totals">
@@ -121,6 +128,16 @@ function SpendPage() {
                     )}
                 </Panel>
             </div>
+            <Panel data-testid="spend-tools">
+                <PanelHeader label="By tool">
+                    <span className="readout text-xs text-muted-foreground">{data?.tools.length ?? ''}</span>
+                </PanelHeader>
+                {data === undefined ? (
+                    <PanelSkeleton rows={5} className="min-h-40" />
+                ) : (
+                    <Tools tools={data.tools} days={days} />
+                )}
+            </Panel>
             <div className="grid gap-6 xl:grid-cols-2">
                 <Panel data-testid="spend-ticks">
                     <PanelHeader label="Ticks by what they bought" />
@@ -404,6 +421,57 @@ function PullRequests({ pullRequests, days }: { pullRequests: SpendPullRequest[]
                             <td className="readout pl-3">
                                 <Cost usd={pr.cost_usd} />
                             </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </PanelScroll>
+    )
+}
+
+/**
+ * What each kind's tool calls returned, by tool, the most first: the calls, the errors, the characters returned, and
+ * the tokens that is, estimated. After the fixed prefix, most of a run's context is tool results, which each later
+ * model call reads again, so this is what fills it.
+ */
+function Tools({ tools, days }: { tools: SpendTool[]; days: number }) {
+    if (tools.length === 0) {
+        return <Empty size="panel">no tool call recorded in these {days} days</Empty>
+    }
+    return (
+        <PanelScroll label="Spend by tool" className="max-h-96 p-3">
+            <table className="w-full border-collapse text-sm" data-testid="spend-tool-table">
+                <thead className="sticky top-0 bg-surface">
+                    <tr className="text-right">
+                        <th className="panel-label pb-1.5 text-left font-normal">tool</th>
+                        <th className="panel-label pb-1.5 pl-3 text-left font-normal">kind</th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal">calls</th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal">errors</th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal" title={RETURNED_HINT}>
+                            returned
+                        </th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal" title={EST_TOKENS_HINT}>
+                            ~tokens
+                        </th>
+                    </tr>
+                </thead>
+                <tbody className="font-mono text-xs">
+                    {tools.map((tool) => (
+                        <tr key={`${tool.kind} ${tool.tool}`} className="text-right" data-testid="spend-tool">
+                            <th scope="row" className="w-full max-w-0 py-0.5 text-left font-normal">
+                                <span className="block truncate" title={tool.tool}>
+                                    {tool.tool}
+                                </span>
+                            </th>
+                            <td className="pl-3 text-left text-muted-foreground">{tool.kind}</td>
+                            <td className="readout pl-3" title={`in ${tool.runs} runs`}>
+                                {tool.calls}
+                            </td>
+                            <td className={cn('readout pl-3', tool.errors === 0 && 'text-muted-foreground')}>
+                                {tool.errors}
+                            </td>
+                            <td className="readout pl-3">{tokenCount(tool.result_chars)}</td>
+                            <td className="readout pl-3">{tokenCount(tool.est_tokens)}</td>
                         </tr>
                     ))}
                 </tbody>

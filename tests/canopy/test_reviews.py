@@ -27,6 +27,7 @@ from tests.canopy.helpers import (
     operator,
     pool,
     state_block,
+    tools_of,
     worker_does,
 )
 from tests.canopy.review_helpers import (
@@ -591,7 +592,10 @@ def test_a_review_run_records_what_it_cost(reviews: CanopyEnv, git_pool: GitPool
     reviews.write_user(
         text.replace("--agent canopy-reviewer {prompt}", "--agent canopy-reviewer --format json {prompt}")
     )
-    with reviewer_reports(FINDINGS), mock.patch.dict(os.environ, {"FAKE_REVIEWER_SESSION": "ses_review"}):
+    with (
+        reviewer_reports(FINDINGS, ["echo", "read it"]),
+        mock.patch.dict(os.environ, {"FAKE_REVIEWER_SESSION": "ses_review"}),
+    ):
         conn = reviews.journal()
         run_id = run_inline(conn, sha=head(git_pool))
     row = db.get_review_run(conn, run_id)
@@ -604,6 +608,7 @@ def test_a_review_run_records_what_it_cost(reviews: CanopyEnv, git_pool: GitPool
     assert (usage.first_call, usage.first_cache_write) == (5500, 500)
     assert (reviews.state_dir / definitions.RUNTIME_DIR / row["definitions_digest"]).is_dir()
     assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
+    assert tools_of(conn, "review_runs", run_id) == [("bash", 1, 0, len("read it\n"))]
 
 
 def test_a_timed_out_review_records_what_it_reported_before_the_kill(reviews: CanopyEnv, git_pool: GitPool) -> None:

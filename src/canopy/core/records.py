@@ -82,6 +82,20 @@ class PoolSlot(Row):
     seeded: str
 
 
+@dataclass(frozen=True)
+class RunTool(Row):
+    """What one tool's calls in an agent run put into its context (DESIGN §13): the run, by its table and id."""
+
+    TABLE: ClassVar[str] = "run_tools"
+
+    run_table: str
+    run_id: int
+    tool: str
+    calls: int
+    errors: int
+    result_chars: int
+
+
 def fetch_all[R: Row](conn: sqlite3.Connection, row_type: type[R], sql: str, params: Sequence[object] = ()) -> list[R]:
     """Run `sql` and build each row it returns as `row_type`.
 

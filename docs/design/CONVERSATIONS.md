@@ -436,7 +436,7 @@ The API, under `{base}/api`:
 | `GET /ticks/{id}` | one tick: what `canopy decisions ID` prints; 404 for no such tick |
 | `GET /ticks/{id}/transcript` | its overseer's session, read back from its output (below); 404 for no such tick |
 | `GET /spend` | what the last 24 hours and the last 30 days each cost: worker, split, chore, and review runs and each tick's overseer, by start (§13); and what all of them ever cost |
-| `GET /spend/breakdown?days=` | what `canopy spend --days` prints (§11): each UTC day's cost by kind and tickets done, the ticks by what they bought and by what woke them, the runs that reported no cost, the tickets done and the spend per ticket done, each ticket's and PR's own cost, and the newest 20 idle ticks; `days` 1 to 366, 7 by default |
+| `GET /spend/breakdown?days=` | what `canopy spend --days` prints (§11): each UTC day's cost by kind and tickets done, the ticks by what they bought and by what woke them, the runs that reported no cost, the tickets done and the spend per ticket done, each ticket's and PR's own cost, what each kind's tool calls returned by tool, and the newest 20 idle ticks; `days` 1 to 366, 7 by default |
 | `GET /tickets` | the journal's tickets, most recent activity first, at most 200: title, phase, private or public, waiting |
 | `GET /tickets/{key}` | one ticket: what `canopy show` prints, its limits (each kind of each unit it has had runs in, then its units' PRs' review limits), its latest 100 messages, its latest 20 decisions, and its total cost |
 | `POST /tickets/{key}/start` | `canopy start` |
@@ -625,6 +625,10 @@ rather than from a one-off analysis of the log.
   pull request, each the costliest first and scrolling in its panel. A ticket's row names it and its title, its runs
   and reviews, what they cost, and when and how it was marked done; a PR's row names it and its phase, its ticket,
   and the same. What each counts is §11's `canopy spend`.
+- Under them, by tool (asked for by the operator, 2026-10-15, issue 434): which tools put the most into the runs'
+  context, so the costly reads are a glance rather than an analysis session. A row per kind and tool, the most
+  returned first and scrolling in its panel: the tool, the kind of run, its calls (the runs that made them on hover),
+  the errors, the characters returned, and the tokens that is, estimated at four characters each and headed `~tokens`.
 - The nav has it, between Chores and Ticks, opening on the week; the rail's two spend figures open it too, the 24
   hours' on the week and the 30 days' on the month. It was at first only a link from the figures, as a question the
   operator asks now and then rather than a place they work, but the operator, who asked for the page, did not find it

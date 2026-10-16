@@ -350,7 +350,9 @@ def _run_agent(
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
     output = agent_output.read(result.stdout)
     if output.session_id is not None or output.usage is not None:
-        db.set_run_report(ctx.conn, "runs", run_id, output.session_id, output.usage, digest=snapshot.name)
+        db.set_run_report(
+            ctx.conn, "runs", run_id, output.session_id, output.usage, digest=snapshot.name, tools=output.tools
+        )
         spent = output.usage.spent() if output.usage else {}
         log.info("worker reported", extra={"run_id": run_id, "session_id": output.session_id, **spent})
     return result, output.text

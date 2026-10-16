@@ -110,6 +110,12 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
         ("https://github.com/acme/web/pull/86", "ABC-100", None),
         ("https://github.com/acme/api/pull/12", None, None),  # only reviewed
     ]
+    # Which tools put the most into context: the overseer's PR reads, then the workers' shell calls.
+    assert [(t["kind"], t["tool"], t["runs"], t["calls"], t["result_chars"]) for t in found["tools"]][:2] == [
+        ("overseer", "github_pull_request_read", 2, 25, 325_000),
+        ("workers", "bash", 4, 119, 279_000),
+    ]
+    assert found["tools"][0]["est_tokens"] == 325_000 // 4
 
     assert c.get("/api/spend/breakdown").json()["days"] == 7  # canopy spend's default
     assert c.get("/api/spend/breakdown", params={"days": 0}).status_code == 422
