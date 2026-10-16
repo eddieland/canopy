@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO
@@ -290,7 +290,7 @@ def session_title(conn: sqlite3.Connection, key: str, kind: str) -> str:
 
 
 def _run_agent(
-    ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter, *, template: str
+    ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter, *, template: str
 ) -> tuple[procs.Result, str]:
     """Check the places the agent reads config from, make a joint run's desk, and run `template` in it.
 
@@ -396,7 +396,7 @@ class _Progress:
             self.log.info("worker session started", extra={"run_id": self.run_id, "session_id": session})
 
 
-def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
+def _split(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
     """Run the splitter in a desk of worktrees at their bases, and record the children it reports if they are valid.
 
     Returns:
@@ -473,7 +473,7 @@ def _drop_local_branch(git: _Git, branch: str, target: str) -> None:
         git.result("branch", "--quiet", "--delete", "--force", branch)  # refused if a worktree has it checked out
 
 
-def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
+def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
     stopped = _stopped(ctx, run)
     if stopped:
         log.info("run not started", extra={"run_id": run["id"], "reason": stopped})
@@ -699,7 +699,7 @@ def _remote_head(git: _Git, branch: str) -> str:
     return listed.split()[0] if listed else ""
 
 
-def _release(ctx: Context, run: sqlite3.Row, slots: list[_Slot], log: logs.TickAdapter) -> None:
+def _release(ctx: Context, run: sqlite3.Row, slots: Collection[_Slot], log: logs.TickAdapter) -> None:
     """Remove a joint run's desk, tidy each slot, return the ones tidied, and remove the run's object directory.
 
     A slot that could not be tidied is not returned, and the object directory is kept, so its objects can still be read.

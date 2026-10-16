@@ -15,7 +15,7 @@ from canopy.core import conversation
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Callable
+    from collections.abc import Callable, Collection, Iterable
 
 type Source = Literal["ticket", "message", "chore_run", "decision", "tick"]
 
@@ -96,7 +96,7 @@ def search(conn: sqlite3.Connection, query: str) -> Found:
     return Found(words=terms, hits=hits, more=more)
 
 
-def snippet(text: str, terms: tuple[str, ...]) -> str:
+def snippet(text: str, terms: Iterable[str]) -> str:
     """`text` on one line, cut to SNIPPET characters around the first match of any of `terms`.
 
     Returns:
@@ -124,7 +124,7 @@ def like(term: str) -> str:
     return f"%{escaped}%"
 
 
-def _matching(conn: sqlite3.Connection, sql: str, terms: tuple[str, ...]) -> list[sqlite3.Row]:
+def _matching(conn: sqlite3.Connection, sql: str, terms: Collection[str]) -> list[sqlite3.Row]:
     # Each source's query is a subquery with a `text` column and an `id` that orders it newest first. SQLite flattens
     # it, so the scan walks the table by id and stops once the limit is met. The SQL is fixed; the terms are bound.
     where = " AND ".join("text LIKE ? ESCAPE '\\'" for _ in terms)

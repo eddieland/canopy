@@ -4,6 +4,7 @@ import fnmatch
 import os
 import shutil
 import time
+from collections.abc import Iterable
 from pathlib import Path
 from unittest import mock
 
@@ -207,7 +208,7 @@ def test_a_worker_definition_without_its_rebase_line_is_refused() -> None:
         definitions.render_rebase(bundled.replace("    # canopy: rebase rules\n", ""), "canopy-worker", rebase=False)
 
 
-def _allowed(rules: list[tuple[str, str]], tool: str) -> bool:
+def _allowed(rules: Iterable[tuple[str, str]], tool: str) -> bool:
     # The last matching rule wins (D021); a tool no rule names keeps what the operator's runtime grants.
     verdicts = [action for pattern, action in rules if fnmatch.fnmatchcase(tool, pattern)]
     return not verdicts or verdicts[-1] != "deny"

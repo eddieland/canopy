@@ -17,7 +17,7 @@ from __future__ import annotations
 import contextlib
 import json
 import shutil
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
@@ -187,7 +187,7 @@ class Added:
     detail: str = ""
 
 
-def add(ws: workspace.Workspace, entries: list[tuple[str, str]]) -> list[Added]:
+def add(ws: workspace.Workspace, entries: Iterable[tuple[str, str]]) -> list[Added]:
     """Add each `(name, url)` to the map as a `[repos.<name>]` table, unless the map already lists that URL.
 
     Nothing is written if any entry conflicts: a name the map gives another URL, or a name given twice.
@@ -389,7 +389,7 @@ def _fill(
     return Checked(repo, "failed" if error is not None or unreturned else "slots", detail)
 
 
-def _return_leases(held: list[pools.Lease], pool: pools.Pool) -> int:
+def _return_leases(held: Iterable[pools.Lease], pool: pools.Pool) -> int:
     """Return sync's leases. Returns how many could not be returned."""
     unreturned = 0
     for leased in held:

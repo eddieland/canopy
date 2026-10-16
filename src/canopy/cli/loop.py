@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -143,7 +144,7 @@ def _print_sinks(ctx: Context) -> None:
         click.echo(f"  {s.name}  {last}; {s.waiting} events waiting{failing}")
 
 
-def _print_attention(items: list[attention.Item]) -> None:
+def _print_attention(items: Sequence[attention.Item]) -> None:
     click.echo(f"\nAttention ({len(items)}):")
     reasons = [i for i in items if not i.finding]
     for group in sorted({i.reason for i in reasons}):

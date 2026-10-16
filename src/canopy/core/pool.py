@@ -21,6 +21,8 @@ import sqlite3
 import stat
 import tempfile
 import uuid
+from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
@@ -252,7 +254,7 @@ class CanopyPool:
         self._seed_or_quarantine(path, want.manifest, new=False)
         return lease
 
-    def _make(self, rows: list[records.PoolSlot], want: _Want) -> Lease:
+    def _make(self, rows: Collection[records.PoolSlot], want: _Want) -> Lease:
         """Make a new slot, under the next free name, and lease it; or reuse a worktree left there with no row.
 
         Returns:
@@ -581,7 +583,7 @@ class _Git:
         return result
 
 
-def classify(runner: procs.Runner, clone: Path, path: Path, *, found: list[cwds.Found] | None = None) -> str:
+def classify(runner: procs.Runner, clone: Path, path: Path, *, found: Collection[cwds.Found] | None = None) -> str:
     """Classify an unleased slot of `clone`'s pool with canopy's own checks, changing nothing.
 
     Reconcile's shadow runs this on treehouse's slots to compare with what treehouse says (ROADMAP M45). `found` is
@@ -645,7 +647,7 @@ def _new_lease(path: Path, want: _Want) -> Lease:
     )
 
 
-def _reset(git: _Git, path: Path, commit: str, seeded: list[str]) -> None:
+def _reset(git: _Git, path: Path, commit: str, seeded: Iterable[str]) -> None:
     """Reset the slot at `path` to `commit`, detached: remove what seeding wrote, restore tracked files, drop untracked.
 
     Ignored files stay (`clean` without `-x`).
@@ -722,7 +724,7 @@ def _commit(git: _Git, cwd: Path, branch: str) -> str:
     return git.run(cwd, "rev-parse", "--verify", f"{ref}^{{commit}}")
 
 
-def _tracked(rel: str, tracked: set[str]) -> bool:
+def _tracked(rel: str, tracked: AbstractSet[str]) -> bool:
     """Whether `rel` is tracked in the slot, or is under or above a tracked path.
 
     Returns:
@@ -733,7 +735,7 @@ def _tracked(rel: str, tracked: set[str]) -> bool:
     return any(t.startswith(f"{rel}/") or rel.startswith(f"{t}/") for t in tracked)
 
 
-def _lexists(slot: Path, parts: tuple[str, ...]) -> bool:
+def _lexists(slot: Path, parts: Sequence[str]) -> bool:
     """Whether the slot already has something at `parts`, looking through no link.
 
     Returns:
@@ -752,7 +754,7 @@ def _lexists(slot: Path, parts: tuple[str, ...]) -> bool:
     return True
 
 
-def _copy_seeds(clone: Path, slot: Path, planned: list[str]) -> None:
+def _copy_seeds(clone: Path, slot: Path, planned: Iterable[str]) -> None:
     """Copy each planned path from the clone into the slot, never following a link on either side.
 
     A regular file keeps its permission bits; a link is written as a regular file holding its target, as treehouse
@@ -786,7 +788,7 @@ def _copy_seeds(clone: Path, slot: Path, planned: list[str]) -> None:
             os.fchmod(f.fileno(), mode)
 
 
-def _remove_seeded(slot: Path, seeded: list[str]) -> None:
+def _remove_seeded(slot: Path, seeded: Iterable[str]) -> None:
     """Remove the files seeding wrote, through no link; what is gone already, or is a directory now, is left."""
     for rel in seeded:
         parts = PurePosixPath(rel).parts
@@ -804,7 +806,7 @@ def _remove_seeded(slot: Path, seeded: list[str]) -> None:
             os.close(parent)
 
 
-def _open_dirs(slot: Path, parts: tuple[str, ...], *, create: bool) -> int:
+def _open_dirs(slot: Path, parts: Iterable[str], *, create: bool) -> int:
     """Open the directory `parts` names under `slot`, one component at a time and through no link.
 
     Returns:

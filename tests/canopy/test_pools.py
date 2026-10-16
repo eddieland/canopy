@@ -4,6 +4,7 @@ import contextlib
 import json
 import os
 import threading
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 from unittest import mock
@@ -32,7 +33,7 @@ def fake_state(treehouse_state: Path) -> dict[str, Any]:
     return state
 
 
-def pool_of(state: dict[str, Any], ws: Ws, name: str) -> dict[str, Any]:
+def pool_of(state: Mapping[str, Any], ws: Ws, name: str) -> dict[str, Any]:
     pool: dict[str, Any] = state["pools"][str(ws.clone(name))]
     return pool
 

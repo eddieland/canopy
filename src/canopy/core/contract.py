@@ -108,7 +108,7 @@ def stored_note(result: Mapping[str, object]) -> str:
     return str(result.get("harness") or result.get("summary") or "")
 
 
-def stored_prs(result: dict[str, object]) -> list[str]:
+def stored_prs(result: Mapping[str, object]) -> list[str]:
     """The PRs a stored result names, each a plain printable https:// URL; anything else is left out.
 
     Returns:
