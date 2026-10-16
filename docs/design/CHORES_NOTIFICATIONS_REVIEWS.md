@@ -883,7 +883,8 @@ page links back to its PR's.
   commit the reviewer read.
 - **Reading it** (`core/review_diff.py`) on each request: only a regular file opened without following links or
   blocking, at most 4 MiB to its last whole line, at most 500 files and 30,000 lines, each line cut at 1000
-  characters, control characters but tabs made spaces. A cut says so. It is the PR's own text, rendered as text.
+  characters, control characters but tabs made spaces. A cut says so. It is the PR's own text, rendered as text; the
+  page colors its code by the file's language, in the browser, from the same text (ui/DESIGN.md, "A review").
 - **Anchoring.** A finding's `location`, `path:line` (also `path:L12` or `path:12-14`, taking the first line), falls on
   a file whose new or old path is that path, or whose path ends in `/<path>` when only one does, and on the line with
   that number on the new side, when the diff shows it. A finding on a file the diff shows, but not on a line it shows,

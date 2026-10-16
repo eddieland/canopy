@@ -21,6 +21,8 @@ memory, and do not upgrade in passing.
 - TanStack Router (file-based, `src/routes/`) and TanStack Query.
 - Tiptap on ProseMirror for the plan editor alone (D120): only `src/lib/plan-*.ts` and
   `src/components/plan-editor.tsx` import it.
+- Shiki for a review's diff alone (D121): only `src/lib/highlight.ts` and `src/lib/languages.ts`, its grammars,
+  import it, and only on demand, each grammar its own chunk.
 - oxlint (with the React Compiler's rules and eslint-plugin-jsdoc's, and type-aware rules through oxlint-tsgolint)
   and oxfmt, Vitest, Playwright.
 

@@ -28,6 +28,11 @@ test('a review opens from the nav and puts each finding on its line of the diff'
     await expect(card).toBeVisible()
     const above = card.locator('xpath=ancestor::tr/preceding-sibling::tr[1]')
     await expect(above).toContainText('setLoading(false)')
+    // Its code is colored once TypeScript's grammar loads: the same characters, a keyword in its own color.
+    await expect(above.locator('[data-highlighted]')).toHaveText(/setLoading\(false\)/u)
+    await expect(hook.locator('[data-highlighted]').getByText('export', { exact: true }).first()).toHaveClass(
+        'text-syntax-literal',
+    )
     // A finding about a file the diff does not touch has a panel of its own.
     await expect(page.getByText('Not in the diff', { exact: true })).toBeVisible()
 

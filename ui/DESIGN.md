@@ -41,7 +41,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
 | `spend-overseer`, `-idle`, `-workers`, `-chores`, `-reviews`, `-dry-run` | The spend chart's series, as fills only. |
-| `syntax-key`, `-string`, `-number`, `-literal` | JSON's keys, strings, numbers, and literals, in agent output. |
+| `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; diff code. |
 | `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
 | `buddy-eye`, `buddy-pupil` | Sprig's googly eyes: the white and the pupil, and its rim. |
 | `buddy-leaf` | The sprig on Sprig's head. A green of its own, yellower than `status-running`'s, its near twin. |
@@ -799,7 +799,13 @@ list, an empty state, or a skeleton by hand.
 - **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posted nowhere (D114): the
   review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. A diff is a
   monospace table: the old and new line numbers, the `+` or `-` in `diff-add` or `diff-del`, and the line, its row on
-  that token's 12% tint; a hunk's header on `surface-raised`; long lines scroll sideways inside the panel. A finding's
+  that token's 12% tint; a hunk's header on `surface-raised`; long lines scroll sideways inside the panel. The code is
+  colored by the file's language, read from its name (`src/lib/languages.ts`): keywords in `syntax-literal`, strings
+  in `syntax-string`, constants in `syntax-number`, function and type names in `syntax-key`, comments muted, the rest
+  plain, each read at 4.5:1 on an added or removed line's tint too. Shiki tokenizes each hunk's new side and old side
+  whole, with its TextMate grammar, in the browser (`src/lib/highlight.ts`, D121); a line shows plain until its
+  file's grammar has loaded, then the same characters colored, and stays plain for a language canopy does not map, a
+  line of 1000 characters or more, or a grammar that fails. A finding's
   card (`FindingCard`) sits right under the line it names, or under its file's header when the diff does not show the
   line, or in a Not in the diff panel: its number, its severity as a chip (`blocking` in `status-failed`, `major` in
   `status-blocked`, as the attention list's reasons; `minor` plain), its title, its location, and its detail as rich
