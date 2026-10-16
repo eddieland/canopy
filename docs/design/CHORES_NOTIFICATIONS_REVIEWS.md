@@ -882,9 +882,12 @@ page links back to its PR's.
   The review's own checkout is the one moment the harness has the commit, so the diff is taken then, of exactly the
   commit the reviewer read.
 - **Reading it** (`core/review_diff.py`) on each request: only a regular file opened without following links or
-  blocking, at most 4 MiB to its last whole line, at most 500 files and 30,000 lines, each line cut at 1000
-  characters, control characters but tabs made spaces. A cut says so. It is the PR's own text, rendered as text; the
-  page colors its code by the file's language, in the browser, from the same text (ui/DESIGN.md, "A review").
+  blocking, at most 4 MiB to its last whole line, at most 500 files and 30,000 lines, each line cut at 1000 characters,
+  control characters but tabs made spaces. A cut says so. It is the PR's own text, rendered as text; the page colors its
+  code by the file's language, in the browser, from the same text (ui/DESIGN.md, "A review"). `GET /reviews/{id}` sends
+  it gzipped to a browser that takes gzip, since a diff at the bounds is megabytes of JSON read again on every tick
+  while its page is open. It is the one route that compresses: the event stream must never be, as gzip buffers it, and
+  this body holds the PR's text and the reviewer's, never a secret beside them that a compressed size could give away.
 - **Anchoring.** A finding's `location`, `path:line` (also `path:L12` or `path:12-14`, taking the first line), falls on
   a file whose new or old path is that path, or whose path ends in `/<path>` when only one does, and on the line with
   that number on the new side, when the diff shows it. A finding on a file the diff shows, but not on a line it shows,

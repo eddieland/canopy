@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+import gzip
+from typing import TYPE_CHECKING
+
+from fastapi import APIRouter, HTTPException, Request, Response
 
 from canopy.core import chore_view, conversation
 from canopy.infra import logs
@@ -18,9 +21,14 @@ from canopy.serve.schema import (
     ReviewSummary,
 )
 
+if TYPE_CHECKING:
+    from pydantic import BaseModel
+
 TAG = "reviews"
 router = APIRouter(tags=[TAG])
 _log = logs.for_tick(None)
+# A body this long or longer goes gzipped to a browser that takes it; a shorter one saves too little to be worth it.
+_GZIP_FROM = 1024
 
 
 @router.get("/reviews", operation_id="listReviews", summary="List the reviews")
@@ -30,15 +38,22 @@ def review_list(backend: BackendDep) -> list[ReviewSummary]:
         return reviews.reviews(ctx)
 
 
-# The diff is read back from the file beside the run's log on each request; never on the stream.
-@router.get("/reviews/{run_id}", operation_id="getReview", summary="Get a review", responses=not_found("review run"))
-def review(run_id: ReviewId, backend: BackendDep) -> ReviewDetail:
+# The diff is read back from the file beside the run's log on each request; never on the stream. A diff at the reading
+# bounds is megabytes of JSON, read again on every tick while its page is open, so it goes gzipped (`_json`).
+@router.get(
+    "/reviews/{run_id}",
+    operation_id="getReview",
+    summary="Get a review",
+    response_model=ReviewDetail,
+    responses=not_found("review run"),
+)
+def review(run_id: ReviewId, request: Request, backend: BackendDep) -> Response:
     """One review run: its summary, its findings anchored on its diff, the diff, and the PR's other runs."""
     with backend.open() as ctx:
         found = reviews.review(ctx, run_id)
     if found is None:
         raise HTTPException(status_code=404, detail=f"no review run {run_id}")
-    return found
+    return _json(found, request)
 
 
 @router.post(
@@ -94,3 +109,43 @@ def send(run_id: ReviewId, body: ReviewSendRequest, backend: BackendDep) -> Revi
     return ReviewSent(
         run=run_id, findings=findings, ticket_key=sent.ticket, message_id=sent.replied.message_id, new=sent.replied.new
     )
+
+
+def _json(model: BaseModel, request: Request) -> Response:
+    """`model` as JSON, gzipped when it is long and the browser takes gzip.
+
+    Only this route compresses, not the whole app: the event stream must never be (gzip buffers it), and this body
+    holds the PR's text and the reviewer's, never a secret beside them that its compressed size could give away.
+
+    Returns:
+        The response, with `Vary: Accept-Encoding` either way, since its body depends on that header.
+    """
+    # By alias, as FastAPI serializes a `response_model`, so this body stays what the schema declares.
+    body = model.model_dump_json(by_alias=True).encode()
+    headers = {"Vary": "Accept-Encoding"}
+    if len(body) >= _GZIP_FROM and _takes_gzip(request.headers.get("accept-encoding", "")):
+        body = gzip.compress(body)
+        headers["Content-Encoding"] = "gzip"
+    return Response(body, media_type="application/json", headers=headers)
+
+
+def _takes_gzip(accept_encoding: str) -> bool:
+    """Whether an `Accept-Encoding` header takes gzip: it names `gzip` with a weight above 0, or none, which is 1.
+
+    Returns:
+        True when the header lists gzip and does not refuse it with `q=0`; a weight that is not a number refuses it.
+    """
+    for part in accept_encoding.split(","):
+        coding, _, params = part.partition(";")
+        if coding.strip().lower() != "gzip":
+            continue
+        weight = 1.0
+        for param in params.split(";"):
+            name, _, value = param.partition("=")
+            if name.strip().lower() == "q":
+                try:
+                    weight = float(value)
+                except ValueError:
+                    weight = 0.0
+        return weight > 0
+    return False
