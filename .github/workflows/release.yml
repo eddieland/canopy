@@ -5,8 +5,8 @@ name: Release
 # CLAUDE_CODE_OAUTH_TOKEN secret the review workflow uses. Claude reads a prepared commit log and the checkout, and
 # writes one file: no Bash, no network, no GitHub token beyond read. The token is in its process's environment, so a
 # commit message that talked it into reading /proc could leak it into the public notes: reads outside the checkout are
-# never approved, /proc and /sys are denied outright, and the release job refuses notes that hold anything shaped like
-# a token. If Claude fails, the release still goes out with GitHub's own generated notes.
+# never approved, /proc and /sys are denied outright, and notes that hold anything shaped like a token are dropped
+# before they are uploaded. If Claude fails, the release still goes out with GitHub's own generated notes.
 # Run it by hand with a tag to write, or rewrite, the notes of a release already made.
 on:
   push:
@@ -94,6 +94,16 @@ jobs:
             --allowedTools "Edit(./release-notes/notes.md)"
             --disallowedTools "Bash,WebFetch,WebSearch,Read(//proc/**),Read(//sys/**)"
 
+      # Before the upload: anyone can download a public repository's artifacts. A secret in the notes means a commit
+      # message got Claude to fetch one, so they are dropped and the release falls back to GitHub's generated notes.
+      - name: Drop notes that hold a token
+        run: |
+          notes=release-notes/notes.md
+          if [ -f "$notes" ] && grep -Eq 'sk-ant-[A-Za-z0-9_-]{8,}|gh[opsu]_[A-Za-z0-9]{20,}|github_pat_' "$notes"; then
+            rm "$notes"
+            echo "::error::Claude's notes held something shaped like a token; dropped them. Rotate the token."
+          fi
+
       - name: Keep the notes for the release job
         if: steps.claude.outcome == 'success'
         uses: actions/upload-artifact@v4
@@ -126,11 +136,6 @@ jobs:
           PREVIOUS: ${{ needs.notes.outputs.previous }}
         run: |
           notes=release-notes/notes.md
-          # A secret in the notes means a commit message got Claude to fetch one: publish nothing.
-          if [ -f "$notes" ] && grep -Eq 'sk-ant-[A-Za-z0-9_-]{8,}|gh[opsu]_[A-Za-z0-9]{20,}|github_pat_' "$notes"; then
-            echo "::error::Claude's notes hold something shaped like a token; not publishing them"
-            exit 1
-          fi
           if [ -s "$notes" ]; then
             if [ -n "$PREVIOUS" ]; then
               printf '\n**Full Changelog**: %s/%s/compare/%s...%s\n' \
