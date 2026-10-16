@@ -531,7 +531,7 @@ dispatch names at least one, in a workspace of one repository too.
      instead, in code, and a `--label` given for it is ignored.
    - `stopped`: the ticket's start record is stopped (§22), whatever label is passed. `private`: a `split` of a
      started ticket, since a split creates tickets in the tracker. `no_read_tools`: a started ticket when no tracker
-     tools are known for its worker (§22).
+     tools are known for its worker (§22), or a labeled one its dispatch would start under `tracker.private`.
    - `bad_request`: `--request` on a kind other than `split`.
    - `unknown_repo`: no `--repo`, or one not in the map or with no primary clone; for a split's child, any repository
      but the one the split recorded for it. Naming a repository the ticket has no unit in yet adds that unit (§18,
@@ -608,7 +608,8 @@ dispatch names at least one, in a workspace of one repository too.
    - A started ticket's run renders the kind's private variant, `worker-<kind>-private.md` (§22): no label check, no
      tracker writes, and `{{CONVERSATION}}`, the ticket's latest journal messages, which an override must keep.
      The start record is read again in the transaction that inserts the run, so a `canopy stop` that commits first
-     refuses the dispatch (`stopped`) and its leases are returned.
+     refuses the dispatch (`stopped`) and its leases are returned. Under `tracker.private`, a labeled ticket's first
+     dispatch writes the record there and its run is private from the first (§22).
    - The prompt is written to `<state_dir>/runs/<run_id>.prompt`, readable only by the operator.
 4. Spawn `python -m canopy _run <run_id>` with canopy's own interpreter, detached (`setsid`, stdin from `/dev/null`,
    stdout and stderr appended to `<state_dir>/runs/<run_id>.log`, cwd the workspace root), holding its lifelock

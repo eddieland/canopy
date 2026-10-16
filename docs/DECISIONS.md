@@ -409,3 +409,12 @@ such as a shipped migration, may still cite one, and git history has its text.
 - What the harness runs on the host after a run (git, treehouse) reads nothing a sandboxed run can write (TRUST_MODEL
   T4): a new step in a slot keeps D107's flags and runs after `_run`'s link and `commondir` check.
 - Revisit: making it the default, once the canary passes on the operator's machines and a day of sandboxed runs.
+
+## D119. Under `tracker.private`, a labeled ticket's first dispatch writes its start record
+
+- The loop writes a start record, which only the operator's commands wrote before, when the operator set the switch
+  and a ticket canopy never ran is dispatched on a queue label. Settled by the operator.
+- No worker re-reads the label after that, and removing it does not stop the ticket; `canopy stop` does (TRUST_MODEL
+  T1's residual).
+- Rejected: the label authorizing every run (more code: phases and replies without a start record); keeping the
+  worker's label check for such tickets (the operator chose an ordinary private ticket).

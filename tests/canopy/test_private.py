@@ -361,6 +361,90 @@ def test_a_public_run_does_not_start_once_the_ticket_is_started_privately(
     assert not agent_log.exists()
 
 
+def private_by_default(canopy_env: CanopyEnv) -> None:
+    """Set `tracker.private` in the user file: a labeled ticket's first dispatch starts it privately."""
+    canopy_env.write_user(canopy_env.user_file.read_text().replace("[tracker]\n", "[tracker]\nprivate = true\n"))
+
+
+def test_with_tracker_private_a_labeled_tickets_first_dispatch_starts_it_privately(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    agent_log: Path,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    private_by_default(canopy_env)
+    runner = InlineRunner()
+    # The label still authorizes the first dispatch: without one there is nothing to start.
+    assert dispatch(conn, "--kind", "implement", runner=runner) == 1
+    assert "dispatch refused (unauthorized)" in capsys.readouterr().err
+    assert db.starts(conn) == []
+
+    with private_worker_does(*commit_and_push(BRANCH), result=blocked()):
+        assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 0
+        assert "label agent-ready-tester; starts it privately (tracker.private)" in capsys.readouterr().out
+        run = last_run(conn)
+        assert run["private"] == 1
+        record = conversation.start_of(conn, KEY)
+        assert record is not None
+        assert (record["status"], record["channel"]) == ("started", conversation.LABEL)
+        assert main(["_run", str(run["id"])], runner=runner) == 0
+    [worker] = agent_runs(agent_log)
+    argv = worker["argv"]
+    assert isinstance(argv, list)
+    assert "canopy-worker-private" in argv
+    assert last_run(conn)["status"] == "blocked"
+
+    # From now on it is an ordinary private ticket: no label needed, and `canopy stop` stops it.
+    assert operator("show", KEY) == 0
+    assert "by its first dispatch, on its queue label" in capsys.readouterr().out
+    assert operator("reply", KEY, "Blue.") == 0
+    with private_worker_does(result={**blocked(), "status": "done", "question": None}):
+        assert dispatch(conn, "--kind", "resume", runner=runner) == 0
+    assert last_run(conn)["private"] == 1
+    assert operator("stop", KEY) == 0
+    assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "resume", runner=runner) == 1
+    assert "dispatch refused (stopped)" in capsys.readouterr().err
+
+
+def test_tracker_private_leaves_a_ticket_already_worked_in_public_public(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    treehouse_state: Path,
+    conn: sqlite3.Connection,
+) -> None:
+    runner = InlineRunner()
+    assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 0
+    private_by_default(canopy_env)
+    # Its conversation is already on the tracker, so it stays there.
+    conn.execute("UPDATE runs SET status = 'failed', ended_at = started_at")
+    assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 0
+    assert last_run(conn)["private"] == 0
+    assert db.starts(conn) == []
+
+
+def test_tracker_private_in_a_dry_run_writes_no_start_record(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    private_by_default(canopy_env)
+    with in_tick(conn, dry_run=True):
+        assert main(["dispatch", KEY, "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]) == 0
+    assert db.starts(conn) == []
+    [decision] = conn.execute("SELECT rationale FROM decisions").fetchall()
+    assert "starts it privately (tracker.private)" in decision["rationale"]
+
+
+def test_tracker_private_refuses_without_tracker_tools_for_a_private_worker(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    canopy_env.write_shared('[tracker]\nprovider = "linear"\nquery = "assigned to me"\n')
+    private_by_default(canopy_env)
+    assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=InlineRunner()) == 1
+    assert "dispatch refused (no_read_tools)" in capsys.readouterr().err
+    assert db.starts(conn) == []
+
+
 def test_stop_now_ends_the_running_run_and_returns_its_slot(
     canopy_env: CanopyEnv,
     git_pool: GitPool,
