@@ -14,10 +14,10 @@ function load({ reducedMotion = false } = {}) {
     return import('./transition')
 }
 
-// A button 20 by 10 pixels whose center is at (110, 55).
-function button(): HTMLElement {
+// A button 20 by 10 pixels whose top-left corner is at (`left`, `top`): by default, its center is at (110, 55).
+function button(left = 100, top = 50): HTMLElement {
     const element = document.createElement('button')
-    vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 50, 20, 10))
+    vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(new DOMRect(left, top, 20, 10))
     return element
 }
 
@@ -73,6 +73,14 @@ describe('switchTheme', () => {
         expect(animate).toHaveBeenCalledWith(
             { clipPath: ['circle(0px at 110px 55px)', `circle(${radius}px at 110px 55px)`] },
             expect.objectContaining({ pseudoElement: '::view-transition-new(root)' }),
+        )
+
+        // From near the bottom-right, the farthest corner is the top-left.
+        switchTheme('light', button(900, 700))
+        await vi.waitFor(() => expect(animate).toHaveBeenCalledTimes(2))
+        expect(animate).toHaveBeenLastCalledWith(
+            { clipPath: ['circle(0px at 910px 705px)', `circle(${Math.hypot(910, 705)}px at 910px 705px)`] },
+            expect.anything(),
         )
     })
 
