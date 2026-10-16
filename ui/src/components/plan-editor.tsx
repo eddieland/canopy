@@ -25,6 +25,7 @@ import type { ReactNode } from 'react'
 
 import { Panel, PanelHeader } from '@/components/panel'
 import { AskForChanges, PlanThreads } from '@/components/plan-threads'
+import type { Draft } from '@/components/plan-threads'
 import { Button } from '@/components/ui/button'
 import {
     Toolbar,
@@ -50,7 +51,8 @@ const COMMENT_KEYS = APPLE ? '⌘⌥M' : 'Ctrl+Alt+M'
  * A plan in a rich editor, with the operator's comments on its passages beside it (docs/design/PLANNING.md §25,
  * Commenting on a plan). The plan is Markdown in and out (`src/lib/plan-schema.ts`): the operator edits it as a
  * document, through the toolbar or Markdown's own shortcuts (`## `, `- `, `**`), and `onChange` gets the Markdown
- * after each edit. Selecting text and pressing Comment, or ⌘⌥M (Ctrl+Alt+M), comments on that passage; the comments
+ * after each edit. Selecting text and pressing Comment, or ⌘⌥M (Ctrl+Alt+M), comments on that passage, the cursor
+ * in the comment; while one is half written, it keeps its passage and takes the cursor back instead. The comments
  * stay on their passages as the plan is edited, by their words (`src/lib/plan-anchors.ts`), and a passage deleted
  * whole leaves its comment marked as gone. The threads are the caller's state, given as `threads` and changed through
  * `onThreadsChange`. `markdown` is read once: a new plan is a new `key`. With `onAskForChanges`, the comments end in
@@ -95,7 +97,7 @@ export function PlanEditor({
             },
         },
     })
-    const [draft, setDraft] = useState<string | undefined>(undefined)
+    const [draft, setDraft] = useState<Draft | undefined>(undefined)
     const seen = useEditorState({
         editor,
         selector: ({ editor: current }) => {
@@ -152,7 +154,15 @@ export function PlanEditor({
         if (!editable || anchor === undefined) {
             return
         }
-        setDraft(anchor.quote)
+        const opened = (draft?.opened ?? 0) + 1
+        if (draft !== undefined && draft.body.trim() !== '') {
+            // A comment half written stays on its passage, its words with it: the operator goes back to it rather than
+            // lose it or carry it to other words.
+            setDraft({ ...draft, opened })
+            editor.view.dispatch(editor.state.tr.setMeta(BUBBLE, 'hide'))
+            return
+        }
+        setDraft({ quote: anchor.quote, body: '', opened })
         // The bubble goes with the click that used it: the selection it sat over is now the draft's.
         const tr = withHighlight(editor.state.tr, { kind: 'draft', range: { from, to } }).setMeta(BUBBLE, 'hide')
         editor.view.dispatch(tr)
@@ -223,6 +233,7 @@ export function PlanEditor({
                     active={seen.active}
                     draft={draft}
                     editable={editable}
+                    onDraftChange={(body) => setDraft(draft && { ...draft, body })}
                     onDraftSubmit={addComment}
                     onDraftCancel={cancelComment}
                     onActivate={(id) => activate(id, true)}
