@@ -78,7 +78,9 @@ the rest.
 Each input is a pydantic model with `extra="forbid"`, and its JSON schema is the tool's `inputSchema`. The bounds §6
 lists (keys and attention reasons validated, phases from §7's table, cursor ids, text cut at 2000 characters) move
 from click parameter types into those models, below `cli/`, and the click commands validate through the same models,
-so a tool and its command cannot drift apart. A tool's result is the text its command prints today; stage 3 may make
+so a tool and its command cannot drift apart. A rule across fields, which a JSON schema cannot state, is a model
+validator, so the tool refuses it as the command does: `decide` without a `key` for any action but `skip`, and each
+such check the commands make by hand today. A tool's result is the text its command prints today; stage 3 may make
 it structured, once no command shares it.
 
 `pool_status` goes through the pool seam, `core/pools.py`, not `treehouse` itself, so canopy's own pools (M45) serve
@@ -114,7 +116,8 @@ which exists for the overseer's bash calls, goes with them in stage 2.
   servers of its own, under other names.
 - A run that never started the server would have no way to record anything, and its duties (§6) would fail with every
   ticket listed. So the server records on the tick when it answers `initialize`, and a tick whose overseer ended
-  without that closes `overseer_failed` with the summary `no canopy tools`.
+  without that closes `overseer_failed` with the summary `no canopy tools`. A server that answered and died before a
+  call passes that check; its run then fails its duties as any run that stops short does.
 
 ### What changes elsewhere, in stage 2
 

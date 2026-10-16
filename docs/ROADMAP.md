@@ -664,8 +664,8 @@ model gains its first code checks on what the overseer claims.
   a tracker with no connector keeps the live-read procedure, or a connector is required (recommended: required; the
   two shipped cover the operator's trackers, and the contract is a page of Python for another).
 - TRUST_MODEL T1 (labels, repliers, and reviewers checked in code; the overseer's MCP narrowed to stale subjects),
-  T2 (a connector's credentials), T7 (`connect.*`), with the approval note; DESIGN §6, §7, §17, §22; D003 and D081
-  edited in place.
+  T2 (a connector's credentials), T7 (`connect.*`), with the approval note; DESIGN §6, §7, §17, §22; D003 edited in
+  place (M48 superseded D081).
 
 Accept: written with the design, before work starts. Live, once built: a re-measurement (MEASUREMENTS) with
 tool-result tokens per tick at a tenth of the first day's median (about 14k), no MCP call on a tick whose
