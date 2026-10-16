@@ -310,7 +310,8 @@ function sameMark(a: JSONMark, b: JSONMark | undefined): boolean {
 // Text pasted as Markdown, as a planner's plan or a chat's answer is copied from a terminal or an editor, becomes the
 // headings, lists, and marks it writes, read by the plan's own parser, so its HTML stays characters as a plan's does.
 // What pastes as it always has: a copy from the editor itself, which carries its own slice (`data-pm-slice`); text that
-// does not read as Markdown; and a paste with Shift held, the browser's paste as plain text.
+// does not read as Markdown; a paste with Shift held, the browser's paste as plain text; and a paste into a code block,
+// where a YAML list or a shell comment is code, not Markdown, and ProseMirror keeps it as its characters.
 const PasteMarkdown = Extension.create({
     name: 'pasteMarkdown',
     addProseMirrorPlugins() {
@@ -330,10 +331,11 @@ const PasteMarkdown = Extension.create({
                             return false
                         },
                     },
-                    handlePaste: (_, event) => {
+                    handlePaste: (view, event) => {
                         const text = event.clipboardData?.getData('text/plain') ?? ''
                         const html = event.clipboardData?.getData('text/html') ?? ''
-                        if (shift || html.includes('data-pm-slice') || !readsAsMarkdown(text)) {
+                        const inCode = view.state.selection.$from.parent.type.spec.code === true
+                        if (shift || inCode || html.includes('data-pm-slice') || !readsAsMarkdown(text)) {
                             return false
                         }
                         return editor.commands.insertContent(text, { contentType: 'markdown' })
