@@ -213,6 +213,7 @@ function ThreadCard({
     onDelete,
 }: ThreadActions & { thread: PlanThread; lost: boolean; active: boolean; editable: boolean }) {
     const [replying, setReplying] = useState(false)
+    const [deleting, setDeleting] = useState(false)
     return (
         <article
             data-thread={thread.id}
@@ -247,7 +248,14 @@ function ThreadCard({
                     onCancel={() => setReplying(false)}
                 />
             )}
-            {editable && !replying && (
+            {editable && deleting && (
+                <ConfirmDelete
+                    replies={thread.replies.length}
+                    onDelete={() => onDelete(thread.id)}
+                    onKeep={() => setDeleting(false)}
+                />
+            )}
+            {editable && !replying && !deleting && (
                 <div className="-ml-2 flex flex-wrap items-center gap-0.5">
                     {!thread.resolved && (
                         <Button variant="ghost" size="xs" onClick={() => setReplying(true)}>
@@ -259,13 +267,43 @@ function ThreadCard({
                         {thread.resolved ? <RotateCcw aria-hidden /> : <Check aria-hidden />}
                         {thread.resolved ? 'Reopen' : 'Resolve'}
                     </Button>
-                    <Button variant="ghost" size="xs" onClick={() => onDelete(thread.id)}>
+                    <Button variant="ghost" size="xs" onClick={() => setDeleting(true)}>
                         <Trash2 aria-hidden />
                         Delete
                     </Button>
                 </div>
             )}
         </article>
+    )
+}
+
+// Deleting a thread asks first, in its place, as a shared document does, since nothing brings a thread back: Delete or
+// Keep. The focus goes to Keep, the choice that loses nothing, and Escape keeps it too.
+function ConfirmDelete({ replies, onDelete, onKeep }: { replies: number; onDelete: () => void; onKeep: () => void }) {
+    const keep = useRef<HTMLButtonElement>(null)
+    useEffect(() => {
+        keep.current?.focus()
+    }, [])
+    const what = replies > 0 ? 'this comment and its replies' : 'this comment'
+    function onKey(event: KeyboardEvent<HTMLButtonElement>) {
+        if (event.key === 'Escape') {
+            event.preventDefault()
+            onKeep()
+        }
+    }
+    return (
+        <fieldset className="flex flex-wrap items-center justify-between gap-2">
+            <legend className="float-left text-xs text-muted-foreground">Delete {what}?</legend>
+            <div className="flex items-center gap-1">
+                <Button ref={keep} type="button" variant="ghost" size="xs" onClick={onKeep} onKeyDown={onKey}>
+                    Keep
+                </Button>
+                <Button type="button" variant="destructive" size="xs" onClick={onDelete} onKeyDown={onKey}>
+                    <Trash2 aria-hidden />
+                    Delete
+                </Button>
+            </div>
+        </fieldset>
     )
 }
 
