@@ -543,11 +543,12 @@ seen.
 
 ## 8. Dispatch and the worker contract
 
-`canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume|split [--repo NAME]... [--slug SLUG] [--base BRANCH]
-[--request COMMENT_ID] [--context TEXT] [--cursor NAME=ID]...`:
+`canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume|split|plan [--repo NAME]... [--slug SLUG]
+[--base BRANCH] [--request COMMENT_ID] [--context TEXT] [--cursor NAME=ID]...`:
 
 Each `--repo` names a unit of the ticket, its work in one repository (§18); naming several makes a joint run. Every
-dispatch names at least one, in a workspace of one repository too.
+dispatch names at least one, in a workspace of one repository too. A `plan` writes the ticket's plan before its first
+`implement`, and runs as a split does, with guards of its own (§25).
 
 1. Check the guards. They are in code and not overridable from the prompt. A refusal is recorded as a decision
    `refused:<guard>` with the reason, and the command exits 1. A dry run checks the same guards and stops, counting

@@ -894,18 +894,20 @@ the state block and the overseer.
   their base branches, detached, as a split does (§18): no branch, no unit, nothing pushed or verified. It counts
   toward `capacity.max_workers` and has the worker's timeout. `policy.max_plan_attempts`, default 3, limits plan runs
   per ticket, and `canopy grant KEY plan` adds one.
-- The planner writes nothing anywhere. Its definition has no edit, shell, web fetch, or subagent tools, and its
-  tracker tools are the private worker's (§22): the tracker server's tools denied by a wildcard, then only
-  `tracker.read_tools` allowed, so it reads the ticket but cannot comment, label, or create. With no read tools known,
-  the dispatch is refused as `no_read_tools`. On a public ticket it checks the queue label as every worker does.
+- The planner writes its plan to one file in its desk and nothing else anywhere. Its definition allows no other edit,
+  and has no shell, web fetch, or subagent tools, and its tracker tools are the private worker's (§22): the tracker
+  server's tools denied by a wildcard, then only `tracker.read_tools` allowed, so it reads the ticket but cannot
+  comment, label, or create. With no read tools known, the dispatch is refused as `no_read_tools`. On a public ticket
+  it checks the queue label as every worker does.
 - Its prompt, `worker-plan.md`, asks for a plan a later worker can follow: what changes in each repository and why,
   the files and interfaces it touches, the tests that will show it works, what is out of scope, and the open risks. It
   carries the operator's messages, standing instructions, and notice, and on a re-plan the plan it replaces, as a
-  file in its desk, and the operator's reply to it. The plan is its final message, as markdown, before its result
-  line, `{"status":"done|blocked|failed","summary":"...","question":"<only when blocked>"}` (§25). `_run` validates
-  it: a `done` plan is non-empty and at most 100,000 characters; anything else makes the run `unknown` and records no
-  plan. A `blocked` plan records its question as a worker message (§22), on a public ticket
-  too, since the planner cannot post one; the operator answers with `canopy reply`.
+  file in its desk, and the operator's reply to it. The plan is the markdown it writes to `.canopy-new-plan.md` in its
+  desk; its result line is `{"status":"done|blocked|failed","summary":"...","question":"<only when blocked>"}` (§25).
+  `_run` reads the file as every plan file is read: a `done` plan is a regular file, non-empty, and at most 100,000
+  characters; anything else makes the run `unknown` and records no plan. A `blocked` plan records its question as a
+  worker message (§22), on a public ticket too, since the planner cannot post one; the operator answers with `canopy
+  reply`.
 - Whether a ticket is planned: `policy.plan`, `"off"` (default, as today) or `"approve"`, shared config that a
   repository may only tighten to `"approve"`. The operator overrides it for one ticket: `canopy plan KEY` asks for a
   plan (and makes a new one if the ticket has one), `canopy plan KEY --skip` waives it, and `canopy start KEY --plan`
@@ -987,8 +989,11 @@ ticket.
 Status: in progress. The plan editor is in, over mock data at `/plan-editor`: Markdown in and out, comments anchored
 by their words, and Ask for changes composing the reply (`ui/src/lib/plan-*.ts`, D120). Plans' files and rows are
 in (`core/plans.py`, migration 0033): written once and never replaced, read bounded, approved by the file's hash, and
-superseded by `canopy forget`. What keeps it open: the plan runs, the CLI, the guards and phases, the worker's copy,
-the threads' tables, and the ticket page.
+superseded by `canopy forget`. Plan runs are in: `canopy dispatch --kind plan` with its guards, `canopy-planner`,
+`worker-plan.md`, and `_run` writing a `done` plan to its file and recording it `proposed`, with the copy of the plan
+it replaces in its desk. The planner writes its plan to a file in its desk rather than its final message (§25, The
+prompt). What keeps it open: `canopy grant KEY plan`, the CLI, `policy.plan`, the guards and phases, the
+worker's copy, the threads' tables, and the ticket page.
 
 ## M45. canopy's own worktree pools, replacing treehouse in stages
 

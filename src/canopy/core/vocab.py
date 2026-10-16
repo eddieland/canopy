@@ -82,6 +82,8 @@ class RunKind(StrEnum):
     RESUME = "resume"
     # Splits a ticket into children (DESIGN §18): it works on no branch, and counts attempts per ticket, not per unit.
     SPLIT = "split"
+    # Writes a plan before a ticket's first implement (DESIGN §25): no branch, attempts counted per ticket, as a split.
+    PLAN = "plan"
 
 
 class Phase(StrEnum):

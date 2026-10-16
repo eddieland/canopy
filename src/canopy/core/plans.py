@@ -32,6 +32,10 @@ if TYPE_CHECKING:
 # What a planner can write in one message and an operator can read before approving (DESIGN §25, The prompt).
 MAX_CHARS = 100_000
 DIR_NAME = "plans"
+# In a plan run's desk: the copy of the plan it replaces, which the planner reads, and the file it writes its plan to,
+# the one file its definition lets it edit (DESIGN §25). `.agents/agents/canopy-planner.md` names `WRITTEN` too.
+REPLACED = ".canopy-plan.md"
+WRITTEN = ".canopy-new-plan.md"
 # The most bytes `MAX_CHARS` characters of UTF-8 can take: one more and the file is over the bound however it decodes.
 _MAX_BYTES = 4 * MAX_CHARS
 _CHUNK = 64 * 1024
