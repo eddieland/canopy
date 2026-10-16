@@ -205,8 +205,11 @@ def test_review_skill_is_nothing_or_the_skill_within_the_prompt() -> None:
     assert not prompts.review_skill("")
     text = prompts.review_skill("fix-pr")
     assert "load the skill `fix-pr` and follow it" in text
-    # The skill shapes how feedback is addressed, never whose (D089).
-    assert "the trusted reviewers and the operator's messages above still decide whose feedback you address" in text
+    # The skill shapes how feedback is addressed, never whose (D089), wherever an override puts the paragraph.
+    assert (
+        "the trusted reviewers and the operator's messages in this prompt still decide whose feedback you address"
+        in text
+    )
     # A missing skill fails the run rather than addressing feedback without it.
     assert "report `failed` with a summary that starts `no review skill:`" in text
 
