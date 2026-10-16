@@ -22,7 +22,16 @@ from enum import StrEnum
 from typing import Any, ClassVar
 
 # Imported for real, not under TYPE_CHECKING: `typing.get_type_hints` resolves a row type's fields when it is read.
-from canopy.core.vocab import ChoreRunStatus, Phase, PlanSetting, PlanStatus, PoolKind, ReviewRunStatus, TickStatus  # noqa: TC001
+from canopy.core.vocab import (
+    ChoreRunStatus,
+    Phase,
+    PlanSetting,
+    PlanStatus,
+    PoolKind,
+    ReviewRunStatus,
+    StartStatus,
+    TickStatus,
+)
 
 # What a column's value is converted with, by its field's type.
 _Convert = Callable[[object], object]
@@ -189,6 +198,22 @@ class ReviewRun(Row):
     tokens_first_cache_write: int | None
     definitions_digest: str | None
     pool: PoolKind
+
+
+@dataclass(frozen=True)
+class Start(Row):
+    """The operator's start of a subject worked privately (DESIGN §22): the authorization, written only by them."""
+
+    TABLE: ClassVar[str] = "starts"
+
+    subject_kind: str
+    subject_id: str
+    status: StartStatus
+    started_at: str
+    # When the operator stopped it; None while it is started.
+    stopped_at: str | None
+    # The channel of the latest start or stop.
+    channel: str
 
 
 @dataclass(frozen=True)

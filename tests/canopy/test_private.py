@@ -14,7 +14,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, conversation, db, definitions, outbox
-from canopy.core.vocab import RunStatus, TickStatus
+from canopy.core.vocab import RunStatus, StartStatus, TickStatus
 from canopy.infra import procs, resources
 from canopy.loop import attention, repeat
 from canopy.serve import views
@@ -253,7 +253,7 @@ def test_a_stopped_ticket_is_dispatched_by_nothing_until_started_again(
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
     record = conversation.start_of(conn, KEY)
     assert record is not None
-    assert record["status"] == "stopped"
+    assert record.status == StartStatus.STOPPED
     assert operator("start", KEY) == 0
     assert dispatch_in_tick(conn, "--kind", "implement", runner=runner).code == 0
 
@@ -355,7 +355,7 @@ def test_with_tracker_private_a_labeled_tickets_first_dispatch_starts_it_private
         assert run["private"] == 1
         record = conversation.start_of(conn, KEY)
         assert record is not None
-        assert (record["status"], record["channel"]) == ("started", conversation.LABEL)
+        assert (record.status, record.channel) == (StartStatus.STARTED, conversation.LABEL)
         assert main(["_run", str(run["id"])], runner=runner) == 0
     [worker] = agent_runs(agent_log)
     argv = worker["argv"]
