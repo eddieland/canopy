@@ -3,7 +3,8 @@
 Each is a `StrEnum`, so a member is the string the journal stores and compares equal to it, and a misspelled one is a
 type error rather than a silent wrong decision. Code that branches on one matches it with `typing.assert_never` in the
 last case, so a value added here fails the type check until every branch handles it. A value read from the journal is
-converted where it is branched on (`RunStatus(row["status"])`), which raises on one the vocabulary does not hold.
+converted where it is branched on (`RunStatus(row["status"])`), which raises on one the vocabulary does not hold; a
+table with a row type in `records` does that as the row is read, its column a field of the enum.
 
 A table added from M36 on constrains each such column in SQL, `CHECK (status IN (...))` listing this module's values.
 The tables `0001_init.sql` made keep their schema, since a shipped migration is never edited, and list their values in

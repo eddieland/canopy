@@ -3,12 +3,14 @@ import sqlite3
 import types
 import typing
 from dataclasses import dataclass, fields
+from enum import StrEnum
 from pathlib import Path
 from typing import ClassVar
 
 import pytest
 
 from canopy.core import db, records
+from canopy.core.vocab import ChoreRunStatus
 from tests.conftest import Journals
 
 # The field types a column of each declared type may be read as.
@@ -60,7 +62,9 @@ def test_a_row_type_has_its_tables_columns_in_order_with_their_types(
         # An INTEGER PRIMARY KEY is never NULL, though the pragma does not mark it NOT NULL.
         nullable = not column["notnull"] and not column["pk"]
         assert optional == nullable, f"{row_type.TABLE}.{name}: a nullable column is a `| None` field, and only one is"
-        assert inner in AFFINITY[str(column["type"])], f"{row_type.TABLE}.{name} is {column['type']}, not {inner}"
+        # A vocabulary's members are the strings a TEXT column holds.
+        read_as = str if isinstance(inner, type) and issubclass(inner, StrEnum) else inner
+        assert read_as in AFFINITY[str(column["type"])], f"{row_type.TABLE}.{name} is {column['type']}, not {inner}"
 
 
 def test_a_query_builds_its_rows_as_the_row_type(conn: sqlite3.Connection) -> None:
@@ -149,3 +153,26 @@ def test_a_flag_that_is_not_0_or_1_is_refused(conn: sqlite3.Connection) -> None:
     conn.execute("INSERT INTO flagged VALUES (1, 2, NULL)")
     with pytest.raises(records.RowError, match=r"flagged\.done holds neither 0 nor 1"):
         records.fetch_all(conn, Flagged, "SELECT * FROM flagged")
+
+
+def test_a_vocabulary_column_reads_as_its_member(conn: sqlite3.Connection, tmp_path: Path) -> None:
+    run_id = db.insert_chore_run(conn, tick_id=None, chore="deps", logs_dir=tmp_path)
+    db.finish_run(conn, "chore_runs", run_id, ChoreRunStatus.OK, "{}")
+    run = db.get_chore_run(conn, run_id)
+    assert run is not None
+    assert run.status is ChoreRunStatus.OK
+
+
+def test_a_value_the_vocabulary_does_not_hold_is_refused(conn: sqlite3.Connection, tmp_path: Path) -> None:
+    run_id = db.insert_chore_run(conn, tick_id=None, chore="deps", logs_dir=tmp_path)
+    conn.execute("UPDATE chore_runs SET status = 'done' WHERE id = ?", (run_id,))
+    with pytest.raises(records.RowError, match=r"^chore_runs\.status holds 'done', which is not a ChoreRunStatus$"):
+        db.get_chore_run(conn, run_id)
+
+
+def test_columns_reads_a_typed_row_and_a_sqlite_row_alike(conn: sqlite3.Connection, tmp_path: Path) -> None:
+    run_id = db.insert_chore_run(conn, tick_id=None, chore="deps", logs_dir=tmp_path)
+    typed = db.get_chore_run(conn, run_id)
+    assert typed is not None
+    untyped = conn.execute("SELECT * FROM chore_runs WHERE id = ?", (run_id,)).fetchone()
+    assert {k: records.columns(typed)[k] for k in untyped.keys()} == dict(untyped)  # noqa: SIM118
