@@ -229,6 +229,8 @@ shows a session's transcript in the web UI. A `worker_cmd` in a user file from b
 Checking a run's session against `opencode export` is SCENARIOS S30. What keeps it open: workers against OpenCode's
 server. Decided (2026-10-16): `fix-ci` and `resume` start a fresh session, as every run does (DESIGN §8, A fresh
 session per run), since a continued one would keep stale prompts and cost more than the short runs it replaces.
+On request (2026-10-16), a public worker's prompt carries the ticket's latest three runs' reports
+(`{{PREVIOUS_RUNS}}`, DESIGN §8), so a fresh session still learns what the runs before it concluded.
 Taken in part on request (2026-10-13): the overseer names
 each ticket (`canopy ticket set --title`), the name shows beside the key in `canopy status`, `canopy show`, and the web
 UI, and every default template passes it, or a tick's, chore's, or review's own, as the session title

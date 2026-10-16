@@ -65,6 +65,7 @@ PROMPT_VALUES = {
     "OPEN_PR": "Open each PR through the GitHub MCP.",
     "TRUSTED_REVIEWERS": "`octocat`",
     "OPERATOR_MESSAGES": "No messages from the operator.",
+    "PREVIOUS_RUNS": "None: no earlier run of this ticket has ended.",
     "REVIEW_FINDINGS": "None.",
 }
 
