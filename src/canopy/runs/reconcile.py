@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import conversation, db, dead_runs, definitions, pool, pools, workspace
 from canopy.core.vocab import PoolKind, RunStatus
-from canopy.infra import logs, procs
+from canopy.infra import cwds, logs, procs
 from canopy.runs import desks, dispatch, tidy
 
 if TYPE_CHECKING:
@@ -103,6 +103,11 @@ def shadow(
         How many slots it logged a mismatch for.
     """
     mismatches = 0
+    # One read of the process table for every slot: on macOS each read is a full `lsof`.
+    try:
+        processes: cwds.Table | None = cwds.table(runner)
+    except cwds.CwdError:
+        processes = None
     for name, found in slots.items():
         repo = ws.repo(name)
         if repo is None:
@@ -111,7 +116,11 @@ def shadow(
             if slot.lease_holder or slot.lease_id:
                 continue
             try:
-                ours = pool.classify(runner, repo.path, slot.path)
+                ours = (
+                    pool.classify(runner, repo.path, slot.path, found=processes.inside(slot.path))
+                    if processes is not None
+                    else pool.UNVERIFIED
+                )
             except OSError as e:
                 ours = f"error: {e}"
             if ours != slot.status:

@@ -327,10 +327,11 @@ changes it, or `"canopy"`. Every caller reaches either through `pools.Pool` and 
   worktree of the primary clone. There is no hash of the remote in the path: a workspace's repository names are
   unique, and the pools are the workspace's own (D033).
 - **Leases are journal rows.** The `slots` table holds each slot: repository, name, path, lease id and holder, when it
-  was leased, the base it was last leased on by name, and the paths seeding wrote. A lease claims its slot's row before
-  it touches the worktree, all under the pool's lock, `<workspace>/pools/<repo>/.lock`, so two leases never pick one
-  slot. The row is written in its own transaction, not the run's: the slot is claimed before the run that needs it can
-  be recorded, as treehouse's lease is. A lease whose process dies before its run is recorded is a `canopy:` lease no
+  was leased, the base it was last leased on by name, and the paths seeding wrote. Every lease runs under the pool's
+  lock, `<workspace>/pools/<repo>/.lock`, so two leases never pick one slot: a new slot's row is claimed before its
+  worktree is made, and a reused one is reset and then claimed, which nothing else can do between. The row is
+  written in its own transaction, not the run's: the slot is claimed before the run that needs it can be recorded, as
+  treehouse's lease is. A lease whose process dies before its run is recorded is a `canopy:` lease no
   running run holds, which reconcile returns, as it returns treehouse's.
 - **Size.** The declared size is the only bound; a pool with none declared stops at 16, treehouse's default
   `max_trees`. canopy's pool reads no config of treehouse's.

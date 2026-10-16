@@ -19,7 +19,7 @@ from unittest import mock
 import pytest
 
 from canopy.core import pool, pools, workspace
-from canopy.infra import logs, procs
+from canopy.infra import cwds, logs, procs
 from canopy.runs import reconcile
 from tests.conftest import HERMETIC_GIT, CanopyEnv, Journals, git
 
@@ -207,7 +207,10 @@ def test_the_shadow_logs_where_canopy_and_treehouse_disagree_and_changes_nothing
             ]
         }
         log = mock.create_autospec(logs.TickAdapter, instance=True)
-        assert reconcile.shadow(procs.SubprocessRunner(), workspace.find(canopy_env.root), log, said) == 1
+        with mock.patch.object(cwds, "table", autospec=True, side_effect=cwds.table) as read:
+            assert reconcile.shadow(procs.SubprocessRunner(), workspace.find(canopy_env.root), log, said) == 1
+        # One read of the process table for every slot: on macOS each read is a full `lsof`.
+        assert read.call_count == 1
         [call] = log.warning.call_args_list
         assert call.args == ("pool_shadow_mismatch",)
         assert call.kwargs["extra"] == {"repo": REPO, "slot": str(dirty), "treehouse": "available", "canopy": "dirty"}
