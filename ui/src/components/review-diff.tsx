@@ -79,9 +79,12 @@ function FilePanel({
     onLine: Map<number, Numbered[]> | undefined
     onFile: Numbered[]
 }) {
-    const [shown, setShown] = useState(first)
+    // The lines the operator opened, drawn with those the page draws at first, which follow the review as it changes:
+    // a running review's findings arrive when it ends, and each brings its lines into view, folded or not.
+    const [opened, setOpened] = useState<Span[]>([])
+    const shown = opened.reduce((spans, span) => reveal(spans, span), first)
     const highlighted = useHighlight(file)
-    const show = (span: Span) => setShown((was) => reveal(was, nextStep(span)))
+    const show = (span: Span) => setOpened((was) => reveal(was, nextStep(span)))
     const rows = pieces(file, shown).flatMap((piece) => pieceRows(piece, { run, file, highlighted, onLine, show }))
     return (
         <Panel data-testid="diff-file">
