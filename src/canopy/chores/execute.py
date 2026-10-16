@@ -104,8 +104,8 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     return outcome
 
 
-def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, list[str]]:
-    """Return where chore `name` runs and the command that runs it with `prompt`.
+def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, list[str], str]:
+    """Return where chore `name` runs, the command that runs it with `prompt`, and the definitions snapshot's digest.
 
     Raises:
         SetupError: its `cwd` is not a directory, or OpenCode config there or above shadows one of canopy's agents.
@@ -118,7 +118,8 @@ def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, l
     if shadowing:
         raise SetupError(definitions.shadowing_message(shadowing))
     template = chore.cmd if chore.cmd is not None else ctx.config.runtime.chore_cmd
-    return cwd, render_command(template, prompt, definitions.ensure(ctx.state_dir, ctx.config), f"chore:{name}")
+    snapshot = definitions.ensure(ctx.state_dir, ctx.config)
+    return cwd, render_command(template, prompt, snapshot, f"chore:{name}"), snapshot.name
 
 
 def outcome_of(done: procs.Result, output: agent_output.AgentOutput, chore: Chore) -> Outcome:
@@ -144,7 +145,7 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     run_id = int(run["id"])
     # Beside the row's log, so a run started before an upgrade moved the directory still finds its prompt.
     prompt = start.prompt_file(Path(run["log_path"])).read_text(encoding="utf-8")
-    cwd, argv = prepare(ctx, name, chore, prompt)
+    cwd, argv, digest = prepare(ctx, name, chore, prompt)
     log.info(
         "running chore",
         extra={"chore_run_id": run_id, "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": chore.timeout_minutes},
@@ -162,7 +163,7 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     out.flush()
     output = agent_output.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
-        db.set_run_report(ctx.conn, "chore_runs", run_id, output.session_id, output.usage)
+        db.set_run_report(ctx.conn, "chore_runs", run_id, output.session_id, output.usage, digest=digest)
         spent = output.usage.spent() if output.usage else {}
         log.info("chore reported", extra={"chore_run_id": run_id, "session_id": output.session_id, **spent})
     return outcome_of(done, output, chore)
