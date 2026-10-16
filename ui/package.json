@@ -37,6 +37,7 @@
     "radix-ui": "1.7.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "shiki": "4.5.0",
     "swagger-ui-dist": "5.33.1",
     "tailwind-merge": "3.7.0"
   },

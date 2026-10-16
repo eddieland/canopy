@@ -89,6 +89,18 @@ describe.each(Object.entries(THEMES))('%s theme', (_, colors) => {
         expect(low).toEqual([])
     })
 
+    it("reads a diff's code colors on an added or removed line's tint", () => {
+        const code = ['foreground', 'muted-foreground', ...TEXT.filter((name) => name.startsWith('syntax-'))]
+        const low = code
+            .flatMap((name) =>
+                ['diff-add', 'diff-del'].map((line) =>
+                    below(`${name} on ${line} 12%`, token(name), over(token(line), 0.12, token('surface'))),
+                ),
+            )
+            .filter((line) => line !== null)
+        expect(low).toEqual([])
+    })
+
     it("sets the spend chart's series apart from the surface they sit on", () => {
         const low = SERIES.map((name) => {
             const ratio = contrast(token(name), token('surface'))
