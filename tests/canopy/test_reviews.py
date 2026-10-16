@@ -14,7 +14,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import conversation, db, review_diff
+from canopy.core import conversation, db, definitions, review_diff
 from canopy.core import review_result as result
 from canopy.core.config import load
 from canopy.infra import procs
@@ -637,6 +637,8 @@ def test_a_review_run_records_what_it_cost(reviews: CanopyEnv, git_pool: GitPool
     usage = db.usage_of(row)
     assert usage is not None
     assert usage.cost_usd == 0.25  # two model calls at 0.125
+    assert (usage.first_call, usage.first_cache_write) == (5500, 500)
+    assert (reviews.state_dir / definitions.RUNTIME_DIR / row["definitions_digest"]).is_dir()
     assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
 
 
