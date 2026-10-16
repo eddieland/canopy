@@ -1,4 +1,4 @@
-"""The journal's closed vocabularies: run statuses and kinds, a ticket's phase, a plan's, a start's, a lease's pool.
+"""The journal's closed vocabularies: run, tick, start, and plan statuses, run kinds, ticket phases, and lease pools.
 
 Each is a `StrEnum`, so a member is the string the journal stores and compares equal to it, and a misspelled one is a
 type error rather than a silent wrong decision. Code that branches on one matches it with `typing.assert_never` in the
@@ -57,6 +57,21 @@ class ReviewRunStatus(StrEnum):
 
 # Any run table's status, for the lifecycle every run table shares (`db.finish_run`).
 type AnyRunStatus = RunStatus | ChoreRunStatus | ReviewRunStatus
+
+
+class TickStatus(StrEnum):
+    """A tick's status, `ticks.status` (DESIGN §6)."""
+
+    RUNNING = "running"
+    OK = "ok"
+    # The overseer skipped the whole tick: it could not see the world (`mcp_unavailable`, `tracker_unsupported`).
+    SKIPPED = "skipped"
+    # `canopy --version` failed from the overseer's environment, so the overseer did not run.
+    CANOPY_UNAVAILABLE = "canopy_unavailable"
+    OVERSEER_FAILED = "overseer_failed"
+    RECONCILE_FAILED = "reconcile_failed"
+    # The tick's process exited without closing it; the next tick closed it.
+    ABANDONED = "abandoned"
 
 
 class RunKind(StrEnum):

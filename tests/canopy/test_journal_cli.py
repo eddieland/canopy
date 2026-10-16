@@ -10,6 +10,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import agent_output, db
+from canopy.core.vocab import TickStatus
 from canopy.loop import attention
 from tests.conftest import CanopyEnv
 
@@ -46,7 +47,7 @@ def test_journal_commands_need_a_running_tick(
     assert main(["decide", "PROJ-1", "wait", "--rationale", "r"]) == 1
     assert "CANOPY_TICK_ID is not set" in capsys.readouterr().err
     with in_tick(conn) as tick_id:
-        db.finish_tick(conn, tick_id, "ok", "done")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "done")
         assert main(["attention", "PROJ-1", "needs_reviewer", "--detail", "d"]) == 1
         assert "does not name a running tick" in capsys.readouterr().err
         assert conn.execute("SELECT count(*) FROM decisions").fetchone()[0] == 0
@@ -177,9 +178,9 @@ def test_decisions_prints_a_ticks_plan(
     first = db.start_tick(conn, dry_run=True)
     db.record_decision(conn, first, "PROJ-1", "dispatch:implement", "dry run: not dispatched;\nwould work on x")
     db.record_decision(conn, first, None, "skip", "nothing else")
-    db.finish_tick(conn, first, "ok", "dry run; 2 decisions")
+    db.finish_tick(conn, first, TickStatus.OK, "dry run; 2 decisions")
     second = db.start_tick(conn, dry_run=False)
-    db.finish_tick(conn, second, "ok", "0 decisions: none")
+    db.finish_tick(conn, second, TickStatus.OK, "0 decisions: none")
 
     assert main(["decisions"]) == 0
     out = capsys.readouterr().out
@@ -208,7 +209,7 @@ def test_decisions_and_status_print_what_a_tick_cost(
         0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0, peak_context=26_000
     )
     db.set_tick_report(conn, tick_id, "ses_o1", usage)
-    db.finish_tick(conn, tick_id, "ok", "0 decisions: none")
+    db.finish_tick(conn, tick_id, TickStatus.OK, "0 decisions: none")
 
     assert main(["decisions"]) == 0
     assert "\n  overseer session ses_o1  $0.50, 10.0k tokens, 26.0k peak context\n" in capsys.readouterr().out
@@ -223,7 +224,7 @@ def test_decisions_filters_by_ticket_and_reports_no_match(
     db.record_decision(conn, tick_id, "GH-1", "wait", "checks pending")
     db.record_decision(conn, tick_id, "GH-10", "done", "merged")
     db.record_decision(conn, tick_id, None, "skip", "nothing to do")
-    db.finish_tick(conn, tick_id, "ok", "3 decisions")
+    db.finish_tick(conn, tick_id, TickStatus.OK, "3 decisions")
 
     assert main(["decisions", "--ticket", "GH-1"]) == 0
     out = capsys.readouterr().out
@@ -286,7 +287,7 @@ def test_a_ticket_is_named_on_one_line_and_renamed(
         runs_dir=canopy_env.state_dir / "runs",
     )
     conn.execute("UPDATE runs SET status = 'done', ended_at = started_at WHERE id = ?", (run_id,))
-    db.finish_tick(conn, tick_id, "ok", "test")
+    db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     assert main(["status"]) == 0
     assert "\n  PROJ-1: Fix the login loop  implement  done  " in capsys.readouterr().out
     assert main(["show", "PROJ-1"]) == 0
@@ -328,7 +329,7 @@ def test_status_and_attention_ages(
     assert main(["status"]) == 0
     assert "No ticks yet." in capsys.readouterr().out
 
-    def tick(items: Iterable[tuple[str, str]], status: str = "ok") -> int:
+    def tick(items: Iterable[tuple[str, str]], status: TickStatus = TickStatus.OK) -> int:
         tick_id = db.start_tick(conn, dry_run=True)
         for key, reason in items:
             db.record_decision(conn, tick_id, key, f"attention:{reason}", f"https://example.test/{key}")
@@ -338,7 +339,7 @@ def test_status_and_attention_ages(
     tick([("PROJ-1", "needs_reviewer")])
     conn.execute("UPDATE decisions SET created_at = '2020-01-01T00:00:00.000Z'")
     tick([("PROJ-1", "needs_reviewer"), ("PROJ-2", "ready_to_merge")])
-    tick([("PROJ-9", "needs_author")], status="overseer_failed")  # a failed tick does not replace the list
+    tick([("PROJ-9", "needs_author")], status=TickStatus.OVERSEER_FAILED)  # a failed tick does not replace the list
 
     items = attention.current(conn)
     assert [(i.ticket_key, i.reason) for i in items] == [("PROJ-1", "needs_reviewer"), ("PROJ-2", "ready_to_merge")]

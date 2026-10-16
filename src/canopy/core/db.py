@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import re
 import sqlite3
-from collections.abc import Callable, Generator, Mapping, Sequence
+from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal, assert_never
 
 from canopy.core import agent_output, records
-from canopy.core.vocab import Phase, PlanStatus, PoolKind, StartStatus
+from canopy.core.vocab import Phase, PlanStatus, PoolKind, StartStatus, TickStatus
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -261,7 +261,7 @@ def start_tick(conn: sqlite3.Connection, *, dry_run: bool) -> int:
     return _rowid(cur)
 
 
-def finish_tick(conn: sqlite3.Connection, tick_id: int, status: str, summary: str) -> None:
+def finish_tick(conn: sqlite3.Connection, tick_id: int, status: TickStatus, summary: str) -> None:
     """Close a tick with its final status and summary."""
     conn.execute(
         "UPDATE ticks SET ended_at = ?, status = ?, summary = ? WHERE id = ?",
@@ -305,12 +305,11 @@ def last_query_at(conn: sqlite3.Connection) -> str | None:
     return None if row is None or row[0] is None else str(row[0])
 
 
-def previous_tick(conn: sqlite3.Connection, tick_id: int) -> sqlite3.Row | None:
+def previous_tick(conn: sqlite3.Connection, tick_id: int) -> records.Tick | None:
     """Return the tick before `tick_id`, whatever its status, or None if it is the first."""
-    row: sqlite3.Row | None = conn.execute(
-        "SELECT * FROM ticks WHERE id < ? ORDER BY id DESC LIMIT 1", (tick_id,)
-    ).fetchone()
-    return row
+    return records.fetch_one(
+        conn, records.Tick, "SELECT * FROM ticks WHERE id < ? ORDER BY id DESC LIMIT 1", (tick_id,)
+    )
 
 
 def runs_moved_after(conn: sqlite3.Connection, since: str) -> bool:
@@ -416,16 +415,14 @@ def abandon_unfinished_ticks(conn: sqlite3.Connection) -> list[int]:
     return ids
 
 
-def get_tick(conn: sqlite3.Connection, tick_id: int) -> sqlite3.Row | None:
+def get_tick(conn: sqlite3.Connection, tick_id: int) -> records.Tick | None:
     """Return the tick row with `tick_id`, or None."""
-    row: sqlite3.Row | None = conn.execute("SELECT * FROM ticks WHERE id = ?", (tick_id,)).fetchone()
-    return row
+    return records.fetch_one(conn, records.Tick, "SELECT * FROM ticks WHERE id = ?", (tick_id,))
 
 
-def last_tick(conn: sqlite3.Connection) -> sqlite3.Row | None:
+def last_tick(conn: sqlite3.Connection) -> records.Tick | None:
     """Return the most recent tick row, or None."""
-    row: sqlite3.Row | None = conn.execute("SELECT * FROM ticks ORDER BY id DESC LIMIT 1").fetchone()
-    return row
+    return records.fetch_one(conn, records.Tick, "SELECT * FROM ticks ORDER BY id DESC LIMIT 1")
 
 
 # Tickets
@@ -1361,13 +1358,28 @@ def last_decision_of(conn: sqlite3.Connection, key: str) -> str | None:
     return None if row is None else str(row[0])
 
 
-def recent_ticks(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
-    """Return the latest `limit` ticks, newest first, each with `decisions`, how many it recorded."""
-    return conn.execute(
-        "SELECT t.*, (SELECT count(*) FROM decisions d WHERE d.tick_id = t.id) AS decisions "
-        "FROM ticks t ORDER BY t.id DESC LIMIT ?",
-        (limit,),
-    ).fetchall()
+def recent_ticks(conn: sqlite3.Connection, limit: int) -> list[tuple[records.Tick, int]]:
+    """Return the latest `limit` ticks, newest first, each with how many decisions it recorded."""
+    return with_decision_counts(
+        conn, records.fetch_all(conn, records.Tick, "SELECT * FROM ticks ORDER BY id DESC LIMIT ?", (limit,))
+    )
+
+
+def with_decision_counts(conn: sqlite3.Connection, ticks: Iterable[records.Tick]) -> list[tuple[records.Tick, int]]:
+    """Pair each of `ticks` with how many decisions it recorded, in one query by `decisions_tick`.
+
+    Returns:
+        The ticks, in the order given, each with its count.
+    """
+    found = list(ticks)
+    counts = dict(
+        conn.execute(
+            "SELECT tick_id, count(*) FROM decisions WHERE tick_id IN (SELECT value FROM json_each(?)) "
+            "GROUP BY tick_id",
+            (json.dumps([t.id for t in found]),),
+        ).fetchall()
+    )
+    return [(t, int(counts.get(t.id, 0))) for t in found]
 
 
 def decision_count(conn: sqlite3.Connection, tick_id: int) -> int:

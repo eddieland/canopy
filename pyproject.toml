@@ -184,6 +184,9 @@ banned-from = ["unittest.mock"]
 # A click command's docstring is its --help text, so Returns and Raises sections would print there. Every command
 # returns an exit code and raises CliError for main to report; that is main's contract, not each command's.
 "src/canopy/cli/*" = ["DOC201", "DOC501"]
+# A row type's fields are resolved by `typing.get_type_hints` when a row is read, so the vocabularies they name are
+# imported for real (TC001).
+"src/canopy/core/records.py" = ["TC001"]
 # The fakes are standalone scripts that talk on stdout and stderr.
 "tests/fakes/*" = ["T201"]
 # The sandbox wrapper is a separate program, not canopy (DESIGN §24): it runs git and srt, and reports on

@@ -11,7 +11,7 @@ import pytest
 
 from canopy.core import db
 from canopy.core.agent_output import ToolUse, Usage
-from canopy.core.vocab import Phase
+from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import resources
 from tests.canopy.helpers import DEAD_PID, journal_at, shipped_through, versions_after
 from tests.conftest import Journals
@@ -372,11 +372,11 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     db.set_unit(conn, "PROJ-1", "/repo", "api", phase="ci_red", cursors={"ci": "run-7"})
     db.set_ticket(conn, "PROJ-2", "/repo", done=True)
     db.record_decision(conn, tick, "PROJ-1", "wait", "checks pending")
-    db.finish_tick(conn, tick, "ok", "1 decision")
+    db.finish_tick(conn, tick, TickStatus.OK, "1 decision")
 
     row = db.get_tick(conn, stale)
     assert row is not None
-    assert row["status"] == "abandoned"
+    assert row.status == TickStatus.ABANDONED
     [ticket] = db.open_tickets(conn)
     assert (ticket.key, ticket.phase, ticket.last_comment_id) == ("PROJ-1", "ci_red", "c-7")
     [unit] = db.units(conn, "PROJ-1")
@@ -385,7 +385,7 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     assert (decision.ticket_key, decision.action) == ("PROJ-1", "wait")
     last = db.last_tick(conn)
     assert last is not None
-    assert (last["id"], last["status"], last["dry_run"]) == (tick, "ok", 1)
+    assert (last.id, last.status, last.dry_run) == (tick, TickStatus.OK, True)
 
 
 def test_a_tickets_decisions_are_found_by_index(tmp_path: Path, journals: Journals) -> None:
@@ -480,9 +480,9 @@ def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: 
     assert (run["session_id"], run["cost_usd"], run["tokens_input"]) == (None, None, None)
     tick = db.get_tick(conn, 1)
     assert tick is not None
-    assert (tick["session_id"], tick["cost_usd"], tick["tokens_input"]) == (None, None, None)
+    assert (tick.session_id, tick.cost_usd, tick.tokens_input) == (None, None, None)
     # Nor did the loop say whether it was idle or what woke it.
-    assert (tick["idle"], tick["woken_by"]) == (None, None)
+    assert (tick.idle, tick.woken_by) == (None, None)
 
 
 def test_review_runs_from_before_their_purpose_are_own_only_where_their_tickets_unit_has_their_pr(

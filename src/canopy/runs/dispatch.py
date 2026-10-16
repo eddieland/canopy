@@ -554,8 +554,8 @@ def _check_notice(ctx: Context, tick_id: int, kind: str) -> None:
     if kind != FIX_CI:
         return
     tick = db.get_tick(ctx.conn, tick_id)
-    read = tick["read_at"] if tick is not None else None
-    if read is not None and notice.moved_after(ctx.conn, str(read)):
+    read = tick.read_at if tick is not None else None
+    if read is not None and notice.moved_after(ctx.conn, read):
         raise Refusal(
             "notice_changed",
             "the operator set or cleared a notice to workers after this tick read the journal; the next tick decides "

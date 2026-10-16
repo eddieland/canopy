@@ -18,7 +18,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, db, definitions
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunStatus, TickStatus
 from canopy.runs import worker
 from tests.canopy.helpers import (
     WORK,
@@ -106,7 +106,7 @@ def test_the_session_title_names_the_ticket_and_its_title(
     if title is not None:
         with in_tick(conn) as tick_id:
             assert main(["ticket", "set", "PROJ-1", "--title", title]) == 0
-            db.finish_tick(conn, tick_id, "ok", "test")
+            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     with worker_does(*commit_and_push("agent/PROJ-1-work")):
         dispatch_and_run(conn, *WORK)
     [w] = agent_runs(agent_log)
@@ -464,7 +464,7 @@ def test_a_run_is_claimed_once(
             )
             == 0
         )
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         conn.execute("UPDATE runs SET pid = 1 WHERE id = 2")
         assert main(["_run", "2"]) == 1
         still = db.get_run(conn, 2)
