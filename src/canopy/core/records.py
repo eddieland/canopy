@@ -22,7 +22,7 @@ from enum import StrEnum
 from typing import Any, ClassVar
 
 # Imported for real, not under TYPE_CHECKING: `typing.get_type_hints` resolves a row type's fields when it is read.
-from canopy.core.vocab import ChoreRunStatus  # noqa: TC001
+from canopy.core.vocab import ChoreRunStatus, PlanStatus  # noqa: TC001
 
 # What a column's value is converted with, by its field's type.
 _Convert = Callable[[object], object]
@@ -117,6 +117,26 @@ class PoolSlot(Row):
     leased_at: str | None
     base: str
     seeded: str
+
+
+@dataclass(frozen=True)
+class Plan(Row):
+    """A plan a plan run wrote (DESIGN §25): its status, its file's hash as written, and its approval. No text."""
+
+    TABLE: ClassVar[str] = "plans"
+
+    id: int
+    ticket_key: str
+    run_id: int
+    created_at: str
+    status: PlanStatus
+    # The file's SHA-256, hex, and its size in bytes, as the planner wrote it.
+    sha256: str
+    size: int
+    # The file's SHA-256 when the operator approved it, their edits included; set with the time and the channel.
+    approved_sha256: str | None
+    approved_at: str | None
+    approved_channel: str | None
 
 
 @dataclass(frozen=True)

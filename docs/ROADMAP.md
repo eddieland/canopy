@@ -982,8 +982,10 @@ the plan in its summary. A week later the plan is still on the ticket's page. No
 ticket.
 
 Status: in progress. The plan editor is in, over mock data at `/plan-editor`: Markdown in and out, comments anchored
-by their words, and Ask for changes composing the reply (`ui/src/lib/plan-*.ts`, D120). What keeps it open:
-everything in the journal, the CLI, the runs, and the ticket page.
+by their words, and Ask for changes composing the reply (`ui/src/lib/plan-*.ts`, D120). Plans' files and rows are
+in (`core/plans.py`, migration 0033): written once and never replaced, read bounded, approved by the file's hash, and
+superseded by `canopy forget`. What keeps it open: the plan runs, the CLI, the guards and phases, the worker's copy,
+the threads' tables, and the ticket page.
 
 ## M45. canopy's own worktree pools, replacing treehouse in stages
 

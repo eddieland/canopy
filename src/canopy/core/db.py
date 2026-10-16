@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from canopy.core import agent_output, records
-from canopy.core.vocab import PoolKind
+from canopy.core.vocab import PlanStatus, PoolKind
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -1613,7 +1613,8 @@ def latest_message_of(conn: sqlite3.Connection, subject_kind: str, subject_id: s
 def forget_ticket(conn: sqlite3.Connection, key: str) -> None:
     """Clear what the journal knows of a ticket's branch, PRs, and phases, and mark where its loop view begins.
 
-    Call inside a transaction. Runs, messages, the start record, and the cursors stay (DESIGN §22).
+    Call inside a transaction. Runs, messages, the start record, and the cursors stay (DESIGN §22). A waiting or
+    approved plan is superseded, so a ticket planned under `policy.plan = "approve"` is planned again; its file stays.
     """
     conn.execute(
         "UPDATE tickets SET branch = NULL, phase = NULL, needs_human_since = NULL, done = 0, forgotten_at = ?, "
@@ -1623,6 +1624,10 @@ def forget_ticket(conn: sqlite3.Connection, key: str) -> None:
         (now(), key, SUBJECT_TICKET, key, key),
     )
     conn.execute("DELETE FROM ticket_units WHERE ticket_key = ?", (key,))
+    conn.execute(
+        "UPDATE plans SET status = ? WHERE ticket_key = ? AND status != ?",
+        (PlanStatus.SUPERSEDED, key, PlanStatus.SUPERSEDED),
+    )
 
 
 def forgotten_message_id(conn: sqlite3.Connection, key: str) -> int:
