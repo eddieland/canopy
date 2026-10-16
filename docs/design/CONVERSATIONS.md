@@ -165,7 +165,8 @@ list and runs; there is no separate `list`.
   `operator`, and every public `implement`, `fix-ci`, and `resume` prompt carries the latest 20
   (`{{OPERATOR_MESSAGES}}`, at most 30,000 characters), each labeled the operator's: an instruction. The workers'
   questions come with them, labeled data, so a reply to message N names something the worker can read; the rest of the
-  conversation is on the tracker (D093). The overseer's `--context` points at a message by id, never quotes it. A reply
+  conversation is on the tracker (D093). The same prompts carry the latest three runs' reports (`{{PREVIOUS_RUNS}}`,
+  §8), labeled data. The overseer's `--context` points at a message by id, never quotes it. A reply
   on a ticket with no branch yet rides its `implement`, and one after a failed run is "try again". Its authorized
   repliers' comments on the ticket still work as before (§7). `show` drops control characters from every message.
 - A public worker can write to the ticket and its PRs, so keeping the operator's messages off them is its prompt's

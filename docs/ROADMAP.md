@@ -226,8 +226,12 @@ Accept: written with the design, before work starts, and like every milestone's,
 Status: in progress. Taken in part on request (2026-10-07): each worker and split run records its session id, and
 `canopy status` lists the ten most recent runs with their outcome, PRs, summary, cost, run log, and session id; M27
 shows a session's transcript in the web UI. A `worker_cmd` in a user file from before needs `--format json` added.
-Checking a run's session against `opencode export` is SCENARIOS S30. What keeps it open: whether `fix-ci` and `resume`
-continue a session, and workers against OpenCode's server. Taken in part on request (2026-10-13): the overseer names
+Checking a run's session against `opencode export` is SCENARIOS S30. What keeps it open: workers against OpenCode's
+server. Decided (2026-10-16): `fix-ci` and `resume` start a fresh session, as every run does (DESIGN §8, A fresh
+session per run), since a continued one would keep stale prompts and cost more than the short runs it replaces.
+On request (2026-10-16), a public worker's prompt carries the ticket's latest three runs' reports
+(`{{PREVIOUS_RUNS}}`, DESIGN §8), so a fresh session still learns what the runs before it concluded.
+Taken in part on request (2026-10-13): the overseer names
 each ticket (`canopy ticket set --title`), the name shows beside the key in `canopy status`, `canopy show`, and the web
 UI, and every default template passes it, or a tick's, chore's, or review's own, as the session title
 (`opencode run --title={title}`, DESIGN §13). Learned: `run --format json` prints no event with OpenCode's own title,
@@ -421,7 +425,18 @@ overseer and harness calls, `/tmp/claude`, and exfiltration through an allowed h
 (D118).
 HOST_ISOLATION's settled parts are DESIGN §24 now, with its answered questions beside what they settled; HOST_ISOLATION
 keeps the problem, goals, and options, and points each later section there.
-Next: the canary on the operator's Linux and macOS machines.
+Giving sandboxed runs caches of their own, §24's open question on build caches, found that the templates let a run
+write `~/.cache/opencode`, from which OpenCode imports packages and runs programs, the unsandboxed overseer's
+included: a way out of the sandbox at the next tick. Each role now caches in `~/.cache/canopy/sandbox/<role>/`, setup
+in the worker's, through `@CACHE@` and the cache variables the wrapper sets; the canary checks that no run writes the
+operator's OpenCode cache or another role's, and that a role's cache persists; `canopy sandbox setup` says when a
+template it kept still writes the operator's caches. Whether OpenCode's data and state directories, which the
+templates also leave writable and the overseer also reads, are another way out is DESIGN §24's open question now.
+Tracing it found that the data directory is: a `wellknown` entry in `auth.json`, the active account in `opencode.db`,
+and a planted snapshot git directory each make the overseer's OpenCode, or the operator's, run what a worker chose;
+the state directory is not (DESIGN §24, Open).
+Next: data of the sandbox's own, once the operator settles how sandboxed runs get their credentials; then the canary on
+the operator's Linux and macOS machines.
 
 ## M27. Session transcripts in the web UI
 
@@ -865,10 +880,11 @@ Status: not started.
 
 ## M44. Plans before implementing
 
-REQUIREMENTS R18, DESIGN §7, §8, §14, §20, and §22. Asked for by the operator (2026-10-15), and taken next, ahead of
-M36: a ticket can be planned before it is implemented, the operator approves the plan before work starts, and the plan
-stays in the journal to read later. Today the `implement` worker plans inside its own session, and only its summary
-survives. M36 to M40 take up the new phases and kind as they reshape the state block and the overseer.
+REQUIREMENTS R18, DESIGN §25, and the parts of §7, §8, §14, §20, and §22 it changes. Asked for by the operator
+(2026-10-15), and taken next, ahead of M36: a ticket can be planned before it is implemented, the operator approves
+the plan before work starts, and the plan stays in the journal to read later. Today the `implement` worker plans
+inside its own session, and only its summary survives. M36 to M40 take up the new phases and kind as they reshape
+the state block and the overseer.
 
 - A new run kind, `plan`, dispatched with `canopy dispatch KEY --kind plan --repo NAME...`, before the ticket's first
   `implement`. It runs as `canopy-planner` with `runtime.plan_cmd`, in a desk of the named repositories' worktrees at
@@ -881,17 +897,19 @@ survives. M36 to M40 take up the new phases and kind as they reshape the state b
   the dispatch is refused as `no_read_tools`. On a public ticket it checks the queue label as every worker does.
 - Its prompt, `worker-plan.md`, asks for a plan a later worker can follow: what changes in each repository and why,
   the files and interfaces it touches, the tests that will show it works, what is out of scope, and the open risks. It
-  carries the operator's messages, standing instructions, and notice, and on a re-plan the plan it replaces and the
-  operator's reply to it. Its result line is
-  `{"status":"done|blocked|failed","summary":"...","plan":"<markdown>","question":"<only when blocked>"}`. `_run`
-  validates it: a `done` plan has a non-empty `plan` of at most 20,000 characters; anything else makes the run
-  `unknown` and records no plan. A `blocked` plan records its question as a worker message (§22), on a public ticket
+  carries the operator's messages, standing instructions, and notice, and on a re-plan the plan it replaces, as a
+  file in its desk, and the operator's reply to it. The plan is its final message, as markdown, before its result
+  line, `{"status":"done|blocked|failed","summary":"...","question":"<only when blocked>"}` (§25). `_run` validates
+  it: a `done` plan is non-empty and at most 100,000 characters; anything else makes the run `unknown` and records no
+  plan. A `blocked` plan records its question as a worker message (§22), on a public ticket
   too, since the planner cannot post one; the operator answers with `canopy reply`.
 - Whether a ticket is planned: `policy.plan`, `"off"` (default, as today) or `"approve"`, shared config that a
   repository may only tighten to `"approve"`. The operator overrides it for one ticket: `canopy plan KEY` asks for a
   plan (and makes a new one if the ticket has one), `canopy plan KEY --skip` waives it, and `canopy start KEY --plan`
-  starts a private ticket with one. Each refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, and
-  `--skip` and asking for a plan refuse as `bad_plan` once the ticket has a branch.
+  starts a private ticket with one. Asking for a plan and `--skip` supersede a waiting or approved plan at once, so
+  the next tick dispatches a new `plan` or the `implement`. Each refuses as `inside_run` when `CANOPY_TICK_ID` or
+  `CANOPY_RUN_ID` is set, and `--skip` and asking for a plan refuse as `bad_plan` while a plan run is running or once
+  the ticket has a branch.
 - Approval: `canopy plan KEY --approve` approves the newest plan; it refuses `inside_run`, and `bad_plan` when the
   newest plan is not waiting or a plan run for the ticket is running. A reply (`canopy reply KEY`) newer than the plan
   asks for changes: the overseer dispatches `plan` again with the reply in its context, and the new plan supersedes
@@ -900,16 +918,21 @@ survives. M36 to M40 take up the new phases and kind as they reshape the state b
 - A hard guard in code: an `implement` for a ticket that needs a plan, by `policy.plan` or its own setting, and has no
   approved plan is refused as `unplanned`. A `plan` for a ticket with a branch, or for a split's parent, is
   `bad_plan`. A `--slug`, `--base`, or `--request` on a plan is `bad_slug`, `bad_base`, or `bad_request`.
-- Phases (§7): `ready` with a plan needed and none waiting dispatches `plan`; `plan_proposed`, the newest plan waiting
+- Phases (§7): a ticket whose latest plan run ended `blocked`, with no operator message since, is `needs_human` with
+  attention `awaiting_reply`, so it is not planned again until the operator answers; `ready` with a plan needed and
+  none waiting dispatches `plan`; `plan_proposed`, the newest plan waiting
   and no operator message after it, is attention `plan_review` with no run, so the slot is free while the operator
   reads; `plan_proposed` with an operator message after it dispatches `plan` again; `ready` with an approved plan
   dispatches `implement`. The state block gains each ticket's plan: whether one is needed, and the newest plan's id,
   status, and time, never its text.
-- Workers: `implement` and `resume` prompts carry `{{PLAN}}`, the approved plan or `None.`, and an override without it
-  is `bad_prompt` once the ticket has an approved plan, as for `{{OPERATOR_MESSAGES}}` (D093). The prompt says to
-  follow it, and to say in the summary where the work left it and why. A plan is model-written from ticket text: it
-  describes the work, as the ticket does, and the prompt's obligations come before it. The operator's approval
-  authorizes the `implement`, not what the plan's text asks for.
+- Workers: `_run` writes the approved plan from the journal to `.canopy-plan.md` in the worker's cwd, ignored through
+  the repository's `info/exclude` in a one-repository run, and removes it before the slot is returned (§25, The plan
+  file). `implement` and `resume` prompts carry `{{PLAN}}`, the file's name and the plan's headings or `None.`, never
+  its text, and an override without it is `bad_prompt` once the ticket has an approved plan, as for
+  `{{OPERATOR_MESSAGES}}` (D093). The prompt says to follow it, to leave the file out of every commit, and to say in the
+  summary where the work left it and why. A plan is model-written from ticket text: it describes the work, as the ticket
+  does, and the prompt's obligations come before it. The operator's approval authorizes the `implement`, not what the
+  plan's text asks for.
 - Showing it: `canopy show KEY` prints the newest plan, its status, and when it was approved; `canopy show KEY --plans`
   every plan, oldest first. The web UI's ticket page shows the newest plan, as plain text like a message (§22), with
   `Approve`, `Ask for changes` (a reply), and `Skip`, and lists earlier plans. `POST /tickets/{key}/plan` with
@@ -925,10 +948,11 @@ survives. M36 to M40 take up the new phases and kind as they reshape the state b
   definition.
 - Tests with the fakes: under `"approve"`, a dry-run tick dispatches `plan` for a ready ticket; a `done` plan is
   recorded `proposed` and raises `plan_review`; `implement` is refused `unplanned` until `canopy plan --approve`, then
-  carries the plan in its prompt; a reply makes the next plan supersede the first; `--skip` lets `implement` through;
-  a plan result over the bound or without `plan` is `unknown`; a `blocked` plan records its question; `plan`, `--skip`,
-  and `--approve` refuse inside a run; the planner's definition denies the tracker's write tools; the web route
-  approves; Playwright for the ticket page's buttons.
+  finds `.canopy-plan.md` in its cwd, ignored by git, and the plan's headings in its prompt, and the file is gone once
+  the slot is returned; a pushed head holding the file gets a harness note; a reply makes the next plan supersede the
+  first; `--skip` lets `implement` through; an empty plan or one over the bound is `unknown`; a `blocked` plan records
+  its question; `plan`, `--skip`, and `--approve` refuse inside a run; the planner's definition denies the tracker's
+  write tools; the web route approves; Playwright for the ticket page's buttons.
 - Open: a plan-and-go mode (`policy.plan = "auto"`) that implements without waiting, if the operator wants plans
   without the gate; whether a ticket that already has a branch can be planned again before a large `resume`; whether
   plans help, compared by attempts and spend per ticket (M33) on planned and unplanned tickets; whether M38 makes the
@@ -1036,6 +1060,55 @@ and a fresh install from README on a machine with no Go runs a day of `canopy lo
 
 Status: in progress. Stage 1 passed its check 2026-10-16: the contract suite passes against the fake, and against real
 treehouse at the pinned commit in CI on Linux and macOS.
+
+## M46. Workers file follow-up tickets
+
+REQUIREMENTS N3, DESIGN §18. Sketch only; the design comes first. Asked for by the operator (2026-10-16): a worker
+should be able to file follow-up work and properly linked TODOs, and canopy should work them. The split worker, a
+whole run kind whose only output is tickets, has never run live and is not worth keeping on its own. The operator moved
+the authorization line: a human's queue label on a ticket authorizes it and the follow-ups its runs file, since that
+work happens on a branch in a leased worktree and lands only through a PR a human reviews and merges. "Humans should
+authorize work, but I'm not super worried about the prospect of an agent authorizing itself to work in a sandboxed copy
+of the repo." Humans still authorize everything that lands; canopy still never merges (TRUST_MODEL §6).
+
+- Any `implement`, `fix-ci`, or `resume` worker may create tickets: in its ticket's project, linked to its ticket as
+  the parent, with the repository in the body (`canopy-repo: web`) when one applies, no assignee, and no labels. It
+  reports them in its result as `"created": {"PROJ-14": "web", "PROJ-15": null}`. `_run` validates them as it
+  validates a split's children today (a valid key, new to the journal, not the parent, a mapped repository or null)
+  and records them, with the run that made them, in a table generalized from `split_children` by a new migration.
+- A follow-up the journal records is a candidate without a queue label: its authorization is its parent's. Dispatch
+  names no `--label` for it, and refuses it while the parent is stopped or forgotten. The worker's re-read (D051) is
+  that the ticket links its parent.
+- None of this stops a steered agent from authorizing work for itself, and M46 does not try. A worker can already add
+  a queue label to any ticket it can reach, and every label check is agent judgment (TRUST_MODEL T1). So M46 drops the
+  split's label-history checks rather than generalize them. What bounds an agent that authorizes its own work is the
+  harness's guards in code (capacity, attempt limits, cooldowns, never merge) and a human reviewing every PR before
+  it lands.
+- Volume bounds, in code: at most `policy.max_follow_ups` recorded per run (default 5), and only one generation deep.
+  They keep a well-meaning worker from fanning out; they do not stop a steered one. Anything past them is an ordinary
+  ticket, worked only with a queue label, and the harness raises attention naming it.
+- Splitting stops being a kind. An authorized reply asking for a split is guidance to the ticket's next run, which
+  files the children as follow-ups, ordered with the tracker's blocker relation as now. `multi_repo` attention stays
+  for a ticket nobody asked to split.
+- Removed: `--kind split`, `--request`, the `split` phase, `split_unlabeled` and `split_self_labeled`, `split_cmd`
+  and `policy.max_split_attempts` (to `REMOVED_KEYS`), the `canopy-splitter` definition and its sandbox role,
+  `worker-split.md`, SCENARIOS S2 and S15, and M44's `bad_plan` for a split's parent. Old `runs` rows of kind
+  `split` stay as history. The detached desk a split runs in stays, since M44's planner runs in one.
+- The worker definitions allow the tracker's create and link tools. On GitHub, `issue_write` already creates issues
+  and only the prompt kept the worker from it (TRUST_MODEL T6), so the line this moves was mostly prompt-deep already.
+- Private tickets are unchanged: their workers write nothing to the tracker.
+- TRUST_MODEL T1 (from "the loop may create tickets, but never decides to" to "a worker may file follow-ups to its
+  ticket, worked under its ticket's authorization; authorization checks on tickets are best effort, and the backstops
+  are the guards in code and review of what lands") and T6 (a worker's write scope adds creating and linking tickets
+  in its ticket's project), a decision entry for the new line, and the overseer prompt, worker
+  prompts, and definitions, with the operator's approval note in the PR.
+- Open: what a parent's phase is once its work has moved into follow-ups; whether a private ticket's worker should
+  file journal-only follow-ups; whether an operator who wants the old line should get a user-only switch that makes
+  follow-ups wait for a label.
+
+Accept: written with the design, before work starts.
+
+Status: not started.
 
 ## Deferred, with the trigger that would unblock each
 

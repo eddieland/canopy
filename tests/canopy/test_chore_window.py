@@ -15,8 +15,7 @@ from canopy.core import chore_view as view
 from canopy.core import chore_window as window
 from canopy.core import db, workspace
 from canopy.core.config import CHORE_DAYS, Chore, load
-from tests.canopy.helpers import InlineRunner, in_tick, journal
-from tests.canopy.test_chores import chore_toml, decisions, state_block
+from tests.canopy.helpers import InlineRunner, chore_decisions, chore_toml, in_tick, state_block
 from tests.conftest import CanopyEnv
 
 NY = "America/New_York"
@@ -121,10 +120,10 @@ def test_outside_its_window_a_chore_is_refused_and_not_due(
         [section] = state_block(agent_log)["chores"]
         assert (section["due"], section["due_at"]) == (False, next_midnight())
 
-        conn = journal(canopy_env)
+        conn = canopy_env.journal()
         with in_tick(conn) as tick_id:
             assert main(["chore", "run", "build-health"], runner=InlineRunner()) == 1
-            [(name, action, rationale)] = decisions(conn, tick_id)
+            [(name, action, rationale)] = chore_decisions(conn, tick_id)
             assert (name, action) == ("build-health", "refused:outside_hours")
             assert rationale == (
                 f"build-health starts only {','.join(closed_today())} all day UTC; next at {next_midnight()}"
@@ -132,7 +131,7 @@ def test_outside_its_window_a_chore_is_refused_and_not_due(
 
 
 def test_a_run_waits_out_every_minutes_and_then_its_window(canopy_env: CanopyEnv, closed: Path) -> None:
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     [state] = view.states(conn, load(canopy_env.root, canopy_env.user_file), workspace.load(canopy_env.root))
     now = datetime.now(UTC)
     assert state.earliest() is None  # never run: `every_minutes` allows it now, the window does not

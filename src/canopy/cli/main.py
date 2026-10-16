@@ -1,16 +1,95 @@
-"""The `canopy` command line, built with click (D025). Each command group lives in its own module here."""
+"""The `canopy` command line, built with click (D025). Each command group lives in its own module here.
+
+The root group imports a command's module only when that command is looked up, so one `canopy` call loads what it runs
+and not every other command's implementation. The overseer and its workers run `canopy` many times a tick, and each of
+those processes pays for whatever it imports.
+"""
 
 from __future__ import annotations
 
+import importlib
 import sys
 from collections.abc import Sequence
+from typing import override
 
 import click
 
-from canopy.cli import chores, conversation, journal, loop, notify, reviews, runs, setup, spend, workspace
 from canopy.cli.common import Group, Obj
 from canopy.core import config, db
 from canopy.infra import procs
+
+# Each top-level command's module under canopy.cli and the attribute that holds it. A new command goes here; a test
+# fails on one defined in a command module but listed nowhere.
+COMMANDS: dict[str, tuple[str, str]] = {
+    "init": ("setup", "cmd_init"),
+    "skill": ("setup", "cmd_skill"),
+    "completion": ("setup", "cmd_completion"),
+    "secret": ("setup", "cmd_secret"),
+    "sandbox": ("setup", "sandbox_group"),
+    "loop": ("loop", "cmd_loop"),
+    "tick": ("loop", "cmd_tick"),
+    "status": ("loop", "cmd_status"),
+    "decisions": ("loop", "cmd_decisions"),
+    "spend": ("spend", "cmd_spend"),
+    "pause": ("conversation", "cmd_pause"),
+    "resume": ("conversation", "cmd_resume"),
+    "notice": ("conversation", "cmd_notice"),
+    "start": ("conversation", "cmd_start"),
+    "stop": ("conversation", "cmd_stop"),
+    "reply": ("conversation", "cmd_reply"),
+    "forget": ("conversation", "cmd_forget"),
+    "grant": ("conversation", "cmd_grant"),
+    "dismiss": ("conversation", "cmd_dismiss"),
+    "send": ("conversation", "cmd_send"),
+    "show": ("conversation", "cmd_show"),
+    "dispatch": ("runs", "cmd_dispatch"),
+    "_run": ("runs", "cmd_run"),
+    "decide": ("journal", "cmd_decide"),
+    "queried": ("journal", "cmd_queried"),
+    "attention": ("journal", "cmd_attention"),
+    "mirror": ("journal", "cmd_mirror"),
+    "ticket": ("journal", "ticket_group"),
+    "workspace": ("workspace", "workspace_group"),
+    "chore": ("chores", "chore_group"),
+    "_chore": ("chores", "cmd_chore_process"),
+    "notify": ("notify", "notify_group"),
+    "review": ("reviews", "review_group"),
+    "_review": ("reviews", "cmd_review_process"),
+}
+
+
+class LazyGroup(Group):
+    """The root group: it lists every command in COMMANDS and imports one's module when click first looks it up.
+
+    `--help` and shell completion look up every command, so they import them all; running one imports only its own.
+    """
+
+    @override
+    def list_commands(self, ctx: click.Context) -> list[str]:
+        """List the commands added directly and those in COMMANDS, sorted as click sorts them.
+
+        Returns:
+            Every command name, without importing any command's module.
+        """
+        return sorted({*super().list_commands(ctx), *COMMANDS})
+
+    @override
+    def get_command(self, ctx: click.Context, cmd_name: str) -> click.Command | None:
+        """Return the command named `cmd_name`, importing its module the first time.
+
+        Returns:
+            The command, or None when no command has that name.
+
+        Raises:
+            TypeError: COMMANDS names an attribute that is not a click command.
+        """
+        if cmd_name in COMMANDS and cmd_name not in self.commands:
+            module, attr = COMMANDS[cmd_name]
+            command = getattr(importlib.import_module(f"canopy.cli.{module}"), attr)
+            if not isinstance(command, click.Command):
+                raise TypeError(f"canopy.cli.{module}.{attr} is not a click command")
+            self.add_command(command, cmd_name)
+        return super().get_command(ctx, cmd_name)
 
 
 def main(argv: Sequence[str] | None = None, runner: procs.Runner | None = None) -> int:
@@ -43,49 +122,10 @@ def main(argv: Sequence[str] | None = None, runner: procs.Runner | None = None) 
     return result if isinstance(result, int) else 0
 
 
-@click.group(cls=Group, invoke_without_command=True, context_settings={"help_option_names": ["-h", "--help"]})
+@click.group(cls=LazyGroup, invoke_without_command=True, context_settings={"help_option_names": ["-h", "--help"]})
 @click.version_option(package_name="canopy", prog_name="canopy", message="%(prog)s %(version)s")
 @click.pass_context
 def cli(ctx: click.Context) -> None:
     """Unattended, local agent loop driven by your issue tracker."""
     if ctx.invoked_subcommand is None:
         click.echo(ctx.get_help())
-
-
-for command in (
-    setup.cmd_init,
-    setup.cmd_skill,
-    setup.cmd_completion,
-    setup.cmd_secret,
-    setup.sandbox_group,
-    loop.cmd_loop,
-    loop.cmd_tick,
-    loop.cmd_status,
-    loop.cmd_decisions,
-    spend.cmd_spend,
-    conversation.cmd_pause,
-    conversation.cmd_resume,
-    conversation.cmd_notice,
-    conversation.cmd_start,
-    conversation.cmd_stop,
-    conversation.cmd_reply,
-    conversation.cmd_forget,
-    conversation.cmd_grant,
-    conversation.cmd_dismiss,
-    conversation.cmd_send,
-    conversation.cmd_show,
-    runs.cmd_dispatch,
-    runs.cmd_run,
-    journal.cmd_decide,
-    journal.cmd_queried,
-    journal.cmd_attention,
-    journal.cmd_mirror,
-    journal.ticket_group,
-    workspace.workspace_group,
-    chores.chore_group,
-    chores.cmd_chore_process,
-    notify.notify_group,
-    reviews.review_group,
-    reviews.cmd_review_process,
-):
-    cli.add_command(command)

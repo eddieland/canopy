@@ -2,7 +2,7 @@
 
 Part of the canopy design, normative like all of it: the OS sandbox an operator can put around every agent run but the
 overseer's. Sections are numbered across the whole design; the [README](README.md) has the map. Previous: [Flaky
-CI](FLAKY_CI.md).
+CI](FLAKY_CI.md). Next: [Plans](PLANNING.md).
 
 ## 24. Sandboxed runs (M26)
 
@@ -67,9 +67,10 @@ the desk (§8, §18), and:
    includes the Unix sockets that carry the sandbox's network, whose path holds at most 107 bytes, so the wrapper
    refuses a system temp directory too long to leave room for them; `srt` says only that it could not make them.
    macOS's deep per-user temp directory, which `srt`'s source suggested was too long for its 103-byte limit, is not:
-   the canary's macOS job runs a case under it, so the check is Linux-only. For a worker or setup, the wrapper puts a
-   `git` of its own first on the command's `PATH`, which sets git's variables from `CANOPY_GIT_OBJECTS` in the run's
-   worktrees only (Git state, below).
+   the canary's macOS job runs a case under it, so the check is Linux-only. It points the command's caches at the
+   role's own cache directory (Caches, below). For a worker or setup, the wrapper puts a `git` of its own first on the
+   command's `PATH`, which sets git's variables from `CANOPY_GIT_OBJECTS` in the run's worktrees only (Git state,
+   below).
 5. Runs the sandbox with that policy and the rest of its arguments unchanged, after a `--`: `srt --settings <policy> --
    "$@"`. Without it, `srt` reads its own options (`-c`, `-s`, `-d`, combined short forms too) anywhere in its
    arguments, and `-c` takes its value as a shell command, unquoted. It waits rather than `exec`, so that it can remove
@@ -114,9 +115,10 @@ workspace to its template's `denyRead`.
 | This slot's `worktrees/<slot>/`, except `config.worktree`, `commondir`, `gitdir` | yes | yes | Its own HEAD, index, and reflog. |
 | The run's object directory, `<state_dir>/runs/<id>.objects/` | yes | yes | New commits (§8). |
 | The runtime's config (`~/.config/opencode`) | yes | no | A worker must not rewrite its own permissions. |
-| The runtime's data and cache (`~/.local/share/opencode`, ...) | yes | yes | Sessions and token refresh. |
+| The runtime's data and state (`~/.local/share/opencode`, ...) | yes | yes | Sessions and token refresh (Open, below). |
 | Toolchains the build needs (`~/.local/bin`, `~/.cargo`, `~/.nvm`, ...) | yes | no | Running tests. |
-| Build and package caches | yes | yes | Separate from the operator's own caches (Open, below). |
+| The role's cache directory, `~/.cache/canopy/sandbox/<role>/` | yes | yes | Every cache, the runtime's too (below). |
+| The operator's own caches (`~/.cache`, `~/.npm`, ...) | no | no | The host runs what is in them. |
 | A per-run temp directory, exported as `TMPDIR` | yes | yes | Scratch space. |
 | A chore's own `cwd` (default `<state_dir>/chores/<name>/`) | yes | only if it writes | Chores only (below). |
 | A review's directory (`<state_dir>/reviews/<id>/`) | yes | no | Reviews only (below). |
@@ -138,6 +140,32 @@ re-allows reading as it does a chore's `cwd`, and reads the checkout through the
 git directories are readable, as for a worker, and none of them writable: the reviewer writes nothing (§21), and what
 it reads was written by the PR's author. So it gets no object directory and no `git` of the wrapper's, and git in the
 checkout reads and never writes. Its network allowlist leaves out `github.com`, since it neither fetches nor pushes.
+
+### Caches
+
+A cache is code the host runs later. OpenCode imports the npm packages it installs, providers and plugins, from
+`~/.cache/opencode/packages/`, and runs `rg`, LSP servers, and formatters from `~/.cache/opencode/bin/` (from its
+source at 1.19.0). The overseer is OpenCode too, outside any sandbox, under the same HOME, so a run that can write that
+directory runs code on the host at the next tick. The first templates allowed it; the operator's own caches, which an
+earlier SANDBOX.md said to add to `allowWrite`, are the same: npm, uv, Go, and pip install from them, and Bazel's disk
+cache hands builds their outputs.
+
+So no run writes the operator's caches. Each role has a cache directory of its own,
+`$XDG_CACHE_HOME/canopy/sandbox/<role>/`, which the wrapper makes, private to the operator, and the templates allow
+reading and writing as `@CACHE@`. Setup shares the worker's, since warming the worker's caches is its job (§9). The
+wrapper points the command's `XDG_CACHE_HOME` there, which moves OpenCode's cache and most tools' on Linux, and
+`npm_config_cache`, `GOCACHE`, `GOMODCACHE`, and `PIP_CACHE_DIR` under it, for npm, which never follows it, and for
+Go and pip, which do not on macOS, whatever the operator set them to. It denies reading the directory that holds every
+role's, so a review cannot read the worker's, nor a worker the review's, even for an `XDG_CACHE_HOME` outside the
+HOME the templates deny. A review reads the most hostile text the loop meets (T1); what it leaves in its cache reaches
+only later reviews, which write nothing in a checkout and reach no `github.com`. Rejected: the cache of each run its
+own, in the run's directory, which would fetch every package and binary on every run; and one directory for every
+role, which would hand what a review left to a worker.
+
+What a role's runs share is theirs to poison for one another, as `/tmp/claude` is (Trust model changes, below): a
+private ticket's worker and a public one share the worker's. Bazel's caches are the operator's own builds' too, and
+nothing yet gives the sandbox Bazel caches of its own (Open, below). `canopy sandbox setup` says when a template it
+kept still allows writing in the operator's cache directory.
 
 ### Git state
 
@@ -284,7 +312,8 @@ every run prints a marker first, so an attempt that failed because nothing ran f
 the host, never by whether the attempt reported an error. Every attempt must fail:
 
 - Read a fake SSH key, and anything else under `$HOME` outside the policy.
-- Write `~/canary`, `~/.bashrc`, `~/.config/canopy/config.toml`, and anything under the state directory.
+- Write `~/canary`, `~/.bashrc`, `~/.config/canopy/config.toml`, the operator's `~/.cache/opencode`, and anything
+  under the state directory; read or write another role's cache directory.
 - Move another slot's branch or any other ref, write the common directory's `config` or `hooks/post-checkout`, a
   `config.worktree`, the slot's `commondir` or `gitdir`, or the slot's `.git` link. What the slots share is compared
   file by file on the host: `git pack-refs` and `git gc` change no ref a `for-each-ref` shows.
@@ -300,10 +329,11 @@ directory under the state directory, which is how the wrapper finds the state di
 HEAD and index, and the shared git directory.
 
 The positive controls must succeed, so a sandbox that blocks everything cannot pass: write and commit in the slot, its
-objects only in the run's directory; commit in a repository a tool keeps as a cache, its objects in its own; read the
-checkout as a review; reach an allowed host; receive a hypothesis-generated prompt byte for byte, over quotes,
-newlines, `$()`, backticks, and arbitrary Unicode text; and be killed at a short timeout, leaving no process behind (on
-macOS, which has no `setsid` command, only the processes in the sandbox's group are checked).
+objects only in the run's directory; commit in a repository a tool keeps as a cache, its objects in its own; write a
+cache that the role's next run reads, in the role's cache directory on the host; read the checkout as a review; reach
+an allowed host; receive a hypothesis-generated prompt byte for byte, over quotes, newlines, `$()`, backticks, and
+arbitrary Unicode text; and be killed at a short timeout, leaving no process behind (on macOS, which has no `setsid`
+command, only the processes in the sandbox's group are checked).
 
 Every case runs under a short temp directory of its own, since `srt` makes its network sockets in the run's temp
 directory and pytest's is too long for them, but one, which runs under the system's. Run against a fake `srt` that
@@ -326,8 +356,24 @@ there without reading `TMPDIR`.
 - SSH pushes. `srt`'s per-path `allowUnixSockets` is macOS-only; on Linux the only switch is `allowAllUnixSockets`,
   which lifts the block entirely. Whether to support SSH inside the sandbox at all (allow the agent socket, or push
   from the host in `_run`), or leave it to unsandboxed runs, is undecided.
-- Build caches. §9 wants caches shared across slots. Sharing them with the operator's own builds would let a worker
-  poison what the operator runs later, so sandboxed runs should get cache directories of their own.
+- The runtime's data directory is a way out. The templates leave `~/.local/share/opencode` writable, for sessions and
+  OAuth tokens, and the overseer's OpenCode, and the operator's own, read it outside any sandbox. Traced in OpenCode's
+  source at 1.19.0, a run that writes there can make either run code on the host:
+  - `auth.json`: for each `wellknown` entry, OpenCode fetches `<url>/.well-known/opencode` and merges the config it
+    returns as global config, whose `plugin` packages it installs and imports (unless run with `--pure`) and whose
+    local `mcp` servers it starts. The URL is the entry's key, so a worker names its own.
+  - `opencode.db`: OpenCode merges the remote config of the active console account, `<url>/api/config`, the same way.
+  - `snapshot/<project>/<worktree hash>/`: OpenCode runs `git add` and `git gc` in that git directory with only its
+    own `-c` flags, and configures one only when it makes it, so a config planted first, with `core.fsmonitor` say,
+    runs. It reaches the overseer only when the workspace is inside a git repository, since OpenCode snapshots only
+    there, but reaches the operator's own sessions in any repository.
+
+  The state directory is not: `model.json` picks a default model among those configured, only when none is, and the
+  rest is bookkeeping. Closing it means data of the sandbox's own, as for caches, which leaves sandboxed runs without
+  the credentials `opencode auth login` and MCP OAuth keep there; how they get them is the operator's call.
+- Bazel's caches. §9 shares them across slots, and BAZEL.md through the operator's own `~/.bazelrc`, so its own
+  builds share them too. A sandboxed run may not write them (Caches, above), so it builds cold, until a bazelrc that
+  only sandboxed runs read points them under the cache directory.
 - The repository's OpenCode config (skills, MCP servers, plugins) comes from the checked-out branch (T7 residual).
   canopy's own agent definitions no longer do (D040, D044). The sandbox does not change that, but it bounds what a
   hostile config can reach.
