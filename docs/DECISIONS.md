@@ -102,15 +102,16 @@ such as a shipped migration, may still cite one, and git history has its text.
   opts out with a `noqa`, so a fake overseer can run the real CLI).
 - Revisit: if anything reaches for `os.exec*`, `os.spawn*`, or `pty`; ban them too.
 
-## D016. Layered config: the workspace file, then the user file; nothing in a code repository
+## D016. Layered config: the workspace file, the user file, the private file; nothing in a code repository
 
-- Defaults, then the workspace's `canopy-workspace.toml` (shared keys only), then the user's `config.toml`, per key.
+- Defaults, then the workspace's `canopy-workspace.toml` (shared keys only), then the user's `config.toml`, which serves
+  every workspace and is optional, then the workspace's private `.canopy/config.toml`, per key.
 - canopy runs only from a workspace, even for one repository, and reads no config from a code repository: nothing
   shared is repository-specific, and every operator would otherwise commit or gitignore a `canopy.toml`.
-- Keys that run commands, choose prompts, spend, or authorize are user-only; the workspace file's `policy.*` may only
-  tighten.
-- Rejected: a repository `canopy.toml` (per-repository config that is really per queue); tracker keys in the user file
-  (one file overrides every workspace); a gitignored `canopy.local.toml` (easy to commit by accident).
+- Keys that run commands, choose prompts, spend, or authorize are private: the user file or the private file, never the
+  workspace file, whose `policy.*` may only tighten. A state directory git tracks any file in is refused.
+- Rejected: a repository `canopy.toml` (per-repository config that is really per queue); per-workspace keys only in the
+  user file (one file overrides every workspace); a gitignored `canopy.local.toml` (easy to commit by accident).
 
 ## D017. `pyrefly` strict is the only type checker
 
@@ -177,7 +178,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 - One queue, one capacity, one journal. One repository is a workspace with a map of one (D016).
 - No pool root of its own: a fast disk takes the whole workspace, since git keeps each worktree's files in its clone.
 - Rejected: one loop per repository (two journals must agree on one ticket); one pool for all repositories; a
-  user-only pool root (treehouse pools by repository and remote URL, so workspaces sharing it share pools).
+  private pool root (treehouse pools by repository and remote URL, so workspaces sharing it share pools).
 
 ## D035. Notification sinks are commands fed from the journal
 
@@ -235,7 +236,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D053. State directories and snapshots must be private to the operator
 
 - Refuse a symlink, another owner, or group/world access: a shared checkout could plant a journal or a permissive
-  snapshot. Checks permissions, not provenance.
+  snapshot. Checks permissions, not provenance; a state directory git tracks is refused apart (D016).
 
 ## D055. Listeners only on loopback or a private network, behind the operator's secret
 
@@ -244,7 +245,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D056. A worker may push to an open, non-fork PR the operator wrote and labeled
 
-- Agents check author and label (D003). Never forced, unless the operator sets `trust.rebase` (user-only): then a
+- Agents check author and label (D003). Never forced, unless the operator sets `trust.rebase` (private): then a
   rebased branch is pushed with `--force-with-lease`, the only force a worker's definition allows.
 - Rejected: any labeled PR (a label would put commits on a coworker's branch); rebasing by default (merging needs no
   force, and most repositories accept merge commits).
@@ -255,7 +256,7 @@ such as a shipped migration, may still cite one, and git history has its text.
   unit's PR merged. At most one per repository, so a follow-up PR is a new ticket.
 - One branch per ticket; a desk only for a joint run; `run_slots` holds every run's slots.
 
-## D066. Pool sizes are user config; `workspace sync` converges on them
+## D066. Pool sizes are private config; `workspace sync` converges on them
 
 - treehouse's `max_trees` lives only in committed or global files, so canopy enforces sizes itself.
 
@@ -336,7 +337,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D089. Untrusted reviewers' feedback waits for the operator's go-ahead
 
-- `trust.trusted_reviewers` (user-only, empty by default; `canopy:review` for canopy's reviewer). Anyone else's
+- `trust.trusted_reviewers` (private, empty by default; `canopy:review` for canopy's reviewer). Anyone else's
   feedback is `untrusted_review` attention until the operator answers with `canopy reply` or the web UI.
 - Enforced by prompt only: the harness cannot read a comment's author (D003).
 - Rejected: an untrusted list (new bots trusted until noticed); the go-ahead as a tracker comment.

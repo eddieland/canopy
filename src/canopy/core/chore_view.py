@@ -37,7 +37,7 @@ def configured(config: Config, workspace: Workspace) -> dict[str, Chore]:
 
 
 def defined(config: Config, workspace: Workspace) -> dict[str, Chore]:
-    """Return the chores the user config defines for this workspace, by name, even when `max_chores` is 0.
+    """Return the chores the config defines for this workspace, by name, even when `max_chores` is 0.
 
     A chore that lists `workspaces` runs only in those, named as the workspace is (its map's name, or a workspace of
     one's repository name).

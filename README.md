@@ -103,8 +103,7 @@ posture in [docs/TRUST_MODEL.md](docs/TRUST_MODEL.md).
    Use `github`, or your tracker's name, in place of `jira`. Use an HTTPS clone URL with a credential helper: worker
    sandboxing is not expected to support SSH. `canopy init`:
 
-   - writes your personal config, with a queue label of your own, to `$XDG_CONFIG_HOME/canopy/config.toml` (by default
-     `~/.config/canopy/config.toml`);
+   - writes the workspace's private config, yours alone, with a queue label of your own, to `.canopy/config.toml`;
    - writes the workspace's `canopy-workspace.toml`;
    - clones the repository under `repos/`.
 
@@ -142,7 +141,7 @@ on their own; anyone else's comments wait on the attention list as `untrusted_re
 | Read the attention list | `canopy status`, or `.canopy/attention.md` |
 | Read a ticket's conversation, or answer canopy there | `canopy show KEY`, `canopy reply KEY 'text'` |
 | Work a ticket privately, with no label and nothing written to it | `canopy start KEY`, then `canopy stop KEY` |
-| Work every labeled ticket privately | `private = true` under `[tracker]` in your user config |
+| Work every labeled ticket privately | `private = true` under `[tracker]` in `.canopy/config.toml` |
 | Start a ticket over, once its PR is closed and its branch deleted | `canopy forget KEY` |
 | Allow one more run past an `attempt_limit` | `canopy grant KEY implement` (or `resume`, `fix-ci`), or the ticket's page |
 | Allow one more review past a `review_limit` | `canopy grant PR_URL review`, or the PR's page |
@@ -153,7 +152,7 @@ on their own; anyone else's comments wait on the attention list as `untrusted_re
 | Teach your own agent session canopy | save `canopy skill` as `~/.agents/skills/canopy/SKILL.md` |
 | Complete canopy's commands, repositories, and chores with Tab | `canopy completion bash` (or `zsh`, `fish`); its help says how to load it |
 
-Optional, in your user config:
+Optional, in the workspace's `.canopy/config.toml`, or in `~/.config/canopy/config.toml` for every workspace:
 
 - notification sinks for attention changes, `canopy-notify-desktop` and `canopy-notify-slack` (§20);
 - a reviewer agent on PRs, `[review]` (§21);

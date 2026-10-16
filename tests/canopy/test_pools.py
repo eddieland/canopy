@@ -90,7 +90,7 @@ def test_slots_are_declared_in_the_user_file_only(ws: Ws, canopy_env: CanopyEnv)
     canopy_env.write_user(user_toml())
     assert config.load(ws.root, canopy_env.user_file).capacity.slots_for("api") is None  # unmanaged by default
     (ws.root / config.WORKSPACE_FILE_NAME).write_text(map_text(extra="\n[capacity.repo_slots]\napi = 9\n"))
-    with pytest.raises(config.ConfigError, match=r"capacity\.repo_slots is user-only"):
+    with pytest.raises(config.ConfigError, match=r"capacity\.repo_slots is private"):
         config.load(ws.root, canopy_env.user_file)
 
 

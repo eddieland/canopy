@@ -1,7 +1,8 @@
-# ~/.config/canopy/config.toml ($XDG_CONFIG_HOME/canopy/config.toml) - personal, never committed.
-# Overrides each workspace's canopy-workspace.toml key by key, in every workspace. Keys marked user-only in DESIGN
-# §12 may be set only here. Every key, most at its default. `canopy init` writes only tracker.labels and the trust
-# lists: set the rest only to change them.
+# Your own config, never committed: a workspace's private file, .canopy/config.toml under its root, or the user file,
+# ~/.config/canopy/config.toml ($XDG_CONFIG_HOME/canopy/config.toml), which serves every workspace. Either overrides
+# canopy-workspace.toml key by key, and the private file overrides the user file. Keys marked private in DESIGN §12 may
+# be set only in these two. Every key, most at its default. `canopy init` writes only tracker.labels and the trust
+# lists, to the private file: set the rest only to change them.
 
 [tracker]
 # Your queue. A ticket is yours if it carries any of these labels. Never share a

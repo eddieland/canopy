@@ -70,10 +70,14 @@ mkdir -p "$workspace"
 cd "$workspace"
 canopy init --provider github "project=$origin"
 [ -d "$workspace/repos/project/.git" ] || fail "canopy init did not clone the repository into the workspace"
-
-# Point the runtime at the fake agent, keeping {definitions_dir} as the templates require. init writes no [runtime]:
-# the defaults run OpenCode.
+# init writes the workspace's private config, with the queue label, and no user config (DESIGN §12).
+private="$workspace/.canopy/config.toml"
+grep -q '^labels = \["agent-ready-' "$private" || fail "canopy init did not write the label to $private"
 config="$XDG_CONFIG_HOME/canopy/config.toml"
+[ ! -e "$config" ] || fail "canopy init wrote the user config, $config"
+
+# Point the runtime at the fake agent in the user config, which serves every workspace, keeping {definitions_dir} as
+# the templates require. init writes no [runtime]: the defaults run OpenCode.
 cat >>"$config" <<'TOML'
 
 [runtime]
@@ -111,7 +115,7 @@ sed -i.bak '/^\[notify\.sinks\./,$d' "$config"
 # when npm was on PATH at build time.
 secret=$(canopy secret 2>/dev/null)
 [ "${#secret}" -ge 32 ] || fail "canopy secret printed no secret"
-printf '\n[serve]\nport = 18765\n' >>"$config"
+printf '\n[serve]\nport = 18765\n' >>"$private"
 loop=$(canopy loop --dry-run --ticks 1)
 echo "$loop" | grep -q 'web UI .*http://127.0.0.1:18765/' || fail "canopy loop did not serve the web UI"
 if command -v npm >/dev/null; then

@@ -141,12 +141,36 @@ Configuration is layered. Each layer overrides the one before it, key by key:
    workspace, and committed when the workspace is itself a repository. canopy reads no config from a code repository:
    there is no `canopy.toml` (D016).
 3. **User file**, `$XDG_CONFIG_HOME/canopy/config.toml` (default `~/.config/canopy/config.toml`). Personal, never
-   committed. Required.
+   committed, and optional. It serves every workspace, so it holds what is the same in all of them: the runtime
+   templates, the comment marks, the commit trailer, notification sinks.
+4. **Private file**, `<state_dir>/config.toml`, the workspace's own file for the operator alone, never committed. It
+   holds what belongs to one workspace: its queue labels, its authorized repliers and trusted reviewers (each in its
+   tracker's identity format), `review.query`, `runtime.setup_cmd` and `runtime.pr_skill`, `tracker.mcp_server`, its
+   chores, its loop's pacing, its capacity (each workspace's journal counts its own), and its web UI's port, so that
+   two workspaces' loops do not collide.
 
-Every key has a scope. A **shared** key may be set in either file; the user file wins. A **user-only** key may be set
-only in the user file; a workspace file that sets one is a config error that names the key, and canopy refuses to
-run. Unknown keys are errors in both files. A removed key, such as `paths.state_dir`, is an error that says what
-to do instead.
+At least one of the user file and the private file must exist; with neither, the error names the private file and
+`canopy init`. A user file from before the private file keeps working unchanged: nothing migrates.
+
+Every key has a scope. A **shared** key may be set in any file. A **private** key may be set in the user file or the
+private file, never in the workspace file; a workspace file that sets one is a config error that names the key and the
+private file, and canopy refuses to run. No key is held to the user file, the comment marks and the commit trailer
+included: a workspace whose team marks agent work its own way sets its own. Unknown keys are errors in every file. A
+removed key, such as `paths.state_dir`, is an error that says what to do instead. A validation error names the file
+the bad value came from, or, for a missing key, every file it may be set in.
+
+The private file is under the workspace root, which may be a checkout of a shared repository, and its keys run
+commands. The state directory being private to the operator (§18, D053) says nothing of where it came from: a
+`.canopy/` checked out under umask 077 passes that check. So whenever config is loaded, canopy runs one
+`git ls-files` at the workspace root and refuses a state directory any of whose files git tracks, the journal
+included; when the root is in no repository, nothing is tracked and git does not run, and when git fails otherwise,
+canopy refuses too. The private file itself is opened without following a symlink, and must be a regular file of the
+operator's that no one else can write. A sandboxed run can neither read nor write it (§24); an unsandboxed one can, as
+it can the user file.
+
+What is not a key stays in the user config directory, as files: the secrets (`listener-secret`, `slack-webhook`,
+`slack-token`) and the sandbox templates (`sandbox/<role>.json`), which every workspace's runs share. The prompt
+overrides default to `prompts/` there too.
 
 | Key | Scope | Why |
 |---|---|---|
@@ -154,29 +178,29 @@ to do instead.
 | `tracker.query` | shared | the repository scopes it to a project; a user may narrow it |
 | `tracker.needs_human_label` | shared | a signal to people; queues are already disjoint |
 | `tracker.ticket_url` | shared | the tracker's address is the team's; a link runs nothing |
-| `tracker.labels` | user-only | defines this operator's queue |
-| `tracker.mcp_server`, `tracker.read_tools` | user-only | what a private ticket's worker may call (§22) |
-| `tracker.private` | user-only | turns a queue label into a start record (§22) |
-| `tracker.query_every_minutes` | user-only | how often the overseer pays to run the query (§7): the operator's spend |
+| `tracker.labels` | private | defines this operator's queue |
+| `tracker.mcp_server`, `tracker.read_tools` | private | what a private ticket's worker may call (§22) |
+| `tracker.private` | private | turns a queue label into a start record (§22) |
+| `tracker.query_every_minutes` | private | how often the overseer pays to run the query (§7): the operator's spend |
 | `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
 | `trust.branch_prefix` | shared | team conventions for spotting agent work |
-| `trust.authorized_repliers` | user-only | who may steer this operator's workers |
-| `trust.trusted_reviewers` | user-only | whose review feedback reaches a worker without the operator's go-ahead (§7) |
-| `trust.comment_prefix`, `trust.comment_suffix` | user-only | they silence the comments that carry them (§8) |
-| `trust.commit_trailer`, `trust.commit_trailer_name`, `trust.commit_trailer_email` | user-only | whether and whom the operator's commits credit (§8) |
-| `trust.rebase` | user-only | lets workers replace a branch's history (§8, TRUST_MODEL T1) |
-| `capacity.*` | user-only | the operator's machine and spend |
-| `pools.backend` | user-only | which program makes worktrees on the operator's machine (§18) |
-| `loop.*` | user-only | how often the overseer runs: the operator's spend |
-| `runtime.*` | user-only | commands run on the operator's machine |
-| `notify.*` | user-only | a command run on the operator's machine |
-| `paths.*` | user-only | where prompts and state are read from |
-| `chores.*` | user-only | a chore runs a command and a prompt, and spends money (§19) |
-| `review.*` | user-only | `review.query` authorizes reading other people's PRs, and runs an agent on them (§21) |
-| `serve.*` | user-only | a listener on the operator's machine, and where (§22, TRUST_MODEL T8) |
+| `trust.authorized_repliers` | private | who may steer this operator's workers |
+| `trust.trusted_reviewers` | private | whose review feedback reaches a worker without the operator's go-ahead (§7) |
+| `trust.comment_prefix`, `trust.comment_suffix` | private | they silence the comments that carry them (§8) |
+| `trust.commit_trailer`, `trust.commit_trailer_name`, `trust.commit_trailer_email` | private | whether and whom the operator's commits credit (§8) |
+| `trust.rebase` | private | lets workers replace a branch's history (§8, TRUST_MODEL T1) |
+| `capacity.*` | private | the operator's machine and spend |
+| `pools.backend` | private | which program makes worktrees on the operator's machine (§18) |
+| `loop.*` | private | how often the overseer runs: the operator's spend |
+| `runtime.*` | private | commands run on the operator's machine |
+| `notify.*` | private | a command run on the operator's machine |
+| `paths.*` | private | where prompts and state are read from |
+| `chores.*` | private | a chore runs a command and a prompt, and spends money (§19) |
+| `review.*` | private | `review.query` authorizes reading other people's PRs, and runs an agent on them (§21) |
+| `serve.*` | private | a listener on the operator's machine, and where (§22, TRUST_MODEL T8) |
 
 Whoever controls a shared workspace file (anyone who can push to the repository holding it) must not run commands,
-choose prompts, spend money, or authorize anyone; those keys are user-only (TRUST_MODEL T7).
+choose prompts, spend money, or authorize anyone; those keys are private (TRUST_MODEL T7).
 
 Workspace file, beside the map (§18):
 
@@ -200,7 +224,7 @@ stacking = "auto"            # auto | never (§10); "never" is stricter
 branch_prefix = "agent/"
 ```
 
-User file, personal:
+Private keys, in the user file or the private file; any of them may be in either, and the private file wins:
 
 ```toml
 [tracker]
@@ -277,18 +301,18 @@ digit, no backtick, and no surrounding spaces, and at least one is set.
 `trust.commit_trailer_name` and `trust.commit_trailer_email` make the `Co-authored-by` trailer a worker adds to its
 commits when the agent runtime adds no attribution of its own (§8, TRUST_MODEL T5). The name is one line of at most 80
 characters, with a letter or digit, no backtick or angle bracket, and no surrounding spaces; the address is at most 254
-characters, with one `@` and no whitespace, backtick, or angle bracket. They are user-only because the commits are the
+characters, with one `@` and no whitespace, backtick, or angle bracket. They are private because the commits are the
 operator's: a shared file must not credit agent work to a person. Set them to name agent work the way the team's
 tooling expects, such as a team's bot address, and never to a person: the trailer is how a reader tells the work is
 an agent's. `trust.commit_trailer = false` turns the trailer off, for a runtime whose own attribution suffices or a
 team whose tooling rejects it: a worker still keeps the runtime's trailer, but adds none of its own, so with a runtime
-that adds none the commits carry no trailer, and only the branch prefix and the PR mark the work. It is user-only for
+that adds none the commits carry no trailer, and only the branch prefix and the PR mark the work. It is private for
 the same reason.
 
 `trust.rebase` is for repositories whose host or CI refuses merge commits. Set, a worker that brings a base branch into
 its branch rebases onto it instead of merging it, and pushes the result with `git push --force-with-lease`; the
 worker's definition allows that one force and no other, and `canopy _run`'s own push takes a lease on the commit the
-run started from (§8, TRUST_MODEL T1). It applies to every repository the operator works on. It is user-only because
+run started from (§8, TRUST_MODEL T1). It applies to every repository the operator works on. It is private because
 it lets a worker replace a branch's history: a shared file must not decide that.
 
 Rules:
@@ -310,15 +334,17 @@ Rules:
   `.canopy/`, which may be an earlier canopy's journal. In a git checkout it refuses, unless given `--workspace`:
   canopy writes nothing into a code repository. A repository at the home directory is the operator's dotfiles, not a
   code repository, and needs no flag. The refusal names a `canopy.toml` at the checkout's root as not read.
-- `canopy init` writes the user file if missing, with `tracker.labels = ["agent-ready-<$USER>"]` and an empty
-  `trust.authorized_repliers` and `trust.trusted_reviewers` to fill in, and prints the label. It writes the workspace
-  file only if there is none, with `tracker.provider` and an example `tracker.query`. Neither file gets a key whose
-  default serves: a default written into a file is pinned there, and a later canopy's never reaches it. It never
-  overwrites either file and installs nothing else (§13). If the config does not load (for example, templates lacking
-  `{definitions_dir}`), it prints the error. It warns about copies of canopy's agent definitions in the OpenCode config
-  of the workspace root and of each cloned repository, which stop runs (§13). Unless `worker_cmd` already starts with
-  `canopy-sandbox`, it prints that template behind the wrapper's prefix as a line for the user file, pointing to
-  `docs/SANDBOX.md`, and writes nothing: the sandbox is opt-in and needs `canopy sandbox setup` first (§24).
+- `canopy init` writes the private file if missing, readable only by the operator, with
+  `tracker.labels = ["agent-ready-<$USER>"]` and an empty `trust.authorized_repliers` and `trust.trusted_reviewers` to
+  fill in, each only where the user file does not set it, and prints the label when it writes one. It never writes the
+  user file. It writes the workspace file only if there is none, with `tracker.provider` and an example
+  `tracker.query`. No file gets a key whose default serves: a default written into a file is pinned there, and a later
+  canopy's never reaches it. It never overwrites a file and installs nothing else (§13). If the config does not load
+  (for example, templates lacking `{definitions_dir}`), it prints the error. It warns about copies of canopy's agent
+  definitions in the OpenCode config of the workspace root and of each cloned repository, which stop runs (§13). Unless
+  `worker_cmd` already starts with `canopy-sandbox`, it prints that template behind the wrapper's prefix as a line for
+  the user file, pointing to `docs/SANDBOX.md`, and writes nothing: the sandbox is opt-in and needs `canopy sandbox
+  setup` first (§24).
 - `canopy sandbox setup` needs no workspace. It copies `canopy-sandbox`'s policy templates to
   `<user config dir>/sandbox/` (0700), never over one that is there; installs `srt` with
   `npm ci --ignore-scripts --engine-strict` from the lockfile the wrapper ships, into
@@ -332,7 +358,7 @@ Rules:
   It prints each thing left to do and exits 1 while there is one; it writes no config, and prints the `worker_cmd`
   line `canopy init` does (D117).
 - `capacity.slots_per_repo` and `[capacity.repo_slots]` declare each repository's pool size in a workspace (§18).
-  Unset (the default) leaves pools unmanaged. User-only, so a team's map cannot grow the operator's disk use.
+  Unset (the default) leaves pools unmanaged. Private, so a team's map cannot grow the operator's disk use.
 - `pools.backend` names the pool that makes the workspace's worktrees: `"treehouse"` (the default) or `"canopy"`,
   canopy's own (§18). Switching is safe with runs in flight; `canopy workspace sync` carries the idle slots over.
 - Remotes should be HTTPS with a credential helper, not SSH: a sandboxed worker cannot reach the SSH agent socket.
@@ -343,7 +369,7 @@ Rules:
   remote.
 - Reading is `tomllib`, merging is a key-by-key dict merge, and validation is pydantic models carrying each key's type,
   default, scope, and tighten direction (D026). Scope and tighten checks run per file before the merge, so errors name
-  the file that caused them.
+  the file that caused them. `[chores]` comes whole from the last file that sets it.
 
 A command template is split into words with `shlex`, then `{prompt}` and `{definitions_dir}` are replaced inside each
 word in one pass. No shell runs, so the prompt is always exactly one argument (D023). Every agent template must contain
@@ -359,25 +385,29 @@ tick, and one canopy cannot read as UTF-8 refuses the snapshot. An override must
 overseer override must pass `--label` on every `canopy dispatch`, and a worker override must include `{{LABELS}}` and
 the authorization check that uses it (§8, D051); a worker override without it is refused as `bad_prompt`. The default is
 `prompts/` next to the user file, `~/.config/canopy/prompts` unless `XDG_CONFIG_HOME` says otherwise; an empty value
-means the default. `paths.*` values must be absolute or start with `~`, since canopy runs from the workspace root and a
-relative path would let a shared workspace supply them (TRUST_MODEL T7). There is no key for the state directory: it is
-always `<workspace>/.canopy/` (§18), written `<state_dir>` in this document.
+means the default. In the user file, `paths.*` values must be absolute or start with `~`, since canopy runs from the
+workspace root and a relative path would let a shared workspace supply them (TRUST_MODEL T7). In the private file a
+relative value resolves against the state directory, never the workspace root:
+`worker_instructions = "worker-instructions.md"` names `<state_dir>/worker-instructions.md`, private and under the
+provenance check above. There is no key for the state directory: it is always `<workspace>/.canopy/` (§18), written
+`<state_dir>` in this document.
 
 `paths.worker_instructions` names a file of the operator's standing instructions, a few habits every worker should
 keep, such as how to commit review fixes. canopy renders it into every worker prompt but a split's, as
 `{{STANDING_INSTRUCTIONS}}` under its own heading, before the obligations, which come first (§8). It adds to the shipped
 prompts without copying them, so prefer it to an override for anything a few lines can say; a skill is still the place
 for know-how a worker loads when it needs it (§13). It is at most 4 KiB of UTF-8, and a file canopy cannot use refuses
-the dispatch as `bad_prompt` rather than running a worker without it. Like every `paths.*` key it is user-only and
-serves every workspace the user file does. A passing condition, such as a CI outage, belongs in a notice to workers
-(§8) instead: it lapses on its own, the overseer and reviews hear it too, and the web UI shows it while it lasts.
+the dispatch as `bad_prompt` rather than running a worker without it. Like every `paths.*` key it is private: set in
+the user file, it serves every workspace; set in the private file, one. A passing condition, such as a CI outage,
+belongs in a notice to workers (§8) instead: it lapses on its own, the overseer and reviews hear it too, and the web UI
+shows it while it lasts.
 
 `tracker.provider` is a free-form name the harness never branches on; prompts use it to name the `tracker-<provider>`
 skill, and every shipped skill is in the definitions directory (§13). The one use canopy makes of it is to look up that
 skill by name and give it to the overseer in its definition, so it need not be loaded on every tick (§13).
 `tracker.query` is how the overseer finds candidates: in the tracker's search syntax where it has one (JQL, GitHub issue
 search), otherwise plain language. It finds tickets; it does not authorize them (§17). The repository's query usually
-omits the label; an operator can override it in the user file to include their labels and save the overseer reads.
+omits the label; an operator can override it in the private file to include their labels and save the overseer reads.
 It is shared though the overseer reads every ticket it returns before it checks labels: the operator's choice
 (2026-10-15), with that exposure stated in TRUST_MODEL T7's residual.
 
@@ -674,6 +704,6 @@ never notified twice, and an item that returns after going away is new again.
   Answered in M10 (§20, D035): a sink command, with a Slack sink shipped in canopy. The overseer does not post.
 - Whether `merged` should trigger a tracker transition. Default no; humans own
   ticket state.
-- One operator on several repositories. Answered in M6 by the workspace (§18): one queue, one user file, and state
-  per workspace under its root. Repositories that are not one queue go in separate workspaces, each with its own
-  journal and locks.
+- One operator on several repositories. Answered in M6 by the workspace (§18): one queue, and state per workspace
+  under its root, with its private config since M49. Repositories that are not one queue go in separate workspaces, each
+  with its own journal and locks.

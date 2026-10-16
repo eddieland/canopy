@@ -60,7 +60,7 @@ def test_the_backend_is_user_only_and_treehouse_by_default(ws: Ws, canopy_env: C
     use(canopy_env, "treehouse")
     shared = ws.root / config.WORKSPACE_FILE_NAME
     shared.write_text(shared.read_text() + '\n[pools]\nbackend = "canopy"\n')
-    with pytest.raises(config.ConfigError, match="user-only"):
+    with pytest.raises(config.ConfigError, match="is private"):
         config.load(ws.root, canopy_env.user_file)
 
 

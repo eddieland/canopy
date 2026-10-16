@@ -85,7 +85,8 @@ you read.
 
 ### Worked example: `review-queue`
 
-Config, in your user file (chores are user-only; one in a workspace file is a config error):
+Config, in the workspace's private file or your user file (chores are private; one in a workspace file is a config
+error):
 
 ```toml
 [chores.review-queue]

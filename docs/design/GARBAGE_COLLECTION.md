@@ -70,7 +70,7 @@ does (§18):
   starts from it.
 - `--vacuum`, `--git`, and `--caches` add the steps below that the loop never runs on its own.
 - It refuses when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `forget` and `grant` do (TRUST_MODEL T1). No flag
-  shortens retention; only the user file does. An agent that could remove history early could remove the transcript
+  shortens retention; only the operator's own config does. An agent that could remove history early could remove the transcript
   that shows what it did.
 
 ### Run and tick files

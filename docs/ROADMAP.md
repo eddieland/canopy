@@ -212,7 +212,7 @@ REQUIREMENTS R4 and R6, D055. Needs M2. Sketch only; the design comes first.
 - Decide, against the decisions corpus, whether `fix-ci` and `resume` should continue the session of the run that
   wrote the PR instead of starting fresh (PRIOR_ART warns about long-lived sessions fed events).
 - Workers run against OpenCode's server (`opencode serve`, with `opencode run --attach`), so the operator can
-  `opencode attach` to a running worker and prompt it. The listener follows TRUST_MODEL T8: a user-only bind address,
+  `opencode attach` to a running worker and prompt it. The listener follows TRUST_MODEL T8: a private bind address,
   loopback by default, refused if wildcard or public; the operator's listener secret from an operator-only file, passed
   only to the server. Verify OpenCode's server authentication on the pinned version first.
 - Whether one server serves every run or each run gets its own, and what happens to a session whose run has ended: its
@@ -599,7 +599,7 @@ This milestone adds the connectors and the derivation without changing what the 
   subject the `end` line did not cover keeps its old rows and their age. Comments go into `messages` as mirrored
   comments do now, with the workers' marks read in code (D069). `connector_runs` records each run: when, status, counts,
   the tail of stderr.
-- Config, user-only (TRUST_MODEL T7): `[connect.sources.<name>]` with `cmd` (argv, no shell, as a sink's), `kind`
+- Config, private (TRUST_MODEL T7): `[connect.sources.<name>]` with `cmd` (argv, no shell, as a sink's), `kind`
   (`tracker` or `vcs`), and `timeout_minutes`, one per kind at most, nested as sinks are (§20). Beside the table, the
   scalars later milestones read, defined here so the model needs no special case: `connect.max_age_minutes` (M37)
   and `connect.every_minutes` (M39).
@@ -1066,7 +1066,7 @@ What treehouse does that canopy relies on or works around, from its source at th
 
 **Stage 3, by choice, then by default.**
 
-- `pools.backend`, user-only (§12): `"treehouse"` (default) or `"canopy"`. The journal records which pool made each
+- `pools.backend`, private (§12): `"treehouse"` (default) or `"canopy"`. The journal records which pool made each
   lease, and a lease is always returned through that pool, so switching with runs in flight is safe.
 - Switching to canopy, `canopy workspace sync` moves each idle treehouse slot into `pools/` with `git worktree move`,
   keeping its ignored files. Switching back costs only warm caches: treehouse makes fresh slots and sync removes
@@ -1140,7 +1140,7 @@ of the repo." Humans still authorize everything that lands; canopy still never m
   in its ticket's project), a decision entry for the new line, and the overseer prompt, worker
   prompts, and definitions, with the operator's approval note in the PR.
 - Open: what a parent's phase is once its work has moved into follow-ups; whether a private ticket's worker should
-  file journal-only follow-ups; whether an operator who wants the old line should get a user-only switch that makes
+  file journal-only follow-ups; whether an operator who wants the old line should get a private switch that makes
   follow-ups wait for a label.
 
 Accept: written with the design, before work starts.
@@ -1315,7 +1315,9 @@ Accept: the tests above pass, and `make install-check`, with `canopy init` writi
 operator moves the keys that belong to one workspace into its private file, leaving the rest in the user file; the
 loop there runs as before, and a second workspace with its own private file reads its own labels and port.
 
-Status: not started.
+Status: in progress. Built 2026-10-16: the private file layered last, private keys in it or the user file, the
+provenance check and the private file's own, `canopy init` writing it, and the tests above; `make install-check` passes
+with init writing the private file. Left: the live check, the operator's.
 
 ## Deferred, with the trigger that would unblock each
 
