@@ -1034,8 +1034,8 @@ is enough.
 Accept: each stage's check, in order. Then `make install-check` and `make binary` pass with no `treehouse` on `PATH`,
 and a fresh install from README on a machine with no Go runs a day of `canopy loop`.
 
-Status: in progress. Stage 1's suite passes against the fake and against real treehouse at the pinned commit on Linux;
-its check waits on the CI job's first run on macOS.
+Status: in progress. Stage 1 passed its check 2026-10-16: the contract suite passes against the fake, and against real
+treehouse at the pinned commit in CI on Linux and macOS.
 
 ## Deferred, with the trigger that would unblock each
 
