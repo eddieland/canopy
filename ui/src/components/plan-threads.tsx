@@ -214,6 +214,14 @@ function ThreadCard({
 }: ThreadActions & { thread: PlanThread; lost: boolean; active: boolean; editable: boolean }) {
     const [replying, setReplying] = useState(false)
     const [deleting, setDeleting] = useState(false)
+    // Keep gives the focus back to Delete, which opened the question, rather than drop it to the page's top.
+    const [kept, setKept] = useState(false)
+    const deleteAction = useRef<HTMLButtonElement>(null)
+    useEffect(() => {
+        if (kept) {
+            deleteAction.current?.focus()
+        }
+    }, [kept])
     return (
         <article
             data-thread={thread.id}
@@ -252,7 +260,10 @@ function ThreadCard({
                 <ConfirmDelete
                     replies={thread.replies.length}
                     onDelete={() => onDelete(thread.id)}
-                    onKeep={() => setDeleting(false)}
+                    onKeep={() => {
+                        setDeleting(false)
+                        setKept(true)
+                    }}
                 />
             )}
             {editable && !replying && !deleting && (
@@ -267,7 +278,15 @@ function ThreadCard({
                         {thread.resolved ? <RotateCcw aria-hidden /> : <Check aria-hidden />}
                         {thread.resolved ? 'Reopen' : 'Resolve'}
                     </Button>
-                    <Button variant="ghost" size="xs" onClick={() => setDeleting(true)}>
+                    <Button
+                        ref={deleteAction}
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => {
+                            setKept(false)
+                            setDeleting(true)
+                        }}
+                    >
                         <Trash2 aria-hidden />
                         Delete
                     </Button>
