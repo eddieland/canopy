@@ -21,6 +21,17 @@ function paragraphs(markdown: string): number {
     return count
 }
 
+// How many cells each of the document's table rows holds.
+function shape(editor: Editor): number[] {
+    const rows: number[] = []
+    editor.state.doc.descendants((node) => {
+        if (node.type.name === 'tableRow') {
+            rows.push(node.childCount)
+        }
+    })
+    return rows
+}
+
 afterEach(() => {
     for (const editor of editors.splice(0)) {
         editor.destroy()
@@ -109,6 +120,15 @@ describe('planExtensions', () => {
         const editor = open('One\ntwo')
         editor.commands.deleteRange({ from: 5, to: 8 })
         expect(editor.getMarkdown()).toBe('One')
+    })
+
+    it('writes a table with a row and a column added, their cells empty, as a table that reads back whole', () => {
+        const editor = open('| File | Why |\n| --- | --- |\n| a.py | rows |')
+        editor.commands.setTextSelection(editor.state.doc.content.size - 4)
+        editor.commands.addRowAfter()
+        editor.commands.addColumnAfter()
+        expect(shape(editor)).toEqual([3, 3, 3])
+        expect(shape(open(editor.getMarkdown()))).toEqual([3, 3, 3])
     })
 
     it('keeps a table', () => {
