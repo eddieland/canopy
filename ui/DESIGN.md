@@ -621,6 +621,26 @@ list, an empty state, or a skeleton by hand.
   its text and strong pieces go through `LinkedText`, so a URL outside code is a link to itself. In a list's row it
   shows the first four lines and a `show N more lines` toggle in the accent; text one line over shows whole.
   A conversation's bubbles keep their own `whitespace-pre-wrap`.
+- **A plan in its editor** (`PlanEditor`, `src/components/plan-editor.tsx`; docs/design/PLANNING.md §25): the plan
+  in a `Plan` panel, its toolbar in the panel's header, and the comments in a `Comments` panel beside it from `2xl`,
+  under it below that, as a thread sits beside a ticket's work. The plan is laid out as a document (`.plan-doc` in
+  `src/index.css`): `text-sm` prose up to `max-w-3xl`, headings at `text-xl`, `text-base`, and `text-sm` semibold, code
+  as rich text sets it, a table in hairlines with its header row on `surface-raised` at half, a quote muted behind a
+  hairline. What the plan holds as characters (HTML, an image) is muted monospace; a link is underlined in
+  `muted-foreground` with its address on hover, never a link. The toolbar (`Toolbar`, below) is `icon-xs` toggles in
+  groups split by hairlines: undo and redo, the paragraph's style (a choice of one), the marks and the blocks (each on
+  or off, raised while on at the cursor), then `Comment`, enabled while text is selected, with `⌘⌥M` (Ctrl+Alt+M) on
+  hover. A selection also shows a `Comment` bubble over it. A commented passage sits on the accent's tint at 14%; the
+  open one, or the one being commented on, at 28% and underlined in the accent, and clicking a passage opens its
+  thread. A thread is its passage quoted (two lines, a hairline in the accent at its left, the whole on hover; a
+  button that shows it in the plan), the comment and its replies as text with their ages, and ghost `xs` actions,
+  `Reply`, `Resolve` (`Reopen`), and `Delete`; the open thread sits on the accent's tint, as a selected row does. A
+  thread whose passage is gone carries a `passage gone` chip and stays in the list, last. Resolved threads fold under
+  a `Disclosure` (`Show 2 resolved`). A comment or reply form sends on the key Settings names, as a reply does, and
+  Escape drops it. The comments end in `Ask for changes`: a note on the whole plan and the button, with how many open
+  comments go with it, or how far over a reply's bound the request is. Until plans reach a ticket's page (M44), the
+  editor is on `/plan-editor`, over a sample plan on mock data only, with what the planner would read and the plan's
+  Markdown under it.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then how often it may start and its window (`cadenceText`: `every 360 minutes`, as
   the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed
@@ -695,10 +715,12 @@ list, an empty state, or a skeleton by hand.
 - **Behavior comes from Radix**, through the shadcn wrappers in `src/components/ui/`, and only they import it (the lint
   refuses `radix-ui` anywhere else): a button that is on or off is a `Toggle`, a part of the page that opens under its
   button is a `Collapsible` (the panel or row itself, by `asChild`, so it adds no wrapper) opened by a `Disclosure`
-  (below), an option that is on or off a `Checkbox`, and a choice of a few options a `ToggleGroup`. Radix keeps their
-  ARIA in step with their state (`aria-pressed`, `aria-expanded` with `aria-controls`), so a component never writes it
-  by hand. Two stay native on purpose: a transcript's tool call is a `<details>` (above), and rich text's `show N more
-  lines` shows more of text already on screen rather than opening a part, so it is a plain button with `aria-expanded`.
+  (below), an option that is on or off a `Checkbox`, a choice of a few options a `ToggleGroup`, and a row of an
+  editor's controls a `Toolbar` (`src/components/ui/toolbar.tsx`), one tab stop with the arrow keys between them.
+  Radix keeps their ARIA in step with their state (`aria-pressed`, `aria-expanded` with `aria-controls`), so a
+  component never writes it by hand. Two stay native on purpose: a transcript's tool call is a `<details>` (above),
+  and rich text's `show N more lines` shows more of text already on screen rather than opening a part, so it is a
+  plain button with `aria-expanded`.
   A new wrapper is shadcn's, added or ported as `button.tsx` was.
 - **Modes and disclosures** follow one rule each, so a control says which it is before it is clicked:
   - A **mode**, a way of showing what is already there, is a pressed `Toggle`, a ghost `xs` button raised while on,

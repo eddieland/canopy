@@ -421,3 +421,14 @@ such as a shipped migration, may still cite one, and git history has its text.
   T1's residual).
 - Rejected: the label authorizing every run (more code: phases and replies without a start record); keeping the
   worker's label check for such tickets (the operator chose an ordinary private ticket).
+
+## D120. The plan editor is Tiptap on ProseMirror, in the web UI alone
+
+- `@tiptap/*`, pinned, with `marked` under `@tiptap/markdown`, edits a plan as a document (DESIGN §25); nothing else
+  imports it, and it loads only with the page that edits a plan. Comments are ours, anchored by their words.
+- Why: selection, undo, tables, and highlights that follow edits are a ProseMirror's worth of code, and a hand-made
+  `contenteditable` is a known trap. It renders by schema, so model text stays text: HTML and images are characters,
+  and a link does not navigate (D113).
+- Rejected: Lexical and Milkdown (less control of the Markdown written back); a textarea beside a preview (the
+  operator asked for editing in place); Tiptap's paid comments extension (it anchors by position).
+- Revisit: if Tiptap's license or its Markdown changes, or a second editor is wanted.

@@ -1,0 +1,125 @@
+import { expect, test } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
+
+import { settled, signIn } from './helpers.ts'
+
+test.beforeEach(async ({ page }) => {
+    await signIn(page)
+    await page.goto('plan-editor')
+    await settled(page)
+})
+
+// Selects `text` inside the plan, as a drag over it would.
+async function select(page: Page, text: string): Promise<void> {
+    await plan(page).evaluate((root, wanted) => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+        for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+            const at = node.textContent?.indexOf(wanted) ?? -1
+            if (at !== -1) {
+                const range = document.createRange()
+                range.setStart(node, at)
+                range.setEnd(node, at + wanted.length)
+                const selection = globalThis.getSelection()
+                selection?.removeAllRanges()
+                selection?.addRange(range)
+                return
+            }
+        }
+        throw new Error(`no text node holds ${wanted}`)
+    }, text)
+}
+
+function plan(page: Page): Locator {
+    return page.getByRole('textbox', { name: 'Plan', exact: true })
+}
+
+function comments(page: Page): Locator {
+    return page.getByRole('article')
+}
+
+test('the sample plan opens with its comments on their passages, a rewritten one marked gone', async ({ page }) => {
+    const doc = plan(page)
+    await expect(doc.getByRole('heading', { level: 1 })).toHaveText('Export reports as CSV')
+    await expect(doc.locator('table')).toBeVisible()
+    await expect(doc.locator('[data-thread=sample-1]')).toHaveText("streams the report's rows as they are read")
+    await expect(comments(page)).toHaveCount(3)
+    await expect(comments(page).nth(2)).toContainText('passage gone')
+    await expect(page.getByRole('button', { name: 'Show 1 resolved' })).toBeVisible()
+})
+
+test('selecting text and pressing Comment adds a thread on it, highlighted in the plan', async ({ page }) => {
+    await select(page, "Excel's own format")
+    await page.getByRole('toolbar', { name: 'Format' }).getByRole('button', { name: 'Comment' }).click()
+    const form = page.getByRole('form', { name: 'Comment' })
+    await form.getByRole('textbox').fill('Say why not: one customer asked.')
+    await form.getByRole('button', { name: 'Comment' }).click()
+    const thread = comments(page).filter({ hasText: 'one customer asked' })
+    await expect(thread).toHaveAttribute('data-active', 'true')
+    const id = await thread.getAttribute('data-thread')
+    await expect(page.locator(`.plan-doc [data-thread="${id}"]`)).toHaveText("Excel's own format")
+})
+
+test('a comment stays on its passage while the plan is edited above it', async ({ page }) => {
+    const doc = plan(page)
+    await doc.getByRole('heading', { level: 1 }).click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(', streamed')
+    await expect(doc.getByRole('heading', { level: 1 })).toHaveText('Export reports as CSV, streamed')
+    await expect(doc.locator('[data-thread=sample-1]')).toHaveText("streams the report's rows as they are read")
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    await expect(page.getByLabel('Plan Markdown')).toContainText('# Export reports as CSV, streamed')
+})
+
+test('the toolbar formats the selection and says what is in force', async ({ page }) => {
+    await select(page, 'Scheduling exports.')
+    const bold = page.getByRole('toolbar', { name: 'Format' }).getByRole('button', { name: 'Bold' })
+    await bold.click()
+    await expect(bold).toHaveAttribute('aria-pressed', 'true')
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    await expect(page.getByLabel('Plan Markdown')).toContainText('- **Scheduling exports.**')
+})
+
+test('resolving a thread folds it away and takes its highlight off the plan', async ({ page }) => {
+    const thread = comments(page).filter({ hasText: 'name the ticket' })
+    await thread.getByRole('button', { name: 'Resolve' }).click()
+    await expect(comments(page)).toHaveCount(2)
+    await expect(page.locator('.plan-doc [data-thread=sample-2]')).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Show 2 resolved' })).toBeVisible()
+})
+
+test('Ask for changes sends the open comments, each on its passage, with the note', async ({ page }) => {
+    await comments(page).filter({ hasText: 'proxy in front' }).getByRole('button', { name: 'Reply' }).click()
+    const reply = page.getByRole('form', { name: 'Reply' })
+    await reply.getByRole('textbox').fill('And a test that reads the first row before the last is written.')
+    await reply.getByRole('button', { name: 'Reply' }).click()
+    const ask = page.getByRole('form', { name: 'Ask for changes' })
+    await ask.getByRole('textbox').fill('Keep it to one PR per repository.')
+    await ask.getByRole('button', { name: 'Ask for changes' }).click()
+    const request = page.getByLabel('Change request')
+    await expect(request).toContainText('1. On "streams the report\'s rows as they are read":')
+    await expect(request).toContainText('Reply: And a test that reads the first row')
+    await expect(request).toContainText('(no longer in the plan)')
+    await expect(request).not.toContainText('RFC 4180')
+    await expect(request).toContainText('On the whole plan:\nKeep it to one PR per repository.')
+})
+
+test('clicking a commented passage opens its thread and puts the cursor there', async ({ page }) => {
+    await plan(page).locator('[data-thread=sample-2]').click()
+    await expect(comments(page).filter({ hasText: 'name the ticket' })).toHaveAttribute('data-active', 'true')
+    await expect(plan(page).locator('[data-thread=sample-2]')).toHaveClass(/plan-comment-active/u)
+    // The paragraph's style shows the cursor moved from the heading it opened in.
+    const text = page.getByRole('toolbar', { name: 'Format' }).getByRole('radio', { name: 'Text' })
+    await expect(text).toHaveAttribute('data-state', 'on')
+})
+
+test('the shortcut and the bubble over a selection both open a comment on it', async ({ page }) => {
+    await select(page, 'Excel')
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    await expect(page.getByRole('form', { name: 'Comment' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('form', { name: 'Comment' })).toBeHidden()
+    await select(page, 'template cache')
+    await page.getByTestId('plan-bubble').getByRole('button', { name: 'Comment' }).click()
+    await expect(page.getByRole('form', { name: 'Comment' })).toBeVisible()
+    await expect(page.getByTestId('plan-bubble')).toBeHidden()
+})

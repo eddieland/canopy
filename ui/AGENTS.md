@@ -19,6 +19,8 @@ memory, and do not upgrade in passing.
   the only code that imports Radix, from the one `radix-ui` package; the lint refuses it, and any `@radix-ui/*`,
   elsewhere. A control Radix has a primitive for uses its wrapper, never hand-written ARIA state (`DESIGN.md`).
 - TanStack Router (file-based, `src/routes/`) and TanStack Query.
+- Tiptap on ProseMirror for the plan editor alone (D120): only `src/lib/plan-*.ts` and
+  `src/components/plan-editor.tsx` import it.
 - oxlint (with the React Compiler's rules and eslint-plugin-jsdoc's, and type-aware rules through oxlint-tsgolint)
   and oxfmt, Vitest, Playwright.
 
@@ -81,7 +83,9 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
 - **Untrusted text stays text.** Journal content (tracker comments, agent output) is rendered as React children, never
   through `dangerouslySetInnerHTML`, which the lint refuses (`react/no-danger`). Free text goes through `LinkedText`
   (`src/components/linked-text.tsx`), which links its http and https URLs and nothing else (D113), except inside an
-  element that is already a link.
+  element that is already a link. A plan in the plan editor is the one exception, not rendered by React: ProseMirror
+  draws it from its schema (`src/lib/plan-schema.ts`), which keeps HTML and images as their characters and draws no
+  link, so it stays text all the same. A node added to that schema keeps it so.
 - **Formatting:** oxfmt, 120 columns, 4-space indent (the repository's `.editorconfig`). A formatter does not split a
   long string: split class lists across `cn()` or `cva()` arguments. The lint fails on a line over 120.
 - **Mocks are flagged.** `python -m canopy.serve --mock` serves the real API over a journal seeded from

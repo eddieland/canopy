@@ -6,8 +6,9 @@ runs](SANDBOXING.md). Next: [Garbage collection](GARBAGE_COLLECTION.md).
 
 ## 25. Plans before implementing (M44)
 
-Designed, not built (ROADMAP M44, REQUIREMENTS R18): until M44 lands, a ticket's first run is its `implement`, and §7,
-§8, §12, §14, §20, and §22 describe canopy as it is. This section says what changes in each.
+Designed, and built only in part (ROADMAP M44, REQUIREMENTS R18): the plan editor (Commenting on a plan, below) is in,
+over mock data. Until M44 lands, a ticket's first run is its `implement`, and §7, §8, §12, §14, §20, and §22 describe
+canopy as it is. This section says what changes in each.
 
 Today the `implement` worker plans inside its own session, and nothing of that plan survives but the run's summary. A
 **plan** is a run of its own that reads the ticket and the code and writes down how the work will be done, before any
@@ -216,7 +217,8 @@ approved (Journal, below), never its text.
 - **Editing it.** A `proposed` plan's file is the operator's to edit, in any editor, until they approve it: they can
   fix a step rather than ask for a whole new plan. `--approve` takes the file as it then stands and records its hash
   (Approving a plan, above). `canopy show` and the web UI show the file as it is, and say when it differs from what
-  the planner wrote. Edits are the operator's; the web UI does not edit a plan.
+  the planner wrote. Edits are the operator's: in their own editor, or in the web UI's plan editor, which writes the
+  file the same way (Commenting on a plan, below).
 - **After approval.** The approved hash pins the text the operator approved. `implement` and `resume` dispatches
   refuse `plan_changed` when the file no longer matches it, and `_run` checks again before it copies the plan for a
   worker, failing the run `crashed` with a note if it changed in between. An edit after approval is answered by
@@ -266,11 +268,52 @@ canopy ships `canopy-planner` in the definitions directory (§13):
 
 - `canopy show KEY` prints the newest plan, its status, and when it was approved; `canopy show KEY --plans` prints every
   plan, oldest first.
-- The web UI's ticket page (§22) shows the newest plan, as plain text like a message, with `Approve`, `Ask for changes`
-  (a reply), and `Skip`, and lists earlier plans. They call `POST /tickets/{key}/plan` with `approve`, `request`, or
-  `skip`, through the same code as the CLI, so with the same refusals.
+- The web UI's ticket page (§22) shows the newest plan in the plan editor (Commenting on a plan, below), with
+  `Approve`, `Ask for changes`, and `Skip`, and lists earlier plans. They call `POST /tickets/{key}/plan` with
+  `approve`, `request`, or `skip`, through the same code as the CLI, so with the same refusals.
 - A `plan.proposed` event (§20) tells the operator's sinks a plan is waiting: the ticket and its title. It carries no
   plan text, so nothing of the plan leaves the machine through a Slack sink.
+
+### Commenting on a plan
+
+A reply to the whole plan makes the operator say in words where each change goes. The web UI shows a plan in an
+editor instead, where the operator comments on its passages, as on a shared document, and edits it in place; asking
+for changes sends those comments to the planner, each with the passage it is on. Asked for by the operator
+(2026-10-16). The editor is built ahead of the rest of M44, over mock data at `/plan-editor`, and M44 puts it on the
+ticket's page.
+
+- **The editor** (`ui/src/components/plan-editor.tsx`) is Tiptap on ProseMirror (D120), Markdown in and out
+  (`ui/src/lib/plan-schema.ts`): headings, lists, task lists, tables, quotes, code blocks, and inline marks, through a
+  toolbar or Markdown's own shortcuts. A plan opened and left alone writes back as it was read. A plan is model text
+  (TRUST_MODEL T1), so what the editor has no node for stays characters: HTML is never read as HTML and an image is
+  never fetched, both shown and written back as written, and a link keeps its address, shown on hover, but is not a
+  link (D113).
+- **A comment** is a thread on a passage: the comment, its replies, open until the operator resolves it. It is
+  anchored by the passage's words and up to 32 characters either side, whitespace collapsed
+  (`ui/src/lib/plan-anchors.ts`), never by a position, which the first edit above it would make wrong. While the plan
+  is edited, a passage's highlight moves with the text around it, and its anchor follows its words. On a new plan,
+  each thread is looked for again by its words, the text around it choosing between copies. A passage that is gone is
+  found nowhere, and its thread says `passage gone` rather than move to other words: a reworded passage may no longer
+  be what the comment was about.
+- **Ask for changes** sends the open threads, in the order the plan reads, as one operator message: each passage
+  quoted (cut at 160 characters), its comment and replies, then the operator's note on the whole plan, if any
+  (`changeRequest` in `ui/src/lib/plan-threads.ts`). It is a reply, through `canopy reply`'s code and within its
+  4,000-character bound, so the re-plan works as Approving a plan, above, says: the planner reads it among the
+  operator's messages, with the plan it replaces. A request over the bound says so and is not sent; the operator
+  resolves or shortens some. Resolved threads ask for nothing.
+- **Editing** in the web UI edits the plan's file (Where plans live, above), as the operator's own editor would:
+  saving writes the editor's Markdown over the file, through the web channel behind its token (T8), with the same
+  care as the planner's write (operator-only, refusing a symlink or a file that is not regular), under a temporary
+  name renamed into place, so a reader never sees half a file. It saves only a `proposed` plan's file, or an approved
+  one's, which then needs approving again (`plan_changed`); it refuses `bad_plan` while a plan run for the ticket is
+  running, and when the file changed since the editor read it, by its hash, so an edit made elsewhere is never
+  overwritten unseen. `--approve` then takes the file as it stands, as it would after any edit.
+- **In the journal** (M44): a thread belongs to the ticket, not to one plan, so it carries from plan to plan and is
+  anchored again on each. A `plan_threads` table (id, ticket key, quote, prefix, suffix, body, created at, resolved at)
+  and `plan_replies` (id, thread id, body, created at), written only by the web channel, behind its token (T8). A
+  comment is the operator's words and the passage it quotes, not the plan, so it lives in the journal while the plan's
+  text stays in its file. `canopy show KEY --plans` lists the newest plan's open threads under it, each with its
+  passage; there is no CLI verb to comment, since a passage is chosen by selecting it.
 
 ### Journal
 
@@ -297,7 +340,8 @@ Proposed, for the operator's approval note in M44's PR, with the overseer prompt
 - T6: the planner has no write scope: no edits, no shell, and only the tracker's read tools. Residual: a worker can
   commit its copy of the plan by name, which on a private ticket publishes the plan with its branch. The prompt
   forbids it and push verification reports it; nothing prevents it.
-- T8: the plan route joins the web channel's writes, behind the same secret and per-session token as the others.
+- T8: the plan route joins the web channel's writes, behind the same secret and per-session token as the others, and
+  so do saving an edited plan's file and the comments on a plan.
 
 ### Open
 
@@ -310,3 +354,6 @@ Proposed, for the operator's approval note in M44's PR, with the overseer prompt
 - Whether a committed copy of the plan should raise an attention item, not only a note on the run.
 - Whether canopy should prune old plan files, as issue #424 asks of M36's per-tick tables.
 - Whether `fix-ci` runs should get the plan's copy too. They fix a failure, not the plan's work, so for now they do not.
+- Whether the planner should answer each thread in its result, by thread id, rather than only through the new plan.
+- Whether a reworded passage should be found again by its nearest match, rather than shown as gone.
+- Whether threads stay open for comment once a plan is approved, for the `implement` to read.

@@ -240,6 +240,8 @@ Whether a ticket is planned is a config default the operator can change for one 
 operator reads the plan before work starts: nothing is implemented until they approve it, and a reply asking for
 changes makes a new plan. The plan stays in canopy and is posted nowhere, so a private ticket is planned the same way.
 Today the `implement` worker plans inside its own session, and nothing of it survives but its summary.
+2026-10-16: the operator reads a plan as a document, edits it in place, and comments on its passages, as on a shared
+document; asking for changes gives the planner each comment with the passage it is on.
 
 ## Nice to have
 
