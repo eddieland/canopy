@@ -39,6 +39,10 @@ updates:
       # The types follow the Node the UI runs on (engines and CI: 22), not the newest Node.
       - dependency-name: "@types/node"
         update-types: [version-update:semver-major]
+      # A peer of @vitejs/plugin-react, which holds it to one 0.x minor (^0.152.0 in 6.1.2), so a newer minor fails
+      # `npm ci` for the whole group. Move it by hand when plugin-react widens its range.
+      - dependency-name: oxc-transform-react
+        update-types: [version-update:semver-minor]
 
   # The srt that `canopy sandbox setup` installs. Never grouped: each bump is its own PR, so the sandbox canary in CI
   # judges it alone, and a reviewer checks the claims about srt in docs/design/SANDBOXING.md against the new version.
