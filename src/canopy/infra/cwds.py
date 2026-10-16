@@ -35,16 +35,47 @@ class Found:
     name: str
 
 
-def inside(runner: procs.Runner, directory: Path) -> list[Found]:
-    """Return the processes whose working directory is `directory` or below it, by pid.
+@dataclass(frozen=True)
+class Table:
+    """Every process this one can inspect, each with its working directory: one read of the process table."""
+
+    entries: tuple[tuple[Found, Path], ...]
+
+    def inside(self, directory: Path) -> list[Found]:
+        """Return the processes whose working directory is `directory` or below it, by pid.
+
+        Returns:
+            Them, this process and its ancestors left out.
+        """
+        root = Path(os.path.realpath(directory))
+        mine = _ancestors()
+        found = (f for f, cwd in self.entries if f.pid not in mine and _within(cwd, root))
+        return sorted(found, key=lambda f: f.pid)
+
+
+def table(runner: procs.Runner) -> Table:
+    """Read the process table once, for a caller that asks about several directories.
+
+    Returns:
+        Every process found, with its working directory.
 
     Raises:
         CwdError: the process table could not be read.
     """
-    root = Path(os.path.realpath(directory))
-    found = _from_proc(root) if (PROC / "self" / "cwd").exists() else _from_lsof(runner, root)
-    mine = _ancestors()
-    return sorted((f for f in found if f.pid not in mine), key=lambda f: f.pid)
+    entries = _from_proc() if (PROC / "self" / "cwd").exists() else _from_lsof(runner)
+    return Table(tuple(entries))
+
+
+def inside(runner: procs.Runner, directory: Path) -> list[Found]:
+    """Return the processes whose working directory is `directory` or below it, by pid.
+
+    Returns:
+        Them, this process and its ancestors left out.
+
+    Raises:
+        CwdError: the process table could not be read.
+    """
+    return table(runner).inside(directory)
 
 
 def end(runner: procs.Runner, directory: Path) -> list[Found]:
@@ -68,8 +99,8 @@ def end(runner: procs.Runner, directory: Path) -> list[Found]:
     return inside(runner, directory)
 
 
-def _from_proc(root: Path) -> list[Found]:
-    found: list[Found] = []
+def _from_proc() -> list[tuple[Found, Path]]:
+    found: list[tuple[Found, Path]] = []
     try:
         entries = [e for e in PROC.iterdir() if e.name.isdigit()]
     except OSError as e:
@@ -80,19 +111,18 @@ def _from_proc(root: Path) -> list[Found]:
             name = (entry / "comm").read_text().strip()
         except OSError:
             continue  # gone, or another user's
-        if _within(cwd, root):
-            found.append(Found(int(entry.name), name))
+        found.append((Found(int(entry.name), name), cwd))
     return found
 
 
-def _from_lsof(runner: procs.Runner, root: Path) -> list[Found]:
+def _from_lsof(runner: procs.Runner) -> list[tuple[Found, Path]]:
     try:
         result = runner.run(["lsof", "-n", "-w", "-d", "cwd", "-F", "pcn"], timeout=_LSOF_TIMEOUT_SECONDS)
     except procs.ProcError as e:
         raise CwdError(f"lsof: {e}") from e
     if result.timed_out or not result.stdout:
         raise CwdError(f"lsof {'timed out' if result.timed_out else f'exited {result.returncode}'}")
-    found: list[Found] = []
+    found: list[tuple[Found, Path]] = []
     pid, name = 0, ""
     for line in result.stdout.splitlines():
         tag, value = line[:1], line[1:]
@@ -100,8 +130,8 @@ def _from_lsof(runner: procs.Runner, root: Path) -> list[Found]:
             pid, name = int(value), ""
         elif tag == "c":
             name = value
-        elif tag == "n" and pid and _within(Path(value), root):
-            found.append(Found(pid, name))
+        elif tag == "n" and pid:
+            found.append((Found(pid, name), Path(value)))
     return found
 
 

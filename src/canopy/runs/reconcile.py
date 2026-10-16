@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, dead_runs, definitions, pool, pools, treehouse
 from canopy.core.vocab import RunStatus
-from canopy.infra import logs, procs
+from canopy.infra import cwds, logs, procs
 from canopy.runs import desks, dispatch, tidy
 
 if TYPE_CHECKING:
@@ -61,8 +61,8 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
         treehouse.TreehouseError: treehouse could not be read or a slot could not be returned. The tick stops.
     """
     ws = ctx.workspace
-    pools = {repo.name: treehouse.status(ctx.runner, pool=ws.pool(repo.name)) for repo in ws.repos if repo.cloned}
-    shadow(ctx.runner, ws, log, pools)
+    slots = {repo.name: treehouse.status(ctx.runner, pool=ws.pool(repo.name)) for repo in ws.repos if repo.cloned}
+    shadow(ctx.runner, ws, log, slots)
     returned = _close_dead_runs(ctx, log)
     running = db.running_runs(ctx.conn, "runs")
     running_slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
@@ -70,7 +70,7 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     # A running review holds a slot too (DESIGN §21); its own reconcile returns it if its `_review` is gone.
     reviews = db.running_runs(ctx.conn, "review_runs")
     held |= {str(r["lease_id"]) for r in reviews if r["lease_id"]}
-    leased = {name: _return_stale(ctx, log, name, slots, held=held, returned=returned) for name, slots in pools.items()}
+    leased = {name: _return_stale(ctx, log, name, found, held=held, returned=returned) for name, found in slots.items()}
     for desk in desks.prune(ws.root, {str(r["ticket_key"]) for r in running}):
         log.warning("desk with no running run; removed", extra={"desk": str(desk)})
     if not running:
@@ -93,6 +93,11 @@ def shadow(
         How many slots it logged a mismatch for.
     """
     mismatches = 0
+    # One read of the process table for every slot: on macOS each read is a full `lsof`.
+    try:
+        processes: cwds.Table | None = cwds.table(runner)
+    except cwds.CwdError:
+        processes = None
     for name, found in slots.items():
         repo = ws.repo(name)
         if repo is None:
@@ -101,7 +106,11 @@ def shadow(
             if slot.lease_holder or slot.lease_id:
                 continue
             try:
-                ours = pool.classify(runner, repo.path, slot.path)
+                ours = (
+                    pool.classify(runner, repo.path, slot.path, found=processes.inside(slot.path))
+                    if processes is not None
+                    else pool.UNVERIFIED
+                )
             except OSError as e:
                 ours = f"error: {e}"
             if ours != slot.status:
