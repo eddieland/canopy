@@ -56,8 +56,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   Google docstring, with Returns, Yields, and Raises sections that match its body. Opt out with a commented `ignore`
   entry or a `noqa` with a code; never narrow `select`.
 - `make all` runs fmt, lint (including type checks), and tests. It must pass before any PR.
-- `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it, except on a pull request
-  that changes only docs, where every check passes without running; run `make all` before pushing one anyway.
+- `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it, as two jobs side by side
+  (`lint test` and `ui-check`), except on a pull request that changes only docs, where every check passes without
+  running; run `make all` before pushing one anyway.
 - `make install-check` installs canopy with `uv tool install` into an empty HOME and runs a dry tick against the
   fakes (D046). CI runs it too; run it when you change packaging, bundled files, or the install steps.
 - Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only when
