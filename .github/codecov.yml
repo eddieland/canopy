@@ -1,0 +1,13 @@
+# Codecov's settings (ci.yml uploads coverage.xml from `make check COVERAGE=1`). Its commit statuses are informational:
+# they report project and patch coverage on each PR but never fail one, since no milestone sets a coverage bar.
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+# No PR comment: the statuses and codecov.io carry the numbers, and a comment on every push is noise in the thread.
+comment: false

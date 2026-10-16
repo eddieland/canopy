@@ -1,5 +1,7 @@
 # canopy
 
+[![codecov](https://codecov.io/gh/eddieland/canopy/graph/badge.svg)](https://codecov.io/gh/eddieland/canopy)
+
 An unattended, local agent loop driven by your issue tracker.
 
 Label a ticket. When there is capacity, an overseer agent leases a worktree from a

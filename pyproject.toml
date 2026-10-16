@@ -110,6 +110,8 @@ dev = [
     "hypothesis>=6.168.5",
     "pyrefly>=1.3.2",
     "pytest>=9.1",
+    # Line and branch coverage for `make coverage`, which CI uploads to Codecov.
+    "pytest-cov>=7.1.0",
     "pytest-xdist>=3.8.0",
     "ruff>=0.16.10",
     "rumdl>=0.2.78",
@@ -210,6 +212,15 @@ filterwarnings = [
     # procs.spawn detaches its child on purpose, so Popen warns that it is still running.
     "ignore:subprocess \\d+ is still running:ResourceWarning",
 ]
+
+# What `make coverage` measures: canopy and its workspace members, not the tests or the fakes.
+[tool.coverage.run]
+branch = true
+source_pkgs = ["canopy", "canopy_notify_slack", "canopy_sandbox"]
+
+[tool.coverage.report]
+skip_empty = true
+exclude_also = ["if TYPE_CHECKING:", "assert_never\\("]
 
 # Strict preset (D017). The fakes are extensionless, so list them explicitly.
 [tool.pyrefly]
