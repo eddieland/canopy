@@ -5,25 +5,14 @@ import json
 import threading
 from pathlib import Path
 
-import pytest
-
 from canopy.core import db, pools, treehouse, workspace
 from canopy.core.context import Context
-from canopy.infra import resources
 from canopy.serve import mock
-from tests.canopy.test_loop import context
-from tests.canopy.test_serve import client
-from tests.canopy.test_web import running_run, signed_in_client
-from tests.conftest import CanopyEnv, pool_state
+from tests.canopy.helpers import running_run
+from tests.canopy.web_helpers import client, signed_in_client
+from tests.conftest import pool_state
 
 KEY = "PROJ-1"
-
-
-@pytest.fixture
-def ctx(canopy_env: CanopyEnv) -> Context:
-    found = context(canopy_env)
-    db.migrate(found.conn, resources.migrations_dir())
-    return found
 
 
 def slot(name: str, status: str, **more: object) -> dict[str, object]:

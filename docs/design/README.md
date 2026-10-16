@@ -43,6 +43,8 @@ not go in the middle of the sequence.
   - [23. Flaky CI (M25)](FLAKY_CI.md#23-flaky-ci-m25)
 - [Sandboxed runs](SANDBOXING.md): the opt-in OS sandbox around every agent run but the overseer's.
   - [24. Sandboxed runs (M26)](SANDBOXING.md#24-sandboxed-runs-m26)
+- [Plans](PLANNING.md): a plan for a ticket, approved by the operator before any `implement`.
+  - [25. Plans before implementing (M44)](PLANNING.md#25-plans-before-implementing-m44)
 
 ## 1. Problem
 
@@ -108,7 +110,7 @@ canopy (harness, Python)
   __main__.py      python -m canopy, how dispatch starts _run from the same installation
 
   cli/             the command line; only cli imports click, and only __main__ imports cli
-    main.py        main(), the root group, exit codes
+    main.py        main(), exit codes, the root group, which imports a command's module only when it runs
     common.py      opening the Context, refusals, the tick named by CANOPY_TICK_ID
     params.py      validated parameter types: ticket keys, reasons, slugs, cursors, bounded text
     render.py      how status, show, and the other read-back commands name tickets, runs, costs, and chores
@@ -271,6 +273,11 @@ Where later work goes:
 
 - A feature is a features-layer package plus a `cli/` command module: `chores` (§19), `notify` (§20), `reviews`
   (§21). `loop` calls its reconcile and publish steps and its state block part. Deleting a feature deletes those three.
+- A top-level command is listed in `COMMANDS` in `cli/main.py`, by its module and attribute, and its module is
+  imported only when that command runs. The overseer and workers run `canopy` many times a tick, and each process pays
+  for every module it imports, so `canopy decide` loads `cli/journal.py` and not the tick, the worker, or chores. For
+  the same reason `cli/common.py`, which every command imports, imports nothing from `loop`.
+  `tests/canopy/test_cli.py` fails on a command missing from `COMMANDS` and on one that imports another's module.
 - A feature others write to keeps its writing half in `core`: dispatch, `_run`, `_chore`, and reconcile record §20's
   events through `core.outbox`; `notify` delivers them.
 - Code that runs in its own process and must not share the harness's imports or dependencies is a uv workspace member
@@ -278,6 +285,12 @@ Where later work goes:
   script among its own, so one install puts them all on `PATH`. canopy reads the wrapper's bundled templates and
   lockfile, and never runs it: only a command template does.
 - A module that takes on a second concern splits into a same-named package in the same layer, as `cli.py` did.
+- A pydantic model sets `defer_build=True`, so its schema is built where it first validates, not where it is imported.
+  The overseer and workers run `canopy` many times a tick, and each process would otherwise build every model it
+  imports, though a command validates few of them. A field whose default is a model takes it through
+  `default_factory`; a default instance builds the model at import. The web server's models in `serve/` stay eager,
+  since FastAPI builds them all when it creates the app. `tests/canopy/test_models.py` fails on a model that does not
+  defer, does not build, or is built when `canopy` starts.
 
 Roles:
 

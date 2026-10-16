@@ -46,7 +46,7 @@ MaybeStr = Annotated[StrictStr, BeforeValidator(_null_is_empty)]
 
 class _Output(BaseModel):
     # A pool may add fields; canopy reads only the ones it needs.
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
 
 class Process(_Output):

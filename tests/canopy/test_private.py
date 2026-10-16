@@ -7,7 +7,6 @@ import json
 import os
 import sqlite3
 import sys
-from collections.abc import Iterator
 from pathlib import Path
 from unittest import mock
 
@@ -20,66 +19,32 @@ from canopy.infra import procs, resources
 from canopy.loop import attention, repeat
 from canopy.serve import views
 from tests.canopy.helpers import (
+    QUESTION,
+    FakeTime,
     InlineRunner,
+    agent_runs,
+    blocked_result,
+    canopy,
     commit_and_push,
+    console,
+    context,
+    dispatch_in_tick,
     in_tick,
-    journal,
     journal_at,
+    last_run,
+    operator,
+    overseer_does,
     pool,
+    private_worker_does,
+    state_block,
     versions_after,
     wait_for_run,
     worker_does,
 )
-from tests.canopy.test_loop import FakeTime, canopy, console, context, overseer_does
-from tests.canopy.test_mirror import state_block
 from tests.conftest import CanopyEnv, GitPool, Journals
 
 KEY = "PROJ-1"
 BRANCH = f"agent/{KEY}-work"
-QUESTION = "Should the button be red or blue?"
-
-
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return journal(canopy_env)
-
-
-def agent_runs(agent_log: Path) -> list[dict[str, object]]:
-    return [json.loads(line) for line in agent_log.read_text().splitlines()]
-
-
-@contextlib.contextmanager
-def private_worker_does(*commands: list[str], result: dict[str, object]) -> Iterator[None]:
-    """Until the block ends, the fake private worker runs `commands` and then prints `result`."""
-    with mock.patch.dict(
-        os.environ,
-        {"FAKE_WORKER_PRIVATE_COMMANDS": json.dumps(list(commands)), "FAKE_WORKER_PRIVATE_RESULT": json.dumps(result)},
-    ):
-        yield
-
-
-def blocked() -> dict[str, object]:
-    return {"status": "blocked", "branch": BRANCH, "prs": {"repo": None}, "summary": "half done", "question": QUESTION}
-
-
-def operator(*args: str) -> int:
-    """Run one of the operator's commands, from the operator's shell: outside any tick or run."""
-    with mock.patch.dict(os.environ):
-        os.environ.pop("CANOPY_TICK_ID", None)
-        return main(list(args))
-
-
-def dispatch(conn: sqlite3.Connection, *args: str, runner: InlineRunner) -> int:
-    with in_tick(conn) as tick_id:
-        code = main(["dispatch", KEY, "--repo", "repo", *args], runner=runner)
-        db.finish_tick(conn, tick_id, "ok", "test")
-    return code
-
-
-def last_run(conn: sqlite3.Connection) -> sqlite3.Row:
-    row = conn.execute("SELECT * FROM runs ORDER BY id DESC LIMIT 1").fetchone()
-    assert row is not None
-    return row
 
 
 def test_a_started_ticket_is_worked_privately_from_question_to_reply(  # noqa: PLR0915  (M18's acceptance, one story)
@@ -95,9 +60,9 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(  # noqa: P
     assert "is started, privately" in capsys.readouterr().out
 
     # Dispatched with no label: the start record authorizes it, and the harness picks the private worker.
-    with private_worker_does(*commit_and_push(BRANCH), result=blocked()):
+    with private_worker_does(*commit_and_push(BRANCH), result=blocked_result()):
         runner = InlineRunner()
-        assert dispatch(conn, "--kind", "implement", runner=runner) == 0
+        assert dispatch_in_tick(conn, "--kind", "implement", runner=runner).code == 0
         run = last_run(conn)
         assert run["private"] == 1
         assert "private: started by the operator" in capsys.readouterr().out
@@ -134,7 +99,7 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(  # noqa: P
         reply = "Blue, to match the header."
         time = FakeTime()
         with (
-            private_worker_does(result={**blocked(), "status": "done", "question": None}),
+            private_worker_does(result={**blocked_result(), "status": "done", "question": None}),
             contextlib.ExitStack() as after_reply,
         ):
 
@@ -283,14 +248,14 @@ def test_a_stopped_ticket_is_dispatched_by_nothing_until_started_again(
     assert operator("stop", KEY) == 0
     # Not even with a queue label: a stopped ticket stays private.
     runner = InlineRunner()
-    assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 1
+    assert dispatch_in_tick(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner).code == 1
     assert "dispatch refused (stopped)" in capsys.readouterr().err
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
     record = conversation.start_of(conn, KEY)
     assert record is not None
     assert record["status"] == "stopped"
     assert operator("start", KEY) == 0
-    assert dispatch(conn, "--kind", "implement", runner=runner) == 0
+    assert dispatch_in_tick(conn, "--kind", "implement", runner=runner).code == 0
 
 
 def test_a_private_ticket_is_never_split(
@@ -298,7 +263,7 @@ def test_a_private_ticket_is_never_split(
 ) -> None:
     assert operator("start", KEY) == 0
     runner = InlineRunner()
-    assert dispatch(conn, "--kind", "split", "--request", "c-1", runner=runner) == 1
+    assert dispatch_in_tick(conn, "--kind", "split", "--request", "c-1", runner=runner).code == 1
     assert "dispatch refused (private)" in capsys.readouterr().err
 
 
@@ -314,11 +279,11 @@ def test_a_stop_that_commits_before_the_runs_insert_wins(
 
     def stop_meanwhile(c: sqlite3.Connection, key: str) -> str:
         # The operator stops the ticket after the dispatch planned the run and before it inserts it.
-        conversation.stop(journal(canopy_env), conversation.Ref("ticket", key), channel="cli")
+        conversation.stop(canopy_env.journal(), conversation.Ref("ticket", key), channel="cli")
         return real(c, key)
 
     with mock.patch.object(conversation, "prompt_conversation", autospec=True, side_effect=stop_meanwhile):
-        assert dispatch(conn, "--kind", "implement", runner=InlineRunner()) == 1
+        assert dispatch_in_tick(conn, "--kind", "implement", runner=InlineRunner()).code == 1
         assert "dispatch refused (stopped)" in capsys.readouterr().err
         assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
         assert {s["status"] for s in pool(treehouse_state)} == {"available"}
@@ -333,7 +298,7 @@ def test_run_reads_the_start_record_again_before_the_worker_starts(
 ) -> None:
     assert operator("start", KEY) == 0
     runner = InlineRunner()
-    assert dispatch(conn, "--kind", "implement", runner=runner) == 0
+    assert dispatch_in_tick(conn, "--kind", "implement", runner=runner).code == 0
     assert operator("stop", KEY) == 0
     run = last_run(conn)
     assert main(["_run", str(run["id"])], runner=runner) == 0
@@ -354,7 +319,7 @@ def test_a_public_run_does_not_start_once_the_ticket_is_started_privately(
     conn: sqlite3.Connection,
 ) -> None:
     runner = InlineRunner()
-    assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 0
+    assert dispatch_in_tick(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner).code == 0
     assert operator("start", KEY) == 0
     run = last_run(conn)
     assert run["private"] == 0
@@ -379,12 +344,12 @@ def test_with_tracker_private_a_labeled_tickets_first_dispatch_starts_it_private
     private_by_default(canopy_env)
     runner = InlineRunner()
     # The label still authorizes the first dispatch: without one there is nothing to start.
-    assert dispatch(conn, "--kind", "implement", runner=runner) == 1
+    assert dispatch_in_tick(conn, "--kind", "implement", runner=runner).code == 1
     assert "dispatch refused (unauthorized)" in capsys.readouterr().err
     assert db.starts(conn) == []
 
-    with private_worker_does(*commit_and_push(BRANCH), result=blocked()):
-        assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 0
+    with private_worker_does(*commit_and_push(BRANCH), result=blocked_result()):
+        assert dispatch_in_tick(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner).code == 0
         assert "label agent-ready-tester; starts it privately (tracker.private)" in capsys.readouterr().out
         run = last_run(conn)
         assert run["private"] == 1
@@ -402,11 +367,11 @@ def test_with_tracker_private_a_labeled_tickets_first_dispatch_starts_it_private
     assert operator("show", KEY) == 0
     assert "by its first dispatch, on its queue label" in capsys.readouterr().out
     assert operator("reply", KEY, "Blue.") == 0
-    with private_worker_does(result={**blocked(), "status": "done", "question": None}):
-        assert dispatch(conn, "--kind", "resume", runner=runner) == 0
+    with private_worker_does(result={**blocked_result(), "status": "done", "question": None}):
+        assert dispatch_in_tick(conn, "--kind", "resume", runner=runner).code == 0
     assert last_run(conn)["private"] == 1
     assert operator("stop", KEY) == 0
-    assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "resume", runner=runner) == 1
+    assert dispatch_in_tick(conn, "--label", "agent-ready-tester", "--kind", "resume", runner=runner).code == 1
     assert "dispatch refused (stopped)" in capsys.readouterr().err
 
 
@@ -417,11 +382,11 @@ def test_tracker_private_leaves_a_ticket_already_worked_in_public_public(
     conn: sqlite3.Connection,
 ) -> None:
     runner = InlineRunner()
-    assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 0
+    assert dispatch_in_tick(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner).code == 0
     private_by_default(canopy_env)
     # Its conversation is already on the tracker, so it stays there.
     conn.execute("UPDATE runs SET status = 'failed', ended_at = started_at")
-    assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 0
+    assert dispatch_in_tick(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner).code == 0
     assert last_run(conn)["private"] == 0
     assert db.starts(conn) == []
 
@@ -442,7 +407,9 @@ def test_tracker_private_refuses_without_tracker_tools_for_a_private_worker(
 ) -> None:
     canopy_env.write_shared('[tracker]\nprovider = "linear"\nquery = "assigned to me"\n')
     private_by_default(canopy_env)
-    assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=InlineRunner()) == 1
+    assert (
+        dispatch_in_tick(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=InlineRunner()).code == 1
+    )
     assert "dispatch refused (no_read_tools)" in capsys.readouterr().err
     assert db.starts(conn) == []
 
@@ -455,7 +422,7 @@ def test_stop_now_ends_the_running_run_and_returns_its_slot(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     assert operator("start", KEY) == 0
-    assert dispatch(conn, "--kind", "implement", runner=InlineRunner()) == 0
+    assert dispatch_in_tick(conn, "--kind", "implement", runner=InlineRunner()).code == 0
     run = last_run(conn)
     # Stand-ins for `_run` and its worker, each leading its own process group as the real ones do.
     # Each has a log, and so a lifelock, of its own.
@@ -492,7 +459,7 @@ def test_a_private_run_refuses_a_worktree_config_that_names_the_trackers_tools(
         (slot / "opencode.json").write_text('{"permission": {"atlassian_addOrEditJiraIssueComment": "allow"}}')
     assert operator("start", KEY) == 0
     runner = InlineRunner()
-    assert dispatch(conn, "--kind", "implement", runner=runner) == 0
+    assert dispatch_in_tick(conn, "--kind", "implement", runner=runner).code == 0
     assert main(["_run", str(last_run(conn)["id"])], runner=runner) == 0
     run = last_run(conn)
     assert run["status"] == "crashed"
@@ -690,7 +657,7 @@ def test_show_a_run_and_a_chore(
 ) -> None:
     with worker_does(*commit_and_push(BRANCH)):
         runner = InlineRunner()
-        assert dispatch(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner) == 0
+        assert dispatch_in_tick(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner).code == 0
         assert main(["_run", "1"], runner=runner) == 0
         capsys.readouterr()
         assert main(["show", "run:1"]) == 0

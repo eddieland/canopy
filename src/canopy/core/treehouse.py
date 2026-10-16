@@ -35,14 +35,14 @@ class TreehouseError(pools.PoolError):
 class _Held(BaseModel):
     """The fields of a `get` allocation needed to return it, for output that is not a full `Lease`."""
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     path: Path
     lease_id: StrictStr
     lease_holder: StrictStr
 
 
-_SLOTS = TypeAdapter(list[Slot])
+_SLOTS = TypeAdapter(list[Slot], config=ConfigDict(defer_build=True))
 
 
 @dataclass(frozen=True)
