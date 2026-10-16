@@ -18,7 +18,7 @@ check the overseer runs inline. Chores are not "tasks", which is OpenCode's suba
 
 ### Definition
 
-Chores are user-only (§12); one in a workspace file is a config error (TRUST_MODEL T7).
+Chores are private (§12); one in a workspace file is a config error (TRUST_MODEL T7).
 
 ```toml
 [runtime]
@@ -60,8 +60,9 @@ workspaces = ["acme"]     # optional; default every workspace
   created readable only by the operator. The shadowing check (§13) covers `cwd` and every directory above it before
   the agent starts: OpenCode config there that defines one of canopy's agents makes the run `crashed`.
 - `workspaces` names workspaces by their map's `[workspace] name` (§18). Empty (the
-  default) means every workspace whose loop reads the user file. A chore in two workspaces runs in each, each with its
-  own journal.
+  default) means every workspace whose loop reads the file the chore is in: every workspace, for the user file, and
+  its own, for a workspace's private file (§12). A chore in two workspaces runs in each, each with its own journal.
+  `[chores]` comes whole from the last file that sets it, so a private file's chores replace the user file's.
 
 ### Off unless configured
 
@@ -110,7 +111,7 @@ CI system.
 `canopy chore run` requires `CANOPY_TICK_ID` like `dispatch` (D020) and refuses, recording `refused:<guard>`, on the
 first of:
 
-- `unknown_chore`: no such chore in the user config, not for this workspace, or `max_chores` is 0.
+- `unknown_chore`: no such chore in the operator's config, not for this workspace, or `max_chores` is 0.
 - `running`: a run of this chore is running.
 - `not_due`: less than `every_minutes` since this chore's latest run started, however it ended.
 - `outside_hours`: now is outside the chore's `days` and `hours`, in its `timezone`.
@@ -257,7 +258,7 @@ Approved with M9:
   its `every_minutes`, or more than `capacity.max_chores` at once.
 - T6: a chore's only output is its result line; the shipped definition has no write tools. Residual: a steered chore
   can put up to 20 findings of its choosing before the operator and into `notify.cmd`, and a link can carry data.
-- T7: chores, `runtime.chore_cmd`, and `capacity.max_chores` are user-only.
+- T7: chores, `runtime.chore_cmd`, and `capacity.max_chores` are private.
 - §7: the operator is responsible for any tool allowed in a chore's definition. canopy assumes chore tools only read.
 
 ### Open
@@ -267,7 +268,6 @@ Approved with M9:
 - Whether findings should inform ticket decisions once chores have a track record (a flaky-check finding raising
   attention instead of dispatching `fix-ci`). Only to hold work back or raise attention, never to make a ticket a
   candidate, and opt-in per chore.
-- Whether `workspaces` should become a per-workspace table in the user file.
 - Whether a repository should offer chores operators opt into by name, as it offers its tracker query.
 - Whether a chore should get checkouts of the workspace's repositories, for a tool that reads files rather than
   GitHub (today the operator keeps a checkout current and points `cwd` at it). The parts exist: a review's detached
@@ -298,7 +298,7 @@ cmd = "curl -sS --fail --data-binary @- https://ntfy.sh/my-private-topic"
 format = "text"
 ```
 
-- Sinks are user-only (§12), like every `notify.*` key (TRUST_MODEL T7).
+- Sinks are private (§12), like every `notify.*` key (TRUST_MODEL T7).
 - A sink name matches `[a-z][a-z0-9-]*`. At most 5 sinks, since each can hold the tick lock for its timeout.
 - `cmd` follows `notify.cmd`'s rules (§12): split into argv, no shell, no `{prompt}`. It runs in the workspace root
   with the message on stdin and a 60-second timeout. Exit 0 means delivered; anything else, timeout included, means
@@ -573,7 +573,7 @@ posts as the operator, since the loop never read reviews from the PR anyway.
 
 ### Configuration
 
-Every review key is user-only (§12), except the per-PR limit, a shared policy the repository may only tighten
+Every review key is private (§12), except the per-PR limit, a shared policy the repository may only tighten
 (TRUST_MODEL T7).
 
 ```toml
@@ -743,9 +743,9 @@ Review decisions are `decisions` rows with the PR's URL in the `pr` column: `dis
 ### Review requests
 
 Asked for by the operator (2026-10-14, ROADMAP M42): hand canopy a coworker's PR to review without writing a search into
-`review.query`, which lives in the user file and reads one repository's PRs. A request asks for one review, at the
-PR's head. Watching a PR, reviewing it again at each new commit until it merges, was in M42's sketch and is deferred:
-the operator judged it more than MVP needs (2026-10-16), and asking again after a push reviews the new head.
+`review.query`, which lives in the operator's own config and reads one repository's PRs. A request asks for one review,
+at the PR's head. Watching a PR, reviewing it again at each new commit until it merges, was in M42's sketch and is
+deferred: the operator judged it more than MVP needs (2026-10-16), and asking again after a push reviews the new head.
 
 - A request is a journal fact, like a start record (§22): the PR's URL, when and through which channel it was made,
   and when and why it ended. At most one is open per PR; asking again records nothing. It names no repository: the
@@ -924,10 +924,10 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
 ### Trust model changes
 
 Recorded in TRUST_MODEL with M11's human approval: T1 (the reviewer reads the most hostile text; what it writes is
-data; `review.query` authorizes and is user-only), T3 (`max_reviews`, `max_reviews_per_day`, `max_reviews_per_pr`,
+data; `review.query` authorizes and is private), T3 (`max_reviews`, `max_reviews_per_day`, `max_reviews_per_pr`,
 one review per commit, and the review timeout are controls in code), T4 (the harness runs nothing from the checkout,
 and the reviewer's working directory is outside it), T6 (the reviewer has no write tool; what it read leaves only
-through the journal and a resumed worker's prompt), T7 (every review key user-only except
+through the journal and a resumed worker's prompt), T7 (every review key private except
 `policy.max_reviews_per_pr`), §6 (never submit a PR review; never push to or edit a PR the loop is only reviewing),
 and §7 (a reviewer definition that runs commands runs the PR's code). D114 removed the review comment and its T5
 marker, with the operator's approval. M42 adds, with its approval note: T1 (a review request authorizes a

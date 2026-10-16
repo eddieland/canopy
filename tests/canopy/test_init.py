@@ -35,10 +35,14 @@ def test_init_in_an_empty_directory_makes_a_workspace_and_writes_nothing_else(
     assert "'agent-ready-tester'" in out
     assert "Branch protection" in out
     assert "does not load" not in out
-    assert 'labels = ["agent-ready-tester"]' in canopy_env.user_file.read_text()
+    private_file = empty / ".canopy" / "config.toml"
+    assert 'labels = ["agent-ready-tester"]' in private_file.read_text()
+    assert private_file.stat().st_mode & 0o777 == 0o600
+    assert not canopy_env.user_file.exists()
     assert 'provider = "github"' in (empty / config.WORKSPACE_FILE_NAME).read_text()
     # Agent runs load canopy's definitions from its own directory (D040).
-    assert sorted(p.name for p in empty.iterdir()) == [".gitignore", "MAP.md", config.WORKSPACE_FILE_NAME]
+    assert sorted(p.name for p in empty.iterdir()) == [".canopy", ".gitignore", "MAP.md", config.WORKSPACE_FILE_NAME]
+    assert [p.name for p in (empty / ".canopy").iterdir()] == ["config.toml"]
 
     # What init wrote loads.
     found = workspace.load(empty)
@@ -52,9 +56,9 @@ def test_init_in_an_empty_directory_makes_a_workspace_and_writes_nothing_else(
 def test_init_writes_only_keys_without_a_useful_default(canopy_env: CanopyEnv, empty: Path) -> None:
     # A default written into a file is pinned there: a later canopy's default never reaches it.
     assert main(["init", "--provider", "jira"]) == 0
-    user = tomllib.loads(canopy_env.user_file.read_text())
+    private = tomllib.loads((empty / ".canopy" / "config.toml").read_text())
     shared = tomllib.loads((empty / config.WORKSPACE_FILE_NAME).read_text())
-    assert user == {
+    assert private == {
         "tracker": {"labels": ["agent-ready-tester"]},
         "trust": {"authorized_repliers": [], "trusted_reviewers": []},
     }
@@ -67,14 +71,36 @@ def test_init_in_a_workspace_never_overwrites_configs(
 ) -> None:
     user_before = canopy_env.user_file.read_text()
     shared_before = canopy_env.shared_file.read_text()
+    private_file = canopy_env.state_dir / "config.toml"
     with contextlib.chdir(canopy_env.repo):  # inside the workspace, not at its root
         assert main(["init", "--provider", "github"]) == 0
         assert canopy_env.user_file.read_text() == user_before
         assert canopy_env.shared_file.read_text() == shared_before
         out = capsys.readouterr().out
-        assert f"kept    {canopy_env.user_file}" in out
+        assert f"wrote   {private_file}" in out
         assert f"kept    {canopy_env.shared_file}" in out
         assert not (canopy_env.repo / "canopy.toml").exists()
+
+        private_file.write_text("# mine\n")
+        assert main(["init"]) == 0
+        assert f"kept    {private_file}" in capsys.readouterr().out
+        assert private_file.read_text() == "# mine\n"
+
+
+def test_init_leaves_out_of_the_private_file_what_the_user_file_sets(
+    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An existing user file keeps working unchanged: the private file does not override its labels or trust lists."""
+    canopy_env.write_user(
+        canopy_env.user_file.read_text().replace("[runtime]", "[trust]\nauthorized_repliers = ['me']\n\n[runtime]")
+    )
+    assert main(["init"]) == 0
+
+    assert "queue label" not in capsys.readouterr().out
+    private = tomllib.loads((canopy_env.state_dir / "config.toml").read_text())
+    assert private == {"trust": {"trusted_reviewers": []}}
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert (cfg.tracker.labels, cfg.trust.authorized_repliers) == (("agent-ready-tester",), ("me",))
 
 
 def test_init_refuses_a_code_checkout(

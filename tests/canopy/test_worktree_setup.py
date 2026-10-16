@@ -229,7 +229,7 @@ def test_a_setup_command_is_checked_when_the_config_loads(canopy_env: CanopyEnv,
 def test_setup_and_the_include_file_are_user_only(canopy_env: CanopyEnv, section: str, line: str) -> None:
     # Either would run or seed what a commit chose on the operator's machine (TRUST_MODEL T7).
     canopy_env.write_shared(canopy_env.shared_file.read_text() + f"\n[{section}]\n{line}\n")
-    with pytest.raises(config.ConfigError, match="user-only"):
+    with pytest.raises(config.ConfigError, match="is private"):
         config.load(canopy_env.root, canopy_env.user_file)
 
 

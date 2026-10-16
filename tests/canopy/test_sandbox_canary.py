@@ -160,6 +160,7 @@ def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Iter
     (home / ".bashrc").write_text("# the operator's\n")
     (home / ".cache" / "opencode").mkdir(parents=True)
     (canopy_env.state_dir / "secret").write_text(f"{PLANTED}\n")
+    (canopy_env.state_dir / "config.toml").write_text(f"# {PLANTED}\n")
     objects = canopy_env.state_dir / "runs" / "1.objects"
     objects.mkdir(parents=True)
 
@@ -191,6 +192,7 @@ def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Iter
     [
         pytest.param('cat "$HOME/.ssh/id_ed25519"', id="ssh-key"),
         pytest.param('cat "$1/secret"', id="state-dir"),
+        pytest.param('cat "$1/config.toml"', id="private-config"),
         pytest.param(f'grep -r {PLANTED.removeprefix("canary-")} "$HOME" "$1"', id="search"),
     ],
 )
@@ -208,6 +210,7 @@ def test_a_run_cannot_read_home_or_the_state_dir(canary: Canary, script: str, ro
         pytest.param('echo pwned >> "$HOME/.bashrc"', "~/.bashrc", id="bashrc"),
         pytest.param('echo pwned >> "$HOME/.config/canopy/config.toml"', "~/.config/canopy/config.toml", id="config"),
         pytest.param('echo pwned > "$1/planted"', "{state}/planted", id="state-dir"),
+        pytest.param('echo pwned >> "$1/config.toml"', "{state}/config.toml", id="private-config"),
         pytest.param('echo pwned > "$1/runs/planted"', "{state}/runs/planted", id="state-runs"),
         # OpenCode imports packages and runs programs from its cache: the overseer's, outside any sandbox, included.
         pytest.param('echo pwned > "$HOME/.cache/opencode/planted"', "~/.cache/opencode/planted", id="runtime-cache"),

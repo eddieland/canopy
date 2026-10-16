@@ -93,7 +93,7 @@ list and runs; there is no separate `list`.
 - `start` is private by construction: canopy cannot label a ticket (D003), so a ticket started in canopy keeps its
   conversation in the journal. The command says so when it runs, and when the next tick will pick the ticket up. A
   later `--public` could start a ticket whose conversation stays on the tracker; none is planned.
-- `tracker.private` (user-only, off by default) starts labeled tickets privately (D119). The first dispatch of a ticket
+- `tracker.private` (private, off by default) starts labeled tickets privately (D119). The first dispatch of a ticket
   canopy never ran, authorized by its `--label` as any public ticket's, writes the start record in the transaction that
   inserts the run, with channel `label`, and the run is private. From then on it is an ordinary private ticket: no
   `--label`, no label check in its worker's prompt, and removing the label does not stop it; `canopy stop` does. The
@@ -131,7 +131,7 @@ list and runs; there is no separate `list`.
   `canopy-worker-private`: `canopy-worker`, its MCP tools denied by name included (D084), with every tool of the
   tracker's MCP server denied by wildcard and only its read tools allowed by name, and the tracker CLIs canopy knows
   (`gh`, `acli`, `jira`) denied in its bash rules.
-  - The server is `tracker.mcp_server` and its tools `tracker.read_tools`, both user-only, with a default for each
+  - The server is `tracker.mcp_server` and its tools `tracker.read_tools`, both private, with a default for each
     shipped provider's usual MCP server (`config.DEFAULT_TRACKER_TOOLS`): `atlassian` with Jira's read tools for
     `jira`, and `github` for `github`, whose server is also the one PRs go through, so its list adds the PR tools a
     worker needs and leaves out every tool that writes to an issue. Both are rendered into the definition's
@@ -334,7 +334,7 @@ Outbound, every channel uses §20's events: a sink posts them, and the web UI re
 Served by `canopy loop` from a thread (D073):
 
 - On unless `--no-serve` or `serve.enabled = false`. `serve.bind` (loopback by default, or a private address) and
-  `serve.port`. Every `serve.*` key is user-only (T7).
+  `serve.port`. Every `serve.*` key is private (T7).
 - It requires the operator's listener secret (T8, below). Without one the loop says why and how to make one, logs it,
   and serves nothing; the loop goes on. It serves plain HTTP, also on a private address: T8's "relies on the network"
   residual stands (D076).

@@ -24,7 +24,8 @@ reads config from, or writes files into, your own checkouts (D016). Every stage 
 | --- | --- |
 | Shared config and the list of repositories | `canopy-workspace.toml` at the workspace root |
 | What each repository owns, for the overseer | `MAP.md` at the workspace root |
-| Personal config | `~/.config/canopy/config.toml`, one file for every workspace |
+| Your config for this workspace | `.canopy/config.toml`, its private file, written by `canopy init` |
+| Your config for every workspace | `~/.config/canopy/config.toml`, optional; the private file wins over it |
 | Primary clones | `repos/<name>/`, cloned by `canopy init` or `canopy workspace sync` |
 | Worktree pools | `.treehouse/`, apart from your interactive pools under `~/.treehouse` |
 | Journal, logs, `attention.md` | `.canopy/`, readable only by you |
@@ -42,17 +43,18 @@ The smallest setup: canopy works tickets in one repository.
    canopy init --provider jira https://github.com/acme/api.git
    ```
 
-   It writes, overwriting nothing, `~/.config/canopy/config.toml`, your personal config, with a queue label of your
-   own (`agent-ready-<you>`); and, in the directory, `canopy-workspace.toml`, `MAP.md`, and a `.gitignore` for what
-   canopy keeps there. It clones the repository into `repos/api/` and prints the branch protection canopy relies on.
-   Run in a git checkout, init refuses: canopy keeps nothing in your repositories.
+   It writes, overwriting nothing, `.canopy/config.toml`, the workspace's private config, yours alone, with a queue
+   label of your own (`agent-ready-<you>`); and, in the directory, `canopy-workspace.toml`, `MAP.md`, and a `.gitignore`
+   for what canopy keeps there. It clones the repository into `repos/api/` and prints the branch protection canopy
+   relies on. Run in a git checkout, init refuses: canopy keeps nothing in your repositories.
 2. In `canopy-workspace.toml`, set `tracker.query` to find candidate tickets and write a one-line `summary` under
    `[repos.api]`. Create the `needs-human` label in your tracker (or set `needs_human_label` to one you have).
    `examples/canopy-workspace.toml` is a full one. Commit the workspace to a repository of its own only if teammates
    share it.
-3. In your personal config, add your tracker account id to `trust.authorized_repliers`, so your comments can unblock a
-   ticket, and your GitHub login to `trust.trusted_reviewers`, so your review comments send a worker back to its PR.
-   `examples/config.toml` lists every key with its default.
+3. In `.canopy/config.toml`, add your tracker account id to `trust.authorized_repliers`, so your comments can unblock
+   a ticket, and your GitHub login to `trust.trusted_reviewers`, so your review comments send a worker back to its PR.
+   `examples/config.toml` lists every key with its default. What should hold in every workspace, such as the runtime
+   templates, goes in `~/.config/canopy/config.toml` instead.
 4. Add your queue label to a ticket, then run `canopy loop --dry-run --ticks 1` in the workspace and read the plan it
    prints. `canopy decisions` shows it again.
 5. Once you trust it, leave `canopy loop` running.
@@ -67,19 +69,19 @@ with the loop from now on.
 
 A slot is a fresh git worktree. It has none of the gitignored files in your own checkout, such as `.env.local`, and no
 dependencies installed. If a worker cannot build or test without them, set the slot up before the worker starts. Both
-settings below live in your personal config.
+settings below live in the workspace's private config.
 
 **Seed gitignored files.** On every lease, treehouse copies the gitignored files a `.worktreeinclude` manifest names
 from the primary clone into the slot. To use your own manifest instead of the repository's committed one:
 
 ```toml
-# ~/.config/canopy/config.toml
+# .canopy/config.toml
 [paths]
-worktree_include = "~/.config/canopy/worktreeinclude"
+worktree_include = "worktreeinclude"   # relative: .canopy/worktreeinclude
 ```
 
 ```text
-# ~/.config/canopy/worktreeinclude: git's exclude-file patterns, matched in the primary clone.
+# .canopy/worktreeinclude: git's exclude-file patterns, matched in the primary clone.
 .env.local
 ```
 
@@ -91,7 +93,7 @@ before the worker starts, with `CANOPY_REPO` naming the repository and `CANOPY_B
 ask `CANOPY_BRANCH` for the branch's name, not git:
 
 ```toml
-# ~/.config/canopy/config.toml
+# .canopy/config.toml
 [runtime]
 setup_cmd = "sh -c 'pnpm install --frozen-lockfile'"
 setup_timeout_minutes = 30
@@ -115,7 +117,7 @@ by the first run that lands in it. Declare the pool's size instead when a new sl
 bound its disk use:
 
 ```toml
-# ~/.config/canopy/config.toml
+# .canopy/config.toml
 [capacity]
 slots_per_repo = 2
 ```
@@ -142,7 +144,7 @@ When one queue's tickets land in several repositories, keep one workspace for al
 4. Size each pool. `slots_per_repo` applies to every repository; `[capacity.repo_slots]` sets one by name and wins:
 
    ```toml
-   # ~/.config/canopy/config.toml
+   # .canopy/config.toml
    [capacity]
    slots_per_repo = 2
    [capacity.repo_slots]
@@ -206,7 +208,7 @@ server in memory. Measure one (`du -sh "$(bazel info output_base)"` in a slot th
 repository's pool on its own:
 
 ```toml
-# ~/.config/canopy/config.toml
+# .canopy/config.toml
 [capacity]
 max_workers = 2
 slots_per_repo = 2

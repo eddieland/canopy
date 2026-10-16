@@ -60,7 +60,7 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run; `--no-record` records nothing. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
-| `canopy init [--provider NAME] [[NAME=]URL...]` | Sets up a workspace here and the user config; adds and syncs URLs. |
+| `canopy init [--provider NAME] [[NAME=]URL...]` | Sets up a workspace here and its private config; adds and syncs URLs. |
 | `canopy workspace sync [--dry-run]` | Converges `repos/` on the map and each pool on its declared size (DESIGN §18). |
 | `canopy workspace add [NAME=]URL...` | Adds repositories to the map by clone URL, then syncs. |
 | `canopy notify test [SINK]` | Sends a test message to every notification sink, or one, now. Changes nothing. |
@@ -83,10 +83,11 @@ the commands below from the workspace root.
 | `chores/<run id>.log`, `.prompt` | A chore run's output and prompt; `chores/<name>/` is a chore's own directory. |
 | `reviews/<run id>.log`, `.prompt` | A review run's output and prompt. |
 
-Config: the user file `~/.config/canopy/config.toml` (`$XDG_CONFIG_HOME/canopy/config.toml`), personal, and the
-workspace's `canopy-workspace.toml`, which also lists the repositories, shared. No code repository holds canopy config.
-The user file wins key by key; some keys, such as `tracker.labels` and everything under `runtime`, may be set only in the
-user file.
+Config: the workspace's `canopy-workspace.toml`, which also lists the repositories, shared; the user file
+`~/.config/canopy/config.toml` (`$XDG_CONFIG_HOME/canopy/config.toml`), personal and optional, for every workspace; and
+the workspace's private file `.canopy/config.toml`, personal, for this workspace alone. No code repository holds canopy
+config. Later files win key by key, the private file last; private keys, such as `tracker.labels` and everything under
+`runtime`, may be set only in the user file or the private file.
 
 ## Answering "why wasn't KEY picked up?"
 
@@ -233,7 +234,7 @@ When the operator asks you to look into findings or turn them into tickets:
 
 ## Getting a ticket worked
 
-Add the operator's queue label (`tracker.labels` in the user config, `agent-ready-<user>` by default) to an open ticket
+Add the operator's queue label (`tracker.labels`, `agent-ready-<user>` by default) to an open ticket
 that `tracker.query` finds. The next live tick with free capacity that runs the query dispatches it: every tick, unless
 `tracker.query_every_minutes` spaces the query out. To preview, run `canopy tick --dry-run` and then
 `canopy decisions`.

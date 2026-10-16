@@ -706,5 +706,5 @@ def test_config_refuses_a_tool_name_that_could_reach_the_definition_as_more_than
     with pytest.raises(config.ConfigError, match="read_tools"):
         config.load(canopy_env.root)
     canopy_env.write_shared(canopy_env.shared_file.read_text() + 'mcp_server = "github"\n')
-    with pytest.raises(config.ConfigError, match="user-only"):
+    with pytest.raises(config.ConfigError, match="is private"):
         config.load(canopy_env.root)
