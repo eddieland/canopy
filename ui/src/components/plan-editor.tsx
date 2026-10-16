@@ -15,10 +15,11 @@ import {
     Redo2,
     SquareCode,
     Strikethrough,
+    Table,
     TextQuote,
     Undo2,
 } from 'lucide-react'
-import { useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { Panel, PanelHeader } from '@/components/panel'
@@ -28,8 +29,10 @@ import { Button } from '@/components/ui/button'
 import {
     DropdownMenu,
     DropdownMenuContent,
+    DropdownMenuItem,
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
+    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -378,6 +381,7 @@ function FormatBar({ editor, canComment, onComment }: { editor: Editor; canComme
             marks: MARKS.filter((mark) => current.isActive(mark.name)).map((mark) => mark.name),
             blocks: BLOCKS.filter((block) => current.isActive(block.name)).map((block) => block.name),
             style: styleAt(current),
+            inTable: current.isActive('table'),
             undo: current.can().undo(),
             redo: current.can().redo(),
         }),
@@ -533,6 +537,7 @@ function FormatBar({ editor, canComment, onComment }: { editor: Editor; canComme
                     </ToolbarToggleItem>
                 ))}
             </ToolbarToggleGroup>
+            <TableMenu editor={editor} inTable={state.inTable} />
             <ToolbarSeparator />
             <ToolbarButton
                 size="xs"
@@ -605,6 +610,124 @@ function StyleMenu({ style, onStyle }: { style: BlockStyle | undefined; onStyle:
                         </DropdownMenuRadioItem>
                     ))}
                 </DropdownMenuRadioGroup>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+}
+
+// What the table menu does: insert a table where none is, and inside one, add or delete its rows and columns, or the
+// table. Each runs on the editor and leaves the cursor there.
+type TableAction =
+    | 'insert'
+    | 'rowBefore'
+    | 'rowAfter'
+    | 'columnBefore'
+    | 'columnAfter'
+    | 'deleteRow'
+    | 'deleteColumn'
+    | 'deleteTable'
+
+// The menu's items, in its groups, each with what it needs: a table to work in, or none.
+const TABLE_ITEMS: { action: TableAction; label: string; inTable: boolean }[][] = [
+    [{ action: 'insert', label: 'Insert table', inTable: false }],
+    [
+        { action: 'rowBefore', label: 'Add row above', inTable: true },
+        { action: 'rowAfter', label: 'Add row below', inTable: true },
+        { action: 'columnBefore', label: 'Add column left', inTable: true },
+        { action: 'columnAfter', label: 'Add column right', inTable: true },
+    ],
+    [
+        { action: 'deleteRow', label: 'Delete row', inTable: true },
+        { action: 'deleteColumn', label: 'Delete column', inTable: true },
+        { action: 'deleteTable', label: 'Delete table', inTable: true },
+    ],
+]
+
+// A plan's tables, as a menu: a new one is three columns of a header row and two rows, as a plan's Files table is,
+// and inside one its rows and columns are added and deleted. What the cursor's place does not allow is disabled. As
+// the style menu does, an action leaves the cursor in the plan, and Escape gives the focus back to the button.
+function TableMenu({ editor, inTable }: { editor: Editor; inTable: boolean }) {
+    const [chose, setChose] = useState(false)
+
+    function run(action: TableAction) {
+        const chain = editor.chain().focus()
+        switch (action) {
+            case 'insert': {
+                chain.insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+                break
+            }
+            case 'rowBefore': {
+                chain.addRowBefore().run()
+                break
+            }
+            case 'rowAfter': {
+                chain.addRowAfter().run()
+                break
+            }
+            case 'columnBefore': {
+                chain.addColumnBefore().run()
+                break
+            }
+            case 'columnAfter': {
+                chain.addColumnAfter().run()
+                break
+            }
+            case 'deleteRow': {
+                chain.deleteRow().run()
+                break
+            }
+            case 'deleteColumn': {
+                chain.deleteColumn().run()
+                break
+            }
+            case 'deleteTable': {
+                chain.deleteTable().run()
+                break
+            }
+            default: {
+                action satisfies never
+            }
+        }
+    }
+
+    return (
+        <DropdownMenu
+            onOpenChange={(open) => {
+                if (open) {
+                    setChose(false)
+                }
+            }}
+        >
+            <DropdownMenuTrigger asChild>
+                <ToolbarButton aria-label="Table" title="Table">
+                    <Table />
+                </ToolbarButton>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+                align="end"
+                onCloseAutoFocus={(event) => {
+                    if (chose) {
+                        event.preventDefault()
+                    }
+                }}
+            >
+                {TABLE_ITEMS.map((group, i) => (
+                    <Fragment key={group[0]?.action}>
+                        {i > 0 && <DropdownMenuSeparator />}
+                        {group.map((item) => (
+                            <DropdownMenuItem
+                                key={item.action}
+                                disabled={item.inTable !== inTable}
+                                onSelect={() => {
+                                    setChose(true)
+                                    run(item.action)
+                                }}
+                            >
+                                {item.label}
+                            </DropdownMenuItem>
+                        ))}
+                    </Fragment>
+                ))}
             </DropdownMenuContent>
         </DropdownMenu>
     )

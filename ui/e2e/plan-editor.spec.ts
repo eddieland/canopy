@@ -178,6 +178,44 @@ test('the style menu shows each style as the plan sets it, and leaves the cursor
     await expect(page.getByLabel('Plan Markdown')).toContainText('#### Out of scope')
 })
 
+test('the table menu inserts a table where none is, and only there', async ({ page }) => {
+    await plan(page).locator('blockquote p').click()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Enter')
+    await page.getByRole('toolbar', { name: 'Format' }).getByRole('button', { name: 'Table' }).click()
+    await expect(page.getByRole('menuitem', { name: 'Delete row' })).toBeDisabled()
+    await page.getByRole('menuitem', { name: 'Insert table' }).click()
+    await expect(plan(page).locator('table')).toHaveCount(2)
+    await expect(plan(page)).toBeFocused()
+    await page.keyboard.type('Step')
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    await expect(page.getByLabel('Plan Markdown')).toContainText('| Step')
+})
+
+test('in a table, the table menu adds and deletes its rows and columns, and the table', async ({ page }) => {
+    const table = plan(page).locator('table')
+    const pick = async (name: string) => {
+        await page.getByRole('toolbar', { name: 'Format' }).getByRole('button', { name: 'Table' }).click()
+        await page.getByRole('menuitem', { name }).click()
+    }
+    await table.locator('td', { hasText: 'the button' }).click()
+    await page.getByRole('toolbar', { name: 'Format' }).getByRole('button', { name: 'Table' }).click()
+    await expect(page.getByRole('menuitem', { name: 'Insert table' })).toBeDisabled()
+    await page.keyboard.press('Escape')
+    await table.locator('td', { hasText: 'the button' }).click()
+    await pick('Add row below')
+    await expect(table.locator('tr')).toHaveCount(5)
+    await pick('Delete row')
+    await expect(table.locator('tr')).toHaveCount(4)
+    await pick('Add column right')
+    await expect(table.locator('tr').first().locator('th')).toHaveCount(4)
+    await pick('Delete column')
+    await expect(table.locator('tr').first().locator('th')).toHaveCount(3)
+    await pick('Delete table')
+    await expect(table).toHaveCount(0)
+})
+
 test('an empty plan says what goes in it', async ({ page }) => {
     await plan(page).click()
     await page.keyboard.press('ControlOrMeta+a')
