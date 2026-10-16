@@ -23,7 +23,7 @@ MAX_FINDINGS = 20
 class Finding(BaseModel):
     """One defect the reviewer verified against the code."""
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     severity: Literal["blocking", "major", "minor"]
     title: Annotated[StrictStr, one_line, bounded(MAX_TITLE)]
@@ -38,7 +38,7 @@ class ReviewResult(BaseModel):
     The result is the whole review: it lives in the journal and is posted nowhere (D114).
     """
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     status: Literal["done", "failed"]
     verdict: Literal["clean", "findings"] | None = None

@@ -62,7 +62,7 @@ class WorkerResult(BaseModel):
     one repository.
     """
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     status: Literal["done", "blocked", "failed"]
     branch: Text | None = None
@@ -87,7 +87,7 @@ class SplitResult(BaseModel):
     and a refused one is stored without its children.
     """
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     status: Literal["done", "failed"]
     summary: Text = ""
