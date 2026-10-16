@@ -56,6 +56,21 @@ def test_a_review_anchors_its_findings_on_its_diff(backend: Backend) -> None:
     assert not found["diff"]["truncated"]
 
 
+def test_a_review_goes_gzipped_to_a_browser_that_takes_it_and_as_it_is_to_one_that_does_not(backend: Backend) -> None:
+    c = client(None, backend)
+    # httpx asks for gzip, as a browser does, and reads the body back as it was.
+    taken = c.get("/api/reviews/4")
+    assert (taken.headers["content-encoding"], taken.headers["vary"]) == ("gzip", "Accept-Encoding")
+    plain = c.get("/api/reviews/4", headers={"accept-encoding": "identity"})
+    assert ("content-encoding" in plain.headers, plain.headers["vary"]) == (False, "Accept-Encoding")
+    assert taken.json() == plain.json()
+    assert int(taken.headers["content-length"]) < int(plain.headers["content-length"])
+    # A review too short to be worth it goes as it is.
+    short = c.get("/api/reviews/3")
+    assert len(short.content) < 1024
+    assert "content-encoding" not in short.headers
+
+
 def test_a_review_without_a_diff_has_none_and_a_failed_one_says_why(backend: Backend) -> None:
     c = client(None, backend)
     first = c.get("/api/reviews/1").json()
