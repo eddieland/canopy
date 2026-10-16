@@ -1,9 +1,10 @@
-// The comments' passages in a plan's editor, drawn as highlights over the text and kept on it while the operator
-// edits. They are decorations, never part of the document, so the plan's Markdown holds nothing of them; the threads
-// keep their places as anchors (`src/lib/plan-anchors.ts`), and this plugin turns those into ranges and back. A range
-// moves with the edits around it; one whose text is deleted whole is lost, and found again if its passage comes back,
-// as an undo brings it. The plugin says what the operator does with the comments through the editor's own events, so
-// the component listens in an effect rather than handing the plugin callbacks.
+// The comments' passages in a plan's editor, drawn as highlights over the text and kept on it while the operator edits.
+// They are decorations, never part of the document, so the plan's Markdown holds nothing of them; the threads keep
+// their places as anchors (`src/lib/plan-anchors.ts`), and this plugin turns those into ranges and back. A range moves
+// with the edits around it; one whose text is deleted whole is lost, and found again if its passage comes back, as an
+// undo brings it. The open thread closes when the cursor leaves its passage, or on Escape, as a click elsewhere in a
+// shared document closes a comment there. The plugin says what the operator does with the comments through the editor's
+// own events, so the component listens in an effect rather than handing the plugin callbacks.
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorState, Transaction } from '@tiptap/pm/state'
@@ -64,7 +65,10 @@ export type HighlightAction =
 /** The plugin's key: read its state with `highlightsKey.getState(state)`. */
 export const highlightsKey = new PluginKey<Highlights>('planHighlights')
 
-/** The highlights, with Mod+Alt+M asking for a comment on the selection, as Google Docs has it. */
+/**
+ * The highlights, with Mod+Alt+M asking for a comment on the selection, as Google Docs has it, and Escape closing the
+ * open thread.
+ */
 export const PlanHighlights = Extension.create({
     name: 'planHighlights',
     addProseMirrorPlugins() {
@@ -95,6 +99,13 @@ export const PlanHighlights = Extension.create({
         return {
             'Mod-Alt-m': () => {
                 this.editor.emit('planCommentRequest', {})
+                return true
+            },
+            Escape: () => {
+                if (highlightsKey.getState(this.editor.state)?.active === undefined) {
+                    return false
+                }
+                this.editor.view.dispatch(withHighlight(this.editor.state.tr, { kind: 'activate', id: undefined }))
                 return true
             },
         }
@@ -138,7 +149,7 @@ export function anchorFor(state: EditorState, from: number, to: number): Anchor 
 
 function next(tr: Transaction, prev: Highlights, state: EditorState): Highlights {
     const action = tr.getMeta(highlightsKey) as HighlightAction | undefined
-    if (!tr.docChanged && action === undefined) {
+    if (!tr.docChanged && action === undefined && !(tr.selectionSet && leaves(tr, prev.active, prev.ranges))) {
         return prev
     }
     let { threads, active, draft } = prev
@@ -169,6 +180,10 @@ function next(tr: Transaction, prev: Highlights, state: EditorState): Highlights
         }
         case 'draft': {
             draft = action.range
+            // The passage being commented on is the one drawn open now.
+            if (draft !== undefined) {
+                active = undefined
+            }
             break
         }
         case undefined: {
@@ -178,7 +193,21 @@ function next(tr: Transaction, prev: Highlights, state: EditorState): Highlights
             action satisfies never
         }
     }
+    if (action?.kind !== 'activate' && tr.selectionSet && leaves(tr, active, ranges)) {
+        active = undefined
+    }
     return build(state, threads, ranges, active, draft)
+}
+
+// Whether the transaction's cursor is outside the passage of thread `active`, or that passage is gone. A cursor at
+// either end of it is inside, as a click just after its last word puts it.
+function leaves(tr: Transaction, active: string | undefined, ranges: ReadonlyMap<string, Range>): boolean {
+    if (active === undefined) {
+        return false
+    }
+    const range = ranges.get(active)
+    const { head } = tr.selection
+    return range === undefined || head < range.from || head > range.to
 }
 
 // The state with every thread the ranges lack looked for again, and the decorations drawn.
