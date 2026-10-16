@@ -23,7 +23,7 @@ from canopy.core.vocab import RunStatus
 from canopy.infra import procs
 from canopy.loop import tick
 from canopy.runs import policy, reconcile
-from tests.canopy.test_chores import chore_toml
+from tests.canopy.helpers import chore_toml
 
 if TYPE_CHECKING:
     import sqlite3

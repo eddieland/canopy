@@ -1,20 +1,12 @@
 """The web UI's ticks (DESIGN §6, §22, ROADMAP M24): what `canopy decisions` prints, a tick's page, and each ticket's
 decisions across ticks. Reads only."""
 
-from pathlib import Path
-
 import pytest
 
 from canopy.core import db
 from canopy.loop import attention
-from canopy.serve import mock
 from canopy.serve.backend import Backend
-from tests.canopy.test_serve import client
-
-
-@pytest.fixture
-def backend(tmp_path: Path) -> Backend:
-    return mock.seed(tmp_path / "mock")
+from tests.canopy.web_helpers import client
 
 
 def test_the_ticks_list_is_the_latest_newest_first_with_how_many_decisions_each(backend: Backend) -> None:

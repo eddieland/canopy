@@ -16,7 +16,7 @@ from canopy.core.vocab import RunStatus
 from canopy.loop import attention
 from canopy.runs import worker
 from tests.canopy.conftest import Ws, seed_pools
-from tests.canopy.helpers import InlineRunner, in_tick, journal, wait_for_run
+from tests.canopy.helpers import InlineRunner, decisions, in_tick, wait_for_run
 from tests.conftest import CanopyEnv, git
 
 LABEL = "agent-ready-tester"
@@ -24,10 +24,6 @@ LABEL = "agent-ready-tester"
 
 def split(key: str, *args: str) -> list[str]:
     return ["dispatch", key, "--label", LABEL, "--kind", "split", *args]
-
-
-def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
-    return [(d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 @contextmanager
@@ -178,7 +174,7 @@ def test_a_started_ticket_is_not_split_and_a_split_has_an_attempt_limit(ws: Ws, 
 
 
 def test_a_workspace_of_one_repository_is_never_split(canopy_env: CanopyEnv, treehouse_state: Path) -> None:
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     with in_tick(conn) as tick_id:
         assert main(split("PROJ-1", "--request", "1", "--repo", "repo"), runner=InlineRunner()) == 1
         assert decisions(conn, tick_id) == [
@@ -285,7 +281,7 @@ def test_a_timed_out_split_records_the_children_it_reported(ws: Ws, treehouse_st
 def test_a_child_is_not_worked_in_a_workspace_of_another_repository(
     canopy_env: CanopyEnv, treehouse_state: Path
 ) -> None:
-    conn = journal(canopy_env)
+    conn = canopy_env.journal()
     with in_tick(conn, dry_run=True) as tick_id:
         db.touch_ticket(conn, "PROJ-12", str(canopy_env.root))
         conn.execute(

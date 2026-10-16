@@ -150,6 +150,12 @@ If code and the design disagree, the design doc wins until a decision entry says
   directory, with HOME pointed there; commands that name a repository pass `--repo repo`). Each fake's docstring lists
   the env vars and state keys it reads. The fake agent can run commands (`FAKE_AGENT_COMMANDS`), which is how a test
   plays an overseer calling `canopy decide`.
+- What two test modules share lives in one place, never in a test module: `tests/canopy/conftest.py` for fixtures
+  (`conn`, the workspace's journal; `ctx`; the web UI's mock `backend`; `ws`), `tests/canopy/helpers.py` for helpers
+  (`in_tick`, `decisions`, `dispatch_and_run`, and scripting the fake agents: `overseer_does(canopy(...))`,
+  `worker_does`), and `web_helpers.py` and `review_helpers.py` beside it. A test module imports from no other;
+  `tests/canopy/test_layers.py` fails otherwise. Look there before writing a helper, and move one there once a second
+  module needs it.
 - A test opens a journal through `canopy_env.journal()`, or the `journals` fixture for one outside a workspace, never
   `db.connect` directly: those close it when the test ends. A connection, file, or pipe left open raises a
   ResourceWarning, which fails the test like any other warning.
