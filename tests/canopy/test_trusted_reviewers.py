@@ -142,6 +142,26 @@ def test_with_nobody_trusted_the_resume_worker_is_told_so(
         assert "## Messages from the operator\n\nNo messages from the operator.\n" in prompt
 
 
+def test_a_resume_follows_the_operators_review_skill_only_when_one_is_set(
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
+) -> None:
+    trust(canopy_env, "octocat")
+    with worker_does(*commit_and_push("agent/PROJ-1-work")):
+        run_once(conn, "--kind", "implement")
+        plain = run_once(conn, "--kind", "resume", "--context", "Address review comment 1501 by octocat")
+        prompt = (canopy_env.state_dir / "runs" / f"{plain['id']}.prompt").read_text()
+        assert "load the skill" not in prompt
+
+        canopy_env.write_user(
+            canopy_env.user_file.read_text().replace("[runtime]\n", "[runtime]\nreview_skill = 'fix-pr'\n")
+        )
+        skilled = run_once(conn, "--kind", "resume", "--context", "Address review comment 1502 by octocat")
+        assert (skilled["kind"], skilled["status"]) == ("resume", "done")
+        prompt = (canopy_env.state_dir / "runs" / f"{skilled['id']}.prompt").read_text()
+        assert "Trusted reviewers: `octocat`." in prompt
+        assert "Before you address any review feedback, load the skill `fix-pr` and follow it" in prompt
+
+
 def test_a_reply_on_a_public_ticket_needs_a_ticket_canopy_knows(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:

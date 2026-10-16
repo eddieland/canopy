@@ -578,6 +578,9 @@ class Runtime(Section):
     # The skill workers open PRs with, instead of the GitHub MCP; empty means the MCP (DESIGN §8). User-only: it
     # chooses what workers are told to do, which a shared workspace file must not (TRUST_MODEL T7).
     pr_skill: Annotated[StrictStr, Scope.USER, AfterValidator(_skill_name)] = ""
+    # The skill `resume` workers follow when they address review feedback; empty means none (DESIGN §8). User-only, as
+    # `pr_skill` is. It shapes how a worker addresses feedback, never whose: that stays `trust.trusted_reviewers`.
+    review_skill: Annotated[StrictStr, Scope.USER, AfterValidator(_skill_name)] = ""
     # Run in each slot of a worker run once its branch is checked out, before the worker starts; a failure or timeout
     # ends the run `crashed` (DESIGN §8). Empty means none. It runs the branch's code on this machine.
     setup_cmd: Annotated[SetupCommand, Scope.USER] = ""

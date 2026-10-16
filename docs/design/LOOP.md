@@ -618,7 +618,8 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
      `{{PRS}}`, its worker's only way to learn its repositories; an override without them still serves runs in one
      repository. For older overrides, `{{SLOT}}` is the worker's working directory and `{{BASE}}` and `{{PR_URL}}` the
      one repository's base and PR. With `runtime.pr_skill` set, an `implement` or `resume` prompt without
-     `{{OPEN_PR}}` is `bad_prompt` too, so an override that still names the GitHub MCP fails closed. A public
+     `{{OPEN_PR}}` is `bad_prompt` too, so an override that still names the GitHub MCP fails closed, and with
+     `runtime.review_skill` set, so is a `resume` prompt without `{{REVIEW_SKILL}}`. A public
      ticket's prompt without `{{OPERATOR_MESSAGES}}` is `bad_prompt` once the operator has written to the ticket in
      canopy (§22, D093), and still renders for a ticket the operator never wrote to.
    - Every prompt but a split's carries `{{STANDING_INSTRUCTIONS}}`, the operator's file `paths.worker_instructions`
@@ -822,6 +823,18 @@ goes in the result's `prs`. The overseer and later workers still read the PR thr
 that server can read. `fix-ci` and `split` open no PRs and ignore the key. Updating an existing PR, such as retargeting
 a stacked
 one, stays with the MCP.
+
+How a worker addresses review feedback is the other: an operator may answer one reviewer's nits differently from
+another's, or a bot's findings differently from a person's, and say so in a skill of their own. A skill nothing names
+is rarely loaded, since the `resume` prompt already says how to address feedback. `runtime.review_skill`, user-only,
+names one, and the `resume` prompt then says to load it and follow it before addressing any review feedback, as
+`{{REVIEW_SKILL}}`, a paragraph of its own after the trusted reviewers; with the key unset the placeholder is empty.
+The skill shapes how feedback is addressed, never whose: the trusted reviewers and the operator's messages still decide
+that (§7, D089), the overseer has already decided which feedback reaches a worker, and every obligation above still
+holds. A resume for review feedback without the skill available changes nothing and reports `failed` with a summary
+starting `no review skill:`, rather than addressing the feedback in a way the operator set the skill to change; a
+resume for anything else, such as a merge conflict or a human reply, still runs. It sits where `runtime.pr_skill`'s
+does, under its own name, for the same reasons. `implement`, `fix-ci`, and `split` address no review and ignore the key.
 
 ### A fresh session per run
 
