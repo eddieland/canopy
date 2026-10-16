@@ -1,4 +1,4 @@
-"""The overseer's journal commands: `canopy decide`, `canopy attention`, `canopy ticket set`, and `canopy mirror`."""
+"""The overseer's journal commands: `decide`, `queried`, `attention`, `ticket set`, and `mirror`, each `canopy <it>`."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import click
 from canopy.cli.common import CliError, Group, OverseerCommand, open_context, optional_tick, require_tick
 from canopy.cli.params import (
     KEY_RE,
+    MAX_TEXT,
     PR_URL,
     REASON_RE,
     REPO,
@@ -21,7 +22,7 @@ from canopy.cli.params import (
 )
 from canopy.core import conversation, db, vocab
 from canopy.infra import logs
-from canopy.loop import attention
+from canopy.loop import attention, duties
 from canopy.reviews import grants
 
 if TYPE_CHECKING:
@@ -57,6 +58,29 @@ def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationale: str)
         db.touch_ticket(ctx.conn, key, ctx.repo)
     db.record_decision(ctx.conn, current["id"], key, action, rationale)
     click.echo(f"recorded {action} for {key or 'this tick'}")
+    return 0
+
+
+@click.command("queried", cls=OverseerCommand)
+@click.argument("keys", nargs=-1, type=TICKET_KEY, metavar="[KEY]...")
+@click.pass_context
+def cmd_queried(click_ctx: click.Context, keys: tuple[str, ...]) -> int:
+    """Record that this tick ran the tracker query, naming each open ticket it returned (overseer only).
+
+    Name none when it returned no open ticket. Every ticket named is owed a decision this tick, unless the state block
+    lists it in `stopped` or `recently_done`. Record a long result in several calls.
+    """
+    found = list(dict.fromkeys(keys))
+    rationale = duties.queried_rationale(found)
+    if len(rationale) > MAX_TEXT:
+        raise click.UsageError(f"{len(found)} keys do not fit in one call: name them in several", click_ctx)
+    ctx = open_context(click_ctx)
+    current = require_tick(ctx)
+    # Into the journal at once, so the next tick's block carries each one even if this tick ends without deciding it.
+    for key in found:
+        db.touch_ticket(ctx.conn, key, ctx.repo)
+    db.record_decision(ctx.conn, current["id"], None, duties.QUERIED_ACTION, rationale)
+    click.echo(f"recorded the query: {len(found)} open ticket(s)")
     return 0
 
 

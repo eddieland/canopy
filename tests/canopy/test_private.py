@@ -586,7 +586,7 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(
     db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     question = db.insert_message(conn, "ticket", KEY, source="worker", kind="question", channel="run", body="A or B?")
     assert main(["reply", KEY, "B"]) == 0
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does(*(canopy("decide", key, "wait", "--rationale", "next tick") for key in (KEY, "PROJ-2"))):
         assert main(["tick", "--dry-run"]) == 0
         overseer = json.loads(agent_log.read_text().splitlines()[-1])
         state = json.loads(overseer["argv"][-1].split("```json\n", 1)[1].split("\n```", 1)[0])
@@ -619,13 +619,14 @@ def test_a_stopped_ticket_is_named_in_the_state_block_by_key_alone(
     assert main(["start", KEY]) == 0
     assert main(["stop", KEY]) == 0
     db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does(canopy("decide", "PROJ-2", "wait", "--rationale", "next tick")):
         assert main(["tick", "--dry-run"]) == 0
         stopped = state_block(agent_log)
         assert stopped["stopped"] == [KEY]
         assert [t["key"] for t in stopped["tickets"]] == ["PROJ-2"]
-        # Started again, it is a private ticket like any other.
-        assert main(["start", KEY]) == 0
+    # Started again, it is a private ticket like any other.
+    assert main(["start", KEY]) == 0
+    with overseer_does(*(canopy("decide", key, "wait", "--rationale", "next tick") for key in (KEY, "PROJ-2"))):
         assert main(["tick", "--dry-run"]) == 0
         started = state_block(agent_log)
         assert started["stopped"] == []

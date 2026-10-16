@@ -39,6 +39,11 @@ def overseer_does(*commands: list[str]) -> Iterator[None]:
         yield
 
 
+def waits(*keys: str) -> list[list[str]]:
+    """The commands an overseer runs to wait on each of `keys`, as it must on a ticket it has nothing to do for."""
+    return [["decide", key, "wait", "--rationale", "nothing to do yet"] for key in keys]
+
+
 def lease(treehouse_state: Path, key: str) -> dict[str, str]:
     result = procs.SubprocessRunner().run(["treehouse", "get", "--lease", "--lease-holder", f"canopy:{key}", "--json"])
     assert result.ok, result.stderr
@@ -88,7 +93,7 @@ def test_dead_worker_is_crashed_and_its_slot_returned(
     agent_log: Path,
     conn: sqlite3.Connection,
 ) -> None:
-    with overseer_does():
+    with overseer_does(*waits("PROJ-1", "PROJ-2", "PROJ-3")):
         dead = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=DEAD_PID)
         never_started = add_run(conn, "PROJ-2", lease(treehouse_state, "PROJ-2"), pid=None)
         live = add_run(conn, "PROJ-3", lease(treehouse_state, "PROJ-3"), pid=os.getpid())
@@ -105,7 +110,14 @@ def test_dead_worker_is_crashed_and_its_slot_returned(
         assert [s["status"] for s in pool(treehouse_state)] == ["available", "available", "leased"]
 
         items = [(k, a) for k, a, _ in last_tick_decisions(conn)]
-        assert items == [("PROJ-1", "attention:crashed"), ("PROJ-2", "attention:crashed")]
+        assert items == [
+            ("PROJ-1", "attention:crashed"),
+            ("PROJ-2", "attention:crashed"),
+            (None, "queried"),
+            ("PROJ-1", "wait"),
+            ("PROJ-2", "wait"),
+            ("PROJ-3", "wait"),
+        ]
         [prompt] = [r["argv"][-1] for r in map(json.loads, agent_log.read_text().splitlines())]
         assert '"running":1' in prompt
         assert '"available":1' in prompt
@@ -119,7 +131,7 @@ def test_a_worker_is_alive_while_it_holds_its_lifelock_whatever_its_pid(
     conn: sqlite3.Connection,
 ) -> None:
     # The lock beside a run's log says whether its `_run` lives; the pid counts only for a run that has none.
-    with overseer_does():
+    with overseer_does(*waits("PROJ-1", "PROJ-2")):
         holding = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=DEAD_PID)
         let_go = add_run(conn, "PROJ-2", lease(treehouse_state, "PROJ-2"), pid=os.getpid())
         runs = canopy_env.state_dir / "runs"
@@ -144,7 +156,7 @@ def test_old_definitions_snapshots_are_removed_only_when_no_run_is_live(
     agent_log: Path,
     conn: sqlite3.Connection,
 ) -> None:
-    with overseer_does():
+    with overseer_does(*waits("PROJ-1")):
         old = canopy_env.state_dir / "runtime" / "0123456789abcdef"
         old.mkdir(parents=True)
         live = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=os.getpid())
@@ -247,7 +259,7 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
     dispatch = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
     with overseer_does([*dispatch, "--slug", "add-login"]), worker_does(*commit_and_push("agent/PROJ-1-add-login")):
         assert main(["tick"]) == 0
-    assert capsys.readouterr().out.startswith("tick 1: ok: 1 decisions: dispatch:implement=1")
+    assert capsys.readouterr().out.startswith("tick 1: ok: 2 decisions: dispatch:implement=1, queried=1")
 
     run = wait_for_run(conn, 1)
     assert run["status"] == "done", Path(run["log_path"]).read_text()
@@ -260,7 +272,7 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
     assert all(s["status"] == "available" for s in pool(treehouse_state))
 
     # The next tick sees nothing running and nothing to return, and tells the overseer how the run ended.
-    with overseer_does():
+    with overseer_does(*waits("PROJ-1")):
         assert main(["tick"]) == 0
     calls = json.loads(treehouse_state.read_text())["calls"]
     assert [c[0] for c in calls] == ["status", "get", "return", "status"]
@@ -306,7 +318,7 @@ def test_killed_worker_is_detected_on_the_next_tick(
     assert procs.alive(worker_pid)
     assert pool(treehouse_state)[0]["status"] == "leased"
 
-    with overseer_does():
+    with overseer_does(*waits("PROJ-1")):
         assert main(["tick"]) == 0
     crashed = db.get_run(conn, 1)
     assert crashed is not None
@@ -315,5 +327,9 @@ def test_killed_worker_is_detected_on_the_next_tick(
         time.sleep(0.05)
     assert not procs.alive(worker_pid)  # stopped before its slot went back to the pool
     assert all(s["status"] == "available" for s in pool(treehouse_state))
-    assert [(k, a) for k, a, _ in last_tick_decisions(conn)] == [("PROJ-1", "attention:crashed")]
+    assert [(k, a) for k, a, _ in last_tick_decisions(conn)] == [
+        ("PROJ-1", "attention:crashed"),
+        (None, "queried"),
+        ("PROJ-1", "wait"),
+    ]
     assert [(i.ticket_key, i.reason) for i in attention.current(conn)] == [("PROJ-1", "crashed")]

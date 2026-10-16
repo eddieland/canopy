@@ -27,7 +27,7 @@ from canopy.serve.app import create_app
 from canopy.serve.auth import Sessions
 from canopy.serve.options import ServeOptions
 from canopy.serve.schema import LoopUpdated
-from tests.canopy.test_loop import FakeTime, console, context, overseer_does
+from tests.canopy.test_loop import FakeTime, canopy, console, context, overseer_does
 from tests.conftest import SHARED_TOML, CanopyEnv, user_toml
 
 KEY = "PROJ-1"
@@ -636,7 +636,7 @@ def test_the_loop_serves_the_ui_and_a_web_reply_ends_its_wait(
 
     time_.on_sleep = reply_from_the_browser
     term, out = console()
-    with overseer_does():
+    with overseer_does(canopy("decide", KEY, "wait", "--rationale", "waiting on the operator")):
         statuses = repeat.run(
             ctx,
             dry_run=True,

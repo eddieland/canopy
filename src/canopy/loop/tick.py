@@ -1,4 +1,4 @@
-"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, check `canopy`, run the overseer, close, publish."""
+"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, check `canopy`, run and check the overseer, publish."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from canopy.core import agent_output, chore_view, conversation, db, definitions,
 from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import attention, state
+from canopy.loop import attention, duties, state
 from canopy.reviews import reconcile as review_reconcile
 from canopy.reviews import view as review_view
 from canopy.runs import policy, reconcile
@@ -72,6 +72,18 @@ def state_block(
     Returns:
         The `## State` section, the overseer's whole message.
     """
+    block, _ = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due)
+    return block
+
+
+def _render(
+    ctx: Context, *, tick_id: int, dry_run: bool, now: datetime, reconciled: reconcile.Reconciled, query_due: bool
+) -> tuple[str, duties.Duties]:
+    """Render the state block, and read what it asks of the overseer from the same journal reads (DESIGN §6 step 5).
+
+    Returns:
+        The `## State` section, and the overseer's duties this tick.
+    """
     running = db.running_runs(ctx.conn, "runs")
     last_runs = db.latest_runs(ctx.conn)
     # A stopped ticket waits on the operator alone: listed by key, it gets no decision every tick (DESIGN §22).
@@ -81,7 +93,9 @@ def state_block(
     operator = {
         str(t["key"]): found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None
     }
-    return state.state_block(
+    recently_done = db.recently_done(ctx.conn, db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS)))
+    chores = chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now)
+    block = state.state_block(
         ctx.config,
         ctx.repo_root,
         tick_id=tick_id,
@@ -92,7 +106,7 @@ def state_block(
         running=running,
         tickets=tickets,
         stopped=stopped,
-        recently_done=db.recently_done(ctx.conn, db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS))),
+        recently_done=recently_done,
         units=db.all_units(ctx.conn),
         last_runs=last_runs,
         run_slots=db.all_run_slots(ctx.conn, [int(r["id"]) for r in [*running, *last_runs.values()]]),
@@ -102,7 +116,7 @@ def state_block(
         now=now,
         split_attempts=policy.split_attempts(ctx.conn),
         split_children=db.open_split_children(ctx.conn),
-        chores=chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now),
+        chores=chores,
         reviews=review_view.state_section(ctx.conn, ctx.config, now),
         notices=notice.recent(ctx.conn, now),
         private=private,
@@ -111,6 +125,16 @@ def state_block(
         attention=attention.for_overseer(ctx.conn),
         query_due=query_due,
     )
+    owed = duties.owed(
+        ctx.conn,
+        tick_id,
+        query_due=query_due,
+        tickets=tickets,
+        stopped=stopped,
+        recently_done=recently_done,
+        chores=chores,
+    )
+    return block, owed
 
 
 def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
@@ -144,7 +168,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     now = datetime.now(UTC)
     query_due = _query_due(ctx, now)
     db.set_tick_query(ctx.conn, tick_id, due=query_due)
-    block = state_block(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due)
+    block, owed = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due)
     unavailable = _check_canopy(ctx, tick_id, log)
     if unavailable is not None:
         detail = f"{unavailable}; the overseer did not run. Make `canopy --version` work where the loop runs"
@@ -162,6 +186,12 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     skips = [d.rationale for d in decisions if d.ticket_key is None and d.action == "skip"]
     if skips:
         return finish("skipped", f"{prefix}overseer skipped the tick: {'; '.join(skips)}", usage)
+    # A duty left undone fails the tick as a missing done line does: closing it `ok` would resolve the items of every
+    # ticket it left out and count a query it never ran (DESIGN §6 step 5).
+    undone = duties.undone(ctx.conn, tick_id, owed)
+    if undone:
+        log.error("overseer left duties undone", extra={"undone": undone, "dry_run": dry_run})
+        return finish("overseer_failed", f"{prefix}overseer left duties undone: {'; '.join(undone)}", usage)
     actions = Counter(d.action for d in decisions)
     counts = ", ".join(f"{action}={n}" for action, n in sorted(actions.items())) or "none"
     return finish("ok", f"{prefix}{actions.total()} decisions: {counts}", usage)

@@ -5,10 +5,8 @@ which a sandbox wrapper names to git. These tests play that wrapper in the fake 
 variables from `CANOPY_GIT_OBJECTS`, as `canopy-sandbox` does (`test_sandbox_wrapper.py`).
 """
 
-import os
 import sqlite3
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
@@ -16,6 +14,7 @@ from canopy.cli.main import main
 from canopy.core import db, hostgit
 from canopy.infra.procs import SubprocessRunner
 from tests.canopy.helpers import InlineRunner, in_tick, journal, pool, slot_of, worker_does
+from tests.canopy.test_reconcile import overseer_does, waits
 from tests.conftest import CanopyEnv, GitPool, git
 
 BRANCH = "agent/PROJ-1-work"
@@ -146,7 +145,7 @@ def test_reconcile_tidies_the_slots_of_a_killed_run(
     elif rewrites == "commondir":
         (own / "commondir").write_text("/somewhere/else\n")
 
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does(*waits("PROJ-1")):
         assert main(["tick"]) == 0
 
         run = db.get_run(conn, run_id)

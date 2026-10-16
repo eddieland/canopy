@@ -50,6 +50,8 @@ before every decision that matters.
     - `--base` stacks the ticket on its blocker's branch (see "Blockers and stacking"). Without it the worker starts
       from, and targets its PR at, the repository's base branch.
   - `canopy decide <KEY> <action> --rationale "<text>"`
+  - `canopy queried [KEY ...]`, naming each open ticket the configured query returned, or none (see "Procedure", step
+    1). Record a long result in several calls.
   - `canopy attention <KEY> <reason> [--repo NAME] --detail "<text>"`
   - `canopy ticket set <KEY> [--repo NAME] --phase ... --cursor comment=<id> --cursor review=<id> --cursor ci=<id>
     [--title '<title>']`
@@ -80,8 +82,12 @@ before every decision that matters.
    so the query is the only way a newly labeled ticket becomes a candidate; a tick that skips it when it is due reads
    the known tickets, looks complete, and leaves the queue unread. The query is in the tracker's own search syntax, or
    in plain language if the tracker has none. Union the result with tickets in the state block that are not `done`.
-   When `query_due` is false, the operator spaces the query out to save its cost: do not run it, and work the tickets
-   in the state block that are not `done` alone, exactly as below; a later tick runs it. Then read each ticket: it is a
+   As soon as you have its result, record it: `canopy queried <KEY> <KEY> ...`, naming every open ticket it returned,
+   labeled or not, in the state block or not, or `canopy queried` alone when it returned none. Leave out only the
+   closed ones. Each ticket you name is owed a decision this tick, as every ticket in the state block is (see "Every
+   tick, without exception"), unless it is in `stopped` or `recently_done`. When `query_due` is false, the operator
+   spaces the query out to save its cost: do not run it or record it, and work the tickets in the state block that are
+   not `done` alone, exactly as below; a later tick runs it. Then read each ticket: it is a
    candidate only if it carries one of the configured labels and is not closed. The query finds tickets; only the
    labels authorize them. Being in the state block authorizes nothing either: the journal remembers every ticket the
    loop has seen, including ones that never had a label and ones whose label was removed. A closed ticket is never a
@@ -113,23 +119,53 @@ before every decision that matters.
    Record `wait` and do not dispatch it, unless an authorized replier has commented on the ticket since that run's
    `ended_at`, in a comment that is not a worker's (see "Workers' comments"), or an `operator` message is dated after
    it (see "Reviewers and the operator's go-ahead"); then decide from its phase as usual.
-3. Decide exactly one action per ticket, except one in `stopped`. Record every decision with
-   `canopy decide`, including waits and skips, with a one-sentence rationale.
-   Dispatches and attention items also count as decisions; the CLI records
-   them. Record again every item in the state block's `attention` whose cause still holds (see "The attention list").
+3. Decide exactly one action for every ticket in the state block's `tickets` and every ticket you named with `canopy
+   queried`, except one in `stopped` or `recently_done`. Record every decision with `canopy decide`, including waits
+   and skips, with a one-sentence rationale. Dispatches, review runs and waits, attention items, and refusals also
+   count as decisions; the CLI records them. A mirror does not. Record again every item in the state block's
+   `attention` whose cause still holds (see "The attention list"). Decide every due chore (see "Chores").
 4. Dispatch in priority order until capacity is zero: `human_replied` and `changes_requested` first (a human is
    waiting; an operator's go-ahead on untrusted review feedback is `human_replied`), then `conflicted` and `ci_red`,
    then `pushed_no_pr`, then `ready`. Among `ready` tickets, dispatch a blocker before the tickets it blocks, and never
    dispatch a ticket whose blocker is not resolved unless it can be
    stacked (see "Blockers and stacking").
 5. Update cursors for every ticket you inspected so the next tick is incremental (see "Cursors").
-6. End your final message with a line containing only `CANOPY_TICK_DONE`, then exit. You may summarize before it. The
-   harness reads only your final message: without that line there, the tick fails and its attention items are lost.
+6. Check your work against "Every tick, without exception" below, and do what is missing. Then end your final message
+   with a line containing only `CANOPY_TICK_DONE`, and exit. You may summarize before it. The harness reads only your
+   final message: without that line there, the tick fails and its attention items are lost.
 
 If the tracker or GitHub MCP is unavailable or returns errors, record one `decide` with action `skip` and rationale
 `mcp_unavailable: <which>`, and end as step 6 says. Do not decide on partial data. If the tracker works but cannot do
 something you need (find tickets, read labels, read comment authors), record `skip` with rationale
 `tracker_unsupported: <what>` and end as step 6 says.
+
+## Every tick, without exception
+
+These are your duties every tick. None is optional, none waits for a later tick, and none is done by being thought
+about: each is done only by the command that records it. A tick that has no capacity, nothing new, or many tickets
+still owes every one. The only exception is a tick-wide `skip` (`mcp_unavailable`, `tracker_unsupported`), which ends
+the tick at once.
+
+When you end, the harness checks the first four in code, and fails the tick (`overseer_failed`) if any is missing: its
+attention items are lost, its query counts as not run, and every ticket you left out comes back next tick, so leaving
+one out saves nothing.
+
+1. When `query_due` is true: the query ran, and `canopy queried` recorded what it returned.
+2. Every ticket in `tickets`, and every ticket `canopy queried` named, except those in `stopped` or `recently_done`,
+   has a decision of its own this tick: a `decide`, a dispatch, a review run or wait with `--ticket`, an attention
+   item, or a refusal the CLI recorded. A mirror is not a decision. A ticket you could not read is a tick on partial
+   data: end it with the tick-wide `mcp_unavailable` skip instead.
+3. Every chore whose `due` is true and that is not `running` has a `canopy chore run` or `canopy chore wait`.
+4. Your final message has the `CANOPY_TICK_DONE` line.
+
+The harness cannot check the rest, so they are as binding and only your care holds them:
+
+5. Every candidate's comments newer than its `mirror` cursor are mirrored, up to `mirror.max_per_tick`.
+6. Every item in `attention` is recorded again, unless you saw this tick that its cause is gone.
+7. Every ticket in the state block with `title` null has a title.
+8. Every cursor you handled is advanced, on the dispatch or with `canopy ticket set`, and none past an item nobody has
+   handled.
+9. With `reviews.query` set: the query ran, and every kept PR whose head has no `done` review has a review run or wait.
 
 ## The attention list
 

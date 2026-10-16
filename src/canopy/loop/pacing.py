@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import chore_view, db, notice
 from canopy.core.items import subject
-from canopy.loop import attention
+from canopy.loop import attention, duties
 from canopy.runs import policy
 
 if TYPE_CHECKING:
@@ -33,8 +33,9 @@ if TYPE_CHECKING:
 QUIET_REFUSALS = frozenset(
     {"running", "capacity", "chore_capacity", "cooldown", "not_due", "outside_hours", "attempt_limit"}
 )
-# Decisions that change nothing: a wait, and a ticket's skip (a tick-wide skip closes the tick `skipped`).
-_QUIET_ACTIONS = frozenset({"wait", "skip"})
+# Decisions that change nothing: a wait, a ticket's skip (a tick-wide skip closes the tick `skipped`), and the record
+# that the query ran, which a tick makes whenever it is due.
+_QUIET_ACTIONS = frozenset({"wait", "skip", duties.QUERIED_ACTION})
 
 
 @dataclass(frozen=True)

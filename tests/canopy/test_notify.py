@@ -50,9 +50,13 @@ def json_messages(out: Path) -> list[dict[str, Any]]:
 
 
 @contextmanager
-def overseer_records(*items: tuple[str, str]) -> Iterator[None]:
-    """Until the block ends, the fake overseer records each (key, reason) as needing attention and ends the tick."""
+def overseer_records(*items: tuple[str, str], waiting: tuple[str, ...] = ()) -> Iterator[None]:
+    """Until the block ends, the fake overseer records each (key, reason) as needing attention and ends the tick.
+
+    Each key in `waiting` it decides to wait on instead, as it must for a ticket in the journal it records nothing for.
+    """
     commands = [["canopy", "attention", key, reason, "--detail", f"{key} detail"] for key, reason in items]
+    commands += [["canopy", "decide", key, "wait", "--rationale", "nothing to do yet"] for key in waiting]
     with mock.patch.dict(
         os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(commands), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
     ):
@@ -161,7 +165,7 @@ def test_a_json_sink_hears_about_runs(
         )
         assert main(["_run", "1"], runner=runner) == 0
         db.finish_tick(conn, tick_id, "ok", "test")
-    with overseer_records(("PROJ-9", "needs_reviewer")):
+    with overseer_records(("PROJ-9", "needs_reviewer"), waiting=("PROJ-1",)):
         tick()
 
     [message] = json_messages(out)
@@ -197,7 +201,7 @@ def test_a_json_sink_hears_about_runs(
     assert message["text"].startswith("canopy attention: 1 new, 0 resolved\n+ PROJ-9 needs_reviewer: PROJ-9 detail\n> ")
 
     # Delivered events are not sent again.
-    with overseer_records(("PROJ-9", "needs_reviewer")):
+    with overseer_records(("PROJ-9", "needs_reviewer"), waiting=("PROJ-1",)):
         tick()
     assert len(messages(out)) == 1
 
@@ -354,7 +358,7 @@ def test_a_batching_sink_holds_what_is_not_urgent_until_its_window_ends(
     assert len(messages(out)) == 1
     conn = journal(canopy_env)
     run_worker(conn, "PROJ-1")
-    with overseer_records(("PROJ-9", "needs_reviewer")):
+    with overseer_records(("PROJ-9", "needs_reviewer"), waiting=("PROJ-1",)):
         tick()
     assert len(messages(out)) == 1  # held: a run started and ended, and nothing needs the operator
     capsys.readouterr()
@@ -364,7 +368,8 @@ def test_a_batching_sink_holds_what_is_not_urgent_until_its_window_ends(
     run_worker(conn, "PROJ-2")
     earlier = db.format_time(datetime.now(UTC) - timedelta(minutes=31))
     conn.execute("UPDATE notify_sinks SET last_delivery_at = ?", (earlier,))
-    with overseer_records():  # PROJ-9 resolved meanwhile: resolving is not urgent either, but the window is over
+    # PROJ-9 resolved meanwhile: resolving is not urgent either, but the window is over.
+    with overseer_records(waiting=("PROJ-1", "PROJ-2", "PROJ-9")):
         tick()
     [_, batch] = json_messages(out)
     assert [(e["kind"], e["ticket"]) for e in batch["events"]] == [
@@ -374,7 +379,7 @@ def test_a_batching_sink_holds_what_is_not_urgent_until_its_window_ends(
         ("run.ended", "PROJ-2"),
     ]
     assert [r["ticket"] for r in batch["attention"]["resolved"]] == ["PROJ-9"]
-    with overseer_records():
+    with overseer_records(waiting=("PROJ-1", "PROJ-2", "PROJ-9")):
         tick()
     assert len(messages(out)) == 2  # nothing new, and the cursor moved past what the batch sent
 
@@ -394,7 +399,7 @@ def test_a_batching_sink_sends_what_needs_the_operator_at_once_with_what_it_held
         tick()
     conn = journal(canopy_env)
     run_worker(conn, "PROJ-1")
-    with overseer_records(("PROJ-9", "needs_reviewer")):
+    with overseer_records(("PROJ-9", "needs_reviewer"), waiting=("PROJ-1",)):
         tick()
     assert len(messages(out)) == 1
     if urgent == "blocked":
@@ -404,7 +409,7 @@ def test_a_batching_sink_sends_what_needs_the_operator_at_once_with_what_it_held
     else:
         run_worker(conn, "PROJ-2")
         attention = (("PROJ-9", "needs_reviewer"), ("PROJ-8", "ready_to_merge"))
-    with overseer_records(*attention):
+    with overseer_records(*attention, waiting=("PROJ-1", "PROJ-2")):
         tick()
     [_, sent] = json_messages(out)
     assert [(e["kind"], e["ticket"]) for e in sent["events"]] == [
@@ -453,7 +458,7 @@ def test_a_batching_sink_hears_another_sink_failing_at_once_with_what_it_held(
     with overseer_records(("PROJ-9", "needs_reviewer")):
         tick()
     run_worker(journal(canopy_env), "PROJ-1")
-    with overseer_records(("PROJ-9", "needs_reviewer")):
+    with overseer_records(("PROJ-9", "needs_reviewer"), waiting=("PROJ-1",)):
         tick()
         assert len(messages(desk)) == 1  # the runs are held
         tick()  # alerts' third failure in a row
@@ -480,7 +485,7 @@ def test_a_json_digest_names_each_ticket_by_its_title(
         )
         assert main(["_run", "1"], runner=runner) == 0
         db.finish_tick(conn, tick_id, "ok", "test")
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_records(waiting=("PROJ-1",)):
         tick()
 
     [message] = json_messages(out)
@@ -603,7 +608,10 @@ def test_chore_runs_reach_a_sink_that_takes_chores(
     )
     out = tmp_path / "chores.txt"
     add_sink(canopy_env, sink_script, "s", out, extra='format = "text"\nevents = ["chores"]\n')
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    wait = [["canopy", "chore", "wait", "check", "--rationale", "not needed yet"]]
+    with mock.patch.dict(
+        os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(wait), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
+    ):
         tick()
     conn = journal(canopy_env)
     chore = json.dumps({"status": "ok", "summary": "all clear", "findings": []})

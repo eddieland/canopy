@@ -144,11 +144,12 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
     ):
         time = FakeTime()
         # Between the ticks, the reviewer approves PROJ-3: the second tick's overseer no longer lists it.
-        time.on_sleep = lambda: (
-            later.enter_context(overseer_does(canopy("decide", "PROJ-3", "wait", "--rationale", "approved")))
-            if len(time.slept) == 1
-            else None
+        second = (
+            canopy("decide", "PROJ-1", "wait", "--rationale", "checks pending"),
+            canopy("decide", "PROJ-2", "wait", "--rationale", "would be running"),
+            canopy("decide", "PROJ-3", "wait", "--rationale", "approved"),
         )
+        time.on_sleep = lambda: later.enter_context(overseer_does(*second)) if len(time.slept) == 1 else None
         term, out = console()
 
         statuses = repeat.run(
@@ -235,11 +236,11 @@ def test_a_narrow_terminal_shortens_only_the_rationale(
         contextlib.ExitStack() as later,
     ):
         time = FakeTime()
-        time.on_sleep = lambda: (
-            later.enter_context(overseer_does(canopy("decide", "PROJ-3", "wait", "--rationale", "approved")))
-            if len(time.slept) == 1
-            else None
+        second = (
+            canopy("decide", "PROJ-2", "wait", "--rationale", "would be running"),
+            canopy("decide", "PROJ-3", "wait", "--rationale", "approved"),
         )
+        time.on_sleep = lambda: later.enter_context(overseer_does(*second)) if len(time.slept) == 1 else None
         out = io.StringIO()
         term = Console(file=out, width=80, highlight=False)
 
@@ -406,7 +407,7 @@ def test_ctrl_c_during_a_tick_lets_it_finish_then_stops(
         assert time.slept == []  # stopped without waiting
         assert tick_statuses(canopy_env) == ["ok"]
         conn = canopy_env.journal(migrate=False)
-        assert [d.action for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
+        assert [d.action for d in db.decisions_for_tick(conn, 1)] == ["queried", "done"]  # the overseer ran to its end
 
 
 def seconds_apart(seconds: float) -> Callable[[], float]:
@@ -449,7 +450,7 @@ def test_two_signals_from_one_ctrl_c_let_the_tick_finish(
             )
         assert statuses == {"ok": 1}
         conn = canopy_env.journal(migrate=False)
-        assert [d.action for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
+        assert [d.action for d in db.decisions_for_tick(conn, 1)] == ["queried", "done"]  # the overseer ran to its end
 
 
 @pytest.mark.parametrize(
@@ -617,7 +618,7 @@ def test_the_tick_now_key_ends_a_deferred_start(canopy_env: CanopyEnv, treehouse
 def test_an_operator_message_ends_a_deferred_start_after_a_minute(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
-    with overseer_does():
+    with overseer_does(canopy("decide", "PROJ-1", "wait", "--rationale", "answered the operator")):
         ctx = context(canopy_env)
         db.migrate(ctx.conn, resources.migrations_dir())
         db.touch_ticket(ctx.conn, "PROJ-1", "/r")
@@ -958,7 +959,7 @@ def test_sighup_during_a_tick_lets_it_finish_on_the_config_it_started_with(
         assert statuses == {"ok": 2}
         assert reload.during_tick == [True, True]  # the web UI would have said: after the running tick
         conn = canopy_env.journal(migrate=False)
-        assert [d.action for d in db.decisions_for_tick(conn, 1)] == ["done"]  # the overseer ran to its end
+        assert [d.action for d in db.decisions_for_tick(conn, 1)] == ["queried", "done"]  # the overseer ran to its end
         assert sum(time.slept) == 600  # the wait after it was paced before the reload applied
         text = out.getvalue()
         assert text.index("tick 1  ok") < text.index("config reloaded") < text.index("tick 2  ok")

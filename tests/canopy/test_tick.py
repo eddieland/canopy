@@ -51,12 +51,13 @@ def test_dry_run_tick_records_the_overseer_plan(
         ["decide", "PROJ-4;rm", "wait", "--rationale", "bad key"],
     ):
         assert main(["tick", "--dry-run"]) == 0
-        assert capsys.readouterr().out.startswith("tick 1: ok: dry run; 3 decisions")
+        assert capsys.readouterr().out.startswith("tick 1: ok: dry run; 4 decisions")
 
         [run] = agent_runs(agent_log)
         commands = run["commands"]
         assert isinstance(commands, list)
-        assert [c["returncode"] for c in commands] == [0, 0, 0, 0, 2], commands
+        assert commands[0]["argv"] == ["canopy", "queried"]  # the query was due, and found nothing
+        assert [c["returncode"] for c in commands] == [0, 0, 0, 0, 0, 2], commands
         argv = run["argv"]
         assert isinstance(argv, list)
         assert argv[:3] == ["run", "--agent", "canopy-overseer"]
@@ -82,6 +83,7 @@ def test_dry_run_tick_records_the_overseer_plan(
         assert tick["ended_at"] is not None
         decisions = [(d.ticket_key, d.action) for d in db.decisions_for_tick(conn, 1)]
         assert decisions == [
+            (None, "queried"),
             ("PROJ-1", "wait"),
             ("PROJ-2", "dispatch:implement"),
             ("PROJ-3", "attention:needs_reviewer"),
@@ -135,7 +137,7 @@ def test_overseer_state_names_the_comment_marks(canopy_env: CanopyEnv, treehouse
 def test_next_tick_sees_the_journal(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
     with overseer_does(["ticket", "set", "PROJ-9", "--repo", "repo", "--phase", "needs_human"]):
         assert main(["tick", "--dry-run"]) == 0
-    with overseer_does():
+    with overseer_does(["decide", "PROJ-9", "wait", "--rationale", "needs a human"]):
         assert main(["tick", "--dry-run"]) == 0
         second = agent_runs(agent_log)[1]["argv"]
         assert isinstance(second, list)
@@ -176,7 +178,7 @@ def test_the_state_block_names_the_tickets_marked_done_lately(
         db.finish_tick(conn, tick_id, "ok", "")
     [done_at] = conn.execute("SELECT created_at FROM decisions WHERE ticket_key = 'PROJ-1'").fetchone()
     [newest_at] = conn.execute("SELECT created_at FROM decisions WHERE id = ?", (newest,)).fetchone()
-    with overseer_does():
+    with overseer_does(["decide", "PROJ-5", "wait", "--rationale", "checks pending"]):
         assert main(["tick", "--dry-run"]) == 0
         state = state_block(agent_log)
     # Not PROJ-2, done too long ago; not PROJ-4, with no `done` decision; not PROJ-5, which is not marked done; not
@@ -371,7 +373,8 @@ def test_a_running_tick_shows_its_overseer_session(
         [run] = agent_runs(agent_log)
         commands = run["commands"]
         assert isinstance(commands, list)
-        [decisions] = commands
+        queried, decisions = commands
+        assert queried["argv"] == ["canopy", "queried"]
         assert "Tick 1: running (dry run)" in decisions["stdout"]
         assert "overseer session ses_o1\n" in decisions["stdout"]  # no cost yet: the overseer has not ended
 
