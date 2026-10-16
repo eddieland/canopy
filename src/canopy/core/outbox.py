@@ -15,6 +15,7 @@ from canopy.core import contract, review_result
 from canopy.core.db import Event
 
 if TYPE_CHECKING:
+    from canopy.core import records
     from canopy.core.config import Config
     from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunStatus
 
@@ -187,15 +188,17 @@ def chore_ended(
     return Event(CHORES, "chore.ended", fields)
 
 
-def review_ended(config: Config, run: sqlite3.Row, status: ReviewRunStatus, result_json: str | None) -> Event | None:
+def review_ended(
+    config: Config, run: records.ReviewRun, status: ReviewRunStatus, result_json: str | None
+) -> Event | None:
     """Return the `review.ended` event for a review run, or None if no sink takes reviews."""
     if not config.notify.takes(REVIEWS):
         return None
     result = review_result.stored(result_json)
     fields: ReviewEnded = {
-        "pr": run["pr_url"],
-        "ticket": run["ticket_key"],
-        "run": run["id"],
+        "pr": run.pr_url,
+        "ticket": run.ticket_key,
+        "run": run.id,
         "status": status,
         "verdict": result.verdict if result is not None else None,
         "impact": result.impact if result is not None else None,

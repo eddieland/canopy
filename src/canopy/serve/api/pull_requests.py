@@ -147,7 +147,7 @@ def stop(url: PrUrl, backend: BackendDep) -> ReviewRequestStopped:
         except conversation.Refused as r:
             raise RefusedError(r) from None
     _log.info("review request stopped", extra={"pr": ref.id, "channel": WEB})
-    running = int(stopped.running["id"]) if stopped.running is not None else None
+    running = stopped.running.id if stopped.running is not None else None
     return ReviewRequestStopped(request=pull_requests.review_request(stopped.request), running_review=running)
 
 
