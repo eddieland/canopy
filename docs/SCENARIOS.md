@@ -12,6 +12,8 @@ the prompt or the guards it relies on, the install scenarios before a release. A
 issue with the tick id, and its decisions (`canopy decisions TICK`). A run that measures something, such as spend or
 latency, goes in `MEASUREMENTS.md` as a dated section.
 
+Toy repositories to run them against, apart from real work and cheap to reset, are planned in `TOY_REPOS.md`.
+
 ## Canaries
 
 Opt-in tests that run a real model under the pinned OpenCode. Run all of them after any OpenCode upgrade, and before
