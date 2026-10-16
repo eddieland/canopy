@@ -65,9 +65,12 @@ def test_dry_run_tick_records_the_overseer_plan(
         assert isinstance(prompt, str)
         assert prompt.startswith("## State\n")
         assert "# canopy overseer" not in prompt
-        assert '"tick_id": 1' in prompt
-        assert '"dry_run": true' in prompt
-        assert '"labels": [\n      "agent-ready-tester"\n    ]' in prompt
+        # The state is compact JSON, one line: every step of the tick re-reads it (DESIGN §6 step 4).
+        state = prompt.split("```json\n", 1)[1].split("\n```", 1)[0]
+        assert "\n" not in state
+        assert '"tick_id":1,' in state
+        assert '"dry_run":true' in state
+        assert '"labels":["agent-ready-tester"]' in state
         assert run["cwd"] == str(canopy_env.root)
         snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
         assert run["env"] == {"CANOPY_TICK_ID": "1", "OPENCODE_CONFIG_DIR": str(snapshot)}
@@ -114,7 +117,7 @@ def test_overseer_state_names_the_configured_needs_human_label(
         [run] = agent_runs(agent_log)
         argv = run["argv"]
         assert isinstance(argv, list)
-        assert '"needs_human_label": "blocked-on-team"' in str(argv[3])
+        assert '"needs_human_label":"blocked-on-team"' in str(argv[3])
 
 
 def test_overseer_state_names_the_comment_marks(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
@@ -125,8 +128,8 @@ def test_overseer_state_names_the_comment_marks(canopy_env: CanopyEnv, treehouse
         [run] = agent_runs(agent_log)
         argv = run["argv"]
         assert isinstance(argv, list)
-        assert '"comment_prefix": "CANOPY:"' in str(argv[3])
-        assert '"comment_suffix": "(canopy)"' in str(argv[3])
+        assert '"comment_prefix":"CANOPY:"' in str(argv[3])
+        assert '"comment_suffix":"(canopy)"' in str(argv[3])
 
 
 def test_next_tick_sees_the_journal(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
@@ -136,9 +139,9 @@ def test_next_tick_sees_the_journal(canopy_env: CanopyEnv, treehouse_state: Path
         assert main(["tick", "--dry-run"]) == 0
         second = agent_runs(agent_log)[1]["argv"]
         assert isinstance(second, list)
-        assert '"key": "PROJ-9"' in second[-1]
-        assert '"phase": "needs_human"' in second[-1]
-        assert '"tick_id": 2' in second[-1]
+        assert '"key":"PROJ-9"' in second[-1]
+        assert '"phase":"needs_human"' in second[-1]
+        assert '"tick_id":2' in second[-1]
 
 
 def test_the_state_block_names_the_tickets_marked_done_lately(
