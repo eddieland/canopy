@@ -101,7 +101,7 @@ relying on a permission they check.
   branch's commits). Dismiss one finding, tick another, and send it to a worker: expect the next tick to dispatch
   `resume --review-run` for that run, the worker to address the sent finding and leave the rest, and nothing of the
   review or the message on the PR or the ticket.
-- **S37. A coworker's PR, reviewed on request** (M42). With no `review.query` and `review.agent_prs` off, ask for one
+- **S39. A coworker's PR, reviewed on request** (M42). With no `review.query` and `review.agent_prs` off, ask for one
   coworker's open PR to be reviewed from the CLI (`canopy start URL --review`), and another, in a second repository of
   the workspace, from the web UI's pull requests page. Expect each reviewed at its head, in its own repository, and
   its request to end `reviewed` (`canopy show URL`). Ask for one more on a PR that then merges before the next tick,
