@@ -49,10 +49,11 @@
     --diff-add: oklch(0.5 0.135 150);
     --diff-del: oklch(0.535 0.17 20);
 
-    /* JSON in an agent's output: its keys, strings, numbers, and true/false/null. Syntax only, never state. */
+    /* JSON in an agent's output (its keys, strings, numbers, and true/false/null), and a diff's code (its functions,
+     * strings, constants, and keywords), read on an added or removed line's tint too. Syntax only, never state. */
     --syntax-key: oklch(0.5 0.13 235);
     --syntax-string: oklch(0.5 0.12 135);
-    --syntax-number: oklch(0.53 0.11 70);
+    --syntax-number: oklch(0.515 0.11 70);
     --syntax-literal: oklch(0.52 0.17 315);
 
     /* The spend page's chart (src/lib/spend.ts): a series per kind of agent run, as fills, never text and never state.
