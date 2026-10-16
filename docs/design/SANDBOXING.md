@@ -359,6 +359,12 @@ there without reading `TMPDIR`.
   from the host in `_run`), or leave it to unsandboxed runs, is undecided.
 - Caches for tools the wrapper does not move (Caches, above): Cargo's registry first, which needs `CARGO_HOME` split
   from the binaries and config beside it.
+- Bazel's caches. BAZEL.md's disk and repository caches, which docs/SANDBOX.md has the operator add to `allowWrite`,
+  are shared with the operator's own builds, the risk Caches, above, keeps uv and Go out of. Whether Bazel checks
+  what it reads from each, and so whether either needs a copy of its own, is not yet checked.
+- The cost of a second copy. An operator whose uv cache holds CUDA torch keeps several GB twice; docs/SANDBOX.md says
+  how to share one tool's cache knowingly. On a filesystem with copy-on-write clones (APFS, btrfs, XFS), `canopy
+  sandbox setup` could seed the sandbox's cache from the operator's at no cost; ext4, Ubuntu's default, has none.
 - The repository's OpenCode config (skills, MCP servers, plugins) comes from the checked-out branch (T7 residual).
   canopy's own agent definitions no longer do (D040, D044). The sandbox does not change that, but it bounds what a
   hostile config can reach.
