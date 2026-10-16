@@ -3,12 +3,15 @@
 Reads only. Every cost is what the agent runtime reported (§13), summed by the UTC day a run started on: the overseer
 of each tick, worker and split runs, chore runs, and review runs. A dry run's overseer is kept apart from the live
 ones', and idle ticks' (§6, Idle pacing) are a series of their own within the live overseer's. Beside what the window
-cost, what it got done: the tickets marked done in it, and what each ticket and PR's own runs cost.
+cost, what it got done: the tickets marked done in it, and what each ticket and PR's own runs cost. And what each kind
+of run's first model call was sent, by the definitions snapshot it loaded: its fixed overhead, and how often it started
+cold.
 """
 
 from __future__ import annotations
 
 import json
+import statistics
 from collections import Counter
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -41,6 +44,8 @@ IDLE_TICKS = 20
 _TABLES: dict[Kind, str] = {"workers": "runs", "chores": "chore_runs", "reviews": "review_runs"}
 # The overseer's series, each from the ticks.
 _SERIES = ("overseer", "idle", "dry_run")
+# What a run's row says of its first model call, and when it started.
+_FIRST_CALL = "definitions_digest, tokens_first_call, tokens_first_cache_write, started_at"
 
 
 @dataclass(frozen=True)
@@ -135,13 +140,34 @@ class PullRequestSpend:
 
 
 @dataclass(frozen=True)
+class FirstCalls:
+    """The first model calls of one kind's runs that loaded one definitions snapshot and started in the window (§13).
+
+    `runs` counts those that reported a first call; `first_call` is the median of what it was sent, from the cache or
+    not, the lower middle one of an even count; `cold_share` the share of them that started cold, their first call
+    writing more than half of what it was sent to the cache. `first_started` and `last_started` are when the first and
+    the last of them started. `digest` is None for runs that reported a first call and no snapshot.
+    """
+
+    kind: Kind
+    digest: str | None
+    runs: int
+    first_call: int
+    cold_share: float
+    first_started: str
+    last_started: str
+
+
+@dataclass(frozen=True)
 class Breakdown:
     """The window's spend: per day, oldest first, every day in it listed; in total; and by what the ticks bought.
 
     The window is `[since, until)`, each a journal time: midnight UTC on its first day, and after its last. What it got
     done is `done`, the tickets marked done in it, and `per_done`, its whole spend over them: the overseer, chores, and
     the runs of tickets still open are what it cost to get those done. `tickets` and `pull_requests` list what each
-    one's own runs cost, the most first.
+    one's own runs cost, the most first. `first_calls` is each kind's first model calls by snapshot, the kinds in
+    `KINDS` order and each kind's snapshots by when their first run started; the overseer's include dry runs, whose
+    first call is a live tick's.
     """
 
     since: str
@@ -157,6 +183,7 @@ class Breakdown:
     per_done: float | None = None
     tickets: list[TicketSpend] = field(default_factory=list[TicketSpend])
     pull_requests: list[PullRequestSpend] = field(default_factory=list[PullRequestSpend])
+    first_calls: list[FirstCalls] = field(default_factory=list[FirstCalls])
 
 
 def window_start(now: datetime, days: int) -> datetime:
@@ -193,6 +220,7 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
         done = _done(conn, since, until)
         tickets = _tickets(conn, since, until, done)
         pull_requests = _pull_requests(conn, since, until)
+        first_calls = _first_calls(conn, since, until)
     for row in rows:
         day = by_day.setdefault(row.day, {})
         for name in _SERIES:
@@ -218,6 +246,7 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
         per_done=total / len(done) if done and total is not None else None,
         tickets=tickets,
         pull_requests=pull_requests,
+        first_calls=first_calls,
     )
 
 
@@ -446,6 +475,41 @@ def _pull_requests(conn: sqlite3.Connection, since: str, until: str) -> list[Pul
 
 def _first_key(named: Iterable[tuple[str | None, float | None]]) -> str | None:
     return next((key for key, _ in named if key is not None), None)
+
+
+# Each kind's first model calls in the window, grouped by the snapshot their runs loaded. A run recorded before canopy
+# kept the first call, or that made none, is in no group.
+def _first_calls(conn: sqlite3.Connection, since: str, until: str) -> list[FirstCalls]:
+    tables: dict[Kind, str] = {"overseer": "ticks", **_TABLES}
+    found: list[FirstCalls] = []
+    for kind in KINDS:
+        by_digest: dict[str | None, list[tuple[int, bool, str]]] = {}
+        for digest, sent, written, started in conn.execute(
+            f"SELECT {_FIRST_CALL} FROM {tables[kind]} "  # noqa: S608 (a fixed table)
+            "WHERE started_at >= ? AND started_at < ? AND tokens_first_call IS NOT NULL ORDER BY started_at, id",
+            (since, until),
+        ):
+            call = (int(sent), _cold(int(sent), int(written or 0)), str(started))
+            by_digest.setdefault(None if digest is None else str(digest), []).append(call)
+        found.extend(
+            FirstCalls(
+                kind=kind,
+                digest=digest,
+                runs=len(calls),
+                first_call=statistics.median_low(sent for sent, _, _ in calls),
+                cold_share=sum(cold for _, cold, _ in calls) / len(calls),
+                first_started=calls[0][2],
+                last_started=calls[-1][2],
+            )
+            for digest, calls in by_digest.items()
+        )
+    return found
+
+
+# Whether a first call started cold: it wrote most of what it was sent to the cache, where a warm one reads the fixed
+# prefix (the system prompt, the agent's body, the tools) from it and writes only what is new.
+def _cold(sent: int, written: int) -> bool:
+    return 2 * written > sent
 
 
 def _costs(found: dict[str, float | None]) -> Costs:

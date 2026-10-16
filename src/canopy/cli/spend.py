@@ -61,7 +61,8 @@ def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
 
     The overseer, workers and splits, chores, and reviews, as the agent runtime reported each; dry runs apart from
     the live ticks, and idle ticks' share of the overseer's spend. Then the tickets marked done, the spend for each,
-    and the costliest tickets; --json adds every ticket and PR.
+    and the costliest tickets; --json adds every ticket and PR, and each kind's first model calls by definitions
+    snapshot.
     """
     ctx = open_context(click_ctx)
     found = spend.breakdown(ctx.conn, datetime.now(UTC), days)

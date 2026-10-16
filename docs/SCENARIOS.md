@@ -133,10 +133,12 @@ relying on a permission they check.
   new limit. Then close the terminal window: expect the loop gone, as before. Under `nohup`, expect it to outlive the
   window and still reload on `kill -HUP`.
 - **S33. The overseer's prompt from the cache** (M34). Run two `canopy tick --dry-run` a minute apart, and read each
-  tick's first model call from its log: the first `step_finish` event in `<state_dir>/ticks/<id>.log`, its
-  `part.tokens.cache.write` and `part.tokens.cache.read`. Expect the second tick's write near the state block's size,
-  a few thousand tokens, and its read to hold the prompt, the provider skill, and the tools; the first tick, cold,
-  writes them all. Run it after a change to the overseer's definition or prompt, or an OpenCode upgrade, which may
+  tick's first model call from the journal: `SELECT id, tokens_first_call, tokens_first_cache_write, definitions_digest
+  FROM ticks ORDER BY id DESC LIMIT 2` (DESIGN §13; the first `step_finish` event in `<state_dir>/ticks/<id>.log` holds
+  the same). Expect the second tick's write near the state block's size, a few thousand tokens, and the rest of its
+  first call, nearly all read from the cache, to hold the prompt, the provider skill, and the tools; the first tick,
+  cold, writes them all. Over a longer stretch, `canopy spend --json`'s `first_calls` gives each snapshot's median first
+  call and cold share. Run it after a change to the overseer's definition or prompt, or an OpenCode upgrade, which may
   change where OpenCode puts an agent's body. Then, after a working session of `canopy loop`, re-measure with
   MEASUREMENTS' prompt: expect the median tick that starts within the cache's lifetime of the one before at least 15%
   cheaper than on 2026-10-13 at the same price, with no change in what the ticks decided. If the second tick's write

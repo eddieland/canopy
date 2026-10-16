@@ -28,7 +28,7 @@ def test_plain_text_is_read_as_it_is() -> None:
     assert agent_output.read(stdout) == AgentOutput(stdout, stdout)  # plain text is one message
 
 
-def test_events_give_the_text_the_session_the_cost_and_the_peak_context() -> None:
+def test_events_give_the_text_the_session_the_cost_the_peak_context_and_the_first_call() -> None:
     lines = [
         event("step_start", {"type": "step-start"}),
         text("Working on it.\nStill working."),
@@ -43,7 +43,10 @@ def test_events_give_the_text_the_session_the_cost_and_the_peak_context() -> Non
     assert output.last == RESULT
     assert output.session_id == "ses_abc123"
     peak = 100 + 900 + 50  # the second call's input, cache read, and cache write
-    assert output.usage == Usage(1.25, 200, 40, 6, cache_read=1300, cache_write=100, peak_context=peak)
+    first = 100 + 400 + 50  # the first call's
+    assert output.usage == Usage(
+        1.25, 200, 40, 6, cache_read=1300, cache_write=100, peak_context=peak, first_call=first, first_cache_write=50
+    )
     assert output.usage is not None
     assert output.usage.new_tokens == 2 * (100 + 50 + 20 + 3)  # every kind but the cache reads
     assert output.usage.describe() == "$1.25, 346 tokens, 1.1k peak context"
@@ -64,7 +67,7 @@ def test_events_with_no_model_call_cost_nothing() -> None:
     error = json.dumps({"type": "error", "timestamp": 1, "sessionID": "ses_abc123", "error": {"name": "UnknownError"}})
     output = agent_output.read(error)
     assert (output.text, output.last, output.session_id) == ("", "", "ses_abc123")
-    assert output.usage == Usage(0, 0, 0, 0, 0, 0, peak_context=0)
+    assert output.usage == Usage(0, 0, 0, 0, 0, 0, peak_context=0)  # and no first call
 
 
 @pytest.mark.parametrize(

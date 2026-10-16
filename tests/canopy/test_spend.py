@@ -9,6 +9,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db, spend
+from canopy.core.agent_output import Usage
 from tests.conftest import CanopyEnv, Journals
 
 NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
@@ -354,3 +355,52 @@ def test_canopy_spend_prints_the_tickets_done_and_the_costliest(
     assert words[first] == ["A-11", "1", "$12.00", at(now, 0)[:10], "merged"]
     assert [w[0] for w in words[first : first + 10]] == [f"A-{n}" for n in range(11, 1, -1)]  # the costliest ten
     assert words[first + 10] == ["and", "2", "more;", "--json", "lists", "every", "one"]
+
+
+def first_call(sent: int, written: int) -> Usage:
+    """What a run reported whose first model call was sent `sent` tokens and wrote `written` of them to the cache."""
+    return Usage(0.1, 0, 0, 0, sent - written, written, peak_context=sent, first_call=sent, first_cache_write=written)
+
+
+def test_first_calls_are_by_kind_and_snapshot_with_their_median_and_cold_share(
+    tmp_path: Path, journals: Journals
+) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    calls = [(5, 50_000, 49_000, "old"), (4, 52_000, 3_000, "old"), (3, 51_000, 2_000, "old")]
+    calls += [(2, 60_000, 58_000, "new"), (1, 62_000, 5_000, "new")]
+    for hours, sent, written, digest in calls:
+        db.set_tick_report(conn, tick(conn, at(NOW, 0, hours), 0.1), "s", first_call(sent, written), digest=digest)
+    dry = tick(conn, at(NOW, 0, 0.5), 0.1, dry_run=True)  # its first call is a live tick's
+    db.set_tick_report(conn, dry, "s", first_call(61_000, 4_000), digest="new")
+    before = tick(conn, at(NOW, 1), 0.1)  # before the window
+    db.set_tick_report(conn, before, "s", first_call(10, 10), digest="new")
+    tick(conn, at(NOW, 0, 0.25), 0.1)  # recorded before canopy kept the first call
+    ticket(conn, "PROJ-1")
+    run(conn, dry, "PROJ-1", at(NOW, 0, 1), 0.1, None)
+    run_id = conn.execute("SELECT max(id) FROM runs").fetchone()[0]
+    db.set_run_report(conn, "runs", run_id, "s", first_call(30_000, 1_000), digest="new")
+
+    found = spend.breakdown(conn, NOW, 1)
+    assert found.first_calls == [
+        spend.FirstCalls("overseer", "old", 3, 51_000, 1 / 3, at(NOW, 0, 5), at(NOW, 0, 3)),
+        spend.FirstCalls("overseer", "new", 3, 61_000, 1 / 3, at(NOW, 0, 2), at(NOW, 0, 0.5)),
+        spend.FirstCalls("workers", "new", 1, 30_000, 0.0, at(NOW, 0, 1), at(NOW, 0, 1)),
+    ]
+
+
+def test_canopy_spend_json_has_the_first_calls(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
+    conn = canopy_env.journal()
+    now = noon_today()
+    db.set_tick_report(conn, tick(conn, at(now, 0), 0.1), "s", first_call(50_000, 49_000), digest="abc")
+    assert main(["spend", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["first_calls"] == [
+        {
+            "kind": "overseer",
+            "digest": "abc",
+            "runs": 1,
+            "first_call": 50_000,
+            "cold_share": 1.0,
+            "first_started": at(now, 0),
+            "last_started": at(now, 0),
+        }
+    ]
