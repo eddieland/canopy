@@ -106,6 +106,20 @@ Hooks in a repository's committed `treehouse.toml` are ignored; only yours run.
 In a workspace, set `capacity.slots_per_repo` and run `canopy workspace sync`: it makes every slot ahead of time, so
 the hooks run then and not in the first run that lands on a new slot.
 
+With `pools.backend = "canopy"` (DESIGN §18), canopy's own pool makes the slots, and no `post_create` hook runs. Move
+what your hooks do into `setup_cmd` (section 4), which runs in every slot of a run once its branch is checked out. A
+hook's failure was ignored, but `setup_cmd`'s crashes the run, so keep the hook's tolerance:
+
+```toml
+# ~/.config/canopy/config.toml
+[runtime]
+setup_cmd = "sh -c 'bazel fetch //... || true'"
+```
+
+It runs at the run's branch rather than the base, every run rather than once a slot, so a slow hook costs each run
+the time a warm cache leaves it. A slot keeps its ignored files, Bazel's output base among them, from one run to the
+next, so a fetch the last run made is quick.
+
 ## 4. Set up the run's branch with `setup_cmd`
 
 Most Bazel repositories need no `setup_cmd`: Bazel fetches and builds what the branch needs on its own. Use it for

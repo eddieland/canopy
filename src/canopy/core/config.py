@@ -38,6 +38,7 @@ from pydantic import (
 )
 
 from canopy.core import contract
+from canopy.core.vocab import PoolKind
 
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
@@ -520,6 +521,16 @@ class Capacity(Section):
         return self.repo_slots.get(repo, self.slots_per_repo)
 
 
+class Pools(Section):
+    """The `[pools]` table: which pool makes a workspace's worktrees (DESIGN §18, ROADMAP M45).
+
+    User-only, as the pools' sizes are: it decides what runs on the operator's machine. Switching is safe with runs in
+    flight, since a lease always goes back to the pool that made it.
+    """
+
+    backend: Annotated[PoolKind, Scope.USER] = PoolKind.TREEHOUSE
+
+
 class Runtime(Section):
     """The `[runtime]` table: agent command templates and timeouts."""
 
@@ -818,6 +829,7 @@ class Config(Section):
     policy: Policy
     trust: Trust
     capacity: Capacity
+    pools: Pools
     runtime: Runtime
     loop: Loop
     review: Review
@@ -838,6 +850,7 @@ SECTIONS: dict[str, type[Section]] = {
     "policy": Policy,
     "trust": Trust,
     "capacity": Capacity,
+    "pools": Pools,
     "runtime": Runtime,
     "loop": Loop,
     "review": Review,

@@ -17,13 +17,14 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, treehouse
-from canopy.core.pools import AVAILABLE, HOLDER_PREFIX, SYNC_HOLDER, Slot
+from canopy.core import conversation, db
+from canopy.core.pools import AVAILABLE, HOLDER_PREFIX, SYNC_HOLDER, PoolError, Slot
 from canopy.serve import views
 from canopy.serve.schema import Pool, Process, ReviewHold, Worktree, WorktreeState
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Sequence
     from pathlib import Path
 
     from canopy.core.context import Context
@@ -49,8 +50,8 @@ def pools(backend: Backend, ctx: Context) -> list[Pool]:
     """Every pool of the workspace, in map order, each with its slots or why they could not be read.
 
     Returns:
-        One pool per repository in the map. One with no clone, or whose slots treehouse could not read, carries an
-        error instead of worktrees.
+        One pool per repository in the map. One with no clone, or whose slots could not be read, carries an error
+        instead of worktrees.
     """
     running = db.running_runs(ctx.conn, "runs")
     by_lease: dict[str, sqlite3.Row] = {}
@@ -59,23 +60,24 @@ def pools(backend: Backend, ctx: Context) -> list[Pool]:
         by_lease |= {str(s["lease_id"]): row for s in slots}
     reviews = {str(r["lease_id"]): r for r in db.running_runs(ctx.conn, "review_runs") if r["lease_id"]}
     root = ctx.workspace.root
-    repos = [(repo, ctx.pool(repo.name)) for repo in ctx.workspace.repos]
-    cloned = [(repo, pool) for repo, pool in repos if repo.cloned]
-    # `backend.slots` runs on the pool's threads: it uses `ctx.runner`, never the journal connection.
+    sizes = {repo.name: ctx.config.capacity.slots_for(repo.name) for repo in ctx.workspace.repos}
+    cloned = [repo for repo in ctx.workspace.repos if repo.cloned]
+    # Each read opens a Context of its own: a pool may read the journal, and `ctx.conn` belongs to this thread.
     with ThreadPoolExecutor(max_workers=max(1, min(READERS, len(cloned))), thread_name_prefix="canopy-pool") as ex:
-        reads = {repo.name: ex.submit(backend.slots, ctx, pool) for repo, pool in cloned}
+        reads = {repo.name: ex.submit(_read, backend, repo.name) for repo in cloned}
     found: list[Pool] = []
-    for repo, pool in repos:
+    for repo in ctx.workspace.repos:
+        size = sizes[repo.name]
         if not repo.cloned:
-            found.append(Pool(repo=repo.name, size=pool.slots, error=_NO_CLONE))
+            found.append(Pool(repo=repo.name, size=size, error=_NO_CLONE))
             continue
         try:
             slots = reads[repo.name].result()
-        except treehouse.TreehouseError as e:
-            found.append(Pool(repo=repo.name, size=pool.slots, error=str(e)))
+        except PoolError as e:
+            found.append(Pool(repo=repo.name, size=size, error=str(e)))
             continue
         worktrees = [worktree(s, by_lease.get(s.lease_id), reviews.get(s.lease_id), root=root) for s in slots]
-        found.append(Pool(repo=repo.name, size=pool.slots, worktrees=worktrees))
+        found.append(Pool(repo=repo.name, size=size, worktrees=worktrees))
     return found
 
 
@@ -121,6 +123,11 @@ def worktree(slot: Slot, run: sqlite3.Row | None, review: sqlite3.Row | None, *,
         note=note,
         processes=[Process(pid=p.pid, name=conversation.printable(p.name)) for p in slot.processes[:PROCESSES]],
     )
+
+
+def _read(backend: Backend, repo: str) -> Sequence[Slot]:
+    with backend.open() as own:
+        return backend.slots(own, repo)
 
 
 def _time(stamp: str | None) -> datetime | None:

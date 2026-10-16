@@ -22,7 +22,7 @@ import json
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, config, conversation, db, pools, treehouse, workspace
+from canopy.core import chore_view, config, conversation, db, pools, workspace
 from canopy.core.items import Item
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs, resources
@@ -227,8 +227,8 @@ def seed(directory: Path) -> Backend:
     workspace.ensure_state_dir(ws.state_dir)
     slots_by_repo = _pools(root)
 
-    def slots(_ctx: Context, pool: treehouse.Pool) -> list[pools.Slot]:
-        return list(slots_by_repo.get(pool.cwd.name, [])) if pool.cwd is not None else []
+    def slots(_ctx: Context, repo: str) -> list[pools.Slot]:
+        return list(slots_by_repo.get(repo, []))
 
     backend = Backend(
         config=cfg,

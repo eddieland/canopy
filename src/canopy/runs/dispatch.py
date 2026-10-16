@@ -17,9 +17,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, notice, outbox, pools, prompts, treehouse
+from canopy.core import conversation, db, notice, outbox, pools, prompts
 from canopy.core.context import DISPATCH_LOCK
-from canopy.core.vocab import RunKind, RunStatus
+from canopy.core.vocab import PoolKind, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
 from canopy.runs import policy
@@ -78,6 +78,14 @@ class Started:
     def repos(self) -> tuple[str, ...]:
         """The repositories the run works in."""
         return tuple(s.repo or "" for s in self.slots)
+
+
+@dataclass(frozen=True)
+class Leased:
+    """A slot a dispatch leased, and the pool that made the lease, which it goes back to (DESIGN §18)."""
+
+    lease: pools.Lease
+    pool: PoolKind
 
 
 @dataclass(frozen=True)
@@ -619,35 +627,33 @@ def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[s
         raise Refusal("capacity", f"{busy} of {max_workers} workers are running{planned_note}")
 
 
-def _lease_all(ctx: Context, key: str, repos: Sequence[str]) -> list[tuple[str, pools.Lease]]:
+def _lease_all(ctx: Context, key: str, repos: Sequence[str]) -> list[tuple[str, Leased]]:
     """Lease a slot in each repository's pool, or none: a lease that fails returns those already made (DESIGN §18).
 
     Returns:
-        Each repository's name and its lease, in the order of `repos`.
+        Each repository's name and its lease, with the pool that made it, in the order of `repos`.
 
     Raises:
         Refusal: `no_slot`, when a repository's pool could not lease a slot.
     """
-    leases: list[tuple[str, pools.Lease]] = []
+    kind = ctx.config.pools.backend
+    leases: list[tuple[str, Leased]] = []
     for repo in repos:
         try:
-            leases.append((repo, treehouse.lease(ctx.runner, key, pool=ctx.pool(repo))))
-        except treehouse.TreehouseError as e:
+            leases.append((repo, Leased(ctx.pool(repo).lease(key), kind)))
+        except pools.PoolError as e:
             _return_all(ctx, leases)
             raise Refusal("no_slot", f"{repo}: {e}") from e
     return leases
 
 
-def _return_all(ctx: Context, leases: Sequence[tuple[str, pools.Lease]]) -> None:
+def _return_all(ctx: Context, leases: Sequence[tuple[str, Leased]]) -> None:
     """Return slots a dispatch leased and cannot use. A return that fails is left to the next tick's reconcile."""
-    for repo, lease in leases:
-        with contextlib.suppress(treehouse.TreehouseError):
-            treehouse.return_slot(
-                ctx.runner,
-                lease.path,
-                lease_id=lease.lease_id,
-                lease_holder=lease.lease_holder,
-                pool=ctx.workspace.pool(repo),
+    for repo, leased in leases:
+        lease = leased.lease
+        with contextlib.suppress(pools.PoolError):
+            ctx.pool_of(leased.pool, repo).return_slot(
+                lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder
             )
 
 
@@ -658,7 +664,7 @@ def _spawn(
     key: str,
     kind: str,
     plan: Plan,
-    leases: Sequence[tuple[str, pools.Lease]],
+    leases: Sequence[tuple[str, Leased]],
     attempt: int,
     limit: int,
     context: str | None,
@@ -671,12 +677,13 @@ def _spawn(
     slots = tuple(
         db.RunSlot(
             repo=repo,
-            slot_path=lease.path,
-            lease_id=lease.lease_id,
-            lease_holder=lease.lease_holder,
-            base_branch=plan.base if plan.base is not None else lease.base_branch,
+            slot_path=leased.lease.path,
+            lease_id=leased.lease.lease_id,
+            lease_holder=leased.lease.lease_holder,
+            base_branch=plan.base if plan.base is not None else leased.lease.base_branch,
+            pool=leased.pool,
         )
-        for repo, lease in leases
+        for repo, leased in leases
     )
     desk = desk_path(ctx, key) if plan.joint else None
     split = kind == policy.SPLIT

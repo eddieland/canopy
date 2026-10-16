@@ -4,8 +4,8 @@
 ending a stopped ticket's run (`runs.halt.end`, as `canopy stop --now` does), asking the loop to read its config again
 (`loop.reread`, as SIGHUP does), and the attempt and review limits `canopy grant` raises (`runs.policy`,
 `reviews.grants`) are theirs, so `canopy loop` passes them in, and `python -m canopy.serve --mock` passes stand-ins over
-its seeded journal. Reading a pool is `treehouse status` unless told otherwise: the mock has no
-treehouse to ask.
+its seeded journal. Reading a pool is the pool's own `status` unless told otherwise: the mock has no
+pool to ask.
 
 The loop's config and workspace map are read by each request as it opens, and replaced when the loop reads them again
 (`use`), so a request runs on one config throughout, the one the loop runs on.
@@ -14,13 +14,13 @@ The loop's config and workspace map are read by each request as it opens, and re
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, db, pools, treehouse
+from canopy.core import chore_view, db, pools
 from canopy.core.context import Context, db_path
 from canopy.infra import procs
 
@@ -33,8 +33,8 @@ if TYPE_CHECKING:
     from canopy.core.workspace import Workspace
 
 
-def _status(ctx: Context, pool: treehouse.Pool) -> list[pools.Slot]:
-    return treehouse.status(ctx.runner, pool=pool)
+def _status(ctx: Context, repo: str) -> Sequence[pools.Slot]:
+    return ctx.pool(repo).status()
 
 
 @dataclass(frozen=True)
@@ -97,9 +97,9 @@ class Backend:
     grant: Callable[[Context, Ref, str, str | None], Granted]
     # Fixture data, shown as `mock` in the UI's header.
     mock: bool = False
-    # A pool's slots, for the worktrees page: `treehouse status --json`, through `ctx.runner`. Called on a thread per
-    # pool, so it must not use `ctx.conn`, which belongs to the request's own thread.
-    slots: Callable[[Context, treehouse.Pool], list[pools.Slot]] = field(default=_status)
+    # A repository's pool's slots, for the worktrees page: its `status`. Called on a thread per pool, each with a
+    # Context of its own from `open`.
+    slots: Callable[[Context, str], Sequence[pools.Slot]] = field(default=_status)
     # Now, for windows such as the spend figure's: the mock's is fixed, as its journal's times are.
     clock: Callable[[], datetime] = field(default=lambda: datetime.now(UTC))
     # Rewrite `attention.md` after a write that changes the list without a tick, such as a dismissal. The mock's

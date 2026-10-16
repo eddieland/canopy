@@ -6,12 +6,13 @@ import contextlib
 import dataclasses
 from collections.abc import Sequence
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.core import config, workspace
+from canopy.core import config, pool, workspace
+from canopy.core.vocab import PoolKind
 from canopy.infra import lock
 from canopy.setup import init
 from canopy.setup import workspace as setup_workspace
@@ -129,18 +130,40 @@ def _sync(ctx: Context, *, dry_run: bool) -> list[setup_workspace.Checked]:
         # warning, refusing nothing: HTTPS is recommended because a sandboxed worker cannot reach the SSH agent socket.
         if repo.cloned and (urls := init.ssh_push_urls(ctx.runner, repo.path)):
             click.echo(f"{repo.name}: warning: origin pushes over SSH ({', '.join(urls)}); canopy recommends HTTPS")
+        switched = _switch(ctx, repo, dry_run=dry_run) if repo.cloned else None
+        if switched is not None:
+            results.append(_report(switched))
         want = ctx.config.capacity.slots_for(repo.name)
         if want is not None and repo.cloned:
-            results.append(
-                _report(setup_workspace.converge_pool(ctx.runner, ctx.pool(repo.name), repo, want, dry_run=dry_run))
-            )
+            results.append(_report(setup_workspace.converge_pool(ctx.pool(repo.name), repo, want, dry_run=dry_run)))
         elif want is not None and dry_run:
             # Not cloned yet, so it has no pool: a real sync clones it, then makes every slot.
             results.append(_report(setup_workspace.Checked(repo, "slots", f"0 of {want}, would make {want}")))
     results += [
-        _report(setup_workspace.remove(ctx.runner, ws, r, dry_run=dry_run)) for r in setup_workspace.undeclared(ws)
+        _report(setup_workspace.remove(ctx.runner, ctx.pool(r.name), r, dry_run=dry_run))
+        for r in setup_workspace.undeclared(ws)
     ]
     return results
+
+
+def _switch(ctx: Context, repo: workspace.Repo, *, dry_run: bool) -> setup_workspace.Checked | None:
+    """Bring `repo`'s slots over from the pool `pools.backend` does not name, if it has any (DESIGN §18).
+
+    Returns:
+        What moving or removing them came to, or None when there was nothing to do.
+    """
+    match ctx.config.pools.backend:
+        case PoolKind.CANOPY:
+            if not (ctx.repo_root / workspace.POOLS_DIR).is_dir():
+                return None
+            source = ctx.pool_of(PoolKind.TREEHOUSE, repo.name)
+            return setup_workspace.move_slots(source, ctx.canopy_pool(repo.name), repo, dry_run=dry_run)
+        case PoolKind.TREEHOUSE:
+            if not (ctx.repo_root / pool.POOLS_DIR / repo.name).is_dir():
+                return None
+            return setup_workspace.drop_idle(ctx.canopy_pool(repo.name), repo, dry_run=dry_run)
+        case unknown:
+            assert_never(unknown)
 
 
 def _clone_or_check(
