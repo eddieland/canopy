@@ -4,7 +4,7 @@ import io
 import json
 import os
 import threading
-from collections.abc import Generator, Iterator
+from collections.abc import Generator, Iterable, Iterator, Mapping
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any, ClassVar, override
@@ -238,7 +238,7 @@ def test_a_digest_is_a_short_block() -> None:
     assert text.splitlines() == ["*canopy* · api: digest", "", "*Digest*", "Digest since x: 2 ticks", "nothing ran"]
 
 
-def _texts(blocks: list[dict[str, Any]]) -> list[str]:
+def _texts(blocks: Iterable[Mapping[str, Any]]) -> list[str]:
     """Each section's text and each context's elements, in order: what a reader sees, as Slack markup."""
     out: list[str] = []
     for block in blocks:

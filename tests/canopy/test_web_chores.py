@@ -2,6 +2,7 @@
 note the operator writes there, which the chore's next prompt carries as `canopy reply chore:NAME`'s does."""
 
 import dataclasses
+from collections.abc import Collection
 from typing import Any
 
 import pytest
@@ -93,7 +94,7 @@ def test_a_chores_p99_is_by_nearest_rank_so_one_dear_run_in_a_hundred_does_not_s
     assert health["spend"]["day"]["p99_usd"] == 0.33
 
 
-def spent(hours: int, runs: int, costs: list[float]) -> dict[str, Any]:
+def spent(hours: int, runs: int, costs: Collection[float]) -> dict[str, Any]:
     """A chore's spend window as the API sends it, for `runs` runs of which those in `costs` reported one."""
     total = sum(costs)
     return {

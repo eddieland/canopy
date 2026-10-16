@@ -17,6 +17,7 @@ import os
 import re
 import shutil
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -257,7 +258,7 @@ def _check_userns(runner: procs.Runner, report: Report) -> None:
     )
 
 
-def _answers(runner: procs.Runner, args: list[str]) -> bool:
+def _answers(runner: procs.Runner, args: Sequence[str]) -> bool:
     """Whether the command `args` names is installed: found on PATH and started. Its exit status does not matter.
 
     Returns:

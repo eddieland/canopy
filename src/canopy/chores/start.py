@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import sys
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -146,7 +147,7 @@ def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Star
         return Started(run_id, pid)
 
 
-def _guard(ctx: Context, name: str, *, planned: list[str] | None = None) -> Chore:
+def _guard(ctx: Context, name: str, *, planned: Collection[str] | None = None) -> Chore:
     """Refuse unless chore `name` may run now. `planned` holds the chores a dry run already ran this tick.
 
     Returns:

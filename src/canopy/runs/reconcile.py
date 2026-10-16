@@ -23,6 +23,7 @@ from canopy.runs import desks, dispatch, tidy
 if TYPE_CHECKING:
     import sqlite3
     from collections.abc import Mapping, Sequence
+    from collections.abc import Set as AbstractSet
 
     from canopy.core.context import Context
     from canopy.core.workspace import Workspace
@@ -209,8 +210,8 @@ def _return_stale(
     pool_: pools.Pool,
     slots: Sequence[pools.Slot],
     *,
-    held: set[str],
-    returned: set[str],
+    held: AbstractSet[str],
+    returned: AbstractSet[str],
 ) -> list[pools.Slot]:
     """Return repository `name`'s canopy leases in `pool_` that no running run holds.
 

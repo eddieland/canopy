@@ -88,7 +88,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, MutableMapping
+    from collections.abc import Collection, Iterable, Mapping, MutableMapping, Sequence
 
 ROLES = ("worker", "setup", "chore", "review")
 # The roles that commit, and so get the run's object directory and the run's `git`. A review reads its checkout and
@@ -484,7 +484,7 @@ def check_socket_room(tmp: Path) -> None:
 
 
 def placeholders(
-    cwd: Path, trees: list[Worktree], objects: Path | None, tmp: Path, *, cache: Path, reads: list[Path]
+    cwd: Path, trees: Collection[Worktree], objects: Path | None, tmp: Path, *, cache: Path, reads: list[Path]
 ) -> dict[str, list[str]]:
     """Return what each placeholder expands to for this run.
 
@@ -505,7 +505,7 @@ def placeholders(
     return {name: list(dict.fromkeys(str(p) for p in paths)) for name, paths in values.items()}
 
 
-def shared_entries(trees: list[Worktree]) -> list[Path]:
+def shared_entries(trees: Collection[Worktree]) -> list[Path]:
     """List what each worktree's common git directory holds, but the worktrees' own git directories.
 
     Returns:
@@ -520,7 +520,7 @@ def shared_entries(trees: list[Worktree]) -> list[Path]:
     return entries
 
 
-def fill(node: object, values: dict[str, list[str]]) -> object:
+def fill(node: object, values: Mapping[str, Iterable[str]]) -> object:
     """Expand every placeholder in `node`, and drop every key that starts with `#`.
 
     A path a list already holds is not added again: in a slot, `@CWD@` and `@WORKTREES@` are the same directory.
@@ -550,7 +550,7 @@ def fill(node: object, values: dict[str, list[str]]) -> object:
     return node
 
 
-def check(policy: object, denied: list[Path], readable: list[Path]) -> None:
+def check(policy: object, denied: Iterable[Path], readable: Iterable[Path]) -> None:
     """Refuse a policy `srt` would run without a sandbox, or with the network open; deny `denied`, allow `readable`.
 
     `denied` holds the directory of every run's directory: the system temp directory is outside HOME, so without it one
@@ -623,7 +623,7 @@ def environment(current: Mapping[str, str], bin_dir: Path | None, tmp: Path, cac
     return env
 
 
-def git_shim(run_dir: Path, trees: list[Worktree], objects: Path) -> Path:
+def git_shim(run_dir: Path, trees: Collection[Worktree], objects: Path) -> Path:
     """Write the run's `git`, which points git at `objects` in the run's worktrees only, into `run_dir/bin`.
 
     Returns:
@@ -654,7 +654,7 @@ def git_shim(run_dir: Path, trees: list[Worktree], objects: Path) -> Path:
     return bin_dir
 
 
-def run_srt(srt: Path, settings: Path, command: list[str], env: dict[str, str]) -> int:
+def run_srt(srt: Path, settings: Path, command: Sequence[str], env: Mapping[str, str]) -> int:
     """Run `command` under `srt` with the policy at `settings`, passing on a signal the wrapper alone is sent.
 
     Returns:

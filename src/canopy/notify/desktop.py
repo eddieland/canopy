@@ -19,6 +19,7 @@ import argparse
 import json
 import shutil
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 from typing import TextIO
 
@@ -72,7 +73,7 @@ def command(title: str, body: str, platform: str) -> list[str] | None:
     return None
 
 
-def run(argv: list[str], stdin: TextIO, *, runner: procs.Runner, platform: str) -> int:
+def run(argv: Sequence[str], stdin: TextIO, *, runner: procs.Runner, platform: str) -> int:
     """Show the message on `stdin` as a desktop notification. Returns the exit code.
 
     Returns:

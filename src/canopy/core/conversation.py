@@ -18,7 +18,7 @@ import os
 import re
 import secrets
 import sqlite3
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypedDict
@@ -892,7 +892,7 @@ def chore_notes(conn: sqlite3.Connection, name: str) -> list[ChoreNote]:
     ]
 
 
-def _bounded(blocks: list[str], empty: str) -> str:
+def _bounded(blocks: Sequence[str], empty: str) -> str:
     # The newest blocks that fit in PROMPT_CHARS, oldest first, with a note of how many older ones were left out.
     total = 0
     kept: list[str] = []

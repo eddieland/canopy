@@ -10,7 +10,7 @@ Sinks run one after another under the tick lock.
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Collection
+from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -45,7 +45,7 @@ class Delivery:
 
 
 def publish(
-    ctx: Context, items: list[Item], path: Path, log: logs.TickAdapter, *, dismissed: Collection[str] = ()
+    ctx: Context, items: Sequence[Item], path: Path, log: logs.TickAdapter, *, dismissed: Collection[str] = ()
 ) -> list[Delivery]:
     """Deliver to every configured sink, after recording the loop's own events. Never raises: the tick is closed.
 
@@ -86,7 +86,7 @@ def send(ctx: Context, sink: Sink, text: str) -> str | None:
     return f"{status}: {tail}" if tail else status
 
 
-def test(ctx: Context, names: list[str]) -> list[Delivery]:
+def test(ctx: Context, names: Iterable[str]) -> list[Delivery]:
     """Send a test message to each sink in `names` now, outside any tick, changing nothing in the journal.
 
     Returns:
@@ -181,7 +181,7 @@ def _deliver(
     ctx: Context,
     name: str,
     sink: Sink,
-    items: list[Item],
+    items: Sequence[Item],
     *,
     path: Path,
     now: datetime,
@@ -243,7 +243,7 @@ def _batching(row: sqlite3.Row, sink: Sink, now: datetime) -> bool:
     return now - db.parse_time(str(row["last_delivery_at"])) < timedelta(minutes=sink.batch_minutes)
 
 
-def _urgent(change: journal.Diff | None, events: list[message.Event]) -> bool:
+def _urgent(change: journal.Diff | None, events: Iterable[message.Event]) -> bool:
     """Whether a message needs the operator now, so a batching sink sends it at once.
 
     Returns:

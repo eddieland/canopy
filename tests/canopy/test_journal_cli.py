@@ -2,7 +2,7 @@
 
 import os
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from unittest import mock
 
@@ -328,7 +328,7 @@ def test_status_and_attention_ages(
     assert main(["status"]) == 0
     assert "No ticks yet." in capsys.readouterr().out
 
-    def tick(items: list[tuple[str, str]], status: str = "ok") -> int:
+    def tick(items: Iterable[tuple[str, str]], status: str = "ok") -> int:
         tick_id = db.start_tick(conn, dry_run=True)
         for key, reason in items:
             db.record_decision(conn, tick_id, key, f"attention:{reason}", f"https://example.test/{key}")

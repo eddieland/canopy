@@ -13,6 +13,7 @@ header bounds what the app can read; a chunked body has none, and is refused, as
 
 from __future__ import annotations
 
+from collections.abc import Set as AbstractSet
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
@@ -41,7 +42,7 @@ def host_name(host: str) -> str:
     return name if name and port.isdigit() else host
 
 
-def allowed_origin(origin: str, hosts: frozenset[str]) -> bool:
+def allowed_origin(origin: str, hosts: AbstractSet[str]) -> bool:
     """Whether an Origin header value names a page on one of `hosts`, served over HTTP(S).
 
     Returns:

@@ -33,7 +33,7 @@ import os
 import signal
 import time
 from collections import Counter
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Collection, Generator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
@@ -674,7 +674,7 @@ def _report(
     console: Console,
     ctx: Context,
     outcome: tick.Outcome,
-    before: list[attention.Item],
+    before: Collection[attention.Item],
     *,
     elapsed: float,
     wait: float | None,
@@ -744,7 +744,7 @@ def _decision_rows(rows: Table, ctx: Context, tick_id: int, *, failed: bool) -> 
         rows.add_row("", "", Text("overseer output", style="red"), Text(str(output), no_wrap=True, overflow="ellipsis"))
 
 
-def _attention_rows(rows: Table, before: list[attention.Item], after: list[attention.Item]) -> None:
+def _attention_rows(rows: Table, before: Collection[attention.Item], after: Collection[attention.Item]) -> None:
     """Items the tick added to the attention list, then items it resolved."""
     had, has = attention.keys(before), attention.keys(after)
     for item in after:

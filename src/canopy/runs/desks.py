@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 import shutil
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable
 from pathlib import Path
 
 from canopy.core.workspace import DESKS_DIR
@@ -34,7 +34,7 @@ def is_desk(desk: Path) -> bool:
     return desk.is_dir() and not desk.is_symlink() and (desk / MARKER).is_file()
 
 
-def make(root: Path, key: str, links: Sequence[tuple[str, Path]]) -> Path:
+def make(root: Path, key: str, links: Iterable[tuple[str, Path]]) -> Path:
     """Make `key`'s desk with a link named for each repository to its worktree, replacing one left by a dead run.
 
     Returns:

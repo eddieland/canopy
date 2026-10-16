@@ -22,7 +22,7 @@ from canopy.core import contract, db
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Iterable, Iterator
+    from collections.abc import Collection, Iterable, Iterator, Mapping
     from datetime import datetime
 
 type Group = Literal["idle", "busy", "hand_run", "not_ok", "dry_run"]
@@ -365,7 +365,7 @@ def _in_series(row: _TickRow, name: str) -> bool:
     return not row.dry
 
 
-def _groups(rows: list[_TickRow]) -> list[TickGroup]:
+def _groups(rows: Collection[_TickRow]) -> list[TickGroup]:
     return [
         TickGroup(
             group=g,
@@ -377,7 +377,7 @@ def _groups(rows: list[_TickRow]) -> list[TickGroup]:
 
 
 # The live ticks the loop ran, by what ended the wait before each, the most common first.
-def _woken(rows: list[_TickRow]) -> list[Woken]:
+def _woken(rows: Iterable[_TickRow]) -> list[Woken]:
     by_cause: dict[str, list[_TickRow]] = {}
     for row in rows:
         if row.live_loop and row.woken_by is not None:
@@ -391,13 +391,13 @@ def _woken(rows: list[_TickRow]) -> list[Woken]:
 
 # Idle ticks' share of what the live ticks that ended cost: a tick still running has reported its cost and has no
 # group yet, so it is in neither part. None when they cost nothing or reported nothing, as no share of zero exists.
-def _idle_share(ticks: list[TickGroup]) -> float | None:
+def _idle_share(ticks: Collection[TickGroup]) -> float | None:
     live = _sum([g.cost_usd for g in ticks if g.group != "dry_run"])
     idle = next((g.cost_usd for g in ticks if g.group == "idle"), None)
     return (idle or 0.0) / live if live else None
 
 
-def _unpriced(conn: sqlite3.Connection, since: str, until: str, rows: list[_TickRow]) -> list[Unpriced]:
+def _unpriced(conn: sqlite3.Connection, since: str, until: str, rows: Iterable[_TickRow]) -> list[Unpriced]:
     ended = [r for r in rows if r.group is not None]
     found = [Unpriced(kind="overseer", runs=sum(r.ticks for r in ended), unpriced=sum(r.unpriced for r in ended))]
     for kind, table in _TABLES.items():
@@ -427,7 +427,9 @@ def _done(conn: sqlite3.Connection, since: str, until: str) -> dict[str, tuple[D
 
 
 # Each ticket with a run or a review run that started in the window, or marked done in it, the costliest first.
-def _tickets(conn: sqlite3.Connection, since: str, until: str, done: dict[str, tuple[Done, str]]) -> list[TicketSpend]:
+def _tickets(
+    conn: sqlite3.Connection, since: str, until: str, done: Mapping[str, tuple[Done, str]]
+) -> list[TicketSpend]:
     runs = _by_ticket(conn, "runs", since, until)
     reviews = _by_ticket(conn, "review_runs", since, until)
     keys = sorted({*runs, *reviews, *done})
@@ -568,7 +570,7 @@ def _cold(sent: int, written: int) -> bool:
     return 2 * written > sent
 
 
-def _costs(found: dict[str, float | None]) -> Costs:
+def _costs(found: Mapping[str, float | None]) -> Costs:
     return Costs(
         overseer=found.get("overseer"),
         idle=found.get("idle"),
@@ -580,6 +582,6 @@ def _costs(found: dict[str, float | None]) -> Costs:
 
 
 # The sum of the values that are not None; None when every one is.
-def _sum(values: list[float | None]) -> float | None:
+def _sum(values: Iterable[float | None]) -> float | None:
     parts = [float(v) for v in values if v is not None]
     return sum(parts) if parts else None

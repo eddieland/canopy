@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -788,7 +789,7 @@ def _text(session: str, minutes: float, text: str) -> str:
     return _event("text", session, minutes, part={"type": "text", "text": text})
 
 
-def _tool(session: str, minutes: float, tool: str, state: dict[str, object], seconds: float = 1) -> str:
+def _tool(session: str, minutes: float, tool: str, state: Mapping[str, object], seconds: float = 1) -> str:
     ms = int((T0 + timedelta(minutes=minutes)).timestamp() * 1000)
     metadata: dict[str, object] = {}
     timed = {**state, "metadata": metadata, "time": {"start": ms - int(seconds * 1000), "end": ms}}

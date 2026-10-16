@@ -12,6 +12,7 @@ import contextlib
 import json
 import os
 import shutil
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
@@ -244,7 +245,7 @@ def _save_diff(runner: procs.Runner, slot: Path, run: sqlite3.Row, log: logs.Tic
 
 
 def _git_or_none(
-    runner: procs.Runner, slot: Path, log: logs.TickAdapter, fields: dict[str, object], *args: str
+    runner: procs.Runner, slot: Path, log: logs.TickAdapter, fields: Mapping[str, object], *args: str
 ) -> str | None:
     """`git <args>`'s stdout, or None, logged, if it fails: for steps the review can do without.
 

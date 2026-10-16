@@ -33,6 +33,7 @@ The helpers that read OpenCode's event stream are unit-tested here without openc
 import json
 import os
 import shutil
+from collections.abc import Iterable
 from pathlib import Path
 from typing import cast
 
@@ -358,7 +359,7 @@ def events(stdout: str) -> list[dict[str, object]]:
     return parsed
 
 
-def attempted(calls: list[str], needle: str) -> bool:
+def attempted(calls: Iterable[str], needle: str) -> bool:
     """Return whether any tool call mentions `needle`."""
     return any(needle in call for call in calls)
 

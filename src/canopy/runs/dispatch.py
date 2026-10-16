@@ -11,7 +11,7 @@ import functools
 import json
 import re
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -242,7 +242,7 @@ def branch_name(prefix: str, key: str, slug: str) -> str:
 
 
 def repositories_note(
-    ctx: Context, branch: str, slots: Sequence[db.RunSlot], prs: dict[str, str], desk: Path | None
+    ctx: Context, branch: str, slots: Sequence[db.RunSlot], prs: Mapping[str, str], desk: Path | None
 ) -> str:
     """Return the worker prompt's `{{REPOSITORIES}}` section: each repository the run works in (DESIGN §18)."""
     if desk is None:
@@ -647,7 +647,7 @@ def _lease_all(ctx: Context, key: str, repos: Sequence[str]) -> list[tuple[str, 
     return leases
 
 
-def _return_all(ctx: Context, leases: Sequence[tuple[str, Leased]]) -> None:
+def _return_all(ctx: Context, leases: Iterable[tuple[str, Leased]]) -> None:
     """Return slots a dispatch leased and cannot use. A return that fails is left to the next tick's reconcile."""
     for repo, leased in leases:
         lease = leased.lease
@@ -664,7 +664,7 @@ def _spawn(
     key: str,
     kind: str,
     plan: Plan,
-    leases: Sequence[tuple[str, Leased]],
+    leases: Iterable[tuple[str, Leased]],
     attempt: int,
     limit: int,
     context: str | None,

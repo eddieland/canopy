@@ -11,6 +11,7 @@ import contextlib
 import os
 import signal
 import time
+from collections.abc import Collection
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -158,7 +159,7 @@ def _ancestors() -> set[int]:
     return pids
 
 
-def _wait_gone(pids: list[int]) -> bool:
+def _wait_gone(pids: Collection[int]) -> bool:
     """Wait up to the grace period for every one of `pids` to end.
 
     Returns:

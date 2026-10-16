@@ -11,6 +11,7 @@ import contextlib
 import json
 import re
 import sys
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -224,7 +225,7 @@ def _spawn(
     return Started(run_id, pid, lease.path)
 
 
-def _guard(ctx: Context, request: Request, *, planned: list[records.Decision] | None = None) -> str:
+def _guard(ctx: Context, request: Request, *, planned: Collection[records.Decision] | None = None) -> str:
     """Refuse unless a review of `request` may start now. Returns the repository it leases in.
 
     `planned` is a dry run's decisions this tick: its reviews and worker dispatches count as running.
@@ -268,7 +269,10 @@ def _check_ours(ctx: Context, request: Request, repo: str) -> None:
 
 
 def _check_running(
-    ctx: Context, request: Request, planned_reviews: list[records.Decision], planned_runs: list[records.Decision]
+    ctx: Context,
+    request: Request,
+    planned_reviews: Iterable[records.Decision],
+    planned_runs: Iterable[records.Decision],
 ) -> None:
     """`running`: a review of this PR, or a worker on its ticket, is running.
 
@@ -289,7 +293,10 @@ def _check_running(
 
 
 def _check_limits(
-    ctx: Context, request: Request, planned_reviews: list[records.Decision], planned_runs: list[records.Decision]
+    ctx: Context,
+    request: Request,
+    planned_reviews: Collection[records.Decision],
+    planned_runs: Collection[records.Decision],
 ) -> None:
     """`reviewed`, `review_limit`, `daily_limit`, `review_capacity`, and `capacity`, in that order.
 

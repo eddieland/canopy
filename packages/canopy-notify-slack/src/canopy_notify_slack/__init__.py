@@ -30,7 +30,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import TextIO
@@ -239,7 +239,7 @@ def _lines(value: object) -> list[str]:
     return [str(line) for line in value] if isinstance(value, list) else []
 
 
-def render(message: dict[str, object]) -> str:
+def render(message: Mapping[str, object]) -> str:
     """Return the Slack text for one canopy `json` message: a header with counts, a line per item or event, a digest.
 
     Returns:
@@ -344,7 +344,7 @@ def _when(at: object) -> str:
     return f"<!date^{int(parsed.timestamp())}^{{date_short_pretty}} {{time}}|{escape(at)}>"
 
 
-def _ended(e: dict[str, object], what: str) -> str:
+def _ended(e: Mapping[str, object], what: str) -> str:
     """`what` ended with the event's status: led by the status's emoji, so a channel scans by outcome.
 
     Returns:
@@ -364,7 +364,7 @@ def _counted(counts: object) -> str:
     return ", ".join(f"{escape(k)} {escape(v)}" for k, v in sorted(counts.items(), key=lambda kv: str(kv[0])))
 
 
-def _run_started(e: dict[str, object]) -> Block:
+def _run_started(e: Mapping[str, object]) -> Block:
     return _section(
         f":arrow_forward: {_named(e.get('ticket'), e.get('title'))} · {escape(e.get('run_kind'))} run "
         f"{escape(e.get('run'))} started",
@@ -372,7 +372,7 @@ def _run_started(e: dict[str, object]) -> Block:
     )
 
 
-def _run_ended(e: dict[str, object]) -> Block:
+def _run_ended(e: Mapping[str, object]) -> Block:
     prs = _lines(e.get("prs")) or ([str(e["pr"])] if e.get("pr") else [])
     run = f"{escape(e.get('run_kind'))} run {escape(e.get('run'))}"
     return _section(
@@ -383,7 +383,7 @@ def _run_ended(e: dict[str, object]) -> Block:
     )
 
 
-def _chore_ended(e: dict[str, object]) -> Block:
+def _chore_ended(e: Mapping[str, object]) -> Block:
     findings = e.get("findings") or 0
     return _section(
         _ended(e, f"*chore:{escape(e.get('chore'))}* · run {escape(e.get('run'))}")
@@ -392,7 +392,7 @@ def _chore_ended(e: dict[str, object]) -> Block:
     )
 
 
-def _review_ended(e: dict[str, object]) -> Block:
+def _review_ended(e: Mapping[str, object]) -> Block:
     ticket = f"{_named(e.get('ticket'), e.get('title'))} · " if e.get("ticket") else ""
     verdict = " ".join(escape(x) for x in (e.get("verdict"), e.get("impact")) if x)
     findings = e.get("findings") or 0
@@ -403,28 +403,28 @@ def _review_ended(e: dict[str, object]) -> Block:
     )
 
 
-def _loop_failing(e: dict[str, object]) -> Block:
+def _loop_failing(e: Mapping[str, object]) -> Block:
     return _section(
         f":rotating_light: *The loop is failing:* {escape(e.get('count'))} ticks in a row ended other than ok",
         f"latest tick {escape(e.get('tick'))} ended {escape(e.get('status'))}; log `{escape(e.get('log'))}`",
     )
 
 
-def _loop_recovered(e: dict[str, object]) -> Block:
+def _loop_recovered(e: Mapping[str, object]) -> Block:
     return _section(f":white_check_mark: *The loop recovered* after {escape(e.get('failed'))} failed ticks")
 
 
-def _sink_failing(e: dict[str, object]) -> Block:
+def _sink_failing(e: Mapping[str, object]) -> Block:
     return _section(
         f":warning: *Sink {escape(e.get('sink'))} is failing:* 3 deliveries in a row", f"`{escape(e.get('error'))}`"
     )
 
 
-def _test(e: dict[str, object]) -> Block:
+def _test(e: Mapping[str, object]) -> Block:
     return _section(f":test_tube: {_linked(e.get('text'))}")
 
 
-_EVENTS: dict[str, Callable[[dict[str, object]], Block]] = {
+_EVENTS: dict[str, Callable[[Mapping[str, object]], Block]] = {
     "run.started": _run_started,
     "run.ended": _run_ended,
     "chore.ended": _chore_ended,
@@ -436,7 +436,7 @@ _EVENTS: dict[str, Callable[[dict[str, object]], Block]] = {
 }
 
 
-def _event(e: dict[str, object]) -> Block:
+def _event(e: Mapping[str, object]) -> Block:
     """One event as a section built from its fields. A kind this sink does not know shows its text-format line.
 
     Returns:
@@ -446,7 +446,7 @@ def _event(e: dict[str, object]) -> Block:
     return build(e) if build is not None else _section(_linked(e.get("line") or e.get("kind")))
 
 
-def _attention(attention: dict[str, object]) -> list[Block]:
+def _attention(attention: Mapping[str, object]) -> list[Block]:
     out = [
         _section(
             f":bell: {_named(_subject(a.get('ticket'), a.get('repo')), a.get('title'))} · {escape(a.get('reason'))}",
@@ -465,7 +465,7 @@ def _attention(attention: dict[str, object]) -> list[Block]:
     return out
 
 
-def _digest(digest: dict[str, object]) -> list[Block]:
+def _digest(digest: Mapping[str, object]) -> list[Block]:
     ticks = digest.get("ticks")
     total = sum(n for n in ticks.values() if isinstance(n, int)) if isinstance(ticks, dict) else 0
     given = digest.get("attention")
@@ -501,7 +501,7 @@ def _digest(digest: dict[str, object]) -> list[Block]:
     return out
 
 
-def blocks(message: dict[str, object]) -> list[Block]:
+def blocks(message: Mapping[str, object]) -> list[Block]:
     """Return Block Kit blocks for one canopy `json` message, built from its fields rather than its text lines.
 
     A header with the repository directory name and counts, a section per attention item and per event, the resolved
@@ -620,7 +620,7 @@ def read_message(stdin: str) -> dict[str, object]:
     return {str(k): v for k, v in parsed.items()}
 
 
-def run(argv: list[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_url: str = SLACK_API_URL) -> int:
+def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_url: str = SLACK_API_URL) -> int:
     """Post the message on `stdin`.
 
     `prefix` is what the webhook URL must start with; `api_url` is where a token posts.

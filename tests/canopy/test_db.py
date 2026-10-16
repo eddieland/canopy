@@ -4,7 +4,7 @@ import re
 import sqlite3
 import typing
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 import pytest
@@ -321,7 +321,7 @@ UNCHECKED_THROUGH = 26
 CLOSED_COLUMNS = frozenset({"status", "kind", "phase"})
 
 
-def unchecked(conn: sqlite3.Connection, made: set[str]) -> list[str]:
+def unchecked(conn: sqlite3.Connection, made: Iterable[str]) -> list[str]:
     """The `table.column` of each closed column in the tables `made` with no `CHECK (column IN (...))`."""
     found: list[str] = []
     for table in sorted(made):

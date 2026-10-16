@@ -9,6 +9,7 @@ it. Reads only; a rationale and a run's summary are untrusted text.
 from __future__ import annotations
 
 import math
+from collections.abc import Collection, Sequence
 from typing import TYPE_CHECKING
 
 from canopy.core import contract, conversation, db, review_requests
@@ -84,7 +85,7 @@ def review_request(row: records.ReviewRequest) -> ReviewRequest:
     )
 
 
-def _pull_request(conn: sqlite3.Connection, row: sqlite3.Row, reviews: list[sqlite3.Row]) -> PullRequest:
+def _pull_request(conn: sqlite3.Connection, row: sqlite3.Row, reviews: Sequence[sqlite3.Row]) -> PullRequest:
     # A PR no unit records takes its ticket and repository from its reviews: an agent PR's ticket may be forgotten.
     request = review_requests.latest_request(conn, str(row["url"]))
     key = row["ticket_key"] or next((r["ticket_key"] for r in reviews if r["ticket_key"]), None)
@@ -116,7 +117,7 @@ def _runs(conn: sqlite3.Connection, key: str, url: str) -> list[sqlite3.Row]:
     ]
 
 
-def _cost(runs: list[sqlite3.Row], reviews: list[sqlite3.Row]) -> CostTotal:
+def _cost(runs: Collection[sqlite3.Row], reviews: Collection[sqlite3.Row]) -> CostTotal:
     # A run that pushed to two PRs, one per repository, counts on each one's page, and once on its ticket's.
     costs = [float(r["cost_usd"]) for r in [*runs, *reviews] if r["cost_usd"] is not None]
     return CostTotal(

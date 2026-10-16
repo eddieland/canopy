@@ -7,6 +7,7 @@ control characters dropped, as every page's does, and the diff within `review_di
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import contract, conversation, db, review_diff
@@ -123,7 +124,7 @@ def _review_state(status: str) -> RunState:
             assert_never(known)
 
 
-def _worst(findings: list[result.Finding]) -> FindingSeverity | None:
+def _worst(findings: Iterable[result.Finding]) -> FindingSeverity | None:
     found = {f.severity for f in findings}
     return next((s for s in _SEVERITIES if s in found), None)
 

@@ -22,6 +22,7 @@ from __future__ import annotations
 import contextlib
 import json
 import re
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Annotated, Literal, cast
 
@@ -217,7 +218,7 @@ class Tally:
         self._complete = True
         self._tools: dict[str, ToolUse] = {}
 
-    def add(self, event: dict[str, object]) -> None:
+    def add(self, event: Mapping[str, object]) -> None:
         """Count `event`: its session, and its model call's cost or its tool call, if it is either.
 
         The session is the first valid one an event names.
@@ -245,7 +246,7 @@ class Tally:
         return tuple(self._tools.values())
 
     # A call canopy cannot read is left out: it says nothing of which tool it was, or what it returned.
-    def _add_tool(self, event: dict[str, object]) -> None:
+    def _add_tool(self, event: Mapping[str, object]) -> None:
         try:
             part = _ToolPart.model_validate(event.get("part"))
         except ValidationError:
@@ -264,7 +265,7 @@ class Tally:
         )
 
 
-def session_of(event: dict[str, object]) -> str | None:
+def session_of(event: Mapping[str, object]) -> str | None:
     """Return the session `event` names, or None when its `sessionID` is not one canopy prints (`SESSION_ID_RE`)."""
     found = event["sessionID"]
     return found if isinstance(found, str) and SESSION_ID_RE.fullmatch(found) else None
@@ -287,7 +288,7 @@ def parse_event(line: str) -> dict[str, object] | None:
     return event
 
 
-def _total(steps: list[_StepFinish]) -> Usage:
+def _total(steps: Sequence[_StepFinish]) -> Usage:
     first = steps[0].tokens if steps else None
     return Usage(
         cost_usd=sum(float(s.cost) for s in steps),
