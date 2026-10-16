@@ -12,6 +12,7 @@ from canopy.cli.main import main
 from canopy.core import conversation, db, review_requests
 from canopy.core.config import load
 from canopy.core.context import Context
+from canopy.core.vocab import TickStatus
 from canopy.infra import resources
 from tests.canopy.helpers import InlineRunner, context, in_tick, operator, state_block
 from tests.canopy.review_helpers import CLEAN, FINDINGS, head, review, review_decisions, reviewer_reports, run_inline
@@ -51,7 +52,7 @@ def test_a_request_is_reviewed_at_its_head_and_ends_reviewed(
     with in_tick(conn) as tick_id:
         assert main(review(sha=head(git_pool), pr=PR), runner=InlineRunner()) == 1
         assert [d[2] for d in review_decisions(conn, tick_id)] == ["refused:reviews_off"]
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
 
     assert operator("start", PR, "--review") == 0
     assert f"{PR} is requested for review. The next tick reviews its head, once." in capsys.readouterr().out
@@ -86,12 +87,12 @@ def test_a_request_made_after_its_head_was_reviewed_ends_on_the_reviewed_refusal
     assert operator("start", PR, "--review") == 0
     with in_tick(conn, dry_run=True) as tick_id:
         assert main(review(sha=head(git_pool), pr=PR), runner=InlineRunner()) == 1
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     assert requests_of(conn)[-1] == (PR, "cli", None)
     with in_tick(conn) as tick_id:
         assert main(review(sha=head(git_pool), pr=PR), runner=InlineRunner()) == 1
         assert [d[2] for d in review_decisions(conn, tick_id)] == ["refused:reviewed"]
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     assert requests_of(conn) == [(PR, "cli", "reviewed"), (PR, "cli", "reviewed")]
 
 
@@ -117,14 +118,14 @@ def test_review_end_ends_a_request_whose_pr_merged_first_and_needs_a_tick(
     with in_tick(conn, dry_run=True) as tick_id:
         assert main(["review", "end", "--pr", PR, "--reason", "closed"]) == 0
         assert [d[2:] for d in review_decisions(conn, tick_id)] == [("review:end", "dry run: not ended; closed")]
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     assert requests_of(conn) == [(PR, "cli", None)]
     other = f"{PR}0"
     assert operator("start", other, "--review") == 0
     with in_tick(conn) as tick_id:
         # A PR in none of the workspace's repositories cannot be reviewed here.
         assert main(["review", "end", "--pr", other, "--reason", "unknown_repo"]) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     with in_tick(conn) as tick_id:
         assert main(["review", "end", "--pr", PR, "--reason", "stopped"]) == 2
         assert main(["review", "end", "--pr", PR, "--reason", "merged"]) == 0
@@ -134,7 +135,7 @@ def test_review_end_ends_a_request_whose_pr_merged_first_and_needs_a_tick(
             ("review:end", "merged"),
             ("refused:not_requested", f"{PR} has no open request"),
         ]
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     assert requests_of(conn) == [(PR, "cli", "merged"), (other, "cli", "unknown_repo")]
 
 

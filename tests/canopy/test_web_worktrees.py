@@ -8,7 +8,7 @@ from pathlib import Path
 
 from canopy.core import db, pools, workspace
 from canopy.core.context import Context
-from canopy.core.vocab import PoolKind
+from canopy.core.vocab import PoolKind, TickStatus
 from canopy.serve import mock
 from tests.canopy.helpers import running_run
 from tests.canopy.web_helpers import client, signed_in_client
@@ -47,7 +47,7 @@ def test_each_slot_shows_what_holds_it_and_what_runs_in_it(ctx: Context, treehou
         base_branch="main",
         pool=PoolKind.TREEHOUSE,
     )
-    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "test")
     slots = [
         leased(
             "1",

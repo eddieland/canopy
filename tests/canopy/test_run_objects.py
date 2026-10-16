@@ -12,6 +12,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db, hostgit
+from canopy.core.vocab import TickStatus
 from canopy.infra.procs import SubprocessRunner
 from tests.canopy.helpers import (
     DEAD_PID,
@@ -42,7 +43,7 @@ def dispatch(conn: sqlite3.Connection, runner: InlineRunner) -> int:
     with in_tick(conn) as tick_id:
         args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
         assert main([*args, "--slug", "work"], runner=runner) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         return int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
 
 

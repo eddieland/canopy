@@ -20,7 +20,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db, notice
 from canopy.core.context import Context
-from canopy.core.vocab import ChoreRunStatus, Phase, ReviewRunStatus
+from canopy.core.vocab import ChoreRunStatus, Phase, ReviewRunStatus, TickStatus
 from canopy.infra import resources
 from canopy.loop import pacing, repeat, tick
 from tests.canopy.helpers import FakeKeys, FakeTime, canopy, chore_toml, console, context, overseer_does
@@ -83,7 +83,7 @@ class Case:
 
     setup: Step | None = None
     during: Step | None = None
-    status: str = "ok"
+    status: TickStatus = TickStatus.OK
     previous_read: bool = True
 
 
@@ -114,7 +114,7 @@ def two_ticks(ctx: Context, case: Case) -> tuple[tick.Outcome, pacing.Before]:
     db.set_tick_read(conn, previous)
     read_at = stamp(datetime.now(UTC) - BACK) if previous_read else None
     conn.execute("UPDATE ticks SET read_at = ? WHERE id = ?", (read_at, previous))
-    db.finish_tick(conn, previous, "ok", "")
+    db.finish_tick(conn, previous, TickStatus.OK, "")
     seen = pacing.before(ctx)
     tick_id = db.start_tick(conn, dry_run=True)
     db.set_tick_read(conn, tick_id)
@@ -242,7 +242,7 @@ def notice_cleared(conn: sqlite3.Connection, _tick_id: int) -> None:
         pytest.param(Case(during=reviews_granted), id="reviews granted"),
         pytest.param(Case(during=notice_set), id="notice set"),
         pytest.param(Case(setup=notice_set_long_ago, during=notice_cleared), id="notice cleared"),
-        pytest.param(Case(status="overseer_failed"), id="not ok"),
+        pytest.param(Case(status=TickStatus.OVERSEER_FAILED), id="not ok"),
         pytest.param(Case(previous_read=False), id="no previous read"),
     ],
 )
@@ -298,7 +298,7 @@ RELABELLED = both(seen_ticket, sets_ticket(phase=Phase.CI_RED))
         pytest.param(Case(setup=seen_ticket, during=both(RELABELLED, operator_reply)), [], id="an operator message"),
         pytest.param(Case(setup=seen_ticket, during=both(RELABELLED, ticket_started)), [], id="a start"),
         pytest.param(Case(setup=seen_ticket, during=both(RELABELLED, attempts_granted)), [], id="a grant"),
-        pytest.param(Case(setup=seen_ticket, during=RELABELLED, status="overseer_failed"), [], id="not ok"),
+        pytest.param(Case(setup=seen_ticket, during=RELABELLED, status=TickStatus.OVERSEER_FAILED), [], id="not ok"),
         pytest.param(Case(setup=seen_ticket, during=RELABELLED, previous_read=False), [], id="no previous read"),
     ],
 )
@@ -553,7 +553,7 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
     ctx = context(canopy_env)
     db.migrate(ctx.conn, resources.migrations_dir())
     first = db.start_tick(ctx.conn, dry_run=True)
-    db.finish_tick(ctx.conn, first, "ok", "")
+    db.finish_tick(ctx.conn, first, TickStatus.OK, "")
     db.touch_ticket(ctx.conn, KEY, "/r")
     run_id = review_run(ctx.conn, first)
     if when == "before the tick":
@@ -673,7 +673,7 @@ def test_with_idle_pacing_off_a_run_ending_does_not_wake_the_wait(
     ctx = context(canopy_env)
     db.migrate(ctx.conn, resources.migrations_dir())
     first = db.start_tick(ctx.conn, dry_run=True)
-    db.finish_tick(ctx.conn, first, "ok", "")
+    db.finish_tick(ctx.conn, first, TickStatus.OK, "")
     run_id = review_run(ctx.conn, first)
     with overseer_does():
 
