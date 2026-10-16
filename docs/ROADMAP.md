@@ -1319,6 +1319,146 @@ Status: in progress. Built 2026-10-16: the private file layered last, private ke
 provenance check and the private file's own, `canopy init` writing it, and the tests above; `make install-check` passes
 with init writing the private file. Left: the live check, the operator's.
 
+## M50. Agent memory, opt-in
+
+DESIGN §8 (A fresh session per run, Notices to workers), §12, §26, TRUST_MODEL T1 and T7, D030, D076, D093. Sketch
+only; the design comes first, as a new section of the design. Asked for by the operator (2026-10-16): workers record
+what they learn, for later runs on the same ticket and, through the operator, for the whole workspace. No
+REQUIREMENTS entry yet. Off by default, and with it off nothing a run, a tick, or the overseer reads changes. Four
+stages, in order, each in its own PRs, a stage starting only once the one before has passed its check, recorded on the
+`Status:` line.
+
+- Why: `{{PREVIOUS_RUNS}}` is ticket memory already, but it forgets by position (the latest three runs), it is
+  narrative, and a wrong conclusion stays until it scrolls out. Workspace-wide, only the operator writes text every run
+  reads (the standing instructions, the notice). Research into shipping products and papers (2026-10-16): coding
+  agents gain from short, distilled, verified lessons and lose from raw history or memory that does not fit the task;
+  agents often skip memory tools, so what must be seen is pushed; and every memory-poisoning incident shipped so far
+  (ChatGPT, Gemini, Windsurf, Claude Code) had an agent that read untrusted text writing a store that later reached a
+  broader context.
+- Two tiers, split by who can make text reach another ticket. **Ticket notes**: keyed entries a ticket's runs write,
+  read only by that ticket's later runs, as data. **Workspace lessons**: workers only *propose* them; a proposal
+  reaches no prompt until the operator promotes it, and a promoted lesson is the operator's text, beside the standing
+  instructions. The overseer writes no memory and reads none: it reads every ticket's text every tick, and T1 refuses
+  it the notice for that reason, so making it a curator would hand the notice back under another name.
+- Opt-in: `[memory]` with `ticket_notes` and `proposals`, both `false` by default, separate because the tiers carry
+  different risk. Private keys (M49): the user file or the private file, never the workspace file, since turning them
+  on changes what agents may write into later prompts (T7). With both off:
+  - `{{TICKET_MEMORY}}`, `{{WORKSPACE_LESSONS}}`, and `{{MEMORY_CONTRACT}}` (the result fields below, which the
+    literal JSON line of each worker prompt cannot carry) render as the empty string, not `None.`, so every prompt is
+    the same bytes as before and no worker is told to write anything.
+  - An override without the placeholders still serves. Once a key is on, an override without the placeholders it
+    needs is `bad_prompt`, as for the standing instructions and the notice.
+  - `WorkerResult` already ignores unknown fields; `notes` or `proposals` a worker sends anyway are stored nowhere.
+  - The state block and `prompts/overseer.md` are unchanged. No stage adds anything to either, so the overseer's
+    cached prefix and every operator's system prompt stay as they are.
+  - `canopy memory ...` is in `COMMANDS`, imported only when it runs, and says memory is off. The web UI shows no
+    memory page. No memory attention item can arise.
+  - The one footprint is an empty `memories` table: migrations are not conditional, and a second database file
+    would cost a second schema lifecycle and the foreign keys to `runs` and `tickets`.
+  - Turning a key off again stops rendering and writes and keeps retention running, so what a trial wrote ages out on
+    its own; `canopy memory purge --all` removes it at once.
+- Code: a features package, `memory/`, and `cli/memory.py`, with its layer in `tests/canopy/test_layers.py`. Deleting
+  the feature deletes those, its reconcile step, and its prompt part (§5).
+
+**Stage 0, measure.** Nothing is built.
+
+- From the operator's run transcripts, a dated section of `MEASUREMENTS.md`: the share of `fix-ci` and `resume` runs,
+  and of second and later `implement` runs, that end `blocked` or `failed` or spend steps finding again what an earlier
+  run on the ticket found. That is §8's own condition for revisiting fresh sessions, and the baseline stage 1 is held
+  to.
+- Check: written down. If such runs are rare, the operator decides whether the rest is still worth building.
+
+**Stage 1, ticket notes.** Behind `memory.ticket_notes`.
+
+- A migration adds `memories`: scope (`ticket`, `proposal`, `lesson`), ticket, optional repository, key, body,
+  status (`active`, `pending`, `superseded`, `invalid`) and why, author (`worker`, `operator`), the run and tick that
+  wrote it, the branch head it was written against, `supersedes`, `promoted_from`, created, approved, last used, use
+  count, review date, and invalidated. One active row per scope, ticket, and key. Its row type in `core/records.py`,
+  its vocabularies in `core/vocab.py`, `CHECK` constraints, and its hash and seed row in `tests/canopy/test_db.py`.
+  Built whole in this stage, so stage 2 adds no migration.
+- A worker's result gains `notes` (`{key, text}`, text at most 400 characters) and `drop_notes` (keys). `_run`
+  validates them and writes them for the run's own ticket, read from its journal row, never from the result, so no run
+  writes another ticket's notes. A note under an active key supersedes it; nothing is edited in place. A body equal,
+  once normalized, to an active one in the same scope is refused. Notes from runs that ended `failed` or `blocked` are
+  kept: a dead end is what a retry most needs.
+- Bounds in code, at write: control, zero-width, and bidi characters refused, not stripped; a regex and entropy scan
+  refuses a note that looks like a secret; at most 5 notes a run.
+- `{{TICKET_MEMORY}}` in `implement`, `fix-ci`, and `resume` prompts, public and private, beside `{{PREVIOUS_RUNS}}`
+  and framed as it is: data to check against the branch and PR, kept off the tracker and PRs. Each note in key order,
+  with its id, the run that wrote it (kind and outcome), how many runs ago, and the head it was written against.
+  Capped at 3 KiB; past the cap, the least recently used are left out of the prompt, not the journal, and the section
+  says how many. Reviews, chores, and splits get none: a reviewer stays independent of the author's beliefs.
+- The result gains `memory_used` and `memory_wrong`, lists of ids. Only ids rendered into that run's prompt count, so
+  a worker cannot renew or retire a note it never saw. A used note gets its last use and count; a wrong one is
+  invalidated.
+- Retention: a ticket's notes are invalidated when it is marked done and on `canopy forget`, matching
+  `{{PREVIOUS_RUNS}}`' "since any forget"; `canopy stop` keeps them. M47's pass deletes invalidated rows after
+  `retention.memory_days` (30), leaving a tombstone without the body. Where M47 is not built yet, nothing is deleted.
+- `canopy memory list [REF]`, `canopy memory forget ID`, and `canopy memory purge --ticket REF | --run ID | --all`:
+  forget and purge delete the body with `PRAGMA secure_delete` on, so a purged poison or a leaked secret does not
+  survive in free pages. All three that write refuse as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set.
+- TRUST_MODEL T1: a worker may write notes its own ticket's later runs read as data, the same exposure as its reports
+  in `{{PREVIOUS_RUNS}}`, with one new property: a note outlives the tracker comment that steered it, bounded by the
+  ticket's life and by `forget`. With the operator's approval note.
+- Tests with the fakes: with `memory` unset, every worker prompt kind and the state block match their snapshots
+  before this milestone, and a result carrying `notes` stores nothing. With it on: a note reaches the same ticket's
+  next run and no other ticket's; a key supersedes; a run cannot write or retire another ticket's note; an id never
+  rendered is ignored; a secret-like or bidi body is refused; the digest's cap and its count; done and forget
+  invalidate; an override without the placeholder is `bad_prompt` only once the key is on; purge leaves no body in the
+  file.
+- Check: a week of the operator's loop with notes on, against stage 0's baseline: the same share of runs, attempts
+  per ticket, and steps per run, with notes per run, bytes per note, and the `memory_used` and `memory_wrong` rates, a
+  dated section of `MEASUREMENTS.md`. If notes do not move the baseline, the milestone stops here.
+
+**Stage 2, proposals and lessons.** Behind `memory.proposals`, with the operator's approval note.
+
+- A worker's result gains `proposals` (`{key, text, repo?}`, text at most 600 characters), stored `pending` under the
+  same bounds. **A pending proposal is rendered into no prompt.** At most 20 pending per workspace, refusing new ones
+  past it so a flood cannot push older ones out; one is invalidated 14 days after it is written if nobody reviews it.
+  When its source ticket is marked done, the harness raises `memory_proposal`, so the operator reviews lessons whose
+  work a merge has checked.
+- `canopy memory proposals` lists each with its provenance (ticket, private or not, run, kind, outcome, whether its PR
+  merged), its text with zero-width, bidi, and control characters made visible, and a warning on one from a private
+  ticket. `canopy memory promote ID [--text TEXT]` copies it into a new row the operator authored; `reject ID` ends
+  it. Both refuse as `inside_run`.
+- `{{WORKSPACE_LESSONS}}` in every worker prompt that carries `{{STANDING_INSTRUCTIONS}}`, under its own heading beside
+  them, framed as the operator's words after the prompt's obligations. Capped at 2 KiB, in key order, with the count
+  left out past the cap. A lesson naming a repository renders only in runs that lease it.
+- A lesson in `memory_used` has its review date pushed out 90 days. At the review date the harness raises
+  `lesson_review`: renew, graduate into the repository's AGENTS.md or a skill through a ticket and a PR the operator
+  merges, or drop it. A lesson never lapses on its own: it is the operator's word. `memory_wrong` on a lesson raises
+  `lesson_wrong`; only the operator retires it.
+- TRUST_MODEL T1: workspace memory is operator text; agents only propose it, and `promote` refuses in any run, like
+  `notice`. The residual is D076's: until workers are sandboxed (M26), a steered worker's bash runs as the operator
+  and could insert a `lesson` row, as it could a `notices` row.
+- Tests with the fakes: with `memory.proposals` off, a result carrying `proposals` stores nothing and no prompt
+  changes; with it on, a pending proposal is in no prompt of any kind; promote and reject refuse with
+  `CANOPY_RUN_ID` set; the cap refuses the 21st; expiry at 14 days; `memory_proposal` at done; a promoted lesson
+  reaches every worker prompt and no review or chore; `lesson_review` at the review date and its push on use; a lesson
+  for one repository stays out of another's runs.
+- Check: a month of the operator's loop with proposals on: proposals a week, the share promoted, edited at promotion,
+  rejected, and expired, and the median time to review, a dated section of `MEASUREMENTS.md`.
+
+**Stage 3, search.** Only if stage 1 or 2's check shows digests left out entries often.
+
+- `canopy memory search QUERY` over an FTS5 table ranked with `bm25()`, scoped by `CANOPY_RUN_ID` to the run's ticket
+  and the promoted lessons, reaching superseded notes and what the caps left out. No embeddings: they would be a
+  runtime dependency, and they are weakest on facts that changed, which is canopy's usual case.
+- `make install-check` checks that the installed Python's SQLite has FTS5.
+
+Open:
+
+- Agent-written workspace facts with code citations the harness checks at read (GitHub Copilot's shape). A citation
+  proves the code exists, not that the advice about it is true ("this test is flaky; skip it" cites a real test), so
+  it is a staleness control, not an integrity one, and such facts are the ones grep finds cheaply. Worth a TRUST_MODEL
+  change only if stage 2 shows the operator promoting many cited, mechanical proposals almost unchanged.
+- Whether promoted lessons and the standing-instructions file become one surface the operator edits.
+- Whether a ticket reopened from `recently_done` gets its notes back.
+- A chore that drafts proposals from transcripts, as Codex and Gemini CLI do, only if workers' own proposals prove
+  too few.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Spend-paced loop (M13): when, with M39 built, overseer spend per day still runs past what the operator will pay
