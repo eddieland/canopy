@@ -37,15 +37,15 @@ def one_line(text: str) -> str:
     return flat if len(flat) <= SUMMARY_WIDTH else flat[: SUMMARY_WIDTH - 3] + "..."
 
 
-def phase_of(conn: sqlite3.Connection, ticket: sqlite3.Row) -> str:
+def phase_of(conn: sqlite3.Connection, ticket: records.Ticket) -> str:
     """A ticket's phase as the operator reads it: the recorded one, else what the last tick decided, else unseen.
 
     Returns:
         The phase to print. When none is recorded, a note naming the last decision about the ticket, if there is one.
     """
-    if ticket["phase"]:
-        return str(ticket["phase"])
-    decided = db.last_decision_of(conn, str(ticket["key"]))
+    if ticket.phase is not None:
+        return ticket.phase
+    decided = db.last_decision_of(conn, ticket.key)
     return f"not recorded, last decision {decided}" if decided is not None else "not seen by a tick yet"
 
 

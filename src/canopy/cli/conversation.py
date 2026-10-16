@@ -511,14 +511,14 @@ def _show_ticket(ctx: Context, key: str) -> None:
         # The channel is the latest start's or stop's; `label` is a first dispatch under `tracker.private` (§22).
         how += " by its first dispatch, on its queue label" if record.channel == conversation.LABEL else ""
     click.echo(f"{key}: {how}")
-    if ticket is not None and ticket["title"]:
-        click.echo(f"  title {one_line(str(ticket['title']))}")
+    if ticket is not None and ticket.title:
+        click.echo(f"  title {one_line(ticket.title)}")
     if ticket is not None:
-        done = ", done" if ticket["done"] else ""
-        click.echo(f"  phase {phase_of(ctx.conn, ticket)}{done}; branch {ticket['branch'] or 'none yet'}")
-        if ticket["forgotten_at"]:
+        done = ", done" if ticket.done else ""
+        click.echo(f"  phase {phase_of(ctx.conn, ticket)}{done}; branch {ticket.branch or 'none yet'}")
+        if ticket.forgotten_at:
             click.echo(
-                f"  forgotten {attention.age(str(ticket['forgotten_at']))} ago: the runs and messages before then are "
+                f"  forgotten {attention.age(ticket.forgotten_at)} ago: the runs and messages before then are "
                 "history, and the loop reads only what came after"
             )
         for unit in db.units(ctx.conn, key):

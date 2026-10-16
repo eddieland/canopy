@@ -133,7 +133,7 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
                 id=fingerprint(item.ticket_key, item.reason, item.repo),
                 subject=item.subject,
                 ticket_key=ticket,
-                ticket_title=_title(row["title"]) if row is not None else None,
+                ticket_title=_title(row.title) if row is not None else None,
                 chore=chore,
                 repo=item.repo,
                 reason=item.reason,

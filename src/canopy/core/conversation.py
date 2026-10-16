@@ -551,7 +551,7 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, dispatch_lock: Path) -> Forgot
             )
         prs = [str(u["pr_url"]) for u in db.units(conn, ref.id) if u["pr_url"]]
         db.forget_ticket(conn, ref.id)
-    return Forgot(branch=ticket["branch"], prs=prs)
+    return Forgot(branch=ticket.branch, prs=prs)
 
 
 # The overseer's mirror of tracker comments
@@ -772,19 +772,19 @@ class OperatorSection(TypedDict):
     new_operator_messages: list[OperatorMessage]
 
 
-def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> PrivateSection | None:
+def state_section(conn: sqlite3.Connection, ticket: records.Ticket) -> PrivateSection | None:
     """Return a started ticket's part of the overseer's state block, or None for a public ticket (DESIGN §22).
 
     It carries the operator's messages newer than the ticket's message cursor, and the question waiting on a reply.
     Messages from before the operator forgot the ticket's work are not new, whatever the cursor says. A stopped ticket
     is not asked for: the block names it only by key (`stopped`).
     """
-    key = str(ticket["key"])
+    key = ticket.key
     record = start_of(conn, key)
     if record is None:
         return None
-    cursor = int(ticket["last_message_id"] or 0)
-    forgotten = int(ticket["forgotten_message_id"] or 0)
+    cursor = ticket.last_message_id or 0
+    forgotten = ticket.forgotten_message_id or 0
     question = latest_question(conn, key)
     return {
         "started_at": record.started_at,
@@ -798,18 +798,18 @@ def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> PrivateSecti
     }
 
 
-def operator_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> OperatorSection | None:
+def operator_section(conn: sqlite3.Connection, ticket: records.Ticket) -> OperatorSection | None:
     """Return a public ticket's operator messages for the overseer's state block, or None when it has no new ones.
 
     They are the operator's replies (DESIGN §22) newer than the ticket's message cursor, and after any forget. The
     overseer reads them as instructions, as it reads an authorized reply on the ticket (DESIGN §7). A private ticket's
     are in its own section (`state_section`).
     """
-    key = str(ticket["key"])
+    key = ticket.key
     if start_of(conn, key) is not None:
         return None
-    cursor = int(ticket["last_message_id"] or 0)
-    forgotten = int(ticket["forgotten_message_id"] or 0)
+    cursor = ticket.last_message_id or 0
+    forgotten = ticket.forgotten_message_id or 0
     messages = operator_messages_after(conn, key, max(cursor, forgotten))
     if not messages:
         return None

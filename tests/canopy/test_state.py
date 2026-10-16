@@ -19,7 +19,7 @@ from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 
 from canopy.core import config, conversation, db, pools, workspace
 from canopy.core.context import Context
-from canopy.core.vocab import RunStatus, StartStatus
+from canopy.core.vocab import Phase, RunStatus, StartStatus
 from canopy.infra import procs
 from canopy.loop import tick
 from canopy.runs import policy, reconcile
@@ -77,7 +77,9 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, block: Snaps
     with clock("09:00"):
         earlier = db.start_tick(conn, dry_run=False)
         # PROJ-1: its PR is open and its CI failed; one fix-ci ran, so it cools down, and the operator wrote to it.
-        db.set_ticket(conn, "PROJ-1", root, title="Retry flaky uploads", phase="pr_open", cursors={"comment": "10001"})
+        db.set_ticket(
+            conn, "PROJ-1", root, title="Retry flaky uploads", phase=Phase.CI_RUNNING, cursors={"comment": "10001"}
+        )
         implement = db.insert_run(
             conn,
             tick_id=earlier,
@@ -88,7 +90,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, block: Snaps
             runs_dir=runs_dir,
         )
         # PROJ-6 was split in two, and neither child is done.
-        db.set_ticket(conn, "PROJ-6", root, title="Rework the importer", phase="split")
+        db.set_ticket(conn, "PROJ-6", root, title="Rework the importer", phase=Phase.SPLIT)
         split = db.insert_run(
             conn,
             tick_id=earlier,
@@ -101,7 +103,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, block: Snaps
         )
         db.record_split_children(conn, "PROJ-6", split, {"PROJ-7": "repo", "PROJ-8": "repo"})
         # PROJ-5 merged, and the tracker still shows it open.
-        db.set_ticket(conn, "PROJ-5", root, title="Bump the SDK", phase="merged", done=True)
+        db.set_ticket(conn, "PROJ-5", root, title="Bump the SDK", phase=Phase.MERGED, done=True)
         decide(conn, earlier, "PROJ-5", "done", "merged")
         # PROJ-3 was started privately and stopped; PROJ-4 is private and its worker asked a question.
         with db.transaction(conn):
@@ -167,7 +169,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, block: Snaps
         db.finish_tick(conn, earlier, "ok", "")
     with clock("09:55"):
         # PROJ-2 is being implemented now.
-        db.set_ticket(conn, "PROJ-2", root, title="Add a dark mode", phase="implementing")
+        db.set_ticket(conn, "PROJ-2", root, title="Add a dark mode", phase=Phase.RUNNING)
         db.insert_run(
             conn,
             tick_id=earlier,

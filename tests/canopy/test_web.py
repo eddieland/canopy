@@ -204,7 +204,7 @@ def test_forget_from_the_web_needs_the_key_typed_and_then_forgets_as_canopy_forg
     assert forgot.json() == {"branch": f"agent/{KEY}-work", "prs": [pr]}
     ticket = db.get_ticket(ctx.conn, KEY)
     assert ticket is not None
-    assert (ticket["branch"], ticket["phase"], ticket["forgotten_run_id"]) == (None, None, run_id)
+    assert (ticket.branch, ticket.phase, ticket.forgotten_run_id) == (None, None, run_id)
     assert db.units(ctx.conn, KEY) == []
     assert db.get_run(ctx.conn, run_id) is not None
 

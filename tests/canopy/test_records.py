@@ -10,7 +10,7 @@ from typing import ClassVar
 import pytest
 
 from canopy.core import db, records
-from canopy.core.vocab import ChoreRunStatus, PoolKind, ReviewRunStatus, StartStatus
+from canopy.core.vocab import ChoreRunStatus, Phase, PlanSetting, PoolKind, ReviewRunStatus, StartStatus
 from tests.canopy.helpers import in_tick
 from tests.conftest import Journals
 
@@ -203,3 +203,14 @@ def test_a_start_reads_its_status_as_its_member(conn: sqlite3.Connection) -> Non
     assert (stopped.status, stopped.started_at, stopped.channel) == (StartStatus.STOPPED, started.started_at, "web")
     assert isinstance(stopped.status, StartStatus)
     assert stopped.stopped_at is not None
+
+
+def test_a_ticket_reads_its_phase_and_plan_setting_as_members_and_done_as_a_flag(conn: sqlite3.Connection) -> None:
+    db.set_ticket(conn, "PROJ-1", "/ws", phase=Phase.CI_RED, done=True)
+    conn.execute("UPDATE tickets SET plan_setting = 'skip' WHERE key = 'PROJ-1'")
+    ticket = db.get_ticket(conn, "PROJ-1")
+    assert ticket is not None
+    assert (ticket.phase, ticket.plan_setting, ticket.done) == (Phase.CI_RED, PlanSetting.SKIP, True)
+    assert isinstance(ticket.phase, Phase)
+    assert isinstance(ticket.plan_setting, PlanSetting)
+    assert db.open_tickets(conn) == []

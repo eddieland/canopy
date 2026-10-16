@@ -12,6 +12,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, db, definitions
+from canopy.core.vocab import Phase
 from canopy.infra import lock, procs
 from canopy.loop import attention, tick
 from tests.canopy.helpers import agent_runs, canopy, in_tick, overseer_does, state_block, tools_of, tools_printed
@@ -139,7 +140,7 @@ def test_the_state_block_names_the_tickets_marked_done_lately(
             db.set_ticket(conn, key, repo, done=True)
             db.record_decision(conn, tick_id, key, "done", "merged")
         db.set_ticket(conn, "PROJ-4", repo, done=True)
-        db.set_ticket(conn, "PROJ-5", repo, phase="ci_running")
+        db.set_ticket(conn, "PROJ-5", repo, phase=Phase.CI_RUNNING)
         db.record_decision(conn, tick_id, "PROJ-5", "done", "merged")
         # The tracker reports a closed ticket closed, so once it is reopened the query must find it again.
         db.set_ticket(conn, "PROJ-6", repo, done=True)
