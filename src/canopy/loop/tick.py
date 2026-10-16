@@ -115,7 +115,7 @@ def _render(
         grants=policy.grants(ctx.conn),
         fix_ci_cooldowns=policy.fix_ci_cooldowns(ctx.conn, ctx.config, now),
         now=now,
-        split_attempts=policy.split_attempts(ctx.conn),
+        split_attempts=policy.ticket_attempts(ctx.conn, policy.SPLIT),
         split_children=db.open_split_children(ctx.conn),
         chores=chores,
         reviews=review_view.state_section(ctx.conn, ctx.config, now),

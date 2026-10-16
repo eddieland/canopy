@@ -193,6 +193,7 @@ max_fix_ci_attempts = 2
 fix_ci_cooldown_minutes = 30
 max_resume_attempts = 3
 max_split_attempts = 1       # per ticket (§18)
+max_plan_attempts = 3        # per ticket (§25)
 stacking = "auto"            # auto | never (§10); "never" is stricter
 
 [trust]
@@ -221,6 +222,8 @@ overseer_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent
 worker_cmd   = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json
     --title={title} {prompt}'''
 split_cmd    = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json
+    --title={title} {prompt}'''
+plan_cmd     = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json
     --title={title} {prompt}'''
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
@@ -463,10 +466,10 @@ transcript shows each call's (§22). A run recorded before the peak was kept pri
 `tokens`, and the hover on it in the web UI says what is left out. A log line's and the API's `new_tokens` and
 `peak_context` are the same two counts, their names unchanged.
 
-The default `overseer_cmd`, `worker_cmd`, `split_cmd`, `chore_cmd`, and `review_cmd` ask for events. A tick records
-what its overseer reports on the tick (§6), `_run` what a worker or split reports on the run, as it prints it (§8,
-§11), `_chore` what a chore reports on its chore run (§19), and `_review` what a reviewer reports on its review run
-(§21). So every agent run canopy starts records what it cost, and the web UI's spend (§22) sums them all, a running
+The default `overseer_cmd`, `worker_cmd`, `split_cmd`, `plan_cmd`, `chore_cmd`, and `review_cmd` ask for events. A
+tick records what its overseer reports on the tick (§6), `_run` what a worker, split, or plan reports on the run, as it
+prints it (§8, §11), `_chore` what a chore reports on its chore run (§19), and `_review` what a reviewer reports on its
+review run (§21). So every agent run canopy starts records what it cost, and the web UI's spend (§22) sums them all, a running
 worker's so far. A template of the operator's that asks
 for no events records nothing, and its runs are missing from the spend. A tick's output file and a run log hold the
 events as printed, and the web UI reads one session's back from them as its transcript (§22).
@@ -515,8 +518,8 @@ earlier canopy's, still loading its snapshot. OpenCode scans both `agent/` and `
 a config directory, and writes a `.gitignore` and `node_modules/` into each one it loads, the snapshot included.
 
 Command templates name the current snapshot with `{definitions_dir}` (§12), required in every template that runs a
-canopy-shipped agent (`overseer_cmd`, `worker_cmd`, `private_worker_cmd`, `split_cmd`, §19's `chore_cmd`, §21's
-`review_cmd`):
+canopy-shipped agent (`overseer_cmd`, `worker_cmd`, `private_worker_cmd`, `split_cmd`, §25's `plan_cmd`, §19's
+`chore_cmd`, §21's `review_cmd`):
 
 ```toml
 overseer_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json

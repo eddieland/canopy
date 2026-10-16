@@ -214,6 +214,8 @@ Controls in code, not prompts:
 - Chores: a chore runs no more often than its `every_minutes`, never twice at once, and never more than
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
 - Mirrored comments: at most 100 `canopy mirror` calls a tick, each body cut at 2000 characters (DESIGN §22).
+- Plans: a plan run holds a slot within `capacity.max_workers`, has the worker's timeout, and counts toward
+  `policy.max_plan_attempts` per ticket, never reset (DESIGN §25).
 
 ### T4. Damage to the operator's machine
 
@@ -248,9 +250,9 @@ Controls now:
   configuration from the checkout. The shipped `canopy-reviewer` cannot run commands or edit, and reads only through
   that link; a canary like the desk's checks the reads (DESIGN §21).
 - Opt-in: an OS sandbox around every agent run but the overseer's (HOST_ISOLATION, docs/SANDBOX.md, D117, D118). The
-  operator prefixes `worker_cmd`, `private_worker_cmd`, `split_cmd`, `runtime.setup_cmd`, `chore_cmd` and each chore's
-  `cmd`, and `review_cmd` with `canopy-sandbox <role>`, which runs the command under `srt` with a policy it writes for
-  the run from the operator's template for that role. Under the shipped templates a sandboxed run reads, under
+  operator prefixes `worker_cmd`, `private_worker_cmd`, `split_cmd`, `plan_cmd`, `runtime.setup_cmd`, `chore_cmd` and
+  each chore's `cmd`, and `review_cmd` with `canopy-sandbox <role>`, which runs the command under `srt` with a policy
+  it writes for the run from the operator's template for that role. Under the shipped templates a sandboxed run reads, under
   `$HOME`, only its worktrees and their git directories, canopy's agent definitions, and the runtime's and toolchains'
   files: not `~/.ssh`, other repositories, `~/.config/canopy`, or the workspace's `.canopy/`. It writes only its
   worktrees, its slot's own HEAD, index, and reflog, a per-run object directory and temp directory, and the runtime's
@@ -315,6 +317,14 @@ Controls:
   It has no edit, shell, web, or subagent tools, and its MCP tools for labels, assignees, PRs, branches, and files
   are denied by name. It reads the worktrees linked from its desk, checked out at their base branches, and pushes
   nothing.
+- The planner (DESIGN §25) writes one file, its plan, at its desk's root, and nothing else: its `edit` rules deny every
+  path but that file's name, and it has no shell, web, or subagent tools. Its definition is rendered
+  as the private worker's is, so the tracker's MCP server is denied by a wildcard and only `tracker.read_tools` are
+  allowed, and other servers' write tools are denied by name. A plan is refused (`no_read_tools`) when no read tools
+  are known, and a run is refused where the worktree's OpenCode config names any of that server's tools. It reads the
+  worktrees linked from its desk, at their base branches. canopy reads its plan from the desk, never through a link,
+  into an operator-only file under the state directory (T2), and never sends it to the tracker, public ticket or
+  private.
 - A private ticket's worker (DESIGN §22) runs `canopy-worker-private`, whose definition canopy renders from the user
   config: every tool of the tracker's MCP server (`tracker.mcp_server`) is denied by a wildcard, then only
   `tracker.read_tools` are allowed by name, so a write tool missing from the list fails closed; the tracker CLIs canopy

@@ -19,7 +19,7 @@ from unittest import mock
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import config, db, records, workspace
+from canopy.core import config, db, plans, records, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import TickStatus
 from canopy.infra import logs, procs, resources
@@ -330,6 +330,21 @@ def private_worker_does(*commands: list[str], result: dict[str, object]) -> Iter
         os.environ,
         {"FAKE_WORKER_PRIVATE_COMMANDS": json.dumps(list(commands)), "FAKE_WORKER_PRIVATE_RESULT": json.dumps(result)},
     ):
+        yield
+
+
+@contextmanager
+def planner_does(*commands: list[str], plan: str | None, result: Mapping[str, object] | None = None) -> Iterator[None]:
+    """Until the block ends, the fake planner writes `plan` to its desk's plan file, runs `commands`, and reports.
+
+    It writes as the planner's edit tool would, before `commands`; with `plan` None it writes no file. `result`, its
+    result line, defaults to a `done` one (DESIGN §25).
+    """
+    script = "import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(sys.argv[2])"
+    write = [["python3", "-c", script, plans.WRITTEN, plan]] if plan is not None else []
+    line = json.dumps(result if result is not None else {"status": "done", "summary": "planned it"})
+    run = [*write, *commands]
+    with mock.patch.dict(os.environ, {"FAKE_PLANNER_COMMANDS": json.dumps(run), "FAKE_PLANNER_RESULT": line}):
         yield
 
 

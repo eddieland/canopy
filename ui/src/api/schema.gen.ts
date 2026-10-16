@@ -2458,7 +2458,7 @@ export type components = {
             id: number;
             /**
              * Kind
-             * @description implement | fix-ci | resume | split
+             * @description implement | fix-ci | resume | split | plan
              */
             kind: string;
             /**

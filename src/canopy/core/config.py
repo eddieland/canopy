@@ -436,6 +436,8 @@ class Policy(Section):
     max_resume_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
     # Split runs per ticket (DESIGN §18). A split creates tickets in the tracker, so one try is the default.
     max_split_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 1
+    # Plan runs per ticket (DESIGN §25): a plan covers every repository the ticket will touch.
+    max_plan_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
     # Review runs per PR, whatever they ended as (DESIGN §21).
     max_reviews_per_pr: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
     # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10). Prompt policy, not a guard.
@@ -552,6 +554,12 @@ class Runtime(Section):
     # The splitter is its own agent, with no edit or shell tools (DESIGN §18); it shares the worker's timeout.
     split_cmd: Annotated[AgentTemplate, Scope.USER] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json "
+        "--title={title} {prompt}"
+    )
+    # The planner is its own agent, with no edit or shell tools and only the tracker's read tools (DESIGN §25); it
+    # shares the worker's timeout.
+    plan_cmd: Annotated[AgentTemplate, Scope.USER] = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json "
         "--title={title} {prompt}"
     )
     # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).

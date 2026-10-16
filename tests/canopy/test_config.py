@@ -320,6 +320,7 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         runtime.worker_cmd,
         runtime.private_worker_cmd,
         runtime.split_cmd,
+        runtime.plan_cmd,
         runtime.chore_cmd,
         runtime.review_cmd,
     ):

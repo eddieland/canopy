@@ -187,6 +187,7 @@ def test_every_config_key_declares_a_scope() -> None:
         "trust.trusted_reviewers",
         "trust.comment_prefix",
         "runtime.split_cmd",
+        "runtime.plan_cmd",
         "runtime.chore_cmd",
         "capacity.max_chores",
         "chores",

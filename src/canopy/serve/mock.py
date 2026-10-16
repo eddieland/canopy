@@ -291,7 +291,7 @@ def _limits(ctx: Context, key: str) -> list[Limit]:
     counts: dict[str, dict[str, int]] = {}
     for repo, kind, runs in ctx.conn.execute(
         "SELECT s.repo, r.kind, count(DISTINCT r.id) FROM runs r JOIN run_slots s ON s.run_id = r.id "
-        "WHERE r.ticket_key = ? AND r.kind != 'split' AND s.repo IS NOT NULL GROUP BY s.repo, r.kind",
+        "WHERE r.ticket_key = ? AND r.kind NOT IN ('split', 'plan') AND s.repo IS NOT NULL GROUP BY s.repo, r.kind",
         (key,),
     ):
         counts.setdefault(str(repo), dict.fromkeys(base, 0))[str(kind)] = int(runs)
