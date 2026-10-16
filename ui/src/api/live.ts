@@ -7,9 +7,10 @@ import type { ChoreRunDetail, LastTick, Run, StreamEvent } from './types'
  * Writes one stream event into the Query cache. A list arrives whole and replaces the cached one; a changed ticket is
  * read again, only if a page shows it, and so is a chore's page whenever the chores change, and the ticks and the
  * ticket shown whenever the latest tick does. The worktrees are not on the stream: a run starting or ending, or
- * changing the worktrees it holds, marks them stale, and they are read again only if a page shows them. A transcript
- * is read again when its run's or chore run's status or its tick changes, the only times its log can. The loop's
- * pause arrives whole, as a list does. Unknown event types are ignored, so the server can add some.
+ * changing the worktrees it holds, marks them stale, and they are read again only if a page shows them. A run's
+ * transcript is read again when its status, latest tool call, or cost moves, as its worker prints; a chore run's when
+ * its status does, and a tick's when the tick changes, the only times their logs can. The loop's pause arrives whole,
+ * as a list does. Unknown event types are ignored, so the server can add some.
  */
 export function applyStreamEvent(client: QueryClient, event: StreamEvent): void {
     switch (event.type) {
@@ -27,15 +28,15 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             if (before !== undefined && statuses(before) !== statuses(event.runs)) {
                 void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
             }
-            // A run a page holds is written whole; its transcript is read again only when its status moves, since a
-            // run's events reach its log when it ends and its cost moves more often than that.
+            // A run a page holds is written whole; its transcript is read again when its log has more in it: its
+            // worker's events reach the log as it prints them, and a new tool call or model call moves the run's row.
             for (const run of event.runs) {
                 const shown = client.getQueryData<Run>(keys.run(run.id))
                 if (shown === undefined) {
                     continue
                 }
                 client.setQueryData(keys.run(run.id), run)
-                if (shown.status !== run.status) {
+                if (logged(shown) !== logged(run)) {
                     void client.invalidateQueries({ queryKey: keys.runTranscript(run.id) })
                 }
             }
@@ -105,6 +106,14 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
 /** Each run's state, as one comparable string: a run starting or ending changes it, a cost going up does not. */
 function statuses(runs: Run[]): string {
     return runs.map((run) => `${run.id}:${run.state}`).join(',')
+}
+
+/**
+ * What of a run's row moves as its log grows, as one comparable string: its status, its latest tool call, and its
+ * cost, which moves at each model call.
+ */
+function logged(run: Run): string {
+    return `${run.status}:${run.activity?.at ?? ''}:${run.cost_usd ?? ''}`
 }
 
 /** Which running runs hold which worktrees, as one comparable string: a cost going up leaves it alone. */

@@ -554,8 +554,13 @@ list, an empty state, or a skeleton by hand.
   (`src/lib/acknowledged.ts`), and an `awaiting_reply` item it answered an `answered` chip, with a line saying it leaves
   at the next tick; Waiting on you counts neither. While a run works the ticket, the conversation ends on it (starts on
   it, flipped newest first), on the worker's side, as a chat shows someone typing (`WorkingNow`): a pulsing `RunDot`,
-  `working now` in `status-running`, its `run:N` link, its kind, its cost so far, and for how long. It comes from the
-  runs on the stream, so it rises in when the run starts and leaves when it ends.
+  `working now` in `status-running`, its `run:N` link, its kind, its latest tool call (`RunDoing`, below), its cost
+  so far, and for how long. It comes from the runs on the stream, so it rises in when the run starts, follows what it
+  does, and leaves when it ends.
+- **A running run's latest tool call** (`RunDoing`, `src/components/run-doing.tsx`): one line of mono data, the tool
+  in `status-running`, what the call did muted (a shell call's command, else the runtime's title; cut to fit, whole on
+  hover), and how long ago. A running run's row has it where an ended run's summary goes, `WorkingNow` after the
+  kind, and the run's page as its `last call` field. It is agent output, rendered as text.
 - **A URL in journal text** (`LinkedText`): an http or https URL in a message body, a summary, a rationale, or a
   detail is a link in `accent`, underlined so it reads as one inside prose, its text the URL as written; it opens in a
   new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below), and so is a GitHub

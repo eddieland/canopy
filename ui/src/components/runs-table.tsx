@@ -8,6 +8,7 @@ import { Disclosure } from '@/components/disclosure'
 import { LinkedText } from '@/components/linked-text'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ListRow, RowLine } from '@/components/rows'
+import { RunDoing } from '@/components/run-doing'
 import { RunLink } from '@/components/run-link'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { Chip, RunDot, Word } from '@/components/status'
@@ -24,7 +25,8 @@ const WORKTREES_SHOWN = 3
 
 /**
  * Runs, one row each: state, the ticket and its title, the run's id (opening its page) and kind, cost, when, and what
- * it said. `ticket` leaves out the ticket and its title, for a ticket's own page.
+ * it said, or while it runs, its latest tool call. `ticket` leaves out the ticket and its title, for a ticket's own
+ * page.
  */
 export function RunsTable({ runs, ticket = true }: { runs: Run[]; ticket?: boolean }) {
     return (
@@ -130,6 +132,11 @@ function RunBody({ run, ticket }: { run: Run; ticket: boolean }) {
             </span>
             <RunReadouts run={run} />
             {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className={rowLineFrom(under)} />}
+            {run.activity && (
+                <RowLine from={under}>
+                    <RunDoing activity={run.activity} />
+                </RowLine>
+            )}
             {(run.prs.length > 0 || run.worktrees.length > 0 || run.session_id) && (
                 <RowLine from={under} className="flex flex-wrap items-center gap-x-4 gap-y-1 font-mono text-xs">
                     {run.prs.map((pr) => (

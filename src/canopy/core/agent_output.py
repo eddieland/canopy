@@ -17,6 +17,7 @@ it: plain text does not say where one message ends.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
 from dataclasses import dataclass
@@ -139,29 +140,51 @@ def read(stdout: str) -> AgentOutput:
         usage when a step could not be read.
     """
     texts: list[str] = []
-    steps: list[_StepFinish] = []
-    session: str | None = None
+    tally = Tally()
     events = 0
-    complete = True
     for line in stdout.splitlines():
         event = parse_event(line)
         if event is None:
             continue
         events += 1
-        session = session or session_of(event)
-        try:
-            if event["type"] == "text":
+        tally.add(event)
+        if event["type"] == "text":
+            # A text part canopy cannot read is left out, which at worst makes the result line invalid.
+            with contextlib.suppress(ValidationError):
                 texts.append(_Text.model_validate(event.get("part")).text)
-            elif event["type"] == "step_finish":
-                steps.append(_StepFinish.model_validate(event.get("part")))
-        except ValidationError:
-            # A text part canopy cannot read is left out, which at worst makes the result line invalid. A step it
-            # cannot read makes the total wrong, so the run reports no cost rather than too little.
-            complete = complete and event["type"] != "step_finish"
     if not events:
         return AgentOutput(stdout, stdout)
     last = texts[-1] if texts else ""
-    return AgentOutput("\n".join(texts), last, session, _total(steps) if complete else None)
+    return AgentOutput("\n".join(texts), last, tally.session_id, tally.usage)
+
+
+class Tally:
+    """The session and usage of an agent's events, added one at a time as it prints them, as `read` reports them.
+
+    So a running agent's session and what it has spent so far are what `read` would say of what it printed so far.
+    """
+
+    def __init__(self) -> None:
+        """Start with no event: no session, and nothing spent."""
+        self.session_id: str | None = None
+        self._steps: list[_StepFinish] = []
+        self._complete = True
+
+    def add(self, event: dict[str, object]) -> None:
+        """Count `event`: the first valid session it names, and its model call's cost if it is a `step_finish`."""
+        self.session_id = self.session_id or session_of(event)
+        if event["type"] != "step_finish":
+            return
+        try:
+            self._steps.append(_StepFinish.model_validate(event.get("part")))
+        except ValidationError:
+            # A step canopy cannot read makes the total wrong, so the run reports no cost rather than too little.
+            self._complete = False
+
+    @property
+    def usage(self) -> Usage | None:
+        """The steps' total usage so far, or None when a step could not be read."""
+        return _total(self._steps) if self._complete else None
 
 
 def session_of(event: dict[str, object]) -> str | None:

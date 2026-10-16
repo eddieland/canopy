@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest import mock
 
-from canopy.core import transcript
+from canopy.core import agent_output, transcript
 from canopy.core.transcript import Error, Step, Text, Tokens, ToolCall
 
 SESSION = "ses_abc123"
@@ -231,3 +231,22 @@ def test_a_missing_prompt_a_symlink_and_a_directory_are_not_read(tmp_path: Path)
     (tmp_path / "dir.prompt").mkdir()
     for name in ("missing.prompt", "link.prompt", "dir.prompt"):
         assert transcript.prompt(tmp_path / name) is None
+
+
+def test_what_a_tool_call_did_is_its_command_else_its_title_on_one_line() -> None:
+    def did(line: str) -> tuple[str, str] | None:
+        found = agent_output.parse_event(line)
+        assert found is not None
+        return transcript.did(found)
+
+    assert did(tool("bash", BASH)) == ("bash", "uv run pytest -q")  # not what the agent said it was for
+    read: dict[str, object] = {
+        "status": "completed",
+        "input": {"filePath": "/w/a.py"},
+        "output": "",
+        "title": "a.py\nb",
+    }
+    assert did(tool("read", read)) == ("read", "a.py b")
+    assert did(tool("todowrite", {"status": "error", "input": {}, "error": "no"})) == ("todowrite", "")
+    assert did(tool("bash", {"status": "running"})) is None  # printed only once it ends
+    assert did(event("text", {"type": "text", "text": "hi"})) is None

@@ -144,6 +144,17 @@ class AttentionItem(_Model):
     """The PR it is about when no ticket owns it, such as a `review_limit` on a PR `review.query` found."""
 
 
+class RunActivity(_Model):
+    """A running run's latest tool call, as `_run` read it from the worker's events (DESIGN §8)."""
+
+    tool: str
+    """The tool's name, as the runtime names it: `bash`, `read`, an MCP server's tool."""
+    did: str
+    """What the call did, on one line: a shell call's command, else the runtime's title; empty when it gave neither."""
+    at: datetime
+    """When `_run` read it."""
+
+
 class Run(_Model):
     """One worker or split run (`run:ID`)."""
 
@@ -185,6 +196,9 @@ class Run(_Model):
     """The worktrees a running run holds, from the workspace root when under it."""
     log_path: str
     """Where its log is: from the workspace root when under it, as a worktree's path is."""
+    activity: RunActivity | None = None
+    """While it runs, its worker's latest tool call; None before the first, for a template that prints no events, and
+    once it ends."""
 
 
 class TicketSummary(_Model):

@@ -671,7 +671,15 @@ dispatch names at least one, in a workspace of one repository too.
    `CANOPY_RUN_ID` set to the run's id, `CANOPY_GIT_OBJECTS` to the object directory, and cwd = the slot, or for a
    joint run the desk (§18), which
    `_run` makes now with one link per slot. Record the worker's pid in `runs.worker_pid`; the worker leads its own
-   process group. Its stdout and stderr go to the run log.
+   process group. Its stdout and stderr go to the run log: each line of stdout as the worker prints it, its stderr
+   once it ends. While it runs, `_run` reads each event (§13) as it comes and records on the run what they report so
+   far: the session at the first event that names one, what it has spent at each `step_finish`, and its latest tool
+   call at each `tool_use` (`runs.activity_tool`, `activity`, `activity_at`: the tool, a shell call's command or else
+   the runtime's title, and when), so a running run shows more than `running` in `canopy status` and the web UI
+   (§22), and its transcript grows as it goes. Only a row still `running` is written. A write the journal refuses is
+   logged and passed over, since raising would kill the worker; step 4 records the session and cost again. Taken on
+   request (2026-10-15); a run's events used to reach its log only as it ended, since stdout was captured whole
+   (ROADMAP M27).
 4. Parse the last line of the worker's text that starts with `{` as the result contract: its stdout, or the text of
    OpenCode's JSON events (§13). Missing or invalid means `status='unknown'`; a timeout means `status='timeout'`.
    Record the session id and cost the events reported on the run at once, also after a timeout, so a git failure after
