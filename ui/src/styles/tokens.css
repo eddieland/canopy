@@ -87,6 +87,9 @@
     --buddy-keyboard: oklch(0.42 0.03 275);
     --buddy-key: oklch(0.97 0.006 275);
 
+    /* The lightswitch rave's dark, when The Cheat flips the lights off: a near black, a touch of the indigo. */
+    --rave-dark: oklch(0.16 0.03 275);
+
     --radius: 0.5rem;
 }
 
@@ -154,6 +157,8 @@
     --buddy-hat-blue: oklch(0.6 0.15 265);
     --buddy-keyboard: oklch(0.36 0.04 270);
     --buddy-key: oklch(0.56 0.04 268);
+
+    --rave-dark: oklch(0.08 0.02 275);
 }
 
 /* Tailwind utilities for every token. `inline` so a utility reads the variable, and a theme switch needs no rebuild. */
@@ -218,6 +223,8 @@
     --color-buddy-hat-blue: var(--buddy-hat-blue);
     --color-buddy-keyboard: var(--buddy-keyboard);
     --color-buddy-key: var(--buddy-key);
+
+    --color-rave-dark: var(--rave-dark);
 
     /*
      * shadcn/ui's names, aliased onto ours so `shadcn add` output renders without edits. New code uses the names

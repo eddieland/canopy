@@ -49,6 +49,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `buddy-hat-band` | A hat's band, pompom, and trim: a plum no status wears. |
 | `buddy-hat-gold`, `-cloth`, `-blue` | A hat's gold, its white cloth (outlined to show on white), a wizard's blue. |
 | `buddy-keyboard`, `buddy-key` | Sprig's keyboard: its case and its keys. A key pressed lights in the accent. |
+| `rave-dark` | The lightswitch rave's dark, the lights off: a near black with the indigo in it. Beams: `flair-*`. |
 
 Rules:
 
@@ -237,7 +238,7 @@ Rules:
 ## Fun
 
 canopy should be a little fun to use (PRODUCT.md), and the fun lives in a few named places, each written here, never
-journal text: the ticker, Sprig, and the empty inbox. They share these rules:
+journal text: the ticker, Sprig, the empty inbox, and the lightswitch rave. They share these rules:
 
 - **Fun never covers data, and never squeezes it.** Each has a place of its own in the layout. Where the window
   leaves it too little room to be read, it steps out entirely, rather than shrinking, clipping, or sitting on
@@ -248,6 +249,7 @@ journal text: the ticker, Sprig, and the empty inbox. They share these rules:
 - **Fun honours reduced motion** (Motion, below): it holds still, and says the same.
 - **Settings has one Fun panel**, second to last, below the settings that change how canopy works and above Session:
   an on/off for each, as checkboxes, then each one's details. Everything in it is kept in this browser (Themes, below).
+  The rave is the one without a checkbox: its switch hides in the panel's header (below).
 
 The ticker:
 
@@ -312,12 +314,26 @@ The empty inbox, and an item clearing:
   which hears the list's count change. It never fakes state: the item is already gone from the list and the counters.
   The last item to leave shows the empty inbox at once instead.
 
+The lightswitch rave:
+
+- An Easter egg, after The Cheat's lightswitch rave: a wall light switch (`Switch`, `src/components/ui/switch.tsx`)
+  at the end of the Fun panel's header, with no words beside it, named `Lightswitch rave` to a screen reader and
+  `The Cheat's light switch` on hover. Flipped, the lights go off and on over the whole app, and its lever flicks
+  with them, until it is flipped back (`Rave` in `src/components/shell/rave.tsx`, `src/lib/rave.ts`). Off by default,
+  and kept in this browser, so it outlasts a reload and every tab raves together (Themes, below).
+- It is the one fun that covers the page, since the operator asked for it by name and it ends with one more flip: it
+  takes no pointer, so everything under it still works; it is hidden from a screen reader, which hears the switch's
+  state; and it is not printed. The dark is `rave-dark` at 60%, so the page still reads through it, and beams in the
+  `flair-*` colors turn slowly through the dark, never a status color.
+- The lights go off and on once every 0.6 seconds, under two flashes a second, well clear of the three that WCAG 2.3.1
+  counts as harmful. Under reduced motion the lights rest off, the beams hold still, and the lever rests down.
+
 ## Motion
 
 Motion says something arrived or changed, and gives the page some life without asking for attention. It is short
 (at most 700ms), eased out (`cubic-bezier(0.2, 0, 0, 1)`), and never loops on anything but the logo, a running run,
-a skeleton, the empty inbox, the header's ticker, and Sprig's blink and typing. The keyframes and utilities are in
-`src/index.css`.
+a skeleton, the empty inbox, the header's ticker, Sprig's blink and typing, and the lightswitch rave. The keyframes
+and utilities are in `src/index.css`.
 
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
   new one is ready, because navigations run inside React transitions.
@@ -342,6 +358,8 @@ a skeleton, the empty inbox, the header's ticker, and Sprig's blink and typing. 
   below).
 - An item leaving the attention list fades and folds shut as a leaf tumbles off it (Fun, above). Its fold is the one
   animation that fills forwards: the row is let go once it has played.
+- The lightswitch rave flicks the lights off and on every 0.6 seconds in steps, the switch's lever flicking with them,
+  while its beams turn once every 8 seconds (Fun, above).
 - Sprig's tip pops in a moment after a page arrives, its brows rise once with each new tip, its eyes blink now and
   then and look toward the pointer, and every 5 seconds it types a burst on its keyboard, each key it presses sinking
   and lighting in the accent for a moment.
@@ -351,8 +369,8 @@ a skeleton, the empty inbox, the header's ticker, and Sprig's blink and typing. 
   animations frozen is the page at rest.
 - Everything above is off under `prefers-reduced-motion: reduce`: the theme swaps instantly, values and rows appear
   in place, pulses, ripples, and the drifting leaf are hidden, a cleared item is simply gone, the ticker shows its
-  first headline in place, and Sprig's eyes and keys hold still. New motion goes inside a `prefers-reduced-motion:
-  no-preference` block or a `motion-safe:` variant.
+  first headline in place, Sprig's eyes and keys hold still, and the rave rests with its lights off. New motion goes
+  inside a `prefers-reduced-motion: no-preference` block or a `motion-safe:` variant.
 
 ## No layout shift
 
@@ -369,9 +387,10 @@ The blocking script in `index.html` sets the `dark` class, `color-scheme`, and `
 paint; `src/theme/store.ts` keeps them current afterwards. Change one, change both: `theme-script.test.ts` runs the
 inline script and checks it against the store's key. Whether the ticker is on, its speed, gap, and hidden topics are
 kept the same way, as JSON under `canopy-ticker` (`src/lib/ticker-settings.ts`), whether Sprig is on under
-`canopy-buddy` (`src/lib/buddy.ts`), the key that sends a reply under `canopy-send-key`
-(`src/lib/send-key.ts`), and each list's order under `canopy-list-order` (`src/lib/list-order.ts`), all synced across
-tabs. The ticker keeps the topics left out, not those shown, so a topic added later shows until it is turned off.
+`canopy-buddy` (`src/lib/buddy.ts`), whether the lightswitch rave is on under `canopy-rave` (`src/lib/rave.ts`), the
+key that sends a reply under `canopy-send-key` (`src/lib/send-key.ts`), and each list's order under
+`canopy-list-order` (`src/lib/list-order.ts`), all synced across tabs. The ticker keeps the topics left out, not those
+shown, so a topic added later shows until it is turned off.
 
 ## Primitives
 
@@ -748,8 +767,9 @@ list, an empty state, or a skeleton by hand.
 - **Behavior comes from Radix**, through the shadcn wrappers in `src/components/ui/`, and only they import it (the lint
   refuses `radix-ui` anywhere else): a button that is on or off is a `Toggle`, a part of the page that opens under its
   button is a `Collapsible` (the panel or row itself, by `asChild`, so it adds no wrapper) opened by a `Disclosure`
-  (below), an option that is on or off a `Checkbox`, a choice of a few options a `ToggleGroup`, and a row of an
-  editor's controls a `Toolbar` (`src/components/ui/toolbar.tsx`), one tab stop with the arrow keys between them.
+  (below), an option that is on or off a `Checkbox` (or, for the lightswitch rave alone, a `Switch`), a choice of a
+  few options a `ToggleGroup`, and a row of an editor's controls a `Toolbar` (`src/components/ui/toolbar.tsx`), one
+  tab stop with the arrow keys between them.
   Radix keeps their ARIA in step with their state (`aria-pressed`, `aria-expanded` with `aria-controls`), so a
   component never writes it by hand. Two stay native on purpose: a transcript's tool call is a `<details>` (above),
   and rich text's `show N more lines` shows more of text already on screen rather than opening a part, so it is a

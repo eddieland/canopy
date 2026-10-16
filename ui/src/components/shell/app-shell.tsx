@@ -23,6 +23,7 @@ import { Mark } from './mark'
 import { Nav } from './nav'
 import { NewerBuild } from './newer-build'
 import { RailFooter, RailSpend, RailWorking } from './rail'
+import { Rave } from './rave'
 import { SearchBox } from './search-box'
 import { ThemeToggle } from './theme-toggle'
 import { Ticker } from './ticker'
@@ -36,8 +37,9 @@ export const PAGE_SCROLLER = 'page'
 
 /**
  * The frame every page renders in: header (with its ticker), side rail (search, navigation, the runs working now, the
- * spend, Sprig once Settings turns it on and the rail has room for it, and a footer), and the routed page. Signed
- * out, the sign-in page instead, whatever the route: every API route but the session's needs a session (DESIGN §22).
+ * spend, Sprig once Settings turns it on and the rail has room for it, and a footer), the routed page, and over it
+ * all the lightswitch rave while Settings' light switch is on. Signed out, the sign-in page instead, whatever the
+ * route: every API route but the session's needs a session (DESIGN §22).
  *
  * The header stays put and only what is under it scrolls (`PAGE_SCROLLER`), so the header spans the window's width:
  * a scrollbar, or the gutter kept for one, sits beside the rail and the page, never beside the header.
@@ -175,6 +177,7 @@ export function AppShell() {
                     <RailColumn buddy={buddy === 'on'} />
                 </SheetContent>
             )}
+            <Rave />
         </Sheet>
     )
 }
