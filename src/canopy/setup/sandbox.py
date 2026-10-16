@@ -125,7 +125,9 @@ def _copy_templates(report: Report) -> None:
 
 
 def _shared_caches(template: Path) -> list[str]:
-    """List what `template` lets a run write in the operator's cache directory, outside the sandbox's own in it.
+    """List what `template` lets a run write in the operator's cache directory, but inside a role's cache directory.
+
+    The directory that holds every role's is flagged too: a run that can write it can write every role's.
 
     Returns:
         Each such `allowWrite` entry, as the template spells it; none for a template that cannot be read.
@@ -149,12 +151,12 @@ def _shared_caches(template: Path) -> list[str]:
 
 
 def _within(path: Path, root: Path, *, but: Path) -> bool:
-    """Whether `path` is `root` or under it, and not `but` or under that.
+    """Whether `path` is `root` or under it, and not under `but`, though it may be `but` itself.
 
     Returns:
         True when it is.
     """
-    return path.is_relative_to(root) and not path.is_relative_to(but)
+    return path.is_relative_to(root) and not (path.is_relative_to(but) and path != but)
 
 
 def _install_runtime(runner: procs.Runner, report: Report) -> None:

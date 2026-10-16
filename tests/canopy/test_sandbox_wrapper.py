@@ -328,6 +328,15 @@ def test_each_role_caches_in_a_directory_of_its_own_and_setup_in_the_workers(san
     assert (sandbox.caches() / "review").stat().st_mode & 0o777 == 0o700
 
 
+def test_a_cache_directory_already_there_is_made_private(sandbox: Sandbox, tmp_path: Path) -> None:
+    (sandbox.caches() / "chore").mkdir(parents=True, mode=0o755)
+    (sandbox.caches() / "chore").chmod(0o755)
+
+    assert wrap("chore", "true", cwd=tmp_path).ok
+
+    assert (sandbox.caches() / "chore").stat().st_mode & 0o777 == 0o700
+
+
 def test_a_cache_directory_that_is_a_link_runs_nothing(sandbox: Sandbox, tmp_path: Path) -> None:
     sandbox.caches().mkdir(parents=True)
     (sandbox.caches() / "chore").symlink_to(sandbox.cache_home, target_is_directory=True)

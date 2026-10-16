@@ -147,14 +147,15 @@ def test_a_template_kept_that_lets_a_run_write_the_operators_caches_is_to_be_cha
     templates = canopy_env.home / ".config" / "canopy" / "sandbox"
     templates.mkdir(parents=True)
     old = json.loads((canopy_sandbox.TEMPLATES / "worker.json").read_text())
-    writable = ["@TMPDIR@", "~/.cache/opencode", str(canopy_env.home / ".cache" / "uv"), "~/.cache/canopy/sandbox/x"]
-    old["filesystem"]["allowWrite"] = writable
+    uv = str(canopy_env.home / ".cache" / "uv")
+    every_roles = "~/.cache/canopy/sandbox/"
+    old["filesystem"]["allowWrite"] = ["@TMPDIR@", "~/.cache/opencode", uv, every_roles, "~/.cache/canopy/sandbox/x"]
     (templates / "worker.json").write_text(json.dumps(old))
 
     report = sandbox.run_setup(SubprocessRunner(), "linux")
 
     [todo] = report.todo
-    paths = f"~/.cache/opencode, {canopy_env.home / '.cache' / 'uv'}:"
+    paths = f"~/.cache/opencode, {uv}, {every_roles}:"
     assert todo.startswith(f"{templates / 'worker.json'} lets a sandboxed run write {paths}")
     assert "add @CACHE@" in todo
 

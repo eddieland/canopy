@@ -414,7 +414,7 @@ def runtime_dir() -> Path:
 
 
 def cache_dir(role: str) -> Path:
-    """Make, if it is missing, the cache directory a run as `role` shares with the role's other runs.
+    """Make, if it is missing, the private cache directory a run as `role` shares with the role's other runs.
 
     It is under the operator's XDG_CACHE_HOME, read before the wrapper sets the command's, or `~/.cache`.
 
@@ -434,6 +434,8 @@ def cache_dir(role: str) -> Path:
         raise SandboxError(f"the sandbox's cache directory {path} could not be made: {e}") from None
     if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
         raise SandboxError(f"{path} is not a directory of this user's; remove it")
+    # mkdir sets the mode only on a directory it makes.
+    path.chmod(0o700)
     return path.resolve()
 
 
