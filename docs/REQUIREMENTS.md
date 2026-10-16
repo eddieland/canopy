@@ -1,9 +1,10 @@
 # canopy requirements
 
 The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 to R17
-on 2026-10-14, R18 on 2026-10-15), and where canopy stands on each. The design (`design/`) is how canopy meets them;
-this file is what it must meet. Where the two disagree, the conflict is listed under [Conflicts](#conflicts) until a
-`DECISIONS.md` entry settles it, and the design doc stays normative until then (AGENTS.md).
+on 2026-10-14, R18 on 2026-10-15, R19 on 2026-10-16), and where canopy stands on each. The design (`design/`) is how
+canopy meets them; this file is what it must meet. Where the two disagree, the conflict is listed under
+[Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until then
+(AGENTS.md).
 
 A bare § is a section of the design (`design/`). Status words:
 
@@ -242,6 +243,15 @@ changes makes a new plan. The plan stays in canopy and is posted nowhere, so a p
 Today the `implement` worker plans inside its own session, and nothing of it survives but its summary.
 2026-10-16: the operator reads a plan as a document, edits it in place, and comments on its passages, as on a shared
 document; asking for changes gives the planner each comment with the passage it is on.
+
+### R19. Configure each workspace on its own
+
+Planned (M49). Written down 2026-10-16. Most of what the operator sets belongs to one workspace: its queue labels,
+who may steer its workers, its capacity and pools, its chores and reviews, how often its loop runs, and the port its
+web UI listens on. Those settings should live with the workspace, so that changing one workspace's leaves every other
+alone, and two loops in two workspaces do not share a port. Only what serves every workspace stays in a file of the
+operator's own, and that file is optional. Today one user file serves every workspace, and the workspace's own file is
+shared and perhaps committed, so it can hold none of these (TRUST_MODEL T7).
 
 ## Nice to have
 
