@@ -683,18 +683,19 @@ list, an empty state, or a skeleton by hand.
   accent's tint at 14%; the open one, or the one being commented on, at 28% and underlined in the accent; clicking a
   passage opens its thread, and the cursor leaving it, or Escape, closes it. A thread is its passage quoted (two lines,
   a hairline in the accent at its left, the whole on hover; a button that shows it in the plan), the comment and its
-  replies as text with their ages, and ghost `xs` actions, `Reply`, `Resolve` (`Reopen`), and `Delete`. `Delete` asks
-  first, in the actions' place, since nothing brings a thread back: `Delete this comment and its replies?` in muted
-  `text-xs`, then `Keep`, which takes the focus, and `Delete` in `destructive`; Escape keeps it too, and the focus goes
-  back to `Delete`; the open thread sits on the accent's tint, as a selected row does. A thread whose passage is gone
-  carries a `passage gone` chip and stays in the list, last. Resolved threads fold under a `Disclosure`
-  (`Show 2 resolved`). A comment or reply form sends on the key Settings names, as a reply does, and Escape drops it. A
-  form takes the cursor when it opens, after any words it holds. `Comment` again, on new words, moves an empty comment
-  to them; one half written stays on its passage, and the cursor goes back to it, so its words are never lost or carried
-  to other words. The comments end in `Ask for changes`: a note on the whole plan and the button, with how many open
-  comments go with it, or how far over a reply's bound the request is. Until plans reach a ticket's page (M44), the
-  editor is on `/plan-editor`, over a sample plan on mock data only, with what the planner would read and the plan's
-  Markdown under it.
+  replies as text with their ages, and ghost `xs` actions, `Reply`, `Resolve` (`Reopen`), and `Delete`. While the thread
+  is open, the comment and each reply carry an `Edit` beside their age, in `text-2xs`, which turns it into the comment
+  form in place, holding its words, with `Save`; the actions hide while it is open. `Delete` asks first, in the actions'
+  place, since nothing brings a thread back: `Delete this comment and its replies?` in muted `text-xs`, then `Keep`,
+  which takes the focus, and `Delete` in `destructive`; Escape keeps it too, and the focus goes back to `Delete`; the
+  open thread sits on the accent's tint, as a selected row does. A thread whose passage is gone carries a `passage gone`
+  chip and stays in the list, last. Resolved threads fold under a `Disclosure` (`Show 2 resolved`). A comment or reply
+  form sends on the key Settings names, as a reply does, and Escape drops it. A form takes the cursor when it opens,
+  after any words it holds. `Comment` again, on new words, moves an empty comment to them; one half written stays on its
+  passage, and the cursor goes back to it, so its words are never lost or carried to other words. The comments end in
+  `Ask for changes`: a note on the whole plan and the button, with how many open comments go with it, or how far over a
+  reply's bound the request is. Until plans reach a ticket's page (M44), the editor is on `/plan-editor`, over a sample
+  plan on mock data only, with what the planner would read and the plan's Markdown under it.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then how often it may start and its window (`cadenceText`: `every 360 minutes`, as
   the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed

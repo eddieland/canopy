@@ -35,6 +35,8 @@ export interface ThreadActions {
     onResolve: (id: string, resolved: boolean) => void
     /** Deletes a thread and its replies. */
     onDelete: (id: string) => void
+    /** Has a thread's comment, or with `replyId` one of its replies, say `body` instead. */
+    onEdit: (id: string, body: string, replyId?: string) => void
 }
 
 /**
@@ -202,6 +204,9 @@ export function AskForChanges({
     )
 }
 
+// What `ThreadCard` edits when it edits the comment rather than a reply.
+const COMMENT = 'comment'
+
 function ThreadCard({
     thread,
     lost,
@@ -211,9 +216,14 @@ function ThreadCard({
     onReply,
     onResolve,
     onDelete,
+    onEdit,
 }: ThreadActions & { thread: PlanThread; lost: boolean; active: boolean; editable: boolean }) {
     const [replying, setReplying] = useState(false)
+    // What is being edited: the comment, or a reply by its id.
+    const [editing, setEditing] = useState<string | undefined>(undefined)
     const [deleting, setDeleting] = useState(false)
+    // An open thread's words can be edited while nothing else in its card is open.
+    const startEdit = editable && !thread.resolved && editing === undefined && !replying && !deleting
     // Keep gives the focus back to Delete, which opened the question, rather than drop it to the page's top.
     const [kept, setKept] = useState(false)
     const deleteAction = useRef<HTMLButtonElement>(null)
@@ -239,10 +249,46 @@ function ThreadCard({
                 {lost && <Chip className="mt-0.5">passage gone</Chip>}
                 {thread.resolved && <Chip className="mt-0.5">resolved</Chip>}
             </div>
-            <Said body={thread.body} at={thread.at} />
+            {editing === COMMENT ? (
+                <CommentForm
+                    label="Edit comment"
+                    submit="Save"
+                    initial={thread.body}
+                    onSubmit={(body) => {
+                        onEdit(thread.id, body)
+                        setEditing(undefined)
+                    }}
+                    onCancel={() => setEditing(undefined)}
+                />
+            ) : (
+                <Said
+                    body={thread.body}
+                    at={thread.at}
+                    what="comment"
+                    onEdit={startEdit ? () => setEditing(COMMENT) : undefined}
+                />
+            )}
             {thread.replies.map((reply) => (
                 <div key={reply.id} className="ml-3 border-l pl-2">
-                    <Said body={reply.body} at={reply.at} />
+                    {editing === reply.id ? (
+                        <CommentForm
+                            label="Edit reply"
+                            submit="Save"
+                            initial={reply.body}
+                            onSubmit={(body) => {
+                                onEdit(thread.id, body, reply.id)
+                                setEditing(undefined)
+                            }}
+                            onCancel={() => setEditing(undefined)}
+                        />
+                    ) : (
+                        <Said
+                            body={reply.body}
+                            at={reply.at}
+                            what="reply"
+                            onEdit={startEdit ? () => setEditing(reply.id) : undefined}
+                        />
+                    )}
                 </div>
             ))}
             {replying && (
@@ -266,7 +312,7 @@ function ThreadCard({
                     }}
                 />
             )}
-            {editable && !replying && !deleting && (
+            {editable && !replying && !deleting && editing === undefined && (
                 <div className="-ml-2 flex flex-wrap items-center gap-0.5">
                     {!thread.resolved && (
                         <Button variant="ghost" size="xs" onClick={() => setReplying(true)}>
@@ -354,13 +400,38 @@ function Quote({ text, onClick }: { text: string; onClick?: (() => void) | undef
     )
 }
 
-function Said({ body, at }: { body: string; at: string }) {
+// What a comment or a reply says, and when; with `onEdit`, its own Edit beside its age, so the card's actions stay on
+// one line.
+function Said({
+    body,
+    at,
+    what,
+    onEdit,
+}: {
+    body: string
+    at: string
+    what: 'comment' | 'reply'
+    onEdit?: (() => void) | undefined
+}) {
     return (
         <div className="flex flex-col gap-0.5">
             <p className="text-sm break-words whitespace-pre-wrap">
                 <LinkedText text={body} />
             </p>
-            <Age at={at} variant="ago" className="text-2xs" />
+            <div className="flex items-center gap-1">
+                <Age at={at} variant="ago" className="text-2xs" />
+                {onEdit !== undefined && (
+                    <Button
+                        variant="ghost"
+                        size="xs"
+                        className="h-5 px-1 text-2xs"
+                        aria-label={`Edit ${what}`}
+                        onClick={onEdit}
+                    >
+                        Edit
+                    </Button>
+                )}
+            </div>
         </div>
     )
 }
@@ -370,6 +441,7 @@ function Said({ body, at }: { body: string; at: string }) {
 function CommentForm({
     label,
     submit,
+    initial = '',
     value,
     onValueChange,
     onSubmit,
@@ -377,6 +449,7 @@ function CommentForm({
 }: {
     label: string
     submit: string
+    initial?: string
     value?: string
     onValueChange?: (body: string) => void
     onSubmit: (body: string) => void
@@ -384,7 +457,7 @@ function CommentForm({
 }) {
     const sendKey = useSendKey()
     const field = useRef<HTMLTextAreaElement>(null)
-    const [own, setOwn] = useState('')
+    const [own, setOwn] = useState(initial)
     const body = value ?? own
     const setBody = onValueChange ?? setOwn
 
