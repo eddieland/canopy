@@ -6,7 +6,8 @@ per line. canopy reads two kinds of event and one field of every event, each val
 - `text`: a finished piece of the agent's text, in `part.text`. Joined one per line they are what stdout holds without
   `--format json`, so every result contract reads the same either way. The last one is the agent's final message.
 - `step_finish`: one model call's `part.cost`, in dollars, and `part.tokens`. Summed, they are what the run cost; the
-  most one call was sent is the run's peak context.
+  most one call was sent is the run's peak context. The first call's is kept apart: what it was sent, less the
+  prompt, is the run's fixed overhead, and its cache write says whether that came from the cache.
 - `sessionID`, on every event: the session OpenCode kept, which the operator opens with OpenCode's own tools.
 
 Any other event, and any line that is not an event, is ignored. Output with no events at all is plain text, as from a
@@ -66,7 +67,9 @@ class _StepFinish(BaseModel):
 class Usage:
     """What a run cost: dollars as the runtime priced them, tokens by kind, and the most one model call was sent.
 
-    `peak_context` is None for a run recorded before canopy kept it.
+    `first_call` is what its first model call was sent, from the cache or not, and `first_cache_write` what that call
+    wrote to the cache. Each of the three is None for a run recorded before canopy kept it; the first call's are None
+    too for a run that made no model call.
     """
 
     cost_usd: float
@@ -76,6 +79,8 @@ class Usage:
     cache_read: int
     cache_write: int
     peak_context: int | None = None
+    first_call: int | None = None
+    first_cache_write: int | None = None
 
     @property
     def new_tokens(self) -> int:
@@ -183,6 +188,7 @@ def parse_event(line: str) -> dict[str, object] | None:
 
 
 def _total(steps: list[_StepFinish]) -> Usage:
+    first = steps[0].tokens if steps else None
     return Usage(
         cost_usd=sum(float(s.cost) for s in steps),
         input=sum(s.tokens.input for s in steps),
@@ -190,5 +196,12 @@ def _total(steps: list[_StepFinish]) -> Usage:
         reasoning=sum(s.tokens.reasoning for s in steps),
         cache_read=sum(s.tokens.cache.read for s in steps),
         cache_write=sum(s.tokens.cache.write for s in steps),
-        peak_context=max((s.tokens.input + s.tokens.cache.read + s.tokens.cache.write for s in steps), default=0),
+        peak_context=max((_sent(s.tokens) for s in steps), default=0),
+        first_call=_sent(first) if first is not None else None,
+        first_cache_write=first.cache.write if first is not None else None,
     )
+
+
+# What one model call was sent: its input, from the cache or not.
+def _sent(tokens: _Tokens) -> int:
+    return tokens.input + tokens.cache.read + tokens.cache.write
