@@ -47,6 +47,8 @@ not go in the middle of the sequence.
   - [25. Plans before implementing (M44)](PLANNING.md#25-plans-before-implementing-m44)
 - [Garbage collection](GARBAGE_COLLECTION.md): what canopy removes of its own history and caches, and what it keeps.
   - [26. Garbage collection (M47)](GARBAGE_COLLECTION.md#26-garbage-collection-m47)
+- [The overseer's tools](OVERSEER_TOOLS.md): the MCP tools canopy serves the overseer, in place of the CLI.
+  - [27. The overseer's tools (M48)](OVERSEER_TOOLS.md#27-the-overseers-tools-m48)
 
 ## 1. Problem
 
