@@ -1,6 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { breakStorage, otherTab, otherTabClears } from '@/test-utils'
 
 import { balanceCents, buy, EMPTY, HATS, parseWardrobe } from './hats'
+
+// The wardrobe is read when the module loads, so each test loads a fresh copy.
+function load() {
+    vi.resetModules()
+    return import('./hats')
+}
 
 describe('HATS', () => {
     it('is cheapest first, each hat once', () => {
@@ -53,5 +62,47 @@ describe('buy', () => {
         expect(buy(EMPTY, 'propeller', 400)).toBeUndefined()
         expect(buy({ owned: ['beanie'], worn: null }, 'party', 299.99)).toBeUndefined()
         expect(buy({ owned: ['party'], worn: null }, 'party', 10_000)).toBeUndefined()
+    })
+})
+
+describe('useWardrobe', () => {
+    beforeEach(() => localStorage.clear())
+
+    it('wears what is bought, and keeps it', async () => {
+        const hats = await load()
+        const { result } = renderHook(() => hats.useWardrobe())
+        expect(result.current).toEqual(EMPTY)
+
+        const bought = hats.buy(result.current, 'party', 60)
+        if (!bought) {
+            throw new Error('the party hat is $50')
+        }
+        act(() => hats.setWardrobe(bought))
+        expect(result.current).toEqual({ owned: ['party'], worn: 'party' })
+        expect(hats.parseWardrobe(localStorage.getItem(hats.STORAGE_KEY))).toEqual(result.current)
+    })
+
+    it("follows another tab's wardrobe, one bought before it was read, and storage cleared", async () => {
+        const hats = await load()
+        localStorage.setItem(hats.STORAGE_KEY, JSON.stringify({ owned: ['party'], worn: 'party' }))
+        const { result } = renderHook(() => hats.useWardrobe())
+        expect(result.current).toEqual({ owned: ['party'], worn: 'party' })
+
+        act(() => otherTab(hats.STORAGE_KEY, JSON.stringify({ owned: ['party', 'top'], worn: 'top' })))
+        expect(result.current).toEqual({ owned: ['party', 'top'], worn: 'top' })
+        act(() => otherTab(hats.STORAGE_KEY, JSON.stringify({ owned: ['party', 'top'], worn: null })))
+        expect(result.current).toEqual({ owned: ['party', 'top'], worn: null })
+        act(() => otherTabClears())
+        expect(result.current).toEqual(EMPTY)
+    })
+
+    it('is empty where storage is unavailable, and still wears a hat for this page', async () => {
+        breakStorage()
+        const hats = await load()
+        const { result } = renderHook(() => hats.useWardrobe())
+        expect(result.current).toEqual(EMPTY)
+
+        act(() => hats.setWardrobe({ owned: ['party'], worn: 'party' }))
+        expect(result.current.worn).toBe('party')
     })
 })

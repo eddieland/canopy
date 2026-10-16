@@ -1,6 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { breakStorage, otherTab, otherTabClears } from '@/test-utils'
 
 import { MAX_KEPT, parsePretty, withPretty } from './pretty-output'
+
+// The ticks are read when the module loads, so each test loads a fresh copy.
+function load() {
+    vi.resetModules()
+    return import('./pretty-output')
+}
 
 describe('parsePretty', () => {
     it('reads the ticks stored, and nothing when nothing is', () => {
@@ -29,5 +38,47 @@ describe('withPretty', () => {
         expect(kept).toHaveLength(MAX_KEPT)
         expect(kept[0]).toBe(2)
         expect(kept.at(-1)).toBe(1000)
+    })
+})
+
+describe('usePrettyOutput', () => {
+    beforeEach(() => localStorage.clear())
+
+    it("turns one tick's on and off, keeps it, and leaves the others compact", async () => {
+        const pretty = await load()
+        const { result } = renderHook(() => [pretty.usePrettyOutput(2), pretty.usePrettyOutput(7)])
+        expect(result.current).toEqual([false, false])
+
+        act(() => pretty.setPrettyOutput(2, true))
+        expect(result.current).toEqual([true, false])
+        expect(localStorage.getItem(pretty.STORAGE_KEY)).toBe('[2]')
+
+        act(() => pretty.setPrettyOutput(2, false))
+        expect(result.current).toEqual([false, false])
+    })
+
+    it("follows another tab's choices, one made before they were read, and storage cleared", async () => {
+        const pretty = await load()
+        localStorage.setItem(pretty.STORAGE_KEY, '[7]')
+        const { result } = renderHook(() => pretty.usePrettyOutput(7))
+        expect(result.current).toBe(true)
+
+        act(() => otherTab(pretty.STORAGE_KEY, '[2,7]'))
+        expect(result.current).toBe(true)
+        act(() => otherTab(pretty.STORAGE_KEY, '[2]'))
+        expect(result.current).toBe(false)
+        act(() => otherTab(pretty.STORAGE_KEY, '[7]'))
+        act(() => otherTabClears())
+        expect(result.current).toBe(false)
+    })
+
+    it('is compact where storage is unavailable, and still turns pretty for this page', async () => {
+        breakStorage()
+        const pretty = await load()
+        const { result } = renderHook(() => pretty.usePrettyOutput(7))
+        expect(result.current).toBe(false)
+
+        act(() => pretty.setPrettyOutput(7, true))
+        expect(result.current).toBe(true)
     })
 })

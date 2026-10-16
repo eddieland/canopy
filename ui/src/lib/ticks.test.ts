@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import { byteSize, tickId } from './ticks'
+import { byteSize, tickId, tickState } from './ticks'
+
+describe('tickState', () => {
+    it("reads a tick's ok and skipped as a run's done, and anything else that ended as failed", () => {
+        expect(tickState('running')).toBe('running')
+        expect(tickState('ok')).toBe('done')
+        expect(tickState('skipped')).toBe('done')
+        expect(tickState('overseer_failed')).toBe('failed')
+        expect(tickState('abandoned')).toBe('failed')
+        expect(tickState('a status added later')).toBe('failed')
+    })
+})
 
 describe('tickId', () => {
     it('reads a positive whole number and nothing else', () => {

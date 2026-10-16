@@ -52,6 +52,7 @@ WORKSPACE_MAP_TABLES = ("workspace", "repos")
 # Keys earlier canopy read, and what to do with one left in a file. Each is an error that says so, not "unknown key".
 REMOVED_KEYS = {
     "paths.state_dir": f"delete it; state is always in the workspace's {WORKSPACE_STATE_DIR}/ (D016)",
+    "trust.pr_label": "delete it; workers no longer label their PRs, which the branch prefix already marks",
 }
 PROMPT = "{prompt}"
 # Replaced with the snapshot of canopy's agent definitions and skills (D040).
@@ -435,6 +436,8 @@ class Policy(Section):
     max_resume_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
     # Split runs per ticket (DESIGN §18). A split creates tickets in the tracker, so one try is the default.
     max_split_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 1
+    # Plan runs per ticket (DESIGN §25): a plan covers every repository the ticket will touch.
+    max_plan_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
     # Review runs per PR, whatever they ended as (DESIGN §21).
     max_reviews_per_pr: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
     # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10). Prompt policy, not a guard.
@@ -445,7 +448,6 @@ class Trust(Section):
     """The `[trust]` table."""
 
     branch_prefix: Annotated[StrictStr, Scope.SHARED, AfterValidator(_branch_prefix)] = "agent/"
-    pr_label: Annotated[NonBlank, Scope.SHARED] = "agent"
     authorized_repliers: Annotated[tuple[NonBlank, ...], Scope.USER] = ()
     # Whose review feedback a worker may address without the operator's go-ahead (DESIGN §7, D089): VCS host logins,
     # and `canopy:review` for canopy's own reviewer. Anyone else's waits for an operator message. User-only: a
@@ -552,6 +554,12 @@ class Runtime(Section):
     # The splitter is its own agent, with no edit or shell tools (DESIGN §18); it shares the worker's timeout.
     split_cmd: Annotated[AgentTemplate, Scope.USER] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json "
+        "--title={title} {prompt}"
+    )
+    # The planner is its own agent, with no edit or shell tools and only the tracker's read tools (DESIGN §25); it
+    # shares the worker's timeout.
+    plan_cmd: Annotated[AgentTemplate, Scope.USER] = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json "
         "--title={title} {prompt}"
     )
     # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).

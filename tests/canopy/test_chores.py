@@ -21,7 +21,7 @@ from canopy.core import chore_view as view
 from canopy.core import db, definitions, workspace
 from canopy.core.config import load
 from canopy.core.context import Context
-from canopy.core.vocab import ChoreRunStatus
+from canopy.core.vocab import ChoreRunStatus, TickStatus
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from tests.canopy.helpers import (
@@ -69,7 +69,7 @@ def run_inline(conn: sqlite3.Connection, report: object, *, close: bool = True) 
         run_id = int(conn.execute("SELECT max(id) FROM chore_runs").fetchone()[0])
         assert main(["_chore", str(run_id)], runner=InlineRunner()) == 0
         if close:
-            db.finish_tick(conn, tick_id, "ok", "test")
+            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     return run_id
 
 
@@ -396,7 +396,7 @@ def test_a_killed_chore_run_is_crashed_on_the_next_tick(
     conn = canopy_env.journal()
     with in_tick(conn) as tick_id, mock.patch.dict(os.environ, {"FAKE_CHORE_SLEEP": "60"}):
         assert main(["chore", "run", "build-health"]) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     deadline = time.monotonic() + 30
     row = db.get_chore_run(conn, 1)
     while (row is None or row.agent_pid is None) and time.monotonic() < deadline:

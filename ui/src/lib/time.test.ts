@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { age, stamp } from './time'
+import { age, stamp, useNow } from './time'
 
 describe('age', () => {
     const now = Date.parse('2026-10-08T12:30:00Z')
@@ -24,5 +25,54 @@ describe('stamp', () => {
         const hh = String(local.getHours()).padStart(2, '0')
         const mm = String(local.getMinutes()).padStart(2, '0')
         expect(stamp(iso)).toMatch(new RegExp(`^\\S+ ${local.getDate()} ${hh}:${mm}$`, 'u'))
+    })
+})
+
+describe('useNow', () => {
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    it('reads the time when first read, and again every second', () => {
+        vi.useFakeTimers({ now: Date.parse('2026-10-08T12:00:00Z') })
+        const { result, unmount } = renderHook(() => useNow())
+        expect(result.current).toBe(Date.parse('2026-10-08T12:00:00Z'))
+
+        act(() => {
+            vi.advanceTimersByTime(999)
+        })
+        expect(result.current).toBe(Date.parse('2026-10-08T12:00:00Z'))
+        act(() => {
+            vi.advanceTimersByTime(1)
+        })
+        expect(result.current).toBe(Date.parse('2026-10-08T12:00:01Z'))
+        unmount()
+    })
+
+    it('runs one clock for every reader, and stops it once none is left', () => {
+        vi.useFakeTimers({ now: Date.parse('2026-10-08T12:00:00Z') })
+        const first = renderHook(() => useNow())
+        const second = renderHook(() => useNow())
+        expect(vi.getTimerCount()).toBe(1)
+
+        act(() => {
+            vi.advanceTimersByTime(3000)
+        })
+        expect(first.result.current).toBe(second.result.current)
+
+        first.unmount()
+        expect(vi.getTimerCount()).toBe(1)
+        second.unmount()
+        expect(vi.getTimerCount()).toBe(0)
+    })
+
+    it('starts again from the time it is read, not the time it stopped', () => {
+        vi.useFakeTimers({ now: Date.parse('2026-10-08T12:00:00Z') })
+        renderHook(() => useNow()).unmount()
+
+        vi.setSystemTime(Date.parse('2026-10-08T13:00:00Z'))
+        const { result, unmount } = renderHook(() => useNow())
+        expect(result.current).toBe(Date.parse('2026-10-08T13:00:00Z'))
+        unmount()
     })
 })

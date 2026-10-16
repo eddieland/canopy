@@ -11,6 +11,7 @@ import pytest
 
 from canopy.core import db
 from canopy.core.agent_output import ToolUse, Usage
+from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import resources
 from tests.canopy.helpers import DEAD_PID, journal_at, shipped_through, versions_after
 from tests.conftest import Journals
@@ -51,6 +52,7 @@ SHIPPED = {
     30: "b5c91635acb0fcc0acbfdce96241ff5cac50440c7a85d5ed621df57745fdcef5",
     31: "429563f0913dd074cb33951d58303b4e65af768bfd43b0a02ec6ce71771cdaec",
     32: "a69f227a77b632c3bddf0be6c71852ad3cf2747fcdec099ec10ef1cf566d7f9d",
+    33: "f3f99cdfe08e5a7b05d7d8a8c6c7cc8832484e13b36ed561486617870e558174",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -118,6 +120,10 @@ SEED: Mapping[str, str] = {
     "run_tools": (
         "INSERT INTO run_tools (run_table, run_id, tool, calls, errors, result_chars) "
         "VALUES ('runs', 1, 'bash', 2, 0, 9)"
+    ),
+    "plans": (
+        "INSERT INTO plans (ticket_key, run_id, created_at, status, sha256, size, approved_sha256, approved_at, "
+        "approved_channel) VALUES ('OLD-1', 1, 'x', 'approved', 'a', 9, 'b', 'y', 'cli')"
     ),
 }
 
@@ -362,24 +368,24 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     assert db.abandon_unfinished_ticks(conn) == [stale]
     tick = db.start_tick(conn, dry_run=True)
     db.touch_ticket(conn, "PROJ-1", "/repo")
-    db.set_ticket(conn, "PROJ-1", "/repo", phase="ci_red", cursors={"comment": "c-7"})
+    db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.CI_RED, cursors={"comment": "c-7"})
     db.set_unit(conn, "PROJ-1", "/repo", "api", phase="ci_red", cursors={"ci": "run-7"})
     db.set_ticket(conn, "PROJ-2", "/repo", done=True)
     db.record_decision(conn, tick, "PROJ-1", "wait", "checks pending")
-    db.finish_tick(conn, tick, "ok", "1 decision")
+    db.finish_tick(conn, tick, TickStatus.OK, "1 decision")
 
     row = db.get_tick(conn, stale)
     assert row is not None
-    assert row["status"] == "abandoned"
+    assert row.status == TickStatus.ABANDONED
     [ticket] = db.open_tickets(conn)
-    assert (ticket["key"], ticket["phase"], ticket["last_comment_id"]) == ("PROJ-1", "ci_red", "c-7")
+    assert (ticket.key, ticket.phase, ticket.last_comment_id) == ("PROJ-1", "ci_red", "c-7")
     [unit] = db.units(conn, "PROJ-1")
     assert (unit["repo"], unit["phase"], unit["last_ci_run_id"], unit["branch"]) == ("api", "ci_red", "run-7", None)
     [decision] = db.decisions_for_tick(conn, tick)
     assert (decision.ticket_key, decision.action) == ("PROJ-1", "wait")
     last = db.last_tick(conn)
     assert last is not None
-    assert (last["id"], last["status"], last["dry_run"]) == (tick, "ok", 1)
+    assert (last.id, last.status, last.dry_run) == (tick, TickStatus.OK, True)
 
 
 def test_a_tickets_decisions_are_found_by_index(tmp_path: Path, journals: Journals) -> None:
@@ -474,9 +480,9 @@ def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: 
     assert (run["session_id"], run["cost_usd"], run["tokens_input"]) == (None, None, None)
     tick = db.get_tick(conn, 1)
     assert tick is not None
-    assert (tick["session_id"], tick["cost_usd"], tick["tokens_input"]) == (None, None, None)
+    assert (tick.session_id, tick.cost_usd, tick.tokens_input) == (None, None, None)
     # Nor did the loop say whether it was idle or what woke it.
-    assert (tick["idle"], tick["woken_by"]) == (None, None)
+    assert (tick.idle, tick.woken_by) == (None, None)
 
 
 def test_review_runs_from_before_their_purpose_are_own_only_where_their_tickets_unit_has_their_pr(

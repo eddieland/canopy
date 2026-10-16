@@ -10,6 +10,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, db
+from canopy.core.vocab import TickStatus
 from canopy.runs import policy
 from tests.canopy.helpers import (
     canopy,
@@ -111,7 +112,7 @@ def test_only_the_operator_grants(
             os.environ.pop("CANOPY_TICK_ID")
         assert main(["grant", KEY, "implement"]) == 1
         assert "grant refused (inside_run)" in capsys.readouterr().err
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         assert grants(conn) == []
 
 

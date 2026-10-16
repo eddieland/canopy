@@ -1,48 +1,9 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { FakeEventSource } from '@/test-utils'
+
 import { HIDDEN_MS, RETRY_FIRST_MS, useEventStream } from './use-event-stream'
-
-/** Stands in for EventSource: records instances, and lets a test play the server. */
-class FakeEventSource extends EventTarget {
-    static readonly CONNECTING = 0
-    static readonly OPEN = 1
-    static readonly CLOSED = 2
-    static instances: FakeEventSource[] = []
-    readyState = FakeEventSource.CONNECTING
-    closed = false
-    readonly url: string
-
-    constructor(url: string) {
-        super()
-        this.url = url
-        FakeEventSource.instances.push(this)
-    }
-
-    open(): void {
-        this.readyState = FakeEventSource.OPEN
-        this.dispatchEvent(new Event('open'))
-    }
-
-    send(data: string): void {
-        this.dispatchEvent(new MessageEvent('message', { data }))
-    }
-
-    drop(): void {
-        this.readyState = FakeEventSource.CONNECTING
-        this.dispatchEvent(new Event('error'))
-    }
-
-    refuse(): void {
-        this.readyState = FakeEventSource.CLOSED
-        this.dispatchEvent(new Event('error'))
-    }
-
-    close(): void {
-        this.closed = true
-        this.readyState = FakeEventSource.CLOSED
-    }
-}
 
 let visibility: DocumentVisibilityState = 'visible'
 

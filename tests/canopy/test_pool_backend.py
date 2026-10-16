@@ -11,7 +11,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import config, db, pool, pools, workspace
 from canopy.core.context import Context
-from canopy.core.vocab import PoolKind, RunStatus
+from canopy.core.vocab import PoolKind, RunStatus, TickStatus
 from canopy.infra import logs, procs, resources
 from canopy.runs import reconcile
 from tests.canopy.conftest import Ws, seed_pools
@@ -75,7 +75,7 @@ def test_under_canopy_a_run_leases_from_canopy_s_pool_and_its_slot_goes_back_the
     runner = InlineRunner()
     with worker_does(*commit_and_push(BRANCH)), in_tick(conn) as tick_id:
         assert main(implement("api"), runner=runner) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         [slot] = db.run_slots(conn, 1)
         assert slot["pool"] == PoolKind.CANOPY
         assert Path(slot["slot_path"]) == ws.root / pool.POOLS_DIR / "api" / "1" / "api"
@@ -98,7 +98,7 @@ def test_a_lease_goes_back_to_the_pool_that_made_it_after_a_switch(
     runner = InlineRunner()
     with worker_does(*commit_and_push(BRANCH)), in_tick(conn) as tick_id:
         assert main(implement("api"), runner=runner) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         [slot] = db.run_slots(conn, 1)
         assert slot["pool"] == PoolKind.TREEHOUSE
         # The operator switches while the run is in flight.

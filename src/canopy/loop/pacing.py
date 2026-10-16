@@ -17,11 +17,11 @@ from typing import TYPE_CHECKING
 
 from canopy.core import chore_view, db, notice
 from canopy.core.items import subject
+from canopy.core.vocab import TickStatus
 from canopy.loop import attention, duties
 from canopy.runs import policy
 
 if TYPE_CHECKING:
-    import sqlite3
     from datetime import datetime
 
     from canopy.core.context import Context
@@ -91,16 +91,16 @@ def idle(ctx: Context, outcome: tick.Outcome, seen: Before) -> bool:
     Returns:
         True if the tick was idle.
     """
-    if outcome.status != "ok" or outcome.tick_id is None:
+    if outcome.status != TickStatus.OK or outcome.tick_id is None:
         return False
     previous = db.previous_tick(ctx.conn, outcome.tick_id)
-    if previous is None or previous["read_at"] is None or previous["message_id"] is None:
+    if previous is None or previous.read_at is None or previous.message_id is None:
         return False
     return (
         all(_quiet(d.action) for d in db.decisions_for_tick(ctx.conn, outcome.tick_id))
         and attention.keys(attention.listed(ctx)) == attention.keys(seen.attention)
         and db.tickets_snapshot(ctx.conn) == seen.tickets
-        and _nothing_since(ctx, previous)
+        and _nothing_since(ctx, previous.read_at, previous.message_id)
     )
 
 
@@ -115,15 +115,15 @@ def churn(ctx: Context, outcome: tick.Outcome, seen: Before) -> list[str]:
     Returns:
         A line per phase changed and per attention item added (`+`) or dropped (`-`); none when the tick is not churn.
     """
-    if outcome.status != "ok" or outcome.tick_id is None:
+    if outcome.status != TickStatus.OK or outcome.tick_id is None:
         return []
     previous, row = db.previous_tick(ctx.conn, outcome.tick_id), db.get_tick(ctx.conn, outcome.tick_id)
-    if previous is None or previous["read_at"] is None or previous["message_id"] is None or row is None:
+    if previous is None or previous.read_at is None or previous.message_id is None or row is None:
         return []
-    if not _nothing_since(ctx, previous) or row["read_at"] is None:
+    if not _nothing_since(ctx, previous.read_at, previous.message_id) or row.read_at is None:
         return []
-    opens = gate(ctx, db.parse_time(str(previous["read_at"])))
-    if opens is not None and opens <= db.parse_time(str(row["read_at"])):
+    opens = gate(ctx, db.parse_time(previous.read_at))
+    if opens is not None and opens <= db.parse_time(row.read_at):
         return []
     now = db.phases(ctx.conn)
     lines = [
@@ -141,22 +141,21 @@ def _item_order(item: tuple[str | None, str, str | None]) -> tuple[str, str, str
     return (item[0] or "", item[1], item[2] or "")
 
 
-def _nothing_since(ctx: Context, previous: sqlite3.Row) -> bool:
-    """Whether nothing the journal holds for a tick to act on happened after `previous` read it.
+def _nothing_since(ctx: Context, read_at: str, message_id: int) -> bool:
+    """Whether nothing the journal holds for a tick to act on happened after a tick read it, at `read_at`.
 
     No run, chore run, or review run started or ended, and the operator recorded no message, started or stopped no
-    ticket, granted nothing, and set or cleared no notice.
+    ticket, granted nothing, and set or cleared no notice, past `message_id`, the newest message that tick had read.
 
     Returns:
         True if nothing did.
     """
-    since = str(previous["read_at"])
     return (
-        not db.runs_moved_after(ctx.conn, since)
-        and db.latest_message_id(ctx.conn, source="operator") <= int(previous["message_id"])
-        and not db.starts_moved_after(ctx.conn, since)
-        and not db.granted_after(ctx.conn, since)
-        and not notice.moved_after(ctx.conn, since)
+        not db.runs_moved_after(ctx.conn, read_at)
+        and db.latest_message_id(ctx.conn, source="operator") <= message_id
+        and not db.starts_moved_after(ctx.conn, read_at)
+        and not db.granted_after(ctx.conn, read_at)
+        and not notice.moved_after(ctx.conn, read_at)
     )
 
 
@@ -207,4 +206,4 @@ def read_at(ctx: Context, outcome: tick.Outcome) -> str | None:
     if outcome.tick_id is None:
         return None
     row = db.get_tick(ctx.conn, outcome.tick_id)
-    return None if row is None or row["read_at"] is None else str(row["read_at"])
+    return None if row is None else row.read_at

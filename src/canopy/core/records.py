@@ -22,7 +22,16 @@ from enum import StrEnum
 from typing import Any, ClassVar
 
 # Imported for real, not under TYPE_CHECKING: `typing.get_type_hints` resolves a row type's fields when it is read.
-from canopy.core.vocab import ChoreRunStatus, PoolKind, ReviewRunStatus  # noqa: TC001
+from canopy.core.vocab import (
+    ChoreRunStatus,
+    Phase,
+    PlanSetting,
+    PlanStatus,
+    PoolKind,
+    ReviewRunStatus,
+    StartStatus,
+    TickStatus,
+)
 
 # What a column's value is converted with, by its field's type.
 _Convert = Callable[[object], object]
@@ -40,6 +49,69 @@ class Row:
 
 class RowError(Exception):
     """A query's columns, or a value in one, do not fit the row type it was read as."""
+
+
+@dataclass(frozen=True)
+class Tick(Row):
+    """A tick (DESIGN §6): how it ended, what its overseer cost, what it read, and what the loop knew when it ran it."""
+
+    TABLE: ClassVar[str] = "ticks"
+
+    id: int
+    started_at: str
+    ended_at: str | None
+    dry_run: bool
+    status: TickStatus
+    summary: str | None
+    session_id: str | None
+    cost_usd: float | None
+    tokens_input: int | None
+    tokens_output: int | None
+    tokens_reasoning: int | None
+    tokens_cache_read: int | None
+    tokens_cache_write: int | None
+    # The newest message, and the time, the tick had read up to; None before it read the journal.
+    message_id: int | None
+    read_at: str | None
+    # Set by `canopy loop` alone (`db.set_tick_loop`): whether the tick was idle, and what started it.
+    idle: bool | None
+    woken_by: str | None
+    tokens_peak_context: int | None
+    # Whether the tick's state block told the overseer to run the tracker query; None on a tick from before that was
+    # recorded, each of which was told to.
+    query_due: bool | None
+    tokens_first_call: int | None
+    tokens_first_cache_write: int | None
+    definitions_digest: str | None
+
+
+@dataclass(frozen=True)
+class Ticket(Row):
+    """A ticket canopy has seen (DESIGN §6): its own phase, branch, and cursors, and where any forget left it."""
+
+    TABLE: ClassVar[str] = "tickets"
+
+    key: str
+    # The workspace root.
+    repo: str
+    first_seen_at: str
+    last_seen_at: str
+    # The ticket's own last derived phase, for display only; never read as truth.
+    phase: Phase | None
+    # Fixed by its first implement, and the same in every unit.
+    branch: str | None
+    last_comment_id: str | None
+    needs_human_since: str | None
+    done: bool
+    last_message_id: int | None
+    last_mirrored_id: str | None
+    # When the operator last forgot the ticket's work, and its newest run and message then (DESIGN §22).
+    forgotten_at: str | None
+    forgotten_run_id: int | None
+    forgotten_message_id: int | None
+    title: str | None
+    # The ticket's own plan setting, overriding `policy.plan`; None when unset (DESIGN §25).
+    plan_setting: PlanSetting | None
 
 
 @dataclass(frozen=True)
@@ -129,6 +201,22 @@ class ReviewRun(Row):
 
 
 @dataclass(frozen=True)
+class Start(Row):
+    """The operator's start of a subject worked privately (DESIGN §22): the authorization, written only by them."""
+
+    TABLE: ClassVar[str] = "starts"
+
+    subject_kind: str
+    subject_id: str
+    status: StartStatus
+    started_at: str
+    # When the operator stopped it; None while it is started.
+    stopped_at: str | None
+    # The channel of the latest start or stop.
+    channel: str
+
+
+@dataclass(frozen=True)
 class ReviewRequest(Row):
     """The operator's request to review a PR the loop does not own (DESIGN §21): open, or how it ended."""
 
@@ -156,6 +244,26 @@ class PoolSlot(Row):
     leased_at: str | None
     base: str
     seeded: str
+
+
+@dataclass(frozen=True)
+class Plan(Row):
+    """A plan a plan run wrote (DESIGN §25): its status, its file's hash as written, and its approval. No text."""
+
+    TABLE: ClassVar[str] = "plans"
+
+    id: int
+    ticket_key: str
+    run_id: int
+    created_at: str
+    status: PlanStatus
+    # The file's SHA-256, hex, and its size in bytes, as the planner wrote it.
+    sha256: str
+    size: int
+    # The file's SHA-256 when the operator approved it, their edits included; set with the time and the channel.
+    approved_sha256: str | None
+    approved_at: str | None
+    approved_channel: str | None
 
 
 @dataclass(frozen=True)

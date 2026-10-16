@@ -634,9 +634,9 @@ Status: not started.
 
 ## M37. The overseer reads the journal
 
-Needs M36's measurement, with the disagreements that were the derivation's fixed. Sketch only; the design comes first.
-This is M30's cut, taken from the journal rather than a probe, and it is where the trust model gains its first code
-checks on what the overseer claims.
+Needs M36's measurement, with the disagreements that were the derivation's fixed, and M48's second stage, which
+waits on the operator's approval note. Sketch only; the design comes first. This is M30's cut, taken from the journal
+rather than a probe, and it is where the trust model gains its first code checks on what the overseer claims.
 
 - The state block carries the observations: per ticket, its title, state, labels, blockers, and the comments newer
   than its comment cursor (id, author, time, body, and whether the author is an authorized replier, decided in code);
@@ -660,12 +660,12 @@ checks on what the overseer claims.
   `review` cursor's time form (§7) is no longer needed. CI is keyed on head sha, context, and run id, so a re-run at
   the same head is observed, as resolving a held check needs (M35, 2026-10-13 F16); `fix-ci` alone starts only when
   a context's conclusion changed at that head, never on a re-run that went red to red (PRIOR_ART).
-- `canopy mirror` and the heredoc (D081) are retired: the tracker connector writes comments. Open: whether a tracker
-  with no connector keeps the live-read procedure, or a connector is required (recommended: required; the two shipped
-  cover the operator's trackers, and the contract is a page of Python for another).
+- The `mirror` tool is retired (M48 retired the heredoc, D081): the tracker connector writes comments. Open: whether
+  a tracker with no connector keeps the live-read procedure, or a connector is required (recommended: required; the
+  two shipped cover the operator's trackers, and the contract is a page of Python for another).
 - TRUST_MODEL T1 (labels, repliers, and reviewers checked in code; the overseer's MCP narrowed to stale subjects),
-  T2 (a connector's credentials), T7 (`connect.*`), with the approval note; DESIGN §6, §7, §17, §22; D003 and D081
-  edited in place.
+  T2 (a connector's credentials), T7 (`connect.*`), with the approval note; DESIGN §6, §7, §17, §22; D003 edited in
+  place (M48 superseded D081).
 
 Accept: written with the design, before work starts. Live, once built: a re-measurement (MEASUREMENTS) with
 tool-result tokens per tick at a tenth of the first day's median (about 14k), no MCP call on a tick whose
@@ -734,7 +734,7 @@ trust change: the overseer runs when the journal leaves it something to judge, n
   tick did not record, a gate comes due, or the operator acts, as today. An external event is then seen within one
   poll, not up to `loop.idle_max_minutes` later (M21's trade, lifted). Idle pacing paces only the overseer's runs. A
   connector that fails during a poll raises `connector_failed` and the loop falls back to today's pacing.
-- The overseer's definition loses the tracker and GitHub MCP servers: it has `bash` for `canopy` and nothing else,
+- The overseer's definition loses the tracker and GitHub MCP servers: it has canopy's tools (M48) and nothing else,
   since a `stale` subject now gets `wait` instead of a live read. TRUST_MODEL T1: the overseer can be steered only by
   text the journal holds, bounded and labeled by source, and can call no tracker or VCS tool at all. Approval note.
 - M29's open questions are answered by M36's contract (which subjects to watch), `connect.every_minutes` (how often),
@@ -768,8 +768,8 @@ Status: not started.
 
 ## M41. Limits and trust settings from the web UI
 
-REQUIREMENTS R16, DESIGN §12 and §22. Needs M20. Asked for by the operator (2026-10-14): change a pool's slots or a
-trust setting from the web UI without opening the user config file. Today the web channel asks for a reload and writes
+REQUIREMENTS R16, DESIGN §12 and §22. Needs M20 and M49. Asked for by the operator (2026-10-14): change a pool's slots
+or a trust setting from the web UI without opening a config file. Today the web channel asks for a reload and writes
 no config (TRUST_MODEL T8).
 
 - Which keys: an allowlist in code, by name, never a section's wildcard. Limits, raised or lowered: the counts in
@@ -784,17 +784,20 @@ no config (TRUST_MODEL T8).
 - Ceilings: no count can be raised from the page past a ceiling in code, such as `capacity.max_workers` at 8; the file
   can set any value. A raise within the ceilings outlives a new secret too; that residual is spend, and the page and
   the log show it.
-- Where it writes: the user file only, never the workspace file (shared, perhaps committed, T7). Edited in place,
-  keeping the operator's comments and layout, so a TOML writer joins the runtime dependencies with its DECISIONS
-  entry; `tomllib` only reads. Rejected: a file of canopy's own layered after the user file (a hand edit to the user
-  file would be silently overridden), and writing the file anew with the stdlib (its comments lost).
-- How: the request carries a hash of the user file as the page read it. The server holds a lock from reading the file
-  to replacing it, so two requests cannot both pass the check on the same hash; a file whose hash differs is refused
-  as `stale`, checked again just before the replace, so a hand edit is lost only if it lands in that last moment. The
-  change is applied to a copy and validated by `config.load`, as any `canopy` command would read it; a refusal writes
-  nothing and gives the loader's message. The file is replaced atomically, keeping its mode, and refused when it is a
-  symlink or not the operator's (D053's check). Then the loop is asked to reload through the existing path
-  (`loop.reread`).
+- Where it writes: the workspace's private file (M49) only, never the workspace file (shared, perhaps committed, T7)
+  nor the user file, which serves every workspace. A key whose value came from the user file is written to the
+  private file, where it shadows the user file's for this workspace alone, and the page says so before the save.
+  Edited in place, keeping the operator's comments and layout, so a TOML writer joins the runtime dependencies with
+  its DECISIONS entry; `tomllib` only reads. Rejected: a file of canopy's own layered after the private file (a hand
+  edit to the private file would be silently overridden), and writing the file anew with the stdlib (its comments
+  lost).
+- How: the request carries a hash of the private file as the page read it. The server holds a lock from reading the
+  file to replacing it, so two requests cannot both pass the check on the same hash; a file whose hash differs is
+  refused as `stale`, checked again just before the replace, so a hand edit is lost only if it lands in that last
+  moment. The change is applied to a copy and validated by `config.load`, as any `canopy` command would read it; a
+  refusal writes nothing and gives the loader's message. The file is replaced atomically, keeping its mode, and
+  refused when it is a symlink or not the operator's (D053's check). Then the loop is asked to reload through the
+  existing path (`loop.reread`).
 - The answer says what was saved apart from what the reload did: the keys changed, whether they wait for a running
   tick to end, and that a run already running keeps the prompt and permissions it started with, so a stricter trust
   setting reaches only runs started after it. A save whose reload was not asked for, the server stopping between the
@@ -805,7 +808,7 @@ no config (TRUST_MODEL T8).
 - Each change is logged with channel `web`, the key, and its old and new values.
 - Slots: a changed `capacity.slots_per_repo` or `capacity.repo_slots` bounds leases from the next tick. Making or
   removing slots is still `canopy workspace sync`, which the page names; the web UI runs no sync.
-- API: `GET /config`, each editable key's value, the file it came from, its ceiling, and the user file's hash;
+- API: `GET /config`, each editable key's value, the file it came from, its ceiling, and the private file's hash;
   `PATCH /config`, the changed keys and that hash. The settings page edits them, beside Reload.
 - TRUST_MODEL T8: "It cannot write config" becomes the allowlist, ceilings, and stricter-only keys above, and its
   residual gains a stolen session raising limits up to their ceilings, which outlives a new secret until the operator
@@ -814,14 +817,14 @@ no config (TRUST_MODEL T8).
   the trust boundary relies on), and one for the TOML writer.
 - Tests with the fakes: an allowed key written and reloaded, the file's comments kept; a key outside the allowlist, a
   stricter-only key loosened, a count over its ceiling, a stale hash, two requests on one hash, an invalid value, and
-  a symlinked user file each refused with the file unchanged; the workspace file never written; Playwright for the
-  form.
+  a symlinked private file each refused with the file unchanged; neither the workspace file nor the user file ever
+  written; Playwright for the form.
 - Open: the ceilings' values; whether the page also shows the keys it cannot edit, read-only, with the file each came
   from.
 
 Accept: the tests above pass. Live: while `canopy loop` runs, the operator changes `capacity.slots_per_repo` and
 removes a trusted reviewer from the settings page; the next tick leases under the new size and reads the shorter list;
-and the user file keeps its comments, with only those two values changed.
+and the private file keeps its comments, with only those two values changed.
 
 Status: not started.
 
@@ -891,18 +894,20 @@ the state block and the overseer.
   their base branches, detached, as a split does (§18): no branch, no unit, nothing pushed or verified. It counts
   toward `capacity.max_workers` and has the worker's timeout. `policy.max_plan_attempts`, default 3, limits plan runs
   per ticket, and `canopy grant KEY plan` adds one.
-- The planner writes nothing anywhere. Its definition has no edit, shell, web fetch, or subagent tools, and its
-  tracker tools are the private worker's (§22): the tracker server's tools denied by a wildcard, then only
-  `tracker.read_tools` allowed, so it reads the ticket but cannot comment, label, or create. With no read tools known,
-  the dispatch is refused as `no_read_tools`. On a public ticket it checks the queue label as every worker does.
+- The planner writes its plan to one file in its desk and nothing else anywhere. Its definition allows no other edit,
+  and has no shell, web fetch, or subagent tools, and its tracker tools are the private worker's (§22): the tracker
+  server's tools denied by a wildcard, then only `tracker.read_tools` allowed, so it reads the ticket but cannot
+  comment, label, or create. With no read tools known, the dispatch is refused as `no_read_tools`. On a public ticket
+  it checks the queue label as every worker does.
 - Its prompt, `worker-plan.md`, asks for a plan a later worker can follow: what changes in each repository and why,
   the files and interfaces it touches, the tests that will show it works, what is out of scope, and the open risks. It
   carries the operator's messages, standing instructions, and notice, and on a re-plan the plan it replaces, as a
-  file in its desk, and the operator's reply to it. The plan is its final message, as markdown, before its result
-  line, `{"status":"done|blocked|failed","summary":"...","question":"<only when blocked>"}` (§25). `_run` validates
-  it: a `done` plan is non-empty and at most 100,000 characters; anything else makes the run `unknown` and records no
-  plan. A `blocked` plan records its question as a worker message (§22), on a public ticket
-  too, since the planner cannot post one; the operator answers with `canopy reply`.
+  file in its desk, and the operator's reply to it. The plan is the markdown it writes to `.canopy-new-plan.md` in its
+  desk; its result line is `{"status":"done|blocked|failed","summary":"...","question":"<only when blocked>"}` (§25).
+  `_run` reads the file as every plan file is read: a `done` plan is a regular file, non-empty, and at most 100,000
+  characters; anything else makes the run `unknown` and records no plan. A `blocked` plan records its question as a
+  worker message (§22), on a public ticket too, since the planner cannot post one; the operator answers with `canopy
+  reply`.
 - Whether a ticket is planned: `policy.plan`, `"off"` (default, as today) or `"approve"`, shared config that a
   repository may only tighten to `"approve"`. The operator overrides it for one ticket: `canopy plan KEY` asks for a
   plan (and makes a new one if the ticket has one), `canopy plan KEY --skip` waives it, and `canopy start KEY --plan`
@@ -982,8 +987,13 @@ the plan in its summary. A week later the plan is still on the ticket's page. No
 ticket.
 
 Status: in progress. The plan editor is in, over mock data at `/plan-editor`: Markdown in and out, comments anchored
-by their words, and Ask for changes composing the reply (`ui/src/lib/plan-*.ts`, D120). What keeps it open:
-everything in the journal, the CLI, the runs, and the ticket page.
+by their words, and Ask for changes composing the reply (`ui/src/lib/plan-*.ts`, D120). Plans' files and rows are
+in (`core/plans.py`, migration 0033): written once and never replaced, read bounded, approved by the file's hash, and
+superseded by `canopy forget`. Plan runs are in: `canopy dispatch --kind plan` with its guards, `canopy-planner`,
+`worker-plan.md`, and `_run` writing a `done` plan to its file and recording it `proposed`, with the copy of the plan
+it replaces in its desk. The planner writes its plan to a file in its desk rather than its final message (§25, The
+prompt). What keeps it open: `canopy grant KEY plan`, the CLI, `policy.plan`, the guards and phases, the
+worker's copy, the threads' tables, and the ticket page.
 
 ## M45. canopy's own worktree pools, replacing treehouse in stages
 
@@ -1190,6 +1200,120 @@ remote branch is deleted; and no flag shortens retention, which only the user fi
 - Check: `--git` on a clone whose slots hold unpushed commits keeps every one of them, and a run after it pushes
   normally; a SCENARIOS entry, since it is worth running again on each git upgrade.
 - Open: whether the pass runs `--git` on its own, weekly, after that check.
+
+Status: not started.
+
+## M48. The overseer's tools over MCP
+
+DESIGN §27, D020, D081. Asked for by the operator (2026-10-16): the overseer acts through MCP tools canopy serves,
+not by running the `canopy` CLI through bash. Needs nothing; taken before M37, so that M37 and M38 rewrite the
+overseer's prompt once, against tools. Workers are out of scope (§27, Why). Four stages, in order, each in its own
+PRs, a stage starting only once the one before has passed its check, recorded on the `Status:` line.
+
+**Stage 0, measure and read.** Nothing is built.
+
+- From the operator's tick logs, a dated section of `MEASUREMENTS.md`: the overseer's bash calls per tick, and how
+  many failed on usage, quoting, or a refused command. That is the baseline stage 2 is held to, and if such failures
+  are rare, the operator decides whether the rest is still worth building.
+- From OpenCode's source, as §24 read it: the inline config's form, how it merges with the operator's and the
+  workspace's, whether it reaches OpenCode's children, what a run does when a local server fails to start, and the
+  protocol versions its client asks for.
+- Check: both written down; §27's "How the overseer gets them" revised first if OpenCode differs from it.
+
+**Stage 1, the server.** Nothing the overseer runs changes.
+
+- The overseer's verbs move below `cli/` into `loop/tools.py`, each a function over a pydantic request model that
+  holds §6's bounds and the rules across fields; the click commands build the request and call it. The CLI's tests
+  pass unchanged.
+- `canopy _mcp` in `loop/mcp.py` (§27, The server): the five methods, one tool per verb, refusals as tool errors,
+  nothing listed or served outside a running tick or under `CANOPY_RUN_ID`.
+- `procs` gains a way to remove a variable from a child's environment, for the entry's (§27).
+- A DECISIONS entry: canopy serves MCP itself, over stdio only, to the overseer only; the `mcp` SDK rejected.
+- Tests: a stdio client in `tests/canopy/helpers.py` drives `canopy _mcp` inside a tick. Each tool records what its
+  command records, a refusal is `isError` and the server keeps serving, an unknown field is refused, and no tool is
+  listed outside a tick or with `CANOPY_RUN_ID` set. One parameterized test sends each refusal through both a tool and
+  its command. A spawned run's environment lacks a removed variable.
+- Check: `make check`, and a hand-run `canopy _mcp` in a dry tick answering an OpenCode client.
+
+**Stage 2, the overseer switches.** With the operator's approval note.
+
+- The harness gives the overseer's run the server's entry and removes it from every run it starts; the definition
+  allows each tool by exact name and denies `bash`, `treehouse status*` included; every other definition denies
+  `canopy_*`; `definitions.shadowing` refuses a workspace config that names a `canopy` server; §6's preflight starts
+  the server and sends `initialize`, closing the tick `canopy_unavailable` if it fails.
+- The prompt names tools, not commands; a mirror's body is a field; the state block drops the heredoc delimiter.
+- TRUST_MODEL T1 and T7; DESIGN §6, §13, §22; D020 edited in place, D081 superseded.
+- Tests with the fakes: the fake agent gains `FAKE_AGENT_TOOLS`, tool calls it makes through the server its config
+  names, and the dry-run end-to-end test plays the overseer through them; a worker dispatched through a tool starts
+  without the entry; a server that cannot start closes the tick `canopy_unavailable`.
+- Check: a day of the operator's loop, a dated section of `MEASUREMENTS.md`: no bash call in any overseer transcript,
+  no tick failed for a call the overseer could not make, duties met at least as often as the baseline's, and
+  tool-result tokens per tick no higher.
+
+**Stage 3, MCP only.** The operator's end state (2026-10-16): the CLI keeps the verbs only while the tools settle.
+
+- The overseer's verbs leave the CLI (`dispatch`, `decide`, `queried`, `attention`, `ticket set`, `mirror` if M37 has
+  not retired it, `review run`, `review wait`, `review end`, `chore run`, `chore wait`), and `OverseerCommand` and its
+  completion filter with them. Tests that drove a command drive its tool. D020 names the tools alone.
+- Open: tool results as JSON rather than the CLI's text (§27, Open).
+- Check: `make install-check`'s dry tick passes against the fakes, its overseer acting through the tools.
+
+Status: not started.
+
+## M49. Config per workspace
+
+REQUIREMENTS R19, DESIGN §12 and §18, TRUST_MODEL T7, D016, D053, D066. Asked for by the operator (2026-10-16): most
+settings live with the workspace they serve, not in one user file every workspace shares. Needs nothing; taken before
+M41, so that the settings page writes the file this milestone adds.
+
+- Why: the user file serves every workspace, but most of its keys belong to one. The queue labels; the authorized
+  repliers and trusted reviewers, each in its tracker's identity format; `review.query`; `runtime.setup_cmd` and
+  `runtime.pr_skill`; `tracker.mcp_server`; chores; the loop's pacing; and capacity, which each workspace's journal
+  already counts on its own. Two `canopy loop`s in two workspaces take `serve.port` from the one file and collide.
+- The file: `<state_dir>/config.toml`, the workspace's **private file**, the operator's alone. Layered last: defaults,
+  the workspace file, the user file, then the private file, key by key; `[chores]` comes whole from the last file that
+  sets it, as today. User-only keys become **private** keys: set in the user file or the private file, never in the
+  shared workspace file. §12's table renames the scope and changes no key's.
+- The user file becomes optional, for what serves every workspace: the runtime templates, the comment marks, the
+  commit trailer, notification sinks. Without it canopy reads the private file alone; without either, the error names
+  the private file and `canopy init`. An existing user file keeps working unchanged, so nothing migrates.
+- What stays in the user config directory, as files rather than keys: the secrets (`listener-secret`, `slack-webhook`,
+  `slack-token`) and the sandbox templates (`sandbox/<role>.json`), which every workspace's runs share.
+  `paths.prompt_overrides` still defaults to `prompts/` there.
+- No key is held to the user file, the commit trailer and the comment marks included (the operator, 2026-10-16): a
+  workspace whose team marks agent work its own way sets its own.
+- A `paths.*` value in the private file may be relative, and resolves against the state directory:
+  `worker_instructions = "worker-instructions.md"` names `<state_dir>/worker-instructions.md`, private and under the
+  provenance check below. Not against the workspace root, which may be a shared checkout, where a file anyone who can
+  push may change would choose a prompt (T7). In the user file a `paths.*` value stays absolute or starts with `~`.
+- Provenance: D053 checks permissions, not provenance, so a `.canopy/` checked out of a shared workspace repository
+  under umask 077 passes it. Today that plants a journal; with the private file it would run commands
+  (`runtime.worker_cmd`). So canopy refuses a state directory any of whose paths git tracks: one `git ls-files` at the
+  workspace root through `core/hostgit.py` whenever config is loaded, none tracked when the root is in no repository,
+  and a refusal when git fails otherwise. That closes the journal's half of the residual too. The private file itself
+  is opened without following a symlink and must be a regular file of the operator's, not group or world writable.
+- `canopy init` writes the private file instead of the user file, with the labels and the empty trust lists to fill
+  in when no user file sets them, and still no key whose default serves. It never overwrites either file.
+- Errors name the file: a private key in the workspace file says to set it in the private file, and a validation
+  error names the files a key may come from. `loop.reread` reads the private file like any `canopy` command.
+- Sandbox: no new path. The private file is under `.canopy/`, which the templates already deny (§24); the canary adds
+  it to what a sandboxed run can neither read nor write. An unsandboxed run can write it, as it can the user file
+  today: TRUST_MODEL's residual for unsandboxed runs is unchanged.
+- Docs, in the PR that builds it, with the operator's approval note: TRUST_MODEL T7 (private keys from the user file
+  or the private file, and the provenance control); DESIGN §12 (layers, scopes, the file, the `paths.*` rule) and
+  §18 (pool sizes in either file); `README.md` and `docs/GETTING_STARTED.md`, where `canopy init` writes; D016 edited
+  in place, and D066 to "Pool sizes are private config".
+- Tests with the fakes: a key in the private file wins over the same key in the user file and the workspace file; a
+  private key in the workspace file is refused, naming the private file; a private file and no user file runs; with
+  neither, the error names `canopy init`; a tracked `.canopy/config.toml`, and a tracked journal, refused in a
+  workspace that is a git repository; a symlinked, foreign, or group-writable private file refused; `canopy init`
+  writes the private file, not the user file; a reload takes up a change to the private file; two workspaces' private
+  files set different `serve.port`s and each loads its own; a relative `paths.*` value in the private file resolves
+  under the state directory, and one in the user file is still refused.
+
+Accept: the tests above pass, and `make install-check`, with `canopy init` writing the private file. Live: the
+operator moves the keys that belong to one workspace into its private file, leaving the rest in the user file; the
+loop there runs as before, and a second workspace with its own private file reads its own labels and port.
 
 Status: not started.
 

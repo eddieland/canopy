@@ -25,8 +25,7 @@ This is a live tick.
     "trusted_reviewers": [],
     "comment_prefix": "CANOPY:",
     "comment_suffix": "",
-    "branch_prefix": "agent/",
-    "pr_label": "agent"
+    "branch_prefix": "agent/"
   },
   "policy": {
     "max_implement_attempts": 2,

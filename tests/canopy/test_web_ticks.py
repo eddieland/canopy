@@ -105,8 +105,8 @@ def test_the_spend_breakdown_is_what_canopy_spend_prints_over_the_mock_journal(b
     ]
     assert (found["done"], found["per_done"], found["tickets"][0]["done"]) == (0, None, None)
     assert [(p["url"], p["ticket_key"], p["phase"]) for p in found["pull_requests"]] == [
-        ("https://github.com/acme/web/pull/88", "ABC-099", "in_review"),
-        ("https://github.com/acme/web/pull/91", "ABC-103", "in_review"),
+        ("https://github.com/acme/web/pull/88", "ABC-099", "review_pending"),
+        ("https://github.com/acme/web/pull/91", "ABC-103", "review_pending"),
         ("https://github.com/acme/web/pull/86", "ABC-100", None),
         ("https://github.com/acme/api/pull/12", None, None),  # only reviewed
     ]

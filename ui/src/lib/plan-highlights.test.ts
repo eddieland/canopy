@@ -33,6 +33,28 @@ function sync(editor: Editor, threads: Placed[]) {
     editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'sync', threads }))
 }
 
+// Presses `key` in the editor as the browser would send it: `commands.keyboardShortcut` keeps only the steps of what
+// a handler dispatches, not its meta. Whether a handler took it.
+function press(editor: Editor, key: string): boolean {
+    const event = new KeyboardEvent('keydown', { key })
+    return editor.view.someProp('handleKeyDown', (handle) => handle(editor.view, event)) ?? false
+}
+
+// The document position of `word`'s first letter.
+function posOf(editor: Editor, word: string): number {
+    let found: number | undefined
+    editor.state.doc.descendants((node, pos) => {
+        const at = node.isText ? (node.text?.indexOf(word) ?? -1) : -1
+        if (found === undefined && at >= 0) {
+            found = pos + at
+        }
+    })
+    if (found === undefined) {
+        throw new Error(`no ${word} in the plan`)
+    }
+    return found
+}
+
 function quoteOf(editor: Editor, id: string) {
     const range = highlightsKey.getState(editor.state)?.ranges.get(id)
     return range && editor.state.doc.textBetween(range.from, range.to)
@@ -91,6 +113,40 @@ describe('PlanHighlights', () => {
         expect(quoteOf(editor, 'n')).toBeUndefined()
     })
 
+    it('closes the open thread when the cursor leaves its passage, and keeps it while the cursor is in it', () => {
+        const editor = open(PLAN)
+        sync(editor, [placed('a', 'the rows')])
+        const range = highlightsKey.getState(editor.state)?.ranges.get('a')
+        if (!range) {
+            throw new Error('no range')
+        }
+        editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id: 'a' }))
+        editor.commands.setTextSelection(range.to)
+        expect(highlightsKey.getState(editor.state)?.active).toBe('a')
+        editor.commands.setTextSelection(range.from + 3)
+        editor.commands.insertContent('raw ')
+        expect(highlightsKey.getState(editor.state)?.active).toBe('a')
+        editor.commands.setTextSelection(1)
+        expect(highlightsKey.getState(editor.state)?.active).toBeUndefined()
+    })
+
+    it('closes the open thread on Escape, and leaves Escape alone with none open', () => {
+        const editor = open(PLAN)
+        sync(editor, [placed('a', 'the rows')])
+        expect(press(editor, 'Escape')).toBe(false)
+        editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id: 'a' }))
+        expect(press(editor, 'Escape')).toBe(true)
+        expect(highlightsKey.getState(editor.state)?.active).toBeUndefined()
+    })
+
+    it('draws the passage being commented on as the open one, in place of the thread that was', () => {
+        const editor = open(PLAN)
+        sync(editor, [placed('a', 'the rows')])
+        editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id: 'a' }))
+        editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'draft', range: { from: 1, to: 3 } }))
+        expect(highlightsKey.getState(editor.state)?.active).toBeUndefined()
+    })
+
     it('asks for a comment on Mod+Alt+M, through the editor’s events', () => {
         const editor = open(PLAN)
         let asked = 0
@@ -99,5 +155,28 @@ describe('PlanHighlights', () => {
         })
         editor.commands.keyboardShortcut('Mod-Alt-m')
         expect(asked).toBe(1)
+    })
+
+    it("opens the clicked passage's thread, the innermost of two that overlap, never a resolved one", async () => {
+        const editor = open(PLAN)
+        sync(editor, [placed('outer', 'Stream the rows'), placed('inner', 'the rows'), placed('done', 'large', true)])
+        const opened: string[] = []
+        editor.on('planThreadActivate', ({ id }) => {
+            opened.push(id)
+        })
+        const click = (word: string) =>
+            editor.view.someProp('handleClick', (handle) =>
+                handle(editor.view, posOf(editor, word), new MouseEvent('click')),
+            )
+
+        // No handler takes the click, so ProseMirror still places the cursor.
+        expect(click('the')).toBeUndefined()
+        click('Stream')
+        click('large')
+        click('Plan')
+        await new Promise((resolve) => {
+            setTimeout(resolve, 0)
+        })
+        expect(opened).toEqual(['inner', 'outer'])
     })
 })

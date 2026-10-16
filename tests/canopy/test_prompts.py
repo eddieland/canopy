@@ -11,7 +11,9 @@ from tests.conftest import CanopyEnv
 # A row of the overseer prompt's phase table: `| `phase` | evidence | action |`.
 _PHASE_ROW = re.compile(r"^\| `([a-z_]+)` \|", re.MULTILINE)
 
-UNIT_KINDS = sorted(k for k in prompts.WORKER if k != "split")
+UNIT_KINDS = sorted(k for k in prompts.WORKER if k not in ("split", "plan"))
+# The kinds whose prompt checks the queue label through `{{LABELS}}`: a plan's carries its check in `{{AUTHORIZATION}}`.
+LABELED_KINDS = sorted(k for k in prompts.WORKER if k != "plan")
 
 
 @pytest.mark.parametrize("kind", UNIT_KINDS)
@@ -42,6 +44,45 @@ def test_the_shipped_split_prompt_renders_completely(canopy_env: CanopyEnv) -> N
     assert text.rstrip().endswith('"children":{"<child key>":"<repository name>"}}')
 
 
+@pytest.mark.parametrize("private", [False, True])
+def test_the_shipped_plan_prompt_renders_completely(canopy_env: CanopyEnv, *, private: bool) -> None:
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    values = {
+        **PROMPT_VALUES,
+        "AUTHORIZATION": prompts.plan_authorization("PROJ-1", ["agent-ready-alice"], private=private),
+        "PLAN_FILE": ".canopy-plan.md",
+        "PLAN_OUT": ".canopy-new-plan.md",
+        "MAX_PLAN_CHARS": "100,000",
+        "SLOT": "/ws/desks/PROJ-1",
+    }
+    text = prompts.render_worker(cfg, "plan", values, private=private)
+    assert text.startswith("# canopy worker: plan\n")
+    assert "{{" not in text
+    assert "If `/ws/desks/PROJ-1/.canopy-plan.md` exists, it is the plan this one replaces." in text
+    assert "Write the plan as markdown to `/ws/desks/PROJ-1/.canopy-new-plan.md`" in text
+    assert "within 100,000 characters" in text
+    assert text.rstrip().endswith(
+        '{"status":"done|blocked|failed","summary":"<one paragraph>","question":"<only when blocked>"}'
+    )
+    if private:
+        assert "there is no label to check" in text
+    else:
+        assert "carries none of the labels `agent-ready-alice`" in text
+
+
+@pytest.mark.parametrize("missing", prompts.REQUIRED_PLAN)
+def test_a_plan_prompt_needs_its_authorization_and_the_operators_messages(canopy_env: CanopyEnv, missing: str) -> None:
+    # An override without its own check, or without the reply asking for changes, fails closed.
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    used = " ".join(f"{{{{{name}}}}}" for name in prompts.REQUIRED_PLAN if name != missing)
+    (overrides / "worker-plan.md").write_text(f"Plan {{{{KEY}}}}: {used}\n")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    values = {**PROMPT_VALUES, "AUTHORIZATION": "check", "PLAN_OUT": ".canopy-new-plan.md"}
+    with pytest.raises(prompts.PromptError, match=rf"missing required placeholder \{{\{{{missing}\}}\}}"):
+        prompts.render_worker(cfg, "plan", values)
+
+
 def test_a_split_prompt_needs_the_request(canopy_env: CanopyEnv) -> None:
     # The splitter's own check of who asked for the split reads the request; an override without it fails closed.
     overrides = canopy_env.user_file.parent / "prompts"
@@ -67,7 +108,7 @@ def test_unknown_placeholder_is_an_error(canopy_env: CanopyEnv) -> None:
         prompts.render_worker(cfg, "implement", {k: v for k, v in PROMPT_VALUES.items() if k != "REPOSITORIES"})
 
 
-@pytest.mark.parametrize("kind", sorted(prompts.WORKER))
+@pytest.mark.parametrize("kind", LABELED_KINDS)
 def test_worker_prompt_without_the_labels_is_an_error(canopy_env: CanopyEnv, kind: str) -> None:
     # An override from before D051 would drop the worker's own label check; it must not render.
     overrides = canopy_env.user_file.parent / "prompts"
@@ -139,7 +180,7 @@ def test_comment_marks_name_every_mark_set(prefix: str, suffix: str, recognized:
     assert instruction in prompts.mark_comments(prefix, suffix)
 
 
-@pytest.mark.parametrize("kind", sorted(prompts.WORKER))
+@pytest.mark.parametrize("kind", LABELED_KINDS)
 def test_shipped_worker_prompts_mark_and_recognize_worker_comments(canopy_env: CanopyEnv, kind: str) -> None:
     # Everything posts as the operator, so a worker's own reply must not read back as feedback or a reply (D069).
     values = {**PROMPT_VALUES, "MARK_COMMENTS": "<mark them>", "WORKER_COMMENT": "<is marked>"}
@@ -413,6 +454,7 @@ def test_ticket_set_accepts_every_phase_in_the_overseer_prompts_table() -> None:
     assert set(unit) == vocab.UNIT_PHASES
 
 
-def test_every_run_kind_has_a_worker_prompt_and_every_kind_but_split_a_private_one() -> None:
+def test_every_run_kind_has_a_worker_prompt_and_every_kind_but_split_and_plan_a_private_one() -> None:
+    # A split never runs for a private ticket, and a plan's one prompt serves both (DESIGN §22, §25).
     assert set(prompts.WORKER) == set(vocab.RunKind)
-    assert set(prompts.WORKER_PRIVATE) == set(vocab.RunKind) - {vocab.RunKind.SPLIT}
+    assert set(prompts.WORKER_PRIVATE) == set(vocab.RunKind) - {vocab.RunKind.SPLIT, vocab.RunKind.PLAN}
