@@ -3,7 +3,7 @@
 import json
 import os
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -51,7 +51,7 @@ def test_render_empty() -> None:
 
 
 @contextmanager
-def overseer_records(*items: tuple[str, str], waiting: tuple[str, ...] = ()) -> Iterator[None]:
+def overseer_records(*items: tuple[str, str], waiting: Iterable[str] = ()) -> Iterator[None]:
     """Until the block ends, the fake overseer records each (key, reason) as needing attention and ends the tick.
 
     Each key in `waiting` it decides to wait on instead, as it must for a ticket in the journal it records nothing for.

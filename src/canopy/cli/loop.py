@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -143,7 +144,7 @@ def _print_sinks(ctx: Context) -> None:
         click.echo(f"  {s.name}  {last}; {s.waiting} events waiting{failing}")
 
 
-def _print_attention(items: list[attention.Item]) -> None:
+def _print_attention(items: Sequence[attention.Item]) -> None:
     click.echo(f"\nAttention ({len(items)}):")
     reasons = [i for i in items if not i.finding]
     for group in sorted({i.reason for i in reasons}):
@@ -185,7 +186,7 @@ def _print_review_requests(ctx: Context) -> None:
     click.echo(f"\nReview requests ({len(requests)}):")
     for r in requests:
         runs = db.review_runs_of(ctx.conn, r.pr_url)
-        latest = f"latest review:{runs[0]['id']} {runs[0]['status']}" if runs else "not reviewed yet"
+        latest = f"latest review:{runs[0].id} {runs[0].status}" if runs else "not reviewed yet"
         click.echo(f"  {r.pr_url}  {attention.age(r.created_at)} ago  {latest}")
 
 

@@ -24,6 +24,7 @@ import dataclasses
 import json
 import os
 import stat
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Annotated, Literal
@@ -226,7 +227,7 @@ def read(path: Path, session_id: str) -> Transcript | None:
     return _parse(data.decode("utf-8", errors="replace").splitlines(), session_id, truncated=truncated)
 
 
-def did(event: dict[str, object]) -> tuple[str, str] | None:
+def did(event: Mapping[str, object]) -> tuple[str, str] | None:
     """What a `tool_use` event's call did, on one line, for a running run's row (DESIGN §8): its tool, and what it did.
 
     What it did is a shell call's command, since its title is only what the agent said it was for; else the runtime's
@@ -304,7 +305,7 @@ def _open(path: Path) -> int | None:
     return fd
 
 
-def _parse(lines: list[str], session_id: str, *, truncated: bool) -> Transcript:
+def _parse(lines: Iterable[str], session_id: str, *, truncated: bool) -> Transcript:
     entries: list[Entry] = []
     chars = 0
     unreadable = 0
@@ -333,7 +334,7 @@ def _parse(lines: list[str], session_id: str, *, truncated: bool) -> Transcript:
     return Transcript(entries, truncated, unreadable)
 
 
-def _entry(event: dict[str, object]) -> Entry | None:
+def _entry(event: Mapping[str, object]) -> Entry | None:
     """One event as an entry, or None for a type a transcript leaves out (any it does not know).
 
     Returns:

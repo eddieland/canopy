@@ -4,7 +4,7 @@ import re
 import sqlite3
 import typing
 from collections import Counter
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from pathlib import Path
 
 import pytest
@@ -326,7 +326,7 @@ UNCHECKED_THROUGH = 26
 CLOSED_COLUMNS = frozenset({"status", "kind", "phase"})
 
 
-def unchecked(conn: sqlite3.Connection, made: set[str]) -> list[str]:
+def unchecked(conn: sqlite3.Connection, made: Iterable[str]) -> list[str]:
     """The `table.column` of each closed column in the tables `made` with no `CHECK (column IN (...))`."""
     found: list[str] = []
     for table in sorted(made):
@@ -470,7 +470,7 @@ def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: 
     assert db.migrate(conn, resources.migrations_dir()) == versions_after(1)
     review_run = db.get_review_run(conn, 1)
     assert review_run is not None
-    assert (review_run["session_id"], review_run["cost_usd"], review_run["tokens_input"]) == (None, None, None)
+    assert (review_run.session_id, review_run.cost_usd, review_run.tokens_input) == (None, None, None)
     chore_run = db.get_chore_run(conn, 1)
     assert chore_run is not None
     assert (chore_run.session_id, chore_run.cost_usd, chore_run.tokens_input) == (None, None, None)

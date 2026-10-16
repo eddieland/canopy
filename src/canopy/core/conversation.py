@@ -18,7 +18,7 @@ import os
 import re
 import secrets
 import sqlite3
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypedDict
@@ -26,12 +26,13 @@ from typing import TYPE_CHECKING, TypedDict
 from canopy.core import chore_view, contract, db, outbox, review_result
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import ReviewRunStatus, RunStatus
 from canopy.infra import lock
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from canopy.core import records
     from canopy.core.config import Chore, Config
 
 # A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17). It has no `:`, `#`, or `/`, so no
@@ -414,8 +415,8 @@ def _dismiss_review(conn: sqlite3.Connection, ref: Ref, finding: str, *, channel
         run = db.get_review_run(conn, run_id)
         if run is None:
             raise Refused("unknown", f"there is no review run {run_id}")
-        stored = review_result.stored(run["result_json"])
-        found = len(stored.findings) if stored is not None and run["status"] == "done" else 0
+        stored = review_result.stored(run.result_json)
+        found = len(stored.findings) if stored is not None and run.status is ReviewRunStatus.DONE else 0
         if number > found:
             raise Refused("unknown", f"{ref} has no finding {number}: it reported {found}")
         db.set_review_dismissal(conn, run_id, number, channel=channel)
@@ -462,24 +463,25 @@ def send(
     run = db.get_review_run(conn, run_id)
     if run is None:
         raise Refused("unknown", f"there is no review run {run_id}")
-    stored = review_result.stored(run["result_json"])
-    found = len(stored.findings) if stored is not None and run["status"] == "done" else 0
+    stored = review_result.stored(run.result_json)
+    found = len(stored.findings) if stored is not None and run.status is ReviewRunStatus.DONE else 0
     if numbers[-1] > found:
         raise Refused("unknown", f"{ref} has no finding {numbers[-1]}: it reported {found}")
     dismissed = db.review_dismissals(conn, run_id)
     if held := [n for n in numbers if n in dismissed]:
         raise Refused("dismissed", f"{ref} {_numbered(held)} dismissed; undo the dismissal to send it")
-    if not own_pr(conn, run):
+    key = run.ticket_key
+    if key is None or not own_pr(conn, run):
         raise Refused("not_ours", f"{ref} is of a PR the loop did not open, which no worker pushes to")
     left = tuple(n for n in range(1, found + 1) if n not in numbers and n not in dismissed)
-    body = f"Address {_numbered(numbers, verb=False)} of canopy's review run {run_id}, of commit {run['sha'][:12]}."
+    body = f"Address {_numbered(numbers, verb=False)} of canopy's review run {run_id}, of commit {run.sha[:12]}."
     if left:
         body += f" Leave its {_numbered(left, verb=False)} alone."
-    replied = reply(conn, Ref(TICKET, run["ticket_key"]), body, channel=channel, submission=submission)
-    return Sent(ticket=run["ticket_key"], replied=replied)
+    replied = reply(conn, Ref(TICKET, key), body, channel=channel, submission=submission)
+    return Sent(ticket=key, replied=replied)
 
 
-def own_pr(conn: sqlite3.Connection, run: sqlite3.Row) -> bool:
+def own_pr(conn: sqlite3.Connection, run: records.ReviewRun) -> bool:
     """Whether review run `run` is of one of the loop's own PRs, and its ticket's unit still has that PR.
 
     Only such a review's findings can be sent to a worker (DESIGN §21). Its purpose was checked when it started; the
@@ -488,11 +490,10 @@ def own_pr(conn: sqlite3.Connection, run: sqlite3.Row) -> bool:
     Returns:
         True when the run's purpose is `own` and its ticket's unit in its repository has the run's PR.
     """
-    key, repo = run["ticket_key"], run["repo"]
     return (
-        run["purpose"] == "own"
-        and key is not None
-        and db.is_unit_pr(conn, str(key), str(run["pr_url"]), repo=str(repo) if repo is not None else None)
+        run.purpose == "own"
+        and run.ticket_key is not None
+        and db.is_unit_pr(conn, run.ticket_key, run.pr_url, repo=run.repo)
     )
 
 
@@ -892,7 +893,7 @@ def chore_notes(conn: sqlite3.Connection, name: str) -> list[ChoreNote]:
     ]
 
 
-def _bounded(blocks: list[str], empty: str) -> str:
+def _bounded(blocks: Sequence[str], empty: str) -> str:
     # The newest blocks that fit in PROMPT_CHARS, oldest first, with a note of how many older ones were left out.
     total = 0
     kept: list[str] = []

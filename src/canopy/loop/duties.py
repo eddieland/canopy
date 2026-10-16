@@ -9,6 +9,7 @@ holds the overseer to doing each duty, not to doing it well.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -50,10 +51,10 @@ def owed(
     tick_id: int,
     *,
     query_due: bool,
-    tickets: list[sqlite3.Row],
-    stopped: list[str],
-    recently_done: list[sqlite3.Row],
-    chores: list[chore_view.ChoreSummary],
+    tickets: Iterable[sqlite3.Row],
+    stopped: Iterable[str],
+    recently_done: Iterable[sqlite3.Row],
+    chores: Iterable[chore_view.ChoreSummary],
 ) -> Duties:
     """What the state block rendered from these asks of the overseer, read just before it runs.
 
@@ -70,7 +71,7 @@ def owed(
     )
 
 
-def queried_rationale(keys: list[str]) -> str:
+def queried_rationale(keys: Sequence[str]) -> str:
     """The rationale of a `queried` decision naming `keys`, which `queried_keys` reads back.
 
     Returns:

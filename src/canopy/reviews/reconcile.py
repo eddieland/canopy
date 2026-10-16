@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from canopy.core import dead_runs, outbox
+from canopy.core import db, dead_runs, outbox
 from canopy.core.vocab import ReviewRunStatus
 from canopy.reviews import execute
 
@@ -24,12 +24,16 @@ def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
     """
     closed: list[int] = []
     for row in dead_runs.find(ctx.conn, "review_runs"):
-        fields = {"review_run_id": row["id"], "pr": row["pr_url"], "pid": row["pid"]}
+        # Read again as a typed row, for what returns its slot and builds its event.
+        run = db.get_review_run(ctx.conn, int(row["id"]))
+        if run is None:
+            continue
+        fields = {"review_run_id": run.id, "pr": run.pr_url, "pid": run.pid}
         dead_runs.kill_agent("review_runs", row, log, fields)
-        execute.clean_up(ctx, row, log)
+        execute.clean_up(ctx, run, log)
         note = json.dumps({"harness": "the review process is gone"})
-        ended = outbox.review_ended(ctx.config, row, ReviewRunStatus.CRASHED, note)
+        ended = outbox.review_ended(ctx.config, run, ReviewRunStatus.CRASHED, note)
         if dead_runs.crash(ctx.conn, "review_runs", row, note, event=ended):
-            closed.append(int(row["id"]))
+            closed.append(run.id)
             log.warning("review process is gone; review run marked crashed", extra=fields)
     return closed

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from canopy.core import contract, db, records
@@ -57,7 +58,7 @@ def result_of(run: sqlite3.Row | records.Row) -> dict[str, object]:
     return contract.stored_object(records.columns(run)["result_json"])
 
 
-def prs_of(result: dict[str, object]) -> list[str]:
+def prs_of(result: Mapping[str, object]) -> list[str]:
     """The PRs a run's result named, each a plain https:// URL; anything else is not printed.
 
     Returns:

@@ -102,7 +102,8 @@ jobs:
         run: uv sync --locked
 
       # `make all` would run `fmt`, which rewrites files; `make check` only verifies.
-      # It includes `ruff format --check`, so unformatted code still fails. COVERAGE=1 writes coverage.xml.
+      # It includes `ruff format --check`, so unformatted code still fails. COVERAGE=1 writes coverage.xml for the
+      # Python tests and ui/coverage/lcov.info for the UI's unit tests.
       - name: Lint, type check, and test
         if: needs.changes.outputs.code != 'false'
         run: make check COVERAGE=1
@@ -113,7 +114,7 @@ jobs:
         if: needs.changes.outputs.code != 'false'
         uses: codecov/codecov-action@v7.1.1
         with:
-          files: coverage.xml
+          files: coverage.xml,ui/coverage/lcov.info
           use_oidc: true
           fail_ci_if_error: false
 

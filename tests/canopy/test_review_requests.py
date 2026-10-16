@@ -63,7 +63,7 @@ def test_a_request_is_reviewed_at_its_head_and_ends_reviewed(
         run_id = run_inline(conn, sha=head(git_pool), pr=PR)
     run = db.get_review_run(conn, run_id)
     assert run is not None
-    assert (run["status"], run["purpose"], run["ticket_key"]) == ("done", "request", None)
+    assert (run.status, run.purpose, run.ticket_key) == ("done", "request", None)
     assert requests_of(conn) == [(PR, "cli", "reviewed")]
     # With the request ended, reviews are off again.
     assert not review_requests.reviews_on(conn, load(requests_env.root))
@@ -102,7 +102,7 @@ def test_a_failed_review_leaves_the_request_open(requests_env: CanopyEnv, git_po
         run_id = run_inline(conn, sha=head(git_pool), pr=PR)
     run = db.get_review_run(conn, run_id)
     assert run is not None
-    assert run["status"] == "failed"
+    assert run.status == "failed"
     assert requests_of(conn) == [(PR, "cli", None)]
 
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 import click
@@ -107,7 +108,7 @@ def _provider(provider: str | None, shared_file: Path, what: str) -> str | None:
     return provider
 
 
-def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, repos: tuple[str, ...]) -> int:
+def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, repos: Sequence[str]) -> int:
     user_file = config.user_config_path()
     report = setup_workspace.run_init(root, user_file, provider)
     _print_files(report)

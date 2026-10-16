@@ -115,7 +115,7 @@ class Stopped:
     """What `stop` did: the request it ended, and a review of the PR still running, which finishes."""
 
     request: records.ReviewRequest
-    running: sqlite3.Row | None
+    running: records.ReviewRun | None
 
 
 def stop(conn: sqlite3.Connection, ref: conversation.Ref) -> Stopped:
@@ -137,9 +137,12 @@ def stop(conn: sqlite3.Connection, ref: conversation.Ref) -> Stopped:
         if found is None:
             raise conversation.Refused("not_requested", f"{url} has no open review request to stop")
         _end(conn, found.id, STOPPED)
-        running = conn.execute(
-            "SELECT * FROM review_runs WHERE pr_url = ? AND status = 'running' ORDER BY id DESC LIMIT 1", (url,)
-        ).fetchone()
+        running = records.fetch_one(
+            conn,
+            records.ReviewRun,
+            "SELECT * FROM review_runs WHERE pr_url = ? AND status = 'running' ORDER BY id DESC LIMIT 1",
+            (url,),
+        )
     return Stopped(request=found, running=running)
 
 
