@@ -65,7 +65,7 @@ If code and the design disagree, the design doc wins until a decision entry says
   validating config and anything parsed from another program's output (D026), `hypothesis` for property tests of input
   validators (dev only), `pytest-xdist` to run the tests in parallel (dev only), `rich` for terminal output
   (D043), `fastapi` and `uvicorn` for the web UI's server (D074, only in `canopy.serve`), `tomlkit` for its edits to
-  the user config (D122, only in `canopy.serve`), and `httpx2` for its test client (D079, dev only), and `syrupy` for
+  the private config (D123, only in `canopy.serve`), and `httpx2` for its test client (D079, dev only), and `syrupy` for
   snapshot tests (dev only).
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
   and npm; `make check` runs its checks, and `make ui-e2e` its Playwright tests.

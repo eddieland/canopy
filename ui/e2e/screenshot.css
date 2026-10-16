@@ -1,6 +1,6 @@
 /* Applied to every screenshot (playwright.config.ts): what changes with the build or the run, not the page, is hidden.
- * The rail's version names the commit, and the user config's path is under the mock's temporary directory. */
+ * The rail's version names the commit, and the private config's path is under the mock's temporary directory. */
 [data-testid='rail-version'],
-[data-testid='config-user-file'] {
+[data-testid='config-private-file'] {
     visibility: hidden;
 }

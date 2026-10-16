@@ -509,11 +509,11 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, make and end a review
   request on a PR as `canopy start URL --review` and `canopy stop URL` do, pause and resume the loop as
   `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, ask the loop to
-  read its config files again as SIGHUP does, and change the limits and trust settings below in the user file,
-  nothing else. A reload reads only the operator's own files, and a `serve.*` change waits for a restart, so the
-  listener's bind and port never change under it. A forget must carry the ticket's key typed out, checked in code. A
-  grant allows one more run a request, with `canopy grant`'s guards. It cannot run a chore.
-- Its config writes (DESIGN §12, §22, D121) are an allowlist in code, by key name, never a section's wildcard, so a key
+  read its config files again as SIGHUP does, and change the limits and trust settings below in the workspace's
+  private file, nothing else. A reload reads only the operator's own files, and a `serve.*` change waits for a
+  restart, so the listener's bind and port never change under it. A forget must carry the ticket's key typed out,
+  checked in code. A grant allows one more run a request, with `canopy grant`'s guards. It cannot run a chore.
+- Its config writes (DESIGN §12, §22, D122) are an allowlist in code, by key name, never a section's wildcard, so a key
   added later is not writable until it is named. Limits may be raised or lowered, but not past a bound in code (a
   count's ceiling, such as `capacity.max_workers` at 32, or a pace's floor): the counts in `capacity`, the attempt
   limits and the fix-CI cooldown in `policy`, and `loop.interval_minutes` and `loop.idle_max_minutes`. Trust settings
@@ -522,9 +522,11 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   runs a command, chooses a prompt, is read as words, or moves the listener: no `runtime.*`, `notify.*`, `chores`,
   `paths.*`, `review.*`, `serve.*`, or `tracker.*`, and no comment mark or trailer name. A config write outlives the
   secret, which is why trust only tightens: a replier added through a stolen session would go on steering workers after
-  a new secret ended it. It writes the user file alone, never the workspace file (T7), keeping the file as it was as
-  `config.toml.bak`; refuses a user file that is a symlink or not the operator's (D053's check), one tomlkit would not
-  write back byte for byte, and one that changed since the page read it; validates the result as any `canopy` command
+  a new secret ended it. It writes the workspace's private file alone (M49), never the workspace file (T7) nor the
+  user file, which serves every workspace: a key from the user file is written to the private file, where it shadows
+  the user file's for this workspace alone. It keeps the file as it was as `config.toml.bak`; refuses a private file
+  that is a symlink or not the operator's (D053's check), one tomlkit would not write back byte for byte, and one that
+  changed since the page read it; validates the result as any `canopy` command
   would load it; and refuses inside a tick or run (`inside_run`). Each change is logged with its old and new values. A
   running run keeps the prompt and permissions it started with, so a stricter setting reaches only runs started after
   it.
@@ -537,8 +539,8 @@ shared machine can reach loopback, and is stopped only by the secret. A browser 
 on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
 read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session
 cannot be ended alone before its 30 days: a new secret ends them all. Whoever holds a session can raise the limits up
-to their ceilings, and that outlives a new secret until the operator reads the file or the log: the residual is spend,
-bounded by the ceilings, never authority. Plain HTTP on a private address can be read on
+to their ceilings for that workspace, and that outlives a new secret until the operator reads the private file or the
+log: the residual is spend, bounded by the ceilings, never authority. Plain HTTP on a private address can be read on
 the network (D076), transcripts included: a secret a worker's tool printed into its log is then on the network too.
 
 ## 6. What canopy must never do

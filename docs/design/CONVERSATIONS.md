@@ -346,7 +346,7 @@ Served by `canopy loop` from a thread (D073):
   `pause.pause` and `pause.resume` as `canopy pause` and `canopy resume` (§6), and `notice.set_notice` and
   `notice.clear` as `canopy notice` and `canopy notice --clear` (§8). Reload on
   the settings page asks the loop to read its config again, as SIGHUP does (§6); it writes nothing. The Limits and
-  trust page under Settings (`/settings/limits`) writes the user file, only the keys §12 lists, within their bounds,
+  trust page under Settings (`/settings/limits`) writes the private file, only the keys §12 lists, within their bounds,
   and trust only toward stricter (`serve.config_edit`, TRUST_MODEL T8), then asks for the same reload; every other key
   stays the operator's to edit in the file. A forget
   cannot be undone from the UI, so its request carries the ticket's key as the operator typed it, and the server refuses
@@ -472,8 +472,8 @@ The API, under `{base}/api`:
 | `POST /loop/pause`, `POST /loop/resume` | `canopy pause`, `canopy resume`: whether it already was, and the state left |
 | `POST /loop/notice`, `POST /loop/notice/clear` | `canopy notice TEXT --for DURATION` with the text and minutes, and `canopy notice --clear`: for a clear, whether none was in force, and the state left |
 | `POST /loop/reload` | ask the loop to read its config again, as SIGHUP does (§6): the keys that differ, those that wait for a restart, and whether a tick is running |
-| `GET /config` | each key the Limits and trust page edits (§12): its value, the file it comes from, its bound; the user file's hash, the workspace's repositories, and `--every` |
-| `PATCH /config` | the changed keys and the hash the page read: written to the user file, then a reload asked for; refused `not_editable`, `past_bound`, `not_stricter`, `stale`, `unsafe_file`, `not_roundtrip`, `config_invalid`, or `inside_run`, writing nothing; the file as it was is kept as `config.toml.bak` |
+| `GET /config` | each key the Limits and trust page edits (§12): its value, the file it comes from, its bound; the private file's hash, the workspace's repositories, and `--every` |
+| `PATCH /config` | the changed keys and the hash the page read: written to the private file, then a reload asked for; refused `not_editable`, `past_bound`, `not_stricter`, `stale`, `unsafe_file`, `not_roundtrip`, `config_invalid`, or `inside_run`, writing nothing; the file as it was is kept as `config.toml.bak` |
 | `GET /events` | the event stream, below |
 
 A message is acknowledged once a tick that read it closes `ok`: `GET /tick` and `tick.updated` carry the newest message

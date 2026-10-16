@@ -1031,14 +1031,16 @@ type ConfigValue = Annotated[
 
 
 class ConfigKey(_Model):
-    """One user config key the settings page edits (DESIGN §12, §22): its value as the files say now, and how far."""
+    """One config key the settings page edits (DESIGN §12, §22): its value as the files say now, and how far."""
 
     name: str
     """The key, as `section.key`."""
     value: ConfigValue
     """Its value now, from whichever file sets it, else the default."""
-    source: Literal["user", "workspace", "default"]
-    """Which file the value comes from: the operator's own, the workspace file (a shared `policy.*` key), or none."""
+    source: Literal["private", "user", "workspace", "default"]
+    """Which file the value comes from: the workspace's private file, the user file (a save writes it to the private
+    file, where it shadows the user file's for this workspace), the workspace file (a shared `policy.*` key), or
+    none."""
     kind: Literal["limit", "stricter"]
     """`limit`: raised or lowered, within `bound`. `stricter`: only made stricter (a list only loses entries)."""
     bound: int | None
@@ -1052,12 +1054,15 @@ class ConfigSettings(_Model):
 
     keys: list[ConfigKey]
     """Every key the page edits, in the order it shows them. No other key can be changed from the web UI."""
+    private_file: str
+    """The workspace's private file (M49), the one a save writes, with comments and layout kept; made if not there."""
     user_file: str
-    """The user config file a save writes, with comments and layout kept."""
+    """The user config file, which serves every workspace and which the web UI never writes."""
     workspace_file: str
     """The workspace file, which the web UI never writes."""
     hash: str
-    """The user file's SHA-256 as read: a save carries it, and is refused `stale` if the file changed since."""
+    """The private file's SHA-256 as read, an empty file's when there is none: a save carries it, and is refused
+    `stale` if the file changed since."""
     repos: list[str]
     """The workspace map's repositories, each of which `capacity.repo_slots` may give a count."""
     every: int | None
@@ -1065,7 +1070,7 @@ class ConfigSettings(_Model):
 
 
 class ConfigPatch(_Model):
-    """A save from the settings page: the keys to change, and the user file's hash as the page read it."""
+    """A save from the settings page: the keys to change, and the private file's hash as the page read it."""
 
     hash: str
     """The `hash` the page read with `GET /config`."""
@@ -1091,7 +1096,7 @@ class ConfigSaved(_Model):
     changed: list[ConfigChange]
     """The keys whose values changed; empty when each already had the value asked for, and nothing was written."""
     hash: str
-    """The user file's SHA-256 now, for the next save."""
+    """The private file's SHA-256 now, for the next save."""
     reload: ConfigReload | None
     """What asking the loop to read its config again found; None when nothing changed or the reload was refused. A
     run already running keeps the prompt and permissions it started with either way."""

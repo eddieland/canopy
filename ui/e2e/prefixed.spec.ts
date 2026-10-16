@@ -192,7 +192,7 @@ test('the settings page saves a limit and drops a trusted reviewer, but raises n
     await slots.getByTestId('capacity.repo_slots.api').fill('3')
     await form.getByTestId('config-save').click()
     await expect(form.getByRole('status')).toContainText(
-        'Saved capacity.max_workers, capacity.repo_slots, trust.trusted_reviewers to your config.',
+        "Saved capacity.max_workers, capacity.repo_slots, trust.trusted_reviewers to this workspace's config.",
     )
     await expect(slots.getByTestId('capacity.repo_slots.api')).toHaveValue('3')
     // Read again from the file: the reviewer is gone, and only the stricter side of a trust switch is offered.

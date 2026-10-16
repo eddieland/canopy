@@ -1,4 +1,4 @@
-"""The keys the web UI's settings page edits in the operator's user config, and the save (DESIGN §12, §22, D121).
+"""The keys the web UI's settings page edits in the workspace's private config, and the save (DESIGN §12, §22, D122).
 
 Only the keys `EDITABLE` names, never a section's wildcard: a key added to a section later is not editable until it
 is named here. A limit may be raised or lowered, but the page cannot loosen one past its bound, a count's ceiling or a
@@ -6,13 +6,15 @@ pace's floor; the file can set any value, and the page may still tighten one the
 moves only toward stricter: a config write outlives the listener secret, so a replier added through a stolen session
 would go on steering workers after a new secret ended it (TRUST_MODEL T8).
 
-A save writes the user file only, never the workspace file (TRUST_MODEL T7), edited in place so that the operator's
-comments and layout stay: a file tomlkit would not write back byte for byte is refused before anything is changed, so
-only the values set differ, and the file as it was is kept beside it as `config.toml.bak`. A lock beside the file is
-held from reading it to replacing it, so two saves made on the same read cannot both pass the hash check; the hash is
-checked again just before the replace, so a hand edit is lost only if it lands in that last moment. The edited copy is
-validated by `config.load`, as any `canopy` command would read it, before it replaces the file atomically, with the
-file's mode kept.
+A save writes the workspace's private file only (M49), never the workspace file (TRUST_MODEL T7) nor the user file,
+which serves every workspace. A key whose value comes from the user file is written to the private file, where it
+shadows the user file's for this workspace alone; a private file not there yet is made. The file is edited in place so
+that the operator's comments and layout stay: a file tomlkit would not write back byte for byte is refused before
+anything is changed, so only the values set differ, and the file as it was is kept beside it as `config.toml.bak`.
+A lock beside the file is held from reading it to replacing it, so two saves made on the same read cannot both pass
+the hash check; the hash is checked again just before the replace, so a hand edit is lost only if it lands in that
+last moment. The edited copy is validated by `config.load`, as any `canopy` command would read it, before it replaces
+the file atomically, with the file's mode kept.
 """
 
 from __future__ import annotations
@@ -38,7 +40,7 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
 
 type Value = int | bool | str | tuple[str, ...] | dict[str, int] | None
-type Source = Literal["user", "workspace", "default"]
+type Source = Literal["private", "user", "workspace", "default"]
 
 # Read by name from the request, so each guard's words are the operator's to act on.
 NOT_EDITABLE = "not_editable"
@@ -97,9 +99,11 @@ EDITABLE: tuple[Editable, ...] = (
     Editable("trust.commit_trailer", "stricter"),
 )
 BY_NAME = {e.name: e for e in EDITABLE}
-# The file as it was before the latest save, beside it: `config.toml.bak`.
+# The file as it was before the latest save, beside it: `config.toml.bak`. None when the save made the file.
 BACKUP_SUFFIX = ".bak"
 REPO_SLOTS = "capacity.repo_slots"
+# A private file the save makes: the operator's alone, as `config.load` requires of it.
+NEW_FILE_MODE = 0o600
 # The trust switches, and the value each may move to from the page: the stricter one.
 _STRICTER_BOOL = {"trust.rebase": False, "trust.commit_trailer": True}
 
@@ -115,9 +119,10 @@ class Setting:
 
 @dataclass(frozen=True)
 class Settings:
-    """Every editable key, the files they come from, and the user file's hash as read, which a save must carry."""
+    """Every editable key, the files they come from, and the private file's hash as read, which a save must carry."""
 
     settings: tuple[Setting, ...]
+    private_file: Path
     user_file: Path
     workspace_file: Path
     hash: str
@@ -141,10 +146,11 @@ class Saved:
 
 
 def read(root: Path, user_file: Path) -> Settings:
-    """Every editable key's value as the workspace at `root` and `user_file` say now.
+    """Every editable key's value as the workspace at `root`, `user_file`, and the private file say now.
 
     Returns:
-        Each key in `EDITABLE`'s order, with its source, and the user file's hash.
+        Each key in `EDITABLE`'s order, with its source, and the private file's hash: an empty file's when there is
+        none yet.
 
     Raises:
         ConfigError: the files do not load. The message names the file.
@@ -152,82 +158,93 @@ def read(root: Path, user_file: Path) -> Settings:
     cfg = config.load(root, user_file)
     origin = config.sources(root, user_file)
     shared_file = root / config.WORKSPACE_FILE_NAME
+    private_file = config.private_config_path(root)
 
     def source(name: str) -> Source:
         found = origin.get(name)
         if found is None:
             return "default"
-        return "workspace" if found == shared_file else "user"
+        if found == shared_file:
+            return "workspace"
+        return "private" if found == private_file else "user"
 
     return Settings(
         settings=tuple(Setting(e, value(cfg, e.name), source(e.name)) for e in EDITABLE),
+        private_file=private_file,
         user_file=user_file,
         workspace_file=shared_file,
-        hash=digest(user_file.read_bytes()),
+        hash=digest(private_file.read_bytes() if private_file.exists() else b""),
     )
 
 
 def save(root: Path, user_file: Path, expected: str, changes: Mapping[str, object]) -> Saved:
-    """Write `changes` to `user_file`, read with hash `expected`, if every one is allowed and the result loads.
+    """Write `changes` to the private file of the workspace at `root`, read with hash `expected`, if each is allowed.
 
-    A list's value is the entries to keep, in the file's order; `capacity.repo_slots`'s is the repositories whose count
-    changes. Nothing is written when every value is already so, or when anything is refused.
+    The private file is loaded over `user_file`, as the loop loads them, before and after. A list's value is the entries
+    to keep, in the file's order; `capacity.repo_slots`'s is the repositories whose count changes. Nothing is written
+    when every value is already so, or when anything is refused. The user file and the workspace file are never
+    written.
 
     Returns:
         The keys changed, with their values before and after, and the file's hash now.
 
     Raises:
         Refused: `inside_run` inside one of canopy's own ticks or runs; `not_editable` for a key `EDITABLE` does not
-            name; `unsafe_file` for a user file that is a symlink, not a regular file, or not the operator's (D053),
-            or whose backup cannot be written; `not_roundtrip` for one tomlkit would not write back byte for byte;
-            `stale` when the file's hash is not `expected`; `config_invalid` for a value of None, or when the files,
-            before or after, do not load; `past_bound` for a limit loosened past its bound; `not_stricter` for a
-            trust key loosened.
+            name; `unsafe_file` for a private file that is a symlink, not a regular file, or not the operator's
+            (D053), or whose backup cannot be written; `not_roundtrip` for one tomlkit would not write back byte for
+            byte; `stale` when the file's hash is not `expected`; `config_invalid` for a value of None, for a
+            workspace with no state directory, or when the files, before or after, do not load; `past_bound` for a
+            limit loosened past its bound; `not_stricter` for a trust key loosened.
     """
     conversation.check_operator()
+    target = config.private_config_path(root)
     unknown = sorted(n for n in changes if n not in BY_NAME)
     if unknown:
         raise conversation.Refused(
-            NOT_EDITABLE, f"the web UI cannot change {', '.join(unknown)}; edit {user_file} for that"
+            NOT_EDITABLE, f"the web UI cannot change {', '.join(unknown)}; edit {target} for that"
         )
     unset = sorted(n for n, v in changes.items() if v is None)
     if unset:
         # Unsetting a key could loosen it to its default, as an unmanaged pool is: that is the file's to do.
         raise conversation.Refused(
-            CONFIG_INVALID, f"{', '.join(unset)} needs a value; unset it in {user_file} if that is what you want"
+            CONFIG_INVALID, f"{', '.join(unset)} needs a value; unset it in {target} if that is what you want"
         )
-    with lock.hold(user_file.with_name(user_file.name + ".lock"), wait=True):
-        text, mode = _read_own(user_file)
-        _check_hash(user_file, text, expected)
-        old = _load(root, user_file, user_file)
-        doc = _parse_exactly(text, user_file)
+    if not target.parent.is_dir():
+        raise conversation.Refused(CONFIG_INVALID, f"no state directory at {target.parent}; run `canopy init`")
+    with lock.hold(target.with_name(target.name + ".lock"), wait=True):
+        text, mode = _read_own(target)
+        _check_hash(target, text, expected)
+        old = _load(root, user_file, None, target)
+        doc = _parse_exactly(text, target)
         for name, wanted in changes.items():
-            _set(doc, BY_NAME[name], wanted, old, user_file)
+            _set(doc, BY_NAME[name], wanted, old, target)
         written = tomlkit.dumps(doc).encode()
-        fd, temp = tempfile.mkstemp(dir=user_file.parent, prefix=f".{user_file.name}.", suffix=".tmp")
+        # Beside the file, so a relative `paths.*` value in it resolves as the file's own does.
+        fd, temp = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
         copy = Path(temp)
         try:
             with os.fdopen(fd, "wb") as f:
-                os.fchmod(f.fileno(), mode)
+                os.fchmod(f.fileno(), mode or NEW_FILE_MODE)
                 f.write(written)
-            new = _load(root, copy, user_file)
-            _check_rest(old, new, changes, user_file)
+            new = _load(root, user_file, copy, target)
+            _check_rest(old, new, changes, target)
             found = tuple(Change(n, value(old, n), value(new, n)) for n in BY_NAME if value(old, n) != value(new, n))
             for change in found:
-                _check(BY_NAME[change.name], change, old, user_file)
+                _check(BY_NAME[change.name], change, old, target)
             if not found:
                 return Saved((), expected)
             # Again just before the replace: a hand edit since the first read is kept, and this save refused.
-            _check_hash(user_file, _read_own(user_file)[0], expected)
-            _back_up(user_file, text, mode)
-            copy.replace(user_file)
+            _check_hash(target, _read_own(target)[0], expected)
+            if mode is not None:
+                _back_up(target, text, mode)
+            copy.replace(target)
         finally:
             copy.unlink(missing_ok=True)
     return Saved(found, digest(written))
 
 
 def digest(text: bytes) -> str:
-    """The hash a save must carry: SHA-256 of the user file's bytes, in hex.
+    """The hash a save must carry: SHA-256 of the private file's bytes, in hex, an empty file's when there is none.
 
     Returns:
         The hex digest.
@@ -255,20 +272,20 @@ def value(cfg: Config, name: str) -> Value:
     raise TypeError(f"{name} is not a value the settings page shows")
 
 
-def _read_own(path: Path) -> tuple[bytes, int]:
-    """The user file's bytes and permission bits, once it is a regular file of the operator's (D053's check).
+def _read_own(path: Path) -> tuple[bytes, int | None]:
+    """The private file's bytes and permission bits, once it is a regular file of the operator's (D053's check).
 
     Returns:
-        Its bytes, and its mode's permission bits, which the replacement keeps.
+        Its bytes, and its mode's permission bits, which the replacement keeps; no bytes and None when there is no file
+        yet, which the save makes.
 
     Raises:
-        Refused: `config_invalid` when there is none; `unsafe_file` when it is a symlink, not a regular file, or
-            someone else's.
+        Refused: `unsafe_file` when it is a symlink, not a regular file, or someone else's.
     """
     try:
         st = path.lstat()
     except FileNotFoundError:
-        raise conversation.Refused(CONFIG_INVALID, f"no user config at {path}; run `canopy init`") from None
+        return b"", None
     if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid():
         raise conversation.Refused(
             UNSAFE_FILE,
@@ -280,7 +297,7 @@ def _read_own(path: Path) -> tuple[bytes, int]:
 
 
 def _parse_exactly(text: bytes, path: Path) -> tomlkit.TOMLDocument:
-    """The user file's tree, once it is known to write back byte for byte, so a save changes only what it sets.
+    """The private file's tree, once it is known to write back byte for byte, so a save changes only what it sets.
 
     Returns:
         The parsed document.
@@ -321,23 +338,27 @@ def _check_hash(path: Path, text: bytes, expected: str) -> None:
         raise conversation.Refused(STALE, f"{path} changed since the page read it; read it again and redo the change")
 
 
-def _load(root: Path, user_file: Path, shown: Path) -> Config:
-    """`config.load` of `user_file`, its errors naming `shown`, the file the operator knows.
+def _load(root: Path, user_file: Path, private_file: Path | None, shown: Path) -> Config:
+    """`config.load` with `private_file` as the private file, its errors naming `shown`, the file the operator knows.
 
     Returns:
-        The config the workspace file and `user_file` make.
+        The config the workspace file, `user_file`, and `private_file` (None: the workspace's own) make.
 
     Raises:
         Refused: `config_invalid`, with the loader's message.
     """
     try:
-        return config.load(root, user_file)
+        return config.load(root, user_file, private_file=private_file)
     except config.ConfigError as e:
-        raise conversation.Refused(CONFIG_INVALID, str(e).replace(str(user_file), str(shown))) from None
+        message = str(e) if private_file is None else str(e).replace(str(private_file), str(shown))
+        raise conversation.Refused(CONFIG_INVALID, message) from None
 
 
-def _set(doc: tomlkit.TOMLDocument, key: Editable, wanted: object, old: Config, user_file: Path) -> None:
-    """Set `key` to `wanted` in `doc`, the user file's tree, keeping every comment and line around it.
+def _set(doc: tomlkit.TOMLDocument, key: Editable, wanted: object, old: Config, path: Path) -> None:
+    """Set `key` to `wanted` in `doc`, the private file's tree, keeping every comment and line around it.
+
+    A key the tree does not set yet takes its whole value there, as the files give it now with `wanted` applied, so a
+    key from the user file keeps what the page did not change: a list's other entries, another repository's slots.
 
     Raises:
         Refused: `not_stricter` for a list given an entry it does not have. A value of the wrong type is written as
@@ -349,12 +370,7 @@ def _set(doc: tomlkit.TOMLDocument, key: Editable, wanted: object, old: Config, 
         table = tomlkit.table()
         doc[section] = table
     if key.name == REPO_SLOTS and isinstance(wanted, dict):
-        slots = table.get(name)
-        if not isinstance(slots, tomlkit.items.Table | tomlkit.items.InlineTable):
-            slots = tomlkit.inline_table()
-            table[name] = slots
-        for repo, count in wanted.items():
-            slots[str(repo)] = count
+        _set_slots(table, name, wanted, value(old, key.name))
         return
     current = value(old, key.name)
     if isinstance(current, tuple) and isinstance(wanted, list):
@@ -362,7 +378,7 @@ def _set(doc: tomlkit.TOMLDocument, key: Editable, wanted: object, old: Config, 
         if added:
             raise conversation.Refused(
                 NOT_STRICTER,
-                f"{key.name} may only lose entries from the web UI; add {', '.join(added)} in {user_file}",
+                f"{key.name} may only lose entries from the web UI; add {', '.join(added)} in {path}",
             )
         entries = table.get(name)
         if isinstance(entries, tomlkit.items.Array):
@@ -374,7 +390,25 @@ def _set(doc: tomlkit.TOMLDocument, key: Editable, wanted: object, old: Config, 
     table[name] = wanted
 
 
-def _check_rest(old: Config, new: Config, changes: Mapping[str, object], user_file: Path) -> None:
+def _set_slots(
+    table: tomlkit.items.Table | tomlkit.items.InlineTable, name: str, wanted: dict[object, object], now: Value
+) -> None:
+    """Set `capacity.repo_slots`'s counts for the repositories in `wanted`, keeping every other repository's.
+
+    It is one key, so a private file's table replaces the user file's whole: one the private file does not have yet
+    starts from the counts the files give now (`now`).
+    """
+    slots = table.get(name)
+    if not isinstance(slots, tomlkit.items.Table | tomlkit.items.InlineTable):
+        slots = tomlkit.inline_table()
+        if isinstance(now, dict):
+            slots.update(now)
+        table[name] = slots
+    for repo, count in wanted.items():
+        slots[str(repo)] = count
+
+
+def _check_rest(old: Config, new: Config, changes: Mapping[str, object], path: Path) -> None:
     """Refuse when the edit changed a key the request did not name: no key outside `EDITABLE` moves.
 
     Raises:
@@ -383,11 +417,11 @@ def _check_rest(old: Config, new: Config, changes: Mapping[str, object], user_fi
     others = [n for n in config.changed(old, new) if n not in changes]
     if others:
         raise conversation.Refused(
-            NOT_EDITABLE, f"the change would also change {', '.join(others)}; edit {user_file} for that"
+            NOT_EDITABLE, f"the change would also change {', '.join(others)}; edit {path} for that"
         )
 
 
-def _check(key: Editable, change: Change, old: Config, user_file: Path) -> None:
+def _check(key: Editable, change: Change, old: Config, path: Path) -> None:
     """Refuse a change that loosens `key` further than the page may.
 
     Raises:
@@ -407,11 +441,11 @@ def _check(key: Editable, change: Change, old: Config, user_file: Path) -> None:
             pairs = [(key.name, change.old, change.new)]
         for name, was, now in pairs:
             if _past(key, was, now):
-                raise conversation.Refused(PAST_BOUND, _past_reason(key, name, user_file))
+                raise conversation.Refused(PAST_BOUND, _past_reason(key, name, path))
         return
     if not _stricter(key, change.old, change.new):
         raise conversation.Refused(
-            NOT_STRICTER, f"{key.name} may only be made stricter from the web UI; loosen it in {user_file}"
+            NOT_STRICTER, f"{key.name} may only be made stricter from the web UI; loosen it in {path}"
         )
 
 
@@ -428,10 +462,10 @@ def _past(key: Editable, was: object, now: object) -> bool:
     return now < key.bound and (not isinstance(was, int) or now < was)
 
 
-def _past_reason(key: Editable, name: str, user_file: Path) -> str:
+def _past_reason(key: Editable, name: str, path: Path) -> str:
     if key.looser == "higher":
-        return f"{name} may be at most {key.bound} from the web UI; set more in {user_file}"
-    return f"{name} may be at least {key.bound} from the web UI; set less in {user_file}"
+        return f"{name} may be at most {key.bound} from the web UI; set more in {path}"
+    return f"{name} may be at least {key.bound} from the web UI; set less in {path}"
 
 
 def _stricter(key: Editable, was: Value, now: Value) -> bool:

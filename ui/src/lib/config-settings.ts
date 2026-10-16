@@ -10,11 +10,17 @@ export type ConfigDrafts = Record<string, string | boolean | string[] | Record<s
 /** The key whose value is a count per repository, which the form shows a field for each. */
 export const REPO_SLOTS = 'capacity.repo_slots'
 
-/** Where a key's value comes from, in the page's words. */
+/**
+ * Where a key's value comes from, in the page's words. One from the user config is saved to this workspace's own file,
+ * where it overrides the user config here alone, so the page says so before the save.
+ */
 export function sourceText(key: ConfigKey): string {
     switch (key.source) {
+        case 'private': {
+            return "set in this workspace's config"
+        }
         case 'user': {
-            return 'set in your config'
+            return 'from your user config; a change here is for this workspace only'
         }
         case 'workspace': {
             return 'set in the workspace file'
@@ -116,7 +122,7 @@ export function savedText(saved: ConfigSaved): string {
         return 'Nothing changed: each setting already had that value, and nothing was written.'
     }
     const names = saved.changed.map((c) => c.name).join(', ')
-    const parts = [`Saved ${names} to your config.`]
+    const parts = [`Saved ${names} to this workspace's config.`]
     if (saved.reload !== null) {
         parts.push(
             saved.reload.after_tick

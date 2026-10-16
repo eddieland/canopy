@@ -170,13 +170,13 @@ export type paths = {
         options?: never;
         head?: never;
         /**
-         * Change settings in the user config
-         * @description Write the changes to the user file, then ask the loop to read its config again, as Reload does.
+         * Change settings in the private config
+         * @description Write the changes to the workspace's private file, then ask the loop to read its config again, as Reload does.
          *
          *     Refused, writing nothing: `inside_run`; `not_editable` for a key `GET /config` does not list; `past_bound` for a
          *     limit loosened past its bound; `not_stricter` for a trust setting loosened; `stale` when the file changed since
-         *     `hash` was read; `unsafe_file` for a user file that is a symlink or not the operator's; `config_invalid` with the
-         *     loader's message.
+         *     `hash` was read; `unsafe_file` for a private file that is a symlink or not the operator's; `config_invalid` with
+         *     the loader's message.
          */
         patch: operations["saveConfig"];
         trace?: never;
@@ -1395,7 +1395,7 @@ export type components = {
         };
         /**
          * ConfigKey
-         * @description One user config key the settings page edits (DESIGN §12, §22): its value as the files say now, and how far.
+         * @description One config key the settings page edits (DESIGN §12, §22): its value as the files say now, and how far.
          */
         ConfigKey: {
             /**
@@ -1421,16 +1421,18 @@ export type components = {
             name: string;
             /**
              * Source
-             * @description Which file the value comes from: the operator's own, the workspace file (a shared `policy.*` key), or none.
+             * @description Which file the value comes from: the workspace's private file, the user file (a save writes it to the private
+             *     file, where it shadows the user file's for this workspace), the workspace file (a shared `policy.*` key), or
+             *     none.
              * @enum {string}
              */
-            source: "user" | "workspace" | "default";
+            source: "private" | "user" | "workspace" | "default";
             /** @description Its value now, from whichever file sets it, else the default. */
             value: components["schemas"]["ConfigValue"];
         };
         /**
          * ConfigPatch
-         * @description A save from the settings page: the keys to change, and the user file's hash as the page read it.
+         * @description A save from the settings page: the keys to change, and the private file's hash as the page read it.
          */
         ConfigPatch: {
             /**
@@ -1486,7 +1488,7 @@ export type components = {
             every: number | null;
             /**
              * Hash
-             * @description The user file's SHA-256 now, for the next save.
+             * @description The private file's SHA-256 now, for the next save.
              */
             hash: string;
             /**
@@ -1512,7 +1514,8 @@ export type components = {
             every: number | null;
             /**
              * Hash
-             * @description The user file's SHA-256 as read: a save carries it, and is refused `stale` if the file changed since.
+             * @description The private file's SHA-256 as read, an empty file's when there is none: a save carries it, and is refused
+             *     `stale` if the file changed since.
              */
             hash: string;
             /**
@@ -1521,13 +1524,18 @@ export type components = {
              */
             keys: components["schemas"]["ConfigKey"][];
             /**
+             * Private File
+             * @description The workspace's private file (M49), the one a save writes, with comments and layout kept; made if not there.
+             */
+            private_file: string;
+            /**
              * Repos
              * @description The workspace map's repositories, each of which `capacity.repo_slots` may give a count.
              */
             repos: string[];
             /**
              * User File
-             * @description The user config file a save writes, with comments and layout kept.
+             * @description The user config file, which serves every workspace and which the web UI never writes.
              */
             user_file: string;
             /**

@@ -60,11 +60,14 @@ export function ConfigForm() {
     )
 }
 
-/** The user config's path, as the page read it, for the page's header; nothing while the first read is on its way. */
+/**
+ * The path of the workspace's private config, the file a save writes, as the page read it, for the page's header;
+ * just its name while the first read is on its way.
+ */
 export function ConfigFile() {
-    const path = useQuery(configQuery).data?.user_file
+    const path = useQuery(configQuery).data?.private_file
     return (
-        <code className="font-mono text-xs" data-testid="config-user-file">
+        <code className="font-mono text-xs" data-testid="config-private-file">
             {path ?? 'config.toml'}
         </code>
     )

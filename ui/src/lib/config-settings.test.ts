@@ -95,7 +95,8 @@ describe('config settings', () => {
     })
 
     it('say where a value comes from and how far the page may take it', () => {
-        expect(sourceText(WORKERS)).toBe('set in your config')
+        expect(sourceText(WORKERS)).toBe('from your user config; a change here is for this workspace only')
+        expect(sourceText({ ...WORKERS, source: 'private' })).toBe("set in this workspace's config")
         expect(sourceText({ ...WORKERS, source: 'workspace' })).toBe('set in the workspace file')
         expect(sourceText(REBASE)).toBe('default')
         expect(boundText(WORKERS)).toBe('at most 8 from here')
@@ -105,7 +106,8 @@ describe('config settings', () => {
 
     it('say what a save wrote apart from what its reload did', () => {
         expect(savedText(SAVED)).toBe(
-            'Saved loop.interval_minutes to your config. The loop runs on it from now on. A run already running ' +
+            "Saved loop.interval_minutes to this workspace's config. The loop runs on it from now on. A run already " +
+                'running ' +
                 'keeps the prompt and permissions it started with.',
         )
         expect(savedText({ ...SAVED, every: 3 })).toContain('--every 3 still sets the pace until the loop restarts.')

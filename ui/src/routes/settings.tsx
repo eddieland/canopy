@@ -401,7 +401,7 @@ function LimitsPanel() {
             <div className="flex items-center justify-between gap-4 p-3">
                 <p className="text-sm text-muted-foreground">
                     How many workers, chores, and reviews run, how often a ticket is tried, how often the loop ticks,
-                    and whose words it acts on. Changed in your config.toml, its comments kept.
+                    and whose words it acts on. Changed in this workspace&apos;s own config.toml, its comments kept.
                 </p>
                 <Button asChild variant="outline" data-testid="limits-open">
                     <Link to="/settings/limits">

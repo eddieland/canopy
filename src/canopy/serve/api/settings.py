@@ -1,7 +1,8 @@
-"""The limits and trust settings the settings page edits in the operator's user config (DESIGN §12, §22, M41).
+"""The limits and trust settings the settings page edits in the workspace's private config (DESIGN §12, §22, M41).
 
 Only the keys `GET /config` lists, within their bounds, and trust settings only toward stricter (TRUST_MODEL T8). A
-save writes the user file alone, keeping its comments, and then asks the loop to read its config again, as Reload does.
+save writes the private file alone, keeping its comments, and then asks the loop to read its config again, as Reload
+does.
 """
 
 from __future__ import annotations
@@ -44,6 +45,7 @@ def read_config(backend: BackendDep) -> ConfigSettings:
             )
             for s in found.settings
         ],
+        private_file=str(found.private_file),
         user_file=str(found.user_file),
         workspace_file=str(found.workspace_file),
         hash=found.hash,
@@ -52,14 +54,14 @@ def read_config(backend: BackendDep) -> ConfigSettings:
     )
 
 
-@router.patch("/config", operation_id="saveConfig", summary="Change settings in the user config", responses=REFUSED)
+@router.patch("/config", operation_id="saveConfig", summary="Change settings in the private config", responses=REFUSED)
 def save_config(body: ConfigPatch, backend: BackendDep) -> ConfigSaved:
-    """Write the changes to the user file, then ask the loop to read its config again, as Reload does.
+    """Write the changes to the workspace's private file, then ask the loop to read its config again, as Reload does.
 
     Refused, writing nothing: `inside_run`; `not_editable` for a key `GET /config` does not list; `past_bound` for a
     limit loosened past its bound; `not_stricter` for a trust setting loosened; `stale` when the file changed since
-    `hash` was read; `unsafe_file` for a user file that is a symlink or not the operator's; `config_invalid` with the
-    loader's message.
+    `hash` was read; `unsafe_file` for a private file that is a symlink or not the operator's; `config_invalid` with
+    the loader's message.
     """
     with backend.open() as ctx:
         root = ctx.repo_root

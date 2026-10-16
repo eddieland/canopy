@@ -927,11 +927,19 @@ def private_config_path(root: Path) -> Path:
     return root.absolute() / WORKSPACE_STATE_DIR / CONFIG_FILE_NAME
 
 
-def load(root: Path, user_file: Path | None = None, runner: procs.Runner | None = None) -> Config:
+def load(
+    root: Path,
+    user_file: Path | None = None,
+    runner: procs.Runner | None = None,
+    *,
+    private_file: Path | None = None,
+) -> Config:
     """Read and validate the layered config for the workspace at `root`: workspace file, user file, private file.
 
     No code repository's file is read (D016). The workspace file's map tables are `canopy.core.workspace`'s to read.
     `runner` runs the git that checks the state directory came from no checkout; None means the real one.
+    `private_file` stands in for the private file, as the settings page's edited copy beside it does; None means the
+    workspace's own.
 
     Returns:
         The validated config, each key from the last file that sets it.
@@ -944,7 +952,7 @@ def load(root: Path, user_file: Path | None = None, runner: procs.Runner | None 
     """
     user_file = user_file or user_config_path()
     shared_file = root / WORKSPACE_FILE_NAME
-    private_file = private_config_path(root)
+    private_file = private_file or private_config_path(root)
     check_untracked(runner or procs.SubprocessRunner(), root)
     shared: dict[str, object] = _read(shared_file, skip=WORKSPACE_MAP_TABLES) if shared_file.exists() else {}
     for name in shared:
@@ -999,21 +1007,25 @@ def check_untracked(runner: procs.Runner, root: Path) -> None:
 
 
 def sources(root: Path, user_file: Path | None = None) -> dict[str, Path]:
-    """Which file each key's value comes from, for the keys either file sets and `load` keeps (DESIGN §12).
+    """Which file each key's value comes from, for the keys any file sets and `load` keeps (DESIGN §12).
 
     A workspace file's policy value that does not tighten the default is not kept, so it is not here.
 
     Returns:
-        The workspace file or the user file, by `section.key` name; a key at its default is absent.
+        The workspace file, the user file, or the private file, by `section.key` name; a key at its default is absent.
 
     Raises:
-        ConfigError: A file cannot be read or is not valid TOML, or it has a key that is unknown or was removed.
+        ConfigError: A file cannot be read or is not valid TOML, or it has a key that is unknown or was removed; or
+            the private file is not the operator's alone.
     """
     user_file = user_file or user_config_path()
     shared_file = root / WORKSPACE_FILE_NAME
+    private_file = private_config_path(root)
     shared: dict[str, object] = _read(shared_file, skip=WORKSPACE_MAP_TABLES) if shared_file.exists() else {}
-    user_values = _read(user_file) if user_file.exists() else {}
-    return _merge(((shared_file, shared), (user_file, user_values)), shared_file)[1]
+    user_values: dict[str, object] = _read(user_file) if user_file.exists() else {}
+    private_values = _read_private(private_file) or {}
+    layers = ((shared_file, shared), (user_file, user_values), (private_file, private_values))
+    return _merge(layers, shared_file)[1]
 
 
 def _merge(
