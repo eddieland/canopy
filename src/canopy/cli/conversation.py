@@ -612,10 +612,10 @@ def _show_chore(ctx: Context, name: str) -> None:
     latest = state.latest_ended
     if latest is not None:
         said = one_line(contract.stored_note(result_of(latest)))
-        click.echo(f"  latest run {latest['id']} {latest['status']}" + (f": {said}" if said else ""))
-        session = f"session {latest['session_id']}" if latest["session_id"] else "no session reported"
+        click.echo(f"  latest run {latest.id} {latest.status}" + (f": {said}" if said else ""))
+        session = f"session {latest.session_id}" if latest.session_id else "no session reported"
         click.echo(f"  {session}{spent(latest)}")
-        click.echo(f"  log {latest['log_path']}")
+        click.echo(f"  log {latest.log_path}")
     findings = state.findings()
     click.echo(f"\nOpen findings ({len(findings)}):")
     for f in findings:

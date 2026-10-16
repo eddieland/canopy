@@ -232,8 +232,9 @@ operator, posted nowhere (D114), with no worker and no ticket.
 
 Planned (M44, §25). Written down 2026-10-15. Planning should be a step canopy can take for a ticket: a run that reads
 the ticket and the code and writes down how it will do the work, before any `implement` starts. Two reasons. A worker
-that starts from an explicit plan should do better than one that plans as it goes. And the plan should stay in the
-journal, so the operator can read it later for any ticket, as they read its conversation and runs today.
+that starts from an explicit plan should do better than one that plans as it goes. And the plan should be kept, so
+the operator can read it later for any ticket, as they read its conversation and runs today: on disk, as a file of its
+own outside the journal (2026-10-16), that they can read and edit with their own tools.
 
 Whether a ticket is planned is a config default the operator can change for one ticket. When a ticket is planned, the
 operator reads the plan before work starts: nothing is implemented until they approve it, and a reply asking for

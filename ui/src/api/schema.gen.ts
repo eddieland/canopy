@@ -2745,6 +2745,12 @@ export type components = {
              * @description The ticks that ended in it, a row per group, in a fixed order: idle, busy, hand_run, not_ok, dry_run.
              */
             ticks: components["schemas"]["SpendTicks"][];
+            /**
+             * Tools
+             * @description What each kind's tool calls returned, by tool, the most characters first: a row per kind and tool.
+             * @default []
+             */
+            tools: components["schemas"]["SpendTool"][];
             /** @description The whole window's costs. */
             totals: components["schemas"]["SpendCosts"];
             /**
@@ -2923,6 +2929,45 @@ export type components = {
              * @description How many ticks.
              */
             ticks: number;
+        };
+        /**
+         * SpendTool
+         * @description What one tool's calls in one kind's runs that started in the window put into their context (DESIGN §13).
+         */
+        SpendTool: {
+            /**
+             * Calls
+             * @description How many of its calls ended.
+             */
+            calls: number;
+            /**
+             * Errors
+             * @description How many of those ended in an error.
+             */
+            errors: number;
+            /**
+             * Est Tokens
+             * @description `result_chars` over 4: an estimate of their tokens, since the runtime does not say which of a call's tokens a
+             *     tool's result was.
+             */
+            est_tokens: number;
+            /** @description The kind of run that called it; the overseer's include dry runs. */
+            kind: components["schemas"]["SpendKind"];
+            /**
+             * Result Chars
+             * @description The characters they returned, output or error, which each later model call of the run reads again.
+             */
+            result_chars: number;
+            /**
+             * Runs
+             * @description How many of those runs called it.
+             */
+            runs: number;
+            /**
+             * Tool
+             * @description The tool's name as the runtime gives it, an MCP server's prefixed with the server's: untrusted text.
+             */
+            tool: string;
         };
         /**
          * SpendUnpriced

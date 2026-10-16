@@ -20,6 +20,7 @@ from canopy.core import (
     items,
     notice,
     pause,
+    records,
     search,
     transcript,
 )
@@ -60,6 +61,7 @@ from canopy.serve.schema import (
     SpendPullRequest,
     SpendTicket,
     SpendTicks,
+    SpendTool,
     SpendUnpriced,
     SpendWindow,
     SpendWoken,
@@ -84,7 +86,6 @@ from canopy.serve.schema import (
 if TYPE_CHECKING:
     import sqlite3
 
-    from canopy.core import records
     from canopy.core.context import Context
     from canopy.serve import backend as served
     from canopy.serve.backend import Backend
@@ -202,6 +203,18 @@ def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown
                 url=p.url, ticket_key=p.ticket, phase=p.phase, runs=p.runs, reviews=p.reviews, cost_usd=p.cost_usd
             )
             for p in found.pull_requests
+        ],
+        tools=[
+            SpendTool(
+                kind=t.kind,
+                tool=t.tool,
+                runs=t.runs,
+                calls=t.calls,
+                errors=t.errors,
+                result_chars=t.result_chars,
+                est_tokens=t.est_tokens,
+            )
+            for t in found.tools
         ],
     )
 
@@ -551,7 +564,7 @@ def _run_state(status: str) -> RunState:
             assert_never(known)
 
 
-def new_tokens(row: sqlite3.Row) -> int | None:
+def new_tokens(row: sqlite3.Row | records.Row) -> int | None:
     """A run's, a chore run's, or a tick's tokens, every kind but cache reads; None when the runtime reported none.
 
     Cache reads are left out: each model call reads again what the calls before it were sent, so their sum grows with
@@ -560,17 +573,18 @@ def new_tokens(row: sqlite3.Row) -> int | None:
     Returns:
         The sum of the counts the runtime reported, a missing one counting as none.
     """
-    found = [row[c] for c in ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_write")]
+    values = records.columns(row)
+    found = [values[c] for c in ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_write")]
     return sum(int(t) for t in found if t is not None) if any(t is not None for t in found) else None
 
 
-def said(row: sqlite3.Row) -> str | None:
+def said(row: sqlite3.Row | records.Row) -> str | None:
     """What a run's or a chore run's result says, the harness's note first, with its line breaks, and cut.
 
     Returns:
         At most `SUMMARY_LENGTH` characters, or None when the result says nothing.
     """
-    note = contract.stored_note(contract.stored_object(row["result_json"]))
+    note = contract.stored_note(contract.stored_object(records.columns(row)["result_json"]))
     return lines(note)[:SUMMARY_LENGTH].rstrip() or None
 
 
@@ -816,42 +830,37 @@ def _chore_spent(conn: sqlite3.Connection, name: str, now: datetime, hours: int)
     )
 
 
-def chore_run(row: sqlite3.Row, root: Path) -> ChoreRun:
+def chore_run(row: records.ChoreRun, root: Path) -> ChoreRun:
     """One chore run's row, its log's path from the workspace `root`.
 
     Returns:
         The run as the API sends it, `done` only when it ended `ok`, with its findings counted then.
     """
-    status = str(row["status"])
-    parsed = chore_result.stored(row["result_json"]) if status == "ok" else None
+    parsed = chore_result.stored(row.result_json) if row.status is ChoreRunStatus.OK else None
     return ChoreRun(
-        id=int(row["id"]),
-        status=status,
-        state=_chore_state(status),
-        started_at=db.parse_time(str(row["started_at"])),
-        ended_at=db.parse_time(str(row["ended_at"])) if row["ended_at"] else None,
+        id=row.id,
+        status=row.status,
+        state=_chore_state(row.status),
+        started_at=db.parse_time(row.started_at),
+        ended_at=db.parse_time(row.ended_at) if row.ended_at else None,
         summary=said(row),
         findings=len(parsed.findings) if parsed is not None else 0,
-        session_id=str(row["session_id"]) if row["session_id"] else None,
-        cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
+        session_id=row.session_id or None,
+        cost_usd=row.cost_usd,
         new_tokens=new_tokens(row),
-        peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
-        log_path=shown_path(str(row["log_path"]), root),
+        peak_context=row.tokens_peak_context,
+        log_path=shown_path(row.log_path, root),
     )
 
 
-def _chore_state(status: str) -> RunState:
+def _chore_state(status: ChoreRunStatus) -> RunState:
     """What the web UI colors a chore run that has `status` as.
 
     Returns:
         The run's state: a chore run that checked is done, and every other ending, which raises `chore_failed`
-        (DESIGN §19), is failed, as is a status canopy does not know.
+        (DESIGN §19), is failed.
     """
-    try:
-        known = ChoreRunStatus(status)
-    except ValueError:
-        return "failed"
-    match known:
+    match status:
         case ChoreRunStatus.RUNNING:
             return "running"
         case ChoreRunStatus.OK:
@@ -859,7 +868,7 @@ def _chore_state(status: str) -> RunState:
         case ChoreRunStatus.FAILED | ChoreRunStatus.UNKNOWN | ChoreRunStatus.TIMEOUT | ChoreRunStatus.CRASHED:
             return "failed"
         case _:
-            assert_never(known)
+            assert_never(status)
 
 
 def chore_run_detail(ctx: Context, name: str, run_id: int) -> ChoreRunDetail | None:
@@ -871,8 +880,8 @@ def chore_run_detail(ctx: Context, name: str, run_id: int) -> ChoreRunDetail | N
     row = _chore_run_of(ctx.conn, name, run_id)
     if row is None:
         return None
-    stored = contract.stored_object(row["result_json"])
-    parsed = chore_result.stored(row["result_json"]) if row["status"] == "ok" else None
+    stored = contract.stored_object(row.result_json)
+    parsed = chore_result.stored(row.result_json) if row.status is ChoreRunStatus.OK else None
     return ChoreRunDetail(
         chore=name,
         run=chore_run(row, ctx.workspace.root),
@@ -899,12 +908,12 @@ def chore_run_transcript(ctx: Context, name: str, run_id: int) -> Transcript | N
     row = _chore_run_of(ctx.conn, name, run_id)
     if row is None:
         return None
-    return session_transcript(Path(str(row["log_path"])), row["session_id"])
+    return session_transcript(Path(row.log_path), row.session_id)
 
 
-def _chore_run_of(conn: sqlite3.Connection, name: str, run_id: int) -> sqlite3.Row | None:
+def _chore_run_of(conn: sqlite3.Connection, name: str, run_id: int) -> records.ChoreRun | None:
     row = db.get_chore_run(conn, run_id)
-    return row if row is not None and row["chore"] == name else None
+    return row if row is not None and row.chore == name else None
 
 
 def found(ctx: Context, query: str) -> SearchResults:

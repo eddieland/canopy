@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import chore_result as result
 from canopy.core import chore_window as window
-from canopy.core import contract, db
+from canopy.core import contract, db, records
 from canopy.core.vocab import ChoreRunStatus
 
 if TYPE_CHECKING:
@@ -73,25 +73,25 @@ class ChoreState:
 
     name: str
     chore: Chore
-    runs: list[sqlite3.Row]
-    older: Callable[[int], list[sqlite3.Row]]
+    runs: list[records.ChoreRun]
+    older: Callable[[int], list[records.ChoreRun]]
     dismissals: Mapping[str, str]
     starts: FindingStarts | None = None
 
     @property
-    def running(self) -> sqlite3.Row | None:
+    def running(self) -> records.ChoreRun | None:
         """Its running run, if any."""
-        return next((r for r in self.runs if r["status"] == "running"), None)
+        return next((r for r in self.runs if r.status is ChoreRunStatus.RUNNING), None)
 
     @property
-    def latest(self) -> sqlite3.Row | None:
+    def latest(self) -> records.ChoreRun | None:
         """Its most recent run, whatever its status."""
         return self.runs[0] if self.runs else None
 
     @property
-    def latest_ended(self) -> sqlite3.Row | None:
+    def latest_ended(self) -> records.ChoreRun | None:
         """Its most recent run that has ended."""
-        return next((r for r in self.runs if r["status"] != "running"), None)
+        return next((r for r in self.runs if r.status is not ChoreRunStatus.RUNNING), None)
 
     def earliest(self) -> datetime | None:
         """The earliest time the `not_due` guard allows a new run: `every_minutes` after the latest start. None: now.
@@ -102,7 +102,7 @@ class ChoreState:
         latest = self.latest
         if latest is None:
             return None
-        return db.parse_time(str(latest["started_at"])) + timedelta(minutes=self.chore.every_minutes)
+        return db.parse_time(latest.started_at) + timedelta(minutes=self.chore.every_minutes)
 
     def due_at(self, now: datetime) -> datetime | None:
         """The earliest time every guard on time allows a new run: `earliest`, moved to when its window next opens.
@@ -131,7 +131,11 @@ class ChoreState:
             dismissed; none before an `ok` run.
         """
         latest = next(
-            ((r, parsed) for r in self.runs if r["status"] == "ok" and (parsed := result.stored(r["result_json"]))),
+            (
+                (r, parsed)
+                for r in self.runs
+                if r.status is ChoreRunStatus.OK and (parsed := result.stored(r.result_json))
+            ),
             None,
         )
         if latest is None:
@@ -145,7 +149,7 @@ class ChoreState:
             found.append(OpenFinding(self.name, f, since[f.id], dismissed=dismissed))
         return found
 
-    def _since(self, latest: sqlite3.Row, parsed: result.ChoreResult) -> dict[str, str]:
+    def _since(self, latest: records.ChoreRun, parsed: result.ChoreResult) -> dict[str, str]:
         """When the unbroken sequence of `ok` runs reporting each of the latest `ok` run's findings started.
 
         One walk back serves every finding, and stops once each one's sequence has, or at the run `starts` remembers
@@ -155,31 +159,31 @@ class ChoreState:
         Returns:
             Each finding's id, and the start time, in the journal's format, of the oldest `ok` run in its sequence.
         """
-        start = str(latest["started_at"])
+        start = latest.started_at
         since = {f.id: start for f in parsed.findings}
         open_ids = set(since)
         known = self.starts.of(self.name) if self.starts is not None else None
-        if known is not None and known.run == int(latest["id"]):
+        if known is not None and known.run == latest.id:
             return dict(known.since)
         if open_ids:
-            for run in self._older_oks(int(latest["id"])):
-                if known is not None and int(run["id"]) == known.run:
+            for run in self._older_oks(latest.id):
+                if known is not None and run.id == known.run:
                     # That run reported exactly what `known` holds: a finding it did not report ended its sequence.
                     since.update((i, known.since[i]) for i in open_ids if i in known.since)
                     break
-                found = result.stored(run["result_json"])
+                found = result.stored(run.result_json)
                 if found is None:
                     continue
                 open_ids &= {f.id for f in found.findings}
                 if not open_ids:
                     break
                 for finding_id in open_ids:
-                    since[finding_id] = str(run["started_at"])
+                    since[finding_id] = run.started_at
         if self.starts is not None:
-            self.starts.keep(self.name, Started(int(latest["id"]), since))
+            self.starts.keep(self.name, Started(latest.id, since))
         return since
 
-    def _older_oks(self, before: int) -> Iterator[sqlite3.Row]:
+    def _older_oks(self, before: int) -> Iterator[records.ChoreRun]:
         """Its `ok` runs before run id `before`, newest first, reading back page by page.
 
         Yields:
@@ -187,10 +191,10 @@ class ChoreState:
         """
         page = self.runs
         while True:
-            yield from (r for r in page if r["status"] == "ok" and int(r["id"]) < before)
+            yield from (r for r in page if r.status is ChoreRunStatus.OK and r.id < before)
             if len(page) < _HISTORY_RUNS:
                 return
-            page = self.older(int(page[-1]["id"]))
+            page = self.older(page[-1].id)
 
 
 @dataclass(frozen=True)
@@ -239,7 +243,7 @@ def states(
 def state_of(conn: sqlite3.Connection, name: str, chore: Chore, *, starts: FindingStarts | None = None) -> ChoreState:
     """Return chore `name`'s state as the journal sees it, remembering its findings' starts in `starts` if given."""
 
-    def older(before: int) -> list[sqlite3.Row]:
+    def older(before: int) -> list[records.ChoreRun]:
         return db.chore_runs(conn, name, _HISTORY_RUNS, before=before)
 
     runs = db.chore_runs(conn, name, _HISTORY_RUNS)
@@ -269,18 +273,18 @@ def failed_items(conn: sqlite3.Connection, config: Config, workspace: Workspace)
     items: list[FailedItem] = []
     for state in states(conn, config, workspace):
         run = state.latest_ended
-        if run is None or run["status"] not in FAILED:
+        if run is None or run.status not in FAILED:
             continue
         items.append(FailedItem(state.name, _detail(run)))
     return items
 
 
-def _detail(run: sqlite3.Row) -> str:
-    note = contract.stored_note(contract.stored_object(run["result_json"]))
-    text = f"chore run {run['id']} ended {run['status']}"
+def _detail(run: records.ChoreRun) -> str:
+    note = contract.stored_note(contract.stored_object(run.result_json))
+    text = f"chore run {run.id} ended {run.status}"
     if note:
         text += f": {note}"
-    return f"{text}; log {run['log_path']}"[:2000]
+    return f"{text}; log {run.log_path}"[:2000]
 
 
 class LatestRun(TypedDict):
@@ -322,13 +326,13 @@ def state_section(states_: list[ChoreState], now: datetime) -> list[ChoreSummary
         latest = state.latest
         latest_summary: LatestRun | None = None
         if latest is not None:
-            stored = result.stored(latest["result_json"])
-            harness = contract.stored_object(latest["result_json"]).get("harness")
+            stored = result.stored(latest.result_json)
+            harness = contract.stored_object(latest.result_json).get("harness")
             latest_summary = {
-                "run_id": latest["id"],
-                "status": latest["status"],
-                "started_at": latest["started_at"],
-                "ended_at": latest["ended_at"],
+                "run_id": latest.id,
+                "status": latest.status,
+                "started_at": latest.started_at,
+                "ended_at": latest.ended_at,
                 "summary": str(harness) if harness else (stored.summary if stored is not None else None),
             }
         due = state.due_at(now)

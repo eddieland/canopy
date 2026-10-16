@@ -71,6 +71,8 @@ export type SpendGroup = Schemas['SpendGroup']
 export type SpendTicket = Schemas['SpendTicket']
 /** What the runs that pushed to one PR, and the reviews of it, in a spend window cost. */
 export type SpendPullRequest = Schemas['SpendPullRequest']
+/** What one tool's calls in one kind's runs in a spend window returned: the calls, errors, and characters. */
+export type SpendTool = Schemas['SpendTool']
 /** A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded. */
 export type Tick = Schemas['Tick']
 /** The latest tick, or none before the first, and the newest message a tick has acknowledged. */

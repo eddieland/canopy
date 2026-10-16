@@ -21,7 +21,7 @@ from canopy.core.vocab import PoolKind
 from canopy.infra import procs
 
 if TYPE_CHECKING:
-    from canopy.core.agent_output import Usage
+    from canopy.core.agent_output import ToolUse, Usage
     from canopy.core.vocab import AnyRunStatus, RunStatus
 
 DB_FILE_NAME = "canopy.db"
@@ -589,12 +589,14 @@ def set_run_report(
     usage: Usage | None,
     *,
     digest: str | None = None,
+    tools: Sequence[ToolUse] = (),
 ) -> None:
-    """Record what the agent runtime reported about a run in `table`: its session, and what it cost (DESIGN §13).
+    """Record what the agent runtime reported about a run in `table`: its session, what it cost, and its tools.
 
-    `digest` names the definitions snapshot the run loaded, recorded only when the runtime reported something.
+    The tools are its tool calls rolled up by tool (DESIGN §13), in place of any recorded before. `digest` names the
+    definitions snapshot the run loaded, recorded only when the runtime reported something.
     """
-    _set_report(conn, table, run_id, session_id, usage, digest=digest)
+    _set_report(conn, table, run_id, session_id, usage, digest=digest, tools=tools)
 
 
 def finish_run(
@@ -766,13 +768,34 @@ def finish_ticket_run(
 
 
 def set_tick_report(
-    conn: sqlite3.Connection, tick_id: int, session_id: str | None, usage: Usage | None, *, digest: str | None = None
+    conn: sqlite3.Connection,
+    tick_id: int,
+    session_id: str | None,
+    usage: Usage | None,
+    *,
+    digest: str | None = None,
+    tools: Sequence[ToolUse] = (),
 ) -> None:
-    """Record what the agent runtime reported about a tick's overseer run: its session, and what it cost (§6, §13).
+    """Record what the agent runtime reported about a tick's overseer run: its session, cost, and tools (§6, §13).
 
-    `digest` names the definitions snapshot the overseer loaded, recorded only when the runtime reported something.
+    The tools are its tool calls rolled up by tool, in place of any recorded before. `digest` names the definitions
+    snapshot the overseer loaded, recorded only when the runtime reported something.
     """
-    _set_report(conn, "ticks", tick_id, session_id, usage, digest=digest)
+    _set_report(conn, "ticks", tick_id, session_id, usage, digest=digest, tools=tools)
+
+
+def run_tools(conn: sqlite3.Connection, table: RunTable | Literal["ticks"], run_id: int) -> list[records.RunTool]:
+    """What a run's tool calls put into its context, by tool (§13): a tick's overseer when `table` is `ticks`.
+
+    Returns:
+        A row per tool it called, the most characters returned first; empty for a run that printed no tool call.
+    """
+    return records.fetch_all(
+        conn,
+        records.RunTool,
+        "SELECT * FROM run_tools WHERE run_table = ? AND run_id = ? ORDER BY result_chars DESC, tool",
+        (table, run_id),
+    )
 
 
 def set_run_progress(
@@ -809,25 +832,28 @@ def set_tick_session(conn: sqlite3.Connection, tick_id: int, session_id: str) ->
     conn.execute("UPDATE ticks SET session_id = ? WHERE id = ?", (session_id, tick_id))
 
 
-def usage_of(row: sqlite3.Row) -> Usage | None:
+def usage_of(row: sqlite3.Row | records.Row) -> Usage | None:
     """What a run, chore run, review run, or tick row says its agent cost, or None when the runtime reported nothing.
 
     Returns:
         The row's cost and token counts, a missing count read as 0 and a missing peak context or first call as
         unknown, or None when it has no cost.
     """
-    if row["cost_usd"] is None:
+    values = records.columns(row)
+    if values["cost_usd"] is None:
         return None
     return agent_output.Usage(
-        cost_usd=float(row["cost_usd"]),
-        input=int(row["tokens_input"] or 0),
-        output=int(row["tokens_output"] or 0),
-        reasoning=int(row["tokens_reasoning"] or 0),
-        cache_read=int(row["tokens_cache_read"] or 0),
-        cache_write=int(row["tokens_cache_write"] or 0),
-        peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
-        first_call=int(row["tokens_first_call"]) if row["tokens_first_call"] is not None else None,
-        first_cache_write=int(row["tokens_first_cache_write"]) if row["tokens_first_cache_write"] is not None else None,
+        cost_usd=float(values["cost_usd"]),
+        input=int(values["tokens_input"] or 0),
+        output=int(values["tokens_output"] or 0),
+        reasoning=int(values["tokens_reasoning"] or 0),
+        cache_read=int(values["tokens_cache_read"] or 0),
+        cache_write=int(values["tokens_cache_write"] or 0),
+        peak_context=int(values["tokens_peak_context"]) if values["tokens_peak_context"] is not None else None,
+        first_call=int(values["tokens_first_call"]) if values["tokens_first_call"] is not None else None,
+        first_cache_write=int(values["tokens_first_cache_write"])
+        if values["tokens_first_cache_write"] is not None
+        else None,
     )
 
 
@@ -839,16 +865,23 @@ def _set_report(
     usage: Usage | None,
     *,
     digest: str | None,
+    tools: Sequence[ToolUse],
 ) -> None:
     spent = _spent(usage) if usage is not None else (None,) * 9
     # Only with a report: a template of the operator's that prints plain text may not load the snapshot at all.
     loaded = digest if session_id is not None or usage is not None else None
-    conn.execute(
-        f"UPDATE {table} SET session_id = ?, cost_usd = ?, tokens_input = ?, tokens_output = ?, "  # noqa: S608
-        "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ?, tokens_peak_context = ?, "
-        "tokens_first_call = ?, tokens_first_cache_write = ?, definitions_digest = ? WHERE id = ?",
-        (session_id, *spent, loaded, row_id),
-    )
+    with transaction(conn):
+        conn.execute(
+            f"UPDATE {table} SET session_id = ?, cost_usd = ?, tokens_input = ?, tokens_output = ?, "  # noqa: S608
+            "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ?, tokens_peak_context = ?, "
+            "tokens_first_call = ?, tokens_first_cache_write = ?, definitions_digest = ? WHERE id = ?",
+            (session_id, *spent, loaded, row_id),
+        )
+        conn.execute("DELETE FROM run_tools WHERE run_table = ? AND run_id = ?", (table, row_id))
+        conn.executemany(
+            "INSERT INTO run_tools (run_table, run_id, tool, calls, errors, result_chars) VALUES (?, ?, ?, ?, ?, ?)",
+            [(table, row_id, t.tool, t.calls, t.errors, t.result_chars) for t in tools],
+        )
 
 
 def _spent(usage: Usage) -> tuple[float, int, int, int, int, int, int | None, int | None, int | None]:
@@ -975,20 +1008,21 @@ def insert_chore_run(conn: sqlite3.Connection, *, tick_id: int | None, chore: st
     return run_id
 
 
-def get_chore_run(conn: sqlite3.Connection, run_id: int) -> sqlite3.Row | None:
+def get_chore_run(conn: sqlite3.Connection, run_id: int) -> records.ChoreRun | None:
     """Return the chore run with `run_id`, or None."""
-    row: sqlite3.Row | None = conn.execute("SELECT * FROM chore_runs WHERE id = ?", (run_id,)).fetchone()
-    return row
+    return records.fetch_one(conn, records.ChoreRun, "SELECT * FROM chore_runs WHERE id = ?", (run_id,))
 
 
 def chore_runs(
     conn: sqlite3.Connection, chore: str, limit: int = 1000, *, before: int | None = None
-) -> list[sqlite3.Row]:
+) -> list[records.ChoreRun]:
     """Return `chore`'s runs, newest first: at most `limit`, and only those before run id `before` if it is given."""
-    return conn.execute(
+    return records.fetch_all(
+        conn,
+        records.ChoreRun,
         "SELECT * FROM chore_runs WHERE chore = ? AND id < ? ORDER BY id DESC LIMIT ?",
         (chore, before if before is not None else 2**63 - 1, limit),
-    ).fetchall()
+    )
 
 
 def chore_costs_since(conn: sqlite3.Connection, chore: str, since: str) -> tuple[int, list[float]]:

@@ -5,6 +5,9 @@ so a misspelled column is a type error where it is read, and a query whose colum
 where it runs, not in a caller far from it. `tests/canopy/test_records.py` checks every row type against its table after
 every migration: the same columns, in order, each with the type and nullability its column has.
 
+A column holding one of `vocab`'s closed vocabularies is a field of that `StrEnum`, so the row carries the member and a
+value the vocabulary does not hold is refused where the row is read, not where something later branches on it.
+
 A table's row type is added when a PR first reads that table through it; the rest still read `sqlite3.Row`.
 """
 
@@ -14,8 +17,12 @@ import sqlite3
 import types
 import typing
 from collections.abc import Callable, Sequence
-from dataclasses import Field, dataclass, fields
+from dataclasses import Field, asdict, dataclass, fields
+from enum import StrEnum
 from typing import Any, ClassVar
+
+# Imported for real, not under TYPE_CHECKING: `typing.get_type_hints` resolves a row type's fields when it is read.
+from canopy.core.vocab import ChoreRunStatus  # noqa: TC001
 
 # What a column's value is converted with, by its field's type.
 _Convert = Callable[[object], object]
@@ -53,6 +60,36 @@ class Decision(Row):
 
 
 @dataclass(frozen=True)
+class ChoreRun(Row):
+    """A run of a chore (DESIGN §19): the overseer's, or the operator's `canopy chore try`, and how it ended."""
+
+    TABLE: ClassVar[str] = "chore_runs"
+
+    id: int
+    # None for a run the operator started with `canopy chore try`.
+    tick_id: int | None
+    chore: str
+    pid: int | None
+    agent_pid: int | None
+    started_at: str
+    ended_at: str | None
+    status: ChoreRunStatus
+    result_json: str | None
+    log_path: str
+    session_id: str | None
+    cost_usd: float | None
+    tokens_input: int | None
+    tokens_output: int | None
+    tokens_reasoning: int | None
+    tokens_cache_read: int | None
+    tokens_cache_write: int | None
+    tokens_peak_context: int | None
+    tokens_first_call: int | None
+    tokens_first_cache_write: int | None
+    definitions_digest: str | None
+
+
+@dataclass(frozen=True)
 class ReviewRequest(Row):
     """The operator's request to review a PR the loop does not own (DESIGN §21): open, or how it ended."""
 
@@ -82,6 +119,20 @@ class PoolSlot(Row):
     seeded: str
 
 
+@dataclass(frozen=True)
+class RunTool(Row):
+    """What one tool's calls in an agent run put into its context (DESIGN §13): the run, by its table and id."""
+
+    TABLE: ClassVar[str] = "run_tools"
+
+    run_table: str
+    run_id: int
+    tool: str
+    calls: int
+    errors: int
+    result_chars: int
+
+
 def fetch_all[R: Row](conn: sqlite3.Connection, row_type: type[R], sql: str, params: Sequence[object] = ()) -> list[R]:
     """Run `sql` and build each row it returns as `row_type`.
 
@@ -103,6 +154,18 @@ def fetch_one[R: Row](conn: sqlite3.Connection, row_type: type[R], sql: str, par
     build = _builder(row_type, cur.description)
     first = cur.fetchone()
     return None if first is None else build(first)
+
+
+def columns(row: sqlite3.Row | Row) -> sqlite3.Row | dict[str, Any]:
+    """A row of a table with a row type or one still read as `sqlite3.Row`, either way read by column name.
+
+    For a helper that reads the same columns, such as a run's cost, from rows of several tables, while some of those
+    tables have no row type yet.
+
+    Returns:
+        A typed row's fields by name, or the `sqlite3.Row` itself.
+    """
+    return asdict(row) if isinstance(row, Row) else row
 
 
 def _builder[R: Row](row_type: type[R], description: Sequence[Sequence[object]]) -> Callable[[Sequence[object]], R]:
@@ -166,7 +229,12 @@ def _converter(table: str, name: str, hint: object) -> _Convert:
         return lambda value: float(typing.cast("float", _checked(where, value, (float, int))))
     if hint is bool:
         return lambda value: _flag(where, value)
-    raise RowError(f"{where} is a {hint}; a row's fields are int, float, str, bytes, bool, or one of them or None")
+    if isinstance(hint, type) and issubclass(hint, StrEnum):
+        vocabulary: type[StrEnum] = hint
+        return lambda value: _member(where, vocabulary, value)
+    raise RowError(
+        f"{where} is a {hint}; a row's fields are int, float, str, bytes, bool, a StrEnum, or one of them or None"
+    )
 
 
 def _checked(where: str, value: object, allowed: tuple[type, ...]) -> object:
@@ -196,3 +264,19 @@ def _flag(where: str, value: object) -> bool:
     if isinstance(value, int) and value in {0, 1}:
         return value == 1
     raise RowError(f"{where} holds neither 0 nor 1, as a flag must")
+
+
+def _member(where: str, vocabulary: type[StrEnum], value: object) -> StrEnum:
+    """A vocabulary column's value as the member of `vocabulary` it names.
+
+    Returns:
+        The member whose value is `value`.
+
+    Raises:
+        RowError: The value is not a string, or not one `vocabulary` holds.
+    """
+    text = str(_checked(where, value, (str,)))
+    try:
+        return vocabulary(text)
+    except ValueError:
+        raise RowError(f"{where} holds {text!r}, which is not a {vocabulary.__name__}") from None

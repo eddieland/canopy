@@ -882,7 +882,7 @@ Status: not started.
 
 REQUIREMENTS R18, DESIGN §25, and the parts of §7, §8, §14, §20, and §22 it changes. Asked for by the operator
 (2026-10-15), and taken next, ahead of M36: a ticket can be planned before it is implemented, the operator approves
-the plan before work starts, and the plan stays in the journal to read later. Today the `implement` worker plans
+the plan before work starts, and the plan is kept on disk to read later. Today the `implement` worker plans
 inside its own session, and only its summary survives. M36 to M40 take up the new phases and kind as they reshape
 the state block and the overseer.
 
@@ -908,13 +908,17 @@ the state block and the overseer.
   plan (and makes a new one if the ticket has one), `canopy plan KEY --skip` waives it, and `canopy start KEY --plan`
   starts a private ticket with one. Asking for a plan and `--skip` supersede a waiting or approved plan at once, so
   the next tick dispatches a new `plan` or the `implement`. Each refuses as `inside_run` when `CANOPY_TICK_ID` or
-  `CANOPY_RUN_ID` is set, and `--skip` and asking for a plan refuse as `bad_plan` while a plan run is running or once
-  the ticket has a branch.
-- Approval: `canopy plan KEY --approve` approves the newest plan; it refuses `inside_run`, and `bad_plan` when the
-  newest plan is not waiting or a plan run for the ticket is running. A reply (`canopy reply KEY`) newer than the plan
-  asks for changes: the overseer dispatches `plan` again with the reply in its context, and the new plan supersedes
-  the old. An approval after such a reply, before the new plan run starts, wins: it is the operator's later word, and
-  the reply reaches the `implement` as an operator message, as any message does.
+  `CANOPY_RUN_ID` is set, and `--skip` and asking for a plan refuse as `bad_plan` while a plan run is running.
+  Asking for a plan also refuses once the ticket has a branch; `--skip` there drops the plan from later runs.
+- Approval: `canopy plan KEY --approve` approves the newest plan as its file stands, the operator's edits included,
+  and records the file's hash; it refuses `inside_run`, and `bad_plan` when the newest plan is not waiting (unless it
+  is approved and its file changed since), a plan run for the ticket is running, or its file is missing or no longer
+  a plan. `implement` and `resume` refuse `plan_changed` when the approved plan's file is missing, unreadable, or no
+  longer has its approved hash; the operator approves it again, or, for a file that is gone, asks for a new plan or
+  `--skip`s it. A reply (`canopy reply KEY`) newer than the plan asks for changes: the overseer dispatches `plan` again
+  with the reply in its context, and the new plan supersedes the old. An approval after such a reply, before the new
+  plan run starts, wins: it is the operator's later word, and the reply reaches the `implement` as an operator
+  message, as any message does.
 - A hard guard in code: an `implement` for a ticket that needs a plan, by `policy.plan` or its own setting, and has no
   approved plan is refused as `unplanned`. A `plan` for a ticket with a branch, or for a split's parent, is
   `bad_plan`. A `--slug`, `--base`, or `--request` on a plan is `bad_slug`, `bad_base`, or `bad_request`.
@@ -938,16 +942,22 @@ the state block and the overseer.
   `Approve`, `Ask for changes` (a reply), and `Skip`, and lists earlier plans. `POST /tickets/{key}/plan` with
   `approve`, `request`, or `skip`, through the same code as the CLI, so with the same refusals. A `plan.proposed`
   event goes to the operator's sinks (§20), with the ticket's title and no plan text.
-- Journal: a migration adds `plans` (id, ticket key, run id, body, created at, status `proposed`, `approved`, or
-  `superseded`, approved at and channel) and the ticket's own plan setting (unset, `plan`, or `skip`), set only by the
-  operator's channels. `canopy forget` supersedes a waiting or approved plan, so a forgotten ticket is planned again
-  under `"approve"`. Its hash joins `SHIPPED`, and a row `SEED`, in `tests/canopy/test_db.py`.
+- Storage: each plan is a file of its own, `<state_dir>/plans/<KEY>/<run>.md`, named for its plan run, operator-only,
+  never deleted by canopy (§25, Where plans live). A migration adds `plans` (id, ticket key, run id, created at, status
+  `proposed`, `approved`, or `superseded`, the SHA-256 and size of the file as written, the approved hash, approved at
+  and channel; no body) and the ticket's own plan setting (unset, `plan`, or `skip`), set only by the operator's
+  channels. `canopy forget` supersedes a waiting or approved plan, so a forgotten ticket is planned again under
+  `"approve"`. Its hash joins `SHIPPED`, and a row `SEED`, in `tests/canopy/test_db.py`.
 - TRUST_MODEL: T1 says an approved plan is data, not an operator instruction; T3 counts plan runs toward capacity and
   attempts; T6 gives the planner no write scope; T8 adds the plan route to the web channel's writes. With the
   operator's approval note in the PR, for those, the overseer prompt, the new prompt, and the `canopy-planner`
   definition.
-- Tests with the fakes: under `"approve"`, a dry-run tick dispatches `plan` for a ready ticket; a `done` plan is
-  recorded `proposed` and raises `plan_review`; `implement` is refused `unplanned` until `canopy plan --approve`, then
+- Tests with the fakes: under `"approve"`, a dry-run tick dispatches `plan` for a ready ticket; a `done` plan is written
+  to its file and recorded `proposed`, and raises `plan_review`; an edit to the file before `--approve` is what the
+  worker gets; an edit after it makes `implement` refuse `plan_changed` until approved again, as does a missing file,
+  which `--skip` gets past on a ticket with a branch; an edit between dispatch and `_run`'s check crashes the run before
+  the worker starts; a symlinked `plans/` or ticket directory refuses the write; a plan file with no row is never read,
+  and a name already taken is never overwritten; `implement` is refused `unplanned` until `canopy plan --approve`, then
   finds `.canopy-plan.md` in its cwd, ignored by git, and the plan's headings in its prompt, and the file is gone once
   the slot is returned; a pushed head holding the file gets a harness note; a reply makes the next plan supersede the
   first; `--skip` lets `implement` through; an empty plan or one over the bound is `unknown`; a `blocked` plan records
@@ -1113,6 +1123,62 @@ of the repo." Humans still authorize everything that lands; canopy still never m
   follow-ups wait for a label.
 
 Accept: written with the design, before work starts.
+
+Status: not started.
+
+## M47. Garbage collection
+
+DESIGN §26, D030, D086, D107. Asked for by the operator (2026-10-16): a plan for removing what canopy keeps forever.
+Almost everything is kept: every run's, tick's, chore run's, and review's log and prompt, `canopy.log` unrotated, the
+harness's attention rows recorded again each tick, a journal nothing checkpoints or vacuums, and loose objects in the
+primary clones. Four stages, in order, each in its own PRs, a stage starting only once the one before has passed its
+check, recorded on the `Status:` line.
+
+What every stage holds to: no row a guard counts is deleted (`runs`, `run_slots`, `review_runs`, grants,
+dismissals), nor a tick, ticket, message, or the overseer's own decisions; nothing a live run uses is touched; no
+remote branch is deleted; and no flag shortens retention, which only the user file sets (§26, What it never removes).
+
+**Stage 1, measure.** Nothing is removed.
+
+- `canopy gc --dry-run [--json]`: for each kind in §26's table, the count, the bytes, and what a pass with the
+  proposed defaults would remove. It refuses when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set; TRUST_MODEL T1 adds
+  `gc` to the commands that do, with the operator's approval note in the PR.
+- `[retention]` in the user file (§26, Configuration), validated in full now (non-negative integers), so a later
+  stage changes no key; read by nothing but the dry run yet.
+- Check: the operator runs it on their live workspace, the result is a dated section of `MEASUREMENTS.md`, and the
+  defaults in §26 are set from it.
+
+**Stage 2, files.**
+
+- The pass in reconcile, at most daily on a live tick, recording each in `gc_passes` (a new migration): run, tick,
+  chore, and review files past their retention, and files with no row. A failed pass is logged and the tick goes on.
+- `canopy.log` rotated past `log_max_mib`, its size checked on every live tick, every process logging through
+  `WatchedFileHandler`.
+- The web UI's transcript, prompt, and diff views say "removed after N days" for a file retention removed.
+- Tests with the fakes: a live run's files, a running tick's, and a symlink are never removed; a dry tick runs no
+  pass; a file with no row goes only after an hour.
+- Check: a week of the operator's loop with the pass on; each day's `gc_passes` row matches what the dry run
+  predicted, and no page the operator opens fails.
+
+**Stage 3, the journal.**
+
+- The pass deletes harness-raised attention rows older than both the attention list's 1000-tick window and
+  `journal_days`, then runs `PRAGMA wal_checkpoint(TRUNCATE)`. `canopy gc --vacuum` runs `VACUUM` while no run is
+  live and the disk has room for a copy of the journal.
+- Tests: with rows on both sides of the window, the attention list, each item's open-since, and the notification
+  diff are the same before and after a pass; with fewer than 1000 `ok` ticks, a pass deletes no row.
+- Check: on the operator's journal, the attention list and `canopy status` are unchanged across a pass, and the file
+  shrinks after `--vacuum` by about what the dry run said.
+
+**Stage 4, outside the journal.**
+
+- `canopy gc --git`: `loose-objects` and `incremental-repack` maintenance in each primary clone with no leased slot,
+  under `dispatch.lock`, through `hostgit.argv`.
+- `canopy gc --caches`: empties the sandbox's per-role caches while no run of that role is live.
+- The dry run lists remote branches no open run or unit names, for the operator to delete.
+- Check: `--git` on a clone whose slots hold unpushed commits keeps every one of them, and a run after it pushes
+  normally; a SCENARIOS entry, since it is worth running again on each git upgrade.
+- Open: whether the pass runs `--git` on its own, weekly, after that check.
 
 Status: not started.
 
