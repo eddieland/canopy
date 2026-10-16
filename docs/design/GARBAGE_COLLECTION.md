@@ -45,8 +45,8 @@ What the survey of 2026-10-16 found. The last column is what M47 adds.
   to, with no `ON DELETE`; tickets, messages, and units are the conversation (§22) and its cursors.
 - **The overseer's own decisions.** They are the audit log and the prompt-evaluation corpus (§11). Only the
   attention items the harness raises (`attention.HARNESS_REASONS`) are pruned.
-- **Rows the design already keeps:** `starts`, `notices`, ended `review_requests`, and `chore_runs`, whose `ok` runs
-  date each finding's sequence (§19).
+- **Rows the design keeps, or a reader needs whole:** `starts`, `notices`, and ended `review_requests` (§11, §21);
+  `chore_runs`, whose `ok` runs date each finding's sequence (§19).
 - **Anything a live run uses.** A file is removed only when its row has ended, and never while the run's lifelock
   is held.
 - **Remote branches.** Deleting one is outward-facing and the branch may hold work. They stay the operator's (§22);
