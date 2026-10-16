@@ -10,7 +10,7 @@ from typing import ClassVar
 import pytest
 
 from canopy.core import db, records
-from canopy.core.vocab import ChoreRunStatus, PoolKind, ReviewRunStatus
+from canopy.core.vocab import ChoreRunStatus, Phase, PlanSetting, PoolKind, ReviewRunStatus
 from tests.canopy.helpers import in_tick
 from tests.conftest import Journals
 
@@ -189,3 +189,14 @@ def test_a_review_run_reads_its_status_and_pool_as_their_members(conn: sqlite3.C
     assert (run.id, run.status, run.pool) == (run_id, ReviewRunStatus.RUNNING, PoolKind.TREEHOUSE)
     assert isinstance(run.status, ReviewRunStatus)
     assert isinstance(run.pool, PoolKind)
+
+
+def test_a_ticket_reads_its_phase_and_plan_setting_as_members_and_done_as_a_flag(conn: sqlite3.Connection) -> None:
+    db.set_ticket(conn, "PROJ-1", "/ws", phase=Phase.CI_RED, done=True)
+    conn.execute("UPDATE tickets SET plan_setting = 'skip' WHERE key = 'PROJ-1'")
+    ticket = db.get_ticket(conn, "PROJ-1")
+    assert ticket is not None
+    assert (ticket.phase, ticket.plan_setting, ticket.done) == (Phase.CI_RED, PlanSetting.SKIP, True)
+    assert isinstance(ticket.phase, Phase)
+    assert isinstance(ticket.plan_setting, PlanSetting)
+    assert db.open_tickets(conn) == []

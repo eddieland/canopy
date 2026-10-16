@@ -21,7 +21,7 @@ def test_the_list_has_each_pr_once_with_its_ticket_branch_and_latest_review(back
         "ABC-099",
         "Debounce search input",
         "agent/ABC-099-search",
-        "in_review",
+        "review_pending",
         2,
     )
     assert ours["latest_review"]["id"] == 4  # the newest of its two review runs

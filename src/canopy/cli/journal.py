@@ -200,7 +200,7 @@ def cmd_ticket_set(
         ctx.conn,
         key,
         ctx.repo,
-        phase=None if unit_phase is not None else phase,
+        phase=None if phase is None or unit_phase is not None else vocab.Phase(phase),
         cursors=ticket_cursors,
         done=done and not dry_run,
         title=title,

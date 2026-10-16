@@ -126,7 +126,7 @@ def test_a_public_resume_hears_the_operator_and_knows_whom_to_trust(
         # The dispatch carried the message cursor, so the next tick does not read the go-ahead again.
         ticket = db.get_ticket(conn, KEY)
         assert ticket is not None
-        assert int(ticket["last_message_id"]) == message
+        assert ticket.last_message_id == message
         assert conversation.operator_section(conn, ticket) is None
 
 
