@@ -2,7 +2,7 @@
 
 Part of the canopy design, normative like all of it: a plan for a ticket, written and approved before any `implement`.
 Sections are numbered across the whole design; the [README](README.md) has the map. Previous: [Sandboxed
-runs](SANDBOXING.md).
+runs](SANDBOXING.md). Next: [Garbage collection](GARBAGE_COLLECTION.md).
 
 ## 25. Plans before implementing (M44)
 

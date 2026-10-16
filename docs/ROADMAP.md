@@ -1116,6 +1116,60 @@ Accept: written with the design, before work starts.
 
 Status: not started.
 
+## M47. Garbage collection
+
+DESIGN §26, D030, D086, D107. Asked for by the operator (2026-10-16): a plan for removing what canopy keeps forever.
+Almost everything is kept: every run's, tick's, chore run's, and review's log and prompt, `canopy.log` unrotated, the
+harness's attention rows recorded again each tick, a journal nothing checkpoints or vacuums, and loose objects in the
+primary clones. Four stages, in order, each in its own PRs, a stage starting only once the one before has passed its
+check, recorded on the `Status:` line.
+
+What every stage holds to: no row a guard counts is deleted (`runs`, `run_slots`, `review_runs`, grants,
+dismissals), nor a tick, ticket, message, or the overseer's own decisions; nothing a live run uses is touched; no
+remote branch is deleted; and no flag shortens retention, which only the user file sets (§26, What it never removes).
+
+**Stage 1, measure.** Nothing is removed.
+
+- `canopy gc --dry-run [--json]`: for each kind in §26's table, the count, the bytes, and what a pass with the
+  proposed defaults would remove. It refuses when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set; TRUST_MODEL T1 adds
+  `gc` to the commands that do, with the operator's approval note in the PR.
+- `[retention]` in the user file (§26, Configuration), validated, read by nothing but the dry run yet.
+- Check: the operator runs it on their live workspace, the result is a dated section of `MEASUREMENTS.md`, and the
+  defaults in §26 are set from it.
+
+**Stage 2, files.**
+
+- The pass in reconcile, at most daily on a live tick, recording each in `gc_passes` (a new migration): run, tick,
+  chore, and review files past their retention, and files with no row. A failed pass is logged and the tick goes on.
+- `canopy.log` rotated past `log_max_mib`, every process logging through `WatchedFileHandler`.
+- The web UI's transcript, prompt, and diff views say "removed after N days" for a file retention removed.
+- Tests with the fakes: a live run's files, a running tick's, and a symlink are never removed; a dry tick runs no
+  pass; a file with no row goes only after an hour.
+- Check: a week of the operator's loop with the pass on; each day's `gc_passes` row matches what the dry run
+  predicted, and no page the operator opens fails.
+
+**Stage 3, the journal.**
+
+- The pass deletes harness-raised attention rows older than both the attention list's 1000-tick window and
+  `journal_days`, then runs `PRAGMA wal_checkpoint(TRUNCATE)`. `canopy gc --vacuum` runs `VACUUM` while no run is
+  live.
+- A test: with rows on both sides of the window, the attention list, each item's open-since, and the notification
+  diff are the same before and after a pass.
+- Check: on the operator's journal, the attention list and `canopy status` are unchanged across a pass, and the file
+  shrinks after `--vacuum` by about what the dry run said.
+
+**Stage 4, outside the journal.**
+
+- `canopy gc --git`: `loose-objects` and `incremental-repack` maintenance in each primary clone with no leased slot,
+  under `dispatch.lock`, through `hostgit.argv`.
+- `canopy gc --caches`: empties the sandbox's per-role caches while no run of that role is live.
+- The dry run lists remote branches no open run or unit names, for the operator to delete.
+- Check: `--git` on a clone whose slots hold unpushed commits keeps every one of them, and a run after it pushes
+  normally; a SCENARIOS entry, since it is worth running again on each git upgrade.
+- Open: whether the pass runs `--git` on its own, weekly, after that check.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Spend-paced loop (M13): when, with M39 built, overseer spend per day still runs past what the operator will pay
