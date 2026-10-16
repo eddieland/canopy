@@ -62,6 +62,57 @@ def run(ctx: Context, *, dry_run: bool) -> Outcome:
         return Outcome(None, "lock_busy", "another tick holds the lock")
 
 
+def state_block(
+    ctx: Context, *, tick_id: int, dry_run: bool, now: datetime, reconciled: reconcile.Reconciled, query_due: bool
+) -> str:
+    """Read the journal for tick `tick_id` and render the overseer's state block from it (DESIGN §6 step 4).
+
+    `reconciled` is what reconcile left: the capacity, and each repository's leased slots.
+
+    Returns:
+        The `## State` section, the overseer's whole message.
+    """
+    running = db.running_runs(ctx.conn, "runs")
+    last_runs = db.latest_runs(ctx.conn)
+    # A stopped ticket waits on the operator alone: listed by key, it gets no decision every tick (DESIGN §22).
+    stopped = conversation.stopped(ctx.conn)
+    tickets = [t for t in db.open_tickets(ctx.conn) if str(t["key"]) not in stopped]
+    private = {str(t["key"]): found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
+    operator = {
+        str(t["key"]): found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None
+    }
+    return state.state_block(
+        ctx.config,
+        ctx.repo_root,
+        tick_id=tick_id,
+        dry_run=dry_run,
+        capacity=reconciled.capacity,
+        workspace=ctx.workspace,
+        leased=reconciled.leased,
+        running=running,
+        tickets=tickets,
+        stopped=stopped,
+        recently_done=db.recently_done(ctx.conn, db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS))),
+        units=db.all_units(ctx.conn),
+        last_runs=last_runs,
+        run_slots=db.all_run_slots(ctx.conn, [int(r["id"]) for r in [*running, *last_runs.values()]]),
+        attempts=policy.attempts(ctx.conn),
+        grants=policy.grants(ctx.conn),
+        fix_ci_cooldowns=policy.fix_ci_cooldowns(ctx.conn, ctx.config, now),
+        now=now,
+        split_attempts=policy.split_attempts(ctx.conn),
+        split_children=db.open_split_children(ctx.conn),
+        chores=chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now),
+        reviews=review_view.state_section(ctx.conn, ctx.config, now),
+        notices=notice.recent(ctx.conn, now),
+        private=private,
+        operator=operator,
+        mirror_delimiter=conversation.body_delimiter(),
+        attention=attention.for_overseer(ctx.conn),
+        query_due=query_due,
+    )
+
+
 def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     applied = db.migrate(ctx.conn, resources.migrations_dir())
     abandoned = db.abandon_unfinished_ticks(ctx.conn)
@@ -93,45 +144,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     now = datetime.now(UTC)
     query_due = _query_due(ctx, now)
     db.set_tick_query(ctx.conn, tick_id, due=query_due)
-    running = db.running_runs(ctx.conn, "runs")
-    last_runs = db.latest_runs(ctx.conn)
-    # A stopped ticket waits on the operator alone: listed by key, it gets no decision every tick (DESIGN §22).
-    stopped = conversation.stopped(ctx.conn)
-    tickets = [t for t in db.open_tickets(ctx.conn) if str(t["key"]) not in stopped]
-    private = {str(t["key"]): found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
-    operator = {
-        str(t["key"]): found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None
-    }
-    block = state.state_block(
-        ctx.config,
-        ctx.repo_root,
-        tick_id=tick_id,
-        dry_run=dry_run,
-        capacity=reconciled.capacity,
-        workspace=ctx.workspace,
-        leased=reconciled.leased,
-        running=running,
-        tickets=tickets,
-        stopped=stopped,
-        recently_done=db.recently_done(ctx.conn, db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS))),
-        units=db.all_units(ctx.conn),
-        last_runs=last_runs,
-        run_slots=db.all_run_slots(ctx.conn, [int(r["id"]) for r in [*running, *last_runs.values()]]),
-        attempts=policy.attempts(ctx.conn),
-        grants=policy.grants(ctx.conn),
-        fix_ci_cooldowns=policy.fix_ci_cooldowns(ctx.conn, ctx.config, now),
-        now=now,
-        split_attempts=policy.split_attempts(ctx.conn),
-        split_children=db.open_split_children(ctx.conn),
-        chores=chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now),
-        reviews=review_view.state_section(ctx.conn, ctx.config, now),
-        notices=notice.recent(ctx.conn, now),
-        private=private,
-        operator=operator,
-        mirror_delimiter=conversation.body_delimiter(),
-        attention=attention.for_overseer(ctx.conn),
-        query_due=query_due,
-    )
+    block = state_block(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due)
     unavailable = _check_canopy(ctx, tick_id, log)
     if unavailable is not None:
         detail = f"{unavailable}; the overseer did not run. Make `canopy --version` work where the loop runs"

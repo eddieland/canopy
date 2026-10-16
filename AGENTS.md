@@ -152,6 +152,10 @@ If code and the design disagree, the design doc wins until a decision entry says
   `src/canopy`.
 - One end-to-end test runs `canopy tick --dry-run` against the fakes and asserts on the `decisions` and `ticks`
   tables.
+- What canopy renders whole, such as the overseer's state block, is held by a snapshot test: a journal written by hand,
+  the output compared with a file under `tests/snapshots/` through the `snapshot` fixture (`tests/snapshot.py`).
+  `make snapshots` records the ones that differ, and the diff is reviewed with the change. A snapshot holds canopy's
+  output, never a model's.
 - Prompts are not unit-tested. `canopy tick --dry-run` writes the overseer's plan to the `decisions` table; that table
   is the evaluation corpus for prompt changes. Do not add prompt "tests" that assert on model output.
 

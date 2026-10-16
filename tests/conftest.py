@@ -17,6 +17,7 @@ import pytest
 from canopy.core import db
 from canopy.infra import resources
 from canopy.infra.procs import SubprocessRunner
+from tests.snapshot import UPDATE_OPTION, Snapshot
 
 if TYPE_CHECKING:
     import sqlite3
@@ -37,6 +38,16 @@ HERMETIC_GIT = {
     "GIT_CONFIG_GLOBAL": os.devnull,
     "GIT_CONFIG_NOSYSTEM": "1",
 }
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(UPDATE_OPTION, action="store_true", help="record every snapshot that differs (tests/snapshot.py)")
+
+
+@pytest.fixture
+def snapshot(request: pytest.FixtureRequest) -> Snapshot:
+    """Compares rendered text with its snapshot under tests/snapshots/, or records it with `--update-snapshots`."""
+    return Snapshot(update=request.config.getoption(UPDATE_OPTION) is True)
 
 
 @pytest.fixture(autouse=True)
