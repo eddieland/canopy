@@ -33,6 +33,13 @@ function sync(editor: Editor, threads: Placed[]) {
     editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'sync', threads }))
 }
 
+// Presses `key` in the editor as the browser would send it: `commands.keyboardShortcut` keeps only the steps of what
+// a handler dispatches, not its meta. Whether a handler took it.
+function press(editor: Editor, key: string): boolean {
+    const event = new KeyboardEvent('keydown', { key })
+    return editor.view.someProp('handleKeyDown', (handle) => handle(editor.view, event)) ?? false
+}
+
 function quoteOf(editor: Editor, id: string) {
     const range = highlightsKey.getState(editor.state)?.ranges.get(id)
     return range && editor.state.doc.textBetween(range.from, range.to)
@@ -89,6 +96,40 @@ describe('PlanHighlights', () => {
         expect(highlightsKey.getState(editor.state)?.active).toBe('n')
         sync(editor, [])
         expect(quoteOf(editor, 'n')).toBeUndefined()
+    })
+
+    it('closes the open thread when the cursor leaves its passage, and keeps it while the cursor is in it', () => {
+        const editor = open(PLAN)
+        sync(editor, [placed('a', 'the rows')])
+        const range = highlightsKey.getState(editor.state)?.ranges.get('a')
+        if (!range) {
+            throw new Error('no range')
+        }
+        editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id: 'a' }))
+        editor.commands.setTextSelection(range.to)
+        expect(highlightsKey.getState(editor.state)?.active).toBe('a')
+        editor.commands.setTextSelection(range.from + 3)
+        editor.commands.insertContent('raw ')
+        expect(highlightsKey.getState(editor.state)?.active).toBe('a')
+        editor.commands.setTextSelection(1)
+        expect(highlightsKey.getState(editor.state)?.active).toBeUndefined()
+    })
+
+    it('closes the open thread on Escape, and leaves Escape alone with none open', () => {
+        const editor = open(PLAN)
+        sync(editor, [placed('a', 'the rows')])
+        expect(press(editor, 'Escape')).toBe(false)
+        editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id: 'a' }))
+        expect(press(editor, 'Escape')).toBe(true)
+        expect(highlightsKey.getState(editor.state)?.active).toBeUndefined()
+    })
+
+    it('draws the passage being commented on as the open one, in place of the thread that was', () => {
+        const editor = open(PLAN)
+        sync(editor, [placed('a', 'the rows')])
+        editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id: 'a' }))
+        editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'draft', range: { from: 1, to: 3 } }))
+        expect(highlightsKey.getState(editor.state)?.active).toBeUndefined()
     })
 
     it('asks for a comment on Mod+Alt+M, through the editor’s events', () => {
