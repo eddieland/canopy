@@ -1133,7 +1133,8 @@ remote branch is deleted; and no flag shortens retention, which only the user fi
 - `canopy gc --dry-run [--json]`: for each kind in §26's table, the count, the bytes, and what a pass with the
   proposed defaults would remove. It refuses when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set; TRUST_MODEL T1 adds
   `gc` to the commands that do, with the operator's approval note in the PR.
-- `[retention]` in the user file (§26, Configuration), validated, read by nothing but the dry run yet.
+- `[retention]` in the user file (§26, Configuration), validated in full now (non-negative integers), so a later
+  stage changes no key; read by nothing but the dry run yet.
 - Check: the operator runs it on their live workspace, the result is a dated section of `MEASUREMENTS.md`, and the
   defaults in §26 are set from it.
 
@@ -1141,7 +1142,8 @@ remote branch is deleted; and no flag shortens retention, which only the user fi
 
 - The pass in reconcile, at most daily on a live tick, recording each in `gc_passes` (a new migration): run, tick,
   chore, and review files past their retention, and files with no row. A failed pass is logged and the tick goes on.
-- `canopy.log` rotated past `log_max_mib`, every process logging through `WatchedFileHandler`.
+- `canopy.log` rotated past `log_max_mib`, its size checked on every live tick, every process logging through
+  `WatchedFileHandler`.
 - The web UI's transcript, prompt, and diff views say "removed after N days" for a file retention removed.
 - Tests with the fakes: a live run's files, a running tick's, and a symlink are never removed; a dry tick runs no
   pass; a file with no row goes only after an hour.
@@ -1152,9 +1154,9 @@ remote branch is deleted; and no flag shortens retention, which only the user fi
 
 - The pass deletes harness-raised attention rows older than both the attention list's 1000-tick window and
   `journal_days`, then runs `PRAGMA wal_checkpoint(TRUNCATE)`. `canopy gc --vacuum` runs `VACUUM` while no run is
-  live.
-- A test: with rows on both sides of the window, the attention list, each item's open-since, and the notification
-  diff are the same before and after a pass.
+  live and the disk has room for a copy of the journal.
+- Tests: with rows on both sides of the window, the attention list, each item's open-since, and the notification
+  diff are the same before and after a pass; with fewer than 1000 `ok` ticks, a pass deletes no row.
 - Check: on the operator's journal, the attention list and `canopy status` are unchanged across a pass, and the file
   shrinks after `--vacuum` by about what the dry run said.
 

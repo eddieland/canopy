@@ -90,19 +90,22 @@ things, for history the operator rarely opens after a month.
 
 ### `canopy.log`
 
-Every canopy process appends to it: ticks, `_run`, `_chore`, `_review`, and the web UI's server. The pass renames
-it to `canopy.log.1`, shifting older ones up to `log_keep`, once it passes `log_max_mib`. Every process logs through
-stdlib's `logging.handlers.WatchedFileHandler`, which notices the rename and reopens the path, so no process keeps
-writing to a renamed file for long. Rejected: `RotatingFileHandler`, which rotates in whichever process crosses the
+Every canopy process appends to it: ticks, `_run`, `_chore`, `_review`, and the web UI's server. Reconcile checks its
+size on every live tick, not only in the daily pass, since the check is one `stat`; once it passes `log_max_mib`,
+reconcile renames it to `canopy.log.1`, shifting older ones up to `log_keep`. So the limit is soft by at most one
+tick's lines. Every process logs through stdlib's `logging.handlers.WatchedFileHandler`, which notices the rename and
+reopens the path. A line written between that check and the rename lands in `canopy.log.1`; nothing is lost, and the
+tests do not try to prove an order. Rejected: `RotatingFileHandler`, which rotates in whichever process crosses the
 size, and races every other process doing the same.
 
 ### The journal
 
 The pass deletes a harness-raised attention row when its tick is older than the 1000th newest `ok` tick, which is as
 far back as the attention list ever looks (`attention._HISTORY_TICKS`), and it was recorded more than `journal_days`
-ago. The attention list, each item's open-since, and notifications read only that window, so none of them changes. An
-old tick's page still shows the overseer's decisions, but not the harness's attention rows. Search finds no old ones
-either.
+ago. A journal with fewer than 1000 `ok` ticks has no row outside the window, so the pass deletes none, whatever
+`journal_days` says. The attention list, each item's open-since, and notifications read only that window, so none of
+them changes. An old tick's page still shows the overseer's decisions, but not the harness's attention rows. Search
+finds no old ones either.
 
 Rejected: recording an item only when it opens and when it closes. That would save the same rows, but it changes how
 §14 derives the list, and every reader of `decisions` with it; the window rule saves them and changes nothing that is
@@ -111,8 +114,10 @@ read.
 After the deletes the pass runs `PRAGMA wal_checkpoint(TRUNCATE)`. A long-lived reader, such as one of the web UI's
 event streams, can hold the checkpoint back; then the pass logs it and moves on. SQLite reuses freed pages, but the
 file never shrinks: `canopy gc --vacuum` runs `VACUUM`, refusing while any run is live, since `_run` writes the
-journal while it runs. Rejected: `auto_vacuum = INCREMENTAL`, since an existing journal needs a `VACUUM` to switch, and
-it would free little more than reuse does.
+journal while it runs. `VACUUM` writes a whole copy of the journal first, so it also refuses when the disk has less
+free space than the journal's size: it is for reclaiming space at leisure, and cannot help a disk that is already
+full. The file deletes above are what help then. Rejected: `auto_vacuum = INCREMENTAL`, since an existing journal
+needs a `VACUUM` to switch, and it would free little more than reuse does.
 
 ### Git in the primary clones
 
@@ -146,8 +151,8 @@ log_max_mib = 50       # canopy.log is rotated past this
 log_keep = 3           # and this many rotated files are kept
 ```
 
-`0` keeps that kind forever. The values are a proposal: M47's first stage measures a live workspace, and its numbers
-set the defaults.
+Each is a non-negative integer, and `0` keeps that kind forever. The values are a proposal: M47's first stage
+measures a live workspace, and its numbers set the defaults.
 
 ### Open
 
