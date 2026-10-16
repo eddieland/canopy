@@ -960,19 +960,24 @@ What every stage holds to:
 - **The host stays safe.** Every git canopy's pool runs goes through `hostgit.argv` (D107), and a step in a slot after
   a run comes after `_run`'s link and `commondir` check (D118).
 
-What treehouse does that canopy relies on or works around, from its source (read at `d40678e`; stage 1 checks each
-against the pinned `1185dc6`):
+What treehouse does that canopy relies on or works around, from its source at the pinned `1185dc6` (checked in stage
+1; DESIGN §18, What a pool guarantees, lists what the contract suite holds it to):
 
-- Reuse and return reset a slot with `read-tree --reset -u` and `clean -fd`, no `-x`: ignored files (build outputs,
-  `node_modules`, Bazel's links) survive, and untracked files and unpushed commits do not.
+- Reuse and return reset a slot with `read-tree --reset -u` and `clean -fd`, no `-x`, and move HEAD to the base's tip,
+  detached: ignored files (build outputs, `node_modules`, Bazel's links) survive, except those seeding wrote, which
+  the reset removes first; untracked files and commits no branch holds do not.
 - A slot is reused only when it is unleased, a worktree of this clone, clean (`status --porcelain
-  --untracked-files=all`), and has no process with its cwd inside it.
+  --untracked-files=all`), has no process with its cwd inside it, and its HEAD is merged (an ancestor, or the same
+  content as a squash) into the base or the base it was last leased on. A clean slot holding unmerged commits shows
+  `available` and is passed over.
 - `return` is conditional on the lease id and holder (exit 1 otherwise) and forced, so exit 3 never happens. It ends
-  processes in the slot first.
-- Seeding copies the ignored files `.worktreeinclude` (or `--include-file`) selects, on every lease, and fails a lease
-  whose seed target already exists.
-- `destroy` keeps a slot that is leased, in use, dirty, or unmerged into the default branch, and calls `ls-remote`
-  first. `status` writes treehouse's state and may move files out of a slot it recovers.
+  processes in the slot first (SIGTERM, then SIGKILL after two seconds), and parks the slot on its lease's base.
+- Seeding copies the untracked, ignored files `.worktreeinclude` (or `--include-file`) selects, on every lease. A
+  seed target already in the slot fails the lease, and treehouse then holds a reused slot under a `quarantined:`
+  holder. A symlink is written as a regular file holding its target.
+- `destroy` keeps a slot that is leased, in use, dirty, unverifiable, or unmerged into the default branch, and runs
+  `git fetch` and `ls-remote` on `origin` first. `status` rewrites treehouse's state, forgets a slot whose directory
+  is gone, and records a worktree it finds unrecorded as held; it moves no file.
 
 **Stage 1, the contract.** No behavior changes.
 
@@ -1029,7 +1034,8 @@ is enough.
 Accept: each stage's check, in order. Then `make install-check` and `make binary` pass with no `treehouse` on `PATH`,
 and a fresh install from README on a machine with no Go runs a day of `canopy loop`.
 
-Status: not started.
+Status: in progress. Stage 1's suite passes against the fake and against real treehouse at the pinned commit on Linux;
+its check waits on the CI job's first run on macOS.
 
 ## Deferred, with the trigger that would unblock each
 

@@ -210,6 +210,92 @@ api = 4                 # by repository name; wins over slots_per_repo
   uncloned repository is previewed with every slot to make.
 - A lease sync cannot return, its own or a dead sync's, makes the pool `failed` and sync exit 1.
 
+### What a pool guarantees
+
+What canopy takes from a pool, whichever implements it, is a list of guarantees, each stated by one case in
+`tests/canopy/test_pool_contract.py` (ROADMAP M45). The suite runs every case through `core/treehouse.py`'s four
+operations against the fake on every `make check`, and against real treehouse when it is on PATH: `make pool-contract`,
+which CI runs on Linux and macOS with treehouse built at the pinned commit. A behavior with no case is not a guarantee,
+and a caller may rely only on what is listed here. The fake models treehouse's CLI and lease bookkeeping, not git, so
+the cases about what is in a slot run only against a pool of real worktrees.
+
+Leasing:
+
+- A new pool has no slots (`test_a_new_pool_has_no_slots`).
+- A lease names its slot, its id, its holder `canopy:<KEY>`, when it was taken (ISO 8601 with an offset), and its base
+  branch by its bare name, `main` by default; `status` shows the slot `leased` under the same id, holder, and time
+  (`test_a_lease_names_its_slot_holder_time_and_base`).
+- Slots are `<root>/.treehouse/<pool>/<N>/<repo>`, numbered from 1
+  (`test_slots_live_under_the_workspace_in_the_pinned_layout`).
+- Leases held at once are different slots (`test_leases_held_at_once_are_different_slots`).
+- A lease on a base starts at that branch's tip (`test_a_lease_on_a_base_starts_there`).
+- A lease fetches `origin` first; sync's `--no-fetch` lease cuts the slot from the refs already there
+  (`test_a_lease_fetches_first_unless_told_not_to`).
+- A slot is a linked worktree of the primary clone, detached at its base, whose `.git` file and `commondir` `_run`
+  checks (`test_a_slot_is_a_detached_worktree_of_the_primary_clone`).
+- A sync lease names no ticket (`test_a_sync_lease_names_no_ticket`).
+
+Returning:
+
+- A return frees the slot: `available`, with no lease id, holder, or time (`test_a_return_frees_the_slot`).
+- A return needs the lease's id and holder both, and fails otherwise, leaving the lease
+  (`test_a_return_needs_the_lease_id_and_holder`); so a lease returns once, and never touches the slot's next holder
+  (`test_a_lease_returns_once`).
+- Returning a path no pool manages fails (`test_returning_a_path_no_pool_manages_fails`).
+- A return finds the slot's pool from the slot's own path, so it works from the workspace root when the clone is gone
+  (`test_a_return_finds_the_pool_from_the_slot_when_the_clone_is_gone`).
+- A return is forced: it never answers `dirty`, and it discards uncommitted changes, untracked files, and commits no
+  branch holds, leaving HEAD at the base (`test_a_return_is_forced_and_discards_what_the_run_left`).
+- A return ends the processes in the slot first (`test_a_return_ends_the_processes_in_the_slot`).
+
+Reuse:
+
+- A returned slot is reused before a new one is made (`test_a_returned_slot_is_reused`).
+- Reuse resets the slot to the base's tip and keeps its ignored files, such as build outputs and caches, and nothing
+  else (`test_reuse_keeps_ignored_files_and_nothing_else`).
+- A return parks the slot on its lease's base, and a slot parked on a stacked run's base is still reused
+  (`test_a_return_parks_the_slot_on_its_base_and_it_is_reused`).
+- An idle slot with changes is `dirty`, and one with a process in it `in-use`; neither is reused
+  (`test_an_idle_slot_with_changes_is_dirty_and_not_reused`,
+  `test_an_idle_slot_with_a_process_in_it_is_in_use_and_not_reused`).
+- An idle slot whose HEAD is not merged into the base is not reused, though clean and so `available`
+  (`test_an_idle_slot_with_unmerged_commits_is_not_reused`): `available` does not promise reusable.
+
+Seeding (§9):
+
+- Every lease, a reused slot's too, copies from the primary clone the untracked, ignored files the include file
+  selects, and nothing else (`test_a_lease_seeds_the_ignored_files_the_include_file_selects`,
+  `test_seeding_repeats_on_every_lease`); never a tracked file (`test_seeding_never_copies_a_tracked_file`).
+- A return removes what seeding wrote, so the next lease seeds afresh (`test_a_return_removes_what_seeding_wrote`).
+- A seed target already in the slot fails the lease, and the slot is held under a holder no ticket can name until the
+  operator returns it (`test_a_seed_target_already_in_the_slot_fails_the_lease_and_holds_the_slot`).
+- A seeded symlink is written as a regular file holding the link's target
+  (`test_a_seeded_link_is_written_as_a_file_holding_its_target`); whether it should be a link is open (ROADMAP M45).
+- A missing include file fails the lease before any slot is touched
+  (`test_a_missing_include_file_fails_the_lease_before_any_slot`).
+
+Removing (sync's trim, above):
+
+- `destroy` removes an idle, clean, merged slot and its directory (`test_destroy_removes_an_idle_merged_slot`), and
+  keeps, saying why, a slot that is leased, dirty, in use, or holds commits not merged into the default branch
+  (`test_destroy_keeps_a_leased_slot`, `test_destroy_keeps_a_dirty_slot`,
+  `test_destroy_keeps_a_slot_with_a_process_in_it`, `test_destroy_keeps_a_slot_with_unmerged_commits`), or that no
+  pool manages
+  (`test_destroy_of_a_path_no_pool_manages_says_why`).
+
+Size (above):
+
+- A pool with no declared size stops at its bound, treehouse's `max_trees`
+  (`test_an_unmanaged_pool_stops_at_its_bound`).
+- A declared pool with every slot busy, a dirty idle one counting as busy, refuses a lease without growing
+  (`test_a_declared_pool_with_every_slot_busy_refuses_without_growing`,
+  `test_a_declared_pool_counts_a_dirty_idle_slot_as_busy`), and keeps its size when its idle slot cannot be reused
+  (`test_a_declared_pool_keeps_its_size_when_its_idle_slot_cannot_be_reused`).
+
+Not guaranteed, though treehouse does it: `status` rewrites treehouse's state, forgets a slot whose directory is gone,
+and records a worktree it finds in the pool directory as held; `destroy` runs `git fetch` and `git ls-remote` on
+`origin` first; `post_create` hooks run after seeding. treehouse runs git with none of D107's flags.
+
 ### Units
 
 A ticket's work is divided into units, one per repository it changes, each with its own PR, phase, review and CI
