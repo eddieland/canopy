@@ -15,6 +15,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, conversation, db, definitions, outbox
+from canopy.core.vocab import RunStatus
 from canopy.infra import procs, resources
 from canopy.loop import attention, repeat
 from canopy.serve import views
@@ -468,9 +469,9 @@ def test_the_migration_gives_runs_from_before_it_a_conversation(tmp_path: Path, 
 
 def test_run_messages_and_the_run_ended_event_carry_the_message() -> None:
     result = json.dumps({"summary": " did it ", "prs": {"api": "https://e.test/pr/1"}, "question": "Q?"})
-    assert conversation.run_messages("done", result) == [("report", "did it\nhttps://e.test/pr/1")]
-    assert conversation.run_messages("blocked", result)[1] == ("question", "Q?")
-    assert conversation.run_messages("crashed", json.dumps({"harness": "gone"})) == [("report", "gone")]
+    assert conversation.run_messages(RunStatus.DONE, result) == [("report", "did it\nhttps://e.test/pr/1")]
+    assert conversation.run_messages(RunStatus.BLOCKED, result)[1] == ("question", "Q?")
+    assert conversation.run_messages(RunStatus.CRASHED, json.dumps({"harness": "gone"})) == [("report", "gone")]
 
 
 def test_run_ended_names_the_message_the_run_recorded(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
@@ -484,11 +485,11 @@ def test_run_ended_names_the_message_the_run_recorded(canopy_env: CanopyEnv, con
     run = db.get_run(conn, run_id)
     assert run is not None
     result = json.dumps({"summary": "s", "question": "Q?"})
-    assert conversation.close_run(conn, cfg, run, "blocked", result)
+    assert conversation.close_run(conn, cfg, run, RunStatus.BLOCKED, result)
     event = conn.execute("SELECT fields FROM notify_events WHERE kind = 'run.ended'").fetchone()
     question = db.messages_of(conn, "ticket", KEY, 10)[-1]
     assert json.loads(event[0])["message"] == question["id"]
-    assert outbox.run_ended(cfg, run, "done", "{}")(None) is not None
+    assert outbox.run_ended(cfg, run, RunStatus.DONE, "{}")(None) is not None
 
 
 def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(

@@ -6,6 +6,7 @@ import json
 from typing import TYPE_CHECKING
 
 from canopy.core import dead_runs, outbox
+from canopy.core.vocab import ReviewRunStatus
 from canopy.reviews import execute
 
 if TYPE_CHECKING:
@@ -27,7 +28,7 @@ def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
         dead_runs.kill_agent("review_runs", row, log, fields)
         execute.clean_up(ctx, row, log)
         note = json.dumps({"harness": "the review process is gone"})
-        ended = outbox.review_ended(ctx.config, row, "crashed", note)
+        ended = outbox.review_ended(ctx.config, row, ReviewRunStatus.CRASHED, note)
         if dead_runs.crash(ctx.conn, "review_runs", row, note, event=ended):
             closed.append(int(row["id"]))
             log.warning("review process is gone; review run marked crashed", extra=fields)

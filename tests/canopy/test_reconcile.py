@@ -14,6 +14,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, db, definitions
+from canopy.core.vocab import RunStatus
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from tests.canopy.helpers import commit_and_push, in_tick, journal, pool, wait_for_run, worker_does
@@ -71,7 +72,7 @@ def add_run(
     if pid is not None:
         db.claim_run(conn, "runs", run_id, pid)
     if status != "running":
-        db.finish_run(conn, "runs", run_id, status, json.dumps({"summary": "gave up"}))
+        db.finish_run(conn, "runs", run_id, RunStatus(status), json.dumps({"summary": "gave up"}))
     return run_id
 
 
@@ -152,7 +153,7 @@ def test_old_definitions_snapshots_are_removed_only_when_no_run_is_live(
         assert main(["tick", "--dry-run"]) == 0
         assert old.is_dir()
 
-        db.finish_run(conn, "runs", live, "done", "{}")
+        db.finish_run(conn, "runs", live, RunStatus.DONE, "{}")
         assert main(["tick", "--dry-run"]) == 0
         assert not old.exists()
         current = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))

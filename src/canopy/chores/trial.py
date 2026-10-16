@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from canopy.chores import execute, start
 from canopy.core import agent_output, conversation, db, notice, outbox
 from canopy.core import chore_view as view
+from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import lock, logs, procs
 
 if TYPE_CHECKING:
@@ -173,6 +174,6 @@ def _crash(ctx: Context, run: sqlite3.Row, e: Exception) -> str:
         What went wrong, for the error the caller raises.
     """
     note = json.dumps({"harness": f"could not start the try: {e}"})
-    ended = outbox.chore_ended(ctx.config, run, "crashed", note)
-    db.finish_run(ctx.conn, "chore_runs", int(run["id"]), "crashed", note, event=ended)
+    ended = outbox.chore_ended(ctx.config, run, ChoreRunStatus.CRASHED, note)
+    db.finish_run(ctx.conn, "chore_runs", int(run["id"]), ChoreRunStatus.CRASHED, note, event=ended)
     return f"chore run {run['id']} could not start: {e}"

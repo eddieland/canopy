@@ -13,6 +13,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.core.vocab import RunStatus
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from canopy.runs import desks
@@ -165,7 +166,7 @@ def test_units_have_their_own_attempts_and_share_the_branch(ws: Ws, treehouse_st
                     assert runner.run(
                         ["treehouse", "return", "--force", s["slot_path"]], env={"TREEHOUSE_ROOT": str(ws.root)}
                     ).ok
-                assert db.finish_run(conn, "runs", run_id, "done", "{}")
+                assert db.finish_run(conn, "runs", run_id, RunStatus.DONE, "{}")
             return code
 
         assert run("--repo", "api", "--slug", "login") == 0

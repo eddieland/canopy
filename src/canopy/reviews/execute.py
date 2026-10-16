@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, TextIO
 from canopy.core import agent_output, conversation, db, definitions, hostgit, outbox, review_diff, treehouse
 from canopy.core import review_result as result
 from canopy.core.config import render_command
+from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import logs, procs, stopping
 from canopy.reviews import start
 
@@ -46,7 +47,7 @@ class _SetupError(Exception):
 class Outcome:
     """How a review run ended: its status and the validated result, with a note when the harness decided the status."""
 
-    status: str
+    status: ReviewRunStatus
     result: result.ReviewResult | None
     note: str = ""
 
@@ -75,19 +76,19 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     log = logs.for_tick(int(run["tick_id"]))
     fields = {"review_run_id": run_id, "pr": run["pr_url"], "sha": run["sha"]}
     log.info("review run started", extra=fields)
-    outcome = Outcome("crashed", None, "the review run stopped before its reviewer finished")
+    outcome = Outcome(ReviewRunStatus.CRASHED, None, "the review run stopped before its reviewer finished")
     with stopping.StopOnSignal() as stop:
         try:
             outcome = _work(ctx, run, out, log)
         except stopping.Stopped as e:
-            outcome = Outcome("crashed", None, str(e))
+            outcome = Outcome(ReviewRunStatus.CRASHED, None, str(e))
         except _Unreviewable as e:
-            outcome = Outcome("failed", None, str(e))
+            outcome = Outcome(ReviewRunStatus.FAILED, None, str(e))
         except _SetupError as e:
-            outcome = Outcome("crashed", None, str(e))
+            outcome = Outcome(ReviewRunStatus.CRASHED, None, str(e))
             log.error("review run not started", extra={**fields, "error": str(e)})  # noqa: TRY400
         except Exception as e:
-            outcome = Outcome("crashed", None, f"{type(e).__name__}: {e}")
+            outcome = Outcome(ReviewRunStatus.CRASHED, None, f"{type(e).__name__}: {e}")
             log.exception("review run failed", extra=fields)
         finally:
             stop.armed = False
@@ -109,11 +110,11 @@ def judged(ctx: Context, parsed: result.ReviewResult) -> Outcome:
         as normal, with a note saying so.
     """
     if parsed.status != "done":
-        return Outcome("failed", parsed)
+        return Outcome(ReviewRunStatus.FAILED, parsed)
     if parsed.impact == "low" and not ctx.config.review.low_impact.strip():
         note = "reported low impact, but review.low_impact is not set; recorded as normal"
-        return Outcome("done", parsed.model_copy(update={"impact": "normal"}), note)
-    return Outcome("done", parsed)
+        return Outcome(ReviewRunStatus.DONE, parsed.model_copy(update={"impact": "normal"}), note)
+    return Outcome(ReviewRunStatus.DONE, parsed)
 
 
 def clean_up(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> None:
@@ -180,10 +181,10 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
         spent = output.usage.spent() if output.usage else {}
         log.info("reviewer reported", extra={"review_run_id": run_id, "session_id": output.session_id, **spent})
     if done.timed_out:
-        return Outcome("timeout", None, f"the reviewer timed out after {timeout_minutes} minutes")
+        return Outcome(ReviewRunStatus.TIMEOUT, None, f"the reviewer timed out after {timeout_minutes} minutes")
     parsed = result.parse(output.text)
     if parsed is None:
-        return Outcome("unknown", None, "the reviewer's last line was not a valid result")
+        return Outcome(ReviewRunStatus.UNKNOWN, None, "the reviewer's last line was not a valid result")
     return judged(ctx, parsed)
 
 

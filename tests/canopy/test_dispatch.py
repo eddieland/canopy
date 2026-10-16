@@ -10,6 +10,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.core.vocab import RunStatus
 from canopy.infra import procs
 from tests.canopy.helpers import (
     InlineRunner,
@@ -482,7 +483,7 @@ def test_dry_run_refuses_what_a_live_dispatch_would(
             if status == "running":
                 assert db.claim_run(conn, "runs", run_id, os.getpid())
             else:
-                assert db.finish_run(conn, "runs", run_id, status, None)
+                assert db.finish_run(conn, "runs", run_id, RunStatus(status), None)
 
         past_run("LIMIT", "fix-ci", "done")
         past_run("LIMIT", "fix-ci", "done")

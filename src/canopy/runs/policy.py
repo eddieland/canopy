@@ -16,9 +16,10 @@ import sqlite3
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import conversation, db
+from canopy.core.vocab import RunKind
 
 if TYPE_CHECKING:
     from canopy.core.config import Config
@@ -26,21 +27,31 @@ if TYPE_CHECKING:
 # A unit: a ticket key and a repository name; None for a slot recorded with no repository name.
 Unit = tuple[str, str | None]
 
-# The kinds that work in a unit, and every kind `canopy dispatch` takes.
-KINDS = ("implement", "fix-ci", "resume")
-SPLIT = "split"
-DISPATCH_KINDS = (*KINDS, SPLIT)
+# The kinds that work in a unit, and every kind `canopy dispatch` takes. Typed as str, since the counts below key on
+# `runs.kind` as read; a `click.Choice` takes them as `str(kind)`, since click matches an enum by its name.
+KINDS: tuple[str, ...] = (RunKind.IMPLEMENT, RunKind.FIX_CI, RunKind.RESUME)
+SPLIT = RunKind.SPLIT
+DISPATCH_KINDS: tuple[str, ...] = tuple(RunKind)
 
 
 def limits(config: Config) -> dict[str, int]:
     """Return the most runs of each kind one unit may have, and for `split`, one ticket."""
+    return {kind: _limit(config, kind) for kind in RunKind}
+
+
+def _limit(config: Config, kind: RunKind) -> int:
     p = config.policy
-    return {
-        "implement": p.max_implement_attempts,
-        "fix-ci": p.max_fix_ci_attempts,
-        "resume": p.max_resume_attempts,
-        SPLIT: p.max_split_attempts,
-    }
+    match kind:
+        case RunKind.IMPLEMENT:
+            return p.max_implement_attempts
+        case RunKind.FIX_CI:
+            return p.max_fix_ci_attempts
+        case RunKind.RESUME:
+            return p.max_resume_attempts
+        case RunKind.SPLIT:
+            return p.max_split_attempts
+        case _:
+            assert_never(kind)
 
 
 def unit_limits(config: Config, granted: Mapping[str, int]) -> dict[str, int]:
@@ -171,6 +182,6 @@ def blocked(
     """
     if counts.get(kind, 0) >= limit:
         return "attempt_limit", f"{name} has had {counts.get(kind, 0)} {kind} runs and the limit is {limit}"
-    if kind == "fix-ci" and cooldown_until is not None:
+    if kind == RunKind.FIX_CI and cooldown_until is not None:
         return "cooldown", f"fix-ci for {name} may run again after {db.format_time(cooldown_until)}"
     return None

@@ -8,18 +8,26 @@ slots, a review with its slot, a chore with nothing more.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import db
+from canopy.core.vocab import AnyRunStatus, ChoreRunStatus, ReviewRunStatus, RunStatus
 from canopy.infra import procs
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Mapping
 
     from canopy.core.db import Event, RunTable
     from canopy.infra import logs
+
+# Each run table's `crashed`: what a run whose process is gone is closed as.
+CRASHED: Mapping[RunTable, AnyRunStatus] = {
+    "runs": RunStatus.CRASHED,
+    "chore_runs": ChoreRunStatus.CRASHED,
+    "review_runs": ReviewRunStatus.CRASHED,
+}
 
 
 def find(conn: sqlite3.Connection, table: RunTable) -> list[sqlite3.Row]:
@@ -44,7 +52,7 @@ def crash(conn: sqlite3.Connection, table: RunTable, row: sqlite3.Row, note: str
     Returns:
         True if this call closed the run. False if another process closed it first, which removes the file itself.
     """
-    if not db.finish_run(conn, table, int(row["id"]), "crashed", note, event=event):
+    if not db.finish_run(conn, table, int(row["id"]), CRASHED[table], note, event=event):
         return False
     procs.drop_lifelock(Path(row["log_path"]))
     return True

@@ -9,7 +9,7 @@ from __future__ import annotations
 import math
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import (
     chore_result,
@@ -25,6 +25,7 @@ from canopy.core import (
 )
 from canopy.core import spend as spending
 from canopy.core.items import fingerprint
+from canopy.core.vocab import ChoreRunStatus, RunStatus
 from canopy.serve.schema import (
     AttentionItem,
     ChoreDetail,
@@ -105,9 +106,6 @@ SPEND_DAY_HOURS = 24
 SPEND_MONTH_HOURS = 30 * 24
 _CHORE = "chore:"
 _PR = "pr:"
-_STATES: dict[str, RunState] = {"running": "running", "blocked": "blocked", "done": "done", "stopped": "stopped"}
-# A chore run that checked is done; every other ending raises `chore_failed` (DESIGN §19).
-_CHORE_STATES: dict[str, RunState] = {"running": "running", "ok": "done"}
 _SOURCES: dict[str, MessageSource] = {"worker": "worker", "operator": "operator", "tracker": "tracker"}
 _PAUSE_CHANNELS: dict[str, PauseChannel] = {"loop": "loop", "cli": "cli", "web": "web"}
 _NOTICE_CHANNELS: dict[str, NoticeChannel] = {"cli": "cli", "web": "web"}
@@ -502,7 +500,7 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
         ticket_title=_title(row["ticket_title"]),
         kind=str(row["kind"]),
         status=status,
-        state=_STATES.get(status, "failed"),
+        state=_run_state(status),
         private=bool(row["private"]),
         branch=str(row["branch"]) or None,
         started_at=db.parse_time(str(row["started_at"])),
@@ -516,6 +514,31 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
         worktrees=worktrees or [],
         log_path=shown_path(str(row["log_path"]), root),
     )
+
+
+def _run_state(status: str) -> RunState:
+    """What the web UI colors a run that has `status` as (DESIGN §22).
+
+    Returns:
+        The run's state. A status canopy does not know reads as `failed`.
+    """
+    try:
+        known = RunStatus(status)
+    except ValueError:
+        return "failed"
+    match known:
+        case RunStatus.RUNNING:
+            return "running"
+        case RunStatus.BLOCKED:
+            return "blocked"
+        case RunStatus.DONE:
+            return "done"
+        case RunStatus.STOPPED:
+            return "stopped"
+        case RunStatus.FAILED | RunStatus.UNKNOWN | RunStatus.UNPUSHED | RunStatus.CRASHED | RunStatus.TIMEOUT:
+            return "failed"
+        case _:
+            assert_never(known)
 
 
 def new_tokens(row: sqlite3.Row) -> int | None:
@@ -794,7 +817,7 @@ def chore_run(row: sqlite3.Row, root: Path) -> ChoreRun:
     return ChoreRun(
         id=int(row["id"]),
         status=status,
-        state=_CHORE_STATES.get(status, "failed"),
+        state=_chore_state(status),
         started_at=db.parse_time(str(row["started_at"])),
         ended_at=db.parse_time(str(row["ended_at"])) if row["ended_at"] else None,
         summary=said(row),
@@ -805,6 +828,28 @@ def chore_run(row: sqlite3.Row, root: Path) -> ChoreRun:
         peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
         log_path=shown_path(str(row["log_path"]), root),
     )
+
+
+def _chore_state(status: str) -> RunState:
+    """What the web UI colors a chore run that has `status` as.
+
+    Returns:
+        The run's state: a chore run that checked is done, and every other ending, which raises `chore_failed`
+        (DESIGN §19), is failed, as is a status canopy does not know.
+    """
+    try:
+        known = ChoreRunStatus(status)
+    except ValueError:
+        return "failed"
+    match known:
+        case ChoreRunStatus.RUNNING:
+            return "running"
+        case ChoreRunStatus.OK:
+            return "done"
+        case ChoreRunStatus.FAILED | ChoreRunStatus.UNKNOWN | ChoreRunStatus.TIMEOUT | ChoreRunStatus.CRASHED:
+            return "failed"
+        case _:
+            assert_never(known)
 
 
 def chore_run_detail(ctx: Context, name: str, run_id: int) -> ChoreRunDetail | None:

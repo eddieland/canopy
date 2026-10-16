@@ -26,6 +26,7 @@ from typing import TYPE_CHECKING, TypedDict
 from canopy.core import chore_view, contract, db, outbox, review_result
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
+from canopy.core.vocab import RunStatus
 from canopy.infra import lock
 
 if TYPE_CHECKING:
@@ -882,7 +883,7 @@ def _prompt_message(m: sqlite3.Row) -> str:
 # A run's messages
 
 
-def run_messages(status: str, result_json: str | None) -> list[tuple[str, str]]:
+def run_messages(status: RunStatus, result_json: str | None) -> list[tuple[str, str]]:
     """Return the `(kind, body)` messages a run that closed as `status` reports.
 
     That is a report, and for a `blocked` run its question. The report is the worker's summary, or the harness's note,
@@ -894,12 +895,14 @@ def run_messages(status: str, result_json: str | None) -> list[tuple[str, str]]:
     urls = [str(u) for u in prs.values() if isinstance(u, str) and u] if isinstance(prs, dict) else []
     found = [("report", "\n".join([summary, *urls]))]
     question = _text(result.get("question"))
-    if status == "blocked" and question:
+    if status == RunStatus.BLOCKED and question:
         found.append(("question", question))
     return found
 
 
-def close_run(conn: sqlite3.Connection, config: Config, run: sqlite3.Row, status: str, result_json: str | None) -> bool:
+def close_run(
+    conn: sqlite3.Connection, config: Config, run: sqlite3.Row, status: RunStatus, result_json: str | None
+) -> bool:
     """Close a running run as `status`, recording its messages and its `run.ended` event with it, in one transaction.
 
     Returns:

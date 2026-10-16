@@ -9,6 +9,7 @@ import pytest
 
 from canopy.core import conversation, db, search
 from canopy.core.context import Context
+from canopy.core.vocab import ChoreRunStatus, RunStatus
 from canopy.infra import resources
 from canopy.serve import mock
 from canopy.serve.backend import Backend
@@ -52,9 +53,9 @@ def test_a_runs_report_and_question_are_found_as_its_tickets_messages(ctx: Conte
     db.finish_ticket_run(
         ctx.conn,
         run,
-        "blocked",
+        RunStatus.BLOCKED,
         json.dumps(result),
-        messages=conversation.run_messages("blocked", json.dumps(result)),
+        messages=conversation.run_messages(RunStatus.BLOCKED, json.dumps(result)),
     )
 
     found = search.search(ctx.conn, "BACK OFF")
@@ -69,13 +70,19 @@ def test_a_chore_runs_summary_and_findings_and_its_notes_are_found(ctx: Context)
     run = db.insert_chore_run(ctx.conn, tick_id=tick, chore="deps", logs_dir=ctx.state_dir / "chores")
     finding = {"id": "npm/lodash", "title": "lodash has an advisory", "detail": "Prototype pollution in merge."}
     db.finish_run(
-        ctx.conn, "chore_runs", run, "ok", json.dumps({"status": "ok", "summary": "Checked 3", "findings": [finding]})
+        ctx.conn,
+        "chore_runs",
+        run,
+        ChoreRunStatus.OK,
+        json.dumps({"status": "ok", "summary": "Checked 3", "findings": [finding]}),
     )
     # A result that is not JSON, or whose findings are not objects, is passed over rather than failing the search.
     bad = db.insert_chore_run(ctx.conn, tick_id=tick, chore="deps", logs_dir=ctx.state_dir / "chores")
-    db.finish_run(ctx.conn, "chore_runs", bad, "failed", "not json")
+    db.finish_run(ctx.conn, "chore_runs", bad, ChoreRunStatus.FAILED, "not json")
     odd = db.insert_chore_run(ctx.conn, tick_id=tick, chore="deps", logs_dir=ctx.state_dir / "chores")
-    db.finish_run(ctx.conn, "chore_runs", odd, "ok", json.dumps({"summary": "odd", "findings": ["lodash", 3]}))
+    db.finish_run(
+        ctx.conn, "chore_runs", odd, ChoreRunStatus.OK, json.dumps({"summary": "odd", "findings": ["lodash", 3]})
+    )
     db.insert_message(
         ctx.conn, conversation.CHORE, "deps", source="operator", kind="reply", channel="web", body="Ignore lodash."
     )
