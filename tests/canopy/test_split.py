@@ -12,6 +12,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.core.vocab import RunStatus
 from canopy.loop import attention
 from canopy.runs import worker
 from tests.canopy.conftest import Ws, seed_pools
@@ -160,7 +161,7 @@ def test_a_started_ticket_is_not_split_and_a_split_has_an_attempt_limit(ws: Ws, 
         assert main(split("PROJ-1", "--request", "1", "--repo", "api", "--repo", "web"), runner=runner) == 1
 
         assert main(split("PROJ-12", "--request", "1", "--repo", "api", "--repo", "web"), runner=runner) == 0
-        assert db.finish_run(conn, "runs", 1, "failed", "{}")
+        assert db.finish_run(conn, "runs", 1, RunStatus.FAILED, "{}")
         for s in db.run_slots(conn, 1):
             assert runner.run(
                 ["treehouse", "return", "--force", s["slot_path"]], env={"TREEHOUSE_ROOT": str(ws.root)}

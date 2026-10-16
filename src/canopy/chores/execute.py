@@ -18,6 +18,7 @@ from canopy.core import agent_output, conversation, db, definitions, outbox
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
 from canopy.core.config import render_command
+from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import logs, procs, stopping
 
 if TYPE_CHECKING:
@@ -51,7 +52,7 @@ class Outcome:
     `printed` is what the agent printed, None when the run ended before its agent did.
     """
 
-    status: str
+    status: ChoreRunStatus
     result: result.ChoreResult | None
     note: str = ""
     printed: Printed | None = None
@@ -81,17 +82,17 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     log = logs.for_tick(int(run["tick_id"]) if run["tick_id"] is not None else None)
     fields = {"chore_run_id": run_id, "chore": run["chore"]}
     log.info("chore run started", extra=fields)
-    outcome = Outcome("crashed", None, "the chore run stopped before its agent finished")
+    outcome = Outcome(ChoreRunStatus.CRASHED, None, "the chore run stopped before its agent finished")
     with stopping.StopOnSignal() as stop:
         try:
             outcome = _work(ctx, run, out, log)
         except stopping.Stopped as e:
-            outcome = Outcome("crashed", None, str(e))
+            outcome = Outcome(ChoreRunStatus.CRASHED, None, str(e))
         except SetupError as e:
-            outcome = Outcome("crashed", None, str(e))
+            outcome = Outcome(ChoreRunStatus.CRASHED, None, str(e))
             log.error("chore run not started", extra={**fields, "error": str(e)})  # noqa: TRY400
         except Exception as e:
-            outcome = Outcome("crashed", None, f"{type(e).__name__}: {e}")
+            outcome = Outcome(ChoreRunStatus.CRASHED, None, f"{type(e).__name__}: {e}")
             log.exception("chore run failed", extra=fields)
         finally:
             stop.armed = False
@@ -125,12 +126,14 @@ def outcome_of(done: procs.Result, output: agent_output.AgentOutput, chore: Chor
     """Return how a chore's agent ended: timed out, its validated result from `output`, or `unknown` without one."""
     printed = Printed(output, done.stderr, done.returncode)
     if done.timed_out:
-        return Outcome("timeout", None, f"the chore timed out after {chore.timeout_minutes} minutes", printed)
+        return Outcome(
+            ChoreRunStatus.TIMEOUT, None, f"the chore timed out after {chore.timeout_minutes} minutes", printed
+        )
     parsed = result.parse(output.text)
     if parsed is None:
         note = "the chore's last line was not a valid result; its findings are not recorded"
-        return Outcome("unknown", None, note, printed)
-    return Outcome(parsed.status, parsed, printed=printed)
+        return Outcome(ChoreRunStatus.UNKNOWN, None, note, printed)
+    return Outcome(ChoreRunStatus(parsed.status), parsed, printed=printed)
 
 
 def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) -> Outcome:

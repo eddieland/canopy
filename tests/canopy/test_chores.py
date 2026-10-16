@@ -21,6 +21,7 @@ from canopy.core import chore_view as view
 from canopy.core import db, workspace
 from canopy.core.config import load
 from canopy.core.context import Context
+from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from tests.canopy.helpers import InlineRunner, in_tick, journal, lifelock_left
@@ -175,7 +176,7 @@ def test_chore_guards(canopy_env: CanopyEnv, chores: Path) -> None:
         assert main(["chore", "run", "build-health"], runner=runner) == 0
         assert main(["chore", "run", "build-health"], runner=runner) == 1
         assert main(["chore", "run", "queue-age"], runner=runner) == 1
-        assert db.finish_run(conn, "chore_runs", 1, "ok", json.dumps({"status": "ok"}))
+        assert db.finish_run(conn, "chore_runs", 1, ChoreRunStatus.OK, json.dumps({"status": "ok"}))
         assert main(["chore", "run", "build-health"], runner=runner) == 1
         backdate(conn, 120)
         assert main(["chore", "run", "queue-age"], runner=runner) == 0

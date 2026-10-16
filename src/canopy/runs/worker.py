@@ -25,6 +25,7 @@ from pydantic import BaseModel, ConfigDict, StrictStr
 
 from canopy.core import agent_output, contract, conversation, db, definitions, hostgit, treehouse
 from canopy.core.config import render_command, setup_words
+from canopy.core.vocab import RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
 from canopy.runs import desks, dispatch, policy, tidy
@@ -138,7 +139,7 @@ def _check_child(conn: sqlite3.Connection, parent: str, repos: Sequence[str], ke
 class Outcome:
     """How a run ended: its `runs.status` and the summary stored as `result_json`."""
 
-    status: str
+    status: RunStatus
     result: WorkerResult | SplitResult | None
     note: str = ""
 
@@ -183,7 +184,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     where = {"slots": [str(s.path) for s in slots], "repos": [s.repo for s in slots]}
     log.info("run started", extra={**fields, **where, "branch": run["branch"]})
 
-    outcome = Outcome("crashed", None, "the run stopped before the worker finished")
+    outcome = Outcome(RunStatus.CRASHED, None, "the run stopped before the worker finished")
     with stopping.StopOnSignal() as stop:
         try:
             if not slots:
@@ -192,12 +193,12 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             work = _split if run["kind"] == policy.SPLIT else _work
             outcome = work(ctx, run, slots, out, log)
         except stopping.Stopped as e:
-            outcome = Outcome("crashed", None, str(e))
+            outcome = Outcome(RunStatus.CRASHED, None, str(e))
         except (_SetupError, desks.DeskError) as e:
-            outcome = Outcome("crashed", None, str(e))
+            outcome = Outcome(RunStatus.CRASHED, None, str(e))
             log.error("run setup failed", extra={**fields, "error": str(e)})  # noqa: TRY400  (no traceback needed)
         except Exception as e:
-            outcome = Outcome("crashed", None, f"{type(e).__name__}: {e}")
+            outcome = Outcome(RunStatus.CRASHED, None, f"{type(e).__name__}: {e}")
             log.exception("run failed", extra=fields)
         finally:
             # From here on a signal is ignored: returning the slots and closing the row must not be interrupted.
@@ -364,13 +365,13 @@ def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log:
     if parsed is None:
         if result.timed_out:
             # Whatever it created is unknown to the journal; its comment on the parent lists it for a human.
-            return Outcome("timeout", None, f"the splitter timed out after {timeout_minutes} minutes")
-        return Outcome("unknown", None, "the splitter's last line was not a valid split result")
+            return Outcome(RunStatus.TIMEOUT, None, f"the splitter timed out after {timeout_minutes} minutes")
+        return Outcome(RunStatus.UNKNOWN, None, "the splitter's last line was not a valid split result")
     key = str(run["ticket_key"])
     invalid = check_children(ctx.conn, key, [s.repo for s in slots], parsed)
     if invalid:
         log.warning("split result refused; no child recorded", extra={"run_id": run["id"], "reason": invalid})
-        status = "timeout" if result.timed_out else "unknown"
+        status = RunStatus.TIMEOUT if result.timed_out else RunStatus.UNKNOWN
         # Stored without its children: a refused map is unbounded, and its note says what was wrong with it.
         return Outcome(status, parsed.model_copy(update={"children": {}}), f"children not recorded: {invalid}")
     if parsed.children:
@@ -378,8 +379,8 @@ def _split(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log:
         db.record_split_children(ctx.conn, key, int(run["id"]), parsed.children)
         log.info("split children recorded", extra={"run_id": run["id"], "children": parsed.children})
     if result.timed_out:
-        return Outcome("timeout", parsed, f"the splitter timed out after {timeout_minutes} minutes")
-    return Outcome(parsed.status, parsed)
+        return Outcome(RunStatus.TIMEOUT, parsed, f"the splitter timed out after {timeout_minutes} minutes")
+    return Outcome(RunStatus(parsed.status), parsed)
 
 
 def _check_out(slot: _Slot, branch: str = "") -> _Start:
@@ -430,7 +431,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: 
     stopped = _stopped(ctx, run)
     if stopped:
         log.info("run not started", extra={"run_id": run["id"], "reason": stopped})
-        return Outcome("stopped", None, stopped)
+        return Outcome(RunStatus.STOPPED, None, stopped)
     branch = str(run["branch"])
     starts = [_check_out(slot, branch) for slot in slots]
     for slot in slots:
@@ -444,17 +445,17 @@ def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: 
     if parsed is not None:
         parsed = parsed.for_repos([s.repo for s in slots])
     if result.timed_out:
-        status, note = "timeout", f"the worker timed out after {timeout_minutes} minutes"
+        status, note = RunStatus.TIMEOUT, f"the worker timed out after {timeout_minutes} minutes"
     elif parsed is None:
-        status, note = "unknown", "the worker's last line was not a valid result"
+        status, note = RunStatus.UNKNOWN, "the worker's last line was not a valid result"
     else:
-        status, note = parsed.status, ""
+        status, note = RunStatus(parsed.status), ""
 
     rewritten = [(slot, path) for slot in slots if (path := slot.rewritten()) is not None]
     if rewritten:
         # The slot's git directory may be one the worker made: canopy runs no git in any slot of this run.
         notes = [f"{s.git.where}the worker rewrote {path}; nothing was checked or pushed" for s, path in rewritten]
-        return Outcome("crashed", parsed, "; ".join(notes))
+        return Outcome(RunStatus.CRASHED, parsed, "; ".join(notes))
     objects = _objects(ctx, run)
     if tidy.used(objects):
         # A sandboxed worker's commits are only in the run's object directory (DESIGN §8).
@@ -468,7 +469,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: list[_Slot], out: TextIO, log: 
         if (found := _ensure_pushed(slot, branch, start, log, rebase=rebase))
     ]
     if unpushed:
-        status, note = "unpushed", "; ".join(unpushed)
+        status, note = RunStatus.UNPUSHED, "; ".join(unpushed)
     return Outcome(status, parsed, note)
 
 

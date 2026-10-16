@@ -1,5 +1,6 @@
 import hashlib
 import os
+import re
 import sqlite3
 import typing
 from collections import Counter
@@ -254,6 +255,46 @@ def test_every_run_table_has_what_the_shared_lifecycle_needs(tmp_path: Path, jou
     for table in db.RUN_TABLES:
         columns = {r["name"] for r in conn.execute("SELECT name FROM pragma_table_info(?)", (table,))}
         assert columns >= LIFECYCLE_COLUMNS | {db.AGENT_PID[table]}, table
+
+
+# The last migration before M36. A table made after it constrains each column of a closed vocabulary (`core/vocab.py`)
+# in SQL; the tables before it list their values in comments, since a shipped migration is never edited.
+UNCHECKED_THROUGH = 26
+CLOSED_COLUMNS = frozenset({"status", "kind", "phase"})
+
+
+def unchecked(conn: sqlite3.Connection, made: set[str]) -> list[str]:
+    """The `table.column` of each closed column in the tables `made` with no `CHECK (column IN (...))`."""
+    found: list[str] = []
+    for table in sorted(made):
+        sql = str(
+            conn.execute("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone()[0]
+        )
+        columns = {str(r["name"]) for r in conn.execute("SELECT name FROM pragma_table_info(?)", (table,))}
+        found.extend(
+            f"{table}.{column}"
+            for column in sorted(columns & CLOSED_COLUMNS)
+            if not re.search(rf"CHECK\s*\(\s*{column}\s+IN\s*\(", sql, re.IGNORECASE)
+        )
+    return found
+
+
+def test_a_table_made_from_m36_on_checks_its_closed_columns(tmp_path: Path, journals: Journals) -> None:
+    before = set(tables(journal_at(journals, tmp_path / "before", UNCHECKED_THROUGH)))
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+    assert unchecked(conn, set(tables(conn)) - before) == []
+
+
+def test_a_closed_column_without_a_check_is_found(tmp_path: Path, journals: Journals) -> None:
+    migrations = shipped_through(tmp_path / "migrations", UNCHECKED_THROUGH)
+    (migrations / f"{UNCHECKED_THROUGH + 1:04d}_observed.sql").write_text(
+        "CREATE TABLE checked (id INTEGER PRIMARY KEY, status TEXT NOT NULL CHECK (status IN ('ok', 'failed')));\n"
+        "CREATE TABLE unchecked (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, phase TEXT, note TEXT);\n"
+    )
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, migrations)
+    assert unchecked(conn, {"checked", "unchecked"}) == ["unchecked.kind", "unchecked.phase"]
 
 
 def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None:

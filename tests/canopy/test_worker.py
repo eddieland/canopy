@@ -18,6 +18,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, db, definitions
+from canopy.core.vocab import RunStatus
 from canopy.runs import worker
 from tests.canopy.helpers import (
     InlineRunner,
@@ -631,7 +632,7 @@ def test_status_lists_recent_runs_newest_first(
         run_id = db.insert_run(
             conn, tick_id=tick_id, key="PROJ-1", kind="fix-ci", branch="b", slots=[], runs_dir=Path()
         )
-        db.finish_run(conn, "runs", run_id, "done", json.dumps({"summary": f"run {n + 1}"}))
+        db.finish_run(conn, "runs", run_id, RunStatus.DONE, json.dumps({"summary": f"run {n + 1}"}))
     running = db.insert_run(conn, tick_id=tick_id, key="PROJ-1", kind="resume", branch="b", slots=[], runs_dir=Path())
 
     assert main(["status"]) == 0

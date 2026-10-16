@@ -6,6 +6,7 @@ import json
 from typing import TYPE_CHECKING
 
 from canopy.core import dead_runs, outbox
+from canopy.core.vocab import ChoreRunStatus
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -25,7 +26,7 @@ def run(ctx: Context, log: logs.TickAdapter) -> list[int]:
         fields = {"chore_run_id": row["id"], "chore": row["chore"], "pid": row["pid"]}
         dead_runs.kill_agent("chore_runs", row, log, fields)
         note = json.dumps({"harness": "the chore process is gone"})
-        ended = outbox.chore_ended(ctx.config, row, "crashed", note)
+        ended = outbox.chore_ended(ctx.config, row, ChoreRunStatus.CRASHED, note)
         if dead_runs.crash(ctx.conn, "chore_runs", row, note, event=ended):
             closed.append(int(row["id"]))
             log.warning("chore process is gone; chore run marked crashed", extra=fields)

@@ -13,25 +13,26 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core.config import CANOPY_REVIEWER, DEFAULT_TRAILER_EMAIL, DEFAULT_TRAILER_NAME
+from canopy.core.vocab import RunKind
 from canopy.infra import resources
 
 if TYPE_CHECKING:
     from canopy.core.config import Config
 
 OVERSEER = "overseer.md"
-WORKER = {
-    "implement": "worker-implement.md",
-    "fix-ci": "worker-fix-ci.md",
-    "resume": "worker-resume.md",
-    "split": "worker-split.md",
+WORKER: dict[str, str] = {
+    RunKind.IMPLEMENT: "worker-implement.md",
+    RunKind.FIX_CI: "worker-fix-ci.md",
+    RunKind.RESUME: "worker-resume.md",
+    RunKind.SPLIT: "worker-split.md",
 }
 # A private ticket's worker prompts (DESIGN §22): no label check, since the harness checked the start record, and
 # nothing written to the ticket. Each must carry the conversation, the only way the worker hears the operator's replies;
 # an override without it would run without them.
-WORKER_PRIVATE = {
-    "implement": "worker-implement-private.md",
-    "fix-ci": "worker-fix-ci-private.md",
-    "resume": "worker-resume-private.md",
+WORKER_PRIVATE: dict[str, str] = {
+    RunKind.IMPLEMENT: "worker-implement-private.md",
+    RunKind.FIX_CI: "worker-fix-ci-private.md",
+    RunKind.RESUME: "worker-resume-private.md",
 }
 REQUIRED_PRIVATE = ("CONVERSATION",)
 # A public ticket's worker hears the operator's replies only from these (D093). An override written before they existed
@@ -49,7 +50,7 @@ REQUIRED_JOINT = ("REPOSITORIES", "PRS")
 REQUIRED_SPLIT = ("REPOSITORIES", "REQUEST")
 # The kinds whose workers open PRs. With `runtime.pr_skill` set, their prompts must say how, through `{{OPEN_PR}}`: an
 # override that still names the GitHub MCP would open the PRs the operator set the skill to avoid.
-OPENS_PRS = ("implement", "resume")
+OPENS_PRS = (RunKind.IMPLEMENT, RunKind.RESUME)
 REQUIRED_PR_SKILL = ("OPEN_PR",)
 # The reviewer's prompt (DESIGN §21). An override must still name the PR, the commit, and the checkout it reviews.
 REVIEWER = "reviewer.md"
@@ -71,7 +72,7 @@ REQUIRED_NOTICE = ("NOTICE",)
 # or neither. Neither still serves an operator who keeps the default trailer; once `trust.commit_trailer_name` or
 # `trust.commit_trailer_email` is changed, a prompt needs one of the two, so it cannot name the old trailer; and once
 # `trust.commit_trailer` is off, it needs `{{COMMIT_ATTRIBUTION}}`, so it cannot keep adding one.
-COMMITS = ("implement", "fix-ci", "resume")
+COMMITS = (RunKind.IMPLEMENT, RunKind.FIX_CI, RunKind.RESUME)
 REQUIRED_TRAILER = ("COMMIT_ATTRIBUTION", "COMMIT_TRAILER")
 REQUIRED_NO_TRAILER = ("COMMIT_ATTRIBUTION",)
 # How the workers that commit bring a base branch in: merge it, or with `trust.rebase`, rebase and push with a lease
@@ -82,8 +83,8 @@ REQUIRED_REBASE = ("BRANCH_UPDATE",)
 # The prompt files that carry `{{NOTICE}}`, and the run kinds each serves: every worker's but a split's, public and
 # private, and the reviewer's.
 _HEARS_NOTICE: dict[str, list[str]] = {
-    **{WORKER[k]: [k] for k in ("implement", "fix-ci", "resume")},
-    **{WORKER_PRIVATE[k]: [f"{k} (private)"] for k in ("implement", "fix-ci", "resume")},
+    **{WORKER[k]: [str(k)] for k in WORKER_PRIVATE},
+    **{WORKER_PRIVATE[k]: [f"{k} (private)"] for k in WORKER_PRIVATE},
     REVIEWER: ["review"],
 }
 
@@ -238,7 +239,7 @@ def render_worker(
     prompt must carry with `trust.rebase` set. `notice` is the operator's notice in force (`core.notice`), for
     `{{NOTICE}}`: with one, every prompt but a split's must carry it, and a split's hears none.
     """
-    instructed = kind != "split"
+    instructed = kind != RunKind.SPLIT
     values = {
         **values,
         "STANDING_INSTRUCTIONS": standing_instructions(config) if instructed else "None.",

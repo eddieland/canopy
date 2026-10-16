@@ -11,6 +11,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, db, definitions, workspace
+from canopy.core.vocab import RunStatus
 from canopy.loop import attention
 from canopy.setup import workspace as setup_workspace
 from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools, th
@@ -281,7 +282,7 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
         )
 
         # The ticket has a unit in api only: resuming it in web has no branch to continue there (DESIGN §18).
-        db.finish_run(conn, "runs", 1, "done", "{}")
+        db.finish_run(conn, "runs", 1, RunStatus.DONE, "{}")
         resume = ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "resume", "--repo", "web"]
         assert main(resume, runner=runner) == 1
         assert decisions(conn, tick_id)[-1] == (

@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from canopy.cli.main import main
 from canopy.core import agent_output, config, conversation, db, pause
 from canopy.core.context import Context
+from canopy.core.vocab import RunStatus
 from canopy.infra import resources
 from canopy.loop import repeat, reread, web
 from canopy.reviews import grants
@@ -445,7 +446,7 @@ def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:
     run = db.get_run(ctx.conn, run_id)
     assert run is not None
     result = {"status": "blocked", "summary": "half done\x1b[2J", "question": "Red <b>or</b> blue?"}
-    assert conversation.close_run(ctx.conn, ctx.config, run, "blocked", json.dumps(result))
+    assert conversation.close_run(ctx.conn, ctx.config, run, RunStatus.BLOCKED, json.dumps(result))
     tick_id = db.start_tick(ctx.conn, dry_run=False)
     db.record_decision(ctx.conn, tick_id, KEY, "attention:needs_reviewer", "https://example.test/pr/9")
     db.finish_tick(ctx.conn, tick_id, "ok", "test")
@@ -483,7 +484,7 @@ def test_summaries_and_rationales_keep_their_line_breaks(ctx: Context) -> None:
     run = db.get_run(ctx.conn, running_run(ctx, KEY))
     assert run is not None
     result = {"status": "done", "summary": "Done:\r\n- one\x1b  \n- two\n\n"}
-    assert conversation.close_run(ctx.conn, ctx.config, run, "done", json.dumps(result))
+    assert conversation.close_run(ctx.conn, ctx.config, run, RunStatus.DONE, json.dumps(result))
     tick_id = db.start_tick(ctx.conn, dry_run=False)
     db.record_decision(ctx.conn, tick_id, KEY, "wait", "Checks running:\n  - lint")
     db.finish_tick(ctx.conn, tick_id, "ok", "\nOne wait.\nNothing else.\n")

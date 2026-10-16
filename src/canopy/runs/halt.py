@@ -12,6 +12,7 @@ import os
 from typing import TYPE_CHECKING
 
 from canopy.core import db
+from canopy.core.vocab import RunStatus
 from canopy.infra import procs
 from canopy.runs import reconcile
 
@@ -41,5 +42,5 @@ def end(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> bool:
     current = db.get_run(ctx.conn, int(run["id"]))
     if current is None or current["status"] != "running":
         return False
-    reconcile.end_run(ctx, current, "stopped", NOTE, log)
+    reconcile.end_run(ctx, current, RunStatus.STOPPED, NOTE, log)
     return True
