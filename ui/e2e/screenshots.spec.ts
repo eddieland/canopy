@@ -1,17 +1,20 @@
 import { expect, test } from '@playwright/test'
 
 import {
+    diffFile,
     LIGHT_ROUTES,
     NOW,
     ROUTES,
     screenshotMain,
     screenshotWhole,
+    serveReview,
     settled,
     signIn,
     storeTheme,
     THEMES,
     WHOLE_ROUTES,
 } from './helpers.ts'
+import type { DiffFinding } from './helpers.ts'
 
 for (const theme of THEMES) {
     for (const route of ROUTES.filter((r) => theme === 'dark' || LIGHT_ROUTES.includes(r))) {
@@ -74,6 +77,35 @@ test("a tick's output shown in dark", async ({ page }) => {
     await output.getByRole('button', { name: 'Show output' }).click()
     await expect(output.getByTestId('tick-output-text')).toBeVisible()
     await expect(output).toHaveScreenshot('ticks-2-output-dark.png')
+})
+
+// A long review's diff folded (DIFF_BUDGET in src/lib/review-folds.ts), which review:4's is too short to be: a first
+// file fills what the page draws at first, so the second, too long to highlight, shows only the ten lines either side
+// of its finding, between two folds, the finding on a line of a thousand characters, its card still the panel's width.
+test('a long review diff folded in dark', async ({ page }) => {
+    await page.clock.setFixedTime(NOW)
+    await storeTheme(page, 'dark')
+    await signIn(page)
+    const long = `const table = [${'0, '.repeat(330)}0] // a generated table, its line cut at a thousand characters`
+    const files = [
+        diffFile('src/fills.ts', 1979, (n) => `export const fill${n} = ${n}`),
+        diffFile('src/generated/table.ts', 2500, (n) => (n === 1250 ? long : `export const row${n} = ${n}`)),
+    ]
+    const finding: DiffFinding = {
+        severity: 'minor',
+        title: 'A generated table edited by hand',
+        location: 'src/generated/table.ts:1250',
+        detail: 'The table is generated: `make tables` writes it from `data/rows.csv`, so edit that and run it again.',
+        file: 1,
+        line: 1250,
+        dismissed: false,
+    }
+    await serveReview(page, files, [finding])
+    await page.goto('reviews/4')
+    await settled(page)
+    const panel = page.getByTestId('diff-file').nth(1)
+    await expect(panel.getByTestId('diff-fold')).toHaveCount(2)
+    await expect(panel).toHaveScreenshot('reviews-folded-dark.png')
 })
 
 // A wide screen: the interface is a quarter larger from a 2560px window, and the inbox and a ticket use the width.
