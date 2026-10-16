@@ -55,7 +55,7 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
     {
       "key": "PROJ-1",
       "title": "Retry flaky uploads",
-      "phase": "pr_open",
+      "phase": "ci_running",
       "branch": "agent/PROJ-1-retry",
       "cursors": {
         "comment": "10001",
@@ -115,7 +115,7 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
     {
       "key": "PROJ-2",
       "title": "Add a dark mode",
-      "phase": "implementing",
+      "phase": "running",
       "branch": "agent/PROJ-2-dark",
       "cursors": {
         "comment": null,

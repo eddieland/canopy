@@ -166,7 +166,7 @@ def test_dry_run_ticket_set_records_the_phase_only(
         # A phase about the PR is the unit's, implied in a single repository; its review cursor was not advanced.
         [unit] = db.units(conn, "PROJ-1")
         assert (unit["phase"], unit["last_review_id"]) == ("merged", None)
-        assert [t["key"] for t in db.open_tickets(conn)] == ["PROJ-1"]  # the first live tick still sees it
+        assert [t.key for t in db.open_tickets(conn)] == ["PROJ-1"]  # the first live tick still sees it
 
 
 def test_decisions_prints_a_ticks_plan(

@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from canopy.core import agent_output, records
-from canopy.core.vocab import PlanStatus, PoolKind
+from canopy.core.vocab import Phase, PlanStatus, PoolKind
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -446,7 +446,7 @@ def set_ticket(
     key: str,
     repo: str,
     *,
-    phase: str | None = None,
+    phase: Phase | None = None,
     cursors: Mapping[str, str] | None = None,
     done: bool = False,
     title: str | None = None,
@@ -514,15 +514,14 @@ def all_units(conn: sqlite3.Connection) -> dict[str, list[sqlite3.Row]]:
     return found
 
 
-def get_ticket(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
+def get_ticket(conn: sqlite3.Connection, key: str) -> records.Ticket | None:
     """Return the ticket row for `key`, or None."""
-    row: sqlite3.Row | None = conn.execute("SELECT * FROM tickets WHERE key = ?", (key,)).fetchone()
-    return row
+    return records.fetch_one(conn, records.Ticket, "SELECT * FROM tickets WHERE key = ?", (key,))
 
 
-def open_tickets(conn: sqlite3.Connection) -> list[sqlite3.Row]:
+def open_tickets(conn: sqlite3.Connection) -> list[records.Ticket]:
     """Return the tickets not marked done, by key."""
-    return conn.execute("SELECT * FROM tickets WHERE done = 0 ORDER BY key").fetchall()
+    return records.fetch_all(conn, records.Ticket, "SELECT * FROM tickets WHERE done = 0 ORDER BY key")
 
 
 def recently_done(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:

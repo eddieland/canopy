@@ -11,6 +11,7 @@ import pytest
 
 from canopy.core import db
 from canopy.core.agent_output import ToolUse, Usage
+from canopy.core.vocab import Phase
 from canopy.infra import resources
 from tests.canopy.helpers import DEAD_PID, journal_at, shipped_through, versions_after
 from tests.conftest import Journals
@@ -367,7 +368,7 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     assert db.abandon_unfinished_ticks(conn) == [stale]
     tick = db.start_tick(conn, dry_run=True)
     db.touch_ticket(conn, "PROJ-1", "/repo")
-    db.set_ticket(conn, "PROJ-1", "/repo", phase="ci_red", cursors={"comment": "c-7"})
+    db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.CI_RED, cursors={"comment": "c-7"})
     db.set_unit(conn, "PROJ-1", "/repo", "api", phase="ci_red", cursors={"ci": "run-7"})
     db.set_ticket(conn, "PROJ-2", "/repo", done=True)
     db.record_decision(conn, tick, "PROJ-1", "wait", "checks pending")
@@ -377,7 +378,7 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     assert row is not None
     assert row["status"] == "abandoned"
     [ticket] = db.open_tickets(conn)
-    assert (ticket["key"], ticket["phase"], ticket["last_comment_id"]) == ("PROJ-1", "ci_red", "c-7")
+    assert (ticket.key, ticket.phase, ticket.last_comment_id) == ("PROJ-1", "ci_red", "c-7")
     [unit] = db.units(conn, "PROJ-1")
     assert (unit["repo"], unit["phase"], unit["last_ci_run_id"], unit["branch"]) == ("api", "ci_red", "run-7", None)
     [decision] = db.decisions_for_tick(conn, tick)
