@@ -867,10 +867,11 @@ Status: not started.
 
 ## M44. Plans before implementing
 
-REQUIREMENTS R18, DESIGN §7, §8, §14, §20, and §22. Asked for by the operator (2026-10-15), and taken next, ahead of
-M36: a ticket can be planned before it is implemented, the operator approves the plan before work starts, and the plan
-stays in the journal to read later. Today the `implement` worker plans inside its own session, and only its summary
-survives. M36 to M40 take up the new phases and kind as they reshape the state block and the overseer.
+REQUIREMENTS R18, DESIGN §25, and the parts of §7, §8, §14, §20, and §22 it changes. Asked for by the operator
+(2026-10-15), and taken next, ahead of M36: a ticket can be planned before it is implemented, the operator approves
+the plan before work starts, and the plan stays in the journal to read later. Today the `implement` worker plans
+inside its own session, and only its summary survives. M36 to M40 take up the new phases and kind as they reshape
+the state block and the overseer.
 
 - A new run kind, `plan`, dispatched with `canopy dispatch KEY --kind plan --repo NAME...`, before the ticket's first
   `implement`. It runs as `canopy-planner` with `runtime.plan_cmd`, in a desk of the named repositories' worktrees at
@@ -883,17 +884,19 @@ survives. M36 to M40 take up the new phases and kind as they reshape the state b
   the dispatch is refused as `no_read_tools`. On a public ticket it checks the queue label as every worker does.
 - Its prompt, `worker-plan.md`, asks for a plan a later worker can follow: what changes in each repository and why,
   the files and interfaces it touches, the tests that will show it works, what is out of scope, and the open risks. It
-  carries the operator's messages, standing instructions, and notice, and on a re-plan the plan it replaces and the
-  operator's reply to it. Its result line is
-  `{"status":"done|blocked|failed","summary":"...","plan":"<markdown>","question":"<only when blocked>"}`. `_run`
-  validates it: a `done` plan has a non-empty `plan` of at most 20,000 characters; anything else makes the run
-  `unknown` and records no plan. A `blocked` plan records its question as a worker message (§22), on a public ticket
+  carries the operator's messages, standing instructions, and notice, and on a re-plan the plan it replaces, as a
+  file in its desk, and the operator's reply to it. The plan is its final message, as markdown, before its result
+  line, `{"status":"done|blocked|failed","summary":"...","question":"<only when blocked>"}` (§25). `_run` validates
+  it: a `done` plan is non-empty and at most 100,000 characters; anything else makes the run `unknown` and records no
+  plan. A `blocked` plan records its question as a worker message (§22), on a public ticket
   too, since the planner cannot post one; the operator answers with `canopy reply`.
 - Whether a ticket is planned: `policy.plan`, `"off"` (default, as today) or `"approve"`, shared config that a
   repository may only tighten to `"approve"`. The operator overrides it for one ticket: `canopy plan KEY` asks for a
   plan (and makes a new one if the ticket has one), `canopy plan KEY --skip` waives it, and `canopy start KEY --plan`
-  starts a private ticket with one. Each refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, and
-  `--skip` and asking for a plan refuse as `bad_plan` once the ticket has a branch.
+  starts a private ticket with one. Asking for a plan and `--skip` supersede a waiting or approved plan at once, so
+  the next tick dispatches a new `plan` or the `implement`. Each refuses as `inside_run` when `CANOPY_TICK_ID` or
+  `CANOPY_RUN_ID` is set, and `--skip` and asking for a plan refuse as `bad_plan` while a plan run is running or once
+  the ticket has a branch.
 - Approval: `canopy plan KEY --approve` approves the newest plan; it refuses `inside_run`, and `bad_plan` when the
   newest plan is not waiting or a plan run for the ticket is running. A reply (`canopy reply KEY`) newer than the plan
   asks for changes: the overseer dispatches `plan` again with the reply in its context, and the new plan supersedes
@@ -902,16 +905,21 @@ survives. M36 to M40 take up the new phases and kind as they reshape the state b
 - A hard guard in code: an `implement` for a ticket that needs a plan, by `policy.plan` or its own setting, and has no
   approved plan is refused as `unplanned`. A `plan` for a ticket with a branch, or for a split's parent, is
   `bad_plan`. A `--slug`, `--base`, or `--request` on a plan is `bad_slug`, `bad_base`, or `bad_request`.
-- Phases (§7): `ready` with a plan needed and none waiting dispatches `plan`; `plan_proposed`, the newest plan waiting
+- Phases (§7): a ticket whose latest plan run ended `blocked`, with no operator message since, is `needs_human` with
+  attention `awaiting_reply`, so it is not planned again until the operator answers; `ready` with a plan needed and
+  none waiting dispatches `plan`; `plan_proposed`, the newest plan waiting
   and no operator message after it, is attention `plan_review` with no run, so the slot is free while the operator
   reads; `plan_proposed` with an operator message after it dispatches `plan` again; `ready` with an approved plan
   dispatches `implement`. The state block gains each ticket's plan: whether one is needed, and the newest plan's id,
   status, and time, never its text.
-- Workers: `implement` and `resume` prompts carry `{{PLAN}}`, the approved plan or `None.`, and an override without it
-  is `bad_prompt` once the ticket has an approved plan, as for `{{OPERATOR_MESSAGES}}` (D093). The prompt says to
-  follow it, and to say in the summary where the work left it and why. A plan is model-written from ticket text: it
-  describes the work, as the ticket does, and the prompt's obligations come before it. The operator's approval
-  authorizes the `implement`, not what the plan's text asks for.
+- Workers: `_run` writes the approved plan from the journal to `.canopy-plan.md` in the worker's cwd, ignored through
+  the repository's `info/exclude` in a one-repository run, and removes it before the slot is returned (§25, The plan
+  file). `implement` and `resume` prompts carry `{{PLAN}}`, the file's name and the plan's headings or `None.`, never
+  its text, and an override without it is `bad_prompt` once the ticket has an approved plan, as for
+  `{{OPERATOR_MESSAGES}}` (D093). The prompt says to follow it, to leave the file out of every commit, and to say in the
+  summary where the work left it and why. A plan is model-written from ticket text: it describes the work, as the ticket
+  does, and the prompt's obligations come before it. The operator's approval authorizes the `implement`, not what the
+  plan's text asks for.
 - Showing it: `canopy show KEY` prints the newest plan, its status, and when it was approved; `canopy show KEY --plans`
   every plan, oldest first. The web UI's ticket page shows the newest plan, as plain text like a message (§22), with
   `Approve`, `Ask for changes` (a reply), and `Skip`, and lists earlier plans. `POST /tickets/{key}/plan` with
@@ -927,10 +935,11 @@ survives. M36 to M40 take up the new phases and kind as they reshape the state b
   definition.
 - Tests with the fakes: under `"approve"`, a dry-run tick dispatches `plan` for a ready ticket; a `done` plan is
   recorded `proposed` and raises `plan_review`; `implement` is refused `unplanned` until `canopy plan --approve`, then
-  carries the plan in its prompt; a reply makes the next plan supersede the first; `--skip` lets `implement` through;
-  a plan result over the bound or without `plan` is `unknown`; a `blocked` plan records its question; `plan`, `--skip`,
-  and `--approve` refuse inside a run; the planner's definition denies the tracker's write tools; the web route
-  approves; Playwright for the ticket page's buttons.
+  finds `.canopy-plan.md` in its cwd, ignored by git, and the plan's headings in its prompt, and the file is gone once
+  the slot is returned; a pushed head holding the file gets a harness note; a reply makes the next plan supersede the
+  first; `--skip` lets `implement` through; an empty plan or one over the bound is `unknown`; a `blocked` plan records
+  its question; `plan`, `--skip`, and `--approve` refuse inside a run; the planner's definition denies the tracker's
+  write tools; the web route approves; Playwright for the ticket page's buttons.
 - Open: a plan-and-go mode (`policy.plan = "auto"`) that implements without waiting, if the operator wants plans
   without the gate; whether a ticket that already has a branch can be planned again before a large `resume`; whether
   plans help, compared by attempts and spend per ticket (M33) on planned and unplanned tickets; whether M38 makes the

@@ -2,7 +2,7 @@
 
 Part of the canopy design, normative like all of it: the OS sandbox an operator can put around every agent run but the
 overseer's. Sections are numbered across the whole design; the [README](README.md) has the map. Previous: [Flaky
-CI](FLAKY_CI.md).
+CI](FLAKY_CI.md). Next: [Plans](PLANNING.md).
 
 ## 24. Sandboxed runs (M26)
 
