@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { setBuddy, useBuddy } from '@/lib/buddy'
 import { costText } from '@/lib/cost-total'
@@ -23,6 +24,7 @@ import { balanceCents, buy, HATS, setWardrobe, useWardrobe } from '@/lib/hats'
 import type { Hat } from '@/lib/hats'
 import type { TickerTopic } from '@/lib/headlines'
 import { noticeSetText, reloadedText } from '@/lib/outcomes'
+import { setRave, useRave } from '@/lib/rave'
 import { setSendKey, useSendKey } from '@/lib/send-key'
 import type { SendKey } from '@/lib/send-key'
 import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } from '@/lib/ticker-settings'
@@ -109,14 +111,16 @@ function SettingsPage() {
 
 /**
  * The fun, in one place: an on/off for the ticker and for Sprig, then the ticker's pace, the pause between its
- * headlines, and the topics they are drawn from.
+ * headlines, and the topics they are drawn from. Its header hides a light switch.
  */
 function FunPanel() {
     const { on, speed, gap, hidden } = useTickerSettings()
     const buddy = useBuddy()
     return (
         <Panel>
-            <PanelHeader label="Fun" />
+            <PanelHeader label="Fun">
+                <LightSwitch />
+            </PanelHeader>
             <div className="flex items-center justify-between gap-4 border-b p-3">
                 <p id="fun-items" className="text-sm text-muted-foreground">
                     The ticker crawls joke headlines across the header. Sprig, at the foot of the side rail, has a tip
@@ -220,6 +224,25 @@ function FunPanel() {
             </div>
             <HatShop />
         </Panel>
+    )
+}
+
+/**
+ * An Easter egg at the end of the Fun panel's header, with no words beside it: The Cheat's light switch. Flipped, it
+ * starts the lightswitch rave over the whole app (`Rave` in src/components/shell/rave.tsx), its lever flicking with
+ * the lights; flipped back, it ends it.
+ */
+function LightSwitch() {
+    const rave = useRave()
+    return (
+        <Switch
+            aria-label="Lightswitch rave"
+            title="The Cheat's light switch"
+            checked={rave === 'on'}
+            data-testid="light-switch"
+            className="*:data-[state=checked]:rave-flick"
+            onCheckedChange={(checked) => setRave(checked ? 'on' : 'off')}
+        />
     )
 }
 
