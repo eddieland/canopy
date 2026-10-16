@@ -5,7 +5,7 @@
 // that shows and writes back its characters, as an image is, which would otherwise fetch from another origin
 // (ui/AGENTS.md). A link keeps its Markdown and shows its address on hover, but is not a link: the web UI links a URL
 // only to itself (D113). A line the source wraps inside a paragraph is a soft break of its own, drawn as a space and
-// written back as the wrap it was.
+// written back as the wrap it was. Text pasted as Markdown is read as Markdown, through the same parser.
 import { Extension, Node } from '@tiptap/core'
 import type { AnyExtension, JSONContent } from '@tiptap/core'
 import { Link } from '@tiptap/extension-link'
@@ -13,12 +13,18 @@ import { TaskItem, TaskList } from '@tiptap/extension-list'
 import { TableKit } from '@tiptap/extension-table'
 import { Markdown } from '@tiptap/markdown'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { StarterKit } from '@tiptap/starter-kit'
 
 import { ATOM } from '@/lib/plan-anchors'
 
 // A mark as a document's JSON holds it.
 type JSONMark = NonNullable<JSONContent['marks']>[number]
+
+// A line that starts a heading, a list item (a task's too), a quote, a fence, or a table row.
+const MARKDOWN_BLOCK = /^ {0,3}(?:#{1,6} \S|[-*+] \S|\d{1,9}[.)] \S|> ?\S|```|~~~|\|.*\|\s*$)/mu
+// Bold, inline code, or a link.
+const MARKDOWN_INLINE = /\*\*[^*\n]+\*\*|`[^`\n]+`|\[[^\]\n]+\]\([^)\s]+\)/u
 
 /** The extensions of a plan's document, with `more` (the comments' highlights) after them. */
 export function planExtensions(more: AnyExtension[] = []): AnyExtension[] {
@@ -37,9 +43,18 @@ export function planExtensions(more: AnyExtension[] = []): AnyExtension[] {
         VerbatimInline,
         ImageAsText,
         SoftBreak,
+        PasteMarkdown,
         PlanMarkdown.configure({ indentation: { style: 'space', size: 2 } }),
         ...more,
     ]
+}
+
+/**
+ * Whether pasted text reads as Markdown: a line that starts a heading, a list item, a quote, a fence, or a table row,
+ * or inline marks (`**bold**`, `` `code` ``, `[a link](url)`). Prose without them pastes as the text it is.
+ */
+export function readsAsMarkdown(text: string): boolean {
+    return MARKDOWN_BLOCK.test(text) || MARKDOWN_INLINE.test(text)
 }
 
 /**
@@ -265,6 +280,43 @@ function sameMarks(a: JSONContent, b: JSONContent): boolean {
 function sameMark(a: JSONMark, b: JSONMark | undefined): boolean {
     return JSON.stringify(a) === JSON.stringify(b)
 }
+
+// Text pasted as Markdown, as a planner's plan or a chat's answer is copied from a terminal or an editor, becomes the
+// headings, lists, and marks it writes, read by the plan's own parser, so its HTML stays characters as a plan's does.
+// What pastes as it always has: a copy from the editor itself, which carries its own slice (`data-pm-slice`); text that
+// does not read as Markdown; and a paste with Shift held, the browser's paste as plain text.
+const PasteMarkdown = Extension.create({
+    name: 'pasteMarkdown',
+    addProseMirrorPlugins() {
+        const editor = this.editor
+        let shift = false
+        return [
+            new Plugin({
+                key: new PluginKey('pasteMarkdown'),
+                props: {
+                    handleDOMEvents: {
+                        keydown: (_, event) => {
+                            shift = event.shiftKey
+                            return false
+                        },
+                        keyup: (_, event) => {
+                            shift = event.shiftKey
+                            return false
+                        },
+                    },
+                    handlePaste: (_, event) => {
+                        const text = event.clipboardData?.getData('text/plain') ?? ''
+                        const html = event.clipboardData?.getData('text/html') ?? ''
+                        if (shift || html.includes('data-pm-slice') || !readsAsMarkdown(text)) {
+                            return false
+                        }
+                        return editor.commands.insertContent(text, { contentType: 'markdown' })
+                    },
+                },
+            }),
+        ]
+    },
+})
 
 // An image, as the characters that wrote it: the editor never fetches it.
 const ImageAsText = Extension.create({
