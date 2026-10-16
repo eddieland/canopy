@@ -76,8 +76,8 @@ Built in code (M3), live acceptance pending. `fix-ci` and `resume` runs continue
 cursors so each failure and comment is handled once (§7, §8), attempt limits and a cooldown in code (D030).
 
 Partial on "the agent that owns the PR": each run is a fresh worker on the pushed branch with no transcript of the run
-before it. That is deliberate (PRIOR_ART: long-lived sessions fed events contaminate). Whether a feedback run should
-continue the earlier run's OpenCode session is a question for M15, answered against the decisions corpus.
+before it. That is deliberate (PRIOR_ART: long-lived sessions fed events contaminate), and M15 kept it: a feedback run
+does not continue the earlier run's OpenCode session (§8, A fresh session per run).
 
 Known prompt gap that makes routing noisier than it should be (PRIOR_ART "In prompts"): CI newness is keyed on the
 check run id so a re-run counts as new. The worker's own PR replies no longer read back as new feedback: workers mark
