@@ -33,7 +33,7 @@ def _finding_id(value: str) -> str:
 class Finding(BaseModel):
     """One problem a chore found, which stays on the attention list while later `ok` runs report its id."""
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     id: Annotated[StrictStr, AfterValidator(_finding_id)]
     title: Annotated[StrictStr, one_line, bounded(MAX_TITLE)]
@@ -51,7 +51,7 @@ def _unique_ids(findings: list[Finding]) -> list[Finding]:
 class ChoreResult(BaseModel):
     """`ok` means the chore did its check, and no findings means nothing needs a human; `failed` means it could not."""
 
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     status: Literal["ok", "failed"]
     summary: Annotated[StrictStr, bounded(MAX_SUMMARY)] = ""
