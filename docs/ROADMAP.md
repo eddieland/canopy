@@ -995,8 +995,10 @@ it replaces in its desk. The planner writes its plan to a file in its desk rathe
 prompt). The gate is in: `policy.plan`, `canopy plan KEY [--skip | --approve]`, `canopy start KEY --plan`, `canopy
 grant KEY plan` (migration 0034, `ticket_grants`), and the `unplanned` and `plan_changed` guards. The overseer's part
 is in: the `plan_proposed` phase and the plan rows, the state block's `plan`, `plan_review`, a blocked planner's
-`awaiting_reply` on a public ticket, and `plan.proposed`. What keeps it open: the worker's copy, `canopy show`'s
-plans, the threads' tables, and the ticket page.
+`awaiting_reply` on a public ticket, and `plan.proposed`. The worker's copy is in: `.canopy-plan.md` where an
+`implement` or `resume` starts, checked against the approved hash, ignored, and removed before the slot goes back,
+`{{PLAN}}` with the plan's outline, and a harness note on a pushed copy. What keeps it open: `canopy show`'s plans,
+the threads' tables, and the ticket page.
 
 ## M45. canopy's own worktree pools, replacing treehouse in stages
 

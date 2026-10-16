@@ -791,6 +791,7 @@ def _spawn(
         "WORKER_COMMENT": prompts.worker_comment(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
         "MARK_COMMENTS": prompts.mark_comments(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
         "OPEN_PR": prompts.open_pr(cfg.runtime.pr_skill),
+        "PLAN": "None.",
         "PLAN_FILE": plans.REPLACED,
         "PLAN_OUT": plans.WRITTEN,
         "MAX_PLAN_CHARS": f"{plans.MAX_CHARS:,}",
@@ -819,6 +820,11 @@ def _spawn(
             required = (*required, *prompts.REQUIRED_OPERATOR)
     if review is not None:
         required = (*required, *prompts.REQUIRED_REVIEW)
+    # `_run` writes the copy where the worker starts: its desk, or its one worktree (DESIGN §25).
+    copy = _plan_note(ctx, key, kind, (desk or first.slot_path) / plans.COPY)
+    if copy is not None:
+        values["PLAN"] = copy
+        required = (*required, *prompts.REQUIRED_PLAN_COPY)
     try:
         prompt = prompts.render_worker(
             cfg, kind, values, required=required, private=plan.private, notice=notice.for_prompt(ctx.conn)
@@ -853,6 +859,19 @@ def _spawn(
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, "runs", run_id, pid)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
+
+
+def _plan_note(ctx: Context, key: str, kind: str, copy: Path) -> str | None:
+    """Return an `implement`'s or a `resume`'s `{{PLAN}}` when the ticket has an approved plan, which it then follows.
+
+    Returns:
+        Where the run's copy of the plan will be and its outline, or None for another kind or no approved plan.
+    """
+    if kind not in (RunKind.IMPLEMENT, RunKind.RESUME):
+        return None
+    approved = plans.approved_of(ctx.conn, key)
+    text = plans.approved_text(ctx.state_dir, approved) if approved is not None else None
+    return prompts.plan_note(copy, plans.outline(text)) if text is not None else None
 
 
 def _check_start_again(ctx: Context, key: str, plan: Plan) -> None:

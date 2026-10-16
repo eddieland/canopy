@@ -12,8 +12,10 @@ over mock data, and so are plans' files and rows (Where plans live and Journal, 
 definition, below), and the gate: `policy.plan`, the operator's `canopy plan` verbs, `canopy start --plan`, `canopy
 grant KEY plan`, and the `unplanned` and `plan_changed` guards (Which tickets are planned, Approving a plan, and
 Dispatch, below), and the overseer's part: the phases, the state block's plan, `plan_review`, a blocked planner's
-`awaiting_reply`, and `plan.proposed` (Phases and the overseer's part, and Reading plans, below). Until M44 lands, §8
-and §22 describe workers and the ticket page as they are. This section says what changes in each.
+`awaiting_reply`, and `plan.proposed` (Phases and the overseer's part, and Reading plans, below), and the worker's
+copy: `{{PLAN}}`, `.canopy-plan.md` where the worker starts, and the harness note on a pushed copy (Workers follow the
+plan, and The worker's copy, below). Until M44 lands, §22 describes the ticket page as it is, and `canopy show` prints
+no plan. This section says what changes in each.
 
 Today the `implement` worker plans inside its own session, and nothing of that plan survives but the run's summary. A
 **plan** is a run of its own that reads the ticket and the code and writes down how the work will be done, before any
@@ -270,7 +272,8 @@ step 2) and before the worker starts:
 
 The copy is written fresh for each run, so a worker that edits it changes only its own run, never the plan's file.
 `_run` removes it before the slot is returned, on every exit path, and a slot's leftover copy, from a run whose `_run`
-died, is removed when reconcile cleans up the slot (§6 step 3). The file cannot sit beside the run's prompt in
+died, is removed when reconcile cleans up the slot (§6 step 3): both tidy the slot with the same step, which removes the
+copy first, never following a link. The file cannot sit beside the run's prompt in
 `<state_dir>/runs/`: `canopy-worker` reads nothing outside its cwd (`external_directory: deny`), and the sandbox (§24)
 denies `.canopy/`.
 

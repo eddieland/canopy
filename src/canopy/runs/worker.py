@@ -600,9 +600,11 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     starts = [_check_out(slot, branch) for slot in slots]
     for slot in slots:
         _run_setup(ctx, run, slot, out, log)
+    copy = _plan_copy(ctx, run)
+    desk_files = _place_copy(run, slots, copy)
     runtime = ctx.config.runtime
     template = runtime.private_worker_cmd if run["private"] else runtime.worker_cmd
-    result, text = _run_agent(ctx, run, slots, out, log, template=template)
+    result, text = _run_agent(ctx, run, slots, out, log, template=template, desk_files=desk_files)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
 
     parsed = parse_result(text)
@@ -634,7 +636,86 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     ]
     if unpushed:
         status, note = RunStatus.UNPUSHED, "; ".join(unpushed)
-    return Outcome(status, parsed, note)
+    committed = [found for slot in slots if copy is not None and (found := _committed_copy(slot, branch))]
+    return Outcome(status, parsed, "; ".join(n for n in [note, *committed] if n))
+
+
+def _plan_copy(ctx: Context, run: sqlite3.Row) -> str | None:
+    """Return the approved plan an `implement` or `resume` follows, read again from its file (DESIGN §25).
+
+    Dispatch checked the file against the approved hash; this checks it again, so the worker never gets a text the
+    operator did not approve.
+
+    Returns:
+        The plan's text, or None for another kind or a ticket with no approved plan.
+
+    Raises:
+        _SetupError: the approved plan's file changed, or is gone, since the dispatch.
+    """
+    if run["kind"] not in (RunKind.IMPLEMENT, RunKind.RESUME):
+        return None
+    approved = plans.approved_of(ctx.conn, str(run["ticket_key"]))
+    if approved is None:
+        return None
+    text = plans.approved_text(ctx.state_dir, approved)
+    if text is None:
+        path = plans.path_for(ctx.state_dir, approved.ticket_key, approved.run_id)
+        raise _SetupError(
+            f"plan {approved.id}'s file {path} is no longer the text the operator approved; the worker did not start"
+        )
+    return text
+
+
+def _place_copy(run: sqlite3.Row, slots: Sequence[_Slot], copy: str | None) -> dict[str, str]:
+    """Put the worker's copy of the plan where it starts: in its desk, or at its one worktree's root (DESIGN §25).
+
+    Returns:
+        The files `_run_agent` writes into the desk: the copy for a run in a desk, else none.
+    """
+    if copy is None:
+        return {}
+    if dispatch.in_desk(str(run["kind"]), slots):
+        return {plans.COPY: copy}
+    _write_copy(slots[0], copy)
+    return {}
+
+
+def _write_copy(slot: _Slot, text: str) -> None:
+    """Write the worker's copy of the plan at the root of its worktree, ignored by git there (DESIGN §25).
+
+    The repository's exclude file, which every slot shares, gets the copy's line once, so `git add -A` leaves it out.
+
+    Raises:
+        _SetupError: git could not name the repository's git directory, or the exclude file or the copy could not be
+            written.
+    """
+    common = Path(slot.git.run("rev-parse", "--path-format=absolute", "--git-common-dir"))
+    exclude = common / "info" / "exclude"
+    line = f"/{plans.COPY}"
+    try:
+        held = exclude.read_text(encoding="utf-8") if exclude.is_file() else ""
+        if line not in held.splitlines():
+            exclude.parent.mkdir(parents=True, exist_ok=True)
+            with exclude.open("a", encoding="utf-8") as f:
+                f.write(f"{'' if not held or held.endswith(chr(10)) else chr(10)}{line}\n")
+        logs.write_private(slot.path / plans.COPY, text)
+    except OSError as e:
+        raise _SetupError(f"{slot.git.where}could not write the plan's copy: {e}") from e
+
+
+def _committed_copy(slot: _Slot, branch: str) -> str:
+    """Return a harness note when the branch pushed from `slot` holds the plan's copy at its root, else "".
+
+    Ignored is not untrackable: a worker can add the copy by name. canopy reports it and does not rewrite the branch
+    (DESIGN §25, The worker's copy).
+    """
+    remote = _remote_head(slot.git, branch)
+    if not remote:
+        return ""
+    found = slot.git.result("ls-tree", "--name-only", remote, "--", plans.COPY)
+    if not (found.ok and found.stdout.strip()):
+        return ""
+    return f"{slot.git.where}the pushed {branch} holds {plans.COPY}, the plan's copy, committed by the worker"
 
 
 def _stopped(ctx: Context, run: sqlite3.Row) -> str:
