@@ -810,13 +810,20 @@ list, an empty state, or a skeleton by hand.
 - **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posted nowhere (D114): the
   review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. A diff is a
   monospace table: the old and new line numbers, the `+` or `-` in `diff-add` or `diff-del`, and the line, its row on
-  that token's 12% tint; a hunk's header on `surface-raised`; long lines scroll sideways inside the panel. The code is
-  colored by the file's language, read from its name (`src/lib/languages.ts`): keywords in `syntax-literal`, strings
-  in `syntax-string`, constants in `syntax-number`, function and type names in `syntax-key`, comments muted, the rest
-  plain, each read at 4.5:1 on an added or removed line's tint too. Shiki tokenizes each hunk's new side and old side
-  whole, with its TextMate grammar, in the browser (`src/lib/highlight.ts`, D121); a line shows plain until its
-  file's grammar has loaded, then the same characters colored, and stays plain for a language canopy does not map, a
-  line of 1000 characters or more, or a grammar that fails. A finding's
+  that token's 12% tint; a hunk's header on `surface-raised`; long lines scroll sideways inside the panel, while a
+  finding's card and a fold keep to the panel's width at its left edge (sticky, `100cqw`), so one long line never
+  carries a card's text out of reach. The code is colored by the file's language, read from its name
+  (`src/lib/languages.ts`): keywords in `syntax-literal`, strings in `syntax-string`, constants in `syntax-number`,
+  function and type names in `syntax-key`, comments muted, the rest plain, each read at 4.5:1 on an added or removed
+  line's tint too. Shiki tokenizes each hunk's new side and old side whole, with its TextMate grammar, in the browser
+  (`src/lib/highlight.ts`, D121); a line shows plain until its file's grammar has loaded, then the same characters
+  colored, and stays plain for a language canopy does not map, a line of 1000 characters or more, or a grammar that
+  fails. A diff over 2,000 lines folds (`DIFF_BUDGET`, `src/lib/review-folds.ts`), since one at the server's bounds
+  drawn whole is 150,000 elements, seconds to show and seconds for every click after: the page draws the 10 lines either
+  side of each finding's line, then whole files in order while they fit, then the first lines of the rest, and says so
+  in a muted line above the first file. Each run of lines it leaves out is a fold, a row on `surface-raised/50` with a
+  ghost `xs` button, `Show 60 hidden lines`, or `Show 500 of 13,029 hidden lines` past a step, which draws the next 500;
+  a fold only adds, as rich text's `show N more lines` does, so it is a plain button, not a `Disclosure`. A finding's
   card (`FindingCard`) sits right under the line it names, or under its file's header when the diff does not show the
   line, or in a Not in the diff panel: its number, its severity as a chip (`blocking` in `status-failed`, `major` in
   `status-blocked`, as the attention list's reasons; `minor` plain), its title, its location, and its detail as rich

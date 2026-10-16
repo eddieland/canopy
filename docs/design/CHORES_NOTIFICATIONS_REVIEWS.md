@@ -889,6 +889,10 @@ page links back to its PR's.
   a file whose new or old path is that path, or whose path ends in `/<path>` when only one does, and on the line with
   that number on the new side, when the diff shows it. A finding on a file the diff shows, but not on a line it shows,
   sits under the file's header; one on no file in the diff, or with no diff, in a panel of its own.
+- **Showing it.** The page draws a diff of up to 2,000 lines whole. A longer one folds, since a diff at the reading
+  bounds drawn whole is too much for a browser to keep responsive: the lines around each finding's line come first,
+  then whole files in order while they fit, then the first lines of the rest, and every other run of lines is a fold
+  that draws 500 more of them a click. Every finding's card is drawn, so the findings list reaches each one.
 
 ### Agent definition
 
