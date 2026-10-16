@@ -4,6 +4,8 @@ name: Claude Review
 # summary. It authenticates with the operator's Claude subscription: the CLAUDE_CODE_OAUTH_TOKEN repository secret,
 # made by running `claude setup-token` locally. It does not re-review on every push, which would spend the
 # subscription's usage on each fix commit; close and reopen the PR, or mark it draft and ready again, for another pass.
+# A push reviews only a PR that has no finished review yet. GitHub runs no pull_request workflow while the PR has a
+# merge conflict, so a PR that leaves draft conflicted gets its review from the push that resolves the conflict.
 # It reads AGENTS.md (through CLAUDE.md) on its own; the action restores .claude/ and CLAUDE.md from the base branch,
 # so a PR cannot add hooks or settings to the run. AGENTS.md is not restored: CLAUDE.md imports it from the checkout, so
 # a PR that edits it changes what the reviewer is told, and the prompt has it flag that. The action also skips any PR
@@ -11,7 +13,7 @@ name: Claude Review
 # pushes, or merges.
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened, reopened, ready_for_review, synchronize]
 
 permissions:
   contents: read
@@ -21,9 +23,39 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  review:
+  gate:
     # A fork's pull request gets no secrets, so it would only fail.
     if: ${{ !github.event.pull_request.draft && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      review: ${{ steps.decide.outputs.review }}
+    steps:
+      - name: Decide whether to review
+        id: decide
+        # A finished review leaves the action's tracking comment, which starts "**Claude finished". One that failed or
+        # was cancelled does not, so the next push tries again.
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTION: ${{ github.event.action }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          review=true
+          if [ "$ACTION" = synchronize ]; then
+            finished=$(gh api --paginate "repos/$REPO/issues/$PR/comments" --jq \
+              '.[] | select(.user.login == "claude[bot]" and (.body | startswith("**Claude finished"))) | .id')
+            if [ -n "$finished" ]; then
+              review=false
+            fi
+          fi
+          echo "review=$review" >> "$GITHUB_OUTPUT"
+
+  review:
+    needs: gate
+    if: ${{ needs.gate.outputs.review == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
