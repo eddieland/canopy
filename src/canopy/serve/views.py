@@ -55,6 +55,8 @@ from canopy.serve.schema import (
     SpendBreakdown,
     SpendCosts,
     SpendDay,
+    SpendPullRequest,
+    SpendTicket,
     SpendTicks,
     SpendUnpriced,
     SpendWindow,
@@ -173,7 +175,7 @@ def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown
     return SpendBreakdown(
         since=db.parse_time(found.since),
         days=found.days,
-        per_day=[SpendDay(day=d.day, costs=_spend_costs(d.costs)) for d in found.per_day],
+        per_day=[SpendDay(day=d.day, costs=_spend_costs(d.costs), done=d.done) for d in found.per_day],
         totals=_spend_costs(found.totals),
         ticks=[SpendTicks(group=g.group, ticks=g.ticks, cost_usd=g.cost_usd) for g in found.ticks],
         woken=[SpendWoken(by=w.by, ticks=w.ticks, cost_usd=w.cost_usd) for w in found.woken],
@@ -181,6 +183,26 @@ def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown
         idle_share=found.idle_share,
         idle_ticks=[
             tick_of(row, int(row["decisions"])) for row in spending.idle_ticks(ctx.conn, found.since, found.until)
+        ],
+        done=found.done,
+        per_done=found.per_done,
+        tickets=[
+            SpendTicket(
+                key=t.key,
+                title=t.title,
+                runs=t.runs,
+                reviews=t.reviews,
+                cost_usd=t.cost_usd,
+                done=t.done,
+                done_at=db.parse_time(t.done_at) if t.done_at is not None else None,
+            )
+            for t in found.tickets
+        ],
+        pull_requests=[
+            SpendPullRequest(
+                url=p.url, ticket_key=p.ticket, phase=p.phase, runs=p.runs, reviews=p.reviews, cost_usd=p.cost_usd
+            )
+            for p in found.pull_requests
         ],
     )
 
@@ -256,6 +278,8 @@ def tick_of(row: sqlite3.Row, decisions: int) -> Tick:
         summary=lines(str(row["summary"] or "")) or None,
         session_id=str(row["session_id"]) if row["session_id"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
+        new_tokens=new_tokens(row),
+        peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
         decisions=decisions,
         idle=None if row["idle"] is None else bool(row["idle"]),
         woken_by=str(row["woken_by"]) if row["woken_by"] is not None else None,
@@ -438,12 +462,12 @@ def decision(row: records.Decision) -> Decision:
 
 
 def runs(ctx: Context) -> list[Run]:
-    """Running runs, oldest first, then the ones that ended most recently, newest first.
+    """Running runs, oldest first, then the ones that ended most recently, the one that ended last first.
 
     Returns:
         The running runs with the worktrees they hold, then at most `RECENT_RUNS` that ended.
     """
-    running = db.running_runs(ctx.conn)
+    running = db.running_runs(ctx.conn, "runs")
     slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
     root = ctx.workspace.root
     return [
@@ -495,7 +519,7 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
 
 
 def new_tokens(row: sqlite3.Row) -> int | None:
-    """A run's or a chore run's new tokens, every kind but cache reads, or None when the runtime reported none.
+    """A run's, a chore run's, or a tick's tokens, every kind but cache reads; None when the runtime reported none.
 
     Cache reads are left out: each model call reads again what the calls before it were sent, so their sum grows with
     the number of calls. The peak context says how large that grew.

@@ -69,9 +69,9 @@ def add_run(
         runs_dir=Path("/state/runs"),
     )
     if pid is not None:
-        db.claim_run(conn, run_id, pid)
+        db.claim_run(conn, "runs", run_id, pid)
     if status != "running":
-        db.finish_run(conn, run_id, status, json.dumps({"summary": "gave up"}))
+        db.finish_run(conn, "runs", run_id, status, json.dumps({"summary": "gave up"}))
     return run_id
 
 
@@ -106,9 +106,9 @@ def test_dead_worker_is_crashed_and_its_slot_returned(
         items = [(k, a) for k, a, _ in last_tick_decisions(conn)]
         assert items == [("PROJ-1", "attention:crashed"), ("PROJ-2", "attention:crashed")]
         [prompt] = [r["argv"][-1] for r in map(json.loads, agent_log.read_text().splitlines())]
-        assert '"running": 1' in prompt
-        assert '"available": 1' in prompt
-        assert '"status": "crashed"' in prompt  # the ticket's last run, for the overseer
+        assert '"running":1' in prompt
+        assert '"available":1' in prompt
+        assert '"status":"crashed"' in prompt  # the ticket's last run, for the overseer
 
 
 def test_a_worker_is_alive_while_it_holds_its_lifelock_whatever_its_pid(
@@ -152,7 +152,7 @@ def test_old_definitions_snapshots_are_removed_only_when_no_run_is_live(
         assert main(["tick", "--dry-run"]) == 0
         assert old.is_dir()
 
-        db.finish_run(conn, live, "done", "{}")
+        db.finish_run(conn, "runs", live, "done", "{}")
         assert main(["tick", "--dry-run"]) == 0
         assert not old.exists()
         current = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
@@ -264,8 +264,8 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
     calls = json.loads(treehouse_state.read_text())["calls"]
     assert [c[0] for c in calls] == ["status", "get", "return", "status"]
     prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
-    assert '"last_run": {\n        "run_id": 1,' in prompt
-    assert '"status": "done"' in prompt
+    assert '"last_run":{"run_id":1,' in prompt
+    assert '"status":"done"' in prompt
 
 
 def test_killed_worker_is_detected_on_the_next_tick(

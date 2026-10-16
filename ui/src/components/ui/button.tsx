@@ -36,7 +36,9 @@ const buttonVariants = cva(
             },
             size: {
                 default: 'h-9 gap-1.5 px-2.5',
-                xs: "h-6 gap-1 px-2 text-xs [&_svg:not([class*='size-'])]:size-3",
+                // One look for every xs button, ghost, outline, or a Toggle: monospace at its regular weight, as a
+                // readout beside it is.
+                xs: "h-6 gap-1 px-2 font-mono text-xs font-normal [&_svg:not([class*='size-'])]:size-3",
                 sm: 'h-8 gap-1 px-2.5',
                 lg: 'h-10 gap-1.5 px-2.5',
                 icon: 'size-9',

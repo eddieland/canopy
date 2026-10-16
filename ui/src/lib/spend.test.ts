@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { SpendCosts, SpendDay } from '@/api/types'
 
-import { axisNames, chartTop, dayHint, dayLabel, seriesCost, SERIES, shareText, spendWindow } from './spend'
+import { axisNames, chartTop, dayHint, dayLabel, doneText, seriesCost, SERIES, shareText, spendWindow } from './spend'
 
 const NONE: SpendCosts = {
     overseer: null,
@@ -15,7 +15,7 @@ const NONE: SpendCosts = {
 }
 
 function day(name: string, costs: Partial<SpendCosts>): SpendDay {
-    return { day: name, costs: { ...NONE, ...costs } }
+    return { day: name, costs: { ...NONE, ...costs }, done: 0 }
 }
 
 describe('spend', () => {
@@ -61,5 +61,11 @@ describe('spend', () => {
     it('says a share as a whole percent', () => {
         expect(shareText(0.4123)).toBe('41%')
         expect(shareText(null)).toBe('–')
+    })
+
+    it('says when and how a ticket was marked done, by its UTC day, and nothing for one that was not', () => {
+        expect(doneText({ done: 'merged', done_at: '2026-10-07T23:30:00Z' })).toBe('Oct 7, merged')
+        expect(doneText({ done: 'closed', done_at: '2026-10-08T00:10:00Z' })).toBe('Oct 8, closed')
+        expect(doneText({ done: null, done_at: null })).toBe('')
     })
 })

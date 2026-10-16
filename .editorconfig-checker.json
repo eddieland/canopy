@@ -4,6 +4,7 @@
     "^tests/fakes/(agent|treehouse|srt)$",
     "\\.md$",
     "\\.gen\\.ts$",
-    "^docs/ui-explorations/"
+    "^docs/ui-explorations/",
+    "/__snapshots__/"
   ]
 }

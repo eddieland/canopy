@@ -1,14 +1,14 @@
 import type { FindingSeverity, ReviewFinding, ReviewSummary } from '@/api/types'
+import type { Tone } from '@/lib/tone'
 
 /**
- * A severity chip's classes, written out in full so Tailwind finds them. A blocking finding reads as broken work, a
- * major one as waiting on the operator, as the attention list's reasons do; a minor one is plain (ui/DESIGN.md, "A
- * review").
+ * A severity chip's tone. A blocking finding reads as broken work, a major one as waiting on the operator, as the
+ * attention list's reasons do; a minor one is plain (ui/DESIGN.md, "A review").
  */
-export const SEVERITY_TEXT: Record<FindingSeverity, string> = {
-    blocking: 'text-status-failed border-status-failed/40',
-    major: 'text-status-blocked border-status-blocked/40',
-    minor: '',
+export const SEVERITY_TONE: Record<FindingSeverity, Tone> = {
+    blocking: 'failed',
+    major: 'blocked',
+    minor: 'plain',
 }
 
 // Written out so Tailwind finds them: a verdict wears its worst finding's color, as that finding's chip does.
@@ -27,13 +27,24 @@ export function verdictTone(review: Pick<ReviewSummary, 'worst'>): string {
     return review.worst === null ? '' : VERDICT_TEXT[review.worst]
 }
 
-/** What a review found, in a few words: `clean`, `3 findings`, or the status of a run that reported no verdict. */
+/**
+ * What a review found, in a few words, its worst severity among them, since its color alone would not say it:
+ * `clean`, `3 findings, 1 major`, `1 blocking finding` when every finding is that bad, or the status of a run that
+ * reported no verdict.
+ */
 export function verdictText(review: ReviewSummary): string {
     if (review.verdict === 'clean') {
         return 'clean'
     }
     if (review.verdict === 'findings') {
-        return review.findings === 1 ? '1 finding' : `${review.findings} findings`
+        const noun = review.findings === 1 ? 'finding' : 'findings'
+        if (review.worst === null) {
+            return `${review.findings} ${noun}`
+        }
+        if (review.worst_count === review.findings) {
+            return `${review.findings} ${review.worst} ${noun}`
+        }
+        return `${review.findings} ${noun}, ${review.worst_count} ${review.worst}`
     }
     return review.state === 'running' ? 'reviewing' : 'no verdict'
 }

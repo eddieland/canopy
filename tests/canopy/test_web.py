@@ -106,15 +106,30 @@ def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journ
 def test_a_runs_spend_is_its_new_tokens_and_its_peak_context(ctx: Context) -> None:
     run_id = running_run(ctx, KEY, private=False)
     usage = agent_output.Usage(0.5, input=9000, output=1000, reasoning=0, cache_read=40_000, cache_write=0)
-    db.set_run_report(ctx.conn, run_id, "ses_w1", dataclasses.replace(usage, peak_context=26_000))
+    db.set_run_report(ctx.conn, "runs", run_id, "ses_w1", dataclasses.replace(usage, peak_context=26_000))
 
     c, _ = signed_in_client(ctx)
     run = c.get(f"/api/runs/{run_id}").json()
     assert (run["cost_usd"], run["new_tokens"], run["peak_context"]) == (0.5, 10_000, 26_000)  # no cache reads
 
-    db.set_run_report(ctx.conn, run_id, "ses_w1", usage)  # as a run recorded before the peak was kept
+    db.set_run_report(ctx.conn, "runs", run_id, "ses_w1", usage)  # as a run recorded before the peak was kept
     run = c.get(f"/api/runs/{run_id}").json()
     assert (run["new_tokens"], run["peak_context"]) == (10_000, None)
+
+
+def test_a_ticks_spend_is_its_overseers_new_tokens_and_peak_context(ctx: Context) -> None:
+    tick_id = db.start_tick(ctx.conn, dry_run=False)
+    c, _ = signed_in_client(ctx)
+    tick = c.get("/api/ticks").json()[0]
+    assert (tick["new_tokens"], tick["peak_context"]) == (None, None)  # nothing reported while it runs
+
+    usage = agent_output.Usage(0.25, input=3000, output=400, reasoning=100, cache_read=20_000, cache_write=500)
+    db.set_tick_report(ctx.conn, tick_id, "ses_o1", dataclasses.replace(usage, peak_context=12_000))
+    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    tick = c.get("/api/ticks").json()[0]
+    assert (tick["cost_usd"], tick["new_tokens"], tick["peak_context"]) == (0.25, 4000, 12_000)  # no cache reads
+    detail = c.get(f"/api/ticks/{tick_id}").json()["tick"]
+    assert (detail["new_tokens"], detail["peak_context"]) == (4000, 12_000)
 
 
 def test_meta_carries_each_repositorys_branch_url_when_set(canopy_env: CanopyEnv, ctx: Context) -> None:

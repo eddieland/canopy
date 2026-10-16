@@ -82,6 +82,38 @@ def journal_of_a_week(conn: sqlite3.Connection, now: datetime) -> None:
     )
 
 
+def ticket(conn: sqlite3.Connection, key: str, *, title: str | None = None, done: bool = False) -> None:
+    conn.execute(
+        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, title, done) VALUES (?, 'ws', ?, ?, ?, ?)",
+        (key, at(NOW, 30), at(NOW, 30), title, int(done)),
+    )
+
+
+def run(
+    conn: sqlite3.Connection, tick_id: int, key: str, started: str, cost: float | None, prs: dict[str, str] | None
+) -> None:
+    conn.execute(
+        "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, status, result_json, log_path, cost_usd) "
+        "VALUES (?, ?, 'implement', 'b', ?, 'done', ?, 'l', ?)",
+        (tick_id, key, started, None if prs is None else json.dumps({"status": "done", "prs": prs}), cost),
+    )
+
+
+def review(conn: sqlite3.Connection, tick_id: int, url: str, key: str | None, started: str, cost: float) -> None:
+    conn.execute(
+        "INSERT INTO review_runs (tick_id, pr_url, sha, ticket_key, started_at, status, log_path, cost_usd) "
+        "VALUES (?, ?, 'abc', ?, ?, 'done', 'l', ?)",
+        (tick_id, url, key, started, cost),
+    )
+
+
+def decide(conn: sqlite3.Connection, tick_id: int, key: str, created: str, action: str, rationale: str) -> None:
+    conn.execute(
+        "INSERT INTO decisions (tick_id, ticket_key, action, rationale, created_at) VALUES (?, ?, ?, ?, ?)",
+        (tick_id, key, action, rationale, created),
+    )
+
+
 def test_the_window_is_whole_utc_days_ending_today() -> None:
     assert spend.window_start(NOW, 1) == datetime(2026, 10, 8, tzinfo=UTC)
     assert spend.window_start(NOW, 7) == datetime(2026, 10, 2, tzinfo=UTC)
@@ -246,3 +278,79 @@ def test_idle_share_is_of_the_live_ticks_that_ended(tmp_path: Path, journals: Jo
     found = spend.breakdown(conn, NOW, 1)
     assert found.totals.overseer == 3.0  # the running tick's cost counts, as the rail's counters count it
     assert found.idle_share == 0.25
+
+
+def test_what_each_ticket_and_pr_cost_and_what_the_window_got_done(tmp_path: Path, journals: Journals) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    t = tick(conn, at(NOW, 1), 4.0, idle=False, woken_by="start")
+    web, api, other = "https://e.test/web/pull/1", "https://e.test/api/pull/2", "https://e.test/x/pull/9"
+    ticket(conn, "A-1", title="Merged", done=True)
+    ticket(conn, "A-2", title="Closed in the tracker", done=True)
+    ticket(conn, "A-3")  # still open
+    ticket(conn, "A-4", done=True)  # done the week before, its last run in the window
+    ticket(conn, "A-5", done=True)  # done in the window, no run in it
+    conn.execute(
+        "INSERT INTO ticket_units (ticket_key, repo, pr_url, phase) VALUES ('A-1', 'web', ?, 'merged')", (web,)
+    )
+    run(conn, t, "A-1", at(NOW, 2), 3.0, {"web": web, "api": api})  # a joint run: on each PR, once on its ticket
+    run(conn, t, "A-1", at(NOW, 9), 50.0, {"web": web})  # before the window
+    run(conn, t, "A-2", at(NOW, 1), 1.0, None)
+    run(conn, t, "A-3", at(NOW, 0), 0.5, {"web": "not a url"})
+    run(conn, t, "A-4", at(NOW, 3), None, None)
+    review(conn, t, web, "A-1", at(NOW, 1), 0.25)
+    review(conn, t, other, None, at(NOW, 0), 0.75)
+    decide(conn, t, "A-1", at(NOW, 1), "done", "every PR merged")
+    decide(conn, t, "A-2", at(NOW, 3), "done", "every PR merged")
+    decide(conn, t, "A-2", at(NOW, 1), "done", db.CLOSED_RATIONALE)  # the newest says how
+    decide(conn, t, "A-4", at(NOW, 8), "done", "every PR merged")
+    decide(conn, t, "A-5", at(NOW, 0), "done", "every PR merged")
+    found = spend.breakdown(conn, NOW, 7)
+
+    assert found.done == 3
+    assert [d.done for d in found.per_day] == [0, 0, 0, 0, 0, 2, 1]
+    assert found.totals.total == pytest.approx(9.5)
+    assert found.per_done == pytest.approx(9.5 / 3)  # the window's whole spend, the overseer's included
+    assert found.tickets == [
+        spend.TicketSpend("A-1", "Merged", 1, 1, 3.25, "merged", at(NOW, 1)),
+        spend.TicketSpend("A-2", "Closed in the tracker", 1, 0, 1.0, "closed", at(NOW, 1)),
+        spend.TicketSpend("A-3", None, 1, 0, 0.5),
+        spend.TicketSpend("A-4", None, 1, 0, None),  # done before the window: not done in it
+        spend.TicketSpend("A-5", None, 0, 0, None, "merged", at(NOW, 0)),
+    ]
+    assert found.pull_requests == [
+        spend.PullRequestSpend(web, "A-1", "merged", runs=1, reviews=1, cost_usd=3.25),
+        spend.PullRequestSpend(api, "A-1", None, runs=1, reviews=0, cost_usd=3.0),
+        spend.PullRequestSpend(other, None, None, runs=0, reviews=1, cost_usd=0.75),
+    ]
+
+
+def test_a_ticket_forgotten_or_reopened_since_it_was_done_is_not_done(tmp_path: Path, journals: Journals) -> None:
+    conn = journals.open(tmp_path / "canopy.db")
+    t = tick(conn, at(NOW, 1), 1.0)
+    ticket(conn, "A-1", done=True)
+    ticket(conn, "A-2")  # reopened: no longer done
+    decide(conn, t, "A-1", at(NOW, 1), "done", "every PR merged")
+    decide(conn, t, "A-2", at(NOW, 1), "done", "every PR merged")
+    conn.execute("UPDATE tickets SET forgotten_at = ? WHERE key = 'A-1'", (at(NOW, 0),))
+    found = spend.breakdown(conn, NOW, 7)
+    assert (found.done, found.per_done, found.tickets) == (0, None, [])
+
+
+def test_canopy_spend_prints_the_tickets_done_and_the_costliest(
+    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+) -> None:
+    now = noon_today()
+    conn = canopy_env.journal()
+    t = tick(conn, at(now, 0), 1.0)
+    for n in range(12):
+        ticket(conn, f"A-{n}", done=n == 11)
+        run(conn, t, f"A-{n}", at(now, 0), n + 1.0, None)
+    decide(conn, t, "A-11", at(now, 0), "done", "every PR merged")
+    assert main(["spend", "--days", "1"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert "1 ticket marked done, $79.00 of all spend for each." in out
+    words = [line.split() for line in out]
+    first = words.index(["ticket", "runs", "spent", "done"]) + 1
+    assert words[first] == ["A-11", "1", "$12.00", at(now, 0)[:10], "merged"]
+    assert [w[0] for w in words[first : first + 10]] == [f"A-{n}" for n in range(11, 1, -1)]  # the costliest ten
+    assert words[first + 10] == ["and", "2", "more;", "--json", "lists", "every", "one"]

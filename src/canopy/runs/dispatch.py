@@ -570,7 +570,7 @@ def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: 
             attempt limit (`attempt_limit`) or a unit in its fix-ci cooldown (`cooldown`), or the workers are at
             capacity (`capacity`). A refusal about one unit names its repository.
     """
-    running = db.running_runs(ctx.conn)
+    running = db.running_runs(ctx.conn, "runs")
     for run in running:
         if run["ticket_key"] == key:
             raise Refusal("running", f"run {run['id']} is already working {key}")
@@ -612,7 +612,7 @@ def _check_capacity(ctx: Context, running: Sequence[object], planned: Sequence[s
         Refusal: `capacity`, when running runs, review runs, and those in `planned` number `max_workers` or more.
     """
     max_workers = ctx.config.capacity.max_workers
-    busy = len(running) + len(db.running_review_runs(ctx.conn)) + len(planned)
+    busy = len(running) + len(db.running_runs(ctx.conn, "review_runs")) + len(planned)
     if busy >= max_workers:
         planned_note = f", counting {len(planned)} this dry run dispatched" if planned else ""
         raise Refusal("capacity", f"{busy} of {max_workers} workers are running{planned_note}")
@@ -757,7 +757,7 @@ def _spawn(
         note = json.dumps({"harness": f"could not start the worker: {e}"})
         conversation.close_run(ctx.conn, cfg, run, "crashed", note)
         raise Refusal("spawn_failed", str(e)) from e
-    db.claim_run(ctx.conn, run_id, pid)
+    db.claim_run(ctx.conn, "runs", run_id, pid)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
 
 

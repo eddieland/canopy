@@ -726,6 +726,12 @@ class Tick(_Model):
     """The overseer's session, when the runtime reported it (§13)."""
     cost_usd: float | None = None
     """What the overseer cost, in US dollars, when the runtime reported it (§13)."""
+    new_tokens: int | None = None
+    """The tokens the runtime reported the overseer's model took in or wrote anew, every kind but cache reads; None
+    when it reported nothing."""
+    peak_context: int | None = None
+    """The most tokens one of the overseer's model calls was sent, from the cache or not; None when the runtime
+    reported nothing, or recorded it before canopy kept it."""
     decisions: int = 0
     """How many decisions it recorded so far."""
     idle: bool | None = None
@@ -1066,6 +1072,45 @@ class SpendDay(_Model):
     """The day, `YYYY-MM-DD`, in UTC."""
     costs: SpendCosts
     """What the runs that started on it cost."""
+    done: int = 0
+    """How many tickets the loop marked done on it."""
+
+
+class SpendTicket(_Model):
+    """What one ticket's own runs that started in the window cost, and whether it was marked done in the window."""
+
+    key: str
+    """The ticket."""
+    title: str | None = None
+    """Its title, as the overseer named it; None before it did."""
+    runs: int
+    """How many of its worker and split runs started in the window, a running one included."""
+    reviews: int
+    """How many review runs naming it started in the window."""
+    cost_usd: float | None = None
+    """What those cost, in US dollars; None when none reported a cost. Not the overseer's, which is no ticket's."""
+    done: Literal["merged", "closed"] | None = None
+    """How the loop marked it done in the window (DESIGN §7): its PRs merged, or the tracker closed it, which a
+    tracker may do when its PR merges. None when it was not marked done in the window."""
+    done_at: datetime | None = None
+    """When it was marked done; None when it was not, in the window."""
+
+
+class SpendPullRequest(_Model):
+    """What the runs that pushed to one PR and the review runs of it, started in the window, cost."""
+
+    url: str
+    """The PR."""
+    ticket_key: str | None = None
+    """The ticket that owns it: its unit's, else one a run or review named; None for a PR canopy only reviewed."""
+    phase: str | None = None
+    """Its unit's phase (DESIGN §7), `merged` once it merged; None for a PR no unit of the loop's has."""
+    runs: int
+    """How many runs that pushed to it started in the window: a run that pushed to two PRs counts on each."""
+    reviews: int
+    """How many review runs of it started in the window."""
+    cost_usd: float | None = None
+    """What those cost, in US dollars; None when none reported a cost."""
 
 
 class SpendTicks(_Model):
@@ -1123,6 +1168,15 @@ class SpendBreakdown(_Model):
     no cost, so there is nothing to share."""
     idle_ticks: list[Tick]
     """The newest live idle ticks in the window, at most 20, newest first: what idle spend bought."""
+    done: int = 0
+    """How many tickets the loop marked done in the window, merged or closed."""
+    per_done: float | None = None
+    """The window's whole spend, the overseer's and chores' included, over the tickets marked done in it, in US
+    dollars; None when none was, or nothing reported a cost."""
+    tickets: list[SpendTicket] = []
+    """Each ticket with a run or review run that started in the window, or marked done in it, the costliest first."""
+    pull_requests: list[SpendPullRequest] = []
+    """Each PR a run that started in the window pushed to, or a review run of it started in it, the costliest first."""
 
 
 type SearchSource = Annotated[
@@ -1201,6 +1255,8 @@ class ReviewSummary(_Model):
     """How many findings it reported."""
     worst: FindingSeverity | None = None
     """The severity of the worst finding it reported, which colors its verdict; None when it reported none."""
+    worst_count: int = 0
+    """How many of its findings are of the worst severity, which its verdict says in words (`3 findings, 1 major`)."""
     started_at: datetime
     """When it started."""
     ended_at: datetime | None = None

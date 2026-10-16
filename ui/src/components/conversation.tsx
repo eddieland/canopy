@@ -118,10 +118,10 @@ function Head({ message, waiting, unread }: { message: Message; waiting: boolean
                 </span>
             )}
             {comment && <Chip>data, authorizes nothing</Chip>}
-            {waiting && <Chip className="border-status-blocked text-status-blocked">waiting on you</Chip>}
+            {waiting && <Chip tone="blocked">waiting on you</Chip>}
             {unread && (
                 <span title={unread.title}>
-                    <Chip className="border-status-running/40 text-status-running">{unread.label}</Chip>
+                    <Chip tone="running">{unread.label}</Chip>
                 </span>
             )}
             <Age at={message.at} variant="ago" className="ml-auto" />

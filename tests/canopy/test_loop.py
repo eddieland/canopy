@@ -208,7 +208,7 @@ def test_each_tick_block_shows_what_its_overseer_cost(
         )
 
         tick1, tick2 = out.getvalue().split("tick 1  ok")[1].split("tick 2  ok")
-        assert "attention 0  ·  cost $0.25, 3.5k new tokens, 5.5k peak context  ·  next tick in 1m at" in tick1
+        assert "attention 0  ·  cost $0.25, 3.5k tokens, 5.5k peak context  ·  next tick in 1m at" in tick1
         assert "cost" not in tick2
 
 
@@ -317,7 +317,7 @@ def test_the_footer_counts_running_reviews_as_workers(
         purpose="query",
         logs_dir=canopy_env.state_dir,
     )
-    assert db.claim_review_run(conn, run_id, os.getpid())  # alive, so reconcile leaves it running
+    assert db.claim_run(conn, "review_runs", run_id, os.getpid())  # alive, so reconcile leaves it running
     with overseer_does():
         term, out = console()
         repeat.run(context(canopy_env), dry_run=True, interval_minutes=1, max_ticks=1, console=term, stop=repeat.Stop())

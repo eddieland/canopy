@@ -7,13 +7,14 @@ import { useState } from 'react'
 import { reloadConfig, setNotice, showLoop, signOut } from '@/api/mutations'
 import { keys, sessionQuery, spendQuery } from '@/api/queries'
 import { Cost } from '@/components/cost'
+import { Disclosure } from '@/components/disclosure'
 import { HatPreview } from '@/components/hat'
 import { Input, Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { PageHeader, Panel, PanelHeader } from '@/components/panel'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { setBuddy, useBuddy } from '@/lib/buddy'
@@ -179,7 +180,7 @@ function FunPanel() {
                         step={1}
                         defaultValue={gap}
                         disabled={!on}
-                        className="readout h-8 w-20 text-right"
+                        className="readout w-20 text-right"
                         data-testid="ticker-gap"
                         onChange={(event) => {
                             const value = event.currentTarget.value
@@ -253,11 +254,7 @@ function HatShop() {
                             left of {loaded ? <Cost usd={total} /> : '…'} spent
                         </span>
                     </div>
-                    <CollapsibleTrigger asChild>
-                        <Button variant="ghost" size="xs" data-testid="hats-toggle">
-                            {open ? 'Hide hats' : 'Show hats'}
-                        </Button>
-                    </CollapsibleTrigger>
+                    <Disclosure open={open} what="hats" data-testid="hats-toggle" />
                 </div>
                 <CollapsibleContent asChild>
                     <ul className="grid grid-cols-2 gap-2 border-t p-3 sm:grid-cols-4">

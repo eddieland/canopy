@@ -1,6 +1,7 @@
 import hashlib
 import os
 import sqlite3
+import typing
 from collections import Counter
 from collections.abc import Mapping
 from pathlib import Path
@@ -220,6 +221,39 @@ def test_journal_newer_than_code_is_an_error(tmp_path: Path, journals: Journals)
     conn.execute("INSERT INTO schema_migrations (version, name) VALUES (99, 'future')")
     with pytest.raises(db.MigrationError, match="does not know"):
         db.migrate(conn, resources.migrations_dir())
+
+
+# What the shared run lifecycle reads and writes in every table of detached runs (`db.claim_run` and the rest), besides
+# the column each keeps its agent's pid in.
+LIFECYCLE_COLUMNS = frozenset(
+    {
+        "id",
+        "pid",
+        "status",
+        "started_at",
+        "ended_at",
+        "result_json",
+        "log_path",
+        "session_id",
+        "cost_usd",
+        "tokens_input",
+        "tokens_output",
+        "tokens_reasoning",
+        "tokens_cache_read",
+        "tokens_cache_write",
+        "tokens_peak_context",
+    }
+)
+
+
+def test_every_run_table_has_what_the_shared_lifecycle_needs(tmp_path: Path, journals: Journals) -> None:
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+    assert set(typing.get_args(db.RunTable.__value__)) == set(db.RUN_TABLES)
+    assert set(db.RUN_NOUNS) == set(db.AGENT_PID) == set(db.RUN_TABLES)
+    for table in db.RUN_TABLES:
+        columns = {r["name"] for r in conn.execute("SELECT name FROM pragma_table_info(?)", (table,))}
+        assert columns >= LIFECYCLE_COLUMNS | {db.AGENT_PID[table]}, table
 
 
 def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None:
