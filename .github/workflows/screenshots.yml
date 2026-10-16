@@ -61,13 +61,22 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       # `changed` rewrites only the images that fail the comparison, and writes missing ones, so antialiasing noise
-      # within the threshold does not churn the rest; `all` rewrites every image. Any other failing test fails the run
-      # and nothing is pushed.
+      # within the threshold does not churn the rest; `all` rewrites every image. Only the spec files that take a
+      # screenshot run, found by what they call, so a new one is picked up unlisted: the rest of the suite is three
+      # quarters of the time and writes no image. A failing test in them fails the run and nothing is pushed; the CI
+      # run started on the pushed commit runs the whole suite.
       - name: Playwright, updating the baselines
         working-directory: ui
         env:
           UPDATE: ${{ inputs.update || 'changed' }}
-        run: npm run test:e2e -- --update-snapshots="$UPDATE"
+        run: |
+          mapfile -t specs < <(grep -lE 'toHaveScreenshot|screenshot(Main|Whole)\(' e2e/*.spec.ts)
+          if [ "${#specs[@]}" -eq 0 ]; then
+            echo "::error::No spec file takes a screenshot."
+            exit 1
+          fi
+          printf 'Taking screenshots in %s\n' "${specs[@]}"
+          npm run test:e2e -- --update-snapshots="$UPDATE" "${specs[@]}"
 
       - name: Keep the baselines
         uses: actions/upload-artifact@v7.0.2
