@@ -212,7 +212,12 @@ class CanopyPool:
                 number += 1
             target = self.directory / str(number) / self.repo
             target.parent.mkdir(parents=True)
-            self._git.run(self.clone, "worktree", "move", str(path), str(target))
+            try:
+                self._git.run(self.clone, "worktree", "move", str(path), str(target))
+            except PoolError:
+                with contextlib.suppress(OSError):
+                    target.parent.rmdir()
+                raise
             with db.transaction(self.conn):
                 self.conn.execute(
                     "INSERT INTO slots (repo, name, path) VALUES (?, ?, ?)", (self.repo, str(number), str(target))

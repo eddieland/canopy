@@ -242,8 +242,8 @@ def _other_pools(ctx: Context, log: logs.TickAdapter) -> list[tuple[str, pools.P
     """Read the pools of the backend `pools.backend` does not name, where the workspace has any (DESIGN §18).
 
     After a switch, their leases still go back to them: a run's when it ends, and one no run holds here. canopy's are
-    read whenever `pools/` holds one; treehouse's whenever `.treehouse/` exists, and a treehouse that cannot be read is
-    logged rather than stopping the tick, since it may be gone.
+    read whenever `pools/` holds one, treehouse's whenever `.treehouse/` exists. Either that cannot be read is logged
+    rather than stopping the tick: only the pools `pools.backend` names are the tick's to stop for.
 
     Returns:
         Each repository's name, its pool of the other backend, and that pool's slots.
@@ -253,9 +253,13 @@ def _other_pools(ctx: Context, log: logs.TickAdapter) -> list[tuple[str, pools.P
     match ctx.config.pools.backend:
         case PoolKind.TREEHOUSE:
             for repo in ws.repos:
-                if (ws.root / pool.POOLS_DIR / repo.name).is_dir():
-                    other = ctx.pool_of(PoolKind.CANOPY, repo.name)
+                if not (ws.root / pool.POOLS_DIR / repo.name).is_dir():
+                    continue
+                other = ctx.pool_of(PoolKind.CANOPY, repo.name)
+                try:
                     found.append((repo.name, other, other.status()))
+                except pools.PoolError as e:
+                    log.warning("canopy pool not read", extra={"repo": repo.name, "error": str(e)})
         case PoolKind.CANOPY:
             if not (ws.root / workspace.POOLS_DIR).is_dir():
                 return found

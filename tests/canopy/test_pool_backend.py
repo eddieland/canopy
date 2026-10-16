@@ -9,7 +9,7 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import config, db, pool, workspace
+from canopy.core import config, db, pool, pools, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import PoolKind, RunStatus
 from canopy.infra import logs, procs, resources
@@ -220,3 +220,48 @@ def test_the_worktrees_page_shows_canopy_s_pool_under_canopy(canopy_env: CanopyE
     [one] = found["worktrees"]
     assert (one["name"], one["status"], one["state"], one["run"]["id"]) == ("1", "leased", "working", run_id)
     assert one["path"] == "pools/repo/1/repo"
+
+
+def test_a_treehouse_slot_that_cannot_move_stays_and_sync_says_why(
+    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    old = treehouse_worktree(ws, treehouse_state, "api")
+    (old / "scratch.txt").write_text("not committed\n")
+    use(canopy_env, "canopy")
+    assert main(["workspace", "sync"]) == 1
+    out = capsys.readouterr().out
+    assert "api: kept: moved 0 of 1 idle treehouse slots into pools/; slot 1 stays in treehouse's pool: " in out
+    assert "has changes" in out
+    assert (old / "scratch.txt").exists()
+    assert not (ws.root / pool.POOLS_DIR / "api" / "1").exists()
+
+
+def test_switching_back_keeps_a_canopy_slot_with_work_in_it(
+    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    conn = ws.journal()
+    use(canopy_env, "canopy")
+    ours = context(ws, canopy_env, conn).pool("api")
+    lease = ours.lease("PROJ-1")
+    ours.return_slot(lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
+    git("commit", "--quiet", "--allow-empty", "-m", "committed in an idle slot", cwd=lease.path)
+    use(canopy_env, "treehouse")
+    assert main(["workspace", "sync"]) == 1
+    out = capsys.readouterr().out
+    assert "api: kept: removed 0 of 1 idle slots of canopy's pool; slot 1 kept: HEAD is not merged into " in out
+    assert lease.path.is_dir()
+
+
+def test_under_treehouse_a_canopy_pool_that_cannot_be_read_is_logged_not_fatal(
+    ws: Ws, canopy_env: CanopyEnv, treehouse_state: Path
+) -> None:
+    seed_pools(ws, treehouse_state)
+    (ws.root / pool.POOLS_DIR / "api").mkdir(parents=True)
+    conn = ws.journal()
+    log = mock.create_autospec(logs.TickAdapter, instance=True)
+    broken = pools.PoolError("the journal says something odd")
+    with in_tick(conn), mock.patch.object(pool.CanopyPool, "status", autospec=True, side_effect=broken):
+        reconciled = reconcile.run(context(ws, canopy_env, conn), log)
+    assert set(reconciled.leased) == {"api", "web"}
+    warnings = [(c.args[0], c.kwargs["extra"]) for c in log.warning.call_args_list]
+    assert ("canopy pool not read", {"repo": "api", "error": "the journal says something odd"}) in warnings

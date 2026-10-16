@@ -487,9 +487,12 @@ def drop_idle(source: pools.Pool, repo: workspace.Repo, *, dry_run: bool) -> Che
 
     Returns:
         None when canopy's pool has no idle slot; else `removed`, `to remove` in a dry run, or `kept` with each slot
-        the pool kept.
+        the pool kept, or when the pool cannot be read.
     """
-    idle = sorted((s for s in source.status() if s.status == pools.AVAILABLE), key=_slot_order)
+    try:
+        idle = sorted((s for s in source.status() if s.status == pools.AVAILABLE), key=_slot_order)
+    except pools.PoolError as e:
+        return Checked(repo, "kept", f"canopy's pool cannot be read, so its idle slots stay: {e}")
     if not idle:
         return None
     if dry_run:

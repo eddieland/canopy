@@ -314,7 +314,7 @@ changes it, or `"canopy"`. Every caller reaches either through `pools.Pool` and 
   `review_runs.pool`, and a slot is always returned through that pool, whatever `pools.backend` names by then, so
   switching with runs in flight is safe. Reconcile reads the configured backend's pools, and a failure stops the tick
   as before; it also reads the other backend's where the workspace has any on disk, so a lease left there still goes
-  back, and a treehouse it cannot run there is logged, not fatal. The state block's leased slots come from both.
+  back, and one it cannot read there is logged, not fatal. The state block's leased slots come from both.
 - **Switching** is `canopy workspace sync`'s. To `"canopy"`, it moves each idle treehouse slot into `pools/` with `git
   worktree move`, which keeps everything in it, ignored files and build caches too; a busy one waits for a later sync,
   and its lease goes back to treehouse meanwhile. Back to `"treehouse"`, it removes canopy's idle slots as its trim
