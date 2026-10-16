@@ -6,8 +6,9 @@ never reset: a unit at its limit waits for a human, who raises the limit in conf
 the kind with `canopy grant` (DESIGN §22). The fix-ci cooldown runs from the end of the latest fix-ci run that
 covered the unit. `dispatch.py` enforces these; the overseer's state block shows them.
 
-A split is not a unit's work: it creates tickets and changes no repository (DESIGN §18). Its runs are counted per
-ticket, and never in a unit's counts.
+A split is not a unit's work: it creates tickets and changes no repository (DESIGN §18). Nor is a plan, which writes
+down how the ticket will be done across every repository it touches (DESIGN §25). Their runs are counted per ticket,
+and never in a unit's counts.
 """
 
 from __future__ import annotations
@@ -31,11 +32,14 @@ Unit = tuple[str, str | None]
 # `runs.kind` as read; a `click.Choice` takes them as `str(kind)`, since click matches an enum by its name.
 KINDS: tuple[str, ...] = (RunKind.IMPLEMENT, RunKind.FIX_CI, RunKind.RESUME)
 SPLIT = RunKind.SPLIT
+PLAN = RunKind.PLAN
+# The kinds whose runs are the ticket's, not a unit's: they work on no branch, and their attempts count per ticket.
+TICKET_KINDS: tuple[str, ...] = (SPLIT, PLAN)
 DISPATCH_KINDS: tuple[str, ...] = tuple(RunKind)
 
 
 def limits(config: Config) -> dict[str, int]:
-    """Return the most runs of each kind one unit may have, and for `split`, one ticket."""
+    """Return the most runs of each kind one unit may have, and for `split` and `plan`, one ticket."""
     return {kind: _limit(config, kind) for kind in RunKind}
 
 
@@ -50,6 +54,8 @@ def _limit(config: Config, kind: RunKind) -> int:
             return p.max_resume_attempts
         case RunKind.SPLIT:
             return p.max_split_attempts
+        case RunKind.PLAN:
+            return p.max_plan_attempts
         case _:
             assert_never(kind)
 
@@ -74,10 +80,11 @@ def attempts(conn: sqlite3.Connection, *, ticket: str | None = None) -> dict[Uni
     counts: dict[Unit, dict[str, int]] = {}
     query = "SELECT r.ticket_key, s.repo, r.kind, count(DISTINCT r.id) FROM runs r JOIN run_slots s ON s.run_id = r.id "
     if ticket is None:
-        rows = conn.execute(f"{query}WHERE r.kind != ? GROUP BY r.ticket_key, s.repo, r.kind", (SPLIT,))
+        rows = conn.execute(f"{query}WHERE r.kind NOT IN (?, ?) GROUP BY r.ticket_key, s.repo, r.kind", TICKET_KINDS)
     else:
         rows = conn.execute(
-            f"{query}WHERE r.ticket_key = ? AND r.kind != ? GROUP BY r.ticket_key, s.repo, r.kind", (ticket, SPLIT)
+            f"{query}WHERE r.ticket_key = ? AND r.kind NOT IN (?, ?) GROUP BY r.ticket_key, s.repo, r.kind",
+            (ticket, *TICKET_KINDS),
         )
     for row in rows:
         counts_of = counts.setdefault(unit(str(row[0]), row[1]), dict.fromkeys(KINDS, 0))
@@ -142,9 +149,12 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
     return Granted(repo=repo, runs=unit_attempts(conn, key, repo)[kind], limit=limit)
 
 
-def split_attempts(conn: sqlite3.Connection) -> dict[str, int]:
-    """Return each ticket's count of split runs, whatever they ended as. Tickets never split are missing."""
-    rows = conn.execute("SELECT ticket_key, count(*) FROM runs WHERE kind = ? GROUP BY ticket_key", (SPLIT,))
+def ticket_attempts(conn: sqlite3.Connection, kind: str) -> dict[str, int]:
+    """Return each ticket's count of `kind` runs, a kind counted per ticket, whatever they ended as.
+
+    Tickets with no such run are missing.
+    """
+    rows = conn.execute("SELECT ticket_key, count(*) FROM runs WHERE kind = ? GROUP BY ticket_key", (kind,))
     return {str(r[0]): int(r[1]) for r in rows}
 
 

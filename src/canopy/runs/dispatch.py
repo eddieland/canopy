@@ -11,15 +11,15 @@ import functools
 import json
 import re
 import sys
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence, Sized
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, notice, outbox, pools, prompts
+from canopy.core import conversation, db, notice, outbox, plans, pools, prompts
 from canopy.core.context import DISPATCH_LOCK
-from canopy.core.vocab import PoolKind, RunKind, RunStatus
+from canopy.core.vocab import PoolKind, RunKind, RunStatus, StartStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
 from canopy.runs import policy
@@ -94,9 +94,10 @@ class Plan:
 
     `base` is the branch it stacks on if `--base` named one, the label is in its configured spelling, and the
     repositories are the names of the units it covers, in the order the dispatch named them. A run over several is a
-    joint run (DESIGN §18). A split has no branch (""): it reads the repositories it names and changes none of them. A
-    private run works a ticket the operator started; its start record authorizes it, and it has no label (DESIGN §22).
-    A run that `starts` the ticket is its first, under `tracker.private`: it is private, and writes the start record.
+    joint run (DESIGN §18). A split or a plan has no branch (""): it reads the repositories it names and changes none of
+    them, from a desk however many it names (DESIGN §25). A private run works a ticket the operator started; its start
+    record authorizes it, and it has no label (DESIGN §22). A run that `starts` the ticket is its first, under
+    `tracker.private`: it is private, and writes the start record.
     """
 
     branch: str
@@ -108,7 +109,7 @@ class Plan:
 
     @property
     def joint(self) -> bool:
-        """Whether the run covers several repositories, and so works in a desk."""
+        """Whether the run covers several repositories."""
         return len(self.repos) > 1
 
 
@@ -132,8 +133,9 @@ def start(
     ticket's first implement named, in every repository. `base` stacks the run on another ticket's branch (DESIGN §10);
     without it the run starts from each pool's base branch. `repos` names the units the run covers, one repository each.
     A run over several repositories is a joint run (DESIGN §18). A `split` names the authorized replier's comment that
-    asked for it with `request`, and works no unit. A `resume` for a canopy review's findings carries them in `review`,
-    read from the journal (DESIGN §21).
+    asked for it with `request`, and works no unit. A `plan` works no unit either, and writes the ticket's plan
+    (DESIGN §25). A `resume` for a canopy review's findings carries them in `review`, read from the journal (DESIGN
+    §21).
 
     Returns:
         The run that started: its id, branch, the slots it leased, the worker's pid, and its desk if it is joint.
@@ -227,6 +229,15 @@ def desk_path(ctx: Context, key: str) -> Path:
     return ctx.workspace.root / DESKS_DIR / key
 
 
+def in_desk(kind: str, repos: Sized) -> bool:
+    """Whether a `kind` run over `repos` works in a desk: a joint run, or a plan, whose desk holds the plan it replaces.
+
+    Returns:
+        True for a run over several repositories, and for every plan.
+    """
+    return len(repos) > 1 or kind == policy.PLAN
+
+
 def valid_slug(value: str) -> bool:
     """Slugs reach branch names and argv, like keys.
 
@@ -289,7 +300,7 @@ def map_note(ctx: Context) -> str:
 
 
 def split_repositories_note(ctx: Context, slots: Sequence[db.RunSlot], desk: Path | None) -> str:
-    """Return a split's `{{REPOSITORIES}}` section: each repository it reads, checked out at its base branch."""
+    """Return a split's or a plan's `{{REPOSITORIES}}` section: each repository it reads, checked out at its base."""
     lines = [
         (
             f"`{desk}` is a desk, a directory holding one link per repository's worktree, each checked out at its base "
@@ -340,6 +351,9 @@ def _plan(
     if kind != policy.SPLIT and request is not None:
         raise Refusal("bad_request", "--request names the comment asking for a split; it is for split only")
     names = _check_repos(ctx, key, repos)
+    if kind == policy.PLAN:
+        # Before the split check below: a plan for a split's parent is the plan's own refusal.
+        _check_plan(ctx, key, slug=slug, base=base)
     split_into = db.children_of(ctx.conn, key)
     if split_into:
         # Its children carry the work now; working the parent too would do it twice (DESIGN §18).
@@ -348,6 +362,8 @@ def _plan(
         _check_split(ctx, key, names, slug=slug, base=base)
         return Plan(branch="", base=None, label=configured, repos=names)
     _check_child_repo(ctx, key, names)
+    if kind == policy.PLAN:
+        return Plan(branch="", base=None, label=configured, repos=names, private=private or starts, starts=starts)
     branch = _branch(ctx, key, kind, slug, names)
     if base is not None:
         _check_base(ctx.config.trust.branch_prefix, branch, base)
@@ -475,8 +491,32 @@ def _check_split(ctx: Context, key: str, repos: Sequence[str], *, slug: str | No
     if child is not None:
         raise Refusal("bad_split", f"{key} was created by splitting {child['parent_key']}; it is not split again")
     ticket = db.get_ticket(ctx.conn, key)
-    if ticket is not None and ticket["branch"]:
-        raise Refusal("bad_split", f"{key} already has work on {ticket['branch']}; a started ticket is not split")
+    if ticket is not None and ticket.branch:
+        raise Refusal("bad_split", f"{key} already has work on {ticket.branch}; a started ticket is not split")
+
+
+def _check_plan(ctx: Context, key: str, *, slug: str | None, base: str | None) -> None:
+    """Refuse a plan that would describe work already started or handed on, or that could not read its ticket (§25).
+
+    Raises:
+        Refusal: a slug (`bad_slug`) or a base (`bad_base`) is given; the ticket (`bad_plan`) was split, or already has
+            a branch; or (`no_read_tools`) no tracker read tools are known for the planner.
+    """
+    if slug is not None:
+        raise Refusal("bad_slug", "a plan writes down the work and names no branch; leave out --slug")
+    if base is not None:
+        raise Refusal("bad_base", "a plan writes down the work and starts from no branch; leave out --base")
+    split_into = db.children_of(ctx.conn, key)
+    if split_into:
+        raise Refusal("bad_plan", f"{key} was split into {', '.join(split_into)}; plan those instead")
+    ticket = db.get_ticket(ctx.conn, key)
+    if ticket is not None and ticket.branch:
+        # Its first implement recorded the branch: a plan now would describe work already started (DESIGN §25, Open).
+        raise Refusal("bad_plan", f"{key} already has work on {ticket.branch}; a started ticket is not planned")
+    if ctx.config.tracker.tools() is None:
+        raise Refusal(
+            "no_read_tools", "no tracker read tools are known for the planner; set tracker.mcp_server and read_tools"
+        )
 
 
 def _check_child_repo(ctx: Context, key: str, repos: Sequence[str]) -> None:
@@ -505,7 +545,7 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence
             or in one of `repos` (`no_branch`).
     """
     ticket = db.get_ticket(ctx.conn, key)
-    recorded = str(ticket["branch"]) if ticket is not None and ticket["branch"] else None
+    recorded = ticket.branch if ticket is not None and ticket.branch else None
     if kind == RunKind.IMPLEMENT:
         if recorded is None:
             slug = DEFAULT_SLUG if slug is None else slug
@@ -554,8 +594,8 @@ def _check_notice(ctx: Context, tick_id: int, kind: str) -> None:
     if kind != FIX_CI:
         return
     tick = db.get_tick(ctx.conn, tick_id)
-    read = tick["read_at"] if tick is not None else None
-    if read is not None and notice.moved_after(ctx.conn, str(read)):
+    read = tick.read_at if tick is not None else None
+    if read is not None and notice.moved_after(ctx.conn, read):
         raise Refusal(
             "notice_changed",
             "the operator set or cleared a notice to workers after this tick read the journal; the next tick decides "
@@ -575,9 +615,9 @@ def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: 
         The run's attempt number and attempt limit.
 
     Raises:
-        Refusal: a run is already working `key` or the dry run dispatched it (`running`), a unit or a split is at its
-            attempt limit (`attempt_limit`) or a unit in its fix-ci cooldown (`cooldown`), or the workers are at
-            capacity (`capacity`). A refusal about one unit names its repository.
+        Refusal: a run is already working `key` or the dry run dispatched it (`running`), a unit, or the ticket for a
+            split or a plan, is at its attempt limit (`attempt_limit`) or a unit in its fix-ci cooldown (`cooldown`),
+            or the workers are at capacity (`capacity`). A refusal about one unit names its repository.
     """
     running = db.running_runs(ctx.conn, "runs")
     for run in running:
@@ -585,15 +625,15 @@ def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: 
             raise Refusal("running", f"run {run['id']} is already working {key}")
     if key in planned:
         raise Refusal("running", f"this dry run already dispatched {key}")
-    if kind == policy.SPLIT:
-        # A split is the ticket's, not a unit's: its count is per ticket.
-        done = policy.split_attempts(ctx.conn).get(key, 0)
-        split_limit = policy.limits(ctx.config)[kind]
-        refused = policy.blocked(key, kind, counts={kind: done}, limit=split_limit, cooldown_until=None)
+    if kind in policy.TICKET_KINDS:
+        # A split or a plan is the ticket's, not a unit's: its count is per ticket.
+        done = policy.ticket_attempts(ctx.conn, kind).get(key, 0)
+        ticket_limit = policy.limits(ctx.config)[kind]
+        refused = policy.blocked(key, kind, counts={kind: done}, limit=ticket_limit, cooldown_until=None)
         if refused is not None:
             raise Refusal(*refused)
         _check_capacity(ctx, running, planned)
-        return done + 1, split_limit
+        return done + 1, ticket_limit
     counts = policy.attempts(ctx.conn)
     granted = policy.grants(ctx.conn)
     cooldowns = policy.fix_ci_cooldowns(ctx.conn, ctx.config, datetime.now(UTC))
@@ -685,8 +725,9 @@ def _spawn(
         )
         for repo, leased in leases
     )
-    desk = desk_path(ctx, key) if plan.joint else None
+    desk = desk_path(ctx, key) if in_desk(kind, plan.repos) else None
     split = kind == policy.SPLIT
+    planning = kind == policy.PLAN
     prs = _unit_prs(ctx, key)
     bases = {s.base_branch for s in slots}
     repliers = ", ".join(f"`{r}`" for r in cfg.trust.authorized_repliers)
@@ -698,12 +739,11 @@ def _spawn(
         "BASE": first.base_branch if len(bases) == 1 else "each repository's base branch, listed under Repositories",
         "STACKING": stacking_note(branch, plan.base),
         "REPOSITORIES": split_repositories_note(ctx, slots, desk)
-        if split
+        if split or planning
         else repositories_note(ctx, branch, slots, prs, desk),
         "PRS": json.dumps({s.repo: "<url or null>" for s in slots}, separators=(",", ":")),
         "TRACKER_PROVIDER": cfg.tracker.provider,
         "NEEDS_HUMAN_LABEL": cfg.tracker.needs_human_label,
-        "PR_LABEL": cfg.trust.pr_label,
         "TIMEOUT_MINUTES": str(cfg.runtime.worker_timeout_minutes),
         "ATTEMPT": str(attempt),
         "MAX_ATTEMPTS": str(limit),
@@ -719,14 +759,26 @@ def _spawn(
         "MARK_COMMENTS": prompts.mark_comments(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
         "OPEN_PR": prompts.open_pr(cfg.runtime.pr_skill),
         "REVIEW_SKILL": prompts.review_skill(cfg.runtime.review_skill),
+        "PLAN_FILE": plans.REPLACED,
+        "PLAN_OUT": plans.WRITTEN,
+        "MAX_PLAN_CHARS": f"{plans.MAX_CHARS:,}",
     }
     # A joint run's worker learns its repositories only from these, so an override without them fails closed. A
     # splitter's own check of who asked for the split needs the request.
     if split:
         required: tuple[str, ...] = prompts.REQUIRED_SPLIT
     else:
-        required = prompts.REQUIRED_JOINT if plan.joint else ()
-    if plan.private:
+        required = prompts.REQUIRED_JOINT if plan.joint and not planning else ()
+    if planning:
+        # One prompt for public and private tickets: a private one's conversation holds the operator's messages, and
+        # its start record, not a label, authorizes it (DESIGN §25).
+        values["AUTHORIZATION"] = prompts.plan_authorization(key, cfg.tracker.labels, private=plan.private)
+        values["OPERATOR_MESSAGES"] = (
+            conversation.prompt_conversation(ctx.conn, key)
+            if plan.private
+            else conversation.prompt_operator_messages(ctx.conn, key)
+        )
+    elif plan.private:
         values["CONVERSATION"] = conversation.prompt_conversation(ctx.conn, key)
     else:
         values["OPERATOR_MESSAGES"] = conversation.prompt_operator_messages(ctx.conn, key)
@@ -750,7 +802,7 @@ def _spawn(
         branch=branch,
         slots=slots,
         runs_dir=runs_dir(ctx),
-        works_units=not split,
+        works_units=kind not in policy.TICKET_KINDS,
         started=outbox.run_started(cfg, key=key, kind=kind, branch=branch, attempt=attempt, limit=limit),
         private=plan.private,
         check=functools.partial(_check_start_again, ctx, key, plan),
@@ -780,7 +832,7 @@ def _check_start_again(ctx: Context, key: str, plan: Plan) -> None:
         Refusal: the ticket was stopped (`stopped`), or started privately (`private`), since the dispatch was planned.
     """
     if plan.starts and conversation.start_of(ctx.conn, key) is None:
-        db.set_start(ctx.conn, conversation.TICKET, key, status="started", channel=conversation.LABEL)
+        db.set_start(ctx.conn, conversation.TICKET, key, status=StartStatus.STARTED, channel=conversation.LABEL)
     if plan.private != conversation.is_started(conversation.start_of(ctx.conn, key)):
         what = "was stopped" if plan.private else "was started privately"
         raise Refusal("stopped" if plan.private else "private", f"{key} {what} while this dispatch was planned")

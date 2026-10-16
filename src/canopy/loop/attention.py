@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 
 from canopy.core import chore_view, contract, conversation, db
 from canopy.core.items import Item, age, fingerprint, one_line, subject
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import logs
 from canopy.notify import deliver
 
@@ -66,7 +66,7 @@ def run_reason(status: RunStatus) -> str | None:
 
 
 # A tick that found `canopy` not working for the overseer closes with this status and raises this item (DESIGN §6).
-UNAVAILABLE = "canopy_unavailable"
+UNAVAILABLE: str = TickStatus.CANOPY_UNAVAILABLE
 # What the harness records itself (`tick._record_harness_items`, and `UNAVAILABLE`), so the overseer does not.
 HARNESS_REASONS = frozenset(
     {*filter(None, map(run_reason, RunStatus)), "awaiting_reply", chore_view.FAILED_REASON, "repo_missing", UNAVAILABLE}

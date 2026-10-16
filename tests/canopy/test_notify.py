@@ -16,6 +16,7 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.config import ConfigError, load
 from canopy.core.items import fingerprint
+from canopy.core.vocab import TickStatus
 from canopy.notify import journal as notify_journal
 from canopy.notify import message
 from tests.canopy.helpers import WORKER_DONE, InlineRunner, in_tick, worker_does
@@ -164,7 +165,7 @@ def test_a_json_sink_hears_about_runs(
             main(["dispatch", "PROJ-1", "--repo", "repo", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
         )
         assert main(["_run", "1"], runner=runner) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     with overseer_records(("PROJ-9", "needs_reviewer"), waiting=("PROJ-1",)):
         tick()
 
@@ -340,7 +341,7 @@ def run_worker(conn: sqlite3.Connection, ticket: str, *, result: str = WORKER_DO
         assert main(["dispatch", ticket, "--repo", "repo", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
         run_id = conn.execute("SELECT max(id) FROM runs").fetchone()[0]
         assert main(["_run", str(run_id)], runner=runner) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
 
 
 def test_a_batching_sink_holds_what_is_not_urgent_until_its_window_ends(
@@ -484,7 +485,7 @@ def test_a_json_digest_names_each_ticket_by_its_title(
             main(["dispatch", "PROJ-1", "--repo", "repo", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
         )
         assert main(["_run", "1"], runner=runner) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     with overseer_records(waiting=("PROJ-1",)):
         tick()
 
@@ -620,7 +621,7 @@ def test_chore_runs_reach_a_sink_that_takes_chores(
         with in_tick(conn) as tick_id:
             assert main(["chore", "run", "check"], runner=InlineRunner()) == 0
             assert main(["_chore", "1"], runner=InlineRunner()) == 0
-            db.finish_tick(conn, tick_id, "ok", "test")
+            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         tick()
     [message] = messages(out)
     assert "< chore:check run 1 ended ok (0 findings): all clear\n" in message

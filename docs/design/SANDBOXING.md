@@ -86,7 +86,7 @@ denies writes to `~/.config/canopy`, a worker cannot remove it either.
 
 | Command | Role | Why |
 | --- | --- | --- |
-| `worker_cmd`, `private_worker_cmd`, `split_cmd` | `worker` | The work. |
+| `worker_cmd`, `private_worker_cmd`, `split_cmd`, `plan_cmd` | `worker` | The work. |
 | `runtime.setup_cmd` | `setup` | It runs the branch's code in the slot just before the worker (§9). |
 | `runtime.chore_cmd`, a chore's `cmd` | `chore` | A chore using the operator's own tools has a shell for them (§19). |
 | `review_cmd` | `review` | It reads the most hostile text the loop meets, a diff by anyone `review.query` matches (T1). |

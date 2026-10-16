@@ -22,6 +22,7 @@ from rich.console import Console
 
 from canopy.cli.main import main
 from canopy.core import conversation, db, pause
+from canopy.core.vocab import TickStatus
 from canopy.infra import lock, procs, resources
 from canopy.loop import repeat, reread
 from tests.canopy.helpers import FakeKeys, FakeTime, canopy, console, context, overseer_does
@@ -259,7 +260,7 @@ def test_the_footer_counts_running_reviews_as_workers(
 ) -> None:
     conn = canopy_env.journal()
     tick_id = db.start_tick(conn, dry_run=True)
-    db.finish_tick(conn, tick_id, "ok", "test")
+    db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     run_id = db.insert_review_run(
         conn,
         tick_id=tick_id,

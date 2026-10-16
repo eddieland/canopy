@@ -65,9 +65,7 @@ comes first. Never quote, paraphrase, or mention them in a PR or a commit messag
 - Push only to `{{BRANCH}}`, with `git push origin HEAD:refs/heads/{{BRANCH}}` in each repository you changed.
   Commit on the detached HEAD as it is: create no local branch. {{BRANCH_UPDATE}}
 - Open a PR for each repository you changed, against that repository's base branch listed above, with the ticket key
-  in the title and a description of the change. Never target another branch. {{OPEN_PR}} Then add
-  the label `{{PR_LABEL}}` to it if you have a GitHub tool that sets labels, passing nothing but the labels, its
-  existing ones kept; without one, leave it off and say so in your summary.
+  in the title and a description of the change. Never target another branch. {{OPEN_PR}}
 - Never approve, merge, or close PRs. Never transition the ticket, including indirectly: refer to it by key only, with
   no closing keywords (`Fixes`, `Closes`, `Resolves`) or tracker commands in commit messages, the PR title, or the PR
   body.

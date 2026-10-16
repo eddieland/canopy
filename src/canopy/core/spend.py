@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, timedelta
 from typing import TYPE_CHECKING, Literal
 
-from canopy.core import contract, db
+from canopy.core import contract, db, records
 
 if TYPE_CHECKING:
     import sqlite3
@@ -276,17 +276,22 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
     )
 
 
-def idle_ticks(conn: sqlite3.Connection, since: str, until: str, limit: int = IDLE_TICKS) -> list[sqlite3.Row]:
-    """The newest live idle ticks that started in `[since, until)`, newest first, each with its `decisions` count.
+def idle_ticks(
+    conn: sqlite3.Connection, since: str, until: str, limit: int = IDLE_TICKS
+) -> list[tuple[records.Tick, int]]:
+    """The newest live idle ticks that started in `[since, until)`, newest first, each with how many decisions it made.
 
     Returns:
-        At most `limit` rows of `ticks`, as `db.recent_ticks` reads them.
+        At most `limit` ticks, as `db.recent_ticks` reads them.
     """
-    return conn.execute(
-        "SELECT t.*, (SELECT count(*) FROM decisions d WHERE d.tick_id = t.id) AS decisions FROM ticks t "
-        "WHERE t.started_at >= ? AND t.started_at < ? AND t.dry_run = 0 AND t.idle = 1 ORDER BY t.id DESC LIMIT ?",
+    found = records.fetch_all(
+        conn,
+        records.Tick,
+        "SELECT * FROM ticks WHERE started_at >= ? AND started_at < ? AND dry_run = 0 AND idle = 1 "
+        "ORDER BY id DESC LIMIT ?",
         (since, until, limit),
-    ).fetchall()
+    )
+    return db.with_decision_counts(conn, found)
 
 
 @dataclass(frozen=True)

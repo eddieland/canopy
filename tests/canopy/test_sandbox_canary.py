@@ -33,6 +33,7 @@ from hypothesis import strategies as st
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.core.vocab import TickStatus
 from canopy.infra import procs
 from canopy.infra.procs import SubprocessRunner
 from tests.canopy.helpers import InlineRunner, in_tick, pool, slot_of, worker_does
@@ -475,7 +476,7 @@ def test_canopys_sandboxed_worker_is_pushed(
         with in_tick(conn) as tick_id:
             args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
             assert main([*args, "--slug", "work"], runner=runner) == 0
-            db.finish_tick(conn, tick_id, "ok", "test")
+            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
 

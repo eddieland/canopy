@@ -1,9 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { breakStorage, otherTab, otherTabClears } from '@/test-utils'
 
 import { DEFAULT, isApple, parseSendKey, sends, sendShortcut } from './send-key'
 import type { KeyPress } from './send-key'
 
 const ENTER: KeyPress = { key: 'Enter', shiftKey: false, ctrlKey: false, metaKey: false, isComposing: false }
+
+// The setting is read when the module loads, so each test loads a fresh copy.
+function load() {
+    vi.resetModules()
+    return import('./send-key')
+}
 
 describe('parseSendKey', () => {
     it('defaults to Enter when nothing is stored', () => {
@@ -58,5 +67,41 @@ describe('sendShortcut', () => {
         expect(isApple('Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)')).toBe(true)
         expect(isApple('Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36')).toBe(false)
         expect(isApple('Mozilla/5.0 (Windows NT 10.0; Win64; x64)')).toBe(false)
+    })
+})
+
+describe('useSendKey', () => {
+    beforeEach(() => localStorage.clear())
+
+    it('changes the key that sends, and keeps it', async () => {
+        const sendKey = await load()
+        const { result } = renderHook(() => sendKey.useSendKey())
+        expect(result.current).toBe('enter')
+
+        act(() => sendKey.setSendKey('mod-enter'))
+        expect(result.current).toBe('mod-enter')
+        expect(localStorage.getItem(sendKey.STORAGE_KEY)).toBe('mod-enter')
+    })
+
+    it("follows another tab's setting, one made before it was read, and storage cleared", async () => {
+        const sendKey = await load()
+        localStorage.setItem(sendKey.STORAGE_KEY, 'button')
+        const { result } = renderHook(() => sendKey.useSendKey())
+        expect(result.current).toBe('button')
+
+        act(() => otherTab(sendKey.STORAGE_KEY, 'mod-enter'))
+        expect(result.current).toBe('mod-enter')
+        act(() => otherTabClears())
+        expect(result.current).toBe('enter')
+    })
+
+    it('sends on Enter where storage is unavailable, and still changes for this page', async () => {
+        breakStorage()
+        const sendKey = await load()
+        const { result } = renderHook(() => sendKey.useSendKey())
+        expect(result.current).toBe('enter')
+
+        act(() => sendKey.setSendKey('button'))
+        expect(result.current).toBe('button')
     })
 })

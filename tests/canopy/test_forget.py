@@ -8,7 +8,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import conversation, db
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunStatus, StartStatus
 from canopy.loop import attention
 from tests.canopy.helpers import (
     KEY,
@@ -67,8 +67,8 @@ def test_a_forgotten_ticket_starts_over_on_a_new_branch_and_its_runs_still_count
         assert "its limit is" not in out  # one implement of two
         ticket = db.get_ticket(conn, KEY)
         assert ticket is not None
-        assert (ticket["branch"], ticket["phase"], ticket["done"]) == (None, None, 0)
-        assert ticket["forgotten_run_id"] == last_run(conn)["id"]
+        assert (ticket.branch, ticket.phase, ticket.done) == (None, None, False)
+        assert ticket.forgotten_run_id == last_run(conn)["id"]
         assert db.units(conn, KEY) == []
         # The overseer's state block and the attention list no longer see the run; `show` still does.
         assert KEY not in db.latest_runs(conn)
@@ -83,7 +83,7 @@ def test_a_forgotten_ticket_starts_over_on_a_new_branch_and_its_runs_still_count
         assert work(conn, *LABEL, "--kind", "implement", "--slug", "again", runner=runner)["branch"] == NEW
         ticket = db.get_ticket(conn, KEY)
         assert ticket is not None
-        assert ticket["branch"] == NEW
+        assert ticket.branch == NEW
         assert unit_of(conn, KEY)["pr_url"] == NEW_PR
         assert db.latest_runs(conn)[KEY]["branch"] == NEW
 
@@ -120,7 +120,7 @@ def test_forgetting_a_private_ticket_leaves_its_old_question_waiting_on_nothing(
         assert conversation.awaiting(conn) == []
         ticket = db.get_ticket(conn, KEY)
         assert ticket is not None
-        assert ticket["forgotten_message_id"] == question
+        assert ticket.forgotten_message_id == question
         section = conversation.state_section(conn, ticket)
         assert section is not None
         assert (section["new_operator_messages"], section["awaiting_reply"]) == ([], None)
@@ -128,7 +128,7 @@ def test_forgetting_a_private_ticket_leaves_its_old_question_waiting_on_nothing(
         # The ticket stays started, and the conversation stays in the journal for `show`.
         record = conversation.start_of(conn, KEY)
         assert record is not None
-        assert record["status"] == "started"
+        assert record.status == StartStatus.STARTED
         # The report, the question, the reply, and the question after it.
         assert len(db.messages_of(conn, "ticket", KEY, 10)) == 4
 
@@ -180,7 +180,7 @@ def test_forget_refuses_an_unknown_ticket_a_running_run_a_split_parent_and_other
     assert "forget refused (split): a split made PROJ-2 from PROJ-1" in capsys.readouterr().err
     ticket = db.get_ticket(conn, KEY)
     assert ticket is not None
-    assert (ticket["branch"], ticket["forgotten_at"]) == (OLD, None)
+    assert (ticket.branch, ticket.forgotten_at) == (OLD, None)
 
     for ref in ("run:1", "chore:build-health", "api#4"):
         assert operator("forget", ref) == 1

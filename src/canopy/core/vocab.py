@@ -1,4 +1,4 @@
-"""The journal's closed vocabularies: a run's status and kind, a ticket's phase, and the pool a lease came from.
+"""The journal's closed vocabularies: run, tick, start, and plan statuses, run kinds, ticket phases, and lease pools.
 
 Each is a `StrEnum`, so a member is the string the journal stores and compares equal to it, and a misspelled one is a
 type error rather than a silent wrong decision. Code that branches on one matches it with `typing.assert_never` in the
@@ -59,6 +59,21 @@ class ReviewRunStatus(StrEnum):
 type AnyRunStatus = RunStatus | ChoreRunStatus | ReviewRunStatus
 
 
+class TickStatus(StrEnum):
+    """A tick's status, `ticks.status` (DESIGN §6)."""
+
+    RUNNING = "running"
+    OK = "ok"
+    # The overseer skipped the whole tick: it could not see the world (`mcp_unavailable`, `tracker_unsupported`).
+    SKIPPED = "skipped"
+    # `canopy --version` failed from the overseer's environment, so the overseer did not run.
+    CANOPY_UNAVAILABLE = "canopy_unavailable"
+    OVERSEER_FAILED = "overseer_failed"
+    RECONCILE_FAILED = "reconcile_failed"
+    # The tick's process exited without closing it; the next tick closed it.
+    ABANDONED = "abandoned"
+
+
 class RunKind(StrEnum):
     """What a worker run does, `runs.kind` (DESIGN §8)."""
 
@@ -67,6 +82,8 @@ class RunKind(StrEnum):
     RESUME = "resume"
     # Splits a ticket into children (DESIGN §18): it works on no branch, and counts attempts per ticket, not per unit.
     SPLIT = "split"
+    # Writes a plan before a ticket's first implement (DESIGN §25): no branch, attempts counted per ticket, as a split.
+    PLAN = "plan"
 
 
 class Phase(StrEnum):
@@ -108,6 +125,32 @@ UNIT_PHASES = frozenset(
         Phase.MERGED,
     }
 )
+
+
+class PlanStatus(StrEnum):
+    """A plan's status, `plans.status` (DESIGN §25): waiting on the operator, approved, or replaced."""
+
+    PROPOSED = "proposed"
+    APPROVED = "approved"
+    # A newer plan, a request for one, a skip, or `canopy forget` replaced it.
+    SUPERSEDED = "superseded"
+
+
+class PlanSetting(StrEnum):
+    """A ticket's own plan setting, `tickets.plan_setting` (DESIGN §25): it overrides `policy.plan`; NULL is unset."""
+
+    PLAN = "plan"
+    SKIP = "skip"
+
+
+class StartStatus(StrEnum):
+    """Whether the operator's start of a subject stands, `starts.status` (DESIGN §22).
+
+    A stop never deletes the record, so a stopped ticket stays private.
+    """
+
+    STARTED = "started"
+    STOPPED = "stopped"
 
 
 class PoolKind(StrEnum):

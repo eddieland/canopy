@@ -1,6 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { breakStorage, otherTab, otherTabClears } from '@/test-utils'
 
 import { clampGap, DEFAULTS, MAX_GAP, parseSettings, parseTopics, withTopic } from './ticker-settings'
+
+// The settings are read when the module loads, so each test loads a fresh copy.
+function load() {
+    vi.resetModules()
+    return import('./ticker-settings')
+}
 
 describe('parseSettings', () => {
     it('defaults to on, a normal speed, no gap, and every topic when nothing is stored', () => {
@@ -59,5 +68,44 @@ describe('clampGap', () => {
         expect(clampGap(Number.NaN)).toBeUndefined()
         expect(clampGap(Number.POSITIVE_INFINITY)).toBeUndefined()
         expect(clampGap('3')).toBeUndefined()
+    })
+})
+
+describe('useTickerSettings', () => {
+    beforeEach(() => localStorage.clear())
+
+    it('changes one setting, keeps the rest as they were, and stores them all', async () => {
+        const ticker = await load()
+        const { result } = renderHook(() => ticker.useTickerSettings())
+        expect(result.current).toEqual(DEFAULTS)
+
+        act(() => ticker.setTickerSettings({ speed: 'spicy' }))
+        act(() => ticker.setTickerSettings({ hidden: ['tips'] }))
+        expect(result.current).toEqual({ ...DEFAULTS, speed: 'spicy', hidden: ['tips'] })
+        expect(parseSettings(localStorage.getItem(ticker.STORAGE_KEY))).toEqual(result.current)
+    })
+
+    it("follows another tab's settings, one made before they were read, and storage cleared", async () => {
+        const ticker = await load()
+        localStorage.setItem(ticker.STORAGE_KEY, '{"gap":5}')
+        const { result } = renderHook(() => ticker.useTickerSettings())
+        expect(result.current).toEqual({ ...DEFAULTS, gap: 5 })
+
+        act(() => otherTab(ticker.STORAGE_KEY, '{"gap":5,"hidden":["vibes"]}'))
+        expect(result.current).toEqual({ ...DEFAULTS, gap: 5, hidden: ['vibes'] })
+        act(() => otherTab(ticker.STORAGE_KEY, '{"on":false,"gap":5,"hidden":["vibes"]}'))
+        expect(result.current.on).toBe(false)
+        act(() => otherTabClears())
+        expect(result.current).toEqual(DEFAULTS)
+    })
+
+    it('uses the defaults where storage is unavailable, and still changes for this page', async () => {
+        breakStorage()
+        const ticker = await load()
+        const { result } = renderHook(() => ticker.useTickerSettings())
+        expect(result.current).toEqual(DEFAULTS)
+
+        act(() => ticker.setTickerSettings({ on: false }))
+        expect(result.current).toEqual({ ...DEFAULTS, on: false })
     })
 })

@@ -34,4 +34,3 @@ query = 'project = ACME AND statusCategory != Done ORDER BY priority DESC, creat
 
 [trust]
 branch_prefix = "agent/"
-pr_label = "agent"

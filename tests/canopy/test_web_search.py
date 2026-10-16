@@ -7,7 +7,7 @@ import pytest
 
 from canopy.core import conversation, db, search
 from canopy.core.context import Context
-from canopy.core.vocab import ChoreRunStatus, RunStatus
+from canopy.core.vocab import ChoreRunStatus, RunStatus, TickStatus
 from canopy.serve.backend import Backend
 from tests.canopy.helpers import running_run
 from tests.canopy.web_helpers import SECRET, client
@@ -79,7 +79,7 @@ def test_a_decisions_rationale_and_a_ticks_summary_are_found_with_their_tick(ctx
     tick = db.start_tick(ctx.conn, dry_run=False)
     db.touch_ticket(ctx.conn, "PROJ-2", ctx.repo)
     db.record_decision(ctx.conn, tick, "PROJ-2", "wait", "CI is still running on the flaky suite")
-    db.finish_tick(ctx.conn, tick, "ok", "waited on the flaky suite")
+    db.finish_tick(ctx.conn, tick, TickStatus.OK, "waited on the flaky suite")
 
     found = search.search(ctx.conn, "flaky suite")
     assert where(found) == [("decision", "PROJ-2", "wait"), ("tick", tick, "ok")]
@@ -134,7 +134,7 @@ def test_the_route_searches_the_mock_journal_and_refuses_a_bad_query(backend: Ba
     body = c.get("/api/search", params={"q": "search"}).json()
     assert body["words"] == ["search"]
     assert [(h["source"], h["ticket_key"], h["label"]) for h in body["hits"]] == [
-        ("ticket", "ABC-099", "in_review"),
+        ("ticket", "ABC-099", "review_pending"),
         ("message", "ABC-099", "report"),
     ]
     assert body["hits"][1]["run_id"] == 39

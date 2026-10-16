@@ -34,10 +34,10 @@ def cmd_chore_run(click_ctx: click.Context, name: str, context: str | None) -> i
     """Start a run of chore NAME, if its guards allow one now."""
     ctx = open_context(click_ctx)
     current = require_tick(ctx)
-    tick_id = int(current["id"])
+    tick_id = current.id
     log = logs.for_tick(tick_id)
     try:
-        if current["dry_run"]:
+        if current.dry_run:
             start.check(ctx, tick_id=tick_id, name=name)
             started = None
         else:
@@ -69,7 +69,7 @@ def cmd_chore_wait(click_ctx: click.Context, name: str, rationale: str) -> int:
     current = require_tick(ctx)
     if name not in view.configured(ctx.config, ctx.workspace):
         raise CliError(f"no chore named {name!r} is configured for this workspace")
-    db.record_decision(ctx.conn, int(current["id"]), None, "wait", rationale, chore=name)
+    db.record_decision(ctx.conn, current.id, None, "wait", rationale, chore=name)
     click.echo(f"recorded wait for {attention.CHORE_PREFIX}{name}")
     return 0
 

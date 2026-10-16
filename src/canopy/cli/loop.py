@@ -110,11 +110,11 @@ def cmd_status(click_ctx: click.Context) -> int:
     if last is None:
         click.echo("No ticks yet.")
     else:
-        dry = " (dry run)" if last["dry_run"] else ""
-        started = f"started {attention.age(last['started_at'])} ago"
-        click.echo(f"Last tick: {last['id']} {last['status']}{dry}, {started}{spent(last)}")
-        if last["summary"]:
-            click.echo(f"  {last['summary']}")
+        dry = " (dry run)" if last.dry_run else ""
+        started = f"started {attention.age(last.started_at)} ago"
+        click.echo(f"Last tick: {last.id} {last.status}{dry}, {started}{spent(last)}")
+        if last.summary:
+            click.echo(f"  {last.summary}")
     held = pause.paused(ctx.conn)
     if held is not None:
         click.echo(f"Loop paused {attention.age(held.since)} ago ({held.channel}): no tick until `canopy resume`.")
@@ -162,20 +162,20 @@ def _print_attention(items: Sequence[attention.Item]) -> None:
 
 def _print_started(ctx: Context) -> None:
     """A line per ticket the operator started (DESIGN §22): its state, its phase, and whether it waits on a reply."""
-    records = [r for r in db.starts(ctx.conn) if r["subject_kind"] == conversation.TICKET]
+    records = [r for r in db.starts(ctx.conn) if r.subject_kind == conversation.TICKET]
     if not records:
         return
     click.echo(f"\nStarted ({len(records)}):")
     for r in records:
-        key = str(r["subject_id"])
+        key = r.subject_id
         ticket = db.get_ticket(ctx.conn, key)
         phase = phase_of(ctx.conn, ticket) if ticket is not None else "not seen by a tick yet"
-        done = ", done" if ticket is not None and ticket["done"] else ""
-        since = r["started_at"] if r["status"] == "started" else r["stopped_at"]
-        waiting = conversation.latest_question(ctx.conn, key) if r["status"] == "started" else None
+        done = ", done" if ticket is not None and ticket.done else ""
+        waiting = conversation.latest_question(ctx.conn, key) if conversation.is_started(r) else None
         note = f"  awaiting your reply to message {waiting['id']}" if waiting is not None else ""
-        title = ticket["title"] if ticket is not None else None
-        click.echo(f"  {named(key, title)}  {r['status']} {attention.age(str(since))} ago  phase {phase}{done}{note}")
+        title = ticket.title if ticket is not None else None
+        since = attention.age(r.stopped_at or r.started_at)
+        click.echo(f"  {named(key, title)}  {r.status} {since} ago  phase {phase}{done}{note}")
 
 
 def _print_review_requests(ctx: Context) -> None:
@@ -268,18 +268,18 @@ def cmd_decisions(click_ctx: click.Context, tick_id: int | None, ticket_key: str
             raise CliError(f"no tick {tick_id}")
         click.echo("No ticks yet.")
         return 0
-    dry = " (dry run)" if row["dry_run"] else ""
-    started = f"started {row['started_at']} ({attention.age(row['started_at'])} ago)"
-    click.echo(f"Tick {row['id']}: {row['status']}{dry}, {started}")
-    if row["summary"]:
-        click.echo(f"  {row['summary']}")
-    if row["session_id"] or row["cost_usd"] is not None:
-        session = f"session {row['session_id']}" if row["session_id"] else "no session reported"
+    dry = " (dry run)" if row.dry_run else ""
+    started = f"started {row.started_at} ({attention.age(row.started_at)} ago)"
+    click.echo(f"Tick {row.id}: {row.status}{dry}, {started}")
+    if row.summary:
+        click.echo(f"  {row.summary}")
+    if row.session_id or row.cost_usd is not None:
+        session = f"session {row.session_id}" if row.session_id else "no session reported"
         click.echo(f"  overseer {session}{spent(row)}")
-    output = ctx.state_dir / "ticks" / f"{row['id']}.log"
+    output = ctx.state_dir / "ticks" / f"{row.id}.log"
     if output.exists():
         click.echo(f"  overseer output: {output}")
-    rows = db.decisions_for_tick(ctx.conn, int(row["id"]))
+    rows = db.decisions_for_tick(ctx.conn, row.id)
     if ticket_key is not None:
         rows = [decision for decision in rows if decision.ticket_key == ticket_key]
     click.echo(f"\nDecisions ({len(rows)}):")

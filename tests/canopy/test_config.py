@@ -41,13 +41,13 @@ def test_trusted_reviewers_take_logins_and_canopys_reviewer(canopy_env: CanopyEn
 
 
 def test_user_file_wins_over_the_workspace_file_for_shared_keys(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_shared('[tracker]\nprovider = "jira"\nquery = "project = A"\n[trust]\npr_label = "bot"\n')
+    canopy_env.write_shared('[tracker]\nprovider = "jira"\nquery = "project = A"\n[trust]\nbranch_prefix = "bot/"\n')
     canopy_env.write_user(
-        canopy_env.user_file.read_text().replace("[runtime]", '[trust]\npr_label = "mine"\n\n[runtime]', 1)
+        canopy_env.user_file.read_text().replace("[runtime]", '[trust]\nbranch_prefix = "mine/"\n\n[runtime]', 1)
     )
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert cfg.tracker.query == "project = A"
-    assert cfg.trust.pr_label == "mine"
+    assert cfg.trust.branch_prefix == "mine/"
 
 
 def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(canopy_env: CanopyEnv) -> None:
@@ -95,6 +95,13 @@ def test_a_removed_key_says_what_to_do(canopy_env: CanopyEnv) -> None:
     """`paths.state_dir` was in the example user config; a copy of it must say to delete the key (D016)."""
     canopy_env.write_user(canopy_env.user_file.read_text() + 'state_dir = "~/.canopy"\n')
     with pytest.raises(ConfigError, match=r"paths\.state_dir was removed: delete it; state is always in the workspace"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_a_removed_pr_label_says_to_delete_it(canopy_env: CanopyEnv) -> None:
+    """`trust.pr_label` was in the example workspace file; a copy of it must say to delete the key."""
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + '[trust]\npr_label = "agent"\n')
+    with pytest.raises(ConfigError, match=r"trust\.pr_label was removed: delete it"):
         load(canopy_env.root, canopy_env.user_file)
 
 
@@ -316,6 +323,7 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         runtime.worker_cmd,
         runtime.private_worker_cmd,
         runtime.split_cmd,
+        runtime.plan_cmd,
         runtime.chore_cmd,
         runtime.review_cmd,
     ):

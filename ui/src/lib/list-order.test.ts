@@ -1,6 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { act, renderHook } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { breakStorage, otherTab, otherTabClears } from '@/test-utils'
 
 import { LISTS, orderWords, ordered, parseOrders, withOrder } from './list-order'
+
+// The orders are read when the module loads, so each test loads a fresh copy.
+function load() {
+    vi.resetModules()
+    return import('./list-order')
+}
 
 describe('parseOrders', () => {
     it('chooses nothing when nothing is stored', () => {
@@ -62,5 +71,48 @@ describe('orderWords', () => {
         expect(orderWords('tickets', 'newest')).toBe('recently updated')
         expect(orderWords('pull-requests', 'oldest')).toBe('least recently updated')
         expect(orderWords('runs', 'newest')).toBe('recently updated')
+    })
+})
+
+describe('useListOrder', () => {
+    beforeEach(() => localStorage.clear())
+
+    it('flips one list, keeps it, and leaves the others in their own order', async () => {
+        const lists = await load()
+        const { result } = renderHook(() => [lists.useListOrder('ticks'), lists.useListOrder('conversation')])
+        expect(result.current).toEqual(['newest', 'oldest'])
+
+        act(() => lists.setListOrder('ticks', 'oldest'))
+        expect(result.current).toEqual(['oldest', 'oldest'])
+        expect(localStorage.getItem(lists.STORAGE_KEY)).toBe('{"ticks":"oldest"}')
+
+        act(() => lists.setListOrder('ticks', 'newest'))
+        expect(result.current).toEqual(['newest', 'oldest'])
+        expect(localStorage.getItem(lists.STORAGE_KEY)).toBe('{}')
+    })
+
+    it("follows another tab's orders, one made before they were read, and storage cleared", async () => {
+        const lists = await load()
+        localStorage.setItem(lists.STORAGE_KEY, '{"ticks":"oldest"}')
+        const { result } = renderHook(() => lists.useListOrder('ticks'))
+        expect(result.current).toBe('oldest')
+
+        act(() => otherTab(lists.STORAGE_KEY, '{"ticks":"oldest","conversation":"newest"}'))
+        expect(result.current).toBe('oldest')
+        act(() => otherTab(lists.STORAGE_KEY, '{"conversation":"newest"}'))
+        expect(result.current).toBe('newest')
+        act(() => otherTab(lists.STORAGE_KEY, '{"ticks":"oldest"}'))
+        act(() => otherTabClears())
+        expect(result.current).toBe('newest')
+    })
+
+    it('runs every list in its own order where storage is unavailable, and still flips one for this page', async () => {
+        breakStorage()
+        const lists = await load()
+        const { result } = renderHook(() => lists.useListOrder('conversation'))
+        expect(result.current).toBe('oldest')
+
+        act(() => lists.setListOrder('conversation', 'newest'))
+        expect(result.current).toBe('newest')
     })
 })

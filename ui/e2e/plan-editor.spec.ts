@@ -112,6 +112,36 @@ test('the toolbar formats the selection and says what is in force', async ({ pag
     await expect(page.getByLabel('Plan Markdown')).toContainText('- **Scheduling exports.**')
 })
 
+test('each toolbar control names a shortcut on hover, and that shortcut does what the control does', async ({
+    page,
+}) => {
+    const toolbar = page.getByRole('toolbar', { name: 'Format' })
+    await expect(toolbar.getByRole('button', { name: 'Bold' })).toHaveAttribute('title', /^Bold \((Ctrl\+B|⌘B)\)$/u)
+    await select(page, 'method')
+    // The paragraph's style is a choice of one: each shortcut picks its style, the last going back to text.
+    for (const name of ['Heading 1', 'Heading 2', 'Heading 3', 'Text']) {
+        const style = toolbar.getByRole('radio', { name, exact: true })
+        await page.keyboard.press((await style.getAttribute('aria-keyshortcuts')) ?? '')
+        await expect(style).toHaveAttribute('data-state', 'on')
+    }
+    // A mark or a block is on or off: its shortcut turns it on, and again off.
+    for (const name of ['Bold', 'Italic', 'Strikethrough', 'Code', 'Bulleted list', 'Numbered list', 'Task list']) {
+        const control = toolbar.getByRole('button', { name, exact: true })
+        const keys = (await control.getAttribute('aria-keyshortcuts')) ?? ''
+        await page.keyboard.press(keys)
+        await expect(control, name).toHaveAttribute('aria-pressed', 'true')
+        await page.keyboard.press(keys)
+        await expect(control, name).toHaveAttribute('aria-pressed', 'false')
+    }
+    for (const name of ['Quote', 'Code block']) {
+        const control = toolbar.getByRole('button', { name, exact: true })
+        await page.keyboard.press((await control.getAttribute('aria-keyshortcuts')) ?? '')
+        await expect(control, name).toHaveAttribute('aria-pressed', 'true')
+        await page.keyboard.press('ControlOrMeta+z')
+        await expect(control, name).toHaveAttribute('aria-pressed', 'false')
+    }
+})
+
 test('resolving a thread folds it away and takes its highlight off the plan', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'name the ticket' })
     await thread.getByRole('button', { name: 'Resolve' }).click()
@@ -143,6 +173,54 @@ test('clicking a commented passage opens its thread and puts the cursor there', 
     // The paragraph's style shows the cursor moved from the heading it opened in.
     const text = page.getByRole('toolbar', { name: 'Format' }).getByRole('radio', { name: 'Text' })
     await expect(text).toHaveAttribute('data-state', 'on')
+})
+
+test('a click elsewhere in the plan, or Escape, closes the open thread', async ({ page }) => {
+    const passage = plan(page).locator('[data-thread=sample-2]')
+    const thread = comments(page).filter({ hasText: 'name the ticket' })
+    await passage.click()
+    await expect(thread).toHaveAttribute('data-active', 'true')
+    await plan(page).getByRole('heading', { level: 1 }).click()
+    await expect(thread).toHaveAttribute('data-active', 'false')
+    await expect(plan(page).locator('.plan-comment-active')).toHaveCount(0)
+    await passage.click()
+    await expect(thread).toHaveAttribute('data-active', 'true')
+    await page.keyboard.press('Escape')
+    await expect(thread).toHaveAttribute('data-active', 'false')
+    await expect(plan(page).locator('.plan-comment-active')).toHaveCount(0)
+})
+
+test('commenting again with nothing written moves the comment, and typing goes into it', async ({ page }) => {
+    await select(page, 'iter_rows()')
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    await select(page, 'Export CSV')
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    const form = page.getByRole('form', { name: 'Comment' })
+    await expect(form.getByRole('textbox')).toBeFocused()
+    await page.keyboard.type('Name the button as the page shows it.')
+    await expect(form.getByRole('textbox')).toHaveValue('Name the button as the page shows it.')
+    await expect(plan(page).getByText('Export CSV')).toBeVisible()
+    await form.getByRole('button', { name: 'Comment' }).click()
+    const thread = comments(page).filter({ hasText: 'Name the button' })
+    const id = await thread.getAttribute('data-thread')
+    await expect(page.locator(`.plan-doc [data-thread="${id}"]`)).toHaveText('Export CSV')
+})
+
+test('commenting again on a comment half written keeps it on its passage, with its words', async ({ page }) => {
+    await select(page, 'iter_rows()')
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    await page.keyboard.type('Why not rows()?')
+    await select(page, 'Export CSV')
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    const form = page.getByRole('form', { name: 'Comment' })
+    await expect(form.getByRole('textbox')).toBeFocused()
+    await expect(form.getByRole('textbox')).toHaveValue('Why not rows()?')
+    await page.keyboard.type(' It reads them all.')
+    await expect(plan(page).getByText('Export CSV')).toBeVisible()
+    await form.getByRole('button', { name: 'Comment' }).click()
+    const thread = comments(page).filter({ hasText: 'Why not rows()? It reads them all.' })
+    const id = await thread.getAttribute('data-thread')
+    await expect(page.locator(`.plan-doc [data-thread="${id}"]`)).toHaveText('iter_rows()')
 })
 
 test('the shortcut and the bubble over a selection both open a comment on it', async ({ page }) => {

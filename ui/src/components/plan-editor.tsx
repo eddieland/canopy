@@ -25,6 +25,7 @@ import type { ReactNode } from 'react'
 
 import { Panel, PanelHeader } from '@/components/panel'
 import { AskForChanges, PlanThreads } from '@/components/plan-threads'
+import type { Draft } from '@/components/plan-threads'
 import { Button } from '@/components/ui/button'
 import {
     Toolbar,
@@ -39,18 +40,20 @@ import { planExtensions } from '@/lib/plan-schema'
 import { addReply, addThread, inPlanOrder, removeThread, setResolved, withAnchors } from '@/lib/plan-threads'
 import type { PlanThread } from '@/lib/plan-threads'
 import { isApple } from '@/lib/send-key'
+import { ariaKeys, keysLabel } from '@/lib/shortcut'
 
 const APPLE = isApple(navigator.userAgent)
 // The selection's bubble, by its key, so opening a comment can hide it.
 const BUBBLE = new PluginKey('planBubble')
-/** The shortcut that comments on the selection, as the keyboard names it. */
-const COMMENT_KEYS = APPLE ? '⌘⌥M' : 'Ctrl+Alt+M'
+// The shortcut that comments on the selection (`PlanHighlights`).
+const COMMENT_KEYS = 'Mod-Alt-m'
 
 /**
  * A plan in a rich editor, with the operator's comments on its passages beside it (docs/design/PLANNING.md §25,
  * Commenting on a plan). The plan is Markdown in and out (`src/lib/plan-schema.ts`): the operator edits it as a
  * document, through the toolbar or Markdown's own shortcuts (`## `, `- `, `**`), and `onChange` gets the Markdown
- * after each edit. Selecting text and pressing Comment, or ⌘⌥M (Ctrl+Alt+M), comments on that passage; the comments
+ * after each edit. Selecting text and pressing Comment, or ⌘⌥M (Ctrl+Alt+M), comments on that passage, the cursor
+ * in the comment; while one is half written, it keeps its passage and takes the cursor back instead. The comments
  * stay on their passages as the plan is edited, by their words (`src/lib/plan-anchors.ts`), and a passage deleted
  * whole leaves its comment marked as gone. The threads are the caller's state, given as `threads` and changed through
  * `onThreadsChange`. `markdown` is read once: a new plan is a new `key`. With `onAskForChanges`, the comments end in
@@ -95,7 +98,7 @@ export function PlanEditor({
             },
         },
     })
-    const [draft, setDraft] = useState<string | undefined>(undefined)
+    const [draft, setDraft] = useState<Draft | undefined>(undefined)
     const seen = useEditorState({
         editor,
         selector: ({ editor: current }) => {
@@ -152,7 +155,15 @@ export function PlanEditor({
         if (!editable || anchor === undefined) {
             return
         }
-        setDraft(anchor.quote)
+        const opened = (draft?.opened ?? 0) + 1
+        if (draft !== undefined && draft.body.trim() !== '') {
+            // A comment half written stays on its passage, its words with it: the operator goes back to it rather than
+            // lose it or carry it to other words.
+            setDraft({ ...draft, opened })
+            editor.view.dispatch(editor.state.tr.setMeta(BUBBLE, 'hide'))
+            return
+        }
+        setDraft({ quote: anchor.quote, body: '', opened })
         // The bubble goes with the click that used it: the selection it sat over is now the draft's.
         const tr = withHighlight(editor.state.tr, { kind: 'draft', range: { from, to } }).setMeta(BUBBLE, 'hide')
         editor.view.dispatch(tr)
@@ -206,7 +217,12 @@ export function PlanEditor({
                         className="rounded-md border bg-surface p-0.5"
                         data-testid="plan-bubble"
                     >
-                        <Button variant="ghost" size="xs" onClick={startComment} title={`Comment (${COMMENT_KEYS})`}>
+                        <Button
+                            variant="ghost"
+                            size="xs"
+                            onClick={startComment}
+                            title={withKeys('Comment', COMMENT_KEYS)}
+                        >
                             <MessageSquarePlus aria-hidden />
                             Comment
                         </Button>
@@ -223,6 +239,7 @@ export function PlanEditor({
                     active={seen.active}
                     draft={draft}
                     editable={editable}
+                    onDraftChange={(body) => setDraft(draft && { ...draft, body })}
                     onDraftSubmit={addComment}
                     onDraftCancel={cancelComment}
                     onActivate={(id) => activate(id, true)}
@@ -247,27 +264,32 @@ type BlockStyle = 'paragraph' | 'h1' | 'h2' | 'h3'
 type MarkName = 'bold' | 'italic' | 'strike' | 'code'
 type BlockName = 'bulletList' | 'orderedList' | 'taskList' | 'blockquote' | 'codeBlock'
 
-const MARKS: { name: MarkName; label: string; icon: ReactNode }[] = [
-    { name: 'bold', label: 'Bold', icon: <Bold /> },
-    { name: 'italic', label: 'Italic', icon: <Italic /> },
-    { name: 'strike', label: 'Strikethrough', icon: <Strikethrough /> },
-    { name: 'code', label: 'Code', icon: <Code /> },
+// Each control with the shortcut the editor already binds to it (Tiptap's own, in its notation), which its tooltip
+// names.
+const MARKS: { name: MarkName; label: string; keys: string; icon: ReactNode }[] = [
+    { name: 'bold', label: 'Bold', keys: 'Mod-b', icon: <Bold /> },
+    { name: 'italic', label: 'Italic', keys: 'Mod-i', icon: <Italic /> },
+    { name: 'strike', label: 'Strikethrough', keys: 'Mod-Shift-s', icon: <Strikethrough /> },
+    { name: 'code', label: 'Code', keys: 'Mod-e', icon: <Code /> },
 ]
 
-const BLOCKS: { name: BlockName; label: string; icon: ReactNode }[] = [
-    { name: 'bulletList', label: 'Bulleted list', icon: <List /> },
-    { name: 'orderedList', label: 'Numbered list', icon: <ListOrdered /> },
-    { name: 'taskList', label: 'Task list', icon: <ListTodo /> },
-    { name: 'blockquote', label: 'Quote', icon: <TextQuote /> },
-    { name: 'codeBlock', label: 'Code block', icon: <SquareCode /> },
+const BLOCKS: { name: BlockName; label: string; keys: string; icon: ReactNode }[] = [
+    { name: 'bulletList', label: 'Bulleted list', keys: 'Mod-Shift-8', icon: <List /> },
+    { name: 'orderedList', label: 'Numbered list', keys: 'Mod-Shift-7', icon: <ListOrdered /> },
+    { name: 'taskList', label: 'Task list', keys: 'Mod-Shift-9', icon: <ListTodo /> },
+    { name: 'blockquote', label: 'Quote', keys: 'Mod-Shift-b', icon: <TextQuote /> },
+    { name: 'codeBlock', label: 'Code block', keys: 'Mod-Alt-c', icon: <SquareCode /> },
 ]
 
-const STYLES: { name: BlockStyle; label: string; icon: ReactNode }[] = [
-    { name: 'paragraph', label: 'Text', icon: <Pilcrow /> },
-    { name: 'h1', label: 'Heading 1', icon: <Heading1 /> },
-    { name: 'h2', label: 'Heading 2', icon: <Heading2 /> },
-    { name: 'h3', label: 'Heading 3', icon: <Heading3 /> },
+const STYLES: { name: BlockStyle; label: string; keys: string; icon: ReactNode }[] = [
+    { name: 'paragraph', label: 'Text', keys: 'Mod-Alt-0', icon: <Pilcrow /> },
+    { name: 'h1', label: 'Heading 1', keys: 'Mod-Alt-1', icon: <Heading1 /> },
+    { name: 'h2', label: 'Heading 2', keys: 'Mod-Alt-2', icon: <Heading2 /> },
+    { name: 'h3', label: 'Heading 3', keys: 'Mod-Alt-3', icon: <Heading3 /> },
 ]
+
+const UNDO_KEYS = 'Mod-z'
+const REDO_KEYS = 'Mod-Shift-z'
 
 // The editor's toolbar: undo and redo, the paragraph's style, the marks, the blocks, and Comment. Each control is
 // named for a screen reader and on hover, and shows what is in force at the cursor.
@@ -360,7 +382,8 @@ function FormatBar({ editor, canComment, onComment }: { editor: Editor; canComme
         <Toolbar aria-label="Format" className="-mr-2 ml-auto">
             <ToolbarButton
                 aria-label="Undo"
-                title="Undo"
+                title={withKeys('Undo', UNDO_KEYS)}
+                aria-keyshortcuts={ariaKeys(UNDO_KEYS, APPLE)}
                 disabled={!state.undo}
                 onClick={() => {
                     editor.chain().focus().undo().run()
@@ -370,7 +393,8 @@ function FormatBar({ editor, canComment, onComment }: { editor: Editor; canComme
             </ToolbarButton>
             <ToolbarButton
                 aria-label="Redo"
-                title="Redo"
+                title={withKeys('Redo', REDO_KEYS)}
+                aria-keyshortcuts={ariaKeys(REDO_KEYS, APPLE)}
                 disabled={!state.redo}
                 onClick={() => {
                     editor.chain().focus().redo().run()
@@ -392,7 +416,13 @@ function FormatBar({ editor, canComment, onComment }: { editor: Editor; canComme
                 }}
             >
                 {STYLES.map((style) => (
-                    <ToolbarToggleItem key={style.name} value={style.name} aria-label={style.label} title={style.label}>
+                    <ToolbarToggleItem
+                        key={style.name}
+                        value={style.name}
+                        aria-label={style.label}
+                        title={withKeys(style.label, style.keys)}
+                        aria-keyshortcuts={ariaKeys(style.keys, APPLE)}
+                    >
                         {style.icon}
                     </ToolbarToggleItem>
                 ))}
@@ -410,7 +440,13 @@ function FormatBar({ editor, canComment, onComment }: { editor: Editor; canComme
                 }}
             >
                 {MARKS.map((mark) => (
-                    <ToolbarToggleItem key={mark.name} value={mark.name} aria-label={mark.label} title={mark.label}>
+                    <ToolbarToggleItem
+                        key={mark.name}
+                        value={mark.name}
+                        aria-label={mark.label}
+                        title={withKeys(mark.label, mark.keys)}
+                        aria-keyshortcuts={ariaKeys(mark.keys, APPLE)}
+                    >
                         {mark.icon}
                     </ToolbarToggleItem>
                 ))}
@@ -430,7 +466,13 @@ function FormatBar({ editor, canComment, onComment }: { editor: Editor; canComme
                 }}
             >
                 {BLOCKS.map((block) => (
-                    <ToolbarToggleItem key={block.name} value={block.name} aria-label={block.label} title={block.label}>
+                    <ToolbarToggleItem
+                        key={block.name}
+                        value={block.name}
+                        aria-label={block.label}
+                        title={withKeys(block.label, block.keys)}
+                        aria-keyshortcuts={ariaKeys(block.keys, APPLE)}
+                    >
                         {block.icon}
                     </ToolbarToggleItem>
                 ))}
@@ -440,8 +482,8 @@ function FormatBar({ editor, canComment, onComment }: { editor: Editor; canComme
                 size="xs"
                 disabled={!canComment}
                 onClick={onComment}
-                title={`Comment on the selection (${COMMENT_KEYS})`}
-                aria-keyshortcuts={APPLE ? 'Meta+Alt+M' : 'Control+Alt+M'}
+                title={withKeys('Comment on the selection', COMMENT_KEYS)}
+                aria-keyshortcuts={ariaKeys(COMMENT_KEYS, APPLE)}
             >
                 <MessageSquarePlus />
                 Comment
@@ -458,4 +500,9 @@ function styleAt(editor: Editor): BlockStyle | undefined {
         }
     }
     return editor.isActive('paragraph') ? 'paragraph' : undefined
+}
+
+// A control's name with its shortcut, as its tooltip shows it: `Bold (Ctrl+B)`.
+function withKeys(label: string, keys: string): string {
+    return `${label} (${keysLabel(keys, APPLE)})`
 }

@@ -103,10 +103,10 @@ def cmd_dispatch(
             click_ctx,
         )
     current = require_tick(ctx)
-    tick_id = int(current["id"])
+    tick_id = current.id
     log = logs.for_tick(tick_id)
     db.touch_ticket(ctx.conn, key, ctx.repo)
-    dry_run = bool(current["dry_run"])
+    dry_run = current.dry_run
     try:
         review = _review_findings(ctx.conn, key, kind, repos, review_run)
         # A dry run checks the same guards, so its plan holds the refusals a live tick would get (D036).
@@ -152,10 +152,8 @@ def cmd_dispatch(
     # authorizes a ticket's first run, which starts it privately.
     authorized = f"label {queue_label}" if queue_label else "private: started by the operator"
     authorized += "; starts it privately (tracker.private)" if starts else ""
-    on_base = f" on {base}" if base is not None else ""
     in_repo = f" in {', '.join(repo_names)}"
-    # A split works on no branch: it reads its repositories and creates a ticket for each.
-    work = f"split {key} into {', '.join(repo_names)}" if kind == policy.SPLIT else f"{branch}{on_base}"
+    work = _work(key, kind, branch, base, repo_names)
     requested = f"; request {request}" if request is not None else ""
     requested += f"; review run {review_run}" if review_run is not None else ""
     if started is None:
@@ -169,7 +167,7 @@ def cmd_dispatch(
                 for e in [
                     (
                         f"dry run: not dispatched; would {work}"
-                        if kind == policy.SPLIT
+                        if kind in policy.TICKET_KINDS
                         else f"dry run: not dispatched; would work on {work}{in_repo}"
                     ),
                     authorized,
@@ -197,6 +195,18 @@ def cmd_dispatch(
     log.info("dispatched", extra={"ticket": key, "kind": kind, "run_id": started.run_id, "pid": started.pid})
     click.echo(f"dispatched {kind} for {key}: {rationale}")
     return 0
+
+
+def _work(key: str, kind: str, branch: str, base: str | None, repos: Sequence[str]) -> str:
+    """Return what a dispatch's decision says the run works on: its branch, or for a split or a plan, its ticket.
+
+    A split or a plan works on no branch: it reads its repositories, and creates a ticket for each or writes a plan.
+    """
+    if kind == policy.SPLIT:
+        return f"split {key} into {', '.join(repos)}"
+    if kind == policy.PLAN:
+        return f"plan {key} over {', '.join(repos)}"
+    return f"{branch} on {base}" if base is not None else branch
 
 
 def _review_findings(

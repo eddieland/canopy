@@ -159,7 +159,7 @@ to do instead.
 | `tracker.private` | user-only | turns a queue label into a start record (§22) |
 | `tracker.query_every_minutes` | user-only | how often the overseer pays to run the query (§7): the operator's spend |
 | `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
-| `trust.branch_prefix`, `trust.pr_label` | shared | team conventions for spotting agent work |
+| `trust.branch_prefix` | shared | team conventions for spotting agent work |
 | `trust.authorized_repliers` | user-only | who may steer this operator's workers |
 | `trust.trusted_reviewers` | user-only | whose review feedback reaches a worker without the operator's go-ahead (§7) |
 | `trust.comment_prefix`, `trust.comment_suffix` | user-only | they silence the comments that carry them (§8) |
@@ -193,11 +193,11 @@ max_fix_ci_attempts = 2
 fix_ci_cooldown_minutes = 30
 max_resume_attempts = 3
 max_split_attempts = 1       # per ticket (§18)
+max_plan_attempts = 3        # per ticket (§25)
 stacking = "auto"            # auto | never (§10); "never" is stricter
 
 [trust]
 branch_prefix = "agent/"
-pr_label = "agent"
 ```
 
 User file, personal:
@@ -222,6 +222,8 @@ overseer_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent
 worker_cmd   = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json
     --title={title} {prompt}'''
 split_cmd    = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json
+    --title={title} {prompt}'''
+plan_cmd     = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json
     --title={title} {prompt}'''
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
@@ -392,7 +394,7 @@ Agent definitions ship in `agents/`; agent runs load them from a directory canop
   out of the workspace, ends the run under `opencode run` (D021) and loses every decision it had not recorded, where a
   `deny` costs only the call. MCP: the tracker, GitHub.
 - `canopy-worker`: edit and bash within the worktree. MCP: the tracker (ticket comments, and labels through its issue
-  edit tool), GitHub (open/update PR, its label where a tool sets one, read reviews and checks); merge, review
+  edit tool), GitHub (open/update PR, read reviews and checks); merge, review
   submission, closing, transition, ticket creation, delete, fork, API file and branch writes, and other agents or
   workflow runs denied by name (D084).
 - `canopy-reviewer`: no edits, shell, or subagents; reads only through the link to its checkout. MCP: read
@@ -465,10 +467,10 @@ transcript shows each call's (§22). A run recorded before the peak was kept pri
 `tokens`, and the hover on it in the web UI says what is left out. A log line's and the API's `new_tokens` and
 `peak_context` are the same two counts, their names unchanged.
 
-The default `overseer_cmd`, `worker_cmd`, `split_cmd`, `chore_cmd`, and `review_cmd` ask for events. A tick records
-what its overseer reports on the tick (§6), `_run` what a worker or split reports on the run, as it prints it (§8,
-§11), `_chore` what a chore reports on its chore run (§19), and `_review` what a reviewer reports on its review run
-(§21). So every agent run canopy starts records what it cost, and the web UI's spend (§22) sums them all, a running
+The default `overseer_cmd`, `worker_cmd`, `split_cmd`, `plan_cmd`, `chore_cmd`, and `review_cmd` ask for events. A
+tick records what its overseer reports on the tick (§6), `_run` what a worker, split, or plan reports on the run, as it
+prints it (§8, §11), `_chore` what a chore reports on its chore run (§19), and `_review` what a reviewer reports on its
+review run (§21). So every agent run canopy starts records what it cost, and the web UI's spend (§22) sums them all, a running
 worker's so far. A template of the operator's that asks
 for no events records nothing, and its runs are missing from the spend. A tick's output file and a run log hold the
 events as printed, and the web UI reads one session's back from them as its transcript (§22).
@@ -517,8 +519,8 @@ earlier canopy's, still loading its snapshot. OpenCode scans both `agent/` and `
 a config directory, and writes a `.gitignore` and `node_modules/` into each one it loads, the snapshot included.
 
 Command templates name the current snapshot with `{definitions_dir}` (§12), required in every template that runs a
-canopy-shipped agent (`overseer_cmd`, `worker_cmd`, `private_worker_cmd`, `split_cmd`, §19's `chore_cmd`, §21's
-`review_cmd`):
+canopy-shipped agent (`overseer_cmd`, `worker_cmd`, `private_worker_cmd`, `split_cmd`, §25's `plan_cmd`, §19's
+`chore_cmd`, §21's `review_cmd`):
 
 ```toml
 overseer_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json
