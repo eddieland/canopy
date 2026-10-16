@@ -762,6 +762,35 @@ def set_tick_report(
     _set_report(conn, "ticks", tick_id, session_id, usage, digest=digest)
 
 
+def set_run_progress(
+    conn: sqlite3.Connection,
+    run_id: int,
+    session_id: str,
+    *,
+    usage: Usage | None = None,
+    did: tuple[str, str] | None = None,
+) -> None:
+    """Record what a running run's worker has reported so far (DESIGN §8). Nothing changes for a run not running.
+
+    Its session always; what it has spent so far when `usage` is given; and its latest tool call when `did` is, as
+    `(tool, what it did)`, stamped now.
+    """
+    with transaction(conn):
+        conn.execute("UPDATE runs SET session_id = ? WHERE id = ? AND status = 'running'", (session_id, run_id))
+        if usage is not None:
+            conn.execute(
+                "UPDATE runs SET cost_usd = ?, tokens_input = ?, tokens_output = ?, tokens_reasoning = ?, "
+                "tokens_cache_read = ?, tokens_cache_write = ?, tokens_peak_context = ?, tokens_first_call = ?, "
+                "tokens_first_cache_write = ? WHERE id = ? AND status = 'running'",
+                (*_spent(usage), run_id),
+            )
+        if did is not None:
+            conn.execute(
+                "UPDATE runs SET activity_tool = ?, activity = ?, activity_at = ? WHERE id = ? AND status = 'running'",
+                (*did, now(), run_id),
+            )
+
+
 def set_tick_session(conn: sqlite3.Connection, tick_id: int, session_id: str) -> None:
     """Record a tick's overseer session while it runs, before what it cost is known (§6, §13)."""
     conn.execute("UPDATE ticks SET session_id = ? WHERE id = ?", (session_id, tick_id))
@@ -798,21 +827,7 @@ def _set_report(
     *,
     digest: str | None,
 ) -> None:
-    spent = (
-        (
-            usage.cost_usd,
-            usage.input,
-            usage.output,
-            usage.reasoning,
-            usage.cache_read,
-            usage.cache_write,
-            usage.peak_context,
-            usage.first_call,
-            usage.first_cache_write,
-        )
-        if usage is not None
-        else (None,) * 9
-    )
+    spent = _spent(usage) if usage is not None else (None,) * 9
     # Only with a report: a template of the operator's that prints plain text may not load the snapshot at all.
     loaded = digest if session_id is not None or usage is not None else None
     conn.execute(
@@ -820,6 +835,25 @@ def _set_report(
         "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ?, tokens_peak_context = ?, "
         "tokens_first_call = ?, tokens_first_cache_write = ?, definitions_digest = ? WHERE id = ?",
         (session_id, *spent, loaded, row_id),
+    )
+
+
+def _spent(usage: Usage) -> tuple[float, int, int, int, int, int, int | None, int | None, int | None]:
+    """`usage` as the cost and token columns hold it, in the order `_set_report` and `set_run_progress` write them.
+
+    Returns:
+        The cost, each kind of token, the peak context, and the first call's tokens and cache write.
+    """
+    return (
+        usage.cost_usd,
+        usage.input,
+        usage.output,
+        usage.reasoning,
+        usage.cache_read,
+        usage.cache_write,
+        usage.peak_context,
+        usage.first_call,
+        usage.first_cache_write,
     )
 
 

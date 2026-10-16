@@ -357,12 +357,12 @@ Served by `canopy loop` from a thread (D073):
   Stopping the loop stops it, waiting at most 2 seconds for open streams.
 - Pages: the attention list (the home page; most severe first rather than grouped by reason, beside the selected item's
   conversation and reply form, with the running runs under the list, below counters of running runs, questions waiting,
-  and the list, `ui/DESIGN.md`), runs (running, then the 50 that ended last, each with a page and its session's
-  transcript, below), worktrees (each pool's slots, below), tickets, each with its conversation and the decisions about
-  it, the list filtered by where each stands and by words in its key or title, pull requests (below), chores (below),
-  ticks (below), search (below), and spend (below). The side rail shows the runs working now and the spend of the last
-  24 hours and the last 30 days on every page, under the nav, so what the loop is doing and what it costs stay in view
-  wherever the operator is; either figure opens the spend page. In a
+  and the list, `ui/DESIGN.md`), runs (running, each with its latest tool call, §8, then the 50 that ended last, each
+  with a page and its session's transcript, below), worktrees (each pool's slots, below), tickets, each with its
+  conversation and the decisions about it, the list filtered by where each stands and by words in its key or title,
+  pull requests (below), chores (below), ticks (below), search (below), and spend (below). The side rail shows the
+  runs working now and the spend of the last 24 hours and the last 30 days on every page, under the nav, so what the
+  loop is doing and what it costs stay in view wherever the operator is; either figure opens the spend page. In a
   window narrower than 1024px, as half of a second monitor is, the rail is a strip of the nav's icons whose button
   opens it whole over the page, and each list shows the columns its width has room for, its title always
   (`ui/DESIGN.md`).
@@ -372,7 +372,7 @@ Served by `canopy loop` from a thread (D073):
   the loop from the header on every page, which shows how long it has been paused, setting a notice to workers from
   the settings page and clearing it from the banner every page shows while it is in force (§8), and reloading the
   loop's config from the settings page. OpenCode's session attach (M15) is
-  not in the UI: a run's page shows its session id and, once it ends, its transcript (below), and attach joins once
+  not in the UI: a run's page shows its session id and its transcript as it goes (below), and attach joins once
   M15 runs workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads.
   uvicorn's `Server` runs in the thread, installs no signal handlers there (the loop's own handle Ctrl-C, §6), logs
@@ -425,7 +425,7 @@ The API, under `{base}/api`:
 | `GET /session`, `POST /session`, `DELETE /session` | whether this browser is signed in, with its token; sign in; sign out |
 | `GET /meta` | canopy's version, whether the data is mock, `tracker.ticket_url` (or none), each repository's branch link template, and the workspace root |
 | `GET /attention` | the attention list, as `canopy status` shows it |
-| `GET /runs` | running runs, then the 50 that ended last: ticket title, kind, status, PRs, summary, session, cost, worktrees |
+| `GET /runs` | running runs, then the 50 that ended last: ticket title, kind, status, PRs, summary, session, cost, worktrees, and a running run's latest tool call |
 | `GET /runs/{id}` | one run, as `GET /runs` shows it; 404 for no such run |
 | `GET /runs/{id}/transcript` | its session's events, read back from its log (below); 404 for no such run |
 | `GET /tick` | the latest tick, as `canopy status`'s first line shows it, or none; and the acknowledged message |
@@ -671,9 +671,10 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   dropped, line breaks kept. A log that is a symlink, a FIFO, or anything but a regular file is not read: it is opened
   without following links and without blocking.
 - A transcript says why it has nothing: no session (a template without `--format json`), no log, or none of its
-  events yet. A run's events reach its log only when it ends, since its stdout is captured whole (§8), as a chore
-  run's do (§19); a running run's page says so. A subagent's calls are its own session's (§13), so a `task` call
-  shows as one tool call with its answer.
+  events yet. A worker run's events reach its log as the worker prints them (§8), so a running run's transcript is
+  what it has done so far, and until its first event its page says they show as it prints; a chore run's reach its
+  log only when it ends, since its stdout is captured whole (§19), as a tick's output does (§6). A subagent's calls
+  are its own session's (§13), so a `task` call shows as one tool call with its answer.
 - A tool call's line says what it did and how it ended, so a tick reads without opening each call: a shell call's
   command, not the description the agent gave it, and the call's other short values when the runtime gave it no title
   (an MCP read's `owner=acme repo=web pullNumber=88`, where its first value alone was `get`); its error, or an output
@@ -681,9 +682,10 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   harness refused, which prints `Error: <verb> refused (<guard>)` and exits 1, would show as done: the UI reads that
   line from a canopy command's output and marks the call refused, with its guard. Only canopy's own lines are read so;
   another command's output is what it printed.
-- It is not on the event stream: a log can be large, and it changes only as its run or tick ends. The UI reads a run's
-  again when `runs.updated` moves that run's status, a chore run's when `chores.updated` moves its, and a tick's when
-  `tick.updated` moves that tick's.
+- It is not on the event stream: a log can be large. The UI reads a run's again when `runs.updated` moves that run's
+  status, its latest tool call, or its cost, which a running run's worker moves as it ends each tool call and model
+  call (§8), so a run's page follows it without polling; a chore run's when `chores.updated` moves its status, and a
+  tick's when `tick.updated` moves that tick's, the only times their logs change.
 - A run's page is its fields as the runs list has them, over its transcript; each run's id in a list of runs opens it.
 - A transcript finds lines in itself (taken on request, 2026-10-13), in the browser over the entries already read, so
   it asks the server nothing: a search keeps the rows with a line that holds it, its matches marked, and opens a tool
@@ -694,9 +696,9 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   JSON, have their keys, strings, and values colored. It holds whatever a tool read or printed, a
   file's contents or a command's output, which is more than the journal does (TRUST_MODEL T8).
 - Rejected: running `opencode export <id>` from the server (a second runtime process behind the listener, and
-  OpenCode's storage format to follow); copying events into the journal (unbounded rows for a view); serving a run's
-  log, or its tail. Revisit when a running run should show its events as they come, which needs its stdout streamed
-  to its log, or when a second runtime prints another shape.
+  OpenCode's storage format to follow); copying events into the journal (unbounded rows for a view), which the
+  latest tool call on a running run's row is not: one bounded line, overwritten; serving a run's log, or its tail.
+  Revisit when a second runtime prints another shape.
 
 Model calls (taken on request, 2026-10-13): to explore what each model call was sent and what it did, not only what
 it cost.

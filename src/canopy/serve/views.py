@@ -49,6 +49,7 @@ from canopy.serve.schema import (
     Pause,
     PauseChannel,
     Run,
+    RunActivity,
     RunState,
     SearchHit,
     SearchResults,
@@ -513,6 +514,15 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
         peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
         worktrees=worktrees or [],
         log_path=shown_path(str(row["log_path"]), root),
+        activity=_activity(row) if status == "running" else None,
+    )
+
+
+def _activity(row: sqlite3.Row) -> RunActivity | None:
+    if row["activity_tool"] is None or row["activity_at"] is None:
+        return None
+    return RunActivity(
+        tool=str(row["activity_tool"]), did=str(row["activity"] or ""), at=db.parse_time(str(row["activity_at"]))
     )
 
 

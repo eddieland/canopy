@@ -47,6 +47,7 @@ SHIPPED = {
     25: "ed074227c70399b039f9560b50ae9ec4e6adbc43cce5c909552f728019da73ff",
     26: "77d395b0529f9fb1bf83d67f0d7518dec52429d972b41001ac29b08fe08ad3db",
     27: "724265400f40f3aaeaa8afbe35981bd529a60687d194924ce4c7d3bb3b008cbc",
+    28: "3c266ae47f52ea5fffd544c191f393dfced6137ec43815d42ea3ceac1080045c",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs

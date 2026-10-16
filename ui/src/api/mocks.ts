@@ -23,6 +23,7 @@ export const mockRuns: Run[] = [
         peak_context: 25200,
         worktrees: ['.treehouse/web-3f9c2a1b/1/web'],
         log_path: '/home/op/.canopy/runs/41.log',
+        activity: { tool: 'bash', did: 'npm test -- login', at: '2026-10-08T12:27:00Z' },
     },
     {
         id: 42,
@@ -43,6 +44,7 @@ export const mockRuns: Run[] = [
         peak_context: 60000,
         worktrees: [],
         log_path: '/home/op/.canopy/runs/42.log',
+        activity: null,
     },
 ]
 

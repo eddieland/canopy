@@ -2331,6 +2331,11 @@ export type components = {
          */
         Run: {
             /**
+             * @description While it runs, its worker's latest tool call; None before the first, for a template that prints no events, and
+             *     once it ends.
+             */
+            activity: components["schemas"]["RunActivity"] | null;
+            /**
              * Branch
              * @description The branch it works on.
              */
@@ -2422,6 +2427,28 @@ export type components = {
              * @default []
              */
             worktrees: string[];
+        };
+        /**
+         * RunActivity
+         * @description A running run's latest tool call, as `_run` read it from the worker's events (DESIGN §8).
+         */
+        RunActivity: {
+            /**
+             * At
+             * Format: date-time
+             * @description When `_run` read it.
+             */
+            at: string;
+            /**
+             * Did
+             * @description What the call did, on one line: a shell call's command, else the runtime's title; empty when it gave neither.
+             */
+            did: string;
+            /**
+             * Tool
+             * @description The tool's name, as the runtime names it: `bash`, `read`, an MCP server's tool.
+             */
+            tool: string;
         };
         /**
          * @description A run's status, in five groups the UI colors (DESIGN §22). `blocked` asked a question; `failed` is every ending a human must look at (failed, crashed, unpushed, unknown, timeout); `stopped` is the operator's.
