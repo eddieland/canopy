@@ -286,6 +286,33 @@ test('inline Markdown pasted into a sentence stays in it, and prose or a Shift p
     await expect(plan(page).getByText('**Spreadsheets** and `.ods`, which the ticket')).toBeVisible()
 })
 
+test.describe('copying out of the plan', () => {
+    test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
+
+    test('lines of a list copy as the Markdown that writes them, words in a line as the words', async ({ page }) => {
+        // From the start of the first item to the end of the second, as a drag over both would select.
+        await plan(page).evaluate((root) => {
+            const items = [...root.querySelectorAll('li')].filter((item) => item.closest('ul[data-type]') === null)
+            const first = items.find((item) => item.textContent.startsWith('Excel'))
+            const second = items.find((item) => item.textContent.startsWith('Scheduling'))
+            const range = document.createRange()
+            range.setStart(first?.querySelector('p')?.firstChild ?? root, 0)
+            const last = second?.querySelector('p')
+            range.setEndAfter(last?.lastChild ?? root)
+            root.focus()
+            globalThis.getSelection()?.removeAllRanges()
+            globalThis.getSelection()?.addRange(range)
+        })
+        await page.keyboard.press('ControlOrMeta+c')
+        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+            "- Excel's own format, which the ticket does not ask for.\n- Scheduling exports.",
+        )
+        await select(page, 'iter_rows()')
+        await page.keyboard.press('ControlOrMeta+c')
+        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('iter_rows()')
+    })
+})
+
 test('resolving a thread folds it away and takes its highlight off the plan', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'name the ticket' })
     await thread.getByRole('button', { name: 'Resolve' }).click()

@@ -311,9 +311,11 @@ ticket's page.
   under its marker, as CommonMark reads it; Tiptap's own reader would make a wrapped task two paragraphs. Text pasted as
   Markdown, as a plan or a chat's answer is copied from a terminal or an editor, is read by the same parser, so it
   pastes as headings, lists, and marks, its HTML still characters; prose, a copy from the editor itself, and a paste
-  with Shift held (paste as plain text) paste as the text they are. A plan is model text (TRUST_MODEL T1), so what the
-  editor has no node for stays characters: HTML is never read as HTML and an image is never fetched, both shown and
-  written back as written, and a link keeps its address, shown on hover, but is not a link (D113).
+  with Shift held (paste as plain text) paste as the text they are. What is copied out of more than one block copies, as
+  plain text, as the Markdown that writes it, so a list keeps its markers and a heading its `#`; words within one block
+  copy as the words, as from any page. A plan is model text (TRUST_MODEL T1), so what the editor has no node for stays
+  characters: HTML is never read as HTML and an image is never fetched, both shown and written back as written, and a
+  link keeps its address, shown on hover, but is not a link (D113).
 - **A comment** is a thread on a passage: the comment, its replies, open until the operator resolves it. It is
   anchored by the passage's words and up to 32 characters either side, whitespace collapsed
   (`ui/src/lib/plan-anchors.ts`), never by a position, which the first edit above it would make wrong. While the plan

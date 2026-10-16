@@ -5,8 +5,9 @@
 // that shows and writes back its characters, as an image is, which would otherwise fetch from another origin
 // (ui/AGENTS.md). A link keeps its Markdown and shows its address on hover, but is not a link: the web UI links a URL
 // only to itself (D113). A line the source wraps inside a paragraph is a soft break of its own, drawn as a space and
-// written back as the wrap it was. Text pasted as Markdown is read as Markdown, through the same parser.
-import { Extension, Node } from '@tiptap/core'
+// written back as the wrap it was. Text pasted as Markdown is read as Markdown, through the same parser, and what is
+// copied out of more than one block is written as Markdown.
+import { Extension, getTextBetween, getTextSerializersFromSchema, Node } from '@tiptap/core'
 import type { AnyExtension, JSONContent, MarkdownToken } from '@tiptap/core'
 import { Link } from '@tiptap/extension-link'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
@@ -44,6 +45,7 @@ export function planExtensions(more: AnyExtension[] = []): AnyExtension[] {
         ImageAsText,
         SoftBreak,
         PasteMarkdown,
+        CopyMarkdown,
         PlanMarkdown.configure({ indentation: { style: 'space', size: 2 } }),
         ...more,
     ]
@@ -359,6 +361,41 @@ const PlanTaskItem = TaskItem.extend({
         const wrap: MarkdownToken = { type: 'softBreak', raw: '\n', text: '\n' }
         const tokens = [...(token.tokens ?? []), wrap, ...(first.tokens ?? [])]
         return this.parent?.({ ...token, tokens, nestedTokens: nested.slice(1) }, helpers) ?? []
+    },
+})
+
+// What is copied out of the plan, as plain text: the Markdown that writes it when it spans blocks (lines of a list,
+// a heading and its paragraph, rows of a table), so a list item keeps its `- ` and a heading its `#`. A selection
+// inside one block copies as its words, as it would from any page: as Markdown, `snake_case` would come out escaped
+// and a code span in backticks. The HTML copied beside it is ProseMirror's own, which a paste back into a plan reads.
+const CopyMarkdown = Extension.create({
+    name: 'copyMarkdown',
+    // Ahead of Tiptap's own serializer, which copies every selection as its words.
+    priority: 1000,
+    addProseMirrorPlugins() {
+        const editor = this.editor
+        return [
+            new Plugin({
+                key: new PluginKey('copyMarkdown'),
+                props: {
+                    // The slice is the selection's, with the blocks around it (`Selection.content`).
+                    clipboardTextSerializer: (slice, view) => {
+                        const { $from, $to } = view.state.selection
+                        // The words as Tiptap's serializer gives them, a soft break a space (its `renderText`).
+                        const words = getTextBetween(
+                            view.state.doc,
+                            { from: $from.pos, to: $to.pos },
+                            { textSerializers: getTextSerializersFromSchema(view.state.schema) },
+                        )
+                        if ($from.sameParent($to) && $from.parent.isTextblock) {
+                            return words
+                        }
+                        const doc: JSONContent = { type: 'doc', content: slice.content.toJSON() as JSONContent[] }
+                        return editor.markdown?.serialize(softBreaksAsText(doc)) ?? words
+                    },
+                },
+            }),
+        ]
     },
 })
 
