@@ -14,7 +14,7 @@ from canopy.cli.main import main
 from canopy.core import config, db, definitions
 from canopy.infra import lock, procs
 from canopy.loop import attention, tick
-from tests.canopy.helpers import agent_runs, canopy, in_tick, overseer_does, state_block
+from tests.canopy.helpers import agent_runs, canopy, in_tick, overseer_does, state_block, tools_of, tools_printed
 from tests.conftest import CanopyEnv
 
 
@@ -329,16 +329,22 @@ def test_a_tick_records_and_prints_what_its_overseer_cost(
     """With events, the tick keeps the overseer's session and summed cost, whether or not the overseer succeeded."""
     text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
     canopy_env.write_user(text)
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_SESSION": "ses_o1"}), overseer_does(result=last_line):
+    read = ["echo", "read it"]
+    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_SESSION": "ses_o1"}), overseer_does(read, result=last_line):
         main(["tick", "--dry-run"])
 
-        tick = canopy_env.journal(migrate=False).execute("SELECT * FROM ticks").fetchone()
+        conn = canopy_env.journal(migrate=False)
+        tick = conn.execute("SELECT * FROM ticks").fetchone()
         assert (tick["session_id"], tick["cost_usd"]) == ("ses_o1", 0.25)  # two model calls, summed
         tokens = ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
         assert tuple(tick[c] for c in tokens) == (2000, 400, 60, 8000, 1000)
         assert tick["tokens_peak_context"] == 5500
         assert (tick["tokens_first_call"], tick["tokens_first_cache_write"]) == (5500, 500)
         assert (canopy_env.state_dir / definitions.RUNTIME_DIR / tick["definitions_digest"]).is_dir()
+        # `canopy queried` and the echo, each a `bash` call that returned its stdout.
+        [(tool, calls, _, _)] = tools_of(conn, "ticks", tick["id"])
+        assert (tool, calls) == ("bash", 2)
+        assert tools_of(conn, "ticks", tick["id"]) == tools_printed(agent_log, "canopy-overseer")
         assert capsys.readouterr().out.rstrip().endswith("(cost $0.25, 3.5k tokens, 5.5k peak context)")
 
 

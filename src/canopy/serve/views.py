@@ -60,6 +60,7 @@ from canopy.serve.schema import (
     SpendPullRequest,
     SpendTicket,
     SpendTicks,
+    SpendTool,
     SpendUnpriced,
     SpendWindow,
     SpendWoken,
@@ -202,6 +203,18 @@ def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown
                 url=p.url, ticket_key=p.ticket, phase=p.phase, runs=p.runs, reviews=p.reviews, cost_usd=p.cost_usd
             )
             for p in found.pull_requests
+        ],
+        tools=[
+            SpendTool(
+                kind=t.kind,
+                tool=t.tool,
+                runs=t.runs,
+                calls=t.calls,
+                errors=t.errors,
+                result_chars=t.result_chars,
+                est_tokens=t.est_tokens,
+            )
+            for t in found.tools
         ],
     )
 

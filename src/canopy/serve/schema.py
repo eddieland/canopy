@@ -1127,6 +1127,26 @@ class SpendPullRequest(_Model):
     """What those cost, in US dollars; None when none reported a cost."""
 
 
+class SpendTool(_Model):
+    """What one tool's calls in one kind's runs that started in the window put into their context (DESIGN §13)."""
+
+    kind: SpendKind
+    """The kind of run that called it; the overseer's include dry runs."""
+    tool: str
+    """The tool's name as the runtime gives it, an MCP server's prefixed with the server's: untrusted text."""
+    runs: int
+    """How many of those runs called it."""
+    calls: int
+    """How many of its calls ended."""
+    errors: int
+    """How many of those ended in an error."""
+    result_chars: int
+    """The characters they returned, output or error, which each later model call of the run reads again."""
+    est_tokens: int
+    """`result_chars` over 4: an estimate of their tokens, since the runtime does not say which of a call's tokens a
+    tool's result was."""
+
+
 class SpendTicks(_Model):
     """How many ended ticks of the window are in a group, and what their overseers cost."""
 
@@ -1191,6 +1211,8 @@ class SpendBreakdown(_Model):
     """Each ticket with a run or review run that started in the window, or marked done in it, the costliest first."""
     pull_requests: list[SpendPullRequest] = []
     """Each PR a run that started in the window pushed to, or a review run of it started in it, the costliest first."""
+    tools: list[SpendTool] = []
+    """What each kind's tool calls returned, by tool, the most characters first: a row per kind and tool."""
 
 
 type SearchSource = Annotated[

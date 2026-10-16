@@ -29,6 +29,8 @@ from tests.canopy.helpers import (
     in_tick,
     pool,
     slot_of,
+    tools_of,
+    tools_printed,
     unit_of,
     worker_does,
 )
@@ -536,6 +538,8 @@ def test_a_worker_records_the_session_and_cost_it_reported(
     assert run["tokens_peak_context"] == 1000 + 4000 + 500  # one call's input, cache read, and cache write
     assert (run["tokens_first_call"], run["tokens_first_cache_write"]) == (5500, 500)
     assert (canopy_env.state_dir / definitions.RUNTIME_DIR / run["definitions_digest"]).is_dir()  # the one it loaded
+    # Each command the fake ran is a `bash` call that returned its stdout.
+    assert tools_of(conn, "runs", run["id"]) == tools_printed(agent_log, "canopy-worker") != []
 
     capsys.readouterr()
     assert main(["status"]) == 0

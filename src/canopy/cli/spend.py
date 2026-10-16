@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 import click
 
 from canopy.cli.common import open_context
-from canopy.core import spend
+from canopy.core import agent_output, spend
 
 if TYPE_CHECKING:
     from canopy.core.spend import Breakdown, Costs
@@ -43,6 +43,9 @@ _COST_WIDTH = 9
 _KEY_WIDTH = 16
 # The costliest tickets the text lists; `--json` lists every one.
 _TICKETS = 10
+# The tools that returned the most the text lists, and the width of their names' column; `--json` lists every one.
+_TOOLS = 10
+_TOOL_WIDTH = 32
 
 
 @click.command("spend")
@@ -61,8 +64,8 @@ def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
 
     The overseer, workers and splits, chores, and reviews, as the agent runtime reported each; dry runs apart from
     the live ticks, and idle ticks' share of the overseer's spend. Then the tickets marked done, the spend for each,
-    and the costliest tickets; --json adds every ticket and PR, and each kind's first model calls by definitions
-    snapshot.
+    and the costliest tickets, and the tools whose calls put the most into context; --json adds every ticket, PR,
+    and tool, and each kind's first model calls by definitions snapshot.
     """
     ctx = open_context(click_ctx)
     found = spend.breakdown(ctx.conn, datetime.now(UTC), days)
@@ -102,6 +105,7 @@ def render(found: Breakdown) -> list[str]:
     lines.extend(_row(day.day, day.costs) for day in found.per_day)
     lines.append(_row("all", found.totals))
     lines.extend(["", *_tickets(found)])
+    lines.extend(["", *_tools(found)])
     lines.extend(["", f"{'ticks':<{_DAY_WIDTH}}{'count':>{_COST_WIDTH}}{'spent':>{_COST_WIDTH}}"])
     lines.extend(
         f"{GROUP_LABELS[g.group]:<{_DAY_WIDTH}}{g.ticks:>{_COST_WIDTH}}{cost_text(g.cost_usd):>{_COST_WIDTH}}"
@@ -147,6 +151,32 @@ def _tickets(found: Breakdown) -> list[str]:
     if len(found.tickets) > _TICKETS:
         lines.append(f"and {len(found.tickets) - _TICKETS} more; --json lists every one")
     return lines
+
+
+# The tools whose calls returned the most, by kind, with their calls and errors, and the tokens that is, estimated.
+def _tools(found: Breakdown) -> list[str]:
+    if not found.tools:
+        return ["No tool call recorded."]
+    lines = [_tool_line("tool", "kind", "calls", "errors", "returned", "~tokens")]
+    lines.extend(
+        _tool_line(
+            t.tool,
+            t.kind,
+            str(t.calls),
+            str(t.errors),
+            agent_output.count_text(t.result_chars),
+            agent_output.count_text(t.est_tokens),
+        )
+        for t in found.tools[:_TOOLS]
+    )
+    if len(found.tools) > _TOOLS:
+        lines.append(f"and {len(found.tools) - _TOOLS} more; --json lists every one")
+    lines.append(f"Returned is in characters; ~tokens is that over {spend.CHARS_PER_TOKEN}, an estimate.")
+    return lines
+
+
+def _tool_line(tool: str, kind: str, *counts: str) -> str:
+    return f"{tool:<{_TOOL_WIDTH}} {kind:<{_DAY_WIDTH}}" + "".join(f"{c:>{_COST_WIDTH}}" for c in counts)
 
 
 def _row(label: str, costs: Costs) -> str:
