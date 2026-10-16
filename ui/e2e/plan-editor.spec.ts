@@ -112,6 +112,36 @@ test('the toolbar formats the selection and says what is in force', async ({ pag
     await expect(page.getByLabel('Plan Markdown')).toContainText('- **Scheduling exports.**')
 })
 
+test('each toolbar control names a shortcut on hover, and that shortcut does what the control does', async ({
+    page,
+}) => {
+    const toolbar = page.getByRole('toolbar', { name: 'Format' })
+    await expect(toolbar.getByRole('button', { name: 'Bold' })).toHaveAttribute('title', /^Bold \((Ctrl\+B|⌘B)\)$/u)
+    await select(page, 'method')
+    // The paragraph's style is a choice of one: each shortcut picks its style, the last going back to text.
+    for (const name of ['Heading 1', 'Heading 2', 'Heading 3', 'Text']) {
+        const style = toolbar.getByRole('radio', { name, exact: true })
+        await page.keyboard.press((await style.getAttribute('aria-keyshortcuts')) ?? '')
+        await expect(style).toHaveAttribute('data-state', 'on')
+    }
+    // A mark or a block is on or off: its shortcut turns it on, and again off.
+    for (const name of ['Bold', 'Italic', 'Strikethrough', 'Code', 'Bulleted list', 'Numbered list', 'Task list']) {
+        const control = toolbar.getByRole('button', { name, exact: true })
+        const keys = (await control.getAttribute('aria-keyshortcuts')) ?? ''
+        await page.keyboard.press(keys)
+        await expect(control, name).toHaveAttribute('aria-pressed', 'true')
+        await page.keyboard.press(keys)
+        await expect(control, name).toHaveAttribute('aria-pressed', 'false')
+    }
+    for (const name of ['Quote', 'Code block']) {
+        const control = toolbar.getByRole('button', { name, exact: true })
+        await page.keyboard.press((await control.getAttribute('aria-keyshortcuts')) ?? '')
+        await expect(control, name).toHaveAttribute('aria-pressed', 'true')
+        await page.keyboard.press('ControlOrMeta+z')
+        await expect(control, name).toHaveAttribute('aria-pressed', 'false')
+    }
+})
+
 test('resolving a thread folds it away and takes its highlight off the plan', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'name the ticket' })
     await thread.getByRole('button', { name: 'Resolve' }).click()
