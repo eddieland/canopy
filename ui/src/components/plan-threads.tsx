@@ -1,6 +1,6 @@
 import { Check, MessageSquarePlus, Reply, RotateCcw, Send, Trash2 } from 'lucide-react'
 import { useId, useState } from 'react'
-import type { KeyboardEvent, SubmitEvent } from 'react'
+import type { KeyboardEvent, Ref, SubmitEvent } from 'react'
 
 import { Age } from '@/components/age'
 import { Textarea } from '@/components/input'
@@ -38,17 +38,21 @@ export interface ThreadActions {
 }
 
 /**
- * A plan's comments, as a column beside it: the comment being written, if any, then each open thread in the order the
- * plan reads, those whose passage is gone last with a chip saying so, then the resolved ones folded under a
- * `Disclosure`. A thread is its passage, quoted, the comment and its replies, and its actions; the open one, whose
- * passage the plan shows highlighted, sits on the accent's tint. Every comment is the operator's, but it is journal
- * text all the same, so it is rendered as text with its URLs linked (D113).
+ * A plan's comments, as a column beside it: each open thread in the order the plan reads, with the comment being
+ * written, if any, in its place among them; then those whose passage is gone, with a chip saying so; then the resolved
+ * ones folded under a `Disclosure`. The open threads and the comment being written carry `data-align`, so that
+ * `alignComments` (`src/lib/plan-margin.ts`) can set each beside its passage; `listRef` is the list they sit in. A
+ * thread is its passage, quoted, the comment and its replies, and its actions; the open one, whose passage the plan
+ * shows highlighted, sits on the accent's tint. Every comment is the operator's, but it is journal text all the same,
+ * so it is rendered as text with its URLs linked (D113).
  */
 export function PlanThreads({
     threads,
     found,
     active,
     draft,
+    draftAt,
+    listRef,
     editable,
     onDraftChange,
     onDraftSubmit,
@@ -63,6 +67,10 @@ export function PlanThreads({
     active: string | undefined
     /** The comment being written, if one is. */
     draft: Draft | undefined
+    /** How many of the open threads found in the plan come before the comment being written, in the plan's order. */
+    draftAt: number
+    /** The list of comments, for `alignComments`. */
+    listRef?: Ref<HTMLDivElement>
     /** Whether the operator can comment, reply, and resolve; without it the threads are read only. */
     editable: boolean
     /** Called with what the comment being written says, as the operator types it. */
@@ -74,11 +82,24 @@ export function PlanThreads({
 }) {
     const [showResolved, setShowResolved] = useState(false)
     const open = threads.filter((thread) => !thread.resolved)
+    const placed = open.filter((thread) => found.has(thread.id))
+    const lost = open.filter((thread) => !found.has(thread.id))
     const resolved = threads.filter((thread) => thread.resolved)
+    const card = (thread: PlanThread) => (
+        <ThreadCard
+            key={thread.id}
+            thread={thread}
+            lost={!found.has(thread.id)}
+            active={thread.id === active}
+            editable={editable}
+            {...actions}
+        />
+    )
     return (
-        <div className="flex flex-col">
+        <div ref={listRef} className="plan-margin flex flex-col">
+            {placed.slice(0, draftAt).map((thread) => card(thread))}
             {draft !== undefined && (
-                <div className="border-b bg-accent/14 px-3 py-2.5">
+                <div data-align="draft" className="border-b bg-accent/14 px-3 py-2.5">
                     <Quote text={draft.quote} />
                     <CommentForm
                         key={draft.opened}
@@ -96,16 +117,8 @@ export function PlanThreads({
                     {editable ? 'no open comments yet: select text in the plan, then Comment' : 'no open comments now'}
                 </Empty>
             )}
-            {open.map((thread) => (
-                <ThreadCard
-                    key={thread.id}
-                    thread={thread}
-                    lost={!found.has(thread.id)}
-                    active={thread.id === active}
-                    editable={editable}
-                    {...actions}
-                />
-            ))}
+            {placed.slice(draftAt).map((thread) => card(thread))}
+            {lost.map((thread) => card(thread))}
             {resolved.length > 0 && (
                 <Collapsible open={showResolved} onOpenChange={setShowResolved} className="border-t px-1 py-1">
                     <Disclosure open={showResolved} what={`${resolved.length} resolved`} />
@@ -204,6 +217,7 @@ function ThreadCard({
         <article
             data-thread={thread.id}
             data-active={active}
+            data-align={lost || thread.resolved ? undefined : thread.id}
             aria-label={`Comment on “${thread.anchor.quote}”`}
             className={cn(
                 'flex flex-col gap-1.5 border-b px-3 py-2.5 last:border-b-0',
@@ -345,10 +359,11 @@ function CommentForm({
                 onChange={(event) => setBody(event.target.value)}
                 onKeyDown={onKey}
                 // The form opens on a click that asks for it, so the field takes the focus at once, after any words it
-                // holds already.
+                // holds already; the page scrolls to it a frame on, once the comments are placed beside the plan.
                 ref={(field) => {
-                    field?.focus()
+                    field?.focus({ preventScroll: true })
                     field?.setSelectionRange(field.value.length, field.value.length)
+                    requestAnimationFrame(() => field?.scrollIntoView({ block: 'nearest' }))
                 }}
                 className="min-h-16"
             />
