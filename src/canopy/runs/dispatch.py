@@ -703,7 +703,6 @@ def _spawn(
         "PRS": json.dumps({s.repo: "<url or null>" for s in slots}, separators=(",", ":")),
         "TRACKER_PROVIDER": cfg.tracker.provider,
         "NEEDS_HUMAN_LABEL": cfg.tracker.needs_human_label,
-        "PR_LABEL": cfg.trust.pr_label,
         "TIMEOUT_MINUTES": str(cfg.runtime.worker_timeout_minutes),
         "ATTEMPT": str(attempt),
         "MAX_ATTEMPTS": str(limit),

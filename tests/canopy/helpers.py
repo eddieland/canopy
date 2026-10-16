@@ -48,7 +48,6 @@ PROMPT_VALUES = {
     "STACKING": "This ticket is not stacked on another ticket's branch.",
     "TRACKER_PROVIDER": "jira",
     "NEEDS_HUMAN_LABEL": "needs-human",
-    "PR_LABEL": "agent",
     "TIMEOUT_MINUTES": "45",
     "ATTEMPT": "1",
     "MAX_ATTEMPTS": "2",
