@@ -52,6 +52,7 @@ WORKSPACE_MAP_TABLES = ("workspace", "repos")
 # Keys earlier canopy read, and what to do with one left in a file. Each is an error that says so, not "unknown key".
 REMOVED_KEYS = {
     "paths.state_dir": f"delete it; state is always in the workspace's {WORKSPACE_STATE_DIR}/ (D016)",
+    "trust.pr_label": "delete it; workers no longer label their PRs, which the branch prefix already marks",
 }
 PROMPT = "{prompt}"
 # Replaced with the snapshot of canopy's agent definitions and skills (D040).
@@ -445,7 +446,6 @@ class Trust(Section):
     """The `[trust]` table."""
 
     branch_prefix: Annotated[StrictStr, Scope.SHARED, AfterValidator(_branch_prefix)] = "agent/"
-    pr_label: Annotated[NonBlank, Scope.SHARED] = "agent"
     authorized_repliers: Annotated[tuple[NonBlank, ...], Scope.USER] = ()
     # Whose review feedback a worker may address without the operator's go-ahead (DESIGN §7, D089): VCS host logins,
     # and `canopy:review` for canopy's own reviewer. Anyone else's waits for an operator message. User-only: a

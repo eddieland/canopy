@@ -77,9 +77,7 @@ commit message.
 - Push only to `{{BRANCH}}`, with `git push origin HEAD:refs/heads/{{BRANCH}}` in each repository you changed.
   Commit on the detached HEAD as it is: create no local branch. {{BRANCH_UPDATE}}
 - Open a PR for each repository you changed, against that repository's base branch listed above, with the ticket key
-  in the title and a description of the change. Never target another branch. {{OPEN_PR}} Then add
-  the label `{{PR_LABEL}}` to it if you have a GitHub tool that sets labels, passing nothing but the labels, its
-  existing ones kept; without one, leave it off and say so in your summary.
+  in the title and a description of the change. Never target another branch. {{OPEN_PR}}
 - Comment on the ticket: what you did, every PR link, anything a reviewer should look at first.
 - {{MARK_COMMENTS}} You post as the operator, so that is how canopy knows the comment is yours and never reads it
   back as review feedback or as a reply.

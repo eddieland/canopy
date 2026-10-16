@@ -159,7 +159,7 @@ to do instead.
 | `tracker.private` | user-only | turns a queue label into a start record (§22) |
 | `tracker.query_every_minutes` | user-only | how often the overseer pays to run the query (§7): the operator's spend |
 | `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
-| `trust.branch_prefix`, `trust.pr_label` | shared | team conventions for spotting agent work |
+| `trust.branch_prefix` | shared | team conventions for spotting agent work |
 | `trust.authorized_repliers` | user-only | who may steer this operator's workers |
 | `trust.trusted_reviewers` | user-only | whose review feedback reaches a worker without the operator's go-ahead (§7) |
 | `trust.comment_prefix`, `trust.comment_suffix` | user-only | they silence the comments that carry them (§8) |
@@ -197,7 +197,6 @@ stacking = "auto"            # auto | never (§10); "never" is stricter
 
 [trust]
 branch_prefix = "agent/"
-pr_label = "agent"
 ```
 
 User file, personal:
@@ -391,7 +390,7 @@ Agent definitions ship in `agents/`; agent runs load them from a directory canop
   out of the workspace, ends the run under `opencode run` (D021) and loses every decision it had not recorded, where a
   `deny` costs only the call. MCP: the tracker, GitHub.
 - `canopy-worker`: edit and bash within the worktree. MCP: the tracker (ticket comments, and labels through its issue
-  edit tool), GitHub (open/update PR, its label where a tool sets one, read reviews and checks); merge, review
+  edit tool), GitHub (open/update PR, read reviews and checks); merge, review
   submission, closing, transition, ticket creation, delete, fork, API file and branch writes, and other agents or
   workflow runs denied by name (D084).
 - `canopy-reviewer`: no edits, shell, or subagents; reads only through the link to its checkout. MCP: read
