@@ -50,9 +50,10 @@ REQUIRED_JOINT = ("REPOSITORIES", "PRS")
 # splitter reads to check who asked. An override without it would split on the overseer's word alone.
 REQUIRED_SPLIT = ("REPOSITORIES", "REQUEST")
 # Placeholders a plan's prompt must use (DESIGN §25), for a public ticket and a private one alike: its repositories, the
-# planner's own authorization check, which names the queue labels on a public ticket (D051), and the operator's
-# messages, which carry a reply asking for changes to the plan it replaces.
-REQUIRED_PLAN = ("REPOSITORIES", "AUTHORIZATION", "OPERATOR_MESSAGES")
+# planner's own authorization check, which names the queue labels on a public ticket (D051), the operator's messages,
+# which carry a reply asking for changes to the plan it replaces, and the file the plan is written to, without which
+# no plan is ever recorded.
+REQUIRED_PLAN = ("REPOSITORIES", "AUTHORIZATION", "OPERATOR_MESSAGES", "PLAN_OUT")
 # The kinds whose workers open PRs. With `runtime.pr_skill` set, their prompts must say how, through `{{OPEN_PR}}`: an
 # override that still names the GitHub MCP would open the PRs the operator set the skill to avoid.
 OPENS_PRS = (RunKind.IMPLEMENT, RunKind.RESUME)

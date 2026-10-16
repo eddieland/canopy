@@ -139,29 +139,33 @@ file as it stands, the operator's edits included, to `.canopy-plan.md` at the de
 and the prompt says that a file there is the plan it replaces; the operator's reply to it is among the messages. On a
 public ticket the planner checks the queue label first, as every worker does (§8 step 3); a private ticket has no
 label to check. One prompt serves both: `{{AUTHORIZATION}}` is the label check on a public ticket and says there is
-none on a private one, and an override must carry it, `{{REPOSITORIES}}`, and `{{OPERATOR_MESSAGES}}`. It treats the
-ticket's text and the code as data (TRUST_MODEL T1).
+none on a private one, and an override must carry it, `{{REPOSITORIES}}`, `{{OPERATOR_MESSAGES}}`, and `{{PLAN_OUT}}`.
+It treats the ticket's text and the code as data (TRUST_MODEL T1).
 
-The plan is the planner's final message (§13): the plan as markdown, then the result line. A plan of tens of thousands
-of characters escaped into one JSON string is easy for a model to get wrong, and a run whose result line does not
-parse records nothing, so the plan stays out of the JSON. Result contract, one JSON line, last line of the agent's text
-(§13), validated with pydantic (D026):
+The planner writes its plan, as markdown, to `.canopy-new-plan.md` at its desk's root (`{{PLAN_OUT}}`), the one file its
+definition lets it edit (Agent definition, below), and `_run` reads that file once the planner exits, before the desk
+is removed. A plan of tens of thousands of characters escaped into one JSON string is easy for a model to get wrong,
+and a run whose result line does not parse records nothing, so the plan stays out of the JSON. It stays out of the
+final message too, an earlier design (2026-10-16): a template that prints plain stdout has no message boundaries, so
+everything it printed before the result line would have been the plan; a plan split across messages by a tool call
+would have lost all but its end; and a long plan had to come in one message. A file has none of these: the planner can
+write it a section at a time and revise it as it reads, and the file as it stands at exit is the plan. Result contract,
+one JSON line, last line of the agent's text (§13), validated with pydantic (D026):
 
 ```json
 {"status":"done|blocked|failed","summary":"...","question":"<only when blocked>"}
 ```
 
-- `done` records the final message, the result line and anything after it removed and surrounding whitespace
-  stripped, as the ticket's newest plan, `proposed`. It must be non-empty and at most 100,000 characters. The bound is
-  what a planner can write in one message and an operator can read before approving, not what a worker reads: workers
-  read the plan from a file, by its outline (Workers follow the plan, below). A template that prints plain stdout
-  rather than events has no message boundaries, so all of its stdout before the result line is the plan.
+- `done` records the planner's file as the ticket's newest plan, `proposed`, read as every plan file is (Where plans
+  live, below): a regular file, never through a link, non-empty UTF-8 of at most 100,000 characters. The bound is what
+  an operator can read before approving, not what a worker reads: workers read the plan from a file, by its outline
+  (Workers follow the plan, below).
 - `blocked` has a `question`, recorded as a worker message (§22), on a public ticket too, since the planner cannot
   comment on the ticket. The operator answers with `canopy reply`.
 - `failed` means it could not plan, and the summary says why. Like any run that ends other than `done`, it raises
   attention (§14).
-- Anything else, a `done` with an empty plan or one over the bound included, makes the run `unknown` and records no
-  plan.
+- Anything else, a `done` whose file is missing, empty, over the bound, or not a regular file included, makes the run
+  `unknown` and records no plan.
 
 ### Phases and the overseer's part
 
@@ -269,7 +273,13 @@ run a harness note naming it, so `canopy show` and the web UI say so. The harnes
 
 canopy ships `canopy-planner` in the definitions directory (§13):
 
-- no edit, shell, web fetch, or subagent tools; reads only inside its desk.
+- no shell, web fetch, or subagent tools; reads only inside its desk.
+- one file it may write: its `edit` rules deny `*`, then allow `.canopy-new-plan.md` alone. OpenCode matches an edit's
+  path relative to the project, `/` for a desk outside a checkout, and its `*` crosses `/`, so a file of that name in a
+  worktree is allowed too; it is reset with the slot and never read. `external_directory: deny` keeps every edit inside
+  the desk and its links. The rules come after the MCP patterns, since OpenCode matches each key against the
+  permission's name as a wildcard, and `*edit*` after them would deny the edit tool, and take it from the model
+  altogether. The planner canary checks them against a real model.
 - MCP: its tracker tools are the private worker's (§22): the tracker server's tools denied by a wildcard, then only
   `tracker.read_tools` allowed. It reads the ticket but cannot comment, label, or create. With no read tools known for
   the provider, a plan dispatch refuses `no_read_tools`, rather than run a planner that cannot read the ticket.
@@ -350,7 +360,8 @@ Proposed, for the operator's approval note in M44's PR, with the overseer prompt
   the plan, and a plan cannot widen what a worker may do.
 - T3: plan runs count toward `capacity.max_workers` and are limited by `max_plan_attempts`, never reset. `unplanned`
   is a guard in code.
-- T6: the planner has no write scope: no edits, no shell, and only the tracker's read tools. Residual: a worker can
+- T6: the planner writes one file, its plan, in its desk: no other edits, no shell, and only the tracker's read tools.
+  Residual: a worker can
   commit its copy of the plan by name, which on a private ticket publishes the plan with its branch. The prompt
   forbids it and push verification reports it; nothing prevents it.
 - T8: the plan route joins the web channel's writes, behind the same secret and per-session token as the others, and

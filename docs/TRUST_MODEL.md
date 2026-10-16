@@ -317,12 +317,14 @@ Controls:
   It has no edit, shell, web, or subagent tools, and its MCP tools for labels, assignees, PRs, branches, and files
   are denied by name. It reads the worktrees linked from its desk, checked out at their base branches, and pushes
   nothing.
-- The planner (DESIGN §25) has no write scope. It has no edit, shell, web, or subagent tools; its definition is rendered
+- The planner (DESIGN §25) writes one file, its plan, at its desk's root, and nothing else: its `edit` rules deny every
+  path but that file's name, and it has no shell, web, or subagent tools. Its definition is rendered
   as the private worker's is, so the tracker's MCP server is denied by a wildcard and only `tracker.read_tools` are
   allowed, and other servers' write tools are denied by name. A plan is refused (`no_read_tools`) when no read tools
   are known, and a run is refused where the worktree's OpenCode config names any of that server's tools. It reads the
-  worktrees linked from its desk, at their base branches, and its plan, its final message, goes to an operator-only
-  file under the state directory (T2), never to the tracker, public ticket or private.
+  worktrees linked from its desk, at their base branches. canopy reads its plan from the desk, never through a link,
+  into an operator-only file under the state directory (T2), and never sends it to the tracker, public ticket or
+  private.
 - A private ticket's worker (DESIGN §22) runs `canopy-worker-private`, whose definition canopy renders from the user
   config: every tool of the tracker's MCP server (`tracker.mcp_server`) is denied by a wildcard, then only
   `tracker.read_tools` are allowed by name, so a write tool missing from the list fails closed; the tracker CLIs canopy

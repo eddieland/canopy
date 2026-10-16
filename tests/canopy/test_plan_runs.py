@@ -58,7 +58,7 @@ def test_a_plan_is_written_to_its_file_and_recorded_proposed(
     assert isinstance(argv, list)
     assert argv[:3] == ["run", "--agent", "canopy-planner"]
     assert planner["cwd"] == str(desk)
-    [[checked]] = commands_run(agent_log)
+    [[_, checked]] = commands_run(agent_log)
     assert "# branch.head (detached)" in checked["stdout"]
     assert not desk.exists()
     assert [s["status"] for s in pool(treehouse_state)] == ["available", "available"]
@@ -75,14 +75,14 @@ def test_a_plan_is_written_to_its_file_and_recorded_proposed(
     assert "attempt 1 of 3" in prompt
     assert f"- `repo` at `{desk / 'repo'}`, at `main`." in prompt
 
-    # The plan is the final message less its result line, in a file of its own, operator-only, and its row has its hash.
+    # The plan is the file the planner wrote in its desk, kept in a file of its own, operator-only, its hash on its row.
     [plan] = plans.history(conn, KEY)
     assert (plan.run_id, plan.status) == (run["id"], PlanStatus.PROPOSED)
     path = plan_file(canopy_env, int(run["id"]))
-    assert path.read_text() == TEXT.strip()
+    assert path.read_text() == TEXT
     assert path.stat().st_mode & 0o777 == 0o600
-    assert plan.sha256 == hashlib.sha256(TEXT.strip().encode()).hexdigest()
-    assert plan.size == len(TEXT.strip().encode())
+    assert plan.sha256 == hashlib.sha256(TEXT.encode()).hexdigest()
+    assert plan.size == len(TEXT.encode())
     # Its report is the planner's summary, as any run's.
     assert [(m["kind"], m["body"]) for m in db.run_messages(conn, int(run["id"]))] == [("report", "planned it")]
 
@@ -93,16 +93,16 @@ def test_a_new_plan_reads_the_one_it_replaces_as_it_stands_and_supersedes_it(
     with planner_does(["cat", ".canopy-plan.md"], plan=TEXT):
         first = dispatch_and_run(conn, *PLAN)
     # The first has nothing to replace.
-    [[cat]] = commands_run(agent_log)
+    [[_, cat]] = commands_run(agent_log)
     assert cat["returncode"] != 0
     # The operator edits the plan before asking for changes; the next planner reads it with the edit.
-    edited = TEXT.strip().replace("red", "blue")
+    edited = TEXT.replace("red", "blue")
     plan_file(canopy_env, int(first["id"])).write_text(edited)
 
     with planner_does(["cat", ".canopy-plan.md"], plan="# Plan, again\n\nBlue it is."):
         second = dispatch_and_run(conn, *PLAN)
     assert second["status"] == RunStatus.DONE
-    [_, [cat]] = commands_run(agent_log)
+    [_, [_, cat]] = commands_run(agent_log)
     assert cat["stdout"] == edited
     assert "attempt 2 of 3" in prompt_of(canopy_env, int(second["id"]))
     # The copy went with the desk; the files stay, each its own plan's.
@@ -118,12 +118,13 @@ def test_a_new_plan_reads_the_one_it_replaces_as_it_stands_and_supersedes_it(
 @pytest.mark.parametrize(
     ("result", "plan", "status", "note"),
     [
-        ({"status": "done", "summary": "s"}, "", RunStatus.UNKNOWN, "the planner reported done with no plan"),
+        ({"status": "done", "summary": "s"}, None, RunStatus.UNKNOWN, "but its .canopy-new-plan.md is missing"),
+        ({"status": "done", "summary": "s"}, " \n", RunStatus.UNKNOWN, "but its .canopy-new-plan.md is empty"),
         (
             {"status": "done", "summary": "s"},
             "x" * (plans.MAX_CHARS + 1),
             RunStatus.UNKNOWN,
-            "the plan is 100,001 characters, over the bound of 100,000; no plan was recorded",
+            "but its .canopy-new-plan.md is over the bound; no plan was recorded",
         ),
         ({"status": "maybe"}, TEXT, RunStatus.UNKNOWN, "the planner's last line was not a valid plan result"),
         ({"status": "failed", "summary": "cannot plan this"}, TEXT, RunStatus.FAILED, ""),
@@ -134,7 +135,7 @@ def test_only_a_done_plan_within_its_bound_is_recorded(
     git_pool: GitPool,
     conn: sqlite3.Connection,
     result: dict[str, object],
-    plan: str,
+    plan: str | None,
     status: RunStatus,
     note: str,
 ) -> None:
@@ -151,11 +152,24 @@ def test_a_blocked_plan_records_its_question(
 ) -> None:
     # On a public ticket too: the planner cannot comment, so the operator answers with `canopy reply`.
     blocked = {"status": "blocked", "summary": "the ticket leaves a choice", "question": QUESTION}
-    with planner_does(plan="", result=blocked):
+    with planner_does(plan=None, result=blocked):
         run = dispatch_and_run(conn, *PLAN)
     assert run["status"] == RunStatus.BLOCKED
     messages = [(m["kind"], m["body"]) for m in db.run_messages(conn, int(run["id"]))]
     assert messages == [("report", "the ticket leaves a choice"), ("question", QUESTION)]
+    assert plans.history(conn, KEY) == []
+
+
+def test_a_plan_file_that_is_a_link_is_never_read(
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    # The planner's edit tool makes no links, but canopy reads its file as if it might: never through one.
+    secret = tmp_path / "secret.txt"
+    secret.write_text("not a plan\n")
+    with planner_does(["ln", "-s", str(secret), plans.WRITTEN], plan=None):
+        run = dispatch_and_run(conn, *PLAN)
+    assert run["status"] == RunStatus.UNKNOWN
+    assert "but its .canopy-new-plan.md is not a regular file" in str(run["result_json"])
     assert plans.history(conn, KEY) == []
 
 

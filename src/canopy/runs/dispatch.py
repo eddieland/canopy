@@ -42,8 +42,6 @@ MAX_MAP = 20_000
 RUNS_DIR = "runs"
 # The kind a notice to workers can hold (DESIGN §8): a dispatch of it refuses when the notice moved mid-tick.
 FIX_CI = RunKind.FIX_CI
-# A plan run's copy of the plan it replaces, at its desk's root (DESIGN §25, The worker's copy).
-PLAN_COPY = ".canopy-plan.md"
 
 
 class Refusal(Exception):  # noqa: N818  (a refusal is an outcome the overseer is told about, not an error)
@@ -760,7 +758,8 @@ def _spawn(
         "WORKER_COMMENT": prompts.worker_comment(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
         "MARK_COMMENTS": prompts.mark_comments(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
         "OPEN_PR": prompts.open_pr(cfg.runtime.pr_skill),
-        "PLAN_FILE": PLAN_COPY,
+        "PLAN_FILE": plans.REPLACED,
+        "PLAN_OUT": plans.WRITTEN,
         "MAX_PLAN_CHARS": f"{plans.MAX_CHARS:,}",
     }
     # A joint run's worker learns its repositories only from these, so an override without them fails closed. A

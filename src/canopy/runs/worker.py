@@ -11,8 +11,9 @@ the desk, and nothing is pushed or verified. Its result names the tickets it cre
 in `split_children` (DESIGN §18).
 
 A plan run is checked out as a split is, and always works in a desk, even over one repository: the desk holds a copy of
-the plan it replaces, if the ticket has one. The planner runs with `plan_cmd`, and its final message, less the result
-line, is the plan: a `done` one is written to its file and recorded `proposed` (DESIGN §25).
+the plan it replaces, if the ticket has one. The planner runs with `plan_cmd` and writes its plan to a file at the
+desk's root, the one file it may edit; a `done` one is read from there, bounded, written to the plan's own file, and
+recorded `proposed` (DESIGN §25).
 """
 
 from __future__ import annotations
@@ -99,7 +100,7 @@ class SplitResult(BaseModel):
 
 
 class PlanResult(BaseModel):
-    """A plan's result contract (DESIGN §25). The plan itself is the final message before it, not a field.
+    """A plan's result contract (DESIGN §25). The plan itself is the file the planner wrote in its desk, not a field.
 
     Untrusted, so bounded. A `blocked` plan's question is recorded as a worker message, as any run's is (§22).
     """
@@ -109,20 +110,6 @@ class PlanResult(BaseModel):
     status: Literal["done", "blocked", "failed"]
     summary: Text = ""
     question: Text | None = None
-
-
-def plan_text(final: str) -> str:
-    """The plan in a planner's final message: everything before its result line, surrounding whitespace stripped.
-
-    The result line is the last line that starts with `{`, as `contract.last_line` reads it; it and anything after it
-    are left out.
-
-    Returns:
-        The plan, or "" when the final message has no result line or nothing before it.
-    """
-    lines = final.splitlines(keepends=True)
-    results = [i for i, line in enumerate(lines) if line.strip().startswith("{")]
-    return "".join(lines[: results[-1]]).strip() if results else ""
 
 
 def parse_split(stdout: str) -> SplitResult | None:
@@ -348,7 +335,7 @@ def _run_agent(
     *,
     template: str,
     desk_files: Mapping[str, str] | None = None,
-) -> tuple[procs.Result, agent_output.AgentOutput]:
+) -> tuple[procs.Result, str]:
     """Check the places the agent reads config from, make the run's desk if it has one, and run `template` in it.
 
     A private run's places, and a plan's, must also name none of the tracker server's tools (DESIGN §22, §25).
@@ -358,7 +345,7 @@ def _run_agent(
     fails does not lose them (DESIGN §13).
 
     Returns:
-        The agent's process, and what it printed: the text its result line is read from, and its final message.
+        The agent's process and the text its result line is read from.
 
     Raises:
         _SetupError: a place the agent reads config from shadows canopy's definitions, or, for a private run or a
@@ -419,7 +406,7 @@ def _run_agent(
         )
         spent = output.usage.spent() if output.usage else {}
         log.info("worker reported", extra={"run_id": run_id, "session_id": output.session_id, **spent})
-    return result, output
+    return result, output.text
 
 
 class _Progress:
@@ -469,9 +456,9 @@ def _split(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, 
     """
     for slot in slots:
         _check_out(slot)
-    result, output = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.split_cmd)
+    result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.split_cmd)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
-    parsed = parse_split(output.text)
+    parsed = parse_split(text)
     if parsed is None:
         if result.timed_out:
             # Whatever it created is unknown to the journal; its comment on the parent lists it for a human.
@@ -494,13 +481,13 @@ def _split(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, 
 
 
 def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
-    """Run the planner in a desk of worktrees at their bases, and write and record the plan it reports (DESIGN §25).
+    """Run the planner in a desk of worktrees at their bases, and write and record the plan it wrote (DESIGN §25).
 
     The desk holds a copy of the plan this one replaces, the ticket's current plan, if its file still reads as a plan.
 
     Returns:
         The planner's status; `timeout` if it timed out; `unknown` for a missing or invalid result line, or a `done`
-        with an empty plan or one over `plans.MAX_CHARS`; or `crashed` when the plan's file could not be written.
+        whose file in the desk is not a plan; or `crashed` when the plan's own file could not be written.
     """
     stopped = _stopped(ctx, run)
     if stopped:
@@ -511,33 +498,33 @@ def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     key = str(run["ticket_key"])
     replaced = plans.current(ctx.conn, key)
     copy = plans.read(plans.path_for(ctx.state_dir, key, replaced.run_id)).text if replaced is not None else None
-    desk_files = {dispatch.PLAN_COPY: copy} if copy is not None else {}
+    desk_files = {plans.REPLACED: copy} if copy is not None else {}
     template = ctx.config.runtime.plan_cmd
-    result, output = _run_agent(ctx, run, slots, out, log, template=template, desk_files=desk_files)
+    result, text = _run_agent(ctx, run, slots, out, log, template=template, desk_files=desk_files)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
-    parsed = contract.last_line(PlanResult, output.text)
+    parsed = contract.last_line(PlanResult, text)
     if result.timed_out:
         return Outcome(RunStatus.TIMEOUT, parsed, f"the planner timed out after {timeout_minutes} minutes")
     if parsed is None:
         return Outcome(RunStatus.UNKNOWN, None, "the planner's last line was not a valid plan result")
     if parsed.status != "done":
         return Outcome(RunStatus(parsed.status), parsed)
-    return _record_plan(ctx, run, parsed, plan_text(output.last), log)
+    # Read before `_release` removes the desk: bounded, never through a link, and refused unless it is a plan.
+    written = plans.read(desks.path(ctx.workspace.root, key) / plans.WRITTEN)
+    if written.text is None:
+        note = f"the planner reported done, but its {plans.WRITTEN} is {written.problem}; no plan was recorded"
+        return Outcome(RunStatus.UNKNOWN, parsed, note)
+    return _record_plan(ctx, run, parsed, written.text, log)
 
 
 def _record_plan(ctx: Context, run: sqlite3.Row, parsed: PlanResult, text: str, log: logs.TickAdapter) -> Outcome:
-    """Write a `done` plan's `text` to its file and record it `proposed`, if it is a plan (DESIGN §25).
+    """Write a `done` plan's `text` to the plan's own file and record it `proposed` (DESIGN §25).
 
     Returns:
-        `done` once it is recorded; `unknown` for an empty plan or one over `plans.MAX_CHARS`; `crashed` when its file
-        could not be written, its name taken included. Nothing is recorded but for `done`.
+        `done` once it is recorded, or `crashed` when its file could not be written, its name taken included, and
+        nothing is recorded.
     """
     key = str(run["ticket_key"])
-    if not text:
-        return Outcome(RunStatus.UNKNOWN, parsed, "the planner reported done with no plan before its result line")
-    if len(text) > plans.MAX_CHARS:
-        note = f"the plan is {len(text):,} characters, over the bound of {plans.MAX_CHARS:,}; no plan was recorded"
-        return Outcome(RunStatus.UNKNOWN, parsed, note)
     run_id = int(run["id"])
     try:
         written = plans.write(ctx.state_dir, key, run_id, text)
@@ -603,10 +590,10 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         _run_setup(ctx, run, slot, out, log)
     runtime = ctx.config.runtime
     template = runtime.private_worker_cmd if run["private"] else runtime.worker_cmd
-    result, output = _run_agent(ctx, run, slots, out, log, template=template)
+    result, text = _run_agent(ctx, run, slots, out, log, template=template)
     timeout_minutes = ctx.config.runtime.worker_timeout_minutes
 
-    parsed = parse_result(output.text)
+    parsed = parse_result(text)
     if parsed is not None:
         parsed = parsed.for_repos([s.repo for s in slots])
     if result.timed_out:

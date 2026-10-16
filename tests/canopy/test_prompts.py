@@ -51,6 +51,7 @@ def test_the_shipped_plan_prompt_renders_completely(canopy_env: CanopyEnv, *, pr
         **PROMPT_VALUES,
         "AUTHORIZATION": prompts.plan_authorization("PROJ-1", ["agent-ready-alice"], private=private),
         "PLAN_FILE": ".canopy-plan.md",
+        "PLAN_OUT": ".canopy-new-plan.md",
         "MAX_PLAN_CHARS": "100,000",
         "SLOT": "/ws/desks/PROJ-1",
     }
@@ -58,6 +59,7 @@ def test_the_shipped_plan_prompt_renders_completely(canopy_env: CanopyEnv, *, pr
     assert text.startswith("# canopy worker: plan\n")
     assert "{{" not in text
     assert "If `/ws/desks/PROJ-1/.canopy-plan.md` exists, it is the plan this one replaces." in text
+    assert "Write the plan as markdown to `/ws/desks/PROJ-1/.canopy-new-plan.md`" in text
     assert "within 100,000 characters" in text
     assert text.rstrip().endswith(
         '{"status":"done|blocked|failed","summary":"<one paragraph>","question":"<only when blocked>"}'
@@ -76,7 +78,7 @@ def test_a_plan_prompt_needs_its_authorization_and_the_operators_messages(canopy
     used = " ".join(f"{{{{{name}}}}}" for name in prompts.REQUIRED_PLAN if name != missing)
     (overrides / "worker-plan.md").write_text(f"Plan {{{{KEY}}}}: {used}\n")
     cfg = load(canopy_env.root, canopy_env.user_file)
-    values = {**PROMPT_VALUES, "AUTHORIZATION": "check"}
+    values = {**PROMPT_VALUES, "AUTHORIZATION": "check", "PLAN_OUT": ".canopy-new-plan.md"}
     with pytest.raises(prompts.PromptError, match=rf"missing required placeholder \{{\{{{missing}\}}\}}"):
         prompts.render_worker(cfg, "plan", values)
 
