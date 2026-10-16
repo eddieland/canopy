@@ -15,8 +15,8 @@ from canopy.infra import procs
 from tests.canopy.helpers import (
     InlineRunner,
     commit_and_push,
+    decisions,
     in_tick,
-    journal,
     lifelock_left,
     pool,
     slot_of,
@@ -24,15 +24,6 @@ from tests.canopy.helpers import (
     worker_does,
 )
 from tests.conftest import CanopyEnv, GitPool, pool_state
-
-
-@pytest.fixture
-def conn(canopy_env: CanopyEnv) -> sqlite3.Connection:
-    return journal(canopy_env)
-
-
-def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
-    return [(d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
 
 
 def test_dispatch_leases_records_and_spawns(

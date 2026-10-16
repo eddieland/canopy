@@ -625,6 +625,14 @@ dispatch names at least one, in a workspace of one repository too.
      instruction like their messages, and the prompt's obligations come before it.
    - Every prompt but a split's carries `{{NOTICE}}`, the operator's notice in force (Notices to workers, below), or
      `None.` without one. While one is in force, a prompt without the placeholder is `bad_prompt`.
+   - A public ticket's `implement`, `fix-ci`, and `resume` prompts carry `{{PREVIOUS_RUNS}}`: its latest three ended
+     runs since any forget, oldest first, each with its kind, how it ended, and the messages it recorded (step 7):
+     its report, and a `blocked` run's question. Each run starts a fresh session (A fresh session per run, below), so
+     this is how a worker learns what the runs before it concluded. A report is worker text, written after reading
+     the ticket, PRs, and CI logs, so the prompt calls it data to check against the branch and PR, and keeps it off
+     the ticket and PRs, since it may repeat the operator's messages. A summary and a question are each at most 2000
+     characters, so the section is bounded. A private ticket's prompt has the same reports in `{{CONVERSATION}}`. An
+     override without the placeholder still renders: nothing in it is a check the worker must make.
    - Every `implement`, `fix-ci`, and `resume` prompt carries `{{COMMIT_ATTRIBUTION}}`, the instruction for its
      commits' attribution: keep the runtime's trailer, or add the one rendered from `trust.commit_trailer_name` and
      `trust.commit_trailer_email` (§12); with `trust.commit_trailer` off, keep the runtime's and add none.
@@ -730,6 +738,9 @@ can write there, so without them a hook or monitor it planted would run on the h
 `remote.<name>.uploadpack`) still runs; closing that takes a git directory the worker cannot write (§24, Git state).
 The worker's own git is unaffected, so its push runs the repository's hooks; step 5's fallback push runs none, so a
 repository whose push needs one (Git LFS's `pre-push`) depends on the worker pushing.
+`core/hostgit.py` also adds `-c maintenance.auto=false -c gc.auto=0`, so no git the harness runs starts git's
+automatic maintenance in the background on the shared directory while other slots' runs use it. `canopy workspace
+sync` sets the same in each primary clone's config, for the worker's git and treehouse's (§18).
 
 The object directory is for a sandboxed worker (§24, Git state), which cannot write the git directory its slot
 shares, objects included. `_run` passes it as `CANOPY_GIT_OBJECTS` and never sets git's own variables for the worker:
@@ -808,6 +819,27 @@ goes in the result's `prs`. The overseer and later workers still read the PR thr
 that server can read. `fix-ci` and `split` open no PRs and ignore the key. Updating an existing PR, such as retargeting
 a stacked
 one, stays with the MCP.
+
+### A fresh session per run
+
+Every worker run starts a new session, `fix-ci` and `resume` included. None continues the session of the run before
+it, though OpenCode could (`opencode run --session`). What carries from one run to the next is the pushed branch, its
+PR, the ticket's cursors (§7), the overseer's `--context`, and what the latest runs reported (`{{PREVIOUS_RUNS}}`,
+step 3); the earlier session stays for the operator to open (§13). Decided for M15 (2026-10-16), from the runs
+measured by then (MEASUREMENTS 2026-10-15):
+
+- A prompt is rendered for its run: the notice in force, the standing instructions, the operator's messages, the
+  attempt, and the context. A continued session keeps every earlier prompt, so a lifted notice or a superseded message
+  would still read as the operator's. This is PRIOR_ART's contamination of long-lived sessions.
+- A run lands on any slot (§9), and the earlier transcript names the earlier slot's or desk's paths, which another
+  ticket's run may hold by then.
+- Feedback runs are short: `fix-ci` took a median 0.8 minutes and `resume` 1.0. By the time one starts the provider's
+  cache has expired, after `policy.fix_ci_cooldown_minutes` or a wait on review, so a continued session would write
+  the earlier run's whole context to the cache on its first call and read it back on every call after.
+- What the earlier run read, CI logs and review comments, would come along. A fresh run reads only what it needs.
+
+Revisit if `fix-ci` or `resume` runs often end `blocked` or `failed` for want of what the earlier run worked out,
+visible in their transcripts as steps spent finding it again.
 
 ### Notices to workers
 

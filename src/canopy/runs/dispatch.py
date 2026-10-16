@@ -729,6 +729,7 @@ def _spawn(
         values["CONVERSATION"] = conversation.prompt_conversation(ctx.conn, key)
     else:
         values["OPERATOR_MESSAGES"] = conversation.prompt_operator_messages(ctx.conn, key)
+        values["PREVIOUS_RUNS"] = conversation.prompt_previous_runs(ctx.conn, key)
         if not split and conversation.has_operator_messages(ctx.conn, key):
             required = (*required, *prompts.REQUIRED_OPERATOR)
     if review is not None:

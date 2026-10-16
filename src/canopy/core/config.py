@@ -282,7 +282,7 @@ class Section(BaseModel):
     """Base for config tables: unknown keys are errors, values are frozen, defaults are validated."""
 
     # validate_default: defaults go through the same validators as file values, so `~/.canopy` is expanded.
-    model_config = ConfigDict(extra="forbid", frozen=True, validate_default=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, validate_default=True, defer_build=True)
 
 
 # A part of an OpenCode tool name: an MCP server's name or one of its tools', as OpenCode sanitizes them. They are

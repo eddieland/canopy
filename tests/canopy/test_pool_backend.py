@@ -15,9 +15,9 @@ from canopy.core.vocab import PoolKind, RunStatus
 from canopy.infra import logs, procs, resources
 from canopy.runs import reconcile
 from tests.canopy.conftest import Ws, seed_pools
-from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, worker_does
-from tests.canopy.test_loop import context as loop_context
-from tests.canopy.test_web import running_run, signed_in_client
+from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, running_run, worker_does
+from tests.canopy.helpers import context as loop_context
+from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import CanopyEnv, git, user_toml
 
 LABEL = "agent-ready-tester"

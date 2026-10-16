@@ -36,20 +36,20 @@ Count = Annotated[StrictInt, Field(ge=0, le=MAX_TOKENS)]
 
 
 class _Text(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     text: StrictStr
 
 
 class _Cache(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     read: Count
     write: Count
 
 
 class _Tokens(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     input: Count
     output: Count
@@ -58,7 +58,7 @@ class _Tokens(BaseModel):
 
 
 class _StepFinish(BaseModel):
-    model_config = ConfigDict(extra="ignore", frozen=True)
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
 
     cost: Annotated[StrictFloat | StrictInt, Field(ge=0, le=MAX_COST_USD, allow_inf_nan=False)]
     tokens: _Tokens

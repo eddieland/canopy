@@ -907,6 +907,17 @@ def recent_runs(conn: sqlite3.Connection, limit: int) -> list[sqlite3.Row]:
     ).fetchall()
 
 
+def ended_runs_of(conn: sqlite3.Connection, key: str, limit: int) -> list[sqlite3.Row]:
+    """Return a ticket's latest `limit` ended runs since any forget, oldest first: id, kind, status, and end."""
+    rows = conn.execute(
+        "SELECT r.id, r.kind, r.status, r.ended_at FROM runs r LEFT JOIN tickets t ON t.key = r.ticket_key "
+        "WHERE r.ticket_key = ? AND r.status != 'running' AND r.id > coalesce(t.forgotten_run_id, 0) "
+        "ORDER BY r.id DESC LIMIT ?",
+        (key, limit),
+    ).fetchall()
+    return rows[::-1]
+
+
 def latest_runs(conn: sqlite3.Connection) -> dict[str, sqlite3.Row]:
     """Return each ticket's most recent run, by ticket key: none for a ticket forgotten since its latest run."""
     rows = conn.execute(

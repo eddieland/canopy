@@ -1,0 +1,47 @@
+"""Helpers the web UI's tests share: a browser of the server, signed in or not (DESIGN §22)."""
+
+from pathlib import Path
+
+import httpx2
+from fastapi.testclient import TestClient
+
+from canopy.core.context import Context
+from canopy.loop import reread, web
+from canopy.serve.app import create_app
+from canopy.serve.auth import Sessions
+from canopy.serve.backend import Backend
+from canopy.serve.options import ServeOptions
+
+SECRET = "s3cret-" + "x" * 40
+ORIGIN = "http://127.0.0.1:8765"
+
+
+def client(ui_dir: Path | None, backend: Backend, *, key: str | None = None, **options: object) -> TestClient:
+    """A browser of `canopy serve` over `backend`, the mock unless `options` say otherwise, signed in to nothing."""
+    opts = ServeOptions.model_validate({"ui_dir": ui_dir, "mock": True, "mock_event_seconds": None, **options})
+    sessions = Sessions(key, port=opts.port, base_path=opts.base_path, hosts=opts.hosts)
+    return TestClient(create_app(opts, backend, sessions), base_url=ORIGIN)
+
+
+def signed_in(c: TestClient, *, base: str = "") -> dict[str, str]:
+    """Sign `c` in with SECRET; return the headers a write needs."""
+    response = c.post(f"{base}/api/session", json={"secret": SECRET})
+    assert response.status_code == 200
+    token = response.json()["token"]
+    assert isinstance(token, str)
+    return {"x-canopy-token": token, "origin": ORIGIN}
+
+
+def signed_in_client(ctx: Context, reload: reread.Reload | None = None) -> tuple[TestClient, dict[str, str]]:
+    """A browser signed in to a server over `ctx`'s journal, as the loop builds it, and the headers a write needs."""
+    options = ServeOptions(port=8765)
+    sessions = Sessions(SECRET, port=options.port, base_path="", hosts=options.hosts)
+    c = TestClient(create_app(options, web.backend(ctx, reload or reread.Reload()), sessions), base_url=ORIGIN)
+    return c, signed_in(c)
+
+
+def refused(response: httpx2.Response) -> str:
+    """The guard that refused a write, and why, as `guard: reason`."""
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    return f"{detail['guard']}: {detail['reason']}"
