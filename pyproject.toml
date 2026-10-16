@@ -198,6 +198,9 @@ banned-from = ["unittest.mock"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# With -n, an idle xdist worker takes queued tests from a busy one, so a few slow tests do not leave the others waiting
+# at the end. A run without -n stays serial.
+addopts = ["--dist", "worksteal"]
 # Every strictness option pytest has, and any it adds. A warning fails the test that raised it, so a deprecation is
 # fixed when it appears instead of when the dependency removes the API.
 strict = true
