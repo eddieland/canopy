@@ -49,6 +49,16 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   0027, or that made no model call, is in none. Neither the text nor the web UI shows them: they are for a
   re-measurement, as S33 reads them.
 
+  Then which tools put the most into context (asked for by the operator, 2026-10-15, issue 434): after the fixed
+  prefix, most of a run's context is tool results, which each later model call reads again, and the first
+  measurements took an analysis session over the tick logs to find that PR reads and tracker searches were most of the
+  overseer's (MEASUREMENTS 2026-10-13 F6, F14). For each kind and tool, from `run_tools` over the runs that started in
+  the window, the runs that called it, its calls, the calls that ended in an error, the characters they returned, and
+  those over four as an estimate of the tokens, the most characters first. Characters, because `step_finish` does not
+  say which of a call's tokens a tool's result was; four to a token is a rule of thumb, labeled an estimate wherever it
+  is shown. The overseer's include dry runs, as its first calls do. The text lists the ten that returned the most,
+  `--json` every one (`tools`), and the web UI's spend page all of them.
+
   Done is a ticket's newest `done` decision (§7) in the window, on a ticket still marked done and not forgotten since:
   `merged`, and `closed` too, since a tracker that closes a ticket when its PR merges closes most tickets that landed
   before the loop sees the merge, so leaving them out would undercount what landed. A ticket closed unworked is
@@ -85,6 +95,10 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
 - `review_runs`: one row per review run; the PR's URL, the commit, the ticket of an agent PR, the repository and slot,
   pids, times, status, the validated result (§21), and what the runtime reported (§13), as `runs` has it.
   `decisions.pr` names the PR of a decision about a review.
+- `run_tools`: one row per agent run and tool it called (§13), the run by its table (`ticks` for an overseer, `runs`,
+  `chore_runs`, or `review_runs`) and id; the tool's name, its calls, the calls that ended in an error, and the
+  characters they returned. Written with the run's cost, in place of what was there; no row for a run whose template
+  prints no events, nor for one recorded before migration 0032.
 - `attempt_grants`: one row per `canopy grant`; the ticket, repository, kind, runs granted, and when (§22).
   Only added to.
 - `review_grants`: one row per `canopy grant URL review`; the PR's URL, review runs granted, and when (§21, §22).
@@ -426,10 +440,18 @@ From events the harness also reads, each validated (D026):
   made no model call. All of a run's fixed overhead (the system prompt, the agent's body, the tool schemas) is in its
   first call, so less the prompt canopy sent it is the overhead, and the cache write says whether the provider had
   the prefix cached: small on a warm start, the whole prefix on a cold one (MEASUREMENTS 2026-10-13 F11, F12).
+- the tool calls: each `tool_use` event, printed once its call ended, `completed` or `error`, rolled up by `part.tool`:
+  how many calls, how many ended in an error, and the characters of what they returned (`state.output`, or
+  `state.error` for an error). One that does not validate is not counted. A tool's name is kept as printed but for
+  control characters and runs of whitespace, cut at 200 characters, and a run keeps at most 200 tools, the calls of
+  any after them counted under `(other tools)`, which no runtime names a tool: far more than a runtime offers, and few
+  enough that output no runtime printed cannot fill the journal. A subagent's calls are its own session's, and not
+  counted.
 
-With the report the harness records the digest of the definitions snapshot the run loaded, the name of its directory
-(`core/definitions.py`), so a change to a prompt, an override, or a definition splits the runs into before and after.
-Only when the runtime reported something: a template that prints plain text may not load the snapshot at all.
+With the report the harness records the tool rollup in `run_tools` (§11), and the digest of the definitions snapshot
+the run loaded, the name of its directory (`core/definitions.py`), so a change to a prompt, an override, or a
+definition splits the runs into before and after. The digest only when the runtime reported something: a template
+that prints plain text may not load the snapshot at all.
 
 Wherever canopy prints what a run or a tick cost, the CLI (`Usage.describe`) and the web UI alike, it says it as
 `$0.25, 3.5k tokens, 5.5k peak context`. The tokens are every kind but cache reads: input, cache write, output, and

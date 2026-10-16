@@ -32,6 +32,7 @@ from tests.canopy.helpers import (
     json_block,
     lifelock_left,
     state_block,
+    tools_of,
 )
 from tests.conftest import CanopyEnv
 
@@ -677,7 +678,8 @@ def test_a_chore_run_records_what_it_cost(
     text = canopy_env.user_file.read_text()
     canopy_env.write_user(text.replace("--agent canopy-chore {prompt}", "--agent canopy-chore --format json {prompt}"))
     # The tries after the run report what it did.
-    with mock.patch.dict(os.environ, {"FAKE_CHORE_SESSION": "ses_chore"}), chore_reports(OK):
+    env = {"FAKE_CHORE_SESSION": "ses_chore", "FAKE_CHORE_COMMANDS": json.dumps([["echo", "read it"]])}
+    with mock.patch.dict(os.environ, env), chore_reports(OK):
         conn = canopy_env.journal()
         run_id = run_inline(conn, OK)
         row = db.get_chore_run(conn, run_id)
@@ -690,6 +692,7 @@ def test_a_chore_run_records_what_it_cost(
         assert (usage.first_call, usage.first_cache_write) == (5500, 500)
         assert (canopy_env.state_dir / definitions.RUNTIME_DIR / row["definitions_digest"]).is_dir()
         assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
+        assert tools_of(conn, "chore_runs", run_id) == [("bash", 1, 0, len("read it\n"))]
 
         capsys.readouterr()
         assert main(["show", "chore:build-health"]) == 0

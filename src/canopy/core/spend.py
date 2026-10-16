@@ -5,7 +5,7 @@ of each tick, worker and split runs, chore runs, and review runs. A dry run's ov
 ones', and idle ticks' (§6, Idle pacing) are a series of their own within the live overseer's. Beside what the window
 cost, what it got done: the tickets marked done in it, and what each ticket and PR's own runs cost. And what each kind
 of run's first model call was sent, by the definitions snapshot it loaded: its fixed overhead, and how often it started
-cold.
+cold. And what each kind's tool calls put into its context, by tool: the reads that each later model call reads again.
 """
 
 from __future__ import annotations
@@ -40,8 +40,11 @@ DEFAULT_DAYS = 7
 # The idle ticks the web UI links to: the newest in the window.
 IDLE_TICKS = 20
 
-# Each agent run's table but the ticks', by the kind it counts as.
+# Each agent run's table but the ticks', by the kind it counts as; and every one, the overseer's ticks included.
 _TABLES: dict[Kind, str] = {"workers": "runs", "chores": "chore_runs", "reviews": "review_runs"}
+_ALL_TABLES: dict[Kind, str] = {"overseer": "ticks", **_TABLES}
+# About how many characters make a token: what a tool's result is counted in, as an estimate of its tokens.
+CHARS_PER_TOKEN = 4
 # The overseer's series, each from the ticks.
 _SERIES = ("overseer", "idle", "dry_run")
 # What a run's row says of its first model call, and when it started.
@@ -159,6 +162,25 @@ class FirstCalls:
 
 
 @dataclass(frozen=True)
+class ToolSpend:
+    """What one tool's calls in one kind's runs that started in the window put into their context (§13).
+
+    `runs` counts the runs that called it, `calls` its calls that ended, and `errors` those that ended in an error.
+    `result_chars` is the characters they returned, output or error, and `est_tokens` those over `CHARS_PER_TOKEN`: an
+    estimate, since the runtime does not say which of a model call's tokens a tool's result was. Each later model call
+    of the run reads them again, from the cache or not.
+    """
+
+    kind: Kind
+    tool: str
+    runs: int
+    calls: int
+    errors: int
+    result_chars: int
+    est_tokens: int
+
+
+@dataclass(frozen=True)
 class Breakdown:
     """The window's spend: per day, oldest first, every day in it listed; in total; and by what the ticks bought.
 
@@ -167,7 +189,8 @@ class Breakdown:
     the runs of tickets still open are what it cost to get those done. `tickets` and `pull_requests` list what each
     one's own runs cost, the most first. `first_calls` is each kind's first model calls by snapshot, the kinds in
     `KINDS` order and each kind's snapshots by when their first run started; the overseer's include dry runs, whose
-    first call is a live tick's.
+    first call is a live tick's. `tools` is what each kind's tool calls returned, by tool, the most characters first;
+    the overseer's include dry runs too.
     """
 
     since: str
@@ -184,6 +207,7 @@ class Breakdown:
     tickets: list[TicketSpend] = field(default_factory=list[TicketSpend])
     pull_requests: list[PullRequestSpend] = field(default_factory=list[PullRequestSpend])
     first_calls: list[FirstCalls] = field(default_factory=list[FirstCalls])
+    tools: list[ToolSpend] = field(default_factory=list[ToolSpend])
 
 
 def window_start(now: datetime, days: int) -> datetime:
@@ -221,6 +245,7 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
         tickets = _tickets(conn, since, until, done)
         pull_requests = _pull_requests(conn, since, until)
         first_calls = _first_calls(conn, since, until)
+        tools = _tools(conn, since, until)
     for row in rows:
         day = by_day.setdefault(row.day, {})
         for name in _SERIES:
@@ -247,6 +272,7 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
         tickets=tickets,
         pull_requests=pull_requests,
         first_calls=first_calls,
+        tools=tools,
     )
 
 
@@ -480,12 +506,11 @@ def _first_key(named: Iterable[tuple[str | None, float | None]]) -> str | None:
 # Each kind's first model calls in the window, grouped by the snapshot their runs loaded. A run recorded before canopy
 # kept the first call, or that made none, is in no group.
 def _first_calls(conn: sqlite3.Connection, since: str, until: str) -> list[FirstCalls]:
-    tables: dict[Kind, str] = {"overseer": "ticks", **_TABLES}
     found: list[FirstCalls] = []
     for kind in KINDS:
         by_digest: dict[str | None, list[tuple[int, bool, str]]] = {}
         for digest, sent, written, started in conn.execute(
-            f"SELECT {_FIRST_CALL} FROM {tables[kind]} "  # noqa: S608 (a fixed table)
+            f"SELECT {_FIRST_CALL} FROM {_ALL_TABLES[kind]} "  # noqa: S608 (a fixed table)
             "WHERE started_at >= ? AND started_at < ? AND tokens_first_call IS NOT NULL ORDER BY started_at, id",
             (since, until),
         ):
@@ -504,6 +529,32 @@ def _first_calls(conn: sqlite3.Connection, since: str, until: str) -> list[First
             for digest, calls in by_digest.items()
         )
     return found
+
+
+# Each kind's tool calls in the window, by tool, the most characters first. A run whose template printed no events, or
+# recorded before canopy kept its tools, called none.
+def _tools(conn: sqlite3.Connection, since: str, until: str) -> list[ToolSpend]:
+    found: list[ToolSpend] = []
+    for kind in KINDS:
+        table = _ALL_TABLES[kind]
+        for tool, runs, calls, errors, chars in conn.execute(
+            "SELECT t.tool, count(*), SUM(t.calls), SUM(t.errors), SUM(t.result_chars) "  # noqa: S608 (a fixed table)
+            f"FROM run_tools t JOIN {table} r ON r.id = t.run_id "
+            "WHERE t.run_table = ? AND r.started_at >= ? AND r.started_at < ? GROUP BY t.tool",
+            (table, since, until),
+        ):
+            found.append(
+                ToolSpend(
+                    kind=kind,
+                    tool=str(tool),
+                    runs=int(runs),
+                    calls=int(calls),
+                    errors=int(errors),
+                    result_chars=int(chars),
+                    est_tokens=int(chars) // CHARS_PER_TOKEN,
+                )
+            )
+    return sorted(found, key=lambda t: (-t.result_chars, KINDS.index(t.kind), t.tool))
 
 
 # Whether a first call started cold: it wrote most of what it was sent to the cache, where a warm one reads the fixed

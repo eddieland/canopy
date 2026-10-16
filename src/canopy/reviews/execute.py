@@ -173,7 +173,9 @@ def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) ->
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
     output = agent_output.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
-        db.set_run_report(ctx.conn, "review_runs", run_id, output.session_id, output.usage, digest=snapshot.name)
+        db.set_run_report(
+            ctx.conn, "review_runs", run_id, output.session_id, output.usage, digest=snapshot.name, tools=output.tools
+        )
         spent = output.usage.spent() if output.usage else {}
         log.info("reviewer reported", extra={"review_run_id": run_id, "session_id": output.session_id, **spent})
     if done.timed_out:

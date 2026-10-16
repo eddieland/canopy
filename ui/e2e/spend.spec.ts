@@ -109,3 +109,15 @@ test("each ticket's and PR's own runs, the costliest first, open their pages bes
     await prs.first().getByRole('link', { name: 'acme/web#88', exact: true }).click()
     await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
 })
+
+test('the tools whose calls returned the most, by kind, the most first', async ({ page }) => {
+    await page.goto('spend')
+    await settled(page)
+    const tools = page.getByTestId('spend-tool-table').getByTestId('spend-tool')
+    await expect(tools).toHaveCount(11)
+    // The overseer's PR reads over both mock ticks, then the workers' shell calls.
+    await expect(tools.first().getByRole('cell')).toHaveText(['overseer', '25', '0', '325.0k', '81.3k'])
+    await expect(tools.first().getByRole('rowheader')).toHaveText('github_pull_request_read')
+    await expect(tools.nth(1).getByRole('rowheader')).toHaveText('bash')
+    await expect(tools.nth(1).getByRole('cell')).toHaveText(['workers', '119', '11', '279.0k', '69.8k'])
+})
