@@ -43,6 +43,18 @@ describe('highlightHunks', () => {
         expect(of(lines?.[3], 'string').join('')).toContain('end')
     })
 
+    it('reads a side longer than the grammar reads at once as if whole, a string open far down it', async () => {
+        const inside = Array.from({ length: 450 }, (_, i) => add(`line ${i}`))
+        const hunk: DiffHunk = {
+            header: '',
+            lines: [ctx('const a = `start'), ...inside, ctx('end`'), add('const b = 1')],
+        }
+        const [lines] = await highlightHunks('typescript', [hunk])
+        expect(lines?.[400]).toEqual([{ kind: 'string', text: 'line 399' }])
+        expect(of(lines?.at(-1), 'keyword')).toContain('const')
+        expect(lines).toHaveLength(hunk.lines.length)
+    })
+
     it('keeps the hunks and their lines in order, one entry per line', async () => {
         const hunks: DiffHunk[] = [
             { header: '', lines: [ctx('a = 1'), del('b = 2')] },
