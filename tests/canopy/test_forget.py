@@ -8,6 +8,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import conversation, db
+from canopy.core.vocab import RunStatus
 from canopy.loop import attention
 from tests.canopy.helpers import InlineRunner, commit_and_push, journal, unit_of, worker_does
 from tests.canopy.test_loop import context
@@ -167,7 +168,7 @@ def test_forget_refuses_an_unknown_ticket_a_running_run_a_split_parent_and_other
     assert operator("forget", KEY) == 1
     assert f"forget refused (running): run {run_id} (implement) is working {KEY}" in capsys.readouterr().err
 
-    db.finish_ticket_run(conn, run_id, "done", None, messages=[], event=None)
+    db.finish_ticket_run(conn, run_id, RunStatus.DONE, None, messages=[], event=None)
     db.record_split_children(conn, KEY, run_id, {"PROJ-2": "repo"})
     assert operator("forget", KEY) == 1
     assert "forget refused (split): a split made PROJ-2 from PROJ-1" in capsys.readouterr().err

@@ -23,6 +23,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import chore_view, config, conversation, db, treehouse, workspace
 from canopy.core.items import Item
+from canopy.core.vocab import RunStatus
 from canopy.infra import logs, resources
 from canopy.serve import mock_reviews
 from canopy.serve.backend import Backend, Granted, Limit, Reloading
@@ -267,7 +268,7 @@ def _end_run(ctx: Context, run: sqlite3.Row) -> bool:
     if current is None or current["status"] != "running":
         return False
     note = json.dumps({"harness": "the operator stopped the ticket (mock: no process was killed)"})
-    return conversation.close_run(ctx.conn, ctx.config, current, "stopped", note)
+    return conversation.close_run(ctx.conn, ctx.config, current, RunStatus.STOPPED, note)
 
 
 def _reload(_ctx: Context) -> Reloading:

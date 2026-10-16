@@ -17,6 +17,7 @@ from canopy.core import chore_result as result
 from canopy.core import chore_view as view
 from canopy.core import chore_window as window
 from canopy.core import conversation, db, notice, outbox
+from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import lock, logs, procs
 
 if TYPE_CHECKING:
@@ -136,9 +137,9 @@ def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Star
                 ctx.conn,
                 "chore_runs",
                 run_id,
-                "crashed",
+                ChoreRunStatus.CRASHED,
                 note,
-                event=outbox.chore_ended(ctx.config, run, "crashed", note),
+                event=outbox.chore_ended(ctx.config, run, ChoreRunStatus.CRASHED, note),
             )
             raise Refusal("spawn_failed", str(e)) from e
         db.claim_run(ctx.conn, "chore_runs", run_id, pid)

@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, dead_runs, definitions, treehouse
+from canopy.core.vocab import RunStatus
 from canopy.infra import logs, procs
 from canopy.runs import desks, dispatch, tidy
 
@@ -82,11 +83,11 @@ def _close_dead_runs(ctx: Context, log: logs.TickAdapter) -> set[str]:
     """
     returned: set[str] = set()
     for run in dead_runs.find(ctx.conn, "runs"):
-        returned |= end_run(ctx, run, "crashed", "the worker process is gone", log)
+        returned |= end_run(ctx, run, RunStatus.CRASHED, "the worker process is gone", log)
     return returned
 
 
-def end_run(ctx: Context, run: sqlite3.Row, status: str, note: str, log: logs.TickAdapter) -> set[str]:
+def end_run(ctx: Context, run: sqlite3.Row, status: RunStatus, note: str, log: logs.TickAdapter) -> set[str]:
     """Close a run whose `_run` is gone, or was killed, as `status`: stop its worker, tidy and return its slots.
 
     Its desk and its object directory are removed too. Reconcile closes a crashed run this way, and `canopy stop --now`

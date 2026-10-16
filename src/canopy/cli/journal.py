@@ -19,7 +19,7 @@ from canopy.cli.params import (
     TitleType,
     valid_key,
 )
-from canopy.core import conversation, db
+from canopy.core import conversation, db, vocab
 from canopy.infra import logs
 from canopy.loop import attention
 from canopy.reviews import grants
@@ -27,25 +27,6 @@ from canopy.reviews import grants
 if TYPE_CHECKING:
     from canopy.core.context import Context
 
-PHASES = (
-    "ready",
-    "blocked",
-    "running",
-    "pushed_no_pr",
-    "conflicted",
-    "ci_running",
-    "ci_red",
-    "changes_requested",
-    "untrusted_review",
-    "green_unreviewed",
-    "approved",
-    "merged",
-    "needs_human",
-    "human_replied",
-    "split",
-    "review_pending",
-    "review_findings",
-)
 DECIDE_ACTIONS = ("wait", "skip", "done")
 
 
@@ -142,7 +123,7 @@ def ticket_group() -> None:
 )
 @click.option(
     "--phase",
-    type=click.Choice(PHASES),
+    type=click.Choice([p.value for p in vocab.Phase]),
     help="The ticket's phase, or a unit's with --repo: pushed_no_pr to merged are about a PR, so a unit's.",
 )
 @click.option(
@@ -177,7 +158,7 @@ def cmd_ticket_set(
     """
     ctx = open_context(click_ctx)
     unit_pairs = [(name, value) for name, value in cursor_pairs if name in db.UNIT_CURSORS]
-    unit_phase = phase if phase in db.UNIT_PHASES else None
+    unit_phase = phase if phase in vocab.UNIT_PHASES else None
     unit = _unit(ctx, repo)
     if unit is None and (unit_pairs or unit_phase is not None):
         what = f"a {unit_pairs[0][0]} cursor" if unit_pairs else f"the {unit_phase} phase"

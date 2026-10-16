@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import contract, db, notice, outbox, prompts, treehouse
 from canopy.core import review_result as result
+from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import lock, logs, procs
 from canopy.reviews import grants
 
@@ -197,7 +198,12 @@ def _spawn(
     except (OSError, procs.ProcError) as e:
         note = json.dumps({"harness": f"could not start the reviewer: {e}"})
         db.finish_run(
-            ctx.conn, "review_runs", run_id, "crashed", note, event=outbox.review_ended(cfg, run, "crashed", note)
+            ctx.conn,
+            "review_runs",
+            run_id,
+            ReviewRunStatus.CRASHED,
+            note,
+            event=outbox.review_ended(cfg, run, ReviewRunStatus.CRASHED, note),
         )
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, "review_runs", run_id, pid)

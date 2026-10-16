@@ -19,6 +19,7 @@ from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 
 from canopy.core import config, conversation, db, treehouse, workspace
 from canopy.core.context import Context
+from canopy.core.vocab import RunStatus
 from canopy.infra import procs
 from canopy.loop import tick
 from canopy.runs import policy, reconcile
@@ -114,7 +115,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, block: Snaps
             ("CI is down for maintenance until noon.", stamp("09:00"), stamp("12:00")),
         )
     with clock("09:20"):
-        db.finish_run(conn, "runs", split, "done", None)
+        db.finish_run(conn, "runs", split, RunStatus.DONE, None)
         question = db.insert_run(
             conn,
             tick_id=earlier,
@@ -126,7 +127,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, block: Snaps
             private=True,
         )
     with clock("09:30"):
-        db.finish_run(conn, "runs", question, "blocked", None)
+        db.finish_run(conn, "runs", question, RunStatus.BLOCKED, None)
         db.insert_message(
             conn,
             conversation.TICKET,
@@ -138,7 +139,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, block: Snaps
             body="Should `--help` list the hidden commands?",
         )
     with clock("09:40"):
-        db.finish_run(conn, "runs", implement, "done", None)
+        db.finish_run(conn, "runs", implement, RunStatus.DONE, None)
         db.set_unit(conn, "PROJ-1", root, "repo", phase="ci_failed", pr_url=PR, cursors={"ci": "5551"})
         decide(conn, earlier, "PROJ-1", "attention:needs_reviewer", "no reviewer is assigned", repo="repo")
     with clock("09:45"):
@@ -152,7 +153,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, block: Snaps
             runs_dir=runs_dir,
         )
     with clock("09:50"):
-        db.finish_run(conn, "runs", fix, "done", None)
+        db.finish_run(conn, "runs", fix, RunStatus.DONE, None)
         policy.grant(conn, ctx.config, "PROJ-1", "fix-ci", repo="repo", runs=1)
         db.insert_message(
             conn,

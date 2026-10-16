@@ -11,6 +11,7 @@ import click
 from canopy.cli.common import CliError, OverseerCommand, open_context, require_tick
 from canopy.cli.params import COMMENT_ID, REPO, SLUG, TICKET_KEY, CursorType, TextType, truncate
 from canopy.core import db
+from canopy.core.vocab import RunKind
 from canopy.infra import logs
 from canopy.loop import attention, tick
 from canopy.reviews import findings
@@ -22,7 +23,9 @@ if TYPE_CHECKING:
 
 @click.command("dispatch", cls=OverseerCommand)
 @click.argument("key", type=TICKET_KEY)
-@click.option("--kind", required=True, type=click.Choice(policy.DISPATCH_KINDS), help="What the worker does.")
+@click.option(
+    "--kind", required=True, type=click.Choice([str(k) for k in policy.DISPATCH_KINDS]), help="What the worker does."
+)
 @click.option(
     "--label",
     metavar="LABEL",
@@ -204,7 +207,7 @@ def _review_findings(
     """
     if run_id is None:
         return None
-    if kind != "resume":
+    if kind != RunKind.RESUME:
         raise dispatch.Refusal(
             "bad_review", "--review-run names findings for a resume to address; it is for resume only"
         )

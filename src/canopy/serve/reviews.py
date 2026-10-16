@@ -7,10 +7,11 @@ control characters dropped, as every page's does, and the diff within `review_di
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import contract, conversation, db, review_diff
 from canopy.core import review_result as result
+from canopy.core.vocab import ReviewRunStatus
 from canopy.serve.schema import (
     DiffFile,
     DiffHunk,
@@ -31,7 +32,6 @@ if TYPE_CHECKING:
 
 # How many review runs the reviews list carries, newest first.
 RECENT_REVIEWS = 100
-_STATES: dict[str, RunState] = {"running": "running", "done": "done"}
 # Most severe first: a review's worst finding is the first of these it reported.
 _SEVERITIES: tuple[FindingSeverity, ...] = ("blocking", "major", "minor")
 
@@ -90,7 +90,7 @@ def summary(row: sqlite3.Row) -> ReviewSummary:
         ticket_key=str(row["ticket_key"]) if row["ticket_key"] else None,
         repo=str(row["repo"]) if row["repo"] else None,
         status=status,
-        state=_STATES.get(status, "failed"),
+        state=_review_state(status),
         verdict=stored.verdict if stored is not None else None,
         impact=stored.impact if stored is not None else None,
         findings=len(stored.findings) if stored is not None else 0,
@@ -100,6 +100,27 @@ def summary(row: sqlite3.Row) -> ReviewSummary:
         ended_at=db.parse_time(str(row["ended_at"])) if row["ended_at"] else None,
         cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
     )
+
+
+def _review_state(status: str) -> RunState:
+    """What the web UI colors a review run that has `status` as.
+
+    Returns:
+        The run's state: every ending but `done` is failed, as is a status canopy does not know.
+    """
+    try:
+        known = ReviewRunStatus(status)
+    except ValueError:
+        return "failed"
+    match known:
+        case ReviewRunStatus.RUNNING:
+            return "running"
+        case ReviewRunStatus.DONE:
+            return "done"
+        case ReviewRunStatus.FAILED | ReviewRunStatus.UNKNOWN | ReviewRunStatus.TIMEOUT | ReviewRunStatus.CRASHED:
+            return "failed"
+        case _:
+            assert_never(known)
 
 
 def _worst(findings: list[result.Finding]) -> FindingSeverity | None:

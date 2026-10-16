@@ -115,6 +115,12 @@ If code and the design disagree, the design doc wins until a decision entry says
   (`records.fetch_all`, `records.fetch_one`), not as `sqlite3.Row`. A new table gets its row type in the PR that adds
   it, and an old one when a PR already changes its queries. `tests/canopy/test_records.py` holds each row type to its
   table, so a migration that adds a column to a typed table adds the field too.
+- A run's status and kind and a ticket's phase are closed vocabularies in `core/vocab.py`, each a `StrEnum`. New code
+  writes and compares them through its members, not bare strings, and converts a value read from the journal where it
+  branches on it. A branch over one is a `match` ending in `case _: assert_never(...)`, so a new value fails the type
+  check until every branch handles it. click matches an enum choice by its name, so a `click.Choice` over one takes its
+  values. A table made from M36 on constrains each `status`, `kind`, and `phase` column with `CHECK (column IN (...))`;
+  `tests/canopy/test_db.py` fails on one that does not.
 - Hard guards live in code, judgment lives in prompts. Capacity limits, attempt limits, cooldowns, "never merge", and
   "one worker per ticket" are enforced by the harness regardless of what the overseer asks for.
 - Log with `logging`, JSON lines to `.canopy/canopy.log` in the workspace. Every tick has an id that appears in every

@@ -212,6 +212,7 @@ canopy (harness, Python)
     db.py          SQLite journal, migrations; the one lifecycle of every table of detached runs (§6)
     dead_runs.py   what each kind's reconcile shares: runs whose process is gone, their agents killed, closed crashed
     records.py     typed journal rows: a frozen dataclass per table, built by a query and held to its schema
+    vocab.py       the closed vocabularies: a run's status and kind, a ticket's phase (§7, §8), as StrEnums
     items.py       the attention item: its subject, fingerprint, and age
     outbox.py      the events notification sinks receive, recorded with the fact they report (§20)
     pause.py       the loop's pause, which every channel writes: whether `canopy loop` starts another tick (§6)

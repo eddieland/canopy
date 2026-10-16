@@ -21,10 +21,11 @@ import json
 import sqlite3
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, NotRequired, TypedDict
+from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 
 from canopy.core import chore_view, conversation, db
 from canopy.core.items import Item, age, fingerprint, one_line, subject
+from canopy.core.vocab import RunStatus
 from canopy.infra import logs
 from canopy.notify import deliver
 
@@ -37,21 +38,38 @@ ACTION_PREFIX = "attention:"
 # no colon (DESIGN §17), so neither can equal one.
 CHORE_PREFIX = "chore:"
 PR_PREFIX = "pr:"
-# Run statuses a human must look at, and the attention reason each one raises. `unknown` and `timeout` both mean the
-# worker left no usable result line. `blocked` and `stopped` raise none: a blocked worker asked a question, which
-# reaches the operator on the ticket or as `awaiting_reply`, and the operator stopped a stopped one (DESIGN §22).
-RUN_REASONS = {
-    "crashed": "crashed",
-    "unpushed": "unpushed",
-    "unknown": "unknown_result",
-    "timeout": "unknown_result",
-    "failed": "worker_failed",
-}
+
+
+def run_reason(status: RunStatus) -> str | None:
+    """The attention reason a run that ended in `status` raises.
+
+    `unknown` and `timeout` both mean the worker left no usable result line. `blocked` and `stopped` raise none: a
+    blocked worker asked a question, which reaches the operator on the ticket or as `awaiting_reply`, and the operator
+    stopped a stopped one (DESIGN §22).
+
+    Returns:
+        The reason, or None for a status a human need not look at.
+    """
+    match status:
+        case RunStatus.CRASHED:
+            return "crashed"
+        case RunStatus.UNPUSHED:
+            return "unpushed"
+        case RunStatus.UNKNOWN | RunStatus.TIMEOUT:
+            return "unknown_result"
+        case RunStatus.FAILED:
+            return "worker_failed"
+        case RunStatus.RUNNING | RunStatus.DONE | RunStatus.BLOCKED | RunStatus.STOPPED:
+            return None
+        case _:
+            assert_never(status)
+
+
 # A tick that found `canopy` not working for the overseer closes with this status and raises this item (DESIGN §6).
 UNAVAILABLE = "canopy_unavailable"
 # What the harness records itself (`tick._record_harness_items`, and `UNAVAILABLE`), so the overseer does not.
 HARNESS_REASONS = frozenset(
-    {*RUN_REASONS.values(), "awaiting_reply", chore_view.FAILED_REASON, "repo_missing", UNAVAILABLE}
+    {*filter(None, map(run_reason, RunStatus)), "awaiting_reply", chore_view.FAILED_REASON, "repo_missing", UNAVAILABLE}
 )
 # How far back to look when working out how long an item has been open.
 _HISTORY_TICKS = 1000
@@ -244,7 +262,7 @@ class RunItem:
 
 
 def from_runs(conn: sqlite3.Connection) -> list[RunItem]:
-    """Return an item for each open ticket whose latest run ended in a status listed in RUN_REASONS.
+    """Return an item for each open ticket whose latest run ended in a status that raises a `run_reason`.
 
     The cause holds until a newer run starts for the ticket, the ticket is marked done, or the operator forgets its
     work.
@@ -252,7 +270,7 @@ def from_runs(conn: sqlite3.Connection) -> list[RunItem]:
     done = {str(r[0]) for r in conn.execute("SELECT key FROM tickets WHERE done = 1")}
     items: list[RunItem] = []
     for key, run in sorted(db.latest_runs(conn).items()):
-        reason = RUN_REASONS.get(str(run["status"]))
+        reason = run_reason(RunStatus(run["status"]))
         if reason is None or key in done:
             continue
         items.append(RunItem(key, reason, _detail(run)))

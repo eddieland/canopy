@@ -17,6 +17,7 @@ from canopy.cli.main import main
 from canopy.core import conversation, db, definitions, review_diff
 from canopy.core import review_result as result
 from canopy.core.config import load
+from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import procs
 from canopy.loop import attention
 from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, journal, lifelock_left, pool, worker_does
@@ -204,13 +205,13 @@ def test_review_guards(reviews: CanopyEnv, git_pool: GitPool, agent_log: Path) -
         assert main(review(sha=sha), runner=runner) == 0
         assert main(review(sha=sha), runner=runner) == 1  # running
         assert main(review(sha=sha, pr=f"{PR}0"), runner=runner) == 1  # review_capacity: max_reviews is 1
-        assert db.finish_run(conn, "review_runs", 1, "done", json.dumps(CLEAN))
+        assert db.finish_run(conn, "review_runs", 1, ReviewRunStatus.DONE, json.dumps(CLEAN))
         assert runner.run(
             ["treehouse", "return", "--force", str(pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))[0]["path"])]
         ).ok
         assert main(review(sha=sha), runner=runner) == 1  # reviewed
         assert main(review(sha=other), runner=runner) == 0
-        assert db.finish_run(conn, "review_runs", 2, "failed", "{}")
+        assert db.finish_run(conn, "review_runs", 2, ReviewRunStatus.FAILED, "{}")
         assert runner.run(
             ["treehouse", "return", "--force", str(pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))[0]["path"])]
         ).ok

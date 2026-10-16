@@ -18,6 +18,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, notice, outbox, prompts, treehouse
 from canopy.core.context import DISPATCH_LOCK
+from canopy.core.vocab import RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
 from canopy.runs import policy
@@ -39,7 +40,7 @@ JOINT_PR_NOTE = "one per repository, listed under Repositories"
 MAX_MAP = 20_000
 RUNS_DIR = "runs"
 # The kind a notice to workers can hold (DESIGN §8): a dispatch of it refuses when the notice moved mid-tick.
-FIX_CI = "fix-ci"
+FIX_CI = RunKind.FIX_CI
 
 
 class Refusal(Exception):  # noqa: N818  (a refusal is an outcome the overseer is told about, not an error)
@@ -466,7 +467,7 @@ def _branch(ctx: Context, key: str, kind: str, slug: str | None, repos: Sequence
     """
     ticket = db.get_ticket(ctx.conn, key)
     recorded = str(ticket["branch"]) if ticket is not None and ticket["branch"] else None
-    if kind == "implement":
+    if kind == RunKind.IMPLEMENT:
         if recorded is None:
             slug = DEFAULT_SLUG if slug is None else slug
             if not valid_slug(slug):
@@ -731,7 +732,7 @@ def _spawn(
         pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run["log_path"]))
     except (OSError, procs.ProcError) as e:
         note = json.dumps({"harness": f"could not start the worker: {e}"})
-        conversation.close_run(ctx.conn, cfg, run, "crashed", note)
+        conversation.close_run(ctx.conn, cfg, run, RunStatus.CRASHED, note)
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, "runs", run_id, pid)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk)

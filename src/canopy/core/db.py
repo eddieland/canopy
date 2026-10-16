@@ -21,6 +21,7 @@ from canopy.infra import procs
 
 if TYPE_CHECKING:
     from canopy.core.agent_output import Usage
+    from canopy.core.vocab import AnyRunStatus, RunStatus
 
 DB_FILE_NAME = "canopy.db"
 # How long a connection waits for another to release the write lock before its write fails as `database is locked`.
@@ -35,25 +36,6 @@ CLOSED_RATIONALE = "closed"
 TICKET_CURSORS: Mapping[str, str] = {"comment": "last_comment_id", "message": "last_message_id"}
 UNIT_CURSORS: Mapping[str, str] = {"review": "last_review_id", "ci": "last_ci_run_id"}
 CURSOR_COLUMNS: Mapping[str, str] = {**TICKET_CURSORS, **UNIT_CURSORS}
-# The phases about a PR, `pushed_no_pr` to `merged` in the overseer's phase table, are a unit's (DESIGN §7, §18); the
-# others are the ticket's own.
-UNIT_PHASES = frozenset(
-    (
-        "pushed_no_pr",
-        "conflicted",
-        "ci_running",
-        "ci_red",
-        "review_pending",
-        "review_findings",
-        "changes_requested",
-        "untrusted_review",
-        "green_unreviewed",
-        "approved",
-        "merged",
-    )
-)
-
-
 # The tables of detached runs (DESIGN §6): workers' and splits', chores', and reviews'. Each has the same lifecycle,
 # written once below over a table from this closed set: claimed by its process's pid, its agent's pid recorded, its
 # report, and its close. A table name in SQL comes from here, never from input.
@@ -614,7 +596,7 @@ def finish_run(
     conn: sqlite3.Connection,
     table: RunTable,
     run_id: int,
-    status: str,
+    status: AnyRunStatus,
     result_json: str | None,
     *,
     event: Event | None = None,
@@ -633,7 +615,9 @@ def finish_run(
     return closed
 
 
-def _close_run(conn: sqlite3.Connection, table: RunTable, run_id: int, status: str, result_json: str | None) -> bool:
+def _close_run(
+    conn: sqlite3.Connection, table: RunTable, run_id: int, status: AnyRunStatus, result_json: str | None
+) -> bool:
     """Close a running run in `table`, in the caller's transaction. Nothing changes for one already closed.
 
     Returns:
@@ -738,7 +722,7 @@ def set_slot_link(conn: sqlite3.Connection, run_id: int, repo: str, link: bytes 
 def finish_ticket_run(
     conn: sqlite3.Connection,
     run_id: int,
-    status: str,
+    status: RunStatus,
     result_json: str | None,
     *,
     messages: Sequence[tuple[str, str]] = (),

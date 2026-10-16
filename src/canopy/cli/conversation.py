@@ -20,6 +20,7 @@ from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
 from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, spent
 from canopy.core import chore_view, conversation, db, notice, pause, prompts
+from canopy.core.vocab import RunKind
 from canopy.infra import logs
 from canopy.loop import attention
 from canopy.reviews import grants
@@ -261,8 +262,8 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
         )
     granted = policy.grants(ctx.conn)
     for (key, repo), counts in sorted(policy.attempts(ctx.conn).items(), key=str):
-        limit = policy.unit_limits(ctx.config, granted.get((key, repo), {}))["implement"]
-        if key == subject.id and counts["implement"] >= limit:
+        limit = policy.unit_limits(ctx.config, granted.get((key, repo), {}))[RunKind.IMPLEMENT]
+        if key == subject.id and counts[RunKind.IMPLEMENT] >= limit:
             where, flag = ("", "") if repo is None else (f" in {repo}", f" --repo {repo}")
             click.echo(
                 f"It has had {counts['implement']} implement runs{where}, and its limit is {limit}: grant it "
@@ -273,7 +274,7 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
 
 @click.command("grant")
 @click.argument("ref", metavar="REF")
-@click.argument("kind", type=click.Choice((*policy.KINDS, grants.KIND)))
+@click.argument("kind", type=click.Choice([*(str(k) for k in policy.KINDS), grants.KIND]))
 @click.option("--repo", type=REPO, help="The repository of the ticket's unit. Needed when it has had runs in several.")
 @click.option("--runs", type=click.IntRange(min=1), default=1, show_default=True, help="How many more runs to allow.")
 @click.pass_context

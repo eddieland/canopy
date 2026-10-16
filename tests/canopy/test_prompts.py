@@ -2,8 +2,7 @@ import re
 
 import pytest
 
-from canopy.cli.journal import PHASES
-from canopy.core import db, prompts
+from canopy.core import prompts, vocab
 from canopy.core.config import load
 from canopy.infra import resources
 from tests.conftest import CanopyEnv
@@ -365,7 +364,12 @@ def test_ticket_set_accepts_every_phase_in_the_overseer_prompts_table() -> None:
     table = text.split("## Phase table", 1)[1].split("\n## ", 1)[0]
     phases = _PHASE_ROW.findall(table)
     assert phases
-    assert sorted(phases) == sorted(PHASES)
+    assert sorted(phases) == sorted(vocab.Phase)
     # The table says the phases from `pushed_no_pr` to `merged` are a unit's; the CLI then requires --repo for them.
     unit = phases[phases.index("pushed_no_pr") : phases.index("merged") + 1]
-    assert set(unit) == db.UNIT_PHASES
+    assert set(unit) == vocab.UNIT_PHASES
+
+
+def test_every_run_kind_has_a_worker_prompt_and_every_kind_but_split_a_private_one() -> None:
+    assert set(prompts.WORKER) == set(vocab.RunKind)
+    assert set(prompts.WORKER_PRIVATE) == set(vocab.RunKind) - {vocab.RunKind.SPLIT}
