@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AttentionRouteImport } from './routes/attention'
+import { Route as PlanEditorRouteImport } from './routes/plan-editor'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SpendRouteImport } from './routes/spend'
@@ -37,6 +38,11 @@ const IndexRoute = IndexRouteImport.update({
 const AttentionRoute = AttentionRouteImport.update({
   id: '/attention',
   path: '/attention',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlanEditorRoute = PlanEditorRouteImport.update({
+  id: '/plan-editor',
+  path: '/plan-editor',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SearchRoute = SearchRouteImport.update({
@@ -128,6 +134,7 @@ const ChoresNameRunsIdRoute = ChoresNameRunsIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/attention': typeof AttentionRoute
+  '/plan-editor': typeof PlanEditorRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/spend': typeof SpendRoute
@@ -149,6 +156,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/attention': typeof AttentionRoute
+  '/plan-editor': typeof PlanEditorRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/spend': typeof SpendRoute
@@ -171,6 +179,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/attention': typeof AttentionRoute
+  '/plan-editor': typeof PlanEditorRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/spend': typeof SpendRoute
@@ -194,6 +203,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/attention'
+    | '/plan-editor'
     | '/search'
     | '/settings'
     | '/spend'
@@ -215,6 +225,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/attention'
+    | '/plan-editor'
     | '/search'
     | '/settings'
     | '/spend'
@@ -236,6 +247,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/attention'
+    | '/plan-editor'
     | '/search'
     | '/settings'
     | '/spend'
@@ -258,6 +270,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AttentionRoute: typeof AttentionRoute
+  PlanEditorRoute: typeof PlanEditorRoute
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
   SpendRoute: typeof SpendRoute
@@ -291,6 +304,13 @@ declare module '@tanstack/react-router' {
       path: '/attention'
       fullPath: '/attention'
       preLoaderRoute: typeof AttentionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/plan-editor': {
+      id: '/plan-editor'
+      path: '/plan-editor'
+      fullPath: '/plan-editor'
+      preLoaderRoute: typeof PlanEditorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/search': {
@@ -418,6 +438,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AttentionRoute: AttentionRoute,
+  PlanEditorRoute: PlanEditorRoute,
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
   SpendRoute: SpendRoute,

@@ -934,14 +934,18 @@ the state block and the overseer.
   does, and the prompt's obligations come before it. The operator's approval authorizes the `implement`, not what the
   plan's text asks for.
 - Showing it: `canopy show KEY` prints the newest plan, its status, and when it was approved; `canopy show KEY --plans`
-  every plan, oldest first. The web UI's ticket page shows the newest plan, as plain text like a message (§22), with
-  `Approve`, `Ask for changes` (a reply), and `Skip`, and lists earlier plans. `POST /tickets/{key}/plan` with
+  every plan, oldest first, the newest with its open comments. The web UI's ticket page shows the newest plan in the
+  plan editor (§25, Commenting on a plan), where the operator edits it and comments on its passages, with `Approve`,
+  `Ask for changes` (the open comments, each with its passage, and a note, as one reply), and `Skip`, and lists
+  earlier plans. `POST /tickets/{key}/plan` with
   `approve`, `request`, or `skip`, through the same code as the CLI, so with the same refusals. A `plan.proposed`
   event goes to the operator's sinks (§20), with the ticket's title and no plan text.
 - Journal: a migration adds `plans` (id, ticket key, run id, body, created at, status `proposed`, `approved`, or
   `superseded`, approved at and channel) and the ticket's own plan setting (unset, `plan`, or `skip`), set only by the
-  operator's channels. `canopy forget` supersedes a waiting or approved plan, so a forgotten ticket is planned again
-  under `"approve"`. Its hash joins `SHIPPED`, and a row `SEED`, in `tests/canopy/test_db.py`.
+  operator's channels. A plan row records who wrote it, its run or the operator's channel, since an edit in the web
+  UI saves a new plan. `plan_threads` and `plan_replies` hold the operator's comments, the ticket's, anchored by their
+  passage's words. `canopy forget` supersedes a waiting or approved plan, so a forgotten ticket is planned again
+  under `"approve"`. Its hash joins `SHIPPED`, and a row per table `SEED`, in `tests/canopy/test_db.py`.
 - TRUST_MODEL: T1 says an approved plan is data, not an operator instruction; T3 counts plan runs toward capacity and
   attempts; T6 gives the planner no write scope; T8 adds the plan route to the web channel's writes. With the
   operator's approval note in the PR, for those, the overseer prompt, the new prompt, and the `canopy-planner`
@@ -952,17 +956,23 @@ the state block and the overseer.
   the slot is returned; a pushed head holding the file gets a harness note; a reply makes the next plan supersede the
   first; `--skip` lets `implement` through; an empty plan or one over the bound is `unknown`; a `blocked` plan records
   its question; `plan`, `--skip`, and `--approve` refuse inside a run; the planner's definition denies the tracker's
-  write tools; the web route approves; Playwright for the ticket page's buttons.
+  write tools; the web route approves; a comment and an edit saved through the web routes reach the next plan's
+  prompt; Playwright for the ticket page's buttons. The editor's own tests are in: a plan written back as read, HTML
+  and images kept as characters, anchors that survive edits and find nothing for a passage that is gone, and the
+  change request (Vitest), and commenting, editing, resolving, and asking for changes in a browser (Playwright).
 - Open: a plan-and-go mode (`policy.plan = "auto"`) that implements without waiting, if the operator wants plans
   without the gate; whether a ticket that already has a branch can be planned again before a large `resume`; whether
   plans help, compared by attempts and spend per ticket (M33) on planned and unplanned tickets; whether M38 makes the
   plan gate the harness's decision rather than the overseer's.
 
 Accept: the tests above pass. Live: under `"approve"`, a ticket is planned, the operator asks for one change from the
-web UI, approves the second plan from the CLI, and the `implement` that follows names the plan in its summary. A week
-later the plan is still on the ticket's page. Nothing about the plan appears on the ticket.
+web UI by commenting on its passage, approves the second plan from the CLI, and the `implement` that follows names
+the plan in its summary. A week later the plan is still on the ticket's page. Nothing about the plan appears on the
+ticket.
 
-Status: not started.
+Status: in progress. The plan editor is in, over mock data at `/plan-editor`: Markdown in and out, comments anchored
+by their words, and Ask for changes composing the reply (`ui/src/lib/plan-*.ts`, D120). What keeps it open:
+everything in the journal, the CLI, the runs, and the ticket page.
 
 ## M45. canopy's own worktree pools, replacing treehouse in stages
 
