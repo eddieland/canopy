@@ -17,6 +17,11 @@ on:
 permissions:
   contents: read
 
+# Every uv command refuses a uv.lock that is out of date with pyproject.toml, not only the explicit `uv sync
+# --locked`: the `uv run` calls after it, in make and npm scripts, would otherwise re-lock and sync quietly.
+env:
+  UV_LOCKED: "1"
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
