@@ -9,9 +9,10 @@ test.beforeEach(async ({ page }) => {
     await settled(page)
 })
 
-// Selects `text` inside the plan, as a drag over it would.
+// Selects `text` inside the plan, as a drag over it would. ProseMirror reads the page's selection on `selectionchange`,
+// which the browser fires later, so this waits for it: a key pressed next acts on these words, not the ones before.
 async function select(page: Page, text: string): Promise<void> {
-    await plan(page).evaluate((root, wanted) => {
+    await plan(page).evaluate(async (root, wanted) => {
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
         for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
             const at = node.textContent?.indexOf(wanted) ?? -1
@@ -20,8 +21,20 @@ async function select(page: Page, text: string): Promise<void> {
                 range.setStart(node, at)
                 range.setEnd(node, at + wanted.length)
                 const selection = globalThis.getSelection()
+                const current = selection !== null && selection.rangeCount > 0 ? selection.getRangeAt(0) : undefined
+                if (
+                    current?.compareBoundaryPoints(Range.START_TO_START, range) === 0 &&
+                    current.compareBoundaryPoints(Range.END_TO_END, range) === 0
+                ) {
+                    // Already selected: no selectionchange would come.
+                    return
+                }
+                const read = new Promise((resolve) => {
+                    document.addEventListener('selectionchange', resolve, { once: true })
+                })
                 selection?.removeAllRanges()
                 selection?.addRange(range)
+                await read
                 return
             }
         }
