@@ -1275,6 +1275,12 @@ M41, so that the settings page writes the file this milestone adds.
 - What stays in the user config directory, as files rather than keys: the secrets (`listener-secret`, `slack-webhook`,
   `slack-token`) and the sandbox templates (`sandbox/<role>.json`), which every workspace's runs share.
   `paths.prompt_overrides` still defaults to `prompts/` there.
+- No key is held to the user file, the commit trailer and the comment marks included (the operator, 2026-10-16): a
+  workspace whose team marks agent work its own way sets its own.
+- A `paths.*` value in the private file may be relative, and resolves against the state directory:
+  `worker_instructions = "worker-instructions.md"` names `<state_dir>/worker-instructions.md`, private and under the
+  provenance check below. Not against the workspace root, which may be a shared checkout, where a file anyone who can
+  push may change would choose a prompt (T7). In the user file a `paths.*` value stays absolute or starts with `~`.
 - Provenance: D053 checks permissions, not provenance, so a `.canopy/` checked out of a shared workspace repository
   under umask 077 passes it. Today that plants a journal; with the private file it would run commands
   (`runtime.worker_cmd`). So canopy refuses a state directory any of whose paths git tracks: one `git ls-files` at the
@@ -1289,18 +1295,16 @@ M41, so that the settings page writes the file this milestone adds.
   it to what a sandboxed run can neither read nor write. An unsandboxed run can write it, as it can the user file
   today: TRUST_MODEL's residual for unsandboxed runs is unchanged.
 - Docs, in the PR that builds it, with the operator's approval note: TRUST_MODEL T7 (private keys from the user file
-  or the private file, and the provenance control); DESIGN §12 (layers, scopes, the file) and §18 (pool sizes in
-  either file); `README.md` and `docs/GETTING_STARTED.md`, where `canopy init` writes; D016 edited in place, and D066
-  to "Pool sizes are private config".
+  or the private file, and the provenance control); DESIGN §12 (layers, scopes, the file, the `paths.*` rule) and
+  §18 (pool sizes in either file); `README.md` and `docs/GETTING_STARTED.md`, where `canopy init` writes; D016 edited
+  in place, and D066 to "Pool sizes are private config".
 - Tests with the fakes: a key in the private file wins over the same key in the user file and the workspace file; a
   private key in the workspace file is refused, naming the private file; a private file and no user file runs; with
   neither, the error names `canopy init`; a tracked `.canopy/config.toml`, and a tracked journal, refused in a
   workspace that is a git repository; a symlinked, foreign, or group-writable private file refused; `canopy init`
   writes the private file, not the user file; a reload takes up a change to the private file; two workspaces' private
-  files set different `serve.port`s and each loads its own.
-- Open: whether any key stays in the user file alone, such as the commit trailer and the comment marks, which identify
-  the operator's agent work across every workspace; whether a `paths.*` value in the private file may be relative to
-  the workspace root, which T7's rule against relative paths does not need there.
+  files set different `serve.port`s and each loads its own; a relative `paths.*` value in the private file resolves
+  under the state directory, and one in the user file is still refused.
 
 Accept: the tests above pass, and `make install-check`, with `canopy init` writing the private file. Live: the
 operator moves the keys that belong to one workspace into its private file, leaving the rest in the user file; the
