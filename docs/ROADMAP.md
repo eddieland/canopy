@@ -1039,7 +1039,9 @@ and a fresh install from README on a machine with no Go runs a day of `canopy lo
 Status: in progress. Stage 1's suite passes against the fake and against real treehouse at the pinned commit on Linux;
 its check waits on the CI job's first run on macOS. Stage 2 is built: canopy's pool passes every contract case, and
 reconcile's shadow logs `pool_shadow_mismatch`; its check, a week of `canopy loop` with the shadow on, is the
-operator's.
+operator's. Stage 3's choice is built too, ahead of stage 2's check at the operator's request (2026-10-16):
+`pools.backend` picks the pool, each lease goes back to the pool the journal says made it, and sync moves idle slots
+across on a switch. The default stays `"treehouse"` until stage 3's live check passes.
 
 ## Deferred, with the trigger that would unblock each
 

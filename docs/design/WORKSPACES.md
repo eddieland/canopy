@@ -76,6 +76,7 @@ each, the worktree pools, and canopy's state. The loop runs from the workspace r
   repos/api/                 primary clones, one per repository in the map
   repos/web/
   .treehouse/                every repository's treehouse pool
+  pools/api/1/api            canopy's own pools, with `pools.backend = "canopy"` (canopy's pool, below)
   desks/PROJ-12/             one per running joint run: a link to each worktree it leased
     api -> ../../.treehouse/<api pool>/3/api
     web -> ../../.treehouse/<web pool>/1/web
@@ -126,7 +127,7 @@ summary = "Customer web app. Consumes the api's generated client from a release.
   anyway. A tick never clones or changes a remote; a mapped repository with no clone is attention `repo_missing` and
   cannot be dispatched to.
 - `canopy init` writes, overwriting nothing: the workspace file (asking for the tracker provider), a
-  `MAP.md`, a `.gitignore` covering `repos/`, `.treehouse/`, `desks/`, and `.canopy/` (an existing one gains only
+  `MAP.md`, a `.gitignore` covering `repos/`, `.treehouse/`, `pools/`, `desks/`, and `.canopy/` (an existing one gains only
   missing lines), and the user file if missing. It prints the branch protection rules with every mapped repository
   they must be configured in. `canopy init` inside a workspace does the same.
   `canopy init [NAME=]URL...` also does `canopy workspace add` with the URLs, before printing the rules.
@@ -299,8 +300,22 @@ and records a worktree it finds in the pool directory as held; `destroy` runs `g
 ### canopy's pool
 
 canopy's own pool (`core/pool.py`, ROADMAP M45) keeps every guarantee above, and is held to them by the same cases.
-Until stage 3 of M45 it is built beside treehouse and wired to no caller but reconcile's shadow (below).
+`pools.backend` (§12), user-only, chooses which pool makes a workspace's worktrees: `"treehouse"`, the default until M45
+changes it, or `"canopy"`. Every caller reaches either through `pools.Pool` and none learns which it has.
 
+- **A lease goes back where it came from.** The journal records which pool made each lease, `run_slots.pool` and
+  `review_runs.pool`, and a slot is always returned through that pool, whatever `pools.backend` names by then, so
+  switching with runs in flight is safe. Reconcile reads the configured backend's pools, and a failure stops the tick
+  as before; it also reads the other backend's where the workspace has any on disk, so a lease left there still goes
+  back, and a treehouse it cannot run there is logged, not fatal. The state block's leased slots come from both.
+- **Switching** is `canopy workspace sync`'s. To `"canopy"`, it moves each idle treehouse slot into `pools/` with `git
+  worktree move`, which keeps everything in it, ignored files and build caches too; a busy one waits for a later sync,
+  and its lease goes back to treehouse meanwhile. Back to `"treehouse"`, it removes canopy's idle slots as its trim
+  removes a slot, keeping one with anything to lose, and treehouse makes fresh slots: switching back costs only warm
+  caches. Each prints a line per repository, `moved` or `removed`, and exits 1 on a slot it had to keep.
+- **No `post_create`.** canopy's pool runs no hook; what one did moves to `runtime.setup_cmd` (§9, BAZEL.md).
+- **The worktrees page** reads the configured backend's pools at once, a thread each, each read on a journal
+  connection of its own, since canopy's pool reads its leases from the journal (§22).
 - **Layout.** A repository's slots are `<workspace>/pools/<repo>/<N>/<repo>`, numbered from 1, each a detached linked
   worktree of the primary clone. There is no hash of the remote in the path: a workspace's repository names are
   unique, and the pools are the workspace's own (D033).
@@ -332,7 +347,8 @@ Until stage 3 of M45 it is built beside treehouse and wired to no caller but rec
   one, is adopted as an idle slot when it is a sound worktree of the clone. An idle row whose directory is gone is
   forgotten at the next lease. `status` changes nothing.
 
-**The shadow.** While treehouse makes the pools, every tick's reconcile also classifies each idle treehouse slot with
+**The shadow.** While treehouse makes the pools (`pools.backend = "treehouse"`), every tick's reconcile also classifies
+each idle treehouse slot with
 canopy's pool's checks (`pool.classify`) and logs a `pool_shadow_mismatch` line, with the repository, the slot, and
 both answers, wherever they disagree. It changes nothing, and a check that fails is logged, never raised. Each mismatch
 the operator explains becomes a contract case, and canopy's checks are fixed until it passes (ROADMAP M45, stage 2).

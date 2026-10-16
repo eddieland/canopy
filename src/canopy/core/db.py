@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
 from canopy.core import agent_output, records
+from canopy.core.vocab import PoolKind
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -53,13 +54,17 @@ class MigrationError(Exception):
 
 @dataclass(frozen=True)
 class RunSlot:
-    """One slot a run leased: the repository whose pool it came from, the slot, its lease, and the run's base there."""
+    """One slot a run leased: the repository whose pool it came from, the slot, its lease, and the run's base there.
+
+    `pool` is the pool that made the lease, which is the pool it goes back to (DESIGN §18).
+    """
 
     repo: str
     slot_path: Path
     lease_id: str
     lease_holder: str
     base_branch: str
+    pool: PoolKind = PoolKind.TREEHOUSE
 
 
 @dataclass(frozen=True)
@@ -678,9 +683,9 @@ def insert_run(
         run_id = _rowid(cur)
         conn.execute("UPDATE runs SET log_path = ? WHERE id = ?", (str(runs_dir / f"{run_id}.log"), run_id))
         conn.executemany(
-            "INSERT INTO run_slots (run_id, repo, slot_path, lease_id, lease_holder, base_branch) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            [(run_id, s.repo, str(s.slot_path), s.lease_id, s.lease_holder, s.base_branch) for s in slots],
+            "INSERT INTO run_slots (run_id, repo, slot_path, lease_id, lease_holder, base_branch, pool) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [(run_id, s.repo, str(s.slot_path), s.lease_id, s.lease_holder, s.base_branch, s.pool) for s in slots],
         )
         event = started(run_id) if started is not None else None
         if event is not None:
@@ -1079,12 +1084,19 @@ def delete_review_dismissal(conn: sqlite3.Connection, run_id: int, finding: int)
 
 
 def set_review_slot(
-    conn: sqlite3.Connection, run_id: int, *, slot: Path, lease_id: str, lease_holder: str, base_branch: str
+    conn: sqlite3.Connection,
+    run_id: int,
+    *,
+    slot: Path,
+    lease_id: str,
+    lease_holder: str,
+    base_branch: str,
+    pool: PoolKind,
 ) -> None:
-    """Record the slot a review run leased, and the base branch it was leased on."""
+    """Record the slot a review run leased, the base branch it was leased on, and the pool that made the lease."""
     conn.execute(
-        "UPDATE review_runs SET slot_path = ?, lease_id = ?, lease_holder = ?, base_branch = ? WHERE id = ?",
-        (str(slot), lease_id, lease_holder, base_branch, run_id),
+        "UPDATE review_runs SET slot_path = ?, lease_id = ?, lease_holder = ?, base_branch = ?, pool = ? WHERE id = ?",
+        (str(slot), lease_id, lease_holder, base_branch, pool, run_id),
     )
 
 

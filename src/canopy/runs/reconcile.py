@@ -13,10 +13,10 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, assert_never
 
-from canopy.core import conversation, db, dead_runs, definitions, pool, pools, treehouse
-from canopy.core.vocab import RunStatus
+from canopy.core import conversation, db, dead_runs, definitions, pool, pools, workspace
+from canopy.core.vocab import PoolKind, RunStatus
 from canopy.infra import logs, procs
 from canopy.runs import desks, dispatch, tidy
 
@@ -58,11 +58,18 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
         The capacity left, and each cloned repository's slots still leased, for the state block.
 
     Raises:
-        treehouse.TreehouseError: treehouse could not be read or a slot could not be returned. The tick stops.
+        pools.PoolError: the configured backend's pool could not be read or a slot could not be returned. The tick
+            stops.
     """
     ws = ctx.workspace
-    pools = {repo.name: treehouse.status(ctx.runner, pool=ws.pool(repo.name)) for repo in ws.repos if repo.cloned}
-    shadow(ctx.runner, ws, log, pools)
+    found: list[tuple[str, pools.Pool, Sequence[pools.Slot]]] = []
+    for repo in ws.repos:
+        if repo.cloned:
+            ours = ctx.pool(repo.name)
+            found.append((repo.name, ours, ours.status()))
+    if ctx.config.pools.backend is PoolKind.TREEHOUSE:
+        shadow(ctx.runner, ws, log, {name: slots for name, _, slots in found})
+    found += _other_pools(ctx, log)
     returned = _close_dead_runs(ctx, log)
     running = db.running_runs(ctx.conn, "runs")
     running_slots = db.all_run_slots(ctx.conn, [int(r["id"]) for r in running])
@@ -70,7 +77,10 @@ def run(ctx: Context, log: logs.TickAdapter) -> Reconciled:
     # A running review holds a slot too (DESIGN §21); its own reconcile returns it if its `_review` is gone.
     reviews = db.running_runs(ctx.conn, "review_runs")
     held |= {str(r["lease_id"]) for r in reviews if r["lease_id"]}
-    leased = {name: _return_stale(ctx, log, name, slots, held=held, returned=returned) for name, slots in pools.items()}
+    leased: dict[str, list[pools.Slot]] = {}
+    for name, pool_, slots in found:
+        still = _return_stale(log, name, pool_, slots, held=held, returned=returned)
+        leased.setdefault(name, []).extend(still)
     for desk in desks.prune(ws.root, {str(r["ticket_key"]) for r in running}):
         log.warning("desk with no running run; removed", extra={"desk": str(desk)})
     if not running:
@@ -137,7 +147,7 @@ def end_run(ctx: Context, run: sqlite3.Row, status: RunStatus, note: str, log: l
         The lease ids it dealt with, returned or kept, which reconcile then leaves alone.
 
     Raises:
-        treehouse.TreehouseError: a slot could not be returned.
+        pools.PoolError: a slot could not be returned.
     """
     returned: set[str] = set()
     slots = db.run_slots(ctx.conn, int(run["id"]))
@@ -171,12 +181,8 @@ def end_run(ctx: Context, run: sqlite3.Row, status: RunStatus, note: str, log: l
             returned.add(str(slot["lease_id"]))  # kept for the operator: not returned as a stale lease either
             outcomes.append("kept")
             continue
-        outcome = treehouse.return_slot(
-            ctx.runner,
-            Path(slot["slot_path"]),
-            lease_id=str(slot["lease_id"]),
-            lease_holder=str(slot["lease_holder"]),
-            pool=ctx.workspace.pool(slot["repo"]),
+        outcome = ctx.pool_of(PoolKind(slot["pool"]), slot["repo"]).return_slot(
+            Path(slot["slot_path"]), lease_id=str(slot["lease_id"]), lease_holder=str(slot["lease_holder"])
         )
         returned.add(str(slot["lease_id"]))
         outcomes.append(outcome.value)
@@ -189,9 +195,19 @@ def end_run(ctx: Context, run: sqlite3.Row, status: RunStatus, note: str, log: l
 
 
 def _return_stale(
-    ctx: Context, log: logs.TickAdapter, name: str, slots: list[pools.Slot], *, held: set[str], returned: set[str]
+    log: logs.TickAdapter,
+    name: str,
+    pool_: pools.Pool,
+    slots: Sequence[pools.Slot],
+    *,
+    held: set[str],
+    returned: set[str],
 ) -> list[pools.Slot]:
-    """Return repository `name`'s canopy leases that no running run holds. Returns the slots still leased."""
+    """Return repository `name`'s canopy leases in `pool_` that no running run holds.
+
+    Returns:
+        The slots still leased.
+    """
     leased: list[pools.Slot] = []
     for slot in slots:
         if not slot.lease_id or slot.lease_id in returned:
@@ -199,13 +215,7 @@ def _return_stale(
         if slot.canopy_key is None or slot.lease_id in held:
             leased.append(slot)
             continue
-        outcome = treehouse.return_slot(
-            ctx.runner,
-            slot.path,
-            lease_id=slot.lease_id,
-            lease_holder=slot.lease_holder,
-            pool=ctx.workspace.pool(name),
-        )
+        outcome = pool_.return_slot(slot.path, lease_id=slot.lease_id, lease_holder=slot.lease_holder)
         log.warning(
             "canopy lease with no running worker; returned",
             extra={
@@ -217,6 +227,40 @@ def _return_stale(
             },
         )
     return leased
+
+
+def _other_pools(ctx: Context, log: logs.TickAdapter) -> list[tuple[str, pools.Pool, Sequence[pools.Slot]]]:
+    """Read the pools of the backend `pools.backend` does not name, where the workspace has any (DESIGN §18).
+
+    After a switch, their leases still go back to them: a run's when it ends, and one no run holds here. canopy's are
+    read whenever `pools/` holds one; treehouse's whenever `.treehouse/` exists, and a treehouse that cannot be read is
+    logged rather than stopping the tick, since it may be gone.
+
+    Returns:
+        Each repository's name, its pool of the other backend, and that pool's slots.
+    """
+    ws = ctx.workspace
+    found: list[tuple[str, pools.Pool, Sequence[pools.Slot]]] = []
+    match ctx.config.pools.backend:
+        case PoolKind.TREEHOUSE:
+            for repo in ws.repos:
+                if (ws.root / pool.POOLS_DIR / repo.name).is_dir():
+                    other = ctx.pool_of(PoolKind.CANOPY, repo.name)
+                    found.append((repo.name, other, other.status()))
+        case PoolKind.CANOPY:
+            if not (ws.root / workspace.POOLS_DIR).is_dir():
+                return found
+            for repo in ws.repos:
+                if not repo.cloned:
+                    continue
+                other = ctx.pool_of(PoolKind.TREEHOUSE, repo.name)
+                try:
+                    found.append((repo.name, other, other.status()))
+                except pools.PoolError as e:
+                    log.warning("treehouse pool not read", extra={"repo": repo.name, "error": str(e)})
+        case unknown:
+            assert_never(unknown)
+    return found
 
 
 def _prune_definitions(ctx: Context, log: logs.TickAdapter) -> None:

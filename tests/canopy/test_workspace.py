@@ -364,7 +364,7 @@ def test_init_workspace_writes_the_skeleton(
         assert f"wrote   {root / config.WORKSPACE_FILE_NAME}" in out
         assert f"updated {root / '.gitignore'}" in out
         assert "The map lists no repositories yet." in out
-        assert (root / ".gitignore").read_text() == "*.pyc\n/repos/\n/.treehouse/\n/desks/\n/.canopy/\n"
+        assert (root / ".gitignore").read_text() == "*.pyc\n/repos/\n/.treehouse/\n/pools/\n/desks/\n/.canopy/\n"
         assert (root / "MAP.md").read_text().startswith("# Workspace map")
         found = workspace.load(root)
         assert (found.name, found.repos) == ("acme", ())
