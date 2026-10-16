@@ -475,3 +475,16 @@ def test_canopy_spend_prints_the_tools_that_returned_the_most(
         "result_chars": 80_000,
         "est_tokens": 20_000,
     }
+
+
+@pytest.mark.parametrize("table", ["ticks", "runs", "chore_runs", "review_runs"])
+def test_tools_read_only_the_windows_runs(tmp_path: Path, journals: Journals, table: str) -> None:
+    """The run table leads, by its `started_at` index, so the window's cost is its own runs', not the whole history's.
+
+    A journal in a test is too small for a slow plan to show in its time, so the plan is what is held.
+    """
+    conn = journals.open(tmp_path / "canopy.db")
+    sql = spend._TOOLS_SQL.format(table=table)  # noqa: SLF001 (the query the plan is of)
+    plan = [str(row[3]) for row in conn.execute(f"EXPLAIN QUERY PLAN {sql}", (table, at(NOW, 7), at(NOW, 0)))]
+    assert plan[0].startswith(f"SEARCH r USING COVERING INDEX {table}_spent (started_at>? AND started_at<?)"), plan
+    assert plan[1].startswith("SEARCH t USING PRIMARY KEY (run_table=? AND run_id=?)"), plan

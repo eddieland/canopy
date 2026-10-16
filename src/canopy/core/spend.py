@@ -537,12 +537,7 @@ def _tools(conn: sqlite3.Connection, since: str, until: str) -> list[ToolSpend]:
     found: list[ToolSpend] = []
     for kind in KINDS:
         table = _ALL_TABLES[kind]
-        for tool, runs, calls, errors, chars in conn.execute(
-            "SELECT t.tool, count(*), SUM(t.calls), SUM(t.errors), SUM(t.result_chars) "  # noqa: S608 (a fixed table)
-            f"FROM run_tools t JOIN {table} r ON r.id = t.run_id "
-            "WHERE t.run_table = ? AND r.started_at >= ? AND r.started_at < ? GROUP BY t.tool",
-            (table, since, until),
-        ):
+        for tool, runs, calls, errors, chars in conn.execute(_TOOLS_SQL.format(table=table), (table, since, until)):
             found.append(
                 ToolSpend(
                     kind=kind,
@@ -555,6 +550,16 @@ def _tools(conn: sqlite3.Connection, since: str, until: str) -> list[ToolSpend]:
                 )
             )
     return sorted(found, key=lambda t: (-t.result_chars, KINDS.index(t.kind), t.tool))
+
+
+# One kind's tool calls in a window, from its runs that started in it. The run table leads, through its `_spent` index
+# on `started_at` (migration 0022), and `run_tools` is read by its key's prefix: `CROSS JOIN` keeps SQLite from
+# reordering them, which with no statistics it would, reading every `run_tools` row of the kind ever recorded.
+_TOOLS_SQL = (
+    "SELECT t.tool, count(*), SUM(t.calls), SUM(t.errors), SUM(t.result_chars) "
+    "FROM {table} r CROSS JOIN run_tools t ON t.run_table = ? AND t.run_id = r.id "
+    "WHERE r.started_at >= ? AND r.started_at < ? GROUP BY t.tool"
+)
 
 
 # Whether a first call started cold: it wrote most of what it was sent to the cache, where a warm one reads the fixed

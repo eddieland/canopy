@@ -3,7 +3,8 @@
 -- worker or split run, a chore run, or a review run. `tool` is the tool's name as the runtime gives it, an MCP server's
 -- prefixed with the server's; `calls` how many of its calls ended, `errors` how many of those ended in an error, and
 -- `result_chars` the characters of what they returned, output or error, which each later model call reads again. No
--- row for a run whose template prints no events, nor for any run from before this migration.
+-- row for a run whose template prints no events, nor for any run from before this migration. Without a rowid, since
+-- every read is by its key, which would otherwise be stored again in an index of its own.
 
 CREATE TABLE run_tools (
     run_table     TEXT NOT NULL CHECK (run_table IN ('ticks', 'runs', 'chore_runs', 'review_runs')),
@@ -13,4 +14,4 @@ CREATE TABLE run_tools (
     errors        INTEGER NOT NULL,
     result_chars  INTEGER NOT NULL,
     PRIMARY KEY (run_table, run_id, tool)
-);
+) WITHOUT ROWID;
