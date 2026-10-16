@@ -7,7 +7,8 @@ runs](SANDBOXING.md). Next: [Garbage collection](GARBAGE_COLLECTION.md).
 ## 25. Plans before implementing (M44)
 
 Designed, and built only in part (ROADMAP M44, REQUIREMENTS R18): the plan editor (Commenting on a plan, below) is in,
-over mock data. Until M44 lands, a ticket's first run is its `implement`, and §7, §8, §12, §14, §20, and §22 describe
+over mock data, and so are plans' files and rows (Where plans live and Journal, below; `core/plans.py`), which nothing
+writes yet. Until M44 lands, a ticket's first run is its `implement`, and §7, §8, §12, §14, §20, and §22 describe
 canopy as it is. This section says what changes in each.
 
 Today the `implement` worker plans inside its own session, and nothing of that plan survives but the run's summary. A
@@ -322,8 +323,9 @@ ticket's page.
 - A migration adds `plans`: id, ticket key, run id, created at, status (`proposed`, `approved`, or `superseded`), the
   SHA-256 and size of the file as the planner wrote it, and the approved hash, approved at, and channel. No body: the
   text is the plan's file (Where plans live, above). Its `status` column is constrained with `CHECK (status IN
-  (...))`. Rows are never deleted.
-- `tickets` gains the ticket's own plan setting: unset, `plan`, or `skip`.
+  (...))`. Rows are never deleted. A new plan supersedes the ticket's current one in the transaction that records it,
+  and a partial unique index holds each ticket to one plan that is not superseded.
+- `tickets` gains the ticket's own plan setting, `plan_setting`: NULL for unset, `plan`, or `skip`.
 - A plan run is a `runs` row of kind `plan` with its `run_slots`, no branch, and `result_json` the validated result.
   Its report message (§8 step 7) is its summary.
 - `canopy forget` (§22) supersedes a waiting or approved plan, so a forgotten ticket under `"approve"` is planned again.

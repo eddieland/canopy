@@ -225,6 +225,8 @@ canopy (harness, Python)
     outbox.py      the events notification sinks receive, recorded with the fact they report (§20)
     pause.py       the loop's pause, which every channel writes: whether `canopy loop` starts another tick (§6)
     notice.py      the operator's notice to workers, which every channel writes: what every later run hears (§8)
+    plans.py       each plan's file, written once and read bounded, and its row: current, superseded, approved
+                   by its file's hash (§25)
     definitions.py the snapshot of agents/ and skills/ that agent runs load (§13), the private worker's rendered from
                    config; the guards against shadowing them and against naming the tracker's tools (§22)
     prompts.py     prompt files and overrides; rendering worker prompts

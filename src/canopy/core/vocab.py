@@ -1,4 +1,4 @@
-"""The journal's closed vocabularies: a run's status and kind, a ticket's phase, and the pool a lease came from.
+"""The journal's closed vocabularies: a run's status and kind, a ticket's phase, a plan's, and where a lease came from.
 
 Each is a `StrEnum`, so a member is the string the journal stores and compares equal to it, and a misspelled one is a
 type error rather than a silent wrong decision. Code that branches on one matches it with `typing.assert_never` in the
@@ -108,6 +108,22 @@ UNIT_PHASES = frozenset(
         Phase.MERGED,
     }
 )
+
+
+class PlanStatus(StrEnum):
+    """A plan's status, `plans.status` (DESIGN §25): waiting on the operator, approved, or replaced."""
+
+    PROPOSED = "proposed"
+    APPROVED = "approved"
+    # A newer plan, a request for one, a skip, or `canopy forget` replaced it.
+    SUPERSEDED = "superseded"
+
+
+class PlanSetting(StrEnum):
+    """A ticket's own plan setting, `tickets.plan_setting` (DESIGN §25): it overrides `policy.plan`; NULL is unset."""
+
+    PLAN = "plan"
+    SKIP = "skip"
 
 
 class PoolKind(StrEnum):
