@@ -44,6 +44,9 @@ in order:
      ticket whose latest question has no operator message after it (§22), `chore_failed` for each configured chore
      whose latest ended run did not end `ok` (§19), and `repo_missing` for each mapped repository with no clone.
 4. **Render the state block**, the overseer's whole message: a generated `## State` section holding one JSON object.
+   The object is compact JSON, one line with no space after `,` or `:`: the block is written fresh every tick and
+   re-read on every step, and on a six-ticket block it is about 29% fewer tokens than `indent=2` (1,902 against
+   2,705 for the JSON, by the Claude tokenizer the `anthropic` SDK bundled up to 0.34; 2026-10-16).
    The overseer's prompt, `prompts/overseer.md` or the operator's override (§12), is not in it: it is the body of the
    overseer's agent definition in the definitions snapshot (§13), so the runtime sends it as the system prompt, after
    the tool schemas and before the message. The provider caches by content, not by session, so a tick that starts

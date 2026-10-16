@@ -605,7 +605,7 @@ This milestone adds the connectors and the derivation without changing what the 
   read short or named short. TRUST_MODEL T1, with the approval note.
 - Tests with the fakes: `tests/fakes/connector` prints configured lines; a line out of bounds is refused and the
   rest kept; a cut-off output keeps the previous observations; the derivation over journals written by hand, one
-  case per row of the phase table.
+  case per row of the phase table, each a snapshot test (syrupy) as the state block's are.
 
 Accept: written with the design, before work starts. Live, once built: a day of `canopy loop` with both connectors
 against the real queue, and a MEASUREMENTS section giving the agreement between the derivation and the overseer per

@@ -71,9 +71,21 @@ def run_commands(argv: list[str]) -> list[dict[str, object]]:
 
 def queried(argv: list[str]) -> list[list[str]]:
     found = setting(argv, "QUERIED", "[]")
-    if role(argv) != "OVERSEER" or found == "skip" or not argv or '"query_due": true' not in argv[-1]:
+    if role(argv) != "OVERSEER" or found == "skip" or not query_due(argv[-1] if argv else ""):
         return []
     return [["canopy", "queried", *json.loads(found)]]
+
+
+def query_due(prompt: str) -> bool:
+    """Whether `prompt`, an overseer's state block, says the query is due: its JSON between the fences."""
+    _, fenced, rest = prompt.partition("```json\n")
+    if not fenced:
+        return False
+    try:
+        state = json.loads(rest.partition("\n```")[0])
+    except json.JSONDecodeError:
+        return False
+    return isinstance(state, dict) and state.get("query_due") is True
 
 
 def events(argv: list[str]) -> bool:

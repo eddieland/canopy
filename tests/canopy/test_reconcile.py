@@ -118,9 +118,9 @@ def test_dead_worker_is_crashed_and_its_slot_returned(
             ("PROJ-3", "wait"),
         ]
         [prompt] = [r["argv"][-1] for r in map(json.loads, agent_log.read_text().splitlines())]
-        assert '"running": 1' in prompt
-        assert '"available": 1' in prompt
-        assert '"status": "crashed"' in prompt  # the ticket's last run, for the overseer
+        assert '"running":1' in prompt
+        assert '"available":1' in prompt
+        assert '"status":"crashed"' in prompt  # the ticket's last run, for the overseer
 
 
 def test_a_worker_is_alive_while_it_holds_its_lifelock_whatever_its_pid(
@@ -276,8 +276,8 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
     calls = json.loads(treehouse_state.read_text())["calls"]
     assert [c[0] for c in calls] == ["status", "get", "return", "status"]
     prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
-    assert '"last_run": {\n        "run_id": 1,' in prompt
-    assert '"status": "done"' in prompt
+    assert '"last_run":{"run_id":1,' in prompt
+    assert '"status":"done"' in prompt
 
 
 def test_killed_worker_is_detected_on_the_next_tick(
