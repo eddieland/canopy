@@ -78,7 +78,8 @@ jobs:
 The kit's setup script applies these to each repository, and checks them on every reset:
 
 - A ruleset on `main`: no direct pushes, no force pushes, no deletion; a PR required, with one approving review and the
-  `check` status. The org admin bypasses it, and only the reset script uses that.
+  `check` status. It has no bypass list, not even the org admin: a fine-grained token acts as the account that owns
+  it, so a bypass for the operator would let the toy token, and any worker using it, push straight to `main`.
 - Labels: `agent-ready-<you>-toy` (the toy queue label, never the real one), `needs-human`, and `agent`.
 - Workflow permissions read-only by default; "Allow GitHub Actions to create and approve pull requests" on, for the bot.
 
@@ -136,7 +137,9 @@ labels it.
 `kit/reset.sh <repo|all>`, with the operator's admin `gh`:
 
 1. Close every open PR and delete every branch under `agent/`.
-2. Force `main` back to the `seed` tag, through the ruleset's bypass.
+2. Force `main` back to the `seed` tag: set the ruleset's enforcement to disabled, force-push, and set it back to
+   active, re-enabling it on every exit path. Changing a ruleset takes Administration write, which the toy token lacks,
+   so only the operator's own `gh` can open that window.
 3. Close every issue as not planned, then create the catalog again, rewriting catalog slugs to the new `#N`.
 4. Print each scenario's new key, such as `S9 → GH-23`.
 
@@ -159,7 +162,8 @@ Issue numbers never repeat, so a reset pairs with a fresh toy workspace (remove 
 
 ## Order of work
 
-1. Create the org and the kit repository; create the toy token; verify the bot's approval counts (above).
+1. Create the org and the kit repository; create the toy token; verify the bot's approval counts (above); and verify
+   that the toy token is refused a direct push to `main`, a force push, and a change to the ruleset.
 2. `toy-calc` alone: its template, CI, ruleset, bot workflow, about eight catalog issues, and the reset script. Prove
    it with S8 and S9, first `--dry-run`, then for real.
 3. `toy-api` and `toy-web`. Prove them with S13 and S14.
