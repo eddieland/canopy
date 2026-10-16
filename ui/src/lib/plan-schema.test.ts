@@ -2,7 +2,7 @@ import { Editor } from '@tiptap/core'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { ATOM } from '@/lib/plan-anchors'
-import { docText, planExtensions, rangeOf, spanOf } from '@/lib/plan-schema'
+import { docText, planExtensions, rangeOf, readsAsMarkdown, spanOf } from '@/lib/plan-schema'
 
 const editors: Editor[] = []
 
@@ -136,4 +136,28 @@ describe('docText', () => {
         const { text, positions } = docText(open('a\n\nb').state.doc)
         expect(rangeOf(positions, text.indexOf('\n'), text.indexOf('\n') + 1)).toBeUndefined()
     })
+})
+
+describe('readsAsMarkdown', () => {
+    it.each([
+        '## Rollout',
+        'Intro\n- ship it',
+        '1. first',
+        '- [ ] a task',
+        '> a risk',
+        '```\ncode\n```',
+        '| a | b |',
+        'a **bold** word',
+        'run `make check`',
+        'see [the docs](https://x.test)',
+    ])('reads %j as Markdown', (text) => {
+        expect(readsAsMarkdown(text)).toBe(true)
+    })
+
+    it.each(['Just a sentence.', 'https://x.test/a', '2 * 3 = 6', '#hashtag', '-5 degrees'])(
+        'reads %j as text',
+        (text) => {
+            expect(readsAsMarkdown(text)).toBe(false)
+        },
+    )
 })

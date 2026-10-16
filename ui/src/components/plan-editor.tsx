@@ -91,6 +91,9 @@ export function PlanEditor({
         editable,
         // The editor renders on the first pass, so the plan never paints empty first.
         immediatelyRender: true,
+        // Pasted Markdown is read whole (`src/lib/plan-schema.ts`), so the marks' own paste rules would add nothing but
+        // turn a Shift paste's `**bold**` bold. Typed Markdown (`## `, `**`) still formats, by the input rules.
+        enablePasteRules: false,
         // What a render shows is selected below (`useEditorState`), so a keystroke re-renders only what it changes.
         shouldRerenderOnTransaction: false,
         editorProps: {

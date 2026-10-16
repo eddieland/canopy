@@ -42,6 +42,15 @@ async function caretAt(page: Page, id: string, offset: number): Promise<void> {
     await page.mouse.click(point.x, point.y)
 }
 
+// Pastes `text` into the plan as the browser would from a clipboard holding it as plain text alone.
+async function paste(page: Page, text: string): Promise<void> {
+    await plan(page).evaluate((root, value) => {
+        const data = new DataTransfer()
+        data.setData('text/plain', value)
+        root.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+    }, text)
+}
+
 function plan(page: Page): Locator {
     return page.getByRole('textbox', { name: 'Plan', exact: true })
 }
@@ -243,6 +252,38 @@ test.describe('on half a monitor', () => {
         const box = await header.boundingBox()
         expect((await passage.boundingBox())?.y).toBeGreaterThanOrEqual((box?.y ?? 0) + (box?.height ?? 0))
     })
+})
+
+test('Markdown pasted into the plan becomes the headings, lists, and marks it writes', async ({ page }) => {
+    await plan(page).locator('blockquote p').click()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Enter')
+    await paste(page, '## Rollout\n\n- **ship** behind a flag\n- remove the flag')
+    await expect(plan(page).getByRole('heading', { level: 2, name: 'Rollout' })).toBeVisible()
+    await expect(plan(page).locator('li').filter({ hasText: 'remove the flag' })).toBeVisible()
+    await expect(plan(page).locator('strong').filter({ hasText: 'ship' })).toBeVisible()
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    await expect(page.getByLabel('Plan Markdown')).toContainText('## Rollout')
+    await expect(page.getByLabel('Plan Markdown')).toContainText('- **ship** behind a flag')
+})
+
+test('inline Markdown pasted into a sentence stays in it, and prose or a Shift paste stays as written', async ({
+    page,
+}) => {
+    await select(page, 'Scheduling exports.')
+    await paste(page, 'Scheduling `cron` exports.')
+    await expect(plan(page).locator('li code').filter({ hasText: 'cron' })).toBeVisible()
+    await select(page, "Excel's own format")
+    await paste(page, 'Spreadsheet formats')
+    await expect(plan(page).getByText('Spreadsheet formats, which the ticket')).toBeVisible()
+    await select(page, 'Spreadsheet formats')
+    // Ctrl+Shift+V, as the browser pastes plain text: Shift held in the plan.
+    await plan(page).focus()
+    await page.keyboard.down('Shift')
+    await paste(page, '**Spreadsheets** and `.ods`')
+    await page.keyboard.up('Shift')
+    await expect(plan(page).getByText('**Spreadsheets** and `.ods`, which the ticket')).toBeVisible()
 })
 
 test('resolving a thread folds it away and takes its highlight off the plan', async ({ page }) => {
