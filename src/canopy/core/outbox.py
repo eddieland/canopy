@@ -7,15 +7,15 @@ event is recorded. Text fields are cut to the limits DESIGN §20 lists and kept 
 
 from __future__ import annotations
 
-import json
 import sqlite3
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import review_result
+from canopy.core import contract, review_result
 from canopy.core.db import Event
 
 if TYPE_CHECKING:
+    from canopy.core import records
     from canopy.core.config import Config
     from canopy.core.vocab import ChoreRunStatus, ReviewRunStatus, RunStatus
 
@@ -144,14 +144,14 @@ def run_ended(
     def build(message: int | None) -> Event | None:
         if not config.notify.takes(RUNS):
             return None
-        result = _object(result_json)
+        result = contract.stored_object(result_json)
         prs = result.get("prs")
         pr = result.get("pr")
         pr_urls: list[str] = [str(u) for u in prs.values() if u] if isinstance(prs, dict) else []
         if not pr_urls and pr:
             pr_urls = [str(pr)]
         question = result.get("question") if status == "blocked" else None
-        summary = result.get("harness") or result.get("summary")
+        summary = contract.stored_note(result)
         fields: RunEnded = {
             "ticket": run["ticket_key"],
             "run": run["id"],
@@ -175,9 +175,9 @@ def chore_ended(
     """Return the `chore.ended` event for run `run_id` of `chore`, or None if no sink takes chores."""
     if not config.notify.takes(CHORES):
         return None
-    result = _object(result_json)
+    result = contract.stored_object(result_json)
     findings = result.get("findings")
-    summary = result.get("harness") or result.get("summary")
+    summary = contract.stored_note(result)
     fields: ChoreEnded = {
         "chore": chore,
         "run": run_id,
@@ -188,15 +188,17 @@ def chore_ended(
     return Event(CHORES, "chore.ended", fields)
 
 
-def review_ended(config: Config, run: sqlite3.Row, status: ReviewRunStatus, result_json: str | None) -> Event | None:
+def review_ended(
+    config: Config, run: records.ReviewRun, status: ReviewRunStatus, result_json: str | None
+) -> Event | None:
     """Return the `review.ended` event for a review run, or None if no sink takes reviews."""
     if not config.notify.takes(REVIEWS):
         return None
     result = review_result.stored(result_json)
     fields: ReviewEnded = {
-        "pr": run["pr_url"],
-        "ticket": run["ticket_key"],
-        "run": run["id"],
+        "pr": run.pr_url,
+        "ticket": run.ticket_key,
+        "run": run.id,
         "status": status,
         "verdict": result.verdict if result is not None else None,
         "impact": result.impact if result is not None else None,
@@ -234,15 +236,3 @@ def sink_failing(sink: str, error: str) -> Event:
     """
     fields: SinkFailing = {"sink": sink, "error": cut(error, DETAIL_LIMIT)}
     return Event(LOOP, "loop.sink_failing", fields)
-
-
-def _object(result_json: str | None) -> Mapping[str, object]:
-    if not result_json:
-        return {}
-    try:
-        parsed: object = json.loads(result_json)
-    except json.JSONDecodeError:
-        return {}
-    if not isinstance(parsed, dict):
-        return {}
-    return {str(k): v for k, v in parsed.items()}

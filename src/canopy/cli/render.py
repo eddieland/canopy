@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from canopy.core import contract, db, records
@@ -36,15 +37,15 @@ def one_line(text: str) -> str:
     return flat if len(flat) <= SUMMARY_WIDTH else flat[: SUMMARY_WIDTH - 3] + "..."
 
 
-def phase_of(conn: sqlite3.Connection, ticket: sqlite3.Row) -> str:
+def phase_of(conn: sqlite3.Connection, ticket: records.Ticket) -> str:
     """A ticket's phase as the operator reads it: the recorded one, else what the last tick decided, else unseen.
 
     Returns:
         The phase to print. When none is recorded, a note naming the last decision about the ticket, if there is one.
     """
-    if ticket["phase"]:
-        return str(ticket["phase"])
-    decided = db.last_decision_of(conn, str(ticket["key"]))
+    if ticket.phase is not None:
+        return ticket.phase
+    decided = db.last_decision_of(conn, ticket.key)
     return f"not recorded, last decision {decided}" if decided is not None else "not seen by a tick yet"
 
 
@@ -57,7 +58,7 @@ def result_of(run: sqlite3.Row | records.Row) -> dict[str, object]:
     return contract.stored_object(records.columns(run)["result_json"])
 
 
-def prs_of(result: dict[str, object]) -> list[str]:
+def prs_of(result: Mapping[str, object]) -> list[str]:
     """The PRs a run's result named, each a plain https:// URL; anything else is not printed.
 
     Returns:

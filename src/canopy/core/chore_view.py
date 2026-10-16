@@ -6,17 +6,16 @@ history, and nothing about it reaches the overseer, the attention list, or notif
 
 from __future__ import annotations
 
-import json
 import sqlite3
 import threading
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, TypedDict
 
 from canopy.core import chore_result as result
 from canopy.core import chore_window as window
-from canopy.core import db, records
+from canopy.core import contract, db, records
 from canopy.core.vocab import ChoreRunStatus
 
 if TYPE_CHECKING:
@@ -38,7 +37,7 @@ def configured(config: Config, workspace: Workspace) -> dict[str, Chore]:
 
 
 def defined(config: Config, workspace: Workspace) -> dict[str, Chore]:
-    """Return the chores the user config defines for this workspace, by name, even when `max_chores` is 0.
+    """Return the chores the config defines for this workspace, by name, even when `max_chores` is 0.
 
     A chore that lists `workspaces` runs only in those, named as the workspace is (its map's name, or a workspace of
     one's repository name).
@@ -281,16 +280,7 @@ def failed_items(conn: sqlite3.Connection, config: Config, workspace: Workspace)
 
 
 def _detail(run: records.ChoreRun) -> str:
-    note = ""
-    if run.result_json:
-        try:
-            stored: object = json.loads(run.result_json)
-        except json.JSONDecodeError:
-            stored = None
-        if isinstance(stored, dict):
-            harness: object = stored.get("harness")
-            summary: object = stored.get("summary")
-            note = str(harness or summary or "")
+    note = contract.stored_note(contract.stored_object(run.result_json))
     text = f"chore run {run.id} ended {run.status}"
     if note:
         text += f": {note}"
@@ -329,7 +319,7 @@ class ChoreSummary(TypedDict):
     findings: list[FindingRef]
 
 
-def state_section(states_: list[ChoreState], now: datetime) -> list[ChoreSummary]:
+def state_section(states_: Iterable[ChoreState], now: datetime) -> list[ChoreSummary]:
     """Return the state block's `chores`: each configured chore, for the overseer to run or wait on (DESIGN §19)."""
     section: list[ChoreSummary] = []
     for state in states_:
@@ -337,13 +327,13 @@ def state_section(states_: list[ChoreState], now: datetime) -> list[ChoreSummary
         latest_summary: LatestRun | None = None
         if latest is not None:
             stored = result.stored(latest.result_json)
-            harness = _harness(latest.result_json)
+            harness = contract.stored_object(latest.result_json).get("harness")
             latest_summary = {
                 "run_id": latest.id,
                 "status": latest.status,
                 "started_at": latest.started_at,
                 "ended_at": latest.ended_at,
-                "summary": harness or (stored.summary if stored is not None else None),
+                "summary": str(harness) if harness else (stored.summary if stored is not None else None),
             }
         due = state.due_at(now)
         section.append(
@@ -361,16 +351,3 @@ def state_section(states_: list[ChoreState], now: datetime) -> list[ChoreSummary
             }
         )
     return section
-
-
-def _harness(result_json: str | None) -> str | None:
-    if not result_json:
-        return None
-    try:
-        stored: object = json.loads(result_json)
-    except json.JSONDecodeError:
-        return None
-    if isinstance(stored, dict):
-        harness: object = stored.get("harness")
-        return str(harness) if harness else None
-    return None

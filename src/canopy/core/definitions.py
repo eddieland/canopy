@@ -4,13 +4,13 @@ canopy snapshots its bundled `agents/` and `skills/` into `<state_dir>/runtime/<
 contents. A snapshot is written to a temporary directory and renamed into place, so a run never sees a partial one.
 Command templates name it with `{definitions_dir}`, and OpenCode reads it through `OPENCODE_CONFIG_DIR`.
 
-Three definitions are rendered from config. `canopy-worker-private` gets the tracker's MCP server and the tools of it a
-private worker may call (`render_private`, DESIGN §22). Both workers get the rule that lets them push a rebased branch
-with a lease when `trust.rebase` is set (`render_rebase`, DESIGN §8). `canopy-overseer` gets the overseer's prompt, the
-operator's override if any, and the tracker's skill if canopy ships one, as its body (`render_overseer`): the body is
-the agent's system prompt, which the provider caches across ticks, where the state block, the tick's message, changes
-every tick (DESIGN §6). The digest covers the rendered text, so a config or override change makes a new snapshot rather
-than changing one a run may be loading.
+Four definitions are rendered from config. `canopy-worker-private` and `canopy-planner` get the tracker's MCP server and
+the tools of it they may call, its read tools (`render_private`, DESIGN §22, §25). Both workers get the rule that lets
+them push a rebased branch with a lease when `trust.rebase` is set (`render_rebase`, DESIGN §8). `canopy-overseer` gets
+the overseer's prompt, the operator's override if any, and the tracker's skill if canopy ships one, as its body
+(`render_overseer`): the body is the agent's system prompt, which the provider caches across ticks, where the state
+block, the tick's message, changes every tick (DESIGN §6). The digest covers the rendered text, so a config or override
+change makes a new snapshot rather than changing one a run may be loading.
 
 OpenCode merges a repository's definition of an agent into canopy's, and a repository that repeats one of canopy's
 permission patterns can put its own rules after it (D044). So a run refuses to start in a directory whose OpenCode
@@ -25,7 +25,7 @@ import os
 import shutil
 import tempfile
 import time
-from collections.abc import Mapping
+from collections.abc import Collection, Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -42,6 +42,9 @@ _STALE_TMP_SECONDS = 3600
 WORKER = "canopy-worker"
 PRIVATE_WORKER = "canopy-worker-private"
 _PRIVATE_FILE = f"agents/{PRIVATE_WORKER}.md"
+PLANNER = "canopy-planner"
+# The definitions that may call only the tracker's read tools, rendered at their marked line.
+_READ_ONLY_TRACKER_FILES = (_PRIVATE_FILE, f"agents/{PLANNER}.md")
 _WORKER_FILES = (f"agents/{WORKER}.md", _PRIVATE_FILE)
 # The line of the shipped worker definitions the rules for a rebased branch's push are rendered at.
 _REBASE_MARKER = "    # canopy: rebase rules\n"
@@ -52,7 +55,7 @@ _REBASE_RULES = (
     '    "git push *--force": deny\n',
     '    "git push *--force *": deny\n',
 )
-# The line of the shipped private worker definition the tracker's rules are rendered at.
+# The line of the shipped private worker's and planner's definitions the tracker's rules are rendered at.
 _TOOLS_MARKER = "  # canopy: tracker tools\n"
 OVERSEER = "canopy-overseer"
 _OVERSEER_FILE = f"agents/{OVERSEER}.md"
@@ -68,19 +71,18 @@ def _files(root: Path) -> list[Path]:
     return sorted(p for p in root.rglob("*") if p.is_file())
 
 
-def render_private(text: str, tools: TrackerTools | None) -> str:
-    """Return the private worker's definition with the tracker's rules at its marked line (DESIGN §22).
+def render_private(text: str, tools: TrackerTools | None, name: str = _PRIVATE_FILE) -> str:
+    """Return definition `name`, the private worker's or the planner's, with the tracker's rules at its marked line.
 
     Every tool of the server is denied by a wildcard and the allowed ones named after it: the last matching rule wins
-    (D021). With no tools known, the marked line stays as it is; dispatch refuses a private run then (`no_read_tools`).
+    (D021). With no tools known, the marked line stays as it is; dispatch refuses a private run or a plan then
+    (`no_read_tools`, DESIGN §22, §25).
 
     Raises:
         DefinitionsError: `text` has no marked line to render the tracker's tools at.
     """
     if _TOOLS_MARKER not in text:
-        raise DefinitionsError(
-            f"{_PRIVATE_FILE} has no line {_TOOLS_MARKER.strip()!r} to render the tracker's tools at"
-        )
+        raise DefinitionsError(f"{name} has no line {_TOOLS_MARKER.strip()!r} to render the tracker's tools at")
     if tools is None:
         return text
     rules = [f'  "{tools.server}_*": deny\n', *(f'  "{tools.server}_{tool}": allow\n' for tool in tools.allowed)]
@@ -131,9 +133,9 @@ def sources(config: Config | None = None) -> dict[str, bytes]:
     for name, root in (("agents", resources.agents_dir()), ("skills", resources.skills_dir())):
         for path in _files(root):
             found[f"{name}/{path.relative_to(root).as_posix()}"] = path.read_bytes()
-    if config is not None and _PRIVATE_FILE in found:
-        text = found[_PRIVATE_FILE].decode()
-        found[_PRIVATE_FILE] = render_private(text, config.tracker.tools()).encode()
+    for rel in _READ_ONLY_TRACKER_FILES:
+        if config is not None and rel in found:
+            found[rel] = render_private(found[rel].decode(), config.tracker.tools(), rel).encode()
     for rel in _WORKER_FILES:
         if config is not None and rel in found:
             found[rel] = render_rebase(found[rel].decode(), rel, rebase=config.trust.rebase).encode()
@@ -250,7 +252,7 @@ def prune(state_dir: Path, keep: Path) -> list[Path]:
     return removed
 
 
-def shadowing(root: Path, names: list[str] | None = None) -> list[Path]:
+def shadowing(root: Path, names: Collection[str] | None = None) -> list[Path]:
     """Return the files in `root`'s OpenCode config that define, or may define, one of canopy's agents.
 
     That is an agent or mode file with a canopy agent's name under `.opencode/`, and an `opencode.json` or
@@ -272,7 +274,7 @@ def shadowing(root: Path, names: list[str] | None = None) -> list[Path]:
     return found
 
 
-def shadowing_message(found: list[Path]) -> str:
+def shadowing_message(found: Iterable[Path]) -> str:
     """Explain what `shadowing` found and what to do about it.
 
     Returns:
@@ -302,7 +304,7 @@ def naming_tools(root: Path, server: str) -> list[Path]:
     return [p for p in candidates if p.is_file() and needle in p.read_text(errors="replace")]
 
 
-def naming_tools_message(server: str, found: list[Path]) -> str:
+def naming_tools_message(server: str, found: Iterable[Path]) -> str:
     """Explain what `naming_tools` found and what to do about it.
 
     Returns:

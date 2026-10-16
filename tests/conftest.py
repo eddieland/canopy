@@ -159,6 +159,14 @@ class CanopyEnv:
     def write_shared(self, text: str) -> None:
         self.shared_file.write_text(text)
 
+    @property
+    def private_file(self) -> Path:
+        """The workspace's private config file, which no test writes unless it calls `write_private`."""
+        return self.state_dir / "config.toml"
+
+    def write_private(self, text: str) -> None:
+        self.private_file.write_text(text)
+
 
 REPO_NAME = "repo"
 SHARED_TOML = f"""\
@@ -185,6 +193,7 @@ overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent cano
 worker_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker {prompt}'
 private_worker_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker-private {prompt}'
 split_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-splitter {prompt}'
+plan_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-planner --format json {prompt}'
 
 [paths]
 """

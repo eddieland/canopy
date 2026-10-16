@@ -1,6 +1,6 @@
 import { Check, MessageSquarePlus, Reply, RotateCcw, Send, Trash2 } from 'lucide-react'
-import { useId, useState } from 'react'
-import type { KeyboardEvent, SubmitEvent } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
+import type { KeyboardEvent, Ref, SubmitEvent } from 'react'
 
 import { Age } from '@/components/age'
 import { Textarea } from '@/components/input'
@@ -15,6 +15,16 @@ import type { PlanThread } from '@/lib/plan-threads'
 import { sends, useSendKey } from '@/lib/send-key'
 import { cn } from '@/lib/utils'
 
+/** A comment being written: the passage it is on and what it says so far. */
+export interface Draft {
+    /** The passage, quoted. */
+    quote: string
+    /** What the comment says so far. */
+    body: string
+    /** Counts each time the operator asks to comment, so the form opens again, and takes the focus, on each. */
+    opened: number
+}
+
 /** What the operator can do with a plan's threads, from its comments column. */
 export interface ThreadActions {
     /** Shows a thread's passage in the plan and marks it the one open. */
@@ -25,21 +35,28 @@ export interface ThreadActions {
     onResolve: (id: string, resolved: boolean) => void
     /** Deletes a thread and its replies. */
     onDelete: (id: string) => void
+    /** Has a thread's comment, or with `replyId` one of its replies, say `body` instead. */
+    onEdit: (id: string, body: string, replyId?: string) => void
 }
 
 /**
- * A plan's comments, as a column beside it: the comment being written, if any, then each open thread in the order the
- * plan reads, those whose passage is gone last with a chip saying so, then the resolved ones folded under a
- * `Disclosure`. A thread is its passage, quoted, the comment and its replies, and its actions; the open one, whose
- * passage the plan shows highlighted, sits on the accent's tint. Every comment is the operator's, but it is journal
- * text all the same, so it is rendered as text with its URLs linked (D113).
+ * A plan's comments, as a column beside it: each open thread in the order the plan reads, with the comment being
+ * written, if any, in its place among them; then those whose passage is gone, with a chip saying so; then the resolved
+ * ones folded under a `Disclosure`. The open threads and the comment being written carry `data-align`, so that
+ * `alignComments` (`src/lib/plan-margin.ts`) can set each beside its passage; `listRef` is the list they sit in. A
+ * thread is its passage, quoted, the comment and its replies, and its actions; the open one, whose passage the plan
+ * shows highlighted, sits on the accent's tint. Every comment is the operator's, but it is journal text all the same,
+ * so it is rendered as text with its URLs linked (D113).
  */
 export function PlanThreads({
     threads,
     found,
     active,
     draft,
+    draftAt,
+    listRef,
     editable,
+    onDraftChange,
     onDraftSubmit,
     onDraftCancel,
     ...actions
@@ -50,10 +67,16 @@ export function PlanThreads({
     found: ReadonlySet<string>
     /** The thread open, if any. */
     active: string | undefined
-    /** The passage a comment is being written on, if one is. */
-    draft: string | undefined
+    /** The comment being written, if one is. */
+    draft: Draft | undefined
+    /** How many of the open threads found in the plan come before the comment being written, in the plan's order. */
+    draftAt: number
+    /** The list of comments, for `alignComments`. */
+    listRef?: Ref<HTMLDivElement>
     /** Whether the operator can comment, reply, and resolve; without it the threads are read only. */
     editable: boolean
+    /** Called with what the comment being written says, as the operator types it. */
+    onDraftChange: (body: string) => void
     /** Adds the comment being written. */
     onDraftSubmit: (body: string) => void
     /** Drops the comment being written. */
@@ -61,13 +84,34 @@ export function PlanThreads({
 }) {
     const [showResolved, setShowResolved] = useState(false)
     const open = threads.filter((thread) => !thread.resolved)
+    const placed = open.filter((thread) => found.has(thread.id))
+    const lost = open.filter((thread) => !found.has(thread.id))
     const resolved = threads.filter((thread) => thread.resolved)
+    const card = (thread: PlanThread) => (
+        <ThreadCard
+            key={thread.id}
+            thread={thread}
+            lost={!found.has(thread.id)}
+            active={thread.id === active}
+            editable={editable}
+            {...actions}
+        />
+    )
     return (
-        <div className="flex flex-col">
+        <div ref={listRef} className="plan-margin flex flex-col">
+            {placed.slice(0, draftAt).map((thread) => card(thread))}
             {draft !== undefined && (
-                <div className="border-b bg-accent/14 px-3 py-2.5">
-                    <Quote text={draft} />
-                    <CommentForm label="Comment" submit="Comment" onSubmit={onDraftSubmit} onCancel={onDraftCancel} />
+                <div data-align="draft" className="border-b bg-accent/14 px-3 py-2.5">
+                    <Quote text={draft.quote} />
+                    <CommentForm
+                        key={draft.opened}
+                        label="Comment"
+                        submit="Comment"
+                        value={draft.body}
+                        onValueChange={onDraftChange}
+                        onSubmit={onDraftSubmit}
+                        onCancel={onDraftCancel}
+                    />
                 </div>
             )}
             {open.length === 0 && draft === undefined && (
@@ -75,16 +119,8 @@ export function PlanThreads({
                     {editable ? 'no open comments yet: select text in the plan, then Comment' : 'no open comments now'}
                 </Empty>
             )}
-            {open.map((thread) => (
-                <ThreadCard
-                    key={thread.id}
-                    thread={thread}
-                    lost={!found.has(thread.id)}
-                    active={thread.id === active}
-                    editable={editable}
-                    {...actions}
-                />
-            ))}
+            {placed.slice(draftAt).map((thread) => card(thread))}
+            {lost.map((thread) => card(thread))}
             {resolved.length > 0 && (
                 <Collapsible open={showResolved} onOpenChange={setShowResolved} className="border-t px-1 py-1">
                     <Disclosure open={showResolved} what={`${resolved.length} resolved`} />
@@ -168,6 +204,9 @@ export function AskForChanges({
     )
 }
 
+// What `ThreadCard` edits when it edits the comment rather than a reply.
+const COMMENT = 'comment'
+
 function ThreadCard({
     thread,
     lost,
@@ -177,12 +216,27 @@ function ThreadCard({
     onReply,
     onResolve,
     onDelete,
+    onEdit,
 }: ThreadActions & { thread: PlanThread; lost: boolean; active: boolean; editable: boolean }) {
     const [replying, setReplying] = useState(false)
+    // What is being edited: the comment, or a reply by its id.
+    const [editing, setEditing] = useState<string | undefined>(undefined)
+    const [deleting, setDeleting] = useState(false)
+    // An open thread's words can be edited while nothing else in its card is open.
+    const startEdit = editable && !thread.resolved && editing === undefined && !replying && !deleting
+    // Keep gives the focus back to Delete, which opened the question, rather than drop it to the page's top.
+    const [kept, setKept] = useState(false)
+    const deleteAction = useRef<HTMLButtonElement>(null)
+    useEffect(() => {
+        if (kept) {
+            deleteAction.current?.focus()
+        }
+    }, [kept])
     return (
         <article
             data-thread={thread.id}
             data-active={active}
+            data-align={lost || thread.resolved ? undefined : thread.id}
             aria-label={`Comment on “${thread.anchor.quote}”`}
             className={cn(
                 'flex flex-col gap-1.5 border-b px-3 py-2.5 last:border-b-0',
@@ -195,10 +249,46 @@ function ThreadCard({
                 {lost && <Chip className="mt-0.5">passage gone</Chip>}
                 {thread.resolved && <Chip className="mt-0.5">resolved</Chip>}
             </div>
-            <Said body={thread.body} at={thread.at} />
+            {editing === COMMENT ? (
+                <CommentForm
+                    label="Edit comment"
+                    submit="Save"
+                    initial={thread.body}
+                    onSubmit={(body) => {
+                        onEdit(thread.id, body)
+                        setEditing(undefined)
+                    }}
+                    onCancel={() => setEditing(undefined)}
+                />
+            ) : (
+                <Said
+                    body={thread.body}
+                    at={thread.at}
+                    what="comment"
+                    onEdit={startEdit ? () => setEditing(COMMENT) : undefined}
+                />
+            )}
             {thread.replies.map((reply) => (
                 <div key={reply.id} className="ml-3 border-l pl-2">
-                    <Said body={reply.body} at={reply.at} />
+                    {editing === reply.id ? (
+                        <CommentForm
+                            label="Edit reply"
+                            submit="Save"
+                            initial={reply.body}
+                            onSubmit={(body) => {
+                                onEdit(thread.id, body, reply.id)
+                                setEditing(undefined)
+                            }}
+                            onCancel={() => setEditing(undefined)}
+                        />
+                    ) : (
+                        <Said
+                            body={reply.body}
+                            at={reply.at}
+                            what="reply"
+                            onEdit={startEdit ? () => setEditing(reply.id) : undefined}
+                        />
+                    )}
                 </div>
             ))}
             {replying && (
@@ -212,7 +302,17 @@ function ThreadCard({
                     onCancel={() => setReplying(false)}
                 />
             )}
-            {editable && !replying && (
+            {editable && deleting && (
+                <ConfirmDelete
+                    replies={thread.replies.length}
+                    onDelete={() => onDelete(thread.id)}
+                    onKeep={() => {
+                        setDeleting(false)
+                        setKept(true)
+                    }}
+                />
+            )}
+            {editable && !replying && !deleting && editing === undefined && (
                 <div className="-ml-2 flex flex-wrap items-center gap-0.5">
                     {!thread.resolved && (
                         <Button variant="ghost" size="xs" onClick={() => setReplying(true)}>
@@ -224,13 +324,51 @@ function ThreadCard({
                         {thread.resolved ? <RotateCcw aria-hidden /> : <Check aria-hidden />}
                         {thread.resolved ? 'Reopen' : 'Resolve'}
                     </Button>
-                    <Button variant="ghost" size="xs" onClick={() => onDelete(thread.id)}>
+                    <Button
+                        ref={deleteAction}
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => {
+                            setKept(false)
+                            setDeleting(true)
+                        }}
+                    >
                         <Trash2 aria-hidden />
                         Delete
                     </Button>
                 </div>
             )}
         </article>
+    )
+}
+
+// Deleting a thread asks first, in its place, as a shared document does, since nothing brings a thread back: Delete or
+// Keep. The focus goes to Keep, the choice that loses nothing, and Escape keeps it too.
+function ConfirmDelete({ replies, onDelete, onKeep }: { replies: number; onDelete: () => void; onKeep: () => void }) {
+    const keep = useRef<HTMLButtonElement>(null)
+    useEffect(() => {
+        keep.current?.focus()
+    }, [])
+    const what = replies > 0 ? 'this comment and its replies' : 'this comment'
+    function onKey(event: KeyboardEvent<HTMLButtonElement>) {
+        if (event.key === 'Escape') {
+            event.preventDefault()
+            onKeep()
+        }
+    }
+    return (
+        <fieldset className="flex flex-wrap items-center justify-between gap-2">
+            <legend className="float-left text-xs text-muted-foreground">Delete {what}?</legend>
+            <div className="flex items-center gap-1">
+                <Button ref={keep} type="button" variant="ghost" size="xs" onClick={onKeep} onKeyDown={onKey}>
+                    Keep
+                </Button>
+                <Button type="button" variant="destructive" size="xs" onClick={onDelete} onKeyDown={onKey}>
+                    <Trash2 aria-hidden />
+                    Delete
+                </Button>
+            </div>
+        </fieldset>
     )
 }
 
@@ -262,32 +400,80 @@ function Quote({ text, onClick }: { text: string; onClick?: (() => void) | undef
     )
 }
 
-function Said({ body, at }: { body: string; at: string }) {
+// What a comment or a reply says, and when; with `onEdit`, its own Edit beside its age, so the card's actions stay on
+// one line.
+function Said({
+    body,
+    at,
+    what,
+    onEdit,
+}: {
+    body: string
+    at: string
+    what: 'comment' | 'reply'
+    onEdit?: (() => void) | undefined
+}) {
     return (
         <div className="flex flex-col gap-0.5">
             <p className="text-sm break-words whitespace-pre-wrap">
                 <LinkedText text={body} />
             </p>
-            <Age at={at} variant="ago" className="text-2xs" />
+            <div className="flex items-center gap-1">
+                <Age at={at} variant="ago" className="text-2xs" />
+                {onEdit !== undefined && (
+                    <Button
+                        variant="ghost"
+                        size="xs"
+                        className="h-5 px-1 text-2xs"
+                        aria-label={`Edit ${what}`}
+                        onClick={onEdit}
+                    >
+                        Edit
+                    </Button>
+                )}
+            </div>
         </div>
     )
 }
 
 // A comment or a reply being written. It sends on the key Settings names, as a reply to a ticket does, and Escape
-// drops it.
+// drops it. It keeps its own words, or the caller's through `value` and `onValueChange`, which outlive the form.
 function CommentForm({
     label,
     submit,
+    initial = '',
+    value,
+    onValueChange,
     onSubmit,
     onCancel,
 }: {
     label: string
     submit: string
+    initial?: string
+    value?: string
+    onValueChange?: (body: string) => void
     onSubmit: (body: string) => void
     onCancel: () => void
 }) {
     const sendKey = useSendKey()
-    const [body, setBody] = useState('')
+    const field = useRef<HTMLTextAreaElement>(null)
+    const [own, setOwn] = useState(initial)
+    const body = value ?? own
+    const setBody = onValueChange ?? setOwn
+
+    // The form opens on a click that asks for it, so the field takes the focus as it opens, once, after any words it
+    // holds already; the page scrolls to it a frame on, once the comments are placed beside the plan. Only then: a
+    // render as the operator types leaves the cursor and the page where they are.
+    useEffect(() => {
+        const element = field.current
+        if (element === null) {
+            return
+        }
+        element.focus({ preventScroll: true })
+        element.setSelectionRange(element.value.length, element.value.length)
+        const frame = requestAnimationFrame(() => element.scrollIntoView({ block: 'nearest' }))
+        return () => cancelAnimationFrame(frame)
+    }, [])
 
     function send(event: SubmitEvent<HTMLFormElement>) {
         event.preventDefault()
@@ -317,8 +503,7 @@ function CommentForm({
                 maxLength={MAX_COMMENT}
                 onChange={(event) => setBody(event.target.value)}
                 onKeyDown={onKey}
-                // The form opens on a click that asks for it, so the field takes the focus at once.
-                ref={(field) => field?.focus()}
+                ref={field}
                 className="min-h-16"
             />
             <div className="flex items-center justify-end gap-1">

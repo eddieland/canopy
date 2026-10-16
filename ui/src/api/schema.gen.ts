@@ -2295,6 +2295,11 @@ export type components = {
              * @description The reviewer's summary, line breaks kept: untrusted text.
              */
             summary: string | null;
+            /**
+             * Ticket Title
+             * @description Its ticket's title, on one line; None when it has no ticket or the ticket no title.
+             */
+            ticket_title: string | null;
         };
         /**
          * ReviewDiff
@@ -2629,7 +2634,7 @@ export type components = {
             id: number;
             /**
              * Kind
-             * @description implement | fix-ci | resume | split
+             * @description implement | fix-ci | resume | split | plan
              */
             kind: string;
             /**

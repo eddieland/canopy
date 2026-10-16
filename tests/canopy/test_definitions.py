@@ -4,12 +4,13 @@ import fnmatch
 import os
 import shutil
 import time
+from collections.abc import Iterable
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
-from canopy.core import config, definitions
+from canopy.core import config, definitions, plans
 from canopy.infra import resources
 from tests.conftest import CanopyEnv
 
@@ -207,7 +208,7 @@ def test_a_worker_definition_without_its_rebase_line_is_refused() -> None:
         definitions.render_rebase(bundled.replace("    # canopy: rebase rules\n", ""), "canopy-worker", rebase=False)
 
 
-def _allowed(rules: list[tuple[str, str]], tool: str) -> bool:
+def _allowed(rules: Iterable[tuple[str, str]], tool: str) -> bool:
     # The last matching rule wins (D021); a tool no rule names keeps what the operator's runtime grants.
     verdicts = [action for pattern, action in rules if fnmatch.fnmatchcase(tool, pattern)]
     return not verdicts or verdicts[-1] != "deny"
@@ -294,6 +295,117 @@ def test_the_reviewer_posts_nothing(tool: str) -> None:
 )
 def test_the_reviewer_keeps_its_read_tools(tool: str) -> None:
     assert _allowed(_rules("canopy-reviewer"), tool)
+
+
+@pytest.mark.parametrize(
+    ("tool", "allowed"),
+    [
+        ("atlassian_getJiraIssue", True),
+        ("atlassian_listJiraIssueComments", True),
+        ("atlassian_addCommentToJiraIssue", False),
+        ("atlassian_editJiraIssue", False),
+        ("atlassian_transitionJiraIssue", False),
+        ("atlassian_createJiraIssue", False),
+        ("atlassian_someWriteToolNoPatternNames", False),
+        ("github_add_issue_comment", False),
+        ("github_create_pull_request", False),
+        ("github_issue_write", False),
+        ("github_pull_request_read", True),
+    ],
+)
+def test_the_planner_reads_the_ticket_and_writes_nothing(canopy_env: CanopyEnv, tool: str, *, allowed: bool) -> None:
+    # Rendered with the tracker's server and read tools: every other tool of the server is denied by its wildcard, so
+    # a write tool no pattern names fails closed (DESIGN §25, TRUST_MODEL T6).
+    path = f"agents/{definitions.PLANNER}.md"
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
+    assert _allowed(_rules_in(rendered), tool) is allowed
+
+
+def test_the_planner_has_no_shell_or_subagent_tools() -> None:
+    frontmatter = (resources.agents_dir() / f"{definitions.PLANNER}.md").read_text().split("---")[1]
+    for tool in ("bash", "task", "external_directory"):
+        assert f"\n  {tool}: deny\n" in frontmatter
+
+
+@pytest.mark.parametrize(
+    ("path", "allowed"),
+    [
+        # Relative to the project, as OpenCode matches it: `/` for a desk outside a checkout, else the checkout.
+        (".canopy-new-plan.md", True),
+        ("desks/PROJ-1/.canopy-new-plan.md", True),
+        ("home/op/acme/desks/PROJ-1/.canopy-new-plan.md", True),
+        ("desks/PROJ-1/.canopy-plan.md", False),
+        ("desks/PROJ-1/api/src/app.py", False),
+        ("desks/PROJ-1/.canopy-new-plan.md.bak", False),
+        ("desks/PROJ-1/notes.md", False),
+    ],
+)
+def test_the_planner_may_edit_only_its_plan_file(canopy_env: CanopyEnv, path: str, *, allowed: bool) -> None:
+    # Evaluated as OpenCode 1.19 does: every key matches the permission's name as a wildcard, so `*edit*` is an edit
+    # rule too, and the last rule matching both the name and the path wins (D021).
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[
+        f"agents/{definitions.PLANNER}.md"
+    ]
+    ruleset = _opencode_ruleset(rendered.decode())
+    assert _opencode_action(ruleset, "edit", path) == ("allow" if allowed else "deny")
+
+
+def test_the_planner_keeps_its_edit_tool_and_loses_its_shell(canopy_env: CanopyEnv) -> None:
+    # OpenCode leaves a tool out of the model's toolset when the last rule for its permission denies `*`
+    # (`Permission.disabled`): a `*edit*` after the edit rules would take away the only way to write the plan.
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[
+        f"agents/{definitions.PLANNER}.md"
+    ]
+    ruleset = _opencode_ruleset(rendered.decode())
+    assert not _opencode_disabled(ruleset, "edit")
+    # The file `_run` reads the plan from is the one the definition lets the planner write.
+    assert _opencode_action(ruleset, "edit", f"desks/PROJ-1/{plans.WRITTEN}") == "allow"
+    for permission in ("bash", "task", "webfetch"):
+        assert _opencode_disabled(ruleset, permission)
+
+
+def _opencode_ruleset(definition: str) -> list[tuple[str, str, str]]:
+    """The definition's permission rules as OpenCode's `Permission.fromConfig` makes them, in order.
+
+    Each is (permission, path pattern, action): a scalar is its permission's rule for `*`, and a table one rule per
+    pattern. Only the frontmatter's two levels canopy writes are read, not YAML in general.
+    """
+    frontmatter = definition.split("---")[1]
+    rules: list[tuple[str, str, str]] = []
+    section = ""
+    inside = False
+    for line in frontmatter.splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if line.startswith("permission:"):
+            inside = True
+            continue
+        if not inside or not line.startswith("  "):
+            inside = inside and line.startswith("  ")
+            continue
+        key, _, value = stripped.rpartition(":") if stripped.startswith('"') else stripped.partition(":")
+        key, value = key.strip().strip('"'), value.strip()
+        if line.startswith("    "):
+            rules.append((section, key, value))
+        elif value:
+            rules.append((key, "*", value))
+        else:
+            section = key
+    return rules
+
+
+def _opencode_action(ruleset: Iterable[tuple[str, str, str]], permission: str, path: str) -> str:
+    # OpenCode's `Wildcard.match` is a whole-string match where `*` crosses `/`, as fnmatch's does.
+    matching = [
+        a for p, pattern, a in ruleset if fnmatch.fnmatchcase(permission, p) and fnmatch.fnmatchcase(path, pattern)
+    ]
+    return matching[-1] if matching else "allow"
+
+
+def _opencode_disabled(ruleset: Iterable[tuple[str, str, str]], permission: str) -> bool:
+    matching = [(pattern, a) for p, pattern, a in ruleset if fnmatch.fnmatchcase(permission, p)]
+    return bool(matching) and matching[-1] == ("*", "deny")
 
 
 def test_the_overseer_definition_carries_its_prompt_and_the_trackers_skill(canopy_env: CanopyEnv) -> None:

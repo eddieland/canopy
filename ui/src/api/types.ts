@@ -149,6 +149,8 @@ export type FindingSeverity = Schemas['FindingSeverity']
 export type ReviewDiff = Schemas['ReviewDiff']
 /** One file the reviewed commit changes, with its hunks. */
 export type DiffFile = Schemas['DiffFile']
+/** One hunk of a file's diff: what follows its `@@` ranges, and its lines. */
+export type DiffHunk = Schemas['DiffHunk']
 /** One line of a hunk, with its number on each side it is on. */
 export type DiffLine = Schemas['DiffLine']
 

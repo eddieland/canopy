@@ -133,7 +133,7 @@ def attention(backend: Backend, ctx: Context) -> list[AttentionItem]:
                 id=fingerprint(item.ticket_key, item.reason, item.repo),
                 subject=item.subject,
                 ticket_key=ticket,
-                ticket_title=_title(row["title"]) if row is not None else None,
+                ticket_title=ticket_title(row.title) if row is not None else None,
                 chore=chore,
                 repo=item.repo,
                 reason=item.reason,
@@ -182,7 +182,7 @@ def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown
         unpriced=[SpendUnpriced(kind=u.kind, runs=u.runs, unpriced=u.unpriced) for u in found.unpriced],
         idle_share=found.idle_share,
         idle_ticks=[
-            tick_of(row, int(row["decisions"])) for row in spending.idle_ticks(ctx.conn, found.since, found.until)
+            tick_of(row, decisions) for row, decisions in spending.idle_ticks(ctx.conn, found.since, found.until)
         ],
         done=found.done,
         per_done=found.per_done,
@@ -272,29 +272,29 @@ def tick(ctx: Context) -> Tick | None:
     row = db.last_tick(ctx.conn)
     if row is None:
         return None
-    return tick_of(row, db.decision_count(ctx.conn, int(row["id"])))
+    return tick_of(row, db.decision_count(ctx.conn, row.id))
 
 
-def tick_of(row: sqlite3.Row, decisions: int) -> Tick:
+def tick_of(row: records.Tick, decisions: int) -> Tick:
     """A tick's row, and how many decisions it recorded.
 
     Returns:
         The tick as the API sends it, its summary laid out as a page shows it and None when empty.
     """
     return Tick(
-        id=int(row["id"]),
-        status=str(row["status"]),
-        dry_run=bool(row["dry_run"]),
-        started_at=db.parse_time(row["started_at"]),
-        ended_at=db.parse_time(row["ended_at"]) if row["ended_at"] else None,
-        summary=lines(str(row["summary"] or "")) or None,
-        session_id=str(row["session_id"]) if row["session_id"] else None,
-        cost_usd=float(row["cost_usd"]) if row["cost_usd"] is not None else None,
+        id=row.id,
+        status=row.status,
+        dry_run=row.dry_run,
+        started_at=db.parse_time(row.started_at),
+        ended_at=db.parse_time(row.ended_at) if row.ended_at else None,
+        summary=lines(row.summary or "") or None,
+        session_id=row.session_id or None,
+        cost_usd=row.cost_usd,
         new_tokens=new_tokens(row),
-        peak_context=int(row["tokens_peak_context"]) if row["tokens_peak_context"] is not None else None,
+        peak_context=row.tokens_peak_context,
         decisions=decisions,
-        idle=None if row["idle"] is None else bool(row["idle"]),
-        woken_by=str(row["woken_by"]) if row["woken_by"] is not None else None,
+        idle=row.idle,
+        woken_by=row.woken_by,
     )
 
 
@@ -304,7 +304,7 @@ def ticks(ctx: Context) -> list[Tick]:
     Returns:
         At most `TICKS` ticks, each with how many decisions it recorded.
     """
-    return [tick_of(row, int(row["decisions"])) for row in db.recent_ticks(ctx.conn, TICKS)]
+    return [tick_of(row, decisions) for row, decisions in db.recent_ticks(ctx.conn, TICKS)]
 
 
 def tick_detail(ctx: Context, tick_id: int) -> TickDetail | None:
@@ -343,7 +343,7 @@ def tick_transcript(ctx: Context, tick_id: int) -> Transcript | None:
     row = db.get_tick(ctx.conn, tick_id)
     if row is None:
         return None
-    return session_transcript(tick_output(ctx, tick_id), row["session_id"])
+    return session_transcript(tick_output(ctx, tick_id), row.session_id)
 
 
 def tick_raw_output(ctx: Context, tick_id: int) -> TickOutput | None:
@@ -511,7 +511,7 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
     return Run(
         id=int(row["id"]),
         ticket_key=str(row["ticket_key"]),
-        ticket_title=_title(row["ticket_title"]),
+        ticket_title=ticket_title(row["ticket_title"]),
         kind=str(row["kind"]),
         status=status,
         state=_run_state(status),
@@ -584,8 +584,8 @@ def said(row: sqlite3.Row | records.Row) -> str | None:
     Returns:
         At most `SUMMARY_LENGTH` characters, or None when the result says nothing.
     """
-    result = contract.stored_object(records.columns(row)["result_json"])
-    return lines(str(result.get("harness") or result.get("summary") or ""))[:SUMMARY_LENGTH].rstrip() or None
+    note = contract.stored_note(contract.stored_object(records.columns(row)["result_json"]))
+    return lines(note)[:SUMMARY_LENGTH].rstrip() or None
 
 
 def lines(text: str) -> str:
@@ -597,7 +597,7 @@ def lines(text: str) -> str:
     return "\n".join(line.rstrip() for line in conversation.printable(text).splitlines()).strip("\n")
 
 
-def _title(value: object) -> str | None:
+def ticket_title(value: object) -> str | None:
     """A ticket's title on one line. `canopy ticket set` stored it so; this keeps a page from relying on that.
 
     Returns:
@@ -625,12 +625,12 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
     record = conversation.start_of(conn, key)
     status: StartStatus | None = None
     if record is not None:
-        status = "started" if record["status"] == "started" else "stopped"
+        status = "started" if conversation.is_started(record) else "stopped"
     waiting = conversation.latest_question(conn, key) if status == "started" else None
     running = db.running_run_of(conn, key)
     return TicketSummary(
         key=key,
-        title=_title(row["title"]),
+        title=ticket_title(row["title"]),
         private=record is not None,
         start=status,
         phase=str(row["phase"]) if row["phase"] else None,

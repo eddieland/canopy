@@ -12,6 +12,7 @@ import contextlib
 import json
 import os
 import shutil
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
@@ -19,13 +20,12 @@ from typing import TYPE_CHECKING, TextIO
 from canopy.core import agent_output, conversation, db, definitions, hostgit, outbox, pools, review_diff
 from canopy.core import review_result as result
 from canopy.core.config import render_command
-from canopy.core.vocab import PoolKind, ReviewRunStatus
+from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import logs, procs, stopping
 from canopy.reviews import start
 
 if TYPE_CHECKING:
-    import sqlite3
-
+    from canopy.core import records
     from canopy.core.context import Context
 
 _GIT_TIMEOUT_SECONDS = 300
@@ -72,9 +72,9 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     if run is None:
         raise ReviewError(f"no review run {run_id}")
     if not db.claim_run(ctx.conn, "review_runs", run_id, os.getpid()):
-        raise ReviewError(f"review run {run_id} is not waiting to start: it is {run['status']} or another has it")
-    log = logs.for_tick(int(run["tick_id"]))
-    fields = {"review_run_id": run_id, "pr": run["pr_url"], "sha": run["sha"]}
+        raise ReviewError(f"review run {run_id} is not waiting to start: it is {run.status} or another has it")
+    log = logs.for_tick(run.tick_id)
+    fields = {"review_run_id": run_id, "pr": run.pr_url, "sha": run.sha}
     log.info("review run started", extra=fields)
     outcome = Outcome(ReviewRunStatus.CRASHED, None, "the review run stopped before its reviewer finished")
     with stopping.StopOnSignal() as stop:
@@ -97,7 +97,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             ended = outbox.review_ended(ctx.config, run, outcome.status, stored)
             if not db.finish_run(ctx.conn, "review_runs", run_id, outcome.status, stored, event=ended):
                 log.warning("review run was already closed; its outcome is not recorded", extra=fields)
-            procs.drop_lifelock(Path(run["log_path"]))
+            procs.drop_lifelock(Path(run.log_path))
             log.info("review run finished", extra={**fields, "status": outcome.status})
     return outcome
 
@@ -117,16 +117,16 @@ def judged(ctx: Context, parsed: result.ReviewResult) -> Outcome:
     return Outcome(ReviewRunStatus.DONE, parsed)
 
 
-def clean_up(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> None:
+def clean_up(ctx: Context, run: records.ReviewRun, log: logs.TickAdapter) -> None:
     """Remove the reviewer's directory, never following its link, and return the slot with `--force`."""
     with contextlib.suppress(OSError):
-        shutil.rmtree(start.run_dir(ctx, int(run["id"])))
-    if run["slot_path"] is None:
+        shutil.rmtree(start.run_dir(ctx, run.id))
+    if run.slot_path is None:
         return
-    fields = {"review_run_id": run["id"], "slot": run["slot_path"]}
+    fields = {"review_run_id": run.id, "slot": run.slot_path}
     try:
-        outcome = ctx.pool_of(PoolKind(run["pool"]), run["repo"]).return_slot(
-            Path(str(run["slot_path"])), lease_id=str(run["lease_id"]), lease_holder=str(run["lease_holder"])
+        outcome = ctx.pool_of(run.pool, run.repo).return_slot(
+            Path(str(run.slot_path)), lease_id=str(run.lease_id), lease_holder=str(run.lease_holder)
         )
     except pools.PoolError as e:
         # The next tick's reconcile returns a canopy lease no running run holds.
@@ -135,30 +135,30 @@ def clean_up(ctx: Context, run: sqlite3.Row, log: logs.TickAdapter) -> None:
     log.info("review slot returned", extra={**fields, "outcome": outcome.value})
 
 
-def _work(ctx: Context, run: sqlite3.Row, out: TextIO, log: logs.TickAdapter) -> Outcome:
-    slot = Path(str(run["slot_path"]))
-    sha = str(run["sha"])
+def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapter) -> Outcome:
+    slot = Path(str(run.slot_path))
+    sha = run.sha
     _check_out(ctx.runner, slot, sha)
     dropped = _drop_escaping_links(ctx.runner, slot)
     if dropped:
-        log.warning("removed links that leave the checkout", extra={"review_run_id": run["id"], "links": dropped})
+        log.warning("removed links that leave the checkout", extra={"review_run_id": run.id, "links": dropped})
     _save_diff(ctx.runner, slot, run, log)
-    cwd = start.run_dir(ctx, int(run["id"]))
+    cwd = start.run_dir(ctx, run.id)
     cwd.mkdir(mode=0o700)
     (cwd / start.CHECKOUT_LINK).symlink_to(slot, target_is_directory=True)
     # The reviewer's own directory is canopy's, but OpenCode may read config above it, as in a workspace's checkout.
     shadowing = [found for place in (cwd, ctx.workspace.root) for found in definitions.shadowing(place)]
     if shadowing:
         raise _SetupError(definitions.shadowing_message(shadowing))
-    prompt = start.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
+    prompt = start.prompt_file(ctx, run.id).read_text(encoding="utf-8")
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
-    argv = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, f"review {run['pr_url']}")
+    argv = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, f"review {run.pr_url}")
     timeout_minutes = ctx.config.runtime.review_timeout_minutes
     log.info(
         "running reviewer",
-        extra={"review_run_id": run["id"], "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": timeout_minutes},
+        extra={"review_run_id": run.id, "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": timeout_minutes},
     )
-    run_id = int(run["id"])
+    run_id = run.id
     done = ctx.runner.run(
         argv,
         cwd=cwd,
@@ -220,18 +220,18 @@ def _drop_escaping_links(runner: procs.Runner, slot: Path) -> list[str]:
     return dropped
 
 
-def _save_diff(runner: procs.Runner, slot: Path, run: sqlite3.Row, log: logs.TickAdapter) -> None:
+def _save_diff(runner: procs.Runner, slot: Path, run: records.ReviewRun, log: logs.TickAdapter) -> None:
     """Write the commit's diff against where it leaves its base branch beside the run's log, for the web UI.
 
     Best effort: the review does not need it, so a failure is logged and the page shows no diff. Diff drivers and
     textconv filters are off, since the commit's `.gitattributes` can name them; for a PR stacked on another branch,
     the diff holds that branch's commits too.
     """
-    base = run["base_branch"]
+    base = run.base_branch
     if not base:
         return
-    fields = {"review_run_id": run["id"], "base": base}
-    sha = str(run["sha"])
+    fields: dict[str, object] = {"review_run_id": run.id, "base": base}
+    sha = run.sha
     fetched = _git_or_none(runner, slot, log, fields, "fetch", "--quiet", "origin", f"refs/heads/{base}")
     fork = None if fetched is None else _git_or_none(runner, slot, log, fields, "merge-base", "FETCH_HEAD", sha)
     if fork is None:
@@ -240,11 +240,11 @@ def _save_diff(runner: procs.Runner, slot: Path, run: sqlite3.Row, log: logs.Tic
     diff = _git_or_none(runner, slot, log, fields, *args)
     if diff is not None:
         # Cut at the bound the reader reads, plus one character, so a cut diff reads as truncated.
-        logs.write_private(review_diff.path_for(str(run["log_path"])), diff[: review_diff.MAX_BYTES + 1])
+        logs.write_private(review_diff.path_for(run.log_path), diff[: review_diff.MAX_BYTES + 1])
 
 
 def _git_or_none(
-    runner: procs.Runner, slot: Path, log: logs.TickAdapter, fields: dict[str, object], *args: str
+    runner: procs.Runner, slot: Path, log: logs.TickAdapter, fields: Mapping[str, object], *args: str
 ) -> str | None:
     """`git <args>`'s stdout, or None, logged, if it fails: for steps the review can do without.
 

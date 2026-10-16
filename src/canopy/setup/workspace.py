@@ -1,7 +1,8 @@
 """`canopy init` and `canopy workspace sync` (DESIGN §18).
 
-Init writes a workspace's skeleton: the map, `MAP.md`, and a `.gitignore` for what canopy and treehouse keep under the
-root, plus the user config if missing. It never overwrites a file; a `.gitignore` only gains the lines it lacks.
+Init writes a workspace's skeleton: the map, `MAP.md`, a `.gitignore` for what canopy and treehouse keep under the
+root, and the private config in the state directory. It never overwrites a file; a `.gitignore` only gains the lines
+it lacks.
 
 Sync makes the workspace match what is declared: the map's repositories, and the slots `capacity` declares for each
 pool. It clones each repository in the map that has no clone at `repos/<name>`, reports a clone whose `origin` is not
@@ -17,13 +18,13 @@ from __future__ import annotations
 import contextlib
 import json
 import shutil
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 from canopy.core import definitions, hostgit, pool, pools, workspace
-from canopy.core.config import REPO_NAME_RE, WORKSPACE_FILE_NAME, WORKSPACE_STATE_DIR
+from canopy.core.config import REPO_NAME_RE, WORKSPACE_FILE_NAME, WORKSPACE_STATE_DIR, private_config_path
 from canopy.infra import procs
 from canopy.setup import init
 
@@ -54,7 +55,8 @@ def workspace_file_text(name: str, provider: str) -> str:
     query = init.EXAMPLE_QUERIES.get(provider, "describe which tickets to look at, in plain language")
     return f"""\
 # canopy-workspace.toml: the workspace map, and the config shared by everyone who runs canopy on this workspace.
-# Commit it if the workspace is shared. Shared keys only; personal ones go in the user config (DESIGN §12, §18).
+# Commit it if the workspace is shared. Shared keys only; private ones go in .canopy/config.toml, your own file for
+# this workspace, or in your user config for every workspace (DESIGN §12, §18).
 
 [workspace]
 name = {json.dumps(name)}
@@ -79,18 +81,23 @@ query = {json.dumps(query)}
 def run_init(root: Path, user_file: Path, provider: str | None) -> init.Report:
     """Write what a workspace at `root` is missing. `provider` is needed only when it has no workspace file yet.
 
+    A new private file sets the queue label and the trust lists only where `user_file` does not.
+
     Returns:
         What was written, kept, and updated; `updated` holds a `.gitignore` that gained lines.
 
     Raises:
         ValueError: `root` has no workspace file and `provider` is None.
+        ConfigError: the state directory is there and not private to the operator.
     """
     report = init.Report()
-    if user_file.exists():
-        report.kept.append(user_file)
-    else:
-        report.label = init.default_label()
-        init.write_if_missing(user_file, init.user_config_text(report.label), report)
+    private_file = private_config_path(root)
+    workspace.ensure_state_dir(private_file.parent)
+    user_keys = init.keys_set(user_file)
+    label = None if "tracker.labels" in user_keys else init.default_label()
+    init.write_private_if_missing(private_file, init.private_config_text(label, user_keys), report)
+    if private_file in report.written:
+        report.label = label
 
     workspace_file = root / WORKSPACE_FILE_NAME
     if workspace_file.exists():
@@ -187,7 +194,7 @@ class Added:
     detail: str = ""
 
 
-def add(ws: workspace.Workspace, entries: list[tuple[str, str]]) -> list[Added]:
+def add(ws: workspace.Workspace, entries: Iterable[tuple[str, str]]) -> list[Added]:
     """Add each `(name, url)` to the map as a `[repos.<name>]` table, unless the map already lists that URL.
 
     Nothing is written if any entry conflicts: a name the map gives another URL, or a name given twice.
@@ -389,7 +396,7 @@ def _fill(
     return Checked(repo, "failed" if error is not None or unreturned else "slots", detail)
 
 
-def _return_leases(held: list[pools.Lease], pool: pools.Pool) -> int:
+def _return_leases(held: Iterable[pools.Lease], pool: pools.Pool) -> int:
     """Return sync's leases. Returns how many could not be returned."""
     unreturned = 0
     for leased in held:

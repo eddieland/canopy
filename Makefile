@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 
-.PHONY: help all check fmt lint test snapshots ui-fmt ui-check ui-e2e ui-build install-check sandbox-canary
+.PHONY: help all check fmt lint test coverage snapshots ui-fmt ui-check ui-e2e ui-build install-check sandbox-canary
 .PHONY: pool-contract treehouse
 
 ##@ General
@@ -35,8 +35,15 @@ lint: ## Run linters and the type checker (ruff, pyrefly strict, rumdl, editorco
 # A test still running after a minute (the slowest takes ~10s) is hung: faulthandler dumps every thread's stack and
 # ends its worker, which fails that test by name instead of stalling the run until CI's job timeout. Here, not in
 # pyproject.toml, so the opt-in canaries, which wait minutes on a real sandbox or model, keep no limit.
-test: ## Run all tests, in parallel
-	uv run pytest -q -n auto -o faulthandler_timeout=60 -o faulthandler_exit_on_timeout=true
+# COVERAGE=1 also measures coverage and writes coverage.xml, which is how CI's `make check` feeds Codecov.
+PYTEST := uv run pytest -q -n auto -o faulthandler_timeout=60 -o faulthandler_exit_on_timeout=true
+
+test: ## Run all tests, in parallel (COVERAGE=1: also write coverage.xml)
+	$(PYTEST) $(if $(COVERAGE),--cov --cov-report=xml)
+
+# Coverage settings live in pyproject.toml ([tool.coverage]). Open htmlcov/index.html for the lines a test never ran.
+coverage: ## Run all tests measuring coverage: a summary, htmlcov/, and coverage.xml
+	$(PYTEST) --cov --cov-report=term:skip-covered --cov-report=html --cov-report=xml
 
 # Review the diff before committing it: a snapshot is what the tests hold canopy's output to (syrupy). It also deletes
 # the snapshots no test reads any more. Serial: syrupy refuses to update under xdist without an experimental file lock.
@@ -52,8 +59,9 @@ ui/node_modules: ui/package.json ui/package-lock.json
 ui-fmt: ui/node_modules ## Format ui/ with oxfmt
 	npm --prefix ui run fmt
 
+# COVERAGE=1 also measures the unit tests' coverage and writes ui/coverage/lcov.info, which CI sends to Codecov.
 ui-check: ui/node_modules ## Check ui/ without changing it: format, lint, types, generated API types, unit tests, build
-	npm --prefix ui run check
+	$(if $(COVERAGE),COVERAGE=1 )npm --prefix ui run check
 
 ui-build: ui/node_modules ## Build ui/dist, which canopy serves from a checkout and bundles into its wheel
 	npm --prefix ui run build

@@ -1,11 +1,17 @@
-"""Layered configuration: built-in defaults, then the workspace file, then the user's `config.toml`.
+"""Layered configuration: built-in defaults, the workspace file, the user file, then the workspace's private file.
 
-The shared file is the workspace's `canopy-workspace.toml`. No code repository's file is read (D016).
+The workspace file is `canopy-workspace.toml`, which may be shared. The user file, `config.toml` in the user config
+directory, serves every workspace and is optional. The private file, `config.toml` in the workspace's state directory,
+is the operator's own for that workspace. No code repository's file is read (D016).
 
-Every key has a scope (DESIGN §12). A shared key may be set in either file and the user file wins. A user-only key may
-be set only in the user file; a workspace file that sets one is an error, because a workspace file may be committed to
-a shared repository, and anyone who can push there controls it (TRUST_MODEL T7). Unknown keys are errors in both files.
-The workspace file's `policy.*` values apply only when stricter than the built-in defaults.
+Every key has a scope (DESIGN §12). A shared key may be set in any file. A private key may be set in the user file or
+the private file, never in the workspace file: a workspace file may be committed to a shared repository, and anyone who
+can push there controls it (TRUST_MODEL T7). Later files win, key by key. Unknown keys are errors in every file. The
+workspace file's `policy.*` values apply only when stricter than the built-in defaults.
+
+The private file is under the workspace root, which may be a checkout, and its keys run commands. So `load` refuses a
+state directory any of whose files git tracks, and a private file that is a symlink, someone else's, or writable by
+anyone else. A relative `paths.*` value in it names a file in the state directory.
 
 The models below are the schema: each field carries its type, default, and scope, and policy fields say which
 direction is stricter. `load` enforces scopes and the tighten rule per file, merges, then lets pydantic validate
@@ -18,7 +24,9 @@ import ipaddress
 import os
 import re
 import shlex
+import stat
 import tomllib
+from collections.abc import Collection, Iterable, Mapping
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -37,8 +45,9 @@ from pydantic import (
     model_validator,
 )
 
-from canopy.core import contract
+from canopy.core import contract, hostgit
 from canopy.core.vocab import PoolKind
+from canopy.infra import procs
 
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
@@ -46,11 +55,14 @@ if TYPE_CHECKING:
 WORKSPACE_FILE_NAME = "canopy-workspace.toml"
 # A workspace's state is always here, under its root: each workspace has its own journal and locks (DESIGN §18).
 WORKSPACE_STATE_DIR = ".canopy"
+# The private file's name, in the state directory, and the user file's, in the user config directory.
+CONFIG_FILE_NAME = "config.toml"
 # Tables of the workspace file that are its map, not config. `canopy.core.workspace` reads them.
 WORKSPACE_MAP_TABLES = ("workspace", "repos")
 # Keys earlier canopy read, and what to do with one left in a file. Each is an error that says so, not "unknown key".
 REMOVED_KEYS = {
     "paths.state_dir": f"delete it; state is always in the workspace's {WORKSPACE_STATE_DIR}/ (D016)",
+    "trust.pr_label": "delete it; workers no longer label their PRs, which the branch prefix already marks",
 }
 PROMPT = "{prompt}"
 # Replaced with the snapshot of canopy's agent definitions and skills (D040).
@@ -72,10 +84,10 @@ class ConfigError(Exception):
 
 
 class Scope(Enum):
-    """Where a key may be set: either file, or only the user file."""
+    """Where a key may be set: any file, or only the user file and the private file."""
 
     SHARED = "shared"
-    USER = "user-only"
+    PRIVATE = "private"
 
 
 class Tighten(Enum):
@@ -395,20 +407,20 @@ class Tracker(Section):
     # A ticket's page in the tracker, with {key} where its key goes: the web UI links each ticket there (DESIGN §17).
     # Empty means no link. Shared: the tracker's address is the team's, and a link runs nothing.
     ticket_url: Annotated[StrictStr, Scope.SHARED, link_template(TICKET_KEY)] = ""
-    labels: Annotated[tuple[NonBlank, ...], Scope.USER, Field(min_length=1)]
+    labels: Annotated[tuple[NonBlank, ...], Scope.PRIVATE, Field(min_length=1)]
     # The least time between ticks that run `query` (DESIGN §7, Spacing the query): a tick sooner than that after the
     # last live one that ran it works the tickets the journal knows and leaves the query out. 0 runs it every tick.
-    # User-only: it sets the operator's spend, and how long a newly labeled ticket can wait to be found.
-    query_every_minutes: Annotated[Count, Scope.USER] = 0
+    # Private: it sets the operator's spend, and how long a newly labeled ticket can wait to be found.
+    query_every_minutes: Annotated[Count, Scope.PRIVATE] = 0
     # The tracker's MCP server, as the operator's OpenCode config names it, and the tools of it a private worker may
-    # call (DESIGN §22). Empty and unset mean the provider's defaults. User-only: they decide what a private worker can
+    # call (DESIGN §22). Empty and unset mean the provider's defaults. Private: they decide what a private worker can
     # write, which a shared workspace file must not (TRUST_MODEL T7).
-    mcp_server: Annotated[StrictStr, Scope.USER, AfterValidator(_server_name)] = ""
-    read_tools: Annotated[tuple[ToolPart, ...] | None, Scope.USER] = None
+    mcp_server: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_server_name)] = ""
+    read_tools: Annotated[tuple[ToolPart, ...] | None, Scope.PRIVATE] = None
     # Whether a labeled ticket canopy has never worked is started privately by its first dispatch, as if the operator
-    # had run `canopy start` (DESIGN §22, D119). User-only: it turns a label into a start record, which a shared file
+    # had run `canopy start` (DESIGN §22, D119). Private: it turns a label into a start record, which a shared file
     # must not.
-    private: Annotated[StrictBool, Scope.USER] = False
+    private: Annotated[StrictBool, Scope.PRIVATE] = False
 
     def tools(self) -> TrackerTools | None:
         """The server and tools a private worker gets, or None if neither config nor a default names any.
@@ -434,6 +446,8 @@ class Policy(Section):
     max_resume_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
     # Split runs per ticket (DESIGN §18). A split creates tickets in the tracker, so one try is the default.
     max_split_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 1
+    # Plan runs per ticket (DESIGN §25): a plan covers every repository the ticket will touch.
+    max_plan_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
     # Review runs per PR, whatever they ended as (DESIGN §21).
     max_reviews_per_pr: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
     # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10). Prompt policy, not a guard.
@@ -444,26 +458,25 @@ class Trust(Section):
     """The `[trust]` table."""
 
     branch_prefix: Annotated[StrictStr, Scope.SHARED, AfterValidator(_branch_prefix)] = "agent/"
-    pr_label: Annotated[NonBlank, Scope.SHARED] = "agent"
-    authorized_repliers: Annotated[tuple[NonBlank, ...], Scope.USER] = ()
+    authorized_repliers: Annotated[tuple[NonBlank, ...], Scope.PRIVATE] = ()
     # Whose review feedback a worker may address without the operator's go-ahead (DESIGN §7, D089): VCS host logins,
-    # and `canopy:review` for canopy's own reviewer. Anyone else's waits for an operator message. User-only: a
+    # and `canopy:review` for canopy's own reviewer. Anyone else's waits for an operator message. Private: a
     # workspace file that listed its own bots would decide what steers the operator's workers.
-    trusted_reviewers: Annotated[tuple[Annotated[StrictStr, AfterValidator(_reviewer)], ...], Scope.USER] = ()
+    trusted_reviewers: Annotated[tuple[Annotated[StrictStr, AfterValidator(_reviewer)], ...], Scope.PRIVATE] = ()
     # What every worker comment starts and ends with, when set (DESIGN §8, D069). They only take authority away, from
-    # the comments that carry them; user-only, so a shared file cannot pick marks that silence people's comments.
-    comment_prefix: Annotated[StrictStr, Scope.USER, AfterValidator(_comment_mark)] = "CANOPY:"
-    comment_suffix: Annotated[StrictStr, Scope.USER, AfterValidator(_comment_mark)] = ""
+    # the comments that carry them; private, so a shared file cannot pick marks that silence people's comments.
+    comment_prefix: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_comment_mark)] = "CANOPY:"
+    comment_suffix: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_comment_mark)] = ""
     # Whether a worker adds canopy's trailer to its commits when the agent runtime adds no attribution trailer, and whom
-    # it names as co-author (TRUST_MODEL T5). User-only: the commits are the operator's, and a shared file must neither
+    # it names as co-author (TRUST_MODEL T5). Private: the commits are the operator's, and a shared file must neither
     # credit agent work to a person nor strip the mark that tells it is an agent's.
-    commit_trailer: Annotated[StrictBool, Scope.USER] = True
-    commit_trailer_name: Annotated[StrictStr, Scope.USER, AfterValidator(_trailer_name)] = DEFAULT_TRAILER_NAME
-    commit_trailer_email: Annotated[StrictStr, Scope.USER, AfterValidator(_trailer_email)] = DEFAULT_TRAILER_EMAIL
+    commit_trailer: Annotated[StrictBool, Scope.PRIVATE] = True
+    commit_trailer_name: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_trailer_name)] = DEFAULT_TRAILER_NAME
+    commit_trailer_email: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_trailer_email)] = DEFAULT_TRAILER_EMAIL
     # Whether workers bring a base branch in by rebasing, and push the result with a lease, instead of merging it
-    # (TRUST_MODEL T1, D056), for repositories that refuse merge commits. User-only: a shared file must not let
+    # (TRUST_MODEL T1, D056), for repositories that refuse merge commits. Private: a shared file must not let
     # workers replace a branch's history.
-    rebase: Annotated[StrictBool, Scope.USER] = False
+    rebase: Annotated[StrictBool, Scope.PRIVATE] = False
 
     @model_validator(mode="after")
     def _one_comment_mark(self) -> Trust:
@@ -500,17 +513,17 @@ RepoName = Annotated[str, AfterValidator(_repo_name)]
 class Capacity(Section):
     """The `[capacity]` table."""
 
-    max_workers: Annotated[Count, Scope.USER] = 2
+    max_workers: Annotated[Count, Scope.PRIVATE] = 2
     # Chore runs at once, apart from max_workers; 0 turns every chore off (DESIGN §19).
-    max_chores: Annotated[Count, Scope.USER] = 1
+    max_chores: Annotated[Count, Scope.PRIVATE] = 1
     # Review runs at once, within max_workers, and started in any 24 hours; 0 turns reviews off (DESIGN §21).
-    max_reviews: Annotated[Count, Scope.USER] = 1
-    max_reviews_per_day: Annotated[Count, Scope.USER] = 20
+    max_reviews: Annotated[Count, Scope.PRIVATE] = 1
+    max_reviews_per_day: Annotated[Count, Scope.PRIVATE] = 20
     # Slots in each repository's pool, in a workspace: `canopy workspace sync` creates and removes slots to match, and
     # no lease grows a pool past it. None leaves the pools unmanaged, as treehouse's own `max_trees` has them. Names in
-    # `repo_slots` need not be in this workspace's map: one user file serves every workspace (DESIGN §18).
-    slots_per_repo: Annotated[Count | None, Scope.USER] = None
-    repo_slots: Annotated[dict[RepoName, Count], Scope.USER] = {}
+    # `repo_slots` need not be in this workspace's map: the user file serves every workspace (DESIGN §18).
+    slots_per_repo: Annotated[Count | None, Scope.PRIVATE] = None
+    repo_slots: Annotated[dict[RepoName, Count], Scope.PRIVATE] = {}
 
     def slots_for(self, repo: str) -> int | None:
         """The slots declared for repository `repo`'s pool, or None if its pool is not managed.
@@ -524,76 +537,82 @@ class Capacity(Section):
 class Pools(Section):
     """The `[pools]` table: which pool makes a workspace's worktrees (DESIGN §18, ROADMAP M45).
 
-    User-only, as the pools' sizes are: it decides what runs on the operator's machine. Switching is safe with runs in
+    Private, as the pools' sizes are: it decides what runs on the operator's machine. Switching is safe with runs in
     flight, since a lease always goes back to the pool that made it.
     """
 
-    backend: Annotated[PoolKind, Scope.USER] = PoolKind.TREEHOUSE
+    backend: Annotated[PoolKind, Scope.PRIVATE] = PoolKind.TREEHOUSE
 
 
 class Runtime(Section):
     """The `[runtime]` table: agent command templates and timeouts."""
 
-    overseer_cmd: Annotated[AgentTemplate, Scope.USER] = (
+    overseer_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json "
         "--title={title} {prompt}"
     )
-    worker_cmd: Annotated[AgentTemplate, Scope.USER] = (
+    worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json "
         "--title={title} {prompt}"
     )
     # A private ticket's worker: its own agent, which cannot write to the tracker (DESIGN §22). Shares the worker's
     # timeout.
-    private_worker_cmd: Annotated[AgentTemplate, Scope.USER] = (
+    private_worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker-private --format json "
         "--title={title} {prompt}"
     )
     # The splitter is its own agent, with no edit or shell tools (DESIGN §18); it shares the worker's timeout.
-    split_cmd: Annotated[AgentTemplate, Scope.USER] = (
+    split_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json "
         "--title={title} {prompt}"
     )
+    # The planner is its own agent, with no edit or shell tools and only the tracker's read tools (DESIGN §25); it
+    # shares the worker's timeout.
+    plan_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
+        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json "
+        "--title={title} {prompt}"
+    )
     # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).
-    chore_cmd: Annotated[AgentTemplate, Scope.USER] = (
+    chore_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json "
         "--title={title} {prompt}"
     )
     # The reviewer; pointing it at a different model from the worker's is recommended (DESIGN §21).
-    review_cmd: Annotated[AgentTemplate, Scope.USER] = (
+    review_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json "
         "--title={title} {prompt}"
     )
-    review_timeout_minutes: Annotated[Minutes, Scope.USER] = 20
-    overseer_timeout_minutes: Annotated[Minutes, Scope.USER] = 15
-    worker_timeout_minutes: Annotated[Minutes, Scope.USER] = 45
-    # The skill workers open PRs with, instead of the GitHub MCP; empty means the MCP (DESIGN §8). User-only: it
+    review_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 20
+    overseer_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 15
+    worker_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 45
+    # The skill workers open PRs with, instead of the GitHub MCP; empty means the MCP (DESIGN §8). Private: it
     # chooses what workers are told to do, which a shared workspace file must not (TRUST_MODEL T7).
-    pr_skill: Annotated[StrictStr, Scope.USER, AfterValidator(_skill_name)] = ""
+    pr_skill: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_skill_name)] = ""
     # Run in each slot of a worker run once its branch is checked out, before the worker starts; a failure or timeout
     # ends the run `crashed` (DESIGN §8). Empty means none. It runs the branch's code on this machine.
-    setup_cmd: Annotated[SetupCommand, Scope.USER] = ""
-    setup_timeout_minutes: Annotated[Minutes, Scope.USER] = 30
+    setup_cmd: Annotated[SetupCommand, Scope.PRIVATE] = ""
+    setup_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 30
 
 
 class Review(Section):
-    """The `[review]` table: which PRs get an adversarial review (DESIGN §21). Every key is user-only."""
+    """The `[review]` table: which PRs get an adversarial review (DESIGN §21). Every key is private."""
 
     # The loop's own PRs, before a human is asked to review them.
-    agent_prs: Annotated[StrictBool, Scope.USER] = False
+    agent_prs: Annotated[StrictBool, Scope.PRIVATE] = False
     # PRs the operator names in the VCS host's own search syntax. It authorizes, unlike tracker.query.
-    query: Annotated[StrictStr, Scope.USER] = ""
+    query: Annotated[StrictStr, Scope.PRIVATE] = ""
     # Plain language for the reviewer: which changes it may call low impact. Without it, none.
-    low_impact: Annotated[StrictStr, Scope.USER] = ""
+    low_impact: Annotated[StrictStr, Scope.PRIVATE] = ""
 
 
 class Loop(Section):
     """The `[loop]` table: how `canopy loop` paces ticks. Every tick runs the overseer, so this sets its spend."""
 
-    interval_minutes: Annotated[Minutes, Scope.USER] = 15
+    interval_minutes: Annotated[Minutes, Scope.PRIVATE] = 15
     # The longest wait after idle ticks in a row (DESIGN §6, Idle pacing). Not above the interval, idle pacing is off.
-    idle_max_minutes: Annotated[Minutes, Scope.USER] = 120
+    idle_max_minutes: Annotated[Minutes, Scope.PRIVATE] = 120
     # The least time from one tick's start to the next's, whatever ends the wait, but `TICK_NOW_KEY` (DESIGN §6).
-    min_gap_minutes: Annotated[Minutes, Scope.USER] = 1
+    min_gap_minutes: Annotated[Minutes, Scope.PRIVATE] = 1
 
     @model_validator(mode="after")
     def _cap_not_below_interval(self) -> Loop:
@@ -655,25 +674,25 @@ def check_base_path(value: str) -> str:
 class Serve(Section):
     """The `[serve]` table: the web UI `canopy loop` serves (DESIGN §22).
 
-    Every key is user-only: it opens a listener on the operator's machine (TRUST_MODEL T8).
+    Every key is private: it opens a listener on the operator's machine (TRUST_MODEL T8).
     """
 
-    enabled: Annotated[StrictBool, Scope.USER] = True
-    bind: Annotated[StrictStr, Scope.USER, AfterValidator(listen_address)] = "127.0.0.1"
-    port: Annotated[StrictInt, Scope.USER, Field(ge=1, le=65535)] = 8765
-    base_path: Annotated[StrictStr, Scope.USER, AfterValidator(check_base_path)] = ""
+    enabled: Annotated[StrictBool, Scope.PRIVATE] = True
+    bind: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(listen_address)] = "127.0.0.1"
+    port: Annotated[StrictInt, Scope.PRIVATE, Field(ge=1, le=65535)] = 8765
+    base_path: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(check_base_path)] = ""
 
 
 class Paths(Section):
     """The `[paths]` table."""
 
-    # No static default: `load` supplies `prompts/` next to the user file, which depends on XDG_CONFIG_HOME.
-    prompt_overrides: Annotated[UserPath, Scope.USER]
+    # No static default: `load` supplies `prompts/` in the user config directory, which depends on XDG_CONFIG_HOME.
+    prompt_overrides: Annotated[UserPath, Scope.PRIVATE]
     # A personal `.worktreeinclude`, passed on every `treehouse get` as `--include-file`. treehouse then seeds the
     # ignored files it selects from the primary clone in place of the committed manifest's (DESIGN §9).
-    worktree_include: Annotated[UserPath | None, Scope.USER] = None
+    worktree_include: Annotated[UserPath | None, Scope.PRIVATE] = None
     # The operator's standing instructions, rendered into every worker prompt but a split's (DESIGN §12).
-    worker_instructions: Annotated[UserPath | None, Scope.USER] = None
+    worker_instructions: Annotated[UserPath | None, Scope.PRIVATE] = None
 
 
 # A sink's name is a table name and appears in `canopy notify test` and the journal (DESIGN §20).
@@ -720,8 +739,8 @@ class Notify(Section):
 
     # Receives the attention diff on stdin. Split into argv like the runtime templates, with no `{prompt}`. Shorthand
     # for a sink named `default` that takes the attention list as text (DESIGN §20).
-    cmd: Annotated[NotifyCommand, Scope.USER] = ""
-    sinks: Annotated[dict[SinkName, Sink], Scope.USER] = {}
+    cmd: Annotated[NotifyCommand, Scope.PRIVATE] = ""
+    sinks: Annotated[dict[SinkName, Sink], Scope.PRIVATE] = {}
 
     @model_validator(mode="after")
     def _one_default(self) -> Notify:
@@ -836,8 +855,8 @@ class Config(Section):
     paths: Paths
     notify: Notify
     serve: Serve
-    # Tables of tables, keyed by name; user-only as a whole (TABLE_SECTIONS).
-    chores: Annotated[dict[ChoreName, Chore], Scope.USER] = {}
+    # Tables of tables, keyed by name; private as a whole (TABLE_SECTIONS).
+    chores: Annotated[dict[ChoreName, Chore], Scope.PRIVATE] = {}
 
     @property
     def reviews_on(self) -> bool:
@@ -900,42 +919,83 @@ def user_config_dir() -> Path:
 
 def user_config_path() -> Path:
     """Return the user config file's path."""
-    return user_config_dir() / "config.toml"
+    return user_config_dir() / CONFIG_FILE_NAME
 
 
-def load(root: Path, user_file: Path | None = None) -> Config:
-    """Read and validate the layered config for the workspace at `root`: its workspace file, then the user file.
+def private_config_path(root: Path) -> Path:
+    """Return the private config file's path for the workspace at `root`: in its state directory (DESIGN §12)."""
+    return root.absolute() / WORKSPACE_STATE_DIR / CONFIG_FILE_NAME
+
+
+def load(root: Path, user_file: Path | None = None, runner: procs.Runner | None = None) -> Config:
+    """Read and validate the layered config for the workspace at `root`: workspace file, user file, private file.
 
     No code repository's file is read (D016). The workspace file's map tables are `canopy.core.workspace`'s to read.
+    `runner` runs the git that checks the state directory came from no checkout; None means the real one.
 
     Returns:
-        The validated config, the user file's keys winning over the workspace file's.
+        The validated config, each key from the last file that sets it.
 
     Raises:
-        ConfigError: The workspace file sets a user-only key, the user file is missing, a file cannot be read or is not
-            valid TOML, a key is unknown or removed, or a value does not validate.
+        ConfigError: git tracks a file in the state directory, or cannot say whether it does; the workspace file sets
+            a private key; neither the user file nor the private file exists; the private file is not the operator's
+            alone; a file cannot be read or is not valid TOML; a key is unknown or removed; or a value does not
+            validate.
     """
     user_file = user_file or user_config_path()
     shared_file = root / WORKSPACE_FILE_NAME
+    private_file = private_config_path(root)
+    check_untracked(runner or procs.SubprocessRunner(), root)
     shared: dict[str, object] = _read(shared_file, skip=WORKSPACE_MAP_TABLES) if shared_file.exists() else {}
     for name in shared:
-        if SPECS[name].scope is Scope.USER:
+        if SPECS[name].scope is Scope.PRIVATE:
             raise ConfigError(
-                f"{shared_file}: {name} is user-only and cannot be set in the workspace file; set it in {user_file}"
+                f"{shared_file}: {name} is private and cannot be set in the workspace file; set it in {private_file}, "
+                f"or in {user_file} for every workspace"
             )
-    if not user_file.exists():
-        raise ConfigError(f"no user config at {user_file}; run `canopy init`")
-    user_values = _read(user_file)
+    user_values = _read(user_file) if user_file.exists() else None
+    private_values = _read_private(private_file)
+    if user_values is None and private_values is None:
+        raise ConfigError(f"no config at {private_file} or {user_file}; run `canopy init` in the workspace")
+    private_values = {
+        name: _in_state_dir(value, private_file.parent) if name.startswith("paths.") else value
+        for name, value in (private_values or {}).items()
+    }
 
-    merged, origin = _merge(((shared_file, shared), (user_file, user_values)), shared_file)
-    # Unset or empty: `prompts/` next to the user file.
+    layers = ((shared_file, shared), (user_file, user_values or {}), (private_file, private_values))
+    merged, origin = _merge(layers, shared_file)
+    # Unset or empty: `prompts/` in the user config directory.
     if merged["paths"].get("prompt_overrides", "") == "":
         merged["paths"]["prompt_overrides"] = str(user_file.parent / "prompts")
 
     try:
         return Config.model_validate(merged)
     except ValidationError as e:
-        raise ConfigError(_describe(e, origin, shared_file, user_file)) from e
+        raise ConfigError(_describe(e, origin, (shared_file, user_file, private_file))) from e
+
+
+def check_untracked(runner: procs.Runner, root: Path) -> None:
+    """Refuse the workspace at `root` if git tracks any file in its state directory.
+
+    D053 checks the state directory's permissions, not where it came from, and a `.canopy/` checked out under umask 077
+    passes it. One from a checkout could hold a private file that runs commands, or a journal someone else wrote.
+
+    Raises:
+        ConfigError: git tracks a file there, or `root` is in a repository git cannot read.
+    """
+    state_dir = root.absolute() / WORKSPACE_STATE_DIR
+    found = hostgit.tracked(runner, root, WORKSPACE_STATE_DIR)
+    if found is None:
+        raise ConfigError(
+            f"{root} is in a git repository, and git could not list what it tracks in {state_dir}: canopy uses no "
+            f"state that may have come from a checkout. Run `git ls-files {WORKSPACE_STATE_DIR}` there to see why."
+        )
+    if found:
+        raise ConfigError(
+            f"{root / found[0]} is tracked by git: {state_dir} must be yours alone, and one from a checkout could run "
+            f"commands or supply a journal. Remove it from the repository (`git rm -r --cached {WORKSPACE_STATE_DIR}`) "
+            "and check what it holds before running canopy."
+        )
 
 
 def sources(root: Path, user_file: Path | None = None) -> dict[str, Path]:
@@ -957,7 +1017,7 @@ def sources(root: Path, user_file: Path | None = None) -> dict[str, Path]:
 
 
 def _merge(
-    layers: tuple[tuple[Path, dict[str, object]], ...], shared_file: Path
+    layers: Iterable[tuple[Path, Mapping[str, object]]], shared_file: Path
 ) -> tuple[dict[str, dict[str, object]], dict[str, Path]]:
     """Merge the files' keys in order, later files winning. Returns the merged sections and each key's file.
 
@@ -974,7 +1034,7 @@ def _merge(
                 continue
             origin[name] = source
             if isinstance(value, dict) and name in TABLE_SECTIONS:
-                # A table of tables, such as every `[chores.<name>]`: the user file's replaces any other whole.
+                # A table of tables, such as every `[chores.<name>]`: the last file's replaces any other whole.
                 merged[name] = {str(k): v for k, v in value.items()}
                 continue
             section, key = name.split(".", 1)
@@ -982,7 +1042,7 @@ def _merge(
     return merged, origin
 
 
-def _read(path: Path, *, skip: tuple[str, ...] = ()) -> dict[str, object]:
+def _read(path: Path, *, skip: Collection[str] = ()) -> dict[str, object]:
     """Return the file's config keys as `section.key` names. Tables named in `skip` are someone else's to read.
 
     Raises:
@@ -995,7 +1055,62 @@ def _read(path: Path, *, skip: tuple[str, ...] = ()) -> dict[str, object]:
         raise ConfigError(f"{path}: {e}") from e
     except OSError as e:
         raise ConfigError(f"{path}: {e.strerror}") from e
+    return _keys(path, doc, skip)
 
+
+def _read_private(path: Path) -> dict[str, object] | None:
+    """Return the private file's config keys, as `_read` does, or None if there is none.
+
+    It is opened without following a symlink, and must be a regular file of the operator's that no one else can write.
+
+    Raises:
+        ConfigError: It is a symlink, not a regular file, someone else's, or group or world writable; or it cannot be
+            read, is not valid TOML, or has a key that is unknown or was removed.
+    """
+    try:
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except FileNotFoundError:
+        return None
+    except OSError as e:
+        why = "a symlink" if path.is_symlink() else e.strerror
+        raise ConfigError(f"{path}: {why}; canopy reads it only as a regular file of yours") from e
+    st = os.fstat(fd)
+    if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid() or st.st_mode & 0o022:
+        os.close(fd)
+        raise ConfigError(
+            f"{path} is not private to you: canopy reads it only as a regular file of yours that no one else can "
+            "write. If you did not write it, remove it; if you did, `chmod go-w` it."
+        )
+    try:
+        with os.fdopen(fd, "rb") as f:
+            doc = tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        raise ConfigError(f"{path}: {e}") from e
+    except OSError as e:
+        raise ConfigError(f"{path}: {e.strerror}") from e
+    return _keys(path, doc)
+
+
+def _in_state_dir(value: object, state_dir: Path) -> object:
+    """Resolve a private file's relative `paths.*` value against the state directory.
+
+    Not the workspace root, which may be a shared checkout (TRUST_MODEL T7). Empty stays empty: for
+    `paths.prompt_overrides` it means the default, and for any other key it is refused as it is in the user file.
+
+    Returns:
+        A relative path's string under `state_dir`; any other value as it is, for validation to judge.
+    """
+    if not isinstance(value, str) or not value or value.startswith("~") or Path(value).is_absolute():
+        return value
+    return str(state_dir / value)
+
+
+def _keys(path: Path, doc: Mapping[str, object], skip: Collection[str] = ()) -> dict[str, object]:
+    """Return a parsed file's config keys as `section.key` names, tables named in `skip` left out.
+
+    Raises:
+        ConfigError: it has a key that is unknown or was removed.
+    """
     values: dict[str, object] = {}
     for section, table in doc.items():
         if section in skip:
@@ -1032,7 +1147,8 @@ def _stricter(spec: KeySpec, value: object) -> bool:
     return value < default if spec.tighten is Tighten.LOWER else value > default
 
 
-def _describe(error: ValidationError, origin: dict[str, Path], shared_file: Path, user_file: Path) -> str:
+def _describe(error: ValidationError, origin: Mapping[str, Path], files: tuple[Path, Path, Path]) -> str:
+    shared_file, user_file, private_file = files
     lines: list[str] = []
     for e in error.errors():
         loc = [str(p) for p in e["loc"] if p != "[key]"]
@@ -1045,8 +1161,12 @@ def _describe(error: ValidationError, origin: dict[str, Path], shared_file: Path
         name = ".".join(loc[:2])
         where = name + "".join(f"[{p}]" for p in loc[2:])
         if e["type"] == "missing":
-            files = str(user_file) if SPECS[name].scope is Scope.USER else f"{shared_file} or {user_file}"
-            lines.append(f"missing required key {name}; set it in {files}")
+            where_set = (
+                f"{private_file} or {user_file}"
+                if SPECS[name].scope is Scope.PRIVATE
+                else f"{shared_file}, {private_file}, or {user_file}"
+            )
+            lines.append(f"missing required key {name}; set it in {where_set}")
         else:
             source = origin.get(name)
             prefix = f"{source}: " if source is not None else ""

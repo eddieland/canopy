@@ -18,7 +18,7 @@ import os
 import re
 import secrets
 import sqlite3
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypedDict
@@ -26,12 +26,13 @@ from typing import TYPE_CHECKING, TypedDict
 from canopy.core import chore_view, contract, db, outbox, review_result
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import ReviewRunStatus, RunStatus, StartStatus
 from canopy.infra import lock
 
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from canopy.core import records
     from canopy.core.config import Chore, Config
 
 # A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17). It has no `:`, `#`, or `/`, so no
@@ -185,18 +186,18 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
             )
 
 
-def start_of(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
+def start_of(conn: sqlite3.Connection, key: str) -> records.Start | None:
     """Return a ticket's start record, or None if it is public: the operator never started it."""
     return db.get_start(conn, TICKET, key)
 
 
-def is_started(record: sqlite3.Row | None) -> bool:
+def is_started(record: records.Start | None) -> bool:
     """Whether a start record says the ticket is being worked: started and not stopped.
 
     Returns:
         True for a record whose status is `started`; False for a stopped one or None.
     """
-    return record is not None and record["status"] == "started"
+    return record is not None and record.status is StartStatus.STARTED
 
 
 # The operator's commands
@@ -232,7 +233,7 @@ def start(conn: sqlite3.Connection, config: Config, ref: Ref, *, repo: str, chan
         db.touch_ticket(conn, ref.id, repo)
         # A ticket the overseer marked done is worked again: the operator asked for it.
         conn.execute("UPDATE tickets SET done = 0 WHERE key = ?", (ref.id,))
-        db.set_start(conn, TICKET, ref.id, status="started", channel=channel)
+        db.set_start(conn, TICKET, ref.id, status=StartStatus.STARTED, channel=channel)
         running = db.running_run_of(conn, ref.id)
     return Started(already=is_started(record), running=running)
 
@@ -278,9 +279,9 @@ def stop(conn: sqlite3.Connection, ref: Ref, *, channel: str) -> Stopped:
                 "not_started",
                 f"{ref} was not started in canopy; a public ticket stops when its queue label is removed",
             )
-        db.set_start(conn, TICKET, ref.id, status="stopped", channel=channel)
+        db.set_start(conn, TICKET, ref.id, status=StartStatus.STOPPED, channel=channel)
         running = db.running_run_of(conn, ref.id)
-    return Stopped(already=record["status"] == "stopped", running=running)
+    return Stopped(already=record.status is StartStatus.STOPPED, running=running)
 
 
 @dataclass(frozen=True)
@@ -414,8 +415,8 @@ def _dismiss_review(conn: sqlite3.Connection, ref: Ref, finding: str, *, channel
         run = db.get_review_run(conn, run_id)
         if run is None:
             raise Refused("unknown", f"there is no review run {run_id}")
-        stored = review_result.stored(run["result_json"])
-        found = len(stored.findings) if stored is not None and run["status"] == "done" else 0
+        stored = review_result.stored(run.result_json)
+        found = len(stored.findings) if stored is not None and run.status is ReviewRunStatus.DONE else 0
         if number > found:
             raise Refused("unknown", f"{ref} has no finding {number}: it reported {found}")
         db.set_review_dismissal(conn, run_id, number, channel=channel)
@@ -462,24 +463,25 @@ def send(
     run = db.get_review_run(conn, run_id)
     if run is None:
         raise Refused("unknown", f"there is no review run {run_id}")
-    stored = review_result.stored(run["result_json"])
-    found = len(stored.findings) if stored is not None and run["status"] == "done" else 0
+    stored = review_result.stored(run.result_json)
+    found = len(stored.findings) if stored is not None and run.status is ReviewRunStatus.DONE else 0
     if numbers[-1] > found:
         raise Refused("unknown", f"{ref} has no finding {numbers[-1]}: it reported {found}")
     dismissed = db.review_dismissals(conn, run_id)
     if held := [n for n in numbers if n in dismissed]:
         raise Refused("dismissed", f"{ref} {_numbered(held)} dismissed; undo the dismissal to send it")
-    if not own_pr(conn, run):
+    key = run.ticket_key
+    if key is None or not own_pr(conn, run):
         raise Refused("not_ours", f"{ref} is of a PR the loop did not open, which no worker pushes to")
     left = tuple(n for n in range(1, found + 1) if n not in numbers and n not in dismissed)
-    body = f"Address {_numbered(numbers, verb=False)} of canopy's review run {run_id}, of commit {run['sha'][:12]}."
+    body = f"Address {_numbered(numbers, verb=False)} of canopy's review run {run_id}, of commit {run.sha[:12]}."
     if left:
         body += f" Leave its {_numbered(left, verb=False)} alone."
-    replied = reply(conn, Ref(TICKET, run["ticket_key"]), body, channel=channel, submission=submission)
-    return Sent(ticket=run["ticket_key"], replied=replied)
+    replied = reply(conn, Ref(TICKET, key), body, channel=channel, submission=submission)
+    return Sent(ticket=key, replied=replied)
 
 
-def own_pr(conn: sqlite3.Connection, run: sqlite3.Row) -> bool:
+def own_pr(conn: sqlite3.Connection, run: records.ReviewRun) -> bool:
     """Whether review run `run` is of one of the loop's own PRs, and its ticket's unit still has that PR.
 
     Only such a review's findings can be sent to a worker (DESIGN §21). Its purpose was checked when it started; the
@@ -488,11 +490,10 @@ def own_pr(conn: sqlite3.Connection, run: sqlite3.Row) -> bool:
     Returns:
         True when the run's purpose is `own` and its ticket's unit in its repository has the run's PR.
     """
-    key, repo = run["ticket_key"], run["repo"]
     return (
-        run["purpose"] == "own"
-        and key is not None
-        and db.is_unit_pr(conn, str(key), str(run["pr_url"]), repo=str(repo) if repo is not None else None)
+        run.purpose == "own"
+        and run.ticket_key is not None
+        and db.is_unit_pr(conn, run.ticket_key, run.pr_url, repo=run.repo)
     )
 
 
@@ -550,7 +551,7 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, dispatch_lock: Path) -> Forgot
             )
         prs = [str(u["pr_url"]) for u in db.units(conn, ref.id) if u["pr_url"]]
         db.forget_ticket(conn, ref.id)
-    return Forgot(branch=ticket["branch"], prs=prs)
+    return Forgot(branch=ticket.branch, prs=prs)
 
 
 # The overseer's mirror of tracker comments
@@ -771,22 +772,22 @@ class OperatorSection(TypedDict):
     new_operator_messages: list[OperatorMessage]
 
 
-def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> PrivateSection | None:
+def state_section(conn: sqlite3.Connection, ticket: records.Ticket) -> PrivateSection | None:
     """Return a started ticket's part of the overseer's state block, or None for a public ticket (DESIGN §22).
 
     It carries the operator's messages newer than the ticket's message cursor, and the question waiting on a reply.
     Messages from before the operator forgot the ticket's work are not new, whatever the cursor says. A stopped ticket
     is not asked for: the block names it only by key (`stopped`).
     """
-    key = str(ticket["key"])
+    key = ticket.key
     record = start_of(conn, key)
     if record is None:
         return None
-    cursor = int(ticket["last_message_id"] or 0)
-    forgotten = int(ticket["forgotten_message_id"] or 0)
+    cursor = ticket.last_message_id or 0
+    forgotten = ticket.forgotten_message_id or 0
     question = latest_question(conn, key)
     return {
-        "started_at": record["started_at"],
+        "started_at": record.started_at,
         "message_cursor": cursor or None,
         "new_operator_messages": [
             _operator_message(m) for m in operator_messages_after(conn, key, max(cursor, forgotten))
@@ -797,18 +798,18 @@ def state_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> PrivateSecti
     }
 
 
-def operator_section(conn: sqlite3.Connection, ticket: sqlite3.Row) -> OperatorSection | None:
+def operator_section(conn: sqlite3.Connection, ticket: records.Ticket) -> OperatorSection | None:
     """Return a public ticket's operator messages for the overseer's state block, or None when it has no new ones.
 
     They are the operator's replies (DESIGN §22) newer than the ticket's message cursor, and after any forget. The
     overseer reads them as instructions, as it reads an authorized reply on the ticket (DESIGN §7). A private ticket's
     are in its own section (`state_section`).
     """
-    key = str(ticket["key"])
+    key = ticket.key
     if start_of(conn, key) is not None:
         return None
-    cursor = int(ticket["last_message_id"] or 0)
-    forgotten = int(ticket["forgotten_message_id"] or 0)
+    cursor = ticket.last_message_id or 0
+    forgotten = ticket.forgotten_message_id or 0
     messages = operator_messages_after(conn, key, max(cursor, forgotten))
     if not messages:
         return None
@@ -892,7 +893,7 @@ def chore_notes(conn: sqlite3.Connection, name: str) -> list[ChoreNote]:
     ]
 
 
-def _bounded(blocks: list[str], empty: str) -> str:
+def _bounded(blocks: Sequence[str], empty: str) -> str:
     # The newest blocks that fit in PROMPT_CHARS, oldest first, with a note of how many older ones were left out.
     total = 0
     kept: list[str] = []

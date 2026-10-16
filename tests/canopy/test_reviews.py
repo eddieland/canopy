@@ -16,7 +16,7 @@ from canopy.cli.main import main
 from canopy.core import conversation, db, definitions, review_diff
 from canopy.core import review_result as result
 from canopy.core.config import load
-from canopy.core.vocab import ReviewRunStatus
+from canopy.core.vocab import ReviewRunStatus, TickStatus
 from canopy.infra import procs
 from canopy.loop import attention
 from tests.canopy.helpers import (
@@ -98,13 +98,13 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         assert main(review("--ticket", "PROJ-1", "--context", "Start with src/retry.py", sha=sha)) == 0
         deadline = time.monotonic() + 30
         row = db.get_review_run(conn, 1)
-        while row is not None and row["status"] == "running" and time.monotonic() < deadline:
+        while row is not None and row.status == "running" and time.monotonic() < deadline:
             time.sleep(0.05)
             row = db.get_review_run(conn, 1)
         assert row is not None
-        assert row["status"] == "done", Path(row["log_path"]).read_text()
-        assert result.stored(row["result_json"]) == result.ReviewResult.model_validate(FINDINGS)
-        assert (row["pr_url"], row["sha"], row["ticket_key"]) == (PR, sha, "PROJ-1")
+        assert row.status == "done", Path(row.log_path).read_text()
+        assert result.stored(row.result_json) == result.ReviewResult.model_validate(FINDINGS)
+        assert (row.pr_url, row.sha, row.ticket_key) == (PR, sha, "PROJ-1")
 
         [reviewer] = [json.loads(line) for line in agent_log.read_text().splitlines()]
         run_dir = reviews.state_dir / "reviews" / "1"
@@ -214,7 +214,7 @@ def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_s
         with in_tick(conn) as tick_id:
             assert main(review(sha="b" * 40), runner=InlineRunner()) == 1
             assert [d[2] for d in review_decisions(conn, tick_id)] == ["refused:review_limit", "attention:review_limit"]
-            db.finish_tick(conn, tick_id, "ok", "test")
+            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
 
         assert operator("grant", PR, "review") == 0
         assert f"{PR} has had 1 review runs, and may now have 2." in capsys.readouterr().out
@@ -231,7 +231,7 @@ def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_s
             (PR, "this PR has had 2 review runs and the limit is 2"),
             (f"{PR}0", "this PR has had 1 review runs and the limit is 1"),
         ]
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     assert operator("grant", PR, "review", "--runs", "2") == 0
     assert "has had 2 review runs, and may now have 4." in capsys.readouterr().out
 
@@ -260,7 +260,7 @@ def test_only_the_operator_grants_reviews(
             os.environ.pop("CANOPY_TICK_ID")
         assert main(["grant", PR, "review"]) == 1
         assert "grant refused (inside_run)" in capsys.readouterr().err
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     assert conn.execute("SELECT count(*) FROM review_grants").fetchone()[0] == 0
 
 
@@ -359,8 +359,9 @@ def test_the_harness_checks_what_it_can_of_a_result(
         run_id = run_inline(conn, sha=head(git_pool))
         row = db.get_review_run(conn, run_id)
         assert row is not None
-        assert row["status"] == status
-        stored = json.loads(row["result_json"])
+        assert row.status == status
+        assert row.result_json is not None
+        stored = json.loads(row.result_json)
         assert stored.get("harness", "").startswith(note)
         if status == "done":
             assert stored["impact"] == "normal"
@@ -380,8 +381,8 @@ def test_a_plugin_notice_after_the_result_does_not_hide_it(
     with reviewer_reports(f"{json.dumps(FINDINGS)}\n[policy-plugin] session audited, 0 violations"):
         row = db.get_review_run(conn, run_inline(conn, sha=head(git_pool)))
         assert row is not None
-        assert row["status"] == "done"
-        assert json.loads(row["result_json"])["verdict"] == "findings"
+        assert row.status == "done"
+        assert json.loads(row.result_json)["verdict"] == "findings"
 
 
 def test_links_out_of_the_checkout_are_removed_before_the_reviewer_reads_it(
@@ -403,7 +404,7 @@ def test_links_out_of_the_checkout_are_removed_before_the_reviewer_reads_it(
         run_id = run_inline(conn := reviews.journal(), sha=sha)
         row = db.get_review_run(conn, run_id)
         assert row is not None
-        assert row["status"] == "done", Path(row["log_path"]).read_text()
+        assert row.status == "done", Path(row.log_path).read_text()
         [reviewer] = [json.loads(line) for line in agent_log.read_text().splitlines()]
         [listing] = reviewer["commands"]
         names = listing["stdout"].split()
@@ -427,8 +428,8 @@ def test_a_commit_origin_does_not_have_fails_the_review(reviews: CanopyEnv, git_
     run_id = run_inline(conn, sha="d" * 40)
     row = db.get_review_run(conn, run_id)
     assert row is not None
-    assert row["status"] == "failed"
-    assert json.loads(row["result_json"])["harness"].startswith("git fetch failed: ")
+    assert row.status == "failed"
+    assert json.loads(row.result_json)["harness"].startswith("git fetch failed: ")
     assert not agent_log.exists()  # the reviewer never ran
     assert [s["status"] for s in pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))] == ["available", "available"]
 
@@ -438,15 +439,16 @@ def test_a_killed_review_is_crashed_on_the_next_tick(reviews: CanopyEnv, git_poo
     with mock.patch.dict(os.environ, {"FAKE_REVIEWER_SLEEP": "60"}):
         with in_tick(conn) as tick_id:
             assert main(review(sha=head(git_pool))) == 0
-            db.finish_tick(conn, tick_id, "ok", "test")
+            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         deadline = time.monotonic() + 30
         row = db.get_review_run(conn, 1)
-        while (row is None or row["agent_pid"] is None) and time.monotonic() < deadline:
+        while (row is None or row.agent_pid is None) and time.monotonic() < deadline:
             time.sleep(0.05)
             row = db.get_review_run(conn, 1)
         assert row is not None
-        assert row["agent_pid"] is not None, "`_review` never started the reviewer"
-        pid, agent_pid = int(row["pid"]), int(row["agent_pid"])
+        assert row.agent_pid is not None, "`_review` never started the reviewer"
+        assert row.pid is not None
+        pid, agent_pid = row.pid, row.agent_pid
         run_dir = reviews.state_dir / "reviews" / "1"
         assert (run_dir / "checkout").is_symlink()
         os.kill(pid, signal.SIGKILL)
@@ -459,8 +461,8 @@ def test_a_killed_review_is_crashed_on_the_next_tick(reviews: CanopyEnv, git_poo
             assert main(["tick"]) == 0
             crashed = db.get_review_run(conn, 1)
             assert crashed is not None
-            assert crashed["status"] == "crashed"
-            assert not procs.lifelock(Path(crashed["log_path"])).exists()
+            assert crashed.status == "crashed"
+            assert not procs.lifelock(Path(crashed.log_path)).exists()
             while procs.alive(agent_pid) and time.monotonic() < deadline:
                 time.sleep(0.05)
             assert not procs.alive(agent_pid)
@@ -473,13 +475,13 @@ def test_reconcile_leaves_a_running_reviews_slot_alone(reviews: CanopyEnv, git_p
     conn = reviews.journal()
     with in_tick(conn) as tick_id:
         assert main(review(sha=head(git_pool)), runner=InlineRunner()) == 0  # claimed by this live process
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     with overseer_waits("PROJ-1"):
         assert main(["tick"]) == 0
         assert [s["status"] for s in pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))] == ["leased", "available"]
         row = db.get_review_run(conn, 1)
         assert row is not None
-        assert row["status"] == "running"
+        assert row.status == "running"
 
 
 def test_the_state_block_shows_reviewed_prs(reviews: CanopyEnv, git_pool: GitPool, agent_log: Path) -> None:
@@ -600,13 +602,13 @@ def test_a_review_run_records_what_it_cost(reviews: CanopyEnv, git_pool: GitPool
         run_id = run_inline(conn, sha=head(git_pool))
     row = db.get_review_run(conn, run_id)
     assert row is not None
-    assert row["status"] == "done", Path(row["log_path"]).read_text()  # the result line is read from the text events
-    assert row["session_id"] == "ses_review"
+    assert row.status == "done", Path(row.log_path).read_text()  # the result line is read from the text events
+    assert row.session_id == "ses_review"
     usage = db.usage_of(row)
     assert usage is not None
     assert usage.cost_usd == 0.25  # two model calls at 0.125
     assert (usage.first_call, usage.first_cache_write) == (5500, 500)
-    assert (reviews.state_dir / definitions.RUNTIME_DIR / row["definitions_digest"]).is_dir()
+    assert (reviews.state_dir / definitions.RUNTIME_DIR / row.definitions_digest).is_dir()
     assert db.spent_since(conn, "2000-01-01T00:00:00Z") == 0.25
     assert tools_of(conn, "review_runs", run_id) == [("bash", 1, 0, len("read it\n"))]
 
@@ -623,8 +625,8 @@ def test_a_timed_out_review_records_what_it_reported_before_the_kill(reviews: Ca
     run_id = run_inline(conn, sha=head(git_pool), runner=runner)
     row = db.get_review_run(conn, run_id)
     assert row is not None
-    assert row["status"] == "timeout"
-    assert (row["session_id"], row["cost_usd"], row["tokens_cache_write"]) == ("ses_slow", 0.5, 4)
+    assert row.status == "timeout"
+    assert (row.session_id, row.cost_usd, row.tokens_cache_write) == ("ses_slow", 0.5, 4)
 
 
 def test_the_default_review_cmd_asks_for_events(canopy_env: CanopyEnv) -> None:
@@ -636,7 +638,7 @@ def implemented(conn: sqlite3.Connection) -> None:
     with worker_does(*commit_and_push("agent/PROJ-1-work")), in_tick(conn) as tick_id:
         command = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
         assert main(command, runner=InlineRunner()) == 0
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         assert main(["_run", "1"], runner=InlineRunner()) == 0
 
 
@@ -755,8 +757,8 @@ def test_a_review_keeps_its_commits_diff_for_the_web_ui(
         run_id = run_inline(conn, sha=sha)
         row = db.get_review_run(conn, run_id)
         assert row is not None
-        assert (row["status"], row["base_branch"]) == ("done", "main")
-        path = review_diff.path_for(row["log_path"])
+        assert (row.status, row.base_branch) == ("done", "main")
+        path = review_diff.path_for(row.log_path)
         assert path.stat().st_mode & 0o777 == 0o600
         diff = review_diff.read(path)
         assert diff is not None
@@ -779,8 +781,8 @@ def test_a_review_without_its_base_branch_still_runs(
         run_id = run_inline(conn, sha=sha)
         row = db.get_review_run(conn, run_id)
         assert row is not None
-        assert row["status"] == "done", Path(row["log_path"]).read_text()
-        assert not review_diff.path_for(row["log_path"]).exists()
+        assert row.status == "done", Path(row.log_path).read_text()
+        assert not review_diff.path_for(row.log_path).exists()
 
 
 TWO_FINDINGS = {

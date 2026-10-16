@@ -28,8 +28,12 @@ def test_the_reviews_list_is_every_review_run_newest_first(backend: Backend) -> 
 
 
 def test_a_review_anchors_its_findings_on_its_diff(backend: Backend) -> None:
-    found = client(None, backend).get("/api/reviews/4").json()
+    c = client(None, backend)
+    found = c.get("/api/reviews/4").json()
     assert found["review"]["impact"] == "normal"
+    # Its ticket's title, so its page can lead with it; none for a PR with no ticket.
+    assert found["ticket_title"] == "Debounce search input"
+    assert c.get("/api/reviews/2").json()["ticket_title"] is None
     assert found["base_branch"] == "main"
     assert found["summary"].startswith("Stale requests are aborted now.")
     files = found["diff"]["files"]
@@ -50,6 +54,32 @@ def test_a_review_anchors_its_findings_on_its_diff(backend: Backend) -> None:
     # The PR's other review runs, newest first, this one included.
     assert [r["id"] for r in found["runs"]] == [4, 1]
     assert not found["diff"]["truncated"]
+
+
+def test_a_review_goes_gzipped_to_a_browser_that_takes_it_and_as_it_is_to_one_that_does_not(backend: Backend) -> None:
+    c = client(None, backend)
+    # httpx asks for gzip, as a browser does, and reads the body back as it was.
+    taken = c.get("/api/reviews/4")
+    assert (taken.headers["content-encoding"], taken.headers["vary"]) == ("gzip", "Accept-Encoding")
+    plain = c.get("/api/reviews/4", headers={"accept-encoding": "identity"})
+    assert ("content-encoding" in plain.headers, plain.headers["vary"]) == (False, "Accept-Encoding")
+    assert taken.json() == plain.json()
+    assert int(taken.headers["content-length"]) < int(plain.headers["content-length"])
+    # gzip named among others, or with a weight, is taken; refused with q=0, or only as x-gzip, it is not.
+    for accept, gzipped in [
+        ("deflate, gzip;q=0.5", True),
+        ("br, GZIP", True),
+        ("gzip;q=0", False),
+        ("gzip; q=0.0, identity", False),
+        ("gzip;q=x", False),
+        ("x-gzip", False),
+    ]:
+        sent = c.get("/api/reviews/4", headers={"accept-encoding": accept})
+        assert (sent.headers.get("content-encoding") == "gzip") is gzipped, accept
+    # A review too short to be worth it goes as it is.
+    short = c.get("/api/reviews/3")
+    assert len(short.content) < 1024
+    assert "content-encoding" not in short.headers
 
 
 def test_a_review_without_a_diff_has_none_and_a_failed_one_says_why(backend: Backend) -> None:
@@ -76,7 +106,7 @@ def test_a_diff_that_is_a_link_is_not_followed(backend: Backend, tmp_path: Path)
     with backend.open() as ctx:
         row = db.get_review_run(ctx.conn, 2)
     assert row is not None
-    path = review_diff.path_for(str(row["log_path"]))
+    path = review_diff.path_for(row.log_path)
     elsewhere = tmp_path / "elsewhere.diff"
     elsewhere.write_text(mock_reviews.DIFF_88)
     path.unlink()

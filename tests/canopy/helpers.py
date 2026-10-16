@@ -19,8 +19,9 @@ from unittest import mock
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import config, db, records, workspace
+from canopy.core import config, db, plans, records, workspace
 from canopy.core.context import Context
+from canopy.core.vocab import TickStatus
 from canopy.infra import logs, procs, resources
 from tests.conftest import CanopyEnv, Journals
 
@@ -48,7 +49,6 @@ PROMPT_VALUES = {
     "STACKING": "This ticket is not stacked on another ticket's branch.",
     "TRACKER_PROVIDER": "jira",
     "NEEDS_HUMAN_LABEL": "needs-human",
-    "PR_LABEL": "agent",
     "TIMEOUT_MINUTES": "45",
     "ATTEMPT": "1",
     "MAX_ATTEMPTS": "2",
@@ -117,7 +117,7 @@ def running_run(ctx: Context, key: str, *, private: bool = True) -> int:
         runs_dir=ctx.state_dir / "runs",
         private=private,
     )
-    db.finish_tick(ctx.conn, tick_id, "ok", "test")
+    db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "test")
     return run_id
 
 
@@ -213,7 +213,7 @@ def dispatch_in_tick(
     """In a tick of its own, run `canopy dispatch` of `key` in `repo` with `args`; the run it starts does not run."""
     with in_tick(conn) as tick_id:
         code = main(["dispatch", key, "--repo", "repo", *args], runner=runner or InlineRunner())
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         return Dispatched(code, decisions(conn, tick_id))
 
 
@@ -228,7 +228,7 @@ def dispatch_and_run(
     runner = runner or InlineRunner()
     with in_tick(conn) as tick_id:
         assert main(["dispatch", key, "--repo", "repo", *args], runner=runner) == 0, decisions(conn, tick_id)
-        db.finish_tick(conn, tick_id, "ok", "test")
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         run_id = int(last_run(conn)["id"])
         assert main(["_run", str(run_id)], runner=runner) == 0
     run = db.get_run(conn, run_id)
@@ -330,6 +330,21 @@ def private_worker_does(*commands: list[str], result: dict[str, object]) -> Iter
         os.environ,
         {"FAKE_WORKER_PRIVATE_COMMANDS": json.dumps(list(commands)), "FAKE_WORKER_PRIVATE_RESULT": json.dumps(result)},
     ):
+        yield
+
+
+@contextmanager
+def planner_does(*commands: list[str], plan: str | None, result: Mapping[str, object] | None = None) -> Iterator[None]:
+    """Until the block ends, the fake planner writes `plan` to its desk's plan file, runs `commands`, and reports.
+
+    It writes as the planner's edit tool would, before `commands`; with `plan` None it writes no file. `result`, its
+    result line, defaults to a `done` one (DESIGN §25).
+    """
+    script = "import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(sys.argv[2])"
+    write = [["python3", "-c", script, plans.WRITTEN, plan]] if plan is not None else []
+    line = json.dumps(result if result is not None else {"status": "done", "summary": "planned it"})
+    run = [*write, *commands]
+    with mock.patch.dict(os.environ, {"FAKE_PLANNER_COMMANDS": json.dumps(run), "FAKE_PLANNER_RESULT": line}):
         yield
 
 

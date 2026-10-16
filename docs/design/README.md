@@ -47,6 +47,8 @@ not go in the middle of the sequence.
   - [25. Plans before implementing (M44)](PLANNING.md#25-plans-before-implementing-m44)
 - [Garbage collection](GARBAGE_COLLECTION.md): what canopy removes of its own history and caches, and what it keeps.
   - [26. Garbage collection (M47)](GARBAGE_COLLECTION.md#26-garbage-collection-m47)
+- [The overseer's tools](OVERSEER_TOOLS.md): the MCP tools canopy serves the overseer, in place of the CLI.
+  - [27. The overseer's tools (M48)](OVERSEER_TOOLS.md#27-the-overseers-tools-m48)
 
 ## 1. Problem
 
@@ -112,6 +114,7 @@ canopy (harness, Python)
   __main__.py      python -m canopy, how dispatch starts _run from the same installation
 
   cli/             the command line; only cli imports click, and only __main__ imports cli
+    launcher.py    the console script and python -m canopy: `--version` alone without importing the CLI (§6)
     main.py        main(), exit codes, the root group, which imports a command's module only when it runs
     common.py      opening the Context, refusals, the tick named by CANOPY_TICK_ID
     params.py      validated parameter types: ticket keys, reasons, slugs, cursors, bounded text
@@ -195,7 +198,7 @@ canopy (harness, Python)
     __main__.py    python -m canopy.serve --mock: serve for development and tests, or print the OpenAPI schema
 
   setup/
-    init.py        canopy init: the user config, branch protection text, the SSH push URL check, the sandbox hint
+    init.py        canopy init: the private config, branch protection text, the SSH push URL check, the sandbox hint
     sandbox.py     canopy sandbox setup: the wrapper's templates, the pinned srt, and what needs root
     workspace.py   canopy init: the skeleton; canopy workspace sync: converge clones and pools (§18)
 
@@ -211,7 +214,7 @@ canopy (harness, Python)
                    the CLI and the web UI share
     search.py      the web UI's search over the journal: tickets, messages, chore runs, decisions, ticks (§22)
     spend.py       what agent runs cost by day, kind, and what the ticks bought, for canopy spend and the web UI (§11)
-    config.py      layered config: the workspace file canopy-workspace.toml and user config.toml; scopes
+    config.py      layered config: canopy-workspace.toml, the user config.toml, the private .canopy/config.toml; scopes
     context.py     the Context every command passes around: config, workspace, db connection, runner
     contract.py    what every agent result contract is built from: bounded text, plain URLs, the last stdout line
     conversation.py references, start records, the operator's messages, runs' reports and questions, with the guards
@@ -224,6 +227,8 @@ canopy (harness, Python)
     outbox.py      the events notification sinks receive, recorded with the fact they report (§20)
     pause.py       the loop's pause, which every channel writes: whether `canopy loop` starts another tick (§6)
     notice.py      the operator's notice to workers, which every channel writes: what every later run hears (§8)
+    plans.py       each plan's file, written once and read bounded, and its row: current, superseded, approved
+                   by its file's hash (§25)
     definitions.py the snapshot of agents/ and skills/ that agent runs load (§13), the private worker's rendered from
                    config; the guards against shadowing them and against naming the tracker's tools (§22)
     prompts.py     prompt files and overrides; rendering worker prompts
@@ -270,6 +275,9 @@ canopy installs from git with `uv tool install` (D046), which builds the wheel a
 both sinks, and the sandbox wrapper on `PATH`. Dispatch, chores, and reviews start `_run`, `_chore`, and `_review` via
 `sys.executable -m canopy`, so whatever runs canopy must be an interpreter that imports it. The version is the tag's
 (D085): a build at `v0.2.0` is 0.2.0, and a build between tags names its distance from the last one and its commit.
+Pushing the tag runs `.github/workflows/release.yml`, which makes the tag's GitHub Release with notes Claude writes,
+through the operator's subscription, from the commits since the previous tag; GitHub's generated notes stand in if it
+fails. The release carries no build: the install is still from git.
 
 Where later work goes:
 

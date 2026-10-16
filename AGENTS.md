@@ -90,6 +90,13 @@ If code and the design disagree, the design doc wins until a decision entry says
 ## Code conventions
 
 - Fully typed. `pyrefly` strict clean, the test fakes included.
+- A parameter takes the most general type its body needs; a return keeps the concrete type it builds. `Iterable` for one
+  pass; `Collection` for `len`, `in`, or more than one pass; `Sequence` for indexing, slicing, `reversed`, or an order
+  the output keeps; `Mapping` for a dict only read. A `set` or `frozenset` tested with `in` becomes
+  `collections.abc.Set`, imported as `AbstractSet`, not `Collection`: a `Collection[str]` would also take a bare `str`,
+  where `in` is a substring test. A parameter stays concrete when the function mutates, stores, or returns it, or hands
+  it to `json.dumps` or `isinstance`; a click command's parameters stay the tuple click passes. No linter checks this,
+  so review does.
 - Deterministic core. The Python code never calls an LLM. It runs agent processes and reads their output.
 - Every external process (`treehouse`, `git`, the agent runtime, `notify`) goes through `src/canopy/infra/procs.py`.
   Nothing else calls `subprocess`. This is the seam tests use. ruff's banned-api rule (`TID251`) fails the lint if
@@ -118,12 +125,12 @@ If code and the design disagree, the design doc wins until a decision entry says
   table, so a migration that adds a column to a typed table adds the field too. A status, kind, or phase column is a
   field of its `core/vocab.py` enum, so the row carries the member and refuses a value the vocabulary does not hold. A
   helper that reads the same columns from several tables, some still untyped, reads them through `records.columns`.
-- A run's status and kind and a ticket's phase are closed vocabularies in `core/vocab.py`, each a `StrEnum`. New code
-  writes and compares them through its members, not bare strings, and converts a value read from the journal where it
-  branches on it. A branch over one is a `match` ending in `case _: assert_never(...)`, so a new value fails the type
-  check until every branch handles it. click matches an enum choice by its name, so a `click.Choice` over one takes its
-  values. A table made from M36 on constrains each `status`, `kind`, and `phase` column with `CHECK (column IN (...))`;
-  `tests/canopy/test_db.py` fails on one that does not.
+- A run's and a tick's status, a run's kind, and a ticket's phase are closed vocabularies in `core/vocab.py`, each a
+  `StrEnum`. New code writes and compares them through its members, not bare strings, and converts a value read from the
+  journal where it branches on it. A branch over one is a `match` ending in `case _: assert_never(...)`, so a new value
+  fails the type check until every branch handles it. click matches an enum choice by its name, so a `click.Choice` over
+  one takes its values. A table made from M36 on constrains each `status`, `kind`, and `phase` column with
+  `CHECK (column IN (...))`; `tests/canopy/test_db.py` fails on one that does not.
 - Hard guards live in code, judgment lives in prompts. Capacity limits, attempt limits, cooldowns, "never merge", and
   "one worker per ticket" are enforced by the harness regardless of what the overseer asks for.
 - Log with `logging`, JSON lines to `.canopy/canopy.log` in the workspace. Every tick has an id that appears in every

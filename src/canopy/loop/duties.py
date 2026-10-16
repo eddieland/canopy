@@ -9,6 +9,7 @@ holds the overseer to doing each duty, not to doing it well.
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -17,7 +18,7 @@ from canopy.core import conversation, db
 if TYPE_CHECKING:
     import sqlite3
 
-    from canopy.core import chore_view
+    from canopy.core import chore_view, records
 
 # The decision `canopy queried` records: the tick ran the tracker query, and which open tickets it returned. Its
 # rationale is `queried_rationale`'s, which `queried_keys` reads back.
@@ -50,10 +51,10 @@ def owed(
     tick_id: int,
     *,
     query_due: bool,
-    tickets: list[sqlite3.Row],
-    stopped: list[str],
-    recently_done: list[sqlite3.Row],
-    chores: list[chore_view.ChoreSummary],
+    tickets: Iterable[records.Ticket],
+    stopped: Iterable[str],
+    recently_done: Iterable[sqlite3.Row],
+    chores: Iterable[chore_view.ChoreSummary],
 ) -> Duties:
     """What the state block rendered from these asks of the overseer, read just before it runs.
 
@@ -63,14 +64,14 @@ def owed(
     recorded = db.decisions_for_tick(conn, tick_id)
     return Duties(
         query_due=query_due,
-        tickets=frozenset(str(t["key"]) for t in tickets),
+        tickets=frozenset(t.key for t in tickets),
         exempt=frozenset([*stopped, *(str(t["key"]) for t in recently_done)]),
         chores=frozenset(c["name"] for c in chores if c["due"] and not c["running"]),
         harness=max((d.id for d in recorded), default=0),
     )
 
 
-def queried_rationale(keys: list[str]) -> str:
+def queried_rationale(keys: Sequence[str]) -> str:
     """The rationale of a `queried` decision naming `keys`, which `queried_keys` reads back.
 
     Returns:

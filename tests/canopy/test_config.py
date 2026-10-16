@@ -1,3 +1,4 @@
+import contextlib
 import os
 import re
 import tomllib
@@ -6,9 +7,12 @@ from unittest import mock
 
 import pytest
 
+from canopy.cli.main import main
 from canopy.core import config, workspace
 from canopy.core.config import ConfigError, load, render_command
-from tests.conftest import CanopyEnv
+from canopy.core.context import Context
+from canopy.loop import reread
+from tests.conftest import HERMETIC_GIT, SHARED_TOML, CanopyEnv, git, user_toml
 
 EXAMPLES = Path(__file__).parents[2] / "examples"
 
@@ -41,13 +45,13 @@ def test_trusted_reviewers_take_logins_and_canopys_reviewer(canopy_env: CanopyEn
 
 
 def test_user_file_wins_over_the_workspace_file_for_shared_keys(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_shared('[tracker]\nprovider = "jira"\nquery = "project = A"\n[trust]\npr_label = "bot"\n')
+    canopy_env.write_shared('[tracker]\nprovider = "jira"\nquery = "project = A"\n[trust]\nbranch_prefix = "bot/"\n')
     canopy_env.write_user(
-        canopy_env.user_file.read_text().replace("[runtime]", '[trust]\npr_label = "mine"\n\n[runtime]', 1)
+        canopy_env.user_file.read_text().replace("[runtime]", '[trust]\nbranch_prefix = "mine/"\n\n[runtime]', 1)
     )
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert cfg.tracker.query == "project = A"
-    assert cfg.trust.pr_label == "mine"
+    assert cfg.trust.branch_prefix == "mine/"
 
 
 def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(canopy_env: CanopyEnv) -> None:
@@ -86,7 +90,7 @@ def test_the_workspace_file_may_not_set_user_only_keys(canopy_env: CanopyEnv, se
     section, line = section_key
     extra = f"\n[{section}]\n{line}\n" if section != "tracker" else f"{line}\n"
     canopy_env.write_shared(canopy_env.shared_file.read_text() + extra)
-    with pytest.raises(ConfigError, match="user-only"):
+    with pytest.raises(ConfigError, match="is private"):
         load(canopy_env.root, canopy_env.user_file)
 
 
@@ -94,6 +98,13 @@ def test_a_removed_key_says_what_to_do(canopy_env: CanopyEnv) -> None:
     """`paths.state_dir` was in the example user config; a copy of it must say to delete the key (D016)."""
     canopy_env.write_user(canopy_env.user_file.read_text() + 'state_dir = "~/.canopy"\n')
     with pytest.raises(ConfigError, match=r"paths\.state_dir was removed: delete it; state is always in the workspace"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_a_removed_pr_label_says_to_delete_it(canopy_env: CanopyEnv) -> None:
+    """`trust.pr_label` was in the example workspace file; a copy of it must say to delete the key."""
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + '[trust]\npr_label = "agent"\n')
+    with pytest.raises(ConfigError, match=r"trust\.pr_label was removed: delete it"):
         load(canopy_env.root, canopy_env.user_file)
 
 
@@ -151,7 +162,8 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
     canopy_env.shared_file.unlink()
     with pytest.raises(ConfigError) as exc:
         load(canopy_env.root, canopy_env.user_file)
-    files = f"{canopy_env.shared_file} or {canopy_env.user_file}"
+    private_file = canopy_env.state_dir / "config.toml"
+    files = f"{canopy_env.shared_file}, {private_file}, or {canopy_env.user_file}"
     assert f"missing required key tracker.provider; set it in {files}" in str(exc.value)
     assert "missing required key tracker.query" in str(exc.value)
 
@@ -313,6 +325,7 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         runtime.worker_cmd,
         runtime.private_worker_cmd,
         runtime.split_cmd,
+        runtime.plan_cmd,
         runtime.chore_cmd,
         runtime.review_cmd,
     ):
@@ -371,3 +384,144 @@ def test_changed_names_the_keys_whose_values_differ_in_the_schemas_order(canopy_
     # A table section is one key, whichever of its tables changed.
     assert config.changed(before, after) == ["capacity.max_workers", "serve.port", "chores"]
     assert config.changed(after, before) == ["capacity.max_workers", "serve.port", "chores"]
+
+
+def test_the_private_file_wins_over_the_user_file_and_the_workspace_file(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + '\n[trust]\nbranch_prefix = "team/"\n')
+    canopy_env.write_user(canopy_env.user_file.read_text() + '\n[trust]\nbranch_prefix = "mine/"\n')
+    canopy_env.write_private(
+        '[tracker]\nlabels = ["agent-ready-acme"]\nquery = "project = MINE"\n\n[trust]\nbranch_prefix = "acme/"\n'
+    )
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert cfg.tracker.labels == ("agent-ready-acme",)
+    assert cfg.tracker.query == "project = MINE"
+    assert cfg.trust.branch_prefix == "acme/"
+    assert cfg.tracker.provider == "jira"  # from the workspace file, which nothing overrides
+    assert "agent run" in cfg.runtime.worker_cmd  # from the user file, which the private file leaves alone
+
+
+def test_a_private_key_in_the_workspace_file_names_the_private_file(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_shared(canopy_env.shared_file.read_text() + "\n[serve]\nport = 9000\n")
+    with pytest.raises(ConfigError) as e:
+        load(canopy_env.root, canopy_env.user_file)
+    assert str(e.value) == (
+        f"{canopy_env.shared_file}: serve.port is private and cannot be set in the workspace file; set it in "
+        f"{canopy_env.private_file}, or in {canopy_env.user_file} for every workspace"
+    )
+
+
+def test_a_private_file_and_no_user_file_runs(canopy_env: CanopyEnv) -> None:
+    canopy_env.user_file.unlink()
+    canopy_env.write_private(user_toml())
+    assert load(canopy_env.root, canopy_env.user_file).tracker.labels == ("agent-ready-tester",)
+    assert main(["status"]) == 0
+
+
+def test_with_neither_config_file_the_error_names_the_private_file_and_init(canopy_env: CanopyEnv) -> None:
+    canopy_env.user_file.unlink()
+    with pytest.raises(ConfigError) as e:
+        load(canopy_env.root, canopy_env.user_file)
+    assert str(e.value) == (
+        f"no config at {canopy_env.private_file} or {canopy_env.user_file}; run `canopy init` in the workspace"
+    )
+
+
+def test_a_validation_error_names_the_files_a_private_key_may_come_from(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_user(canopy_env.user_file.read_text().replace("labels = ", "# labels = "))
+    with pytest.raises(ConfigError) as e:
+        load(canopy_env.root, canopy_env.user_file)
+    files = f"{canopy_env.private_file} or {canopy_env.user_file}"
+    assert str(e.value) == f"missing required key tracker.labels; set it in {files}"
+
+    canopy_env.write_private('[tracker]\nlabels = ["mine"]\n\n[capacity]\nmax_workers = -1\n')
+    with pytest.raises(ConfigError, match=rf"^{re.escape(str(canopy_env.private_file))}: capacity\.max_workers: "):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+@pytest.mark.parametrize("tracked", ["config.toml", "canopy.db"])
+def test_a_state_directory_git_tracks_is_refused(canopy_env: CanopyEnv, tracked: str) -> None:
+    """A `.canopy/` checked out of a shared workspace repository passes the permission check (D053), not this one."""
+    canopy_env.write_private("# the operator's own\n")
+    (canopy_env.state_dir / "canopy.db").write_bytes(b"")
+    with mock.patch.dict(os.environ, HERMETIC_GIT):
+        git("init", "--quiet", cwd=canopy_env.root)
+        assert load(canopy_env.root, canopy_env.user_file).tracker.provider == "jira"  # untracked: fine
+
+        git("add", "--force", f".canopy/{tracked}", cwd=canopy_env.root)
+        with pytest.raises(ConfigError, match=rf"{re.escape(str(canopy_env.state_dir / tracked))} is tracked by git"):
+            load(canopy_env.root, canopy_env.user_file)
+        with contextlib.chdir(canopy_env.repo):
+            assert main(["status"]) == 2
+
+        git("rm", "--quiet", "--cached", f".canopy/{tracked}", cwd=canopy_env.root)
+        assert load(canopy_env.root, canopy_env.user_file).tracker.provider == "jira"
+
+
+def test_a_repository_git_cannot_read_is_refused(canopy_env: CanopyEnv) -> None:
+    (canopy_env.root / ".git").mkdir()  # not a repository git reads: it cannot say what it tracks
+    with mock.patch.dict(os.environ, HERMETIC_GIT), pytest.raises(ConfigError, match="git could not list"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_a_symlinked_private_file_is_refused(canopy_env: CanopyEnv, tmp_path: Path) -> None:
+    elsewhere = tmp_path / "elsewhere.toml"
+    elsewhere.write_text('[tracker]\nlabels = ["theirs"]\n')
+    canopy_env.private_file.symlink_to(elsewhere)
+    with pytest.raises(ConfigError, match="a symlink; canopy reads it only as a regular file of yours"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+@pytest.mark.parametrize("mode", [0o620, 0o602])
+def test_a_private_file_others_can_write_is_refused(canopy_env: CanopyEnv, mode: int) -> None:
+    canopy_env.write_private("# mine\n")
+    canopy_env.private_file.chmod(mode)
+    with pytest.raises(ConfigError, match="is not private to you"):
+        load(canopy_env.root, canopy_env.user_file)
+    canopy_env.private_file.chmod(0o644)  # others may read it: nothing in it is secret
+    assert load(canopy_env.root, canopy_env.user_file).tracker.provider == "jira"
+
+
+def test_someone_elses_private_file_is_refused(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_private("# theirs\n")
+    with (
+        mock.patch.object(os, "getuid", autospec=True, return_value=os.getuid() + 1),
+        pytest.raises(ConfigError, match="is not private to you"),
+    ):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_a_private_file_that_is_not_a_regular_file_is_refused(canopy_env: CanopyEnv) -> None:
+    canopy_env.private_file.mkdir()
+    with pytest.raises(ConfigError, match="is not private to you"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_a_reload_takes_up_a_change_to_the_private_file(ctx: Context, canopy_env: CanopyEnv) -> None:
+    canopy_env.write_private("[loop]\ninterval_minutes = 30\n")
+    found = reread.load(ctx)
+    assert found.changed == ("loop.interval_minutes",)
+    assert found.config.loop.interval_minutes == 30
+
+
+def test_two_workspaces_each_read_their_own_private_file(canopy_env: CanopyEnv, tmp_path: Path) -> None:
+    other = tmp_path / "other"
+    (other / ".canopy").mkdir(parents=True, mode=0o700)
+    (other / config.WORKSPACE_FILE_NAME).write_text(SHARED_TOML)
+    canopy_env.write_private('[tracker]\nlabels = ["acme-queue"]\n\n[serve]\nport = 8801\n')
+    (other / ".canopy" / "config.toml").write_text('[tracker]\nlabels = ["other-queue"]\n\n[serve]\nport = 8802\n')
+
+    acme, second = load(canopy_env.root, canopy_env.user_file), load(other, canopy_env.user_file)
+    assert (acme.serve.port, acme.tracker.labels) == (8801, ("acme-queue",))
+    assert (second.serve.port, second.tracker.labels) == (8802, ("other-queue",))
+
+
+def test_a_relative_path_in_the_private_file_names_a_file_in_the_state_directory(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_private('[paths]\nworker_instructions = "worker-instructions.md"\nprompt_overrides = "~/p"\n')
+    paths = load(canopy_env.root, canopy_env.user_file).paths
+    assert paths.worker_instructions == canopy_env.state_dir / "worker-instructions.md"
+    assert paths.prompt_overrides == canopy_env.home / "p"
+
+    canopy_env.private_file.unlink()
+    canopy_env.write_user(canopy_env.user_file.read_text() + 'worker_instructions = "worker-instructions.md"\n')
+    with pytest.raises(ConfigError, match=r"paths\.worker_instructions: Value error, must be an absolute path or"):
+        load(canopy_env.root, canopy_env.user_file)

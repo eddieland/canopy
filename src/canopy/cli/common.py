@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import sqlite3
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, override
@@ -12,10 +11,13 @@ import click
 
 from canopy.core import config, conversation, db, workspace
 from canopy.core.context import Context, db_path
+from canopy.core.vocab import TickStatus
 from canopy.infra import logs, procs, resources
 
 if TYPE_CHECKING:
     from click.shell_completion import CompletionItem
+
+    from canopy.core import records
 
 
 class CliError(click.ClickException):
@@ -70,7 +72,7 @@ def open_context(click_ctx: click.Context, *, migrate: bool = True) -> Context:
     """
     runner = runner_of(click_ctx)
     ws = workspace.find(Path.cwd())
-    cfg = config.load(ws.root)
+    cfg = config.load(ws.root, runner=runner)
     # Logs and overseer output live here; they are for the operator only (TRUST_MODEL T2).
     workspace.ensure_state_dir(ws.state_dir)
     logs.configure(ws.state_dir)
@@ -97,7 +99,7 @@ def runner_of(click_ctx: click.Context) -> procs.Runner:
     return obj.runner
 
 
-def optional_tick(ctx: Context) -> sqlite3.Row | None:
+def optional_tick(ctx: Context) -> records.Tick | None:
     """Return the tick this command runs inside, named by CANOPY_TICK_ID, or None outside a tick.
 
     Raises:
@@ -107,12 +109,12 @@ def optional_tick(ctx: Context) -> sqlite3.Row | None:
     if not raw:
         return None
     row = db.get_tick(ctx.conn, int(raw)) if raw.isdigit() else None
-    if row is None or row["status"] != "running":
+    if row is None or row.status != TickStatus.RUNNING:
         raise CliError(f"{conversation.TICK_ID_ENV}={raw} does not name a running tick")
     return row
 
 
-def require_tick(ctx: Context) -> sqlite3.Row:
+def require_tick(ctx: Context) -> records.Tick:
     """Return the tick this command runs inside; refuse outside a tick.
 
     Raises:

@@ -57,7 +57,7 @@ in order:
 
    The object holds, in order from what changes rarely to what changes every tick, for a runtime that caches part of a
    message: workspace root; the workspace (name, the path of `MAP.md` if any); tracker config (provider, query, labels,
-   needs-human label); trust config (authorized repliers, branch prefix, PR label); policy (limits and stacking); the
+   needs-human label); trust config (authorized repliers, branch prefix); policy (limits and stacking); the
    repositories (name, path, the map's clone `url`, summary, whether cloned, its pool's leased slots, §18); the
    `tickets` rows not marked done, except those the operator stopped; `stopped`; `recently_done` (§7); split children
    (§18); chores and reviews when configured; the operator's notices to workers in force or lately ended (§8), when
@@ -99,7 +99,9 @@ in order:
    launcher's path for every install: a `uv tool install` script, `uv run`, and `python -m canopy`, none of which
    `sys.argv[0]` names reliably. It would
    also override the operator's PATH. The check runs whatever the overseer would, so every install works as it does
-   for the overseer, and costs a process start (about 0.4 seconds) per tick.
+   for the overseer. The launcher answers `--version` alone before importing the CLI (`cli/launcher.py`), so the check
+   costs an interpreter start and a metadata read, under 0.1 seconds, not a whole `canopy` start: it proves the
+   launcher and its environment start and canopy is installed in it, not that every dependency imports.
 
    Then run the overseer with `overseer_cmd`, cwd = the workspace root (§18), timeout
    `overseer_timeout_minutes`, and `CANOPY_TICK_ID` in its environment. `canopy dispatch`, `decide`, `queried`,
@@ -212,7 +214,7 @@ table to the set rather than another copy, so a fix to the claim or to the crash
    lengthened after idle ticks and ended at a gate (Idle pacing, below). This pacing rule is `pacing.wait`; it does
    not read tick cost (ROADMAP M13, deferred). An operator message recorded since the tick began, such as a
    `canopy reply`, ends the wait early (§22); so does a run ending (below). The wait never ends sooner than
-   `loop.min_gap_minutes` (user-only, default 1) after the tick began, whatever ended it: the deadline, a gate, or an
+   `loop.min_gap_minutes` (private, default 1) after the tick began, whatever ended it: the deadline, a gate, or an
    early wake. Measured from the tick's start, it bounds how often the overseer runs: a burst of messages, runs ending
    one after another, or a gate opening just after a tick would otherwise run ticks back to back. On a terminal,
    pressing `t` (`repeat.TICK_NOW_KEY`, either case) ends it at once, with no floor (a keypress is deliberate, as a
@@ -254,7 +256,8 @@ Reloading config (taken on request, 2026-10-13): the loop reads its config at st
 so a change needs no restart. The listener secret is not config: a new one still takes a restart (§22).
 
 - SIGHUP (`kill -HUP`, with the pid in the `loop started` log line) or Reload on the web UI's settings page asks for
-  it (`loop/reread.py`). It reads the workspace file and the user config as any `canopy` command does, and replaces the
+  it (`loop/reread.py`). It reads the workspace file, the user file, and the private file as any `canopy` command does
+  (§12), and replaces the
   loop's own copy: the next tick's limits, the pace, and what the web UI serves. `--every` still holds.
 - A tick running when it is asked for finishes first, on the config it started with; the wait applies it at its next
   step, so a reload during a wait does not wait for the deadline. The wait it comes in keeps its length, and the waits
@@ -322,7 +325,7 @@ The wait after a tick is then:
   it. Off, the loop paces as before M21: `base` after every tick, no gate shortens it, and only the operator's acts
   wake it (§22). A shorter `--every` keeps idle pacing, from that base.
 
-`loop.idle_max_minutes` (user-only, default 120) is at least `loop.interval_minutes` when set; left unset under a
+`loop.idle_max_minutes` (private, default 120) is at least `loop.interval_minutes` when set; left unset under a
 longer interval, it is no error and idle pacing is off. The count lives in the loop, not the journal: a restarted loop
 starts at `base`, and a hand-run `canopy tick` between the loop's ticks counts like any other.
 
@@ -428,7 +431,7 @@ comment is never review feedback either. If the tracker cannot say when a label 
 is the reference point instead of the label. Anything else on the ticket is data, not instruction. See TRUST_MODEL.
 
 **Trusted reviewers** (D089). Review feedback is a PR's reviews, review comments, and requested changes, and canopy's
-own review findings (§21). `trust.trusted_reviewers`, user-only, lists whose feedback a worker may address without the
+own review findings (§21). `trust.trusted_reviewers`, private, lists whose feedback a worker may address without the
 operator's go-ahead: VCS host logins, matched in full and case-insensitively, and `canopy:review` for canopy's own
 review runs, which post nothing and are known only from the journal (§21).
 It is empty by default: nobody is trusted until listed, so a review bot's comment never starts a fixup on its own.
@@ -541,11 +544,12 @@ seen.
 
 ## 8. Dispatch and the worker contract
 
-`canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume|split [--repo NAME]... [--slug SLUG] [--base BRANCH]
-[--request COMMENT_ID] [--context TEXT] [--cursor NAME=ID]...`:
+`canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume|split|plan [--repo NAME]... [--slug SLUG]
+[--base BRANCH] [--request COMMENT_ID] [--context TEXT] [--cursor NAME=ID]...`:
 
 Each `--repo` names a unit of the ticket, its work in one repository (§18); naming several makes a joint run. Every
-dispatch names at least one, in a workspace of one repository too.
+dispatch names at least one, in a workspace of one repository too. A `plan` writes the ticket's plan before its first
+`implement`, and runs as a split does, with guards of its own (§25).
 
 1. Check the guards. They are in code and not overridable from the prompt. A refusal is recorded as a decision
    `refused:<guard>` with the reason, and the command exits 1. A dry run checks the same guards and stops, counting
@@ -596,7 +600,7 @@ dispatch names at least one, in a workspace of one repository too.
    row (kind, branch, started_at, whether it is private) and a `run_slots` row per slot (repository, slot path, lease
    id, holder, and base branch: `--base` if given, else treehouse's). Each repository becomes a unit of the ticket, with
    the run's branch.
-3. Render the worker prompt for the kind with: KEY, tracker provider, branch name, PR label, needs-human label, timeout,
+3. Render the worker prompt for the kind with: KEY, tracker provider, branch name, needs-human label, timeout,
    the attempt number (one more than the most runs of the kind in any unit covered) and that unit's limit, a
    `{{REPOSITORIES}}` section listing each repository's path, base branch, journaled PR, and summary, the authorized
    repliers, the trusted reviewers and, on a public ticket, the operator's latest messages (§7), the queue labels,
@@ -609,7 +613,7 @@ dispatch names at least one, in a workspace of one repository too.
    - The context is the overseer's `--context`: at most 2000 characters pointing at what to read (links, comment ids,
      check names), never a copy of ticket or PR text, which would invite injection, and never a file, whose path
      could pull any file the operator can read into the prompt. The worker reads that text itself and checks a reply's
-     author against the authorized repliers, rendered from the user config.
+     author against the authorized repliers, rendered from the operator's config.
    - Placeholders are `{{NAME}}`, replaced in one pass. An unknown one is `bad_prompt`, as is a worker prompt without
      `{{LABELS}}`, so an older override fails closed (D051). A joint run's prompt also needs `{{REPOSITORIES}}` and
      `{{PRS}}`, its worker's only way to learn its repositories; an override without them still serves runs in one
@@ -804,7 +808,7 @@ without the placeholders still renders, and its workers' comments read as the op
 
 How a worker opens a PR is the one step an operator may need done their own way: an employer's tooling that adds
 metadata, a stacked-PR tool, or a host the GitHub MCP serves badly. It is the operator's skill, not a harness command
-that opens PRs, which would put VCS knowledge in code. `runtime.pr_skill`, user-only, names a skill
+that opens PRs, which would put VCS knowledge in code. `runtime.pr_skill`, private, names a skill
 of the operator's, which `implement` and `resume` workers then open every PR with, and in no other way; with it unset
 they use the GitHub MCP. Workers get the instruction as `{{OPEN_PR}}`. A skill that is not available fails the run: the
 worker opens no PR and reports `failed` with a summary starting `no PR skill:`, rather than falling back to the MCP
@@ -814,7 +818,7 @@ a repository's could stand in for the operator's. Any program it runs must be on
 canopy, which workers inherit. It changes only how the PR is opened; every other obligation above still holds. The
 branch is `{{BRANCH}}`, pushed as the obligations above say, and `_run` still checks it is on origin (step 5). A program
 that pushes by itself is past the bash rules, which match the command text, so branch protection governs (TRUST_MODEL
-T1). The PR targets the listed base, carries the ticket key and `trust.pr_label` with no closing keywords, and its URL
+T1). The PR targets the listed base, carries the ticket key with no closing keywords, and its URL
 goes in the result's `prs`. The overseer and later workers still read the PR through the GitHub MCP, so it must be one
 that server can read. `fix-ci` and `split` open no PRs and ignore the key. Updating an existing PR, such as retargeting
 a stacked
@@ -912,7 +916,7 @@ Three steps, all the operator's, in the order they run:
    setup that depends on the base alone, such as a toolchain or a warm fetch. They are treehouse's: canopy's own pool
    (`pools.backend = "canopy"`, §18) runs none, and what one did moves to `setup_cmd`, made to tolerate its own
    failure where the hook's was ignored (`|| true`); BAZEL.md shows how.
-3. **`runtime.setup_cmd`**, user-only, runs in each slot of a worker run after `_run` checks out its branch (§8
+3. **`runtime.setup_cmd`**, private, runs in each slot of a worker run after `_run` checks out its branch (§8
    `_run` step 2), and fails the run when it fails. It suits setup that depends on the branch or must succeed:
    installing the branch's dependencies, generating code its build needs. It is split into words as `notify.cmd` is,
    with no shell and no placeholders; one command serves every repository, telling them apart by `CANOPY_REPO` (§8).

@@ -126,7 +126,7 @@ def item_fingerprint(item: Item) -> str:
     return fingerprint(item.ticket_key, item.reason, item.repo)
 
 
-def diff(conn: sqlite3.Connection, sink_name: str, items: list[Item], dismissed: Collection[str] = ()) -> Diff:
+def diff(conn: sqlite3.Connection, sink_name: str, items: Sequence[Item], dismissed: Collection[str] = ()) -> Diff:
     """Compare `items` with the open items already delivered to sink `sink_name`.
 
     `dismissed` holds the fingerprints of chore findings the operator dismissed: still open, but off the list.

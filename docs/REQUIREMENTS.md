@@ -1,9 +1,10 @@
 # canopy requirements
 
 The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 to R17
-on 2026-10-14, R18 on 2026-10-15), and where canopy stands on each. The design (`design/`) is how canopy meets them;
-this file is what it must meet. Where the two disagree, the conflict is listed under [Conflicts](#conflicts) until a
-`DECISIONS.md` entry settles it, and the design doc stays normative until then (AGENTS.md).
+on 2026-10-14, R18 on 2026-10-15, R19 on 2026-10-16), and where canopy stands on each. The design (`design/`) is how
+canopy meets them; this file is what it must meet. Where the two disagree, the conflict is listed under
+[Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until then
+(AGENTS.md).
 
 A bare § is a section of the design (`design/`). Status words:
 
@@ -209,18 +210,18 @@ the web UI's settings page, §8) lapses, reaches all of them, and shows on every
 
 ### R16. Change limits and tighten trust settings from the web UI
 
-Built (M41). Written down 2026-10-14. The operator changes some settings often enough that opening the user config
-file is friction: a pool's slots, how many workers run at once, an attempt limit, how often the loop ticks. They should
-be able to change those from the web UI's settings page and have the loop take them up, as a reload does. Trust
+Built (M41). Written down 2026-10-14. The operator changes some settings often enough that opening a config file is
+friction: a pool's slots, how many workers run at once, an attempt limit, how often the loop ticks. They should be
+able to change those from the web UI's settings page and have the loop take them up, as a reload does. Trust
 settings may be changed from the page only toward stricter: removing an authorized replier or a trusted reviewer,
 turning `trust.rebase` off, turning the commit trailer on. Loosening one, or changing any key that runs a command,
 chooses a prompt, or moves the listener, stays an edit to the file. The Limits and trust page under Settings does
-this, within ceilings in code (§12, TRUST_MODEL T8, D121).
+this, writing the workspace's private file within ceilings in code (§12, TRUST_MODEL T8, D122).
 
 ### R17. Review a coworker's PR on request, once or for as long as it is open
 
 Built in part (M42): `canopy start URL --review`, or the web UI's pull requests page, has canopy review a
-PR once, at its head (§21, Review requests); the live check is SCENARIOS S37. Watching one, reviewed again at each new
+PR once, at its head (§21, Review requests); the live check is SCENARIOS S39. Watching one, reviewed again at each new
 commit until it merges, is deferred (ROADMAP's deferred list): the operator judged it more than MVP needs. Written down
 2026-10-14. The operator should be able to hand canopy someone else's PR to review: once, at its current commit, or
 watched, reviewed again at each new commit until it merges or closes. Before M42 canopy reviewed a PR only as the
@@ -242,6 +243,16 @@ changes makes a new plan. The plan stays in canopy and is posted nowhere, so a p
 Today the `implement` worker plans inside its own session, and nothing of it survives but its summary.
 2026-10-16: the operator reads a plan as a document, edits it in place, and comments on its passages, as on a shared
 document; asking for changes gives the planner each comment with the passage it is on.
+
+### R19. Configure each workspace on its own
+
+Built in M49, live acceptance pending. Written down 2026-10-16. Most of what the operator sets belongs to one
+workspace: its queue labels, who may steer its workers, its capacity and pools, its chores and reviews, how often its
+loop runs, and the port its web UI listens on. Those settings should live with the workspace, so that changing one
+workspace's leaves every other alone, and two loops in two workspaces do not share a port. Only what serves every
+workspace stays in a file of the operator's own, and that file is optional. The workspace file is shared and perhaps
+committed, so it can hold none of these (TRUST_MODEL T7); each workspace's private file, `.canopy/config.toml`, does,
+and the user file is optional (§12).
 
 ## Nice to have
 
@@ -292,5 +303,5 @@ DESIGN §10).
   own surface moves to the web UI once M20 is built, and private tickets (R11) are answered there or with the CLI.
   Coworkers' surface is unchanged: labels, ticket comments, and PR review. Principle 6 says so since M20.
 - **C6. Repositories that refuse merge commits vs pushes that are never forced (R4, R9).** Settled by the operator on
-  2026-10-13 (issue #293, D056): with `trust.rebase`, user-only and off by default, workers rebase onto their base and
+  2026-10-13 (issue #293, D056): with `trust.rebase`, private and off by default, workers rebase onto their base and
   push with `--force-with-lease`, the only force their definitions allow. Without it, they merge, as before.

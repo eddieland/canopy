@@ -81,7 +81,7 @@ def test_a_split_reads_a_desk_and_records_its_children(ws: Ws, treehouse_state: 
         # The parent gets no branch and no units: the children carry the work.
         parent = db.get_ticket(conn, "PROJ-12")
         assert parent is not None
-        assert parent["branch"] is None
+        assert parent.branch is None
         assert db.units(conn, "PROJ-12") == []
         assert run["branch"] == ""
         (action, rationale), _ = decisions(conn, tick_id)

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import sys
+from collections.abc import Sequence
 from pathlib import Path
 
 import click
@@ -15,8 +16,8 @@ from click.shell_completion import BashComplete, FishComplete, ShellComplete, Zs
 
 from canopy.cli import workspace as cli_workspace
 from canopy.cli.common import CliError, runner_of
-from canopy.core import config, conversation, definitions, workspace
-from canopy.infra import resources
+from canopy.core import config, conversation, definitions, hostgit, workspace
+from canopy.infra import procs, resources
 from canopy.serve import secret
 from canopy.setup import init
 from canopy.setup import sandbox as setup_sandbox
@@ -40,11 +41,12 @@ COMPLETE_VAR = "_CANOPY_COMPLETE"
 @click.argument("repos", metavar="[[NAME=]URL]...", nargs=-1)
 @click.pass_context
 def cmd_init(click_ctx: click.Context, provider: str | None, repos: tuple[str, ...], *, in_checkout: bool) -> int:
-    """Set up a workspace in this directory, and your user config.
+    """Set up a workspace in this directory, with its private config.
 
     canopy runs from a workspace, even for one repository: a directory of its own, ideally empty, where it clones each
-    repository and keeps their worktree pools and its journal. Clone URLs add those repositories to the map and sync:
-    each is cloned, and its pool made the size your user config declares. A repository is named after its URL, unless
+    repository and keeps their worktree pools and its journal. Its private config, .canopy/config.toml, is yours alone:
+    your queue label and whom you trust, for this workspace. Clone URLs add those repositories to the map and sync:
+    each is cloned, and its pool made the size your config declares. A repository is named after its URL, unless
     given as NAME=URL. Run inside a workspace, init fills in what it is missing.
     """
     root = workspace.find_root(Path.cwd())
@@ -79,7 +81,7 @@ def _check_new_root(root: Path, *, in_checkout: bool) -> None:
             f"{state_dir} exists but {root} has no {config.WORKSPACE_FILE_NAME}: it may be an earlier canopy's "
             f"journal, which a new workspace must not take over. Move it aside, or run `canopy init` elsewhere."
         )
-    checkout = workspace.git_root(root)
+    checkout = hostgit.git_root(root)
     if checkout is None or checkout == home or in_checkout:
         return
     message = (
@@ -107,7 +109,7 @@ def _provider(provider: str | None, shared_file: Path, what: str) -> str | None:
     return provider
 
 
-def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, repos: tuple[str, ...]) -> int:
+def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, repos: Sequence[str]) -> int:
     user_file = config.user_config_path()
     report = setup_workspace.run_init(root, user_file, provider)
     _print_files(report)
@@ -122,7 +124,7 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
         )
     try:
         ws = workspace.load(root)
-        cfg = config.load(root, user_file)
+        cfg = config.load(root, user_file, runner_of(click_ctx))
     except config.ConfigError as e:
         click.echo(f"\nThe config does not load yet; fix it before the first tick:\n{e}")
         if repos:
@@ -198,18 +200,19 @@ def cmd_sandbox_setup(click_ctx: click.Context) -> int:
         "\nFill in your hosts in each template: your model provider, your tracker's and other MCP services,\n"
         "and the registries your builds fetch from (docs/SANDBOX.md, step 3)."
     )
-    if suggestion := init.sandbox_suggestion(_worker_cmd(user_file), user_file, text=init.SANDBOX_NEXT):
+    worker_cmd = _worker_cmd(runner_of(click_ctx), user_file)
+    if suggestion := init.sandbox_suggestion(worker_cmd, user_file, text=init.SANDBOX_NEXT):
         click.echo()
         click.echo(suggestion, nl=False)
     return 1 if report.todo else 0
 
 
-def _worker_cmd(user_file: Path) -> str:
+def _worker_cmd(runner: procs.Runner, user_file: Path) -> str:
     """The `worker_cmd` this workspace's config sets, or the built-in one outside a workspace or if it does not load."""
     root = workspace.find_root(Path.cwd())
     if root is not None:
         with contextlib.suppress(config.ConfigError):
-            return config.load(root, user_file).runtime.worker_cmd
+            return config.load(root, user_file, runner).runtime.worker_cmd
     return config.Runtime().worker_cmd
 
 

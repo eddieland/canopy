@@ -16,6 +16,9 @@ A worktree slot's `.git` is a file naming its git directory. A worker that rewri
 directory of its own, whose hooks and config the flags above do not cover, so `_run` reads it before the run and puts
 it back if it changed. The `commondir` file in the slot's own git directory names the common directory, so a worker
 that rewrites it does the same to every git in the slot; it is checked against where git put it, and put back.
+
+`tracked` asks git which of a workspace's own paths it tracks, so that config can refuse a state directory that came
+out of a checkout (DESIGN §12, TRUST_MODEL T7).
 """
 
 from __future__ import annotations
@@ -25,6 +28,8 @@ import os
 import shutil
 import stat
 from pathlib import Path
+
+from canopy.infra import procs
 
 # Flags before the subcommand: these override any repository, global, or system config.
 SAFE_FLAGS = (
@@ -50,11 +55,43 @@ COMMONDIR = "commondir"
 # What `git worktree add` writes in `commondir`: the common directory is the one that holds `worktrees/<slot>/`.
 COMMONDIR_CONTENT = b"../..\n"
 _LINK_PREFIX = b"gitdir:"
+_LS_FILES_TIMEOUT_SECONDS = 30
 
 
 def argv(*args: str) -> list[str]:
     """Return the command line for `git <args>` with hooks, fsmonitor, submodule fetches, and maintenance off."""
     return ["git", *SAFE_FLAGS, *_MAINTENANCE_FLAGS, *args]
+
+
+def tracked(runner: procs.Runner, root: Path, path: str) -> list[str] | None:
+    """Return the files under `path`, relative to `root`, that the repository `root` is in tracks.
+
+    `root` is in a repository when it or a directory above it holds `.git`; when none does, nothing is tracked and git
+    does not run.
+
+    Returns:
+        The tracked files, relative to `root`, empty when there are none or `root` is in no repository; None when git
+        could not say, such as a `.git` it does not read as a repository.
+    """
+    if git_root(root) is None:
+        return []
+    try:
+        result = runner.run(argv("ls-files", "-z", "--", path), cwd=root, env=ENV, timeout=_LS_FILES_TIMEOUT_SECONDS)
+    except procs.ProcError:
+        return None
+    if not result.ok:
+        return None
+    return [name for name in result.stdout.split("\0") if name]
+
+
+def git_root(start: Path) -> Path | None:
+    """The nearest directory at or above `start` holding `.git`, a directory or a worktree's file, or None.
+
+    Returns:
+        The checkout's root, resolved, or None if `start` is in no checkout.
+    """
+    start = start.resolve()
+    return next((d for d in (start, *start.parents) if (d / LINK).exists()), None)
 
 
 def read_link(worktree: Path) -> bytes | None:

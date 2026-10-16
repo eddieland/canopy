@@ -20,7 +20,7 @@ import click
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
 from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, spent
-from canopy.core import chore_view, conversation, db, notice, pause, prompts, review_requests
+from canopy.core import chore_view, contract, conversation, db, notice, pause, prompts, review_requests
 from canopy.core.vocab import RunKind
 from canopy.infra import logs
 from canopy.loop import attention
@@ -240,7 +240,7 @@ def _stop_review(click_ctx: click.Context, subject: Ref) -> int:
     logs.for_tick(None).info("review request stopped", extra={"pr": subject.id, "channel": CLI})
     click.echo(f"{subject}'s review request is stopped; nothing reviews it now.")
     if stopped.running is not None:
-        click.echo(f"Review run {stopped.running['id']} of it is still running and will finish.")
+        click.echo(f"Review run {stopped.running.id} of it is still running and will finish.")
     return 0
 
 
@@ -489,14 +489,14 @@ def _show_pr(ctx: Context, url: str) -> None:
             click.echo(f"  review request: {made}, ended {attention.age(request.ended_at)} ago ({request.end_reason})")
     click.echo(f"\nReviews ({len(runs)}):")
     for r in runs:
-        when = f"started {attention.age(str(r['started_at']))} ago"
-        if r["ended_at"]:
-            when = f"ended {attention.age(str(r['ended_at']))} ago"
-        click.echo(f"  review:{r['id']}  {str(r['sha'])[:12]}  {r['status']}  {when}")
+        when = f"started {attention.age(r.started_at)} ago"
+        if r.ended_at:
+            when = f"ended {attention.age(r.ended_at)} ago"
+        click.echo(f"  review:{r.id}  {r.sha[:12]}  {r.status}  {when}")
     if not runs:
         click.echo("  none yet")
     else:
-        click.echo(f"\nRead one with `canopy review show {runs[0]['id']}`.")
+        click.echo(f"\nRead one with `canopy review show {runs[0].id}`.")
 
 
 def _show_ticket(ctx: Context, key: str) -> None:
@@ -507,19 +507,18 @@ def _show_ticket(ctx: Context, key: str) -> None:
     if record is None:
         how = "public: its queue label authorizes it; its conversation is on the ticket, and copied here"
     else:
-        since = record["started_at"] if record["status"] == "started" else record["stopped_at"]
-        how = f"private, {record['status']} {attention.age(str(since))} ago"
+        how = f"private, {record.status} {attention.age(record.stopped_at or record.started_at)} ago"
         # The channel is the latest start's or stop's; `label` is a first dispatch under `tracker.private` (§22).
-        how += " by its first dispatch, on its queue label" if record["channel"] == conversation.LABEL else ""
+        how += " by its first dispatch, on its queue label" if record.channel == conversation.LABEL else ""
     click.echo(f"{key}: {how}")
-    if ticket is not None and ticket["title"]:
-        click.echo(f"  title {one_line(str(ticket['title']))}")
+    if ticket is not None and ticket.title:
+        click.echo(f"  title {one_line(ticket.title)}")
     if ticket is not None:
-        done = ", done" if ticket["done"] else ""
-        click.echo(f"  phase {phase_of(ctx.conn, ticket)}{done}; branch {ticket['branch'] or 'none yet'}")
-        if ticket["forgotten_at"]:
+        done = ", done" if ticket.done else ""
+        click.echo(f"  phase {phase_of(ctx.conn, ticket)}{done}; branch {ticket.branch or 'none yet'}")
+        if ticket.forgotten_at:
             click.echo(
-                f"  forgotten {attention.age(str(ticket['forgotten_at']))} ago: the runs and messages before then are "
+                f"  forgotten {attention.age(ticket.forgotten_at)} ago: the runs and messages before then are "
                 "history, and the loop reads only what came after"
             )
         for unit in db.units(ctx.conn, key):
@@ -611,7 +610,7 @@ def _show_chore(ctx: Context, name: str) -> None:
     click.echo(f"chore:{name}: {chore_line(state, datetime.now(UTC))}")
     latest = state.latest_ended
     if latest is not None:
-        said = one_line(str(result_of(latest).get("harness") or result_of(latest).get("summary") or ""))
+        said = one_line(contract.stored_note(result_of(latest)))
         click.echo(f"  latest run {latest.id} {latest.status}" + (f": {said}" if said else ""))
         session = f"session {latest.session_id}" if latest.session_id else "no session reported"
         click.echo(f"  {session}{spent(latest)}")

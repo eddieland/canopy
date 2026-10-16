@@ -21,6 +21,8 @@ memory, and do not upgrade in passing.
 - TanStack Router (file-based, `src/routes/`) and TanStack Query.
 - Tiptap on ProseMirror for the plan editor alone (D120): only `src/lib/plan-*.ts` and
   `src/components/plan-editor.tsx` import it.
+- Shiki for a review's diff alone (D121): only `src/lib/highlight.ts` and `src/lib/languages.ts`, its grammars,
+  import it, and only on demand, each grammar its own chunk.
 - oxlint (with the React Compiler's rules and eslint-plugin-jsdoc's, and type-aware rules through oxlint-tsgolint)
   and oxfmt, Vitest, Playwright.
 
@@ -105,7 +107,10 @@ to the rest; a write goes through `canopy.core.conversation`, never SQL of its o
 
 ## Tests
 
-- Unit tests (Vitest, happy-dom) sit next to the code as `*.test.ts(x)`. Test logic, not markup.
+- Unit tests (Vitest, happy-dom) sit next to the code as `*.test.ts(x)`. Test behavior, and what a component renders
+  when that is the behavior: what shows in each state, its accessible names and roles, and words the CLI shares (a
+  refusal's guard). Find elements by role, name, and text, as a person or a screen reader does, never by class, tag, or
+  DOM shape; how it looks is the screenshots' job.
 - Playwright (`e2e/`) runs against the production build served by FastAPI, never the Vite dev server. The root server
   needs the listener secret (`e2e/secret.ts`; `signIn` in `e2e/helpers.ts`) and never changes its journal; tests that
   write run against the prefixed one. Every route gets a screenshot in dark in `e2e/screenshots.spec.ts`, of its main

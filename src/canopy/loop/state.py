@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, NotRequired, TypedDict
@@ -13,6 +13,7 @@ from canopy.core import conversation, db, pools
 from canopy.runs import policy
 
 if TYPE_CHECKING:
+    from canopy.core import records
     from canopy.core.chore_view import ChoreSummary
     from canopy.core.config import Config
     from canopy.core.notice import Notice
@@ -125,7 +126,6 @@ class TrustState(TypedDict):
     comment_prefix: str
     comment_suffix: str
     branch_prefix: str
-    pr_label: str
 
 
 class PolicyState(TypedDict):
@@ -219,20 +219,20 @@ def state_block(
     dry_run: bool,
     capacity: Capacity,
     workspace: Workspace,
-    leased: Mapping[str, list[pools.Slot]],
-    running: list[sqlite3.Row],
-    tickets: list[sqlite3.Row],
+    leased: Mapping[str, Sequence[pools.Slot]],
+    running: Iterable[sqlite3.Row],
+    tickets: Iterable[records.Ticket],
     stopped: Sequence[str],
     recently_done: Sequence[sqlite3.Row] = (),
-    units: Mapping[str, list[sqlite3.Row]],
+    units: Mapping[str, Sequence[sqlite3.Row]],
     last_runs: Mapping[str, sqlite3.Row],
-    run_slots: Mapping[int, list[sqlite3.Row]],
+    run_slots: Mapping[int, Sequence[sqlite3.Row]],
     attempts: Mapping[policy.Unit, Mapping[str, int]],
     grants: Mapping[policy.Unit, Mapping[str, int]],
     fix_ci_cooldowns: Mapping[policy.Unit, datetime],
     now: datetime,
     split_attempts: Mapping[str, int],
-    split_children: list[sqlite3.Row],
+    split_children: Iterable[sqlite3.Row],
     chores: list[ChoreSummary],
     reviews: ReviewsSection | None,
     notices: Sequence[Notice] = (),
@@ -296,22 +296,22 @@ def state_block(
             "ended_at": run["ended_at"],
         }
 
-    def ticket_summary(t: sqlite3.Row) -> TicketState:
-        key = str(t["key"])
+    def ticket_summary(t: records.Ticket) -> TicketState:
+        key = t.key
         summary: TicketState = {
             "key": key,
-            "title": t["title"],
-            "phase": t["phase"],
-            "branch": t["branch"],
+            "title": t.title,
+            "phase": t.phase,
+            "branch": t.branch,
             # The mirror cursor is moved by `canopy mirror` itself, never by `--cursor` (DESIGN §22).
             "cursors": {
-                **{name: t[column] for name, column in db.TICKET_CURSORS.items()},
-                "mirror": t["last_mirrored_id"],
+                **{name: getattr(t, column) for name, column in db.TICKET_CURSORS.items()},
+                "mirror": t.last_mirrored_id,
             },
             "units": [unit_summary(key, u) for u in units.get(key, [])],
             "split_attempts": split_attempts.get(key, 0),
-            "needs_human_since": t["needs_human_since"],
-            "last_seen_at": t["last_seen_at"],
+            "needs_human_since": t.needs_human_since,
+            "last_seen_at": t.last_seen_at,
             "last_run": run_summary(last_runs.get(key)),
         }
         # A private ticket's conversation state, or a public one's new operator messages, each only when it has one.
@@ -339,7 +339,6 @@ def state_block(
             "comment_prefix": config.trust.comment_prefix,
             "comment_suffix": config.trust.comment_suffix,
             "branch_prefix": config.trust.branch_prefix,
-            "pr_label": config.trust.pr_label,
         },
         "policy": {
             "max_implement_attempts": config.policy.max_implement_attempts,

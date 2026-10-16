@@ -81,18 +81,8 @@ function Ticket({ detail }: { detail: TicketDetail }) {
         <>
             <PageHeader
                 chips={<Chip>{ticket.private ? 'private' : 'public'}</Chip>}
-                tab={ticket.title === null ? ticket.key : `${ticket.key} ${ticket.title}`}
-                title={
-                    ticket.title === null ? (
-                        ticket.key
-                    ) : (
-                        // The key in its data face, quieter, so the title reads as the page's name (DESIGN §7).
-                        <>
-                            <span className="font-mono font-normal text-muted-foreground">{ticket.key}</span>{' '}
-                            {ticket.title}
-                        </>
-                    )
-                }
+                title={ticket.key}
+                subject={ticket.title}
                 links={<TicketLinks tracker={tracker} units={units} branches={branches} />}
             >
                 {how}
@@ -171,7 +161,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     />
                 </Panel>
                 <Panel className="2xl:col-start-1 2xl:row-start-2" data-testid="ticket-runs">
-                    <PanelHeader label="Recent runs">
+                    <PanelHeader label="Runs">
                         <span className="flex items-center gap-2">
                             {runs.length > 1 && <OrderToggle list="ticket-runs" />}
                             <span className="readout text-xs text-muted-foreground">{runs.length}</span>
@@ -180,7 +170,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     {runs.length === 0 ? (
                         <Empty>no runs yet: none has worked it</Empty>
                     ) : (
-                        <PanelScroll label="Recent runs">
+                        <PanelScroll label="Runs">
                             <RunsTable runs={ordered('ticket-runs', runsOrder, runs)} ticket={false} />
                         </PanelScroll>
                     )}

@@ -25,7 +25,12 @@ import { RUN_TEXT } from '@/lib/run-state'
 import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
-/** One chore: its schedule, its open findings, its recent runs, and the operator's notes to it. */
+// What every chore's page shows, on its title's hover: its description is where the chore stands.
+const HELP =
+    'Recurring work the overseer runs when it is due. What it finds reaches the attention list; your notes reach its ' +
+    'next runs.'
+
+/** One chore: its schedule, its open findings, its runs, and the operator's notes to it. */
 export const Route = createFileRoute('/chores/$name')({
     component: ChorePage,
 })
@@ -62,9 +67,8 @@ function Chore({ detail }: { detail: ChoreDetail }) {
     const runsOrder = useListOrder('chore-runs')
     return (
         <>
-            <PageHeader title={choreRef(chore.name)}>
-                Recurring work the overseer runs when it is due. What it finds reaches the attention list; your notes
-                reach its next runs.
+            <PageHeader title={choreRef(chore.name)} help={HELP}>
+                {choreLine(chore, now)}
             </PageHeader>
             {/* The detail skeleton (DESIGN.md): what it is, its notes, then its lists. Wide, the notes move beside the
                 rest, as a ticket's conversation does; the source keeps the reading order. */}
@@ -76,9 +80,8 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                 )}
             >
                 <Panel className="2xl:col-start-1 2xl:row-start-1">
-                    <PanelHeader label="Schedule">
-                        <span className="readout text-xs text-muted-foreground">{choreLine(chore, now)}</span>
-                    </PanelHeader>
+                    {/* Where it stands, running or when it last ran and is next due, is the page's description. */}
+                    <PanelHeader label="Schedule" />
                     <Fields>
                         <Field label="at most" mono>
                             {cadenceText(chore.every_minutes)}
@@ -113,7 +116,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                     )}
                 </Panel>
                 <Panel className="2xl:col-start-1 2xl:row-start-3">
-                    <PanelHeader label="Recent runs">
+                    <PanelHeader label="Runs">
                         <span className="flex items-center gap-2">
                             {runs.length > 1 && <OrderToggle list="chore-runs" />}
                             <span className="readout text-xs text-muted-foreground">{runs.length}</span>
@@ -122,7 +125,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                     {runs.length === 0 ? (
                         <Empty>no runs yet: the overseer starts one when it is due</Empty>
                     ) : (
-                        <PanelScroll label="Recent runs">
+                        <PanelScroll label="Runs">
                             <ul className="divide-y" data-testid="chore-runs">
                                 {ordered('chore-runs', runsOrder, runs).map((run) => (
                                     <RunRow key={run.id} name={chore.name} run={run} />

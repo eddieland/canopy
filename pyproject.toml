@@ -42,7 +42,7 @@ dependencies = [
 ]
 
 [project.scripts]
-canopy = "canopy.cli.main:main"
+canopy = "canopy.cli.launcher:main"
 # Notification sinks canopy ships (DESIGN §20). They run as sink commands, never inside the harness.
 canopy-notify-desktop = "canopy.notify.desktop:main"
 # Its own distribution, a workspace member (D041); listed so the install that puts canopy on PATH puts it there too.
@@ -111,6 +111,8 @@ dev = [
     "hypothesis>=6.168.5",
     "pyrefly>=1.3.2",
     "pytest>=9.1",
+    # Line and branch coverage: `make coverage`, and `make check COVERAGE=1`, whose coverage.xml CI sends to Codecov.
+    "pytest-cov>=7.1.0",
     "pytest-xdist>=3.8.0",
     "ruff>=0.16.10",
     "rumdl>=0.2.78",
@@ -183,6 +185,9 @@ banned-from = ["unittest.mock"]
 # A click command's docstring is its --help text, so Returns and Raises sections would print there. Every command
 # returns an exit code and raises CliError for main to report; that is main's contract, not each command's.
 "src/canopy/cli/*" = ["DOC201", "DOC501"]
+# A row type's fields are resolved by `typing.get_type_hints` when a row is read, so the vocabularies they name are
+# imported for real (TC001).
+"src/canopy/core/records.py" = ["TC001"]
 # The fakes are standalone scripts that talk on stdout and stderr.
 "tests/fakes/*" = ["T201"]
 # The sandbox wrapper is a separate program, not canopy (DESIGN §24): it runs git and srt, and reports on
@@ -211,6 +216,15 @@ filterwarnings = [
     # procs.spawn detaches its child on purpose, so Popen warns that it is still running.
     "ignore:subprocess \\d+ is still running:ResourceWarning",
 ]
+
+# What coverage measures: canopy and its workspace members, not the tests or the fakes.
+[tool.coverage.run]
+branch = true
+source_pkgs = ["canopy", "canopy_notify_slack", "canopy_sandbox"]
+
+[tool.coverage.report]
+skip_empty = true
+exclude_also = ["if TYPE_CHECKING:", "assert_never\\("]
 
 # Strict preset (D017). The fakes are extensionless, so list them explicitly.
 [tool.pyrefly]

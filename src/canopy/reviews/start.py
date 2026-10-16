@@ -11,6 +11,7 @@ import contextlib
 import json
 import re
 import sys
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -208,7 +209,7 @@ def _spawn(
         logs.write_private(prompt_file(ctx, run_id), prompt)
         # `python -m canopy`, not `canopy` from PATH: the child is this same installation.
         argv = [sys.executable, "-m", "canopy", "_review", str(run_id)]
-        pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run["log_path"]))
+        pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run.log_path))
     except (OSError, procs.ProcError) as e:
         note = json.dumps({"harness": f"could not start the reviewer: {e}"})
         db.finish_run(
@@ -224,7 +225,7 @@ def _spawn(
     return Started(run_id, pid, lease.path)
 
 
-def _guard(ctx: Context, request: Request, *, planned: list[records.Decision] | None = None) -> str:
+def _guard(ctx: Context, request: Request, *, planned: Collection[records.Decision] | None = None) -> str:
     """Refuse unless a review of `request` may start now. Returns the repository it leases in.
 
     `planned` is a dry run's decisions this tick: its reviews and worker dispatches count as running.
@@ -268,7 +269,10 @@ def _check_ours(ctx: Context, request: Request, repo: str) -> None:
 
 
 def _check_running(
-    ctx: Context, request: Request, planned_reviews: list[records.Decision], planned_runs: list[records.Decision]
+    ctx: Context,
+    request: Request,
+    planned_reviews: Iterable[records.Decision],
+    planned_runs: Iterable[records.Decision],
 ) -> None:
     """`running`: a review of this PR, or a worker on its ticket, is running.
 
@@ -289,7 +293,10 @@ def _check_running(
 
 
 def _check_limits(
-    ctx: Context, request: Request, planned_reviews: list[records.Decision], planned_runs: list[records.Decision]
+    ctx: Context,
+    request: Request,
+    planned_reviews: Collection[records.Decision],
+    planned_runs: Collection[records.Decision],
 ) -> None:
     """`reviewed`, `review_limit`, `daily_limit`, `review_capacity`, and `capacity`, in that order.
 
@@ -299,13 +306,13 @@ def _check_limits(
     """
     cfg = ctx.config
     runs = db.review_runs_of(ctx.conn, request.pr)
-    done = next((r for r in runs if r["sha"] == request.sha and r["status"] == "done"), None)
+    done = next((r for r in runs if r.sha == request.sha and r.status is ReviewRunStatus.DONE), None)
     if done is not None:
         # The PR may be out of the state block's window by now, so the refusal says what the review found.
-        stored = result.stored(done["result_json"])
+        stored = result.stored(done.result_json)
         found = f" ({stored.verdict}, impact {stored.impact})" if stored is not None else ""
         raise Refusal(
-            "reviewed", f"review run {done['id']} already reviewed {request.sha[:12]}{found}; one review per commit"
+            "reviewed", f"review run {done.id} already reviewed {request.sha[:12]}{found}; one review per commit"
         )
     limit = grants.limit(ctx.conn, cfg, request.pr)
     if len(runs) >= limit:

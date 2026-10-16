@@ -21,6 +21,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
+from canopy.core.vocab import TickStatus
 from canopy.infra import procs
 from canopy.infra.procs import SubprocessRunner
 from tests.canopy.helpers import DEAD_PID, InlineRunner, in_tick, pool, slot_of, worker_does
@@ -572,7 +573,7 @@ def test_canopys_sandboxed_worker_commits_through_the_wrapper_and_is_pushed(
         with in_tick(conn) as tick_id:
             args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
             assert main([*args, "--slug", "work"], runner=runner) == 0
-            db.finish_tick(conn, tick_id, "ok", "test")
+            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
 
@@ -612,7 +613,7 @@ def test_canopys_sandboxed_reviewer_reads_the_checkout_through_the_wrapper(
 
     row = db.get_review_run(conn, run_id)
     assert row is not None
-    assert row["status"] == "done", Path(row["log_path"]).read_text()
+    assert row.status == "done", Path(row.log_path).read_text()
     call = sandbox.only_call()
     assert call["cwd"] == str(canopy_env.state_dir / "reviews" / str(run_id))
     filesystem = call["settings"]["filesystem"]

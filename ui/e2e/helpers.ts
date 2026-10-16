@@ -156,3 +156,57 @@ export async function spentInAll(page: Page, usd: number): Promise<void> {
         })
     }, usd)
 }
+
+/** A line of a review's diff, as the API sends it. */
+export interface DiffLine {
+    /** Whether it is added, deleted, or context. */
+    kind: 'add' | 'del' | 'ctx'
+    /** Its number on the old side, null for an added line. */
+    old: number | null
+    /** Its number on the new side, null for a deleted line. */
+    new: number | null
+    /** Its text. */
+    text: string
+}
+
+/** A review's finding, as the API sends it. */
+export interface DiffFinding {
+    /** How much it matters. */
+    severity: 'blocking' | 'major' | 'minor'
+    /** Its title. */
+    title: string
+    /** Where it is, as the reviewer wrote it. */
+    location: string
+    /** What is wrong, as the reviewer wrote it. */
+    detail: string
+    /** The index of the diff's file it is on, null for none. */
+    file: number | null
+    /** The new-side line it is on, null for none the diff shows. */
+    line: number | null
+    /** Whether the operator dismissed it. */
+    dismissed: boolean
+}
+
+/** A file of `count` added lines in one hunk, numbered from 1; `text` gives each its text by its number. */
+export function diffFile(path: string, count: number, text: (n: number) => string) {
+    const lines = Array.from({ length: count }, (_, i): DiffLine => ({
+        kind: 'add',
+        old: null,
+        new: i + 1,
+        text: text(i + 1),
+    }))
+    return { path, old_path: null, binary: false, hunks: [{ header: '', lines }] }
+}
+
+/** Serves review:4 with this diff and these findings, the rest of it as the mock journal has it. */
+export async function serveReview(
+    page: Page,
+    files: ReturnType<typeof diffFile>[],
+    findings: DiffFinding[],
+): Promise<void> {
+    await page.route('**/api/reviews/4', async (route) => {
+        const response = await route.fetch()
+        const body = (await response.json()) as Record<string, unknown>
+        await route.fulfill({ response, json: { ...body, findings, diff: { files, truncated: true } } })
+    })
+}

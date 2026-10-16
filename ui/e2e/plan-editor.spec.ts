@@ -29,8 +29,36 @@ async function select(page: Page, text: string): Promise<void> {
     }, text)
 }
 
+// Clicks into the passage of thread `id`, `offset` characters in, as the operator would.
+async function caretAt(page: Page, id: string, offset: number): Promise<void> {
+    const point = await plan(page)
+        .locator(`[data-thread="${id}"]`)
+        .evaluate((element, at) => {
+            const range = document.createRange()
+            range.setStart(element.firstChild ?? element, at)
+            const box = range.getBoundingClientRect()
+            return { x: box.x, y: box.y + box.height / 2 }
+        }, offset)
+    await page.mouse.click(point.x, point.y)
+}
+
+// Pastes `text` into the plan as the browser would from a clipboard holding it as plain text alone.
+async function paste(page: Page, text: string): Promise<void> {
+    await plan(page).evaluate((root, value) => {
+        const data = new DataTransfer()
+        data.setData('text/plain', value)
+        root.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))
+    }, text)
+}
+
 function plan(page: Page): Locator {
     return page.getByRole('textbox', { name: 'Plan', exact: true })
+}
+
+// How far apart, in pixels, the tops of two elements are.
+async function topGap(a: Locator, b: Locator): Promise<number> {
+    const [boxA, boxB] = await Promise.all([a.boundingBox(), b.boundingBox()])
+    return Math.abs((boxA?.y ?? 0) - (boxB?.y ?? Infinity))
 }
 
 function comments(page: Page): Locator {
@@ -70,6 +98,26 @@ test('a comment stays on its passage while the plan is edited above it', async (
     await expect(page.getByLabel('Plan Markdown')).toContainText('# Export reports as CSV, streamed')
 })
 
+test('a wrapped line reads as one paragraph, and an edit undone leaves the Markdown as it was', async ({ page }) => {
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    const markdown = page.getByLabel('Plan Markdown')
+    const before = await markdown.textContent()
+    // The sample's first paragraph wraps after `export.csv`,. A matcher collapses whitespace, so these compare exactly.
+    expect(before).toContain('export.csv`,\nwhich streams')
+    expect(await plan(page).locator('p').first().textContent()).toContain('export.csv, which streams')
+    await caretAt(page, 'sample-1', 8)
+    await page.keyboard.type('x')
+    await page.keyboard.press('Backspace')
+    await expect.poll(() => markdown.textContent()).toBe(before)
+})
+
+test('a word typed inside a commented passage on a wrapped line stays in its comment', async ({ page }) => {
+    await caretAt(page, 'sample-1', "streams the report's ".length)
+    await page.keyboard.type('many ')
+    const passage = plan(page).locator('[data-thread=sample-1]')
+    await expect(passage).toHaveText("streams the report's many rows as they are read")
+})
+
 test('the toolbar formats the selection and says what is in force', async ({ page }) => {
     await select(page, 'Scheduling exports.')
     const bold = page.getByRole('toolbar', { name: 'Format' }).getByRole('button', { name: 'Bold' })
@@ -77,6 +125,206 @@ test('the toolbar formats the selection and says what is in force', async ({ pag
     await expect(bold).toHaveAttribute('aria-pressed', 'true')
     await page.getByRole('button', { name: 'Show Markdown' }).click()
     await expect(page.getByLabel('Plan Markdown')).toContainText('- **Scheduling exports.**')
+})
+
+test('each toolbar control names a shortcut on hover, and that shortcut does what the control does', async ({
+    page,
+}) => {
+    const toolbar = page.getByRole('toolbar', { name: 'Format' })
+    await expect(toolbar.getByRole('button', { name: 'Bold' })).toHaveAttribute('title', /^Bold \((Ctrl\+B|⌘B)\)$/u)
+    await select(page, 'method')
+    // The paragraph's style is a choice of one: each shortcut picks its style, the last going back to text.
+    for (const name of ['Heading 1', 'Heading 2', 'Heading 3', 'Text']) {
+        const style = toolbar.getByRole('radio', { name, exact: true })
+        await page.keyboard.press((await style.getAttribute('aria-keyshortcuts')) ?? '')
+        await expect(style).toHaveAttribute('data-state', 'on')
+    }
+    // A mark or a block is on or off: its shortcut turns it on, and again off.
+    for (const name of ['Bold', 'Italic', 'Strikethrough', 'Code', 'Bulleted list', 'Numbered list', 'Task list']) {
+        const control = toolbar.getByRole('button', { name, exact: true })
+        const keys = (await control.getAttribute('aria-keyshortcuts')) ?? ''
+        await page.keyboard.press(keys)
+        await expect(control, name).toHaveAttribute('aria-pressed', 'true')
+        await page.keyboard.press(keys)
+        await expect(control, name).toHaveAttribute('aria-pressed', 'false')
+    }
+    for (const name of ['Quote', 'Code block']) {
+        const control = toolbar.getByRole('button', { name, exact: true })
+        await page.keyboard.press((await control.getAttribute('aria-keyshortcuts')) ?? '')
+        await expect(control, name).toHaveAttribute('aria-pressed', 'true')
+        await page.keyboard.press('ControlOrMeta+z')
+        await expect(control, name).toHaveAttribute('aria-pressed', 'false')
+    }
+})
+
+test('the toolbar stays at the top of the page while the plan scrolls under it', async ({ page }) => {
+    const toolbar = page.getByRole('toolbar', { name: 'Format' })
+    await select(page, 'template cache')
+    await plan(page).locator('blockquote').scrollIntoViewIfNeeded()
+    await page.locator('.page-scroll').evaluate((scroller) => scroller.scrollBy(0, 400))
+    const top = await page.locator('.page-scroll').evaluate((scroller) => scroller.getBoundingClientRect().top)
+    await expect.poll(async () => (await toolbar.boundingBox())?.y).toBeGreaterThanOrEqual(top)
+    await expect(toolbar).toBeInViewport()
+    await toolbar.getByRole('button', { name: 'Bold' }).click()
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    await expect(page.getByLabel('Plan Markdown')).toContainText('a **template cache**')
+})
+
+test('each comment sits beside its passage, and moves with it as the plan is edited above', async ({ page }) => {
+    const card = comments(page).filter({ hasText: 'proxy in front' })
+    const passage = plan(page).locator('[data-thread=sample-1]')
+    await expect.poll(() => topGap(card, passage)).toBeLessThanOrEqual(1)
+    await plan(page).getByRole('heading', { level: 1 }).click()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await page.keyboard.type('A paragraph that moves every passage under it down.')
+    await expect.poll(() => topGap(card, passage)).toBeLessThanOrEqual(1)
+})
+
+test('typing in the middle of a comment being written edits it in place', async ({ page }) => {
+    await select(page, "Excel's own format")
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    const field = page.getByRole('form', { name: 'Comment' }).getByRole('textbox')
+    await expect(field).toBeFocused()
+    await page.keyboard.type('abc')
+    await page.keyboard.press('ArrowLeft')
+    await page.keyboard.press('ArrowLeft')
+    await page.keyboard.type('X')
+    await expect(field).toHaveValue('aXbc')
+})
+
+test('a comment opens beside its passage, without the page moving', async ({ page }) => {
+    // As the operator would find it: in the middle of the window.
+    await plan(page)
+        .getByText("Excel's own format")
+        .evaluate((element) => element.scrollIntoView({ block: 'center' }))
+    await select(page, "Excel's own format")
+    const scroller = page.locator('.page-scroll')
+    const before = await scroller.evaluate((element) => element.scrollTop)
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    const form = page.getByRole('form', { name: 'Comment' })
+    await expect(form.getByRole('textbox')).toBeFocused()
+    expect(await scroller.evaluate((element) => element.scrollTop)).toBe(before)
+    const draft = page.locator('[data-align=draft]')
+    const passage = plan(page).locator('.plan-comment-active').filter({ hasText: "Excel's own format" })
+    await expect.poll(() => topGap(draft, passage)).toBeLessThanOrEqual(1)
+})
+
+// Where the page is too narrow for the comments beside the plan, they sit under it, as a list.
+test.describe('with the comments under the plan', () => {
+    test.use({ viewport: { width: 1000, height: 800 } })
+
+    test('the comments are a list under the plan, none placed at its passage', async ({ page }) => {
+        const doc = await plan(page).boundingBox()
+        const first = await comments(page).first().boundingBox()
+        expect(first?.y).toBeGreaterThan((doc?.y ?? 0) + (doc?.height ?? 0))
+        await expect(page.locator('.plan-margin[data-aligned]')).toHaveCount(0)
+    })
+
+    test('a comment shows its passage in the plan, clear of the toolbar', async ({ page }) => {
+        const card = comments(page).filter({ hasText: 'proxy in front' })
+        await card.scrollIntoViewIfNeeded()
+        const passage = plan(page).locator('[data-thread=sample-1]')
+        await expect(passage).not.toBeInViewport()
+        await card.getByRole('button', { name: "streams the report's rows" }).click()
+        await expect(passage).toBeInViewport()
+        const toolbar = await page.getByRole('toolbar', { name: 'Format' }).boundingBox()
+        expect((await passage.boundingBox())?.y).toBeGreaterThanOrEqual((toolbar?.y ?? 0) + (toolbar?.height ?? 0))
+    })
+})
+
+// The narrowest window the UI is laid out for (e2e/narrow.spec.ts): the toolbar's header must still fit on one line
+// there, within the 48px the editor keeps clear under it (TOOLBAR_CLEARANCE in src/components/plan-editor.tsx).
+test.describe('on half a monitor', () => {
+    test.use({ viewport: { width: 820, height: 900 } })
+
+    test('the stuck toolbar fits in the space the editor keeps clear, and covers no passage it shows', async ({
+        page,
+    }) => {
+        const header = page.getByRole('toolbar', { name: 'Format' }).locator('xpath=..')
+        const card = comments(page).filter({ hasText: 'proxy in front' })
+        await card.scrollIntoViewIfNeeded()
+        const stuck = await header.boundingBox()
+        expect(stuck?.height).toBeLessThan(48)
+        const passage = plan(page).locator('[data-thread=sample-1]')
+        await card.getByRole('button', { name: "streams the report's rows" }).click()
+        await expect(passage).toBeInViewport()
+        const box = await header.boundingBox()
+        expect((await passage.boundingBox())?.y).toBeGreaterThanOrEqual((box?.y ?? 0) + (box?.height ?? 0))
+    })
+})
+
+test('Markdown pasted into the plan becomes the headings, lists, and marks it writes', async ({ page }) => {
+    await plan(page).locator('blockquote p').click()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Enter')
+    await paste(page, '## Rollout\n\n- **ship** behind a flag\n- remove the flag')
+    await expect(plan(page).getByRole('heading', { level: 2, name: 'Rollout' })).toBeVisible()
+    await expect(plan(page).locator('li').filter({ hasText: 'remove the flag' })).toBeVisible()
+    await expect(plan(page).locator('strong').filter({ hasText: 'ship' })).toBeVisible()
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    await expect(page.getByLabel('Plan Markdown')).toContainText('## Rollout')
+    await expect(page.getByLabel('Plan Markdown')).toContainText('- **ship** behind a flag')
+})
+
+test('inline Markdown pasted into a sentence stays in it, and prose or a Shift paste stays as written', async ({
+    page,
+}) => {
+    await select(page, 'Scheduling exports.')
+    await paste(page, 'Scheduling `cron` exports.')
+    await expect(plan(page).locator('li code').filter({ hasText: 'cron' })).toBeVisible()
+    await select(page, "Excel's own format")
+    await paste(page, 'Spreadsheet formats')
+    await expect(plan(page).getByText('Spreadsheet formats, which the ticket')).toBeVisible()
+    await select(page, 'Spreadsheet formats')
+    // Ctrl+Shift+V, as the browser pastes plain text: Shift held in the plan.
+    await plan(page).focus()
+    await page.keyboard.down('Shift')
+    await paste(page, '**Spreadsheets** and `.ods`')
+    await page.keyboard.up('Shift')
+    await expect(plan(page).getByText('**Spreadsheets** and `.ods`, which the ticket')).toBeVisible()
+})
+
+test('Markdown pasted into a code block stays code, as its characters', async ({ page }) => {
+    await plan(page).locator('blockquote p').click()
+    await page.keyboard.press('End')
+    await page.keyboard.press('Enter')
+    await page.keyboard.press('Enter')
+    await page.getByRole('button', { name: 'Code block', exact: true }).click()
+    await paste(page, '- name: web\n- name: api\n# both deploy')
+    await expect(plan(page).locator('pre')).toContainText('- name: web')
+    await expect(plan(page).locator('li').filter({ hasText: 'name: web' })).toHaveCount(0)
+    await expect(plan(page).getByRole('heading', { name: 'both deploy' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    await expect(page.getByLabel('Plan Markdown')).toContainText('```\n- name: web\n- name: api\n# both deploy\n```')
+})
+
+test.describe('copying out of the plan', () => {
+    test.use({ permissions: ['clipboard-read', 'clipboard-write'] })
+
+    test('lines of a list copy as the Markdown that writes them, words in a line as the words', async ({ page }) => {
+        // From the start of the first item to the end of the second, as a drag over both would select.
+        await plan(page).evaluate((root) => {
+            const items = [...root.querySelectorAll('li')].filter((item) => item.closest('ul[data-type]') === null)
+            const first = items.find((item) => item.textContent.startsWith('Excel'))
+            const second = items.find((item) => item.textContent.startsWith('Scheduling'))
+            const range = document.createRange()
+            range.setStart(first?.querySelector('p')?.firstChild ?? root, 0)
+            const last = second?.querySelector('p')
+            range.setEndAfter(last?.lastChild ?? root)
+            root.focus()
+            globalThis.getSelection()?.removeAllRanges()
+            globalThis.getSelection()?.addRange(range)
+        })
+        await page.keyboard.press('ControlOrMeta+c')
+        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+            "- Excel's own format, which the ticket does not ask for.\n- Scheduling exports.",
+        )
+        await select(page, 'iter_rows()')
+        await page.keyboard.press('ControlOrMeta+c')
+        expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('iter_rows()')
+    })
 })
 
 test('resolving a thread folds it away and takes its highlight off the plan', async ({ page }) => {
@@ -87,8 +335,55 @@ test('resolving a thread folds it away and takes its highlight off the plan', as
     await expect(page.getByRole('button', { name: 'Show 2 resolved' })).toBeVisible()
 })
 
+test('deleting a comment asks first, in its place, and Keep or Escape keeps it', async ({ page }) => {
+    const thread = comments(page).filter({ hasText: 'proxy in front' })
+    await thread.getByRole('button', { name: 'Delete' }).click()
+    const confirm = thread.getByRole('group', { name: 'Delete this comment and its replies?' })
+    await expect(confirm.getByRole('button', { name: 'Keep' })).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(confirm).toBeHidden()
+    // Kept, the focus goes back to the Delete that asked, each time.
+    await expect(thread.getByRole('button', { name: 'Delete' })).toBeFocused()
+    await page.keyboard.press('Enter')
+    await confirm.getByRole('button', { name: 'Keep' }).click()
+    await expect(thread.getByRole('button', { name: 'Delete' })).toBeFocused()
+    await thread.getByRole('button', { name: 'Delete' }).click()
+    await confirm.getByRole('button', { name: 'Delete' }).click()
+    await expect(thread).toHaveCount(0)
+    await expect(plan(page).locator('[data-thread=sample-1]')).toHaveCount(0)
+})
+
+test('a comment and a reply are edited in place, and the planner reads what they say now', async ({ page }) => {
+    // By its id: while its comment is in the form, the card's text no longer holds it.
+    const thread = page.locator('article[data-thread=sample-1]')
+    await thread.getByRole('button', { name: 'Edit comment' }).click()
+    const comment = thread.getByRole('form', { name: 'Edit comment' }).getByRole('textbox')
+    await expect(comment).toBeFocused()
+    await expect(comment).toHaveValue(
+        'Does the proxy in front of web buffer responses? If it does, streaming buys nothing.',
+    )
+    await comment.fill('Does the proxy buffer responses?')
+    await thread.getByRole('button', { name: 'Save' }).click()
+    await expect(thread).toContainText('Does the proxy buffer responses?')
+    await thread.getByRole('button', { name: 'Edit reply' }).click()
+    const reply = thread.getByRole('form', { name: 'Edit reply' }).getByRole('textbox')
+    await reply.fill('It buffers up to 2 MB.')
+    await page.keyboard.press('Escape')
+    await expect(thread).toContainText('It buffers up to 1 MB.')
+    await thread.getByRole('button', { name: 'Edit reply' }).click()
+    await reply.fill('It buffers up to 2 MB.')
+    await thread.getByRole('button', { name: 'Save' }).click()
+    await expect(thread).toContainText('It buffers up to 2 MB.')
+    await page.getByRole('form', { name: 'Ask for changes' }).getByRole('button', { name: 'Ask for changes' }).click()
+    await expect(page.getByLabel('Change request')).toContainText('Does the proxy buffer responses?')
+    await expect(page.getByLabel('Change request')).toContainText('Reply: It buffers up to 2 MB.')
+})
+
 test('Ask for changes sends the open comments, each on its passage, with the note', async ({ page }) => {
-    await comments(page).filter({ hasText: 'proxy in front' }).getByRole('button', { name: 'Reply' }).click()
+    await comments(page)
+        .filter({ hasText: 'proxy in front' })
+        .getByRole('button', { name: 'Reply', exact: true })
+        .click()
     const reply = page.getByRole('form', { name: 'Reply' })
     await reply.getByRole('textbox').fill('And a test that reads the first row before the last is written.')
     await reply.getByRole('button', { name: 'Reply' }).click()
@@ -110,6 +405,54 @@ test('clicking a commented passage opens its thread and puts the cursor there', 
     // The paragraph's style shows the cursor moved from the heading it opened in.
     const text = page.getByRole('toolbar', { name: 'Format' }).getByRole('radio', { name: 'Text' })
     await expect(text).toHaveAttribute('data-state', 'on')
+})
+
+test('a click elsewhere in the plan, or Escape, closes the open thread', async ({ page }) => {
+    const passage = plan(page).locator('[data-thread=sample-2]')
+    const thread = comments(page).filter({ hasText: 'name the ticket' })
+    await passage.click()
+    await expect(thread).toHaveAttribute('data-active', 'true')
+    await plan(page).getByRole('heading', { level: 1 }).click()
+    await expect(thread).toHaveAttribute('data-active', 'false')
+    await expect(plan(page).locator('.plan-comment-active')).toHaveCount(0)
+    await passage.click()
+    await expect(thread).toHaveAttribute('data-active', 'true')
+    await page.keyboard.press('Escape')
+    await expect(thread).toHaveAttribute('data-active', 'false')
+    await expect(plan(page).locator('.plan-comment-active')).toHaveCount(0)
+})
+
+test('commenting again with nothing written moves the comment, and typing goes into it', async ({ page }) => {
+    await select(page, 'iter_rows()')
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    await select(page, 'Export CSV')
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    const form = page.getByRole('form', { name: 'Comment' })
+    await expect(form.getByRole('textbox')).toBeFocused()
+    await page.keyboard.type('Name the button as the page shows it.')
+    await expect(form.getByRole('textbox')).toHaveValue('Name the button as the page shows it.')
+    await expect(plan(page).getByText('Export CSV')).toBeVisible()
+    await form.getByRole('button', { name: 'Comment' }).click()
+    const thread = comments(page).filter({ hasText: 'Name the button' })
+    const id = await thread.getAttribute('data-thread')
+    await expect(page.locator(`.plan-doc [data-thread="${id}"]`)).toHaveText('Export CSV')
+})
+
+test('commenting again on a comment half written keeps it on its passage, with its words', async ({ page }) => {
+    await select(page, 'iter_rows()')
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    await page.keyboard.type('Why not rows()?')
+    await select(page, 'Export CSV')
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    const form = page.getByRole('form', { name: 'Comment' })
+    await expect(form.getByRole('textbox')).toBeFocused()
+    await expect(form.getByRole('textbox')).toHaveValue('Why not rows()?')
+    await page.keyboard.type(' It reads them all.')
+    await expect(plan(page).getByText('Export CSV')).toBeVisible()
+    await form.getByRole('button', { name: 'Comment' }).click()
+    const thread = comments(page).filter({ hasText: 'Why not rows()? It reads them all.' })
+    const id = await thread.getAttribute('data-thread')
+    await expect(page.locator(`.plan-doc [data-thread="${id}"]`)).toHaveText('iter_rows()')
 })
 
 test('the shortcut and the bubble over a selection both open a comment on it', async ({ page }) => {

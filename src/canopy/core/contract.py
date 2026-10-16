@@ -7,6 +7,7 @@ that does not validate is no result: each caller decides what that run's status 
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from typing import cast
 
 from pydantic import AfterValidator, BaseModel, ValidationError
@@ -98,7 +99,16 @@ def stored_object(result_json: str | None) -> dict[str, object]:
     return {str(k): v for k, v in cast("dict[object, object]", parsed).items()} if isinstance(parsed, dict) else {}
 
 
-def stored_prs(result: dict[str, object]) -> list[str]:
+def stored_note(result: Mapping[str, object]) -> str:
+    """What a stored result says about its run: the harness's note when it wrote one, else the agent's summary.
+
+    Returns:
+        The note or summary as text, still untrusted and not cut, or "" when the result has neither.
+    """
+    return str(result.get("harness") or result.get("summary") or "")
+
+
+def stored_prs(result: Mapping[str, object]) -> list[str]:
     """The PRs a stored result names, each a plain printable https:// URL; anything else is left out.
 
     Returns:

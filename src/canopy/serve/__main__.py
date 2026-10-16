@@ -12,6 +12,7 @@ import argparse
 import json
 import sys
 import tempfile
+from collections.abc import Sequence
 from pathlib import Path
 
 import uvicorn
@@ -23,7 +24,7 @@ from canopy.serve.auth import Sessions
 from canopy.serve.options import ServeOptions
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: Sequence[str] | None = None) -> None:
     """Parse `argv` and serve, or print the schema."""
     parser = argparse.ArgumentParser(prog="python -m canopy.serve", description=__doc__.splitlines()[0])
     parser.add_argument("command", nargs="?", choices=("serve", "openapi"), default="serve")

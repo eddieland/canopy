@@ -41,7 +41,7 @@ A bare § is a section of the design (`design/`); other documents are named, as 
   [#10](https://github.com/openai/symphony/pull/10), reversed in [#112](https://github.com/openai/symphony/pull/112)).
   canopy: `ask` is auto-rejected (D021) and the run goes to attention.
 - **Intake open to anyone who can file an issue** (agent-orchestrator
-  [#2527](https://github.com/Untrivial-ai/agent-orchestrator/pull/2527)). canopy: queue labels are user-only (§12, §17),
+  [#2527](https://github.com/Untrivial-ai/agent-orchestrator/pull/2527)). canopy: queue labels are private (§12, §17),
   and a label finds tickets, it does not authorize replies.
 - **A reused worktree ran on the previous run's branch** (Hermes
   [#71978](https://github.com/NousResearch/hermes-agent/pull/71978),
@@ -131,7 +131,7 @@ A bare § is a section of the design (`design/`); other documents are named, as 
 ## What not to copy
 
 - **A repository file that sets commands, sandbox policy, or hooks.** Symphony's `WORKFLOW.md` does; TRUST_MODEL T7
-  and TRUST_MODEL §6 keep all of that user-only.
+  and TRUST_MODEL §6 keep all of that private.
 - **Agents that merge, land, or move tickets.** Symphony's example workflow has a `land` skill, run once a human moves
   the ticket to `Merging`; TRUST_MODEL §6 forbids agents merging at all. canopy's own guard is layered: the prompts, a
   `gh pr merge` deny in canopy's agent permissions, and branch protection, which governs. The deny is defense in depth

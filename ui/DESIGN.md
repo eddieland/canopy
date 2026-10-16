@@ -41,7 +41,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
 | `spend-overseer`, `-idle`, `-workers`, `-chores`, `-reviews`, `-dry-run` | The spend chart's series, as fills only. |
-| `syntax-key`, `-string`, `-number`, `-literal` | JSON's keys, strings, numbers, and literals, in agent output. |
+| `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; diff code. |
 | `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
 | `buddy-eye`, `buddy-pupil` | Sprig's googly eyes: the white and the pupil, and its rim. |
 | `buddy-leaf` | The sprig on Sprig's head. A green of its own, yellower than `status-running`'s, its near twin. |
@@ -49,6 +49,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `buddy-hat-band` | A hat's band, pompom, and trim: a plum no status wears. |
 | `buddy-hat-gold`, `-cloth`, `-blue` | A hat's gold, its white cloth (outlined to show on white), a wizard's blue. |
 | `buddy-keyboard`, `buddy-key` | Sprig's keyboard: its case and its keys. A key pressed lights in the accent. |
+| `rave-dark` | The lightswitch rave's dark, the lights off: a near black with the indigo in it. Beams: `flair-*`. |
 
 Rules:
 
@@ -177,13 +178,31 @@ Rules:
 - Pages are a `PageHeader` followed by `Panel`s (`src/components/panel.tsx`). A panel's title row is `PanelHeader`,
   on `surface-raised` at half strength with its label in `foreground` at weight 500, so it stands apart from the rows
   under it; half, so a ghost button's hover in it still shows. In a panel too narrow for one line, what is on its
-  right wraps under the label. The page header's trail starts in its section's color; a panel's label never takes
+  right wraps under the label. A `sticky` header, an editor's toolbar, stays at the top of the page while its panel
+  scrolls under it, the same half step laid over `surface` so that the rows under it do not show through. The page
+  header's trail starts in its section's color; a panel's label never takes
   one. A page's main list is named for its page's noun (Reviews on
-  Reviews, Attention on Attention), and a chore's notes are Notes.
+  Reviews, Attention on Attention), and a chore's notes are Notes. A panel is named for its noun, never for how it is
+  cut, and counts what it lists: a list of runs is Runs on every page, the runs page's, a ticket's, a chore's, and a
+  PR's, and how the runs page filters it (by state) is a label in its header, not its name.
   Its title wraps (`min-w-0 break-words`) inside an unbroken word, since it can be a ticket's title or a search's
   query: a pasted URL widened the page. Its description is `text-balance` up to `max-w-3xl`: most fit on one line on
   a wide screen, a longer one splits into even lines rather than leaving a word or two on its last, and a command in it
   (`code`) never breaks across lines.
+- **A detail page leads with what it is about.** Its title is its subject's, after its reference in a muted
+  monospace (`PageHeader`'s `subject`), as a ticket's page has always led: `run:39 Debounce search input`,
+  `acme/web#88 Debounce search input`, a review's `review:4 acme/web#88` then its ticket's title. With no subject (a
+  tick, a chore run, a PR canopy only reviews, a ticket untitled yet), the reference alone is the title. Its
+  description is that subject's state, a line of facts (`src/lib/descriptions.ts`): `done · implement · ABC-099`,
+  `ABC-099 · 2 reviews`, `ok · 5 decisions · woken by timer`, a chore's `choreLine`, so no two pages of a kind say
+  the same thing there. What every page of its kind shows, the same each time, is its `help`, on the title's hover,
+  as the nav's items say what their pages hold. A ticket is named one way in every identity panel that names one
+  (`TicketField`: its key, a run's kind as a chip, its title).
+- **One home per fact.** What a page says, it says once. Its subject's own name is its title, so the lists under it
+  leave it out: on a ticket's page its runs leave out the ticket (`ticket={false}`); on a PR's page its runs and
+  decisions leave out the PR (`ownPr`), and so does its review limit (`reviews`). A PR's phase is its title's chip, not
+  a field too; whether a ticket is private is its title's chip, not a notice under its actions; a tick's session is
+  its Tick panel's field, not its transcript's header too.
 - **A detail page has one skeleton**: what it is, then its thread or main content, then the lists that support it.
   First the identity panel, its subject's fields (a ticket's Work, a run's Run, a PR's Pull request, a chore's
   Schedule); its actions sit in that panel's foot, under a hairline, never in a panel of their own above the content.
@@ -201,7 +220,8 @@ Rules:
   section (search, the 404) names itself there in the accent. A parent is a journal name, so it keeps its case
   (`chore:deps` on a chore run) and stays muted until hovered. The title is the trail's last step, so the trail never
   repeats it. The trail follows the URL, not the journal: a run's page is under Runs, not its ticket, which its panel
-  links. What qualifies a page, `private` or `dry run`, is a `Chip` beside the title, never a word in the trail.
+  links. What qualifies a page, `private` or `dry run`, is a `Chip` beside the title, never a word in the trail. Where
+  there is no title to qualify, a ticket's attention item, its `private` or `public` chip heads its conversation.
 - **The tab** names the page too: `PageHeader` renders a `<title>` (`pageTitle` in `src/lib/page-title.ts`), which
   React puts ahead of `index.html`'s. A tab is narrow and cut from the right, so it leads with how many attention
   items block work, when any do, then the page's name, then `canopy`: `(3) ABC-102 Export reports as CSV · canopy`.
@@ -218,7 +238,7 @@ Rules:
 ## Fun
 
 canopy should be a little fun to use (PRODUCT.md), and the fun lives in a few named places, each written here, never
-journal text: the ticker, Sprig, and the empty inbox. They share these rules:
+journal text: the ticker, Sprig, the empty inbox, and the lightswitch rave. They share these rules:
 
 - **Fun never covers data, and never squeezes it.** Each has a place of its own in the layout. Where the window
   leaves it too little room to be read, it steps out entirely, rather than shrinking, clipping, or sitting on
@@ -229,6 +249,7 @@ journal text: the ticker, Sprig, and the empty inbox. They share these rules:
 - **Fun honours reduced motion** (Motion, below): it holds still, and says the same.
 - **Settings has one Fun panel**, second to last, below the settings that change how canopy works and above Session:
   an on/off for each, as checkboxes, then each one's details. Everything in it is kept in this browser (Themes, below).
+  The rave is the one without a checkbox: its switch hides in the panel's header (below).
 
 The ticker:
 
@@ -293,12 +314,26 @@ The empty inbox, and an item clearing:
   which hears the list's count change. It never fakes state: the item is already gone from the list and the counters.
   The last item to leave shows the empty inbox at once instead.
 
+The lightswitch rave:
+
+- An Easter egg, after The Cheat's lightswitch rave: a wall light switch (`Switch`, `src/components/ui/switch.tsx`)
+  at the end of the Fun panel's header, with no words beside it, named `Lightswitch rave` to a screen reader and
+  `The Cheat's light switch` on hover. Flipped, the lights go off and on over the whole app, and its lever flicks
+  with them, until it is flipped back (`Rave` in `src/components/shell/rave.tsx`, `src/lib/rave.ts`). Off by default,
+  and kept in this browser, so it outlasts a reload and every tab raves together (Themes, below).
+- It is the one fun that covers the page, since the operator asked for it by name and it ends with one more flip: it
+  takes no pointer, so everything under it still works; it is hidden from a screen reader, which hears the switch's
+  state; and it is not printed. The dark is `rave-dark` at 60%, so the page still reads through it, and beams in the
+  `flair-*` colors turn slowly through the dark, never a status color.
+- The lights go off and on once every 0.6 seconds, under two flashes a second, well clear of the three that WCAG 2.3.1
+  counts as harmful. Under reduced motion the lights rest off, the beams hold still, and the lever rests down.
+
 ## Motion
 
 Motion says something arrived or changed, and gives the page some life without asking for attention. It is short
 (at most 700ms), eased out (`cubic-bezier(0.2, 0, 0, 1)`), and never loops on anything but the logo, a running run,
-a skeleton, the empty inbox, the header's ticker, and Sprig's blink and typing. The keyframes and utilities are in
-`src/index.css`.
+a skeleton, the empty inbox, the header's ticker, Sprig's blink and typing, and the lightswitch rave. The keyframes
+and utilities are in `src/index.css`.
 
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
   new one is ready, because navigations run inside React transitions.
@@ -323,6 +358,8 @@ a skeleton, the empty inbox, the header's ticker, and Sprig's blink and typing. 
   below).
 - An item leaving the attention list fades and folds shut as a leaf tumbles off it (Fun, above). Its fold is the one
   animation that fills forwards: the row is let go once it has played.
+- The lightswitch rave flicks the lights off and on every 0.6 seconds in steps, the switch's lever flicking with them,
+  while its beams turn once every 8 seconds (Fun, above).
 - Sprig's tip pops in a moment after a page arrives, its brows rise once with each new tip, its eyes blink now and
   then and look toward the pointer, and every 5 seconds it types a burst on its keyboard, each key it presses sinking
   and lighting in the accent for a moment.
@@ -332,8 +369,8 @@ a skeleton, the empty inbox, the header's ticker, and Sprig's blink and typing. 
   animations frozen is the page at rest.
 - Everything above is off under `prefers-reduced-motion: reduce`: the theme swaps instantly, values and rows appear
   in place, pulses, ripples, and the drifting leaf are hidden, a cleared item is simply gone, the ticker shows its
-  first headline in place, and Sprig's eyes and keys hold still. New motion goes inside a `prefers-reduced-motion:
-  no-preference` block or a `motion-safe:` variant.
+  first headline in place, Sprig's eyes and keys hold still, and the rave rests with its lights off. New motion goes
+  inside a `prefers-reduced-motion: no-preference` block or a `motion-safe:` variant.
 
 ## No layout shift
 
@@ -350,9 +387,10 @@ The blocking script in `index.html` sets the `dark` class, `color-scheme`, and `
 paint; `src/theme/store.ts` keeps them current afterwards. Change one, change both: `theme-script.test.ts` runs the
 inline script and checks it against the store's key. Whether the ticker is on, its speed, gap, and hidden topics are
 kept the same way, as JSON under `canopy-ticker` (`src/lib/ticker-settings.ts`), whether Sprig is on under
-`canopy-buddy` (`src/lib/buddy.ts`), the key that sends a reply under `canopy-send-key`
-(`src/lib/send-key.ts`), and each list's order under `canopy-list-order` (`src/lib/list-order.ts`), all synced across
-tabs. The ticker keeps the topics left out, not those shown, so a topic added later shows until it is turned off.
+`canopy-buddy` (`src/lib/buddy.ts`), whether the lightswitch rave is on under `canopy-rave` (`src/lib/rave.ts`), the
+key that sends a reply under `canopy-send-key` (`src/lib/send-key.ts`), and each list's order under
+`canopy-list-order` (`src/lib/list-order.ts`), all synced across tabs. The ticker keeps the topics left out, not those
+shown, so a topic added later shows until it is turned off.
 
 ## Primitives
 
@@ -384,7 +422,8 @@ list, an empty state, or a skeleton by hand.
   a list of reviews), and a label that wraps does too. A total cost is a `Field` (`CostTotalRow`).
 - **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
   page of what they belong to, the columns that would repeat it go (`pr={false}`, `ticket={false}`), as a `ListRow`
-  kind of their own (`own-review`, `own-run`).
+  kind of their own (`own-review`, `own-run`). A run names the PRs it pushed to under its row, so on a PR's page
+  `ownPr` leaves that PR out of them, as it does from `Decisions`.
 - **`Empty`** (`src/components/panel.tsx`): what a list or page says when it has nothing to show, in muted text, in two
   sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
   around it. Its words are `no X yet` and one clause on why or what to do (`no runs yet: the overseer starts one when
@@ -621,32 +660,49 @@ list, an empty state, or a skeleton by hand.
   its text and strong pieces go through `LinkedText`, so a URL outside code is a link to itself. In a list's row it
   shows the first four lines and a `show N more lines` toggle in the accent; text one line over shows whole.
   A conversation's bubbles keep their own `whitespace-pre-wrap`.
-- **A plan in its editor** (`PlanEditor`, `src/components/plan-editor.tsx`; docs/design/PLANNING.md §25): the plan
-  in a `Plan` panel, its toolbar in the panel's header, and the comments in a `Comments` panel beside it from `2xl`,
-  under it below that, as a thread sits beside a ticket's work. The plan is laid out as a document (`.plan-doc` in
-  `src/index.css`): `text-sm` prose up to `max-w-3xl`, headings at `text-xl`, `text-base`, and `text-sm` semibold, code
-  as rich text sets it, a table in hairlines with its header row on `surface-raised` at half, a quote muted behind a
-  hairline. What the plan holds as characters (HTML, an image) is muted monospace; a link is underlined in
-  `muted-foreground` with its address on hover, never a link. The toolbar (`Toolbar`, below) is `icon-xs` toggles in
-  groups split by hairlines: undo and redo, the paragraph's style (a choice of one), the marks and the blocks (each on
-  or off, raised while on at the cursor), then `Comment`, enabled while text is selected, with `⌘⌥M` (Ctrl+Alt+M) on
-  hover. A selection also shows a `Comment` bubble over it. A commented passage sits on the accent's tint at 14%; the
-  open one, or the one being commented on, at 28% and underlined in the accent, and clicking a passage opens its
-  thread. A thread is its passage quoted (two lines, a hairline in the accent at its left, the whole on hover; a
-  button that shows it in the plan), the comment and its replies as text with their ages, and ghost `xs` actions,
-  `Reply`, `Resolve` (`Reopen`), and `Delete`; the open thread sits on the accent's tint, as a selected row does. A
-  thread whose passage is gone carries a `passage gone` chip and stays in the list, last. Resolved threads fold under
-  a `Disclosure` (`Show 2 resolved`). A comment or reply form sends on the key Settings names, as a reply does, and
-  Escape drops it. The comments end in `Ask for changes`: a note on the whole plan and the button, with how many open
-  comments go with it, or how far over a reply's bound the request is. Until plans reach a ticket's page (M44), the
-  editor is on `/plan-editor`, over a sample plan on mock data only, with what the planner would read and the plan's
-  Markdown under it.
+- **A plan in its editor** (`PlanEditor`, `src/components/plan-editor.tsx`; docs/design/PLANNING.md §25): the plan in a
+  `Plan` panel, its toolbar in the panel's header, and the comments in a `Comments` panel beside it, 20rem wide, once
+  the page gives both 60rem (a container query, so the rail's width counts), and under it, as a list, below that. Beside
+  the plan, the comments are its margin, as a shared document's are (`src/lib/plan-margin.ts`): each open comment is a
+  card of its own at the height of its passage, in the plan's order, and one that would overlap the card before it moves
+  down to clear it. The open one, or the comment being written, sits exactly at its passage, and the cards before it
+  move up to make room. A comment being written opens in its place among them, beside its passage, so opening one never
+  scrolls the page away from what it is on. Each card is placed by its top margin and stays in the column's flow, so the
+  comments whose passage is gone, the resolved ones, and `Ask for changes` follow the last; the cards move with their
+  passages as the plan is edited, and with each other as one grows. Under the plan, the comments are rows split by
+  hairlines, as before. The plan is laid out as a document (`.plan-doc` in `src/index.css`): `text-sm` prose up to
+  `max-w-3xl`, headings at `text-xl`, `text-base`, and `text-sm` semibold, code as rich text sets it, a table in
+  hairlines with its header row on `surface-raised` at half, a quote muted behind a hairline. What the plan holds as
+  characters (HTML, an image) is muted monospace; a link is underlined in `muted-foreground` with its address on hover,
+  never a link. The toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by hairlines: undo and redo, the
+  paragraph's style (a choice of one), the marks and the blocks (each on or off, raised while on at the cursor), then
+  `Comment`, enabled while text is selected. Each control's tooltip names it and the shortcut the editor binds to it, on
+  this keyboard (`Bold (⌘B)`, `Bold (Ctrl+B)` elsewhere), and declares the same keys as `aria-keyshortcuts`. The plan's
+  header, with the toolbar, is `sticky`, and what the editor scrolls into view (the cursor as it types, a passage a
+  comment shows) stops 48px below it. A selection also shows a `Comment` bubble over it. A commented passage sits on the
+  accent's tint at 14%; the open one, or the one being commented on, at 28% and underlined in the accent; clicking a
+  passage opens its thread, and the cursor leaving it, or Escape, closes it. A thread is its passage quoted (two lines,
+  a hairline in the accent at its left, the whole on hover; a button that shows it in the plan), the comment and its
+  replies as text with their ages, and ghost `xs` actions, `Reply`, `Resolve` (`Reopen`), and `Delete`. While the thread
+  is open, the comment and each reply carry an `Edit` beside their age, in `text-2xs`, which turns it into the comment
+  form in place, holding its words, with `Save`; the actions hide while it is open. `Delete` asks first, in the actions'
+  place, since nothing brings a thread back: `Delete this comment and its replies?` in muted `text-xs`, then `Keep`,
+  which takes the focus, and `Delete` in `destructive`; Escape keeps it too, and the focus goes back to `Delete`; the
+  open thread sits on the accent's tint, as a selected row does. A thread whose passage is gone carries a `passage gone`
+  chip and stays in the list, last. Resolved threads fold under a `Disclosure` (`Show 2 resolved`). A comment or reply
+  form sends on the key Settings names, as a reply does, and Escape drops it. A form takes the cursor when it opens,
+  after any words it holds. `Comment` again, on new words, moves an empty comment to them; one half written stays on its
+  passage, and the cursor goes back to it, so its words are never lost or carried to other words. The comments end in
+  `Ask for changes`: a note on the whole plan and the button, with how many open comments go with it, or how far over a
+  reply's bound the request is. Until plans reach a ticket's page (M44), the editor is on `/plan-editor`, over a sample
+  plan on mock data only, with what the planner would read and the plan's Markdown under it.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then how often it may start and its window (`cadenceText`: `every 360 minutes`, as
   the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed
   as `canopy status` counts them (`findingsText`: `1 open finding · 2 dismissed`; its page's findings panel the
   same, `findingsReadout`: `1 · 2 dismissed`), and what its runs cost in the last
-  24 hours and 30 days (`costText`, a dash when none reported a cost). Its page puts that spend in a table under its
+  24 hours and 30 days (`costText`, a dash when none reported a cost). Its page's description is that line, and it
+  puts that spend in a table under its
   runs, a row a window: runs (`runsText`: `4, 1 unpriced`), total, average, p99, and max. A chore run is a row like a
   run's, its id as `chore:deps#2` (Names, below) linking to its page, with its findings as a chip on
   an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
@@ -715,8 +771,9 @@ list, an empty state, or a skeleton by hand.
 - **Behavior comes from Radix**, through the shadcn wrappers in `src/components/ui/`, and only they import it (the lint
   refuses `radix-ui` anywhere else): a button that is on or off is a `Toggle`, a part of the page that opens under its
   button is a `Collapsible` (the panel or row itself, by `asChild`, so it adds no wrapper) opened by a `Disclosure`
-  (below), an option that is on or off a `Checkbox`, a choice of a few options a `ToggleGroup`, and a row of an
-  editor's controls a `Toolbar` (`src/components/ui/toolbar.tsx`), one tab stop with the arrow keys between them.
+  (below), an option that is on or off a `Checkbox` (or, for the lightswitch rave alone, a `Switch`), a choice of a
+  few options a `ToggleGroup`, and a row of an editor's controls a `Toolbar` (`src/components/ui/toolbar.tsx`), one
+  tab stop with the arrow keys between them.
   Radix keeps their ARIA in step with their state (`aria-pressed`, `aria-expanded` with `aria-controls`), so a
   component never writes it by hand. Two stay native on purpose: a transcript's tool call is a `<details>` (above),
   and rich text's `show N more lines` shows more of text already on screen rather than opening a part, so it is a
@@ -733,8 +790,8 @@ list, an empty state, or a skeleton by hand.
     `Show hats`). In a row's line it sits in line with the text above it (`-ml-2`), no taller than a line (`-my-1`).
     A row that opens to its own body, a transcript's tool call or model call, is the row itself, a chevron at its end.
   - Two of either are one: a pair that does and undoes (Open all, Close all) is one `Toggle` (All open).
-  - A panel header's modes sit together, after what the panel is about: a transcript's session id, a hairline rule,
-    then its order, By call, and All open.
+  - A panel header's modes sit together, after what the panel is about: a transcript's session id (but on a tick's
+    page, whose Tick panel names it), a hairline rule, then its order, By call, and All open.
 - **Buttons come in three sizes**, each one look: the default (`h-9`, `text-sm` at 500) in a form and a panel's foot;
   `sm` (`h-8`, the same type) in the header and for a link out, whose label is the accent's monospace at that size and
   weight (`LinkOutButton`); and `xs` (`h-6`, `text-xs` monospace at 400, as a readout beside it is) in a panel's header
@@ -764,15 +821,20 @@ list, an empty state, or a skeleton by hand.
   `status-failed`, naming the guard. An action that kills something asks
   once more inline (Stop now, then End run N now), never through a browser dialog. One that cannot be undone asks
   for its subject typed out: Forget opens a form in `status-failed` that says what it drops and keeps, and its button
-  stays disabled until the field holds the ticket's key exactly.
+  stays disabled until the field holds the ticket's key exactly. Until then Forget is the quietest of the row, a ghost
+  button in `status-failed` text at its end, since the loudest button is the one clicked first. The line under the
+  actions is empty until one has said something: what the ticket is, private or public, is its chip. A public ticket
+  has no Stop, since its queue label authorizes it; while a worker runs on one, a muted line stands in Stop's place:
+  `Public: remove its queue label to stop it, or start it privately.`
 - **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions, in its Work panel's foot on its
   page and under the item's head on its attention item, above the conversation either way, and in the foot of a PR's
   Pull request panel, under the operator's review request. While something is stuck it is a block on the
   `status-failed` tint, the color its `attempt_limit` chip wears, so it stands out from the panel: a line in body text
   led by `At its limit.` in `status-failed`, then a row per limit whose runs have reached it, what it counts in
-  monospace (`fix-ci in web`, `reviews of web#88`), its runs against it in `status-failed` (`1 of 1 runs`, and `, N
-  granted` past the policy's), and an outline `Allow one more` button at the row's end, as a ticket's actions are, the
-  CLI's command on hover. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
+  monospace (`fix-ci in web`, `reviews of web#88`, just `reviews` on the PR's own page), its runs against it in
+  `status-failed` (`1 of 1 runs`, and `, N granted` past the policy's), and an outline `Allow one more` button at the
+  row's end, the default size of every button in a panel's foot, as a ticket's actions are, the CLI's command on
+  hover. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
   leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
   does not own (DESIGN §21). The pull requests page leads with a `Review a PR` panel above the list: a line saying
@@ -784,7 +846,23 @@ list, an empty state, or a skeleton by hand.
 - **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posted nowhere (D114): the
   review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. A diff is a
   monospace table: the old and new line numbers, the `+` or `-` in `diff-add` or `diff-del`, and the line, its row on
-  that token's 12% tint; a hunk's header on `surface-raised`; long lines scroll sideways inside the panel. A finding's
+  that token's 12% tint; a hunk's header on `surface-raised`; long lines scroll sideways inside the panel, while a
+  finding's card and a fold keep to the panel's width at its left edge (sticky, `100cqw`), so one long line never
+  carries a card's text out of reach. The code is colored by the file's language, read from its name
+  (`src/lib/languages.ts`): keywords in `syntax-literal`, strings in `syntax-string`, constants in `syntax-number`,
+  function and type names in `syntax-key`, comments muted, the rest plain, each read at 4.5:1 on an added or removed
+  line's tint too. Shiki tokenizes each hunk's new side and old side whole, with its TextMate grammar, in the browser
+  (`src/lib/highlight.ts`, D121), 200 lines at a time from the grammar state the last left, the page running between
+  them, so a long diff never holds a click; a line shows plain until its file's grammar has loaded, then the same
+  characters colored, and stays plain for a language canopy does not map, a file of more than 2,000 lines (more than the
+  page draws of a diff at first, below, so mostly folded away; `highlightLanguage`), a line of 1000 characters or more,
+  or a grammar that fails. A diff over 2,000 lines folds (`DIFF_BUDGET`, `src/lib/review-folds.ts`), since one at the
+  server's bounds drawn whole is 150,000 elements, seconds to show and seconds for every click after: the page draws the
+  10 lines either side of each finding's line, then whole files in order while they fit, then the first lines of the
+  rest, and says so in a muted line above the first file. Each run of lines it leaves out is a fold, a row on
+  `surface-raised/50` with a ghost `xs` button, `Show 60 hidden lines`, or `Show 500 of 13,029 hidden lines` past a
+  step, which draws the next 500; a fold only adds, as rich text's `show N more lines` does, so it is a plain button,
+  not a `Disclosure`. A finding's
   card (`FindingCard`) sits right under the line it names, or under its file's header when the diff does not show the
   line, or in a Not in the diff panel: its number, its severity as a chip (`blocking` in `status-failed`, `major` in
   `status-blocked`, as the attention list's reasons; `minor` plain), its title, its location, and its detail as rich

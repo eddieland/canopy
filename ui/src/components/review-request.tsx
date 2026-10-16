@@ -112,7 +112,6 @@ export function ReviewRequestStatus({
                 {open && (
                     <Button
                         variant="outline"
-                        size="sm"
                         className="ml-auto"
                         title={`canopy stop ${url}`}
                         onClick={() => stop.mutate()}

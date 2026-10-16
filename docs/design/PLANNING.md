@@ -7,8 +7,11 @@ runs](SANDBOXING.md). Next: [Garbage collection](GARBAGE_COLLECTION.md).
 ## 25. Plans before implementing (M44)
 
 Designed, and built only in part (ROADMAP M44, REQUIREMENTS R18): the plan editor (Commenting on a plan, below) is in,
-over mock data. Until M44 lands, a ticket's first run is its `implement`, and §7, §8, §12, §14, §20, and §22 describe
-canopy as it is. This section says what changes in each.
+over mock data, and so are plans' files and rows (Where plans live and Journal, below; `core/plans.py`), and plan runs:
+`canopy dispatch --kind plan`, the planner, its prompt, and `_run` writing the plan (Dispatch, The prompt, and Agent
+definition, below). Nothing dispatches a plan yet, since the overseer's prompt and the phases do not name one, and no
+`implement` waits on one. Until M44 lands, a ticket's first run is its `implement`, and §7, §8, §12, §14, §20, and §22
+describe canopy as it is. This section says what changes in each.
 
 Today the `implement` worker plans inside its own session, and nothing of that plan survives but the run's summary. A
 **plan** is a run of its own that reads the ticket and the code and writes down how the work will be done, before any
@@ -113,7 +116,11 @@ A plan runs as a split does (§18): in a desk of the named repositories' worktre
 detached, with no branch and no setup command, since the planner has no shell. `_run` runs `plan_cmd` in the desk,
 parses and validates the plan's result (below), and skips push verification, since a plan pushes nothing. Slots are
 returned and the desk removed on every exit path; reconcile treats a dead plan run like any other. A plan counts toward
-`capacity.max_workers` with workers and reviews: it is an agent run, with spend.
+`capacity.max_workers` with workers and reviews: it is an agent run, with spend. It works in a desk even over one
+repository, so the copy of the plan it replaces (The prompt, below) is in no repository.
+
+Under `tracker.private` (§22), a ticket's first plan starts it privately, as its first `implement` would: otherwise a
+plan, which posts nothing, would be the ticket's first run, and the ticket would stay public for good.
 
 ### The prompt
 
@@ -126,32 +133,39 @@ returned and the desk removed on every exit path; reconcile treats a dead plan r
 - the open risks.
 
 It carries the key, the repositories and their base branches (`{{REPOSITORIES}}`), the operator's messages
-(`{{OPERATOR_MESSAGES}}`, or `{{CONVERSATION}}` on a private ticket), `{{STANDING_INSTRUCTIONS}}`, `{{NOTICE}}`, and the
-bound on a plan's length. On a re-plan, `_run` copies the plan it replaces from its file to `.canopy-plan.md` at the
-desk's root (The worker's copy, below), and the prompt says so; the operator's reply to it is among the messages. On a
+(`{{OPERATOR_MESSAGES}}`, which on a private ticket holds its conversation), `{{STANDING_INSTRUCTIONS}}`, `{{NOTICE}}`,
+and the bound on a plan's length. On a re-plan, `_run` copies the plan it replaces, the ticket's current plan, from its
+file as it stands, the operator's edits included, to `.canopy-plan.md` at the desk's root (The worker's copy, below),
+and the prompt says that a file there is the plan it replaces; the operator's reply to it is among the messages. On a
 public ticket the planner checks the queue label first, as every worker does (§8 step 3); a private ticket has no
-label to check. It treats the ticket's text and the code as data (TRUST_MODEL T1).
+label to check. One prompt serves both: `{{AUTHORIZATION}}` is the label check on a public ticket and says there is
+none on a private one, and an override must carry it, `{{REPOSITORIES}}`, `{{OPERATOR_MESSAGES}}`, and `{{PLAN_OUT}}`.
+It treats the ticket's text and the code as data (TRUST_MODEL T1).
 
-The plan is the planner's final message (§13): the plan as markdown, then the result line. A plan of tens of thousands
-of characters escaped into one JSON string is easy for a model to get wrong, and a run whose result line does not
-parse records nothing, so the plan stays out of the JSON. Result contract, one JSON line, last line of the agent's text
-(§13), validated with pydantic (D026):
+The planner writes its plan, as markdown, to `.canopy-new-plan.md` at its desk's root (`{{PLAN_OUT}}`), the one file its
+definition lets it edit (Agent definition, below), and `_run` reads that file once the planner exits, before the desk
+is removed. A plan of tens of thousands of characters escaped into one JSON string is easy for a model to get wrong,
+and a run whose result line does not parse records nothing, so the plan stays out of the JSON. It stays out of the
+final message too, an earlier design (2026-10-16): a template that prints plain stdout has no message boundaries, so
+everything it printed before the result line would have been the plan; a plan split across messages by a tool call
+would have lost all but its end; and a long plan had to come in one message. A file has none of these: the planner can
+write it a section at a time and revise it as it reads, and the file as it stands at exit is the plan. Result contract,
+one JSON line, last line of the agent's text (§13), validated with pydantic (D026):
 
 ```json
 {"status":"done|blocked|failed","summary":"...","question":"<only when blocked>"}
 ```
 
-- `done` records the final message, the result line and anything after it removed and surrounding whitespace
-  stripped, as the ticket's newest plan, `proposed`. It must be non-empty and at most 100,000 characters. The bound is
-  what a planner can write in one message and an operator can read before approving, not what a worker reads: workers
-  read the plan from a file, by its outline (Workers follow the plan, below). A template that prints plain stdout
-  rather than events has no message boundaries, so all of its stdout before the result line is the plan.
+- `done` records the planner's file as the ticket's newest plan, `proposed`, read as every plan file is (Where plans
+  live, below): a regular file, never through a link, non-empty UTF-8 of at most 100,000 characters. The bound is what
+  an operator can read before approving, not what a worker reads: workers read the plan from a file, by its outline
+  (Workers follow the plan, below).
 - `blocked` has a `question`, recorded as a worker message (§22), on a public ticket too, since the planner cannot
   comment on the ticket. The operator answers with `canopy reply`.
 - `failed` means it could not plan, and the summary says why. Like any run that ends other than `done`, it raises
   attention (§14).
-- Anything else, a `done` with an empty plan or one over the bound included, makes the run `unknown` and records no
-  plan.
+- Anything else, a `done` whose file is missing, empty, over the bound, or not a regular file included, makes the run
+  `unknown` and records no plan.
 
 ### Phases and the overseer's part
 
@@ -259,7 +273,13 @@ run a harness note naming it, so `canopy show` and the web UI say so. The harnes
 
 canopy ships `canopy-planner` in the definitions directory (§13):
 
-- no edit, shell, web fetch, or subagent tools; reads only inside its desk.
+- no shell, web fetch, or subagent tools; reads only inside its desk.
+- one file it may write: its `edit` rules deny `*`, then allow `.canopy-new-plan.md` alone. OpenCode matches an edit's
+  path relative to the project, `/` for a desk outside a checkout, and its `*` crosses `/`, so a file of that name in a
+  worktree is allowed too; it is reset with the slot and never read. `external_directory: deny` keeps every edit inside
+  the desk and its links. The rules come after the MCP patterns, since OpenCode matches each key against the
+  permission's name as a wildcard, and `*edit*` after them would deny the edit tool, and take it from the model
+  altogether. The planner canary checks them against a real model.
 - MCP: its tracker tools are the private worker's (§22): the tracker server's tools denied by a wildcard, then only
   `tracker.read_tools` allowed. It reads the ticket but cannot comment, label, or create. With no read tools known for
   the provider, a plan dispatch refuses `no_read_tools`, rather than run a planner that cannot read the ticket.
@@ -284,17 +304,27 @@ ticket's page.
 
 - **The editor** (`ui/src/components/plan-editor.tsx`) is Tiptap on ProseMirror (D120), Markdown in and out
   (`ui/src/lib/plan-schema.ts`): headings, lists, task lists, tables, quotes, code blocks, and inline marks, through a
-  toolbar or Markdown's own shortcuts. A plan opened and left alone writes back as it was read. A plan is model text
-  (TRUST_MODEL T1), so what the editor has no node for stays characters: HTML is never read as HTML and an image is
-  never fetched, both shown and written back as written, and a link keeps its address, shown on hover, but is not a
-  link (D113).
+  toolbar or Markdown's own shortcuts. A plan opened and left alone writes back as it was read. A line the plan wraps
+  inside a paragraph, as planners wrap Markdown, reads as a space, so the paragraph reflows to the editor's width, and
+  writes back as the wrap it was; kept as a newline, it would show as a line break and turn into a hard break at the
+  first keystroke beside it. A list or task item that wraps stays one paragraph and writes back with its lines indented
+  under its marker, as CommonMark reads it; Tiptap's own reader would make a wrapped task two paragraphs. Text pasted as
+  Markdown, as a plan or a chat's answer is copied from a terminal or an editor, is read by the same parser, so it
+  pastes as headings, lists, and marks, its HTML still characters; prose, a copy from the editor itself, a paste with
+  Shift held (paste as plain text), and anything pasted into a code block paste as the text they are. What is copied out
+  of more than one block copies, as plain text, as the Markdown that writes it, so a list keeps its markers and a
+  heading its `#`; words within one block copy as the words, as from any page. A plan is model text (TRUST_MODEL T1), so
+  what the editor has no node for stays characters: HTML is never read as HTML and an image is never fetched, both shown
+  and written back as written, and a link keeps its address, shown on hover, but is not a link (D113).
 - **A comment** is a thread on a passage: the comment, its replies, open until the operator resolves it. It is
   anchored by the passage's words and up to 32 characters either side, whitespace collapsed
   (`ui/src/lib/plan-anchors.ts`), never by a position, which the first edit above it would make wrong. While the plan
   is edited, a passage's highlight moves with the text around it, and its anchor follows its words. On a new plan,
   each thread is looked for again by its words, the text around it choosing between copies. A passage that is gone is
   found nowhere, and its thread says `passage gone` rather than move to other words: a reworded passage may no longer
-  be what the comment was about.
+  be what the comment was about. While a thread is open, its comment and each reply can be edited in place; Ask for
+  changes sends what they say then. Nothing marks one edited, since the journal keeps a comment's body alone, and only
+  the operator writes there.
 - **Ask for changes** sends the open threads, in the order the plan reads, as one operator message: each passage
   quoted (cut at 160 characters), its comment and replies, then the operator's note on the whole plan, if any
   (`changeRequest` in `ui/src/lib/plan-threads.ts`). It is a reply, through `canopy reply`'s code and within its
@@ -320,8 +350,9 @@ ticket's page.
 - A migration adds `plans`: id, ticket key, run id, created at, status (`proposed`, `approved`, or `superseded`), the
   SHA-256 and size of the file as the planner wrote it, and the approved hash, approved at, and channel. No body: the
   text is the plan's file (Where plans live, above). Its `status` column is constrained with `CHECK (status IN
-  (...))`. Rows are never deleted.
-- `tickets` gains the ticket's own plan setting: unset, `plan`, or `skip`.
+  (...))`. Rows are never deleted. A new plan supersedes the ticket's current one in the transaction that records it,
+  and a partial unique index holds each ticket to one plan that is not superseded.
+- `tickets` gains the ticket's own plan setting, `plan_setting`: NULL for unset, `plan`, or `skip`.
 - A plan run is a `runs` row of kind `plan` with its `run_slots`, no branch, and `result_json` the validated result.
   Its report message (§8 step 7) is its summary.
 - `canopy forget` (§22) supersedes a waiting or approved plan, so a forgotten ticket under `"approve"` is planned again.
@@ -337,7 +368,8 @@ Proposed, for the operator's approval note in M44's PR, with the overseer prompt
   the plan, and a plan cannot widen what a worker may do.
 - T3: plan runs count toward `capacity.max_workers` and are limited by `max_plan_attempts`, never reset. `unplanned`
   is a guard in code.
-- T6: the planner has no write scope: no edits, no shell, and only the tracker's read tools. Residual: a worker can
+- T6: the planner writes one file, its plan, in its desk: no other edits, no shell, and only the tracker's read tools.
+  Residual: a worker can
   commit its copy of the plan by name, which on a private ticket publishes the plan with its branch. The prompt
   forbids it and push verification reports it; nothing prevents it.
 - T8: the plan route joins the web channel's writes, behind the same secret and per-session token as the others, and
