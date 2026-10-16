@@ -45,6 +45,45 @@ describe('planExtensions', () => {
         expect(open(plan).getMarkdown()).toBe(plan)
     })
 
+    it('reflows a wrapped line as a space and writes it back as it was wrapped', () => {
+        const plan = [
+            'In **web**, a new route,',
+            'which streams the rows. A *phrase that',
+            'wraps* and [a link that',
+            'wraps](https://x.test/a) stay whole. ',
+            'A space before the wrap stays too.',
+            '',
+            '> A risk',
+            '> that wraps.',
+        ].join('\n')
+        const editor = open(plan)
+        const texts: string[] = []
+        editor.state.doc.descendants((node) => {
+            if (node.isText) {
+                texts.push(node.text ?? '')
+            }
+        })
+        expect(texts.join('')).not.toContain('\n')
+        expect(editor.getText()).toContain('a new route, which streams')
+        expect(editor.getMarkdown()).toBe(plan)
+    })
+
+    it('keeps a hard break apart from a soft one', () => {
+        const editor = open('One  \ntwo\nthree')
+        const types: string[] = []
+        editor.state.doc.firstChild?.forEach((node) => {
+            types.push(node.type.name)
+        })
+        expect(types).toEqual(['text', 'hardBreak', 'text', 'softBreak', 'text'])
+        expect(editor.getMarkdown()).toBe('One  \ntwo\nthree')
+    })
+
+    it('drops a soft break an edit leaves at the end of its paragraph', () => {
+        const editor = open('One\ntwo')
+        editor.commands.deleteRange({ from: 5, to: 8 })
+        expect(editor.getMarkdown()).toBe('One')
+    })
+
     it('keeps a table', () => {
         const markdown = open('| File | Why |\n| --- | --- |\n| a.py | rows |').getMarkdown()
         expect(markdown).toContain('| a.py | rows |')
@@ -84,6 +123,13 @@ describe('docText', () => {
         }
         expect(editor.state.doc.textBetween(range.from, range.to)).toBe('two')
         expect(spanOf(positions, range.from, range.to)).toEqual({ start, end: start + 3 })
+    })
+
+    it('reads a soft break as a space, at its own position', () => {
+        const editor = open('One\ntwo')
+        const { text, positions } = docText(editor.state.doc)
+        expect(text).toBe('One two')
+        expect(editor.state.doc.nodeAt(positions[3] ?? 0)?.type.name).toBe('softBreak')
     })
 
     it('has no range for a span of block breaks alone', () => {

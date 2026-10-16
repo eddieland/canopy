@@ -29,6 +29,19 @@ async function select(page: Page, text: string): Promise<void> {
     }, text)
 }
 
+// Clicks into the passage of thread `id`, `offset` characters in, as the operator would.
+async function caretAt(page: Page, id: string, offset: number): Promise<void> {
+    const point = await plan(page)
+        .locator(`[data-thread="${id}"]`)
+        .evaluate((element, at) => {
+            const range = document.createRange()
+            range.setStart(element.firstChild ?? element, at)
+            const box = range.getBoundingClientRect()
+            return { x: box.x, y: box.y + box.height / 2 }
+        }, offset)
+    await page.mouse.click(point.x, point.y)
+}
+
 function plan(page: Page): Locator {
     return page.getByRole('textbox', { name: 'Plan', exact: true })
 }
@@ -68,6 +81,26 @@ test('a comment stays on its passage while the plan is edited above it', async (
     await expect(doc.locator('[data-thread=sample-1]')).toHaveText("streams the report's rows as they are read")
     await page.getByRole('button', { name: 'Show Markdown' }).click()
     await expect(page.getByLabel('Plan Markdown')).toContainText('# Export reports as CSV, streamed')
+})
+
+test('a wrapped line reads as one paragraph, and an edit undone leaves the Markdown as it was', async ({ page }) => {
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    const markdown = page.getByLabel('Plan Markdown')
+    const before = await markdown.textContent()
+    // The sample's first paragraph wraps after `export.csv`,. A matcher collapses whitespace, so these compare exactly.
+    expect(before).toContain('export.csv`,\nwhich streams')
+    expect(await plan(page).locator('p').first().textContent()).toContain('export.csv, which streams')
+    await caretAt(page, 'sample-1', 8)
+    await page.keyboard.type('x')
+    await page.keyboard.press('Backspace')
+    await expect.poll(() => markdown.textContent()).toBe(before)
+})
+
+test('a word typed inside a commented passage on a wrapped line stays in its comment', async ({ page }) => {
+    await caretAt(page, 'sample-1', "streams the report's ".length)
+    await page.keyboard.type('many ')
+    const passage = plan(page).locator('[data-thread=sample-1]')
+    await expect(passage).toHaveText("streams the report's many rows as they are read")
 })
 
 test('the toolbar formats the selection and says what is in force', async ({ page }) => {
