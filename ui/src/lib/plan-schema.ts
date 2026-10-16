@@ -4,7 +4,8 @@
 // part of it. A plan is model-written (TRUST_MODEL T1), so its HTML is never read as HTML: a tag is a verbatim atom
 // that shows and writes back its characters, as an image is, which would otherwise fetch from another origin
 // (ui/AGENTS.md). A link keeps its Markdown and shows its address on hover, but is not a link: the web UI links a URL
-// only to itself (D113).
+// only to itself (D113). A line the source wraps inside a paragraph is a soft break of its own, drawn as a space and
+// written back as the wrap it was.
 import { Extension, Node } from '@tiptap/core'
 import type { AnyExtension, JSONContent } from '@tiptap/core'
 import { Link } from '@tiptap/extension-link'
@@ -15,6 +16,9 @@ import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import { StarterKit } from '@tiptap/starter-kit'
 
 import { ATOM } from '@/lib/plan-anchors'
+
+// A mark as a document's JSON holds it.
+type JSONMark = NonNullable<JSONContent['marks']>[number]
 
 /** The extensions of a plan's document, with `more` (the comments' highlights) after them. */
 export function planExtensions(more: AnyExtension[] = []): AnyExtension[] {
@@ -32,7 +36,8 @@ export function planExtensions(more: AnyExtension[] = []): AnyExtension[] {
         VerbatimBlock,
         VerbatimInline,
         ImageAsText,
-        Markdown.configure({ indentation: { style: 'space', size: 2 } }),
+        SoftBreak,
+        PlanMarkdown.configure({ indentation: { style: 'space', size: 2 } }),
         ...more,
     ]
 }
@@ -56,6 +61,9 @@ export function docText(doc: ProseMirrorNode): { text: string; positions: number
             for (let i = 0; i < value.length; i += 1) {
                 positions.push(pos + i)
             }
+        } else if (node.type.name === 'softBreak') {
+            text += ' '
+            positions.push(pos)
         } else if (node.type.name === 'hardBreak') {
             text += '\n'
             positions.push(pos)
@@ -163,6 +171,100 @@ const VerbatimBlock = Node.create({
     },
     renderMarkdown: (node: JSONContent) => String(node.attrs?.['raw'] ?? ''),
 })
+
+// A line the source wraps inside a paragraph, as planners and this repository wrap Markdown. To a reader it is a space,
+// so the paragraph reflows to the editor's width; it writes back as the wrap it was, the space before it and the
+// indent after it included. Left as a newline in a text node, the browser would draw it as a line break, since the
+// editor keeps whitespace as typed, and the first keystroke near it would read it back from the page as a hard break:
+// a change to the plan, and an edit that starts at the break, which cuts short a comment on the words after it. Two or
+// more spaces, or a backslash, before the newline make a hard break instead, which marked reads as `br`.
+const SoftBreak = Node.create({
+    name: 'softBreak',
+    group: 'inline',
+    inline: true,
+    selectable: false,
+    addAttributes() {
+        return { raw: { default: '\n' } }
+    },
+    parseHTML() {
+        return [{ tag: 'span[data-soft-break]' }]
+    },
+    renderHTML() {
+        return ['span', { 'data-soft-break': '' }, ' ']
+    },
+    renderText: () => ' ',
+    markdownTokenizer: {
+        name: 'softBreak',
+        level: 'inline',
+        // Where the text before it stops: at the spaces before a newline, so that two of them still reach `br`.
+        start: (src) => src.search(/ *\n/u),
+        tokenize: (src) => {
+            const match = /^ ?\n[ \t]*/u.exec(src)
+            // A newline that ends the text is no break between words.
+            const between = match !== null && /\S/u.test(src.slice(match[0].length))
+            return between ? { type: 'softBreak', raw: match[0], text: match[0] } : undefined
+        },
+    },
+    parseMarkdown: (token, helpers) => helpers.createNode('softBreak', { raw: token.raw ?? '\n' }),
+    renderMarkdown: (node: JSONContent) => String(node.attrs?.['raw'] ?? '\n'),
+})
+
+// Markdown, with each soft break written as the text it was before the marks around it are: a node of its own would
+// close a mark it sits inside and open it again after it, so `**two\nwords**` would write back as two bold spans.
+const PlanMarkdown = Markdown.extend({
+    onBeforeCreate(event) {
+        this.parent?.(event)
+        const editor = this.editor
+        editor.getMarkdown = () => editor.markdown?.serialize(softBreaksAsText(editor.getJSON())) ?? ''
+    },
+})
+
+// `node` with each soft break turned into its text, joined to the text beside it. Its marks are those of the text on
+// both sides of it, which the parser gives the text alone. A soft break at either end of its block, which an edit can
+// leave there, separates nothing and is dropped.
+function softBreaksAsText(node: JSONContent): JSONContent {
+    if (node.content === undefined) {
+        return node
+    }
+    const content: JSONContent[] = []
+    node.content.forEach((child, i, all) => {
+        if (child.type !== 'softBreak') {
+            content.push(softBreaksAsText(child))
+            return
+        }
+        if (i === 0 || i === all.length - 1) {
+            return
+        }
+        const after = all[i + 1]?.marks ?? []
+        const marks = (all[i - 1]?.marks ?? []).filter((mark) => after.some((other) => sameMark(mark, other)))
+        content.push({ type: 'text', text: String(child.attrs?.['raw'] ?? '\n'), marks })
+    })
+    return { ...node, content: joinText(content) }
+}
+
+// Adjacent text nodes with the same marks, as one.
+function joinText(content: JSONContent[]): JSONContent[] {
+    const joined: JSONContent[] = []
+    for (const node of content) {
+        const last = joined.at(-1)
+        if (last?.type === 'text' && node.type === 'text' && sameMarks(last, node)) {
+            joined[joined.length - 1] = { ...last, text: `${last.text ?? ''}${node.text ?? ''}` }
+        } else {
+            joined.push(node)
+        }
+    }
+    return joined
+}
+
+function sameMarks(a: JSONContent, b: JSONContent): boolean {
+    const theirs = b.marks ?? []
+    const ours = a.marks ?? []
+    return ours.length === theirs.length && ours.every((mark, i) => sameMark(mark, theirs[i]))
+}
+
+function sameMark(a: JSONMark, b: JSONMark | undefined): boolean {
+    return JSON.stringify(a) === JSON.stringify(b)
+}
 
 // An image, as the characters that wrote it: the editor never fetches it.
 const ImageAsText = Extension.create({
