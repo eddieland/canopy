@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
-import type { Page } from '@playwright/test'
 
-import { signIn } from './helpers.ts'
+import { diffFile, serveReview, signIn } from './helpers.ts'
+import type { DiffFinding } from './helpers.ts'
 
 // A review at the server's bounds is the largest the page is ever sent: 500 files and 30,000 lines in its diff
 // (canopy/core/review_diff.py) and 20 findings (canopy/core/review_result.py). Drawn whole, such a diff took seconds to
@@ -14,49 +14,10 @@ const MAX_DETAIL = 1000
 const PAGE_LINES = 2000
 const STEP = 500
 
-/** A line of a diff, as the API sends it. */
-interface Line {
-    kind: 'add' | 'del' | 'ctx'
-    old: number | null
-    new: number | null
-    text: string
-}
-
-/** A finding, as the API sends it. */
-interface Finding {
-    severity: 'blocking' | 'major' | 'minor'
-    title: string
-    location: string
-    detail: string
-    file: number | null
-    line: number | null
-    dismissed: boolean
-}
-
-/** A file of `count` added lines in one hunk, numbered from 1; `text` gives each its text by its number. */
-function diffFile(path: string, count: number, text: (n: number) => string) {
-    const lines = Array.from({ length: count }, (_, i): Line => ({
-        kind: 'add',
-        old: null,
-        new: i + 1,
-        text: text(i + 1),
-    }))
-    return { path, old_path: null, binary: false, hunks: [{ header: '', lines }] }
-}
-
 /** A minor finding titled `title`, on `line` of the diff's file `file`, with as long a detail as a finding may have. */
-function finding(title: string, file: number | null, line: number | null): Finding {
+function finding(title: string, file: number | null, line: number | null): DiffFinding {
     const location = file === null ? 'docs/elsewhere.md:1' : `src/f${file}.ts${line === null ? '' : `:${line}`}`
     return { severity: 'minor', title, location, detail: 'd '.repeat(MAX_DETAIL / 2), file, line, dismissed: false }
-}
-
-/** Serves review:4 with this diff and these findings, the rest of it as the mock journal has it. */
-async function serveReview(page: Page, files: ReturnType<typeof diffFile>[], findings: Finding[]): Promise<void> {
-    await page.route('**/api/reviews/4', async (route) => {
-        const response = await route.fetch()
-        const body = (await response.json()) as Record<string, unknown>
-        await route.fulfill({ response, json: { ...body, findings, diff: { files, truncated: true } } })
-    })
 }
 
 test.beforeEach(async ({ page }) => {
