@@ -274,9 +274,10 @@ Sprig:
 - Sprig (`Buddy`, `src/components/shell/buddy.tsx`) is a bent wire with a sprig on top and googly eyes, behind a
   keyboard it vibe codes on (`Keyboard`), at the foot of the side rail, under a speech bubble offering a tip about
   the page. The keyboard stands in front of the wire's foot, inside the figure's own box, so Sprig takes no more room
-  for it. It is off until Settings turns it on. Its tips are by page (`TIPS` in `src/lib/buddy.ts`): a set for each
-  nav section (`src/lib/sections.ts`, so a new section must get its own) and for the search page, then ones for
-  anywhere. Every one is a joke, and none opens with "Tip:",
+  for it. It is off until Settings turns it on. Its tips are by view (`TIPS` in `src/lib/buddy.ts`), by the route's
+  id: several of its own for every route, a section's list and one of its items apart (`/tickets/` and
+  `/tickets/$key`), so the same joke never shows on two views; then ones for anywhere. A new route is a type error
+  there until it has its own. Every one is a joke, and none opens with "Tip:",
   which on the ticker names something real; a joke dressed as a tip opens with "Unhelpful tip:". The jokes come in
   several voices (the paperclip's "It looks like you're...", a false "Fun fact:", a "Hot take:", a diary entry, a
   haiku, a riddle), mixed in each list so that no voice follows itself. Clicking Sprig, or the bubble's Another tip,

@@ -1,10 +1,10 @@
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { SECTIONS } from '@/lib/sections'
 import { breakStorage, otherTab, otherTabClears } from '@/test-utils'
 
-import { ANYWHERE, DEFAULT, pageOf, parseBuddy, TIPS, tipFor } from './buddy'
+import { ANYWHERE, DEFAULT, parseBuddy, TIPS, tipFor } from './buddy'
+import type { View } from './buddy'
 
 const DAY = 86_400_000
 
@@ -24,22 +24,11 @@ describe('parseBuddy', () => {
     })
 })
 
-describe('pageOf', () => {
-    it('names the page by the first part of its path it knows', () => {
-        expect(pageOf('/attention')).toBe('/attention')
-        expect(pageOf('/tickets/ABC-102')).toBe('/tickets')
-        expect(pageOf('/canopy/ticks/2')).toBe('/ticks')
-        expect(pageOf('/pull-requests/pr')).toBe('/pull-requests')
-        expect(pageOf('/search')).toBe('/search')
-        expect(pageOf('/')).toBeUndefined()
-        expect(pageOf('/nowhere')).toBeUndefined()
-    })
-})
-
 describe('TIPS', () => {
-    it('has tips for every section of the nav', () => {
-        for (const section of SECTIONS) {
-            expect(TIPS[section].length).toBeGreaterThan(0)
+    it('has several tips of its own for every view', () => {
+        // The type check holds every route to a list (src/components/shell/buddy.tsx); this holds each to a few.
+        for (const tips of Object.values(TIPS)) {
+            expect(tips.length).toBeGreaterThanOrEqual(5)
         }
     })
 
@@ -72,38 +61,38 @@ describe('TIPS', () => {
 })
 
 describe('tipFor', () => {
-    it("draws from the page's tips and the ones for anywhere", () => {
-        const length = TIPS['/chores'].length + ANYWHERE.length
-        const tips = new Set(Array.from({ length }, (_, n) => tipFor('/chores/deps', n, 0)))
-        expect(tips).toEqual(new Set([...TIPS['/chores'], ...ANYWHERE]))
+    it("draws from the view's tips and the ones for anywhere", () => {
+        const length = TIPS['/chores/$name'].length + ANYWHERE.length
+        const tips = new Set(Array.from({ length }, (_, n) => tipFor('/chores/$name', n, 0)))
+        expect(tips).toEqual(new Set([...TIPS['/chores/$name'], ...ANYWHERE]))
     })
 
-    it('draws only from the ones for anywhere on a page it does not know', () => {
-        expect(ANYWHERE).toContain(tipFor('/nowhere', 0, 0))
+    it('draws only from the ones for anywhere off every view', () => {
+        expect(ANYWHERE).toContain(tipFor(undefined, 0, 0))
     })
 
-    it("opens on the page's own tips, then the ones for anywhere", () => {
+    it("opens on the view's own tips, then the ones for anywhere", () => {
         for (let day = 0; day < 12; day += 1) {
-            const tips = Array.from({ length: TIPS['/runs'].length + ANYWHERE.length }, (_, n) =>
-                tipFor('/runs', n, day * DAY),
+            const tips = Array.from({ length: TIPS['/runs/$id'].length + ANYWHERE.length }, (_, n) =>
+                tipFor('/runs/$id', n, day * DAY),
             )
-            expect(new Set(tips.slice(0, TIPS['/runs'].length))).toEqual(new Set(TIPS['/runs']))
-            expect(new Set(tips.slice(TIPS['/runs'].length))).toEqual(new Set(ANYWHERE))
+            expect(new Set(tips.slice(0, TIPS['/runs/$id'].length))).toEqual(new Set(TIPS['/runs/$id']))
+            expect(new Set(tips.slice(TIPS['/runs/$id'].length))).toEqual(new Set(ANYWHERE))
         }
     })
 
-    it('never opens two pages it knows on the same tip', () => {
-        const pages = [...SECTIONS, '/search', '/nowhere']
+    it('never opens two views on the same tip, a list and one of its items included', () => {
+        const views = [...(Object.keys(TIPS) as View[]), undefined]
         for (let day = 0; day < 12; day += 1) {
-            const first = pages.map((page) => tipFor(page, 0, day * DAY))
-            expect(new Set(first).size).toBe(pages.length)
+            const first = views.map((view) => tipFor(view, 0, day * DAY))
+            expect(new Set(first).size).toBe(views.length)
         }
     })
 
-    it('is the same for the same page, count, and day, and moves on with either', () => {
-        expect(tipFor('/runs', 1, 5 * DAY)).toBe(tipFor('/runs', 1, 5 * DAY + 1000))
-        expect(tipFor('/runs', 1, 5 * DAY)).not.toBe(tipFor('/runs', 2, 5 * DAY))
-        expect(tipFor('/runs', 0, 5 * DAY)).not.toBe(tipFor('/runs', 0, 6 * DAY))
+    it('is the same for the same view, count, and day, and moves on with either', () => {
+        expect(tipFor('/runs/', 1, 5 * DAY)).toBe(tipFor('/runs/', 1, 5 * DAY + 1000))
+        expect(tipFor('/runs/', 1, 5 * DAY)).not.toBe(tipFor('/runs/', 2, 5 * DAY))
+        expect(tipFor('/runs/', 0, 5 * DAY)).not.toBe(tipFor('/runs/', 0, 6 * DAY))
     })
 })
 
