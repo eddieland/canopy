@@ -226,8 +226,10 @@ Accept: written with the design, before work starts, and like every milestone's,
 Status: in progress. Taken in part on request (2026-10-07): each worker and split run records its session id, and
 `canopy status` lists the ten most recent runs with their outcome, PRs, summary, cost, run log, and session id; M27
 shows a session's transcript in the web UI. A `worker_cmd` in a user file from before needs `--format json` added.
-Checking a run's session against `opencode export` is SCENARIOS S30. What keeps it open: whether `fix-ci` and `resume`
-continue a session, and workers against OpenCode's server. Taken in part on request (2026-10-13): the overseer names
+Checking a run's session against `opencode export` is SCENARIOS S30. What keeps it open: workers against OpenCode's
+server. Decided (2026-10-16): `fix-ci` and `resume` start a fresh session, as every run does (DESIGN §8, A fresh
+session per run), since a continued one would keep stale prompts and cost more than the short runs it replaces.
+Taken in part on request (2026-10-13): the overseer names
 each ticket (`canopy ticket set --title`), the name shows beside the key in `canopy status`, `canopy show`, and the web
 UI, and every default template passes it, or a tick's, chore's, or review's own, as the session title
 (`opencode run --title={title}`, DESIGN §13). Learned: `run --format json` prints no event with OpenCode's own title,
