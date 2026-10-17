@@ -468,7 +468,9 @@ never in the state block, and you do not read it. When `plan.needed` is true, th
   public ticket too, and you never comment on the ticket about it.
 - `plan.newest` is null or `superseded`, and the ticket is otherwise `ready`: dispatch `canopy dispatch <KEY> --label
   <label> --kind plan --repo <name> [--repo <name> ...]`, naming every repository the ticket will touch, with the
-  usual `--context` and no `--slug` or `--base` (a private ticket's takes no `--label`). Record phase `ready`. When
+  usual `--context` and no `--slug` or `--base` (a private ticket's takes no `--label`). When the ticket has new
+  operator messages, such as the answer to a blocked plan's question, pass `--cursor message=<the newest one's id>`
+  and name the message ids in the context; the planner reads them from its prompt. Record phase `ready`. When
   `plan.attempts` has reached `plan.limit`, do not dispatch: record `attempt_limit` as step 2 says, naming `plan`.
 - `plan.newest.status` is `proposed` and `plan.changes_asked` is false: the plan waits on the operator. Record phase
   `plan_proposed` and `canopy attention <KEY> plan_review --detail 'plan <id> waits: canopy show <KEY>, then canopy plan
