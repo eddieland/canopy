@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useBlocker } from '@tanstack/react-router'
 import { Check, Save, SkipForward } from 'lucide-react'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 
@@ -20,8 +21,18 @@ import { Notice } from '@/components/notice'
 import { Empty, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PlanEditor } from '@/components/plan-editor'
 import { Chip } from '@/components/status'
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import { PendingWork, usePending, usePendingWork } from '@/hooks/use-pending'
 import { planText } from '@/lib/outcomes'
 import { fromServer, movedAnchors, threadChanges } from '@/lib/plan-threads'
 import type { PlanThread, ThreadChange } from '@/lib/plan-threads'
@@ -42,17 +53,29 @@ const SAVE_KEYS = 'Mod-s'
 export function TicketPlan({ ticketKey, plans }: { ticketKey: string; plans: TicketPlans }) {
     const newest = plans.newest
     const earlier = plans.plans.filter((plan) => plan.id !== newest?.plan.id).toReversed()
+    // What leaving the page would lose, which it asks about first: an edit not yet saved, or words not yet sent.
+    const [pending, reportPending] = usePendingWork()
+    const held = new Set(pending.values())
+    const leaving = useBlocker({
+        // A move within the page, such as a list flipped, loses nothing.
+        shouldBlockFn: ({ current, next }) => current.pathname !== next.pathname,
+        enableBeforeUnload: true,
+        disabled: pending.size === 0,
+        withResolver: true,
+    })
     return (
         <section aria-label="Plan" className="flex flex-col gap-3" data-testid="ticket-plan">
             <PlanStatus plans={plans} />
             {newest !== null && newest.text !== null && (
-                <NewestPlan
-                    key={newest.plan.id}
-                    ticketKey={ticketKey}
-                    plans={plans}
-                    newest={newest}
-                    text={newest.text}
-                />
+                <PendingWork value={reportPending}>
+                    <NewestPlan
+                        key={newest.plan.id}
+                        ticketKey={ticketKey}
+                        plans={plans}
+                        newest={newest}
+                        text={newest.text}
+                    />
+                </PendingWork>
             )}
             {newest !== null && newest.text === null && (
                 <Panel>
@@ -62,6 +85,13 @@ export function TicketPlan({ ticketKey, plans }: { ticketKey: string; plans: Tic
                 </Panel>
             )}
             {earlier.length > 0 && <EarlierPlans ticketKey={ticketKey} plans={earlier} />}
+            <ConfirmLeave
+                open={leaving.status === 'blocked'}
+                edits={held.has('edit')}
+                words={held.has('words')}
+                onStay={() => leaving.reset?.()}
+                onLeave={() => leaving.proceed?.()}
+            />
         </section>
     )
 }
@@ -138,6 +168,7 @@ function NewestPlan({
     const status = newest.plan.status
     const editable = plans.planning === null && (status === 'proposed' || status === 'approved')
     const dirty = markdown !== text
+    usePending(dirty, 'edit')
     const approvable = status === 'proposed' || (status === 'approved' && (newest.changed_since_approval || dirty))
 
     function refresh(): Promise<void> {
@@ -361,4 +392,47 @@ function EarlierPlan({ ticketKey, plan }: { ticketKey: string; plan: PlanSummary
 // An earlier plan is read only: nothing changes its threads.
 function ignore(): void {
     // Nothing to do.
+}
+
+// Leaving the page with an edit not yet saved, or words in a comment not yet sent, asks first, as a document does:
+// Stay, which takes the focus and which Escape gives too, or Leave, which loses them.
+function ConfirmLeave({
+    open,
+    edits,
+    words,
+    onStay,
+    onLeave,
+}: {
+    open: boolean
+    edits: boolean
+    words: boolean
+    onStay: () => void
+    onLeave: () => void
+}) {
+    const lost = [edits && 'your edits to the plan are not saved', words && 'what you wrote in a comment is not sent']
+    return (
+        <AlertDialog
+            open={open}
+            onOpenChange={(next) => {
+                if (!next) {
+                    onStay()
+                }
+            }}
+        >
+            <AlertDialogContent>
+                <AlertDialogTitle>Leave this page?</AlertDialogTitle>
+                <AlertDialogDescription>{leaveText(lost.filter((part) => part !== false))}</AlertDialogDescription>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Stay</AlertDialogCancel>
+                    <AlertDialogAction onClick={onLeave}>Leave</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    )
+}
+
+// What leaving loses, as a sentence: `Your edits to the plan are not saved, and what you wrote ... is not sent.`
+function leaveText(parts: string[]): string {
+    const said = parts.join(', and ')
+    return `${said.charAt(0).toUpperCase()}${said.slice(1)}.`
 }
