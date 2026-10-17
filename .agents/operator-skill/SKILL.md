@@ -56,11 +56,19 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy grant URL review` | Lets the PR at URL, at `max_reviews_per_pr`, have one more review; `--runs N` for more. |
 | `canopy plan KEY` | Has a ticket planned before its implement; `--approve` the plan as its file stands, `--skip` it. |
 | `canopy pause`, `canopy resume` | The loop starts no tick until resumed; running workers keep going. `p` in the loop too. |
+| `canopy memory list [KEY]` | Agent memory's tiers in words, then the ticket notes workers recorded; `--run ID`, `--digest`. |
+| `canopy memory forget ID`, `purge` | Deletes one memory's text, or many (`--ticket`, `--run`, `--all`); the rows stay. |
+| `canopy memory proposals` | The lessons workers proposed that wait on you, each with where it came from. |
+| `canopy memory promote ID [--text T]` | Makes a proposal a lesson in your words; `reject ID` ends one instead. |
+| `canopy memory lessons`, `renew ID` | The lessons you promoted, their review dates and reports; `renew` keeps one. |
+| `canopy memory search WORDS` | Every memory with its text, best match first; `--ticket KEY` for one ticket's. |
 | `canopy notice 'TEXT' [--for 4h]` | Every run dispatched until it lapses hears TEXT, such as a CI outage; `--clear` lifts it. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run; `--no-record` records nothing. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
+| `canopy daemon start [LOOP OPTIONS]`, `stop` | The loop, detached; output in `.canopy/daemon.log`. The operator runs these. |
+| `canopy daemon status` | Whether the detached loop runs, since when, and where its output is. |
 | `canopy init [--provider NAME] [[NAME=]URL...]` | Sets up a workspace here and its private config; adds and syncs URLs. |
 | `canopy workspace sync [--dry-run]` | Converges `repos/` on the map and each pool on its declared size (DESIGN §18). |
 | `canopy workspace add [NAME=]URL...` | Adds repositories to the map by clone URL, then syncs. |
@@ -156,6 +164,9 @@ no dismissing one, except a chore's finding (below). Reasons:
 | `review_failed`, `review_limit` | A PR's review failed or hit its limit. `canopy review show` lists them; at the limit, `canopy grant URL review`. |
 | `notice_rerun` | A check failed during an outage your notice named, and the notice has ended: rerun the check. |
 | `repo_missing` | A repository in the workspace map has no clone: run `canopy workspace sync`. |
+| `memory_proposal` | A done ticket's runs proposed lessons: `canopy memory proposals`, then `promote` or `reject` each. |
+| `lesson_review` | Lessons are due for review: `canopy memory renew ID`, graduate one into AGENTS.md, or `forget` it. |
+| `lesson_wrong` | A run reported a lesson wrong: read it with `canopy memory lessons`, then `renew` or `forget` it. |
 | `canopy_unavailable` | `canopy --version` failed where the loop runs, so the overseer did not run: fix the install or PATH. |
 | `multi_repo` | Independent pieces in several repositories, or a split not done: decide. Ask for a split below. |
 | `split_unlabeled` | A split's children have no queue label: label each one you want worked. |

@@ -203,10 +203,12 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Imports go down, never between features; only `cli` imports click. Checked by `test_layers.py`.
 - Rejected: ruff `TID251` for layers (per-file exemptions for click would also allow `subprocess`).
 
-## D042. The loop is `canopy loop` in the foreground
+## D042. The loop is `canopy loop`, in the foreground or detached by `canopy daemon`
 
-- Not a daemon: no detaching, pid file, or self-restart. An outside scheduler cannot pace ticks by what they cost.
-- Rejected: cron, launchd.
+- `canopy daemon start` runs the same loop in its own session, its output in `.canopy/daemon.log`. Nothing is
+  installed with the OS, nothing restarts it, and it does not start at login (the operator, 2026-10-17).
+- Why: pacing stays in the loop. An outside scheduler cannot pace ticks by what they cost.
+- Rejected: cron; launchd or systemd units (an install step the operator does not want).
 
 ## D043. rich for terminal output
 
@@ -226,7 +228,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D050. Build canopy rather than adopt Symphony, agent-orchestrator, or Hermes Kanban
 
-- None offers any-tracker-via-MCP, never merging, no daemon, released worktrees, and a fresh overseer per tick
+- None offers any-tracker-via-MCP, never merging, no installed service, released worktrees, and a fresh overseer per tick
   (`PRIOR_ART.md`). Take lessons, not code.
 
 ## D051. A dispatch names the queue label it relies on, and the worker checks it again

@@ -11,13 +11,13 @@ import functools
 import json
 import re
 import sys
-from collections.abc import Iterable, Mapping, Sequence, Sized
+from collections.abc import Collection, Iterable, Mapping, Sequence, Sized
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, notice, outbox, plans, pools, prompts
+from canopy.core import conversation, db, memory, notice, outbox, plans, pools, prompts
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.vocab import PlanStatus, PoolKind, RunKind, RunStatus, StartStatus
 from canopy.core.workspace import DESKS_DIR
@@ -825,12 +825,7 @@ def _spawn(
     if followed is not None:
         values["PLAN"] = followed[1]
         required = (*required, *prompts.REQUIRED_PLAN_COPY)
-    try:
-        prompt = prompts.render_worker(
-            cfg, kind, values, required=required, private=plan.private, notice=notice.for_prompt(ctx.conn)
-        )
-    except (OSError, prompts.PromptError) as e:
-        raise Refusal("bad_prompt", str(e)) from e
+    prompt, remembered = _render(ctx, key, kind, values, required, repos=plan.repos, private=plan.private)
 
     run_id = db.insert_run(
         ctx.conn,
@@ -845,6 +840,9 @@ def _spawn(
         private=plan.private,
         check=functools.partial(_check_start_again, ctx, key, plan),
         plan_id=followed[0] if followed is not None else None,
+        rendered=None
+        if remembered is None
+        else functools.partial(memory.record_rendered, ctx.conn, rendered=remembered),
     )
     run = db.get_run(ctx.conn, run_id)
     if run is None:
@@ -860,6 +858,37 @@ def _spawn(
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, "runs", run_id, pid)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
+
+
+def _render(
+    ctx: Context,
+    key: str,
+    kind: str,
+    values: Mapping[str, str],
+    required: Sequence[str],
+    *,
+    repos: Collection[str],
+    private: bool,
+) -> tuple[str, memory.Rendered | None]:
+    """Render the worker prompt, with agent memory's part: what the run's modes ask it to write and serve it (§28).
+
+    Returns:
+        The prompt, and memory's part of it for the run to record, or None when no memory tier reaches the run.
+
+    Raises:
+        Refusal: `bad_prompt`, when the prompt file cannot be read or does not render.
+    """
+    remembered = memory.render(ctx.conn, ctx.config, key=key, kind=kind, repos=repos)
+    if remembered is not None:
+        values = {**values, **remembered.values}
+        required = (*required, *remembered.required)
+    try:
+        prompt = prompts.render_worker(
+            ctx.config, kind, values, required=required, private=private, notice=notice.for_prompt(ctx.conn)
+        )
+    except (OSError, prompts.PromptError) as e:
+        raise Refusal("bad_prompt", str(e)) from e
+    return prompt, remembered
 
 
 def _plan_note(ctx: Context, key: str, kind: str, copy: Path) -> tuple[int, str] | None:

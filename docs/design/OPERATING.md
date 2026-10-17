@@ -43,6 +43,8 @@ What it records, and why:
 - **`pause`**: present while the operator has paused the loop (§6); a resume deletes it.
 - **`notices`**: each notice to workers (§8). At most one is in force; rows are never deleted.
 - **Plan threads**: the operator's comments on a plan, written only by the web channel (§25).
+- **Agent memory**: each ticket note, proposal, and lesson, and for each run rendered while a tier was on, the modes it
+  was rendered under and what was rendered into it (§28). Empty while memory is off.
 
 Rules: the journal never stores credentials or raw CI logs (token counts are usage, not credentials). A run's result
 is a summary.
@@ -53,8 +55,7 @@ read a dry run's plan. The web UI shows the same (§22).
 `canopy spend` weighs what agent runs cost against what they got done, by UTC day over a window (7 days by default,
 today's so far included), so that comparing two windows tells whether spending more bought more: each kind's cost, the
 ticks by what they bought and what woke them, the tickets done and the spend per ticket done, each ticket's and PR's
-own cost, and which tools put the most into context. `--json` adds each kind's first calls by definitions snapshot,
-for a re-measurement (`docs/MEASUREMENTS.md`) to start from. The web UI's spend page shows it (§22). What it counts:
+own cost, and which tools put the most into context. The web UI's spend page shows it (§22). What it counts:
 
 - Every figure is by start: a run counts on the day it started, within the window, all read at one moment.
 - A ticket is done in the window by its newest `done` decision there (§7), if still done and not forgotten. That is
@@ -139,6 +140,7 @@ overrides default to `prompts/` there too.
 | `chores.*` | private | a chore runs a command and a prompt, and spends money (§19) |
 | `review.*` | private | `review.query` authorizes reading other people's PRs, and runs an agent on them (§21) |
 | `serve.*` | private | a listener on the operator's machine, and where (§22, TRUST_MODEL T8) |
+| `memory.*` | private | what workers may write into later runs' prompts (§28, TRUST_MODEL T7) |
 
 Whoever controls a shared workspace file (anyone who can push to the repository holding it) must not run commands,
 choose prompts, spend money, or authorize anyone; those keys are private (TRUST_MODEL T7).
@@ -230,6 +232,10 @@ enabled = true
 bind = "127.0.0.1"      # loopback, or a private address; never a wildcard or public one
 port = 8765
 base_path = ""          # a path prefix such as "/canopy", for a proxy
+
+[memory]                # agent memory (§28); each tier off, record, or use
+ticket_notes = "off"    # notes a ticket's runs write for its later runs
+proposals = "off"       # lessons workers propose, which reach runs once you promote them
 ```
 
 Built-in defaults are the values shown, except: `tracker.provider`, `tracker.query`, and `tracker.labels` have no
@@ -488,8 +494,11 @@ Reasons are exactly the attention rows in the phase table plus `crashed`, `unpus
 `repo_missing` and the overseer's `multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18). Chores add
 `chore_failed` and their findings, listed by chore after the ticket items (§19). Reviews add `review_failed` and
 `review_limit`, about a PR (§21). A notice to workers adds the overseer's `notice_rerun`: a check failed while a notice
-was in force, the notice has ended, and no newer run of the check exists, so the operator reruns it (§8). An item about
-one unit of a ticket names its repository and is shown as `KEY (repo)`.
+was in force, the notice has ended, and no newer run of the check exists, so the operator reruns it (§8). Agent memory
+adds the harness's `memory_proposal`, about a done ticket whose runs' proposals wait on the operator, and
+`lesson_review` and `lesson_wrong`, about the workspace, each one item naming every lesson it is about; none while
+`memory.proposals` is off, and the last two only at `use` (§28). An item about one unit of a ticket names its
+repository and is shown as `KEY (repo)`.
 
 The harness raises the run reasons itself, every tick, after reconcile. For a ticket not marked done, its latest
 run's status maps to a reason: `crashed` to `crashed`, `unpushed` to `unpushed`, `unknown` or `timeout` to

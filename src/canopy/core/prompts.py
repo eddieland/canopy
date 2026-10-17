@@ -89,6 +89,9 @@ REQUIRED_NO_TRAILER = ("COMMIT_ATTRIBUTION",)
 # default; once `trust.rebase` is set, it fails to render instead of making the merge commits the operator's
 # repositories refuse.
 REQUIRED_REBASE = ("BRANCH_UPDATE",)
+# Agent memory's placeholders (DESIGN §28): a ticket's notes, the operator's lessons, and the result fields memory adds.
+# Each renders as the empty string while its tier is off; the shipped prompts place them so that leaves nothing.
+MEMORY_PARTS = ("TICKET_MEMORY", "WORKSPACE_LESSONS", "MEMORY_CONTRACT")
 # The prompt files that carry `{{NOTICE}}`, and the run kinds each serves: every worker's but a split's, public and
 # private, the planner's, and the reviewer's.
 _HEARS_NOTICE: dict[str, list[str]] = {
@@ -291,6 +294,9 @@ def render_worker(
     """
     instructed = kind != RunKind.SPLIT
     values = {
+        # Agent memory's parts (DESIGN §28): empty unless dispatch rendered them, so with memory off every prompt is
+        # the same bytes as before it existed.
+        **dict.fromkeys(MEMORY_PARTS, ""),
         **values,
         "STANDING_INSTRUCTIONS": standing_instructions(config) if instructed else "None.",
         "NOTICE": notice if notice is not None and instructed else "None.",

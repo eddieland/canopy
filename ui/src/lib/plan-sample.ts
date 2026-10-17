@@ -37,6 +37,14 @@ In **api**, \`ReportQuery\` gains an \`iter_rows()\` method beside \`rows()\`, w
 
 > The reports page renders through a template cache. A new button may need the cache cleared on deploy.`
 
+/**
+ * The plan the sample replaces, as the planner first wrote it: the sample is its answer to the operator's comments, so
+ * the editor's Changes shows what that answer changed.
+ */
+export const SAMPLE_PREVIOUS = SAMPLE_PLAN.replace('a header and three lines', 'a header and a row per line')
+    .replace(', so a large report never sits whole in memory', '')
+    .replace('\n- Scheduling exports.', '')
+
 const AT = '2026-10-08T11:40:00Z'
 
 /** The operator's comments on the sample plan. */

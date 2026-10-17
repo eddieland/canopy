@@ -11,7 +11,7 @@ import stat
 import threading
 import time
 from collections.abc import Iterator
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, suppress
 from importlib.metadata import version
 from pathlib import Path
 from typing import override
@@ -495,6 +495,36 @@ def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) 
     assert spent.spend.total_usd == pytest.approx(spend.spend.total_usd + after.cost_usd - before.cost_usd)
 
 
+def test_the_mock_journal_waits_for_a_held_lock_off_the_event_loop(backend: Backend, journals: Journals) -> None:
+    holder = journals.open(db_path(backend.workspace), migrate=False)
+
+    def cost() -> float:
+        return float(holder.execute("SELECT cost_usd FROM runs WHERE id = ?", (serve_mock.LIVE_RUN,)).fetchone()[0])
+
+    before = cost()
+
+    async def hold() -> float:
+        moving = asyncio.create_task(serve_mock.changes(backend, 0.01))
+        holder.execute("BEGIN IMMEDIATE")
+        started = time.monotonic()
+        await asyncio.sleep(0.2)
+        held = time.monotonic() - started
+        holder.execute("ROLLBACK")
+        async with asyncio.timeout(5):
+            while cost() == before:  # noqa: ASYNC110  (the write is on another thread, with nothing to set an Event)
+                await asyncio.sleep(0.01)
+        moving.cancel()
+        with suppress(asyncio.CancelledError):
+            await moving
+        return held
+
+    # Blocking the loop, the write would hold up the sleep until its busy timeout ran out.
+    with mock.patch.object(db, "BUSY_SECONDS", 2):
+        held = asyncio.run(hold())
+    assert held < 1
+    assert cost() > before
+
+
 def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None:
     recent = db.recent_tickets
     replied: list[bool] = []
@@ -822,6 +852,9 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/runs",
         "/api/runs/{run_id}",
         "/api/runs/{run_id}/transcript",
+        "/api/runs/{run_id}/memory",
+        "/api/memory",
+        "/api/tickets/{key}/memory",
         "/api/spend",
         "/api/spend/breakdown",
         "/api/tick",
@@ -867,6 +900,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/loop/notice",
         "/api/loop/notice/clear",
         "/api/loop/reload",
+        "/api/loop/tick",
     }
     assert set(schema["paths"]) == paths
 

@@ -80,8 +80,10 @@ not go in the middle of the sequence.
   - [26. Garbage collection (M47)](GARBAGE_COLLECTION.md#26-garbage-collection-m47)
 - [The overseer's tools](OVERSEER_TOOLS.md): the MCP tools canopy serves the overseer, in place of the CLI.
   - [27. The overseer's tools (M48)](OVERSEER_TOOLS.md#27-the-overseers-tools-m48)
+- [Agent memory](MEMORY.md): what workers record of what they learn, who reads it, and who decides.
+  - [28. Agent memory (M50)](MEMORY.md#28-agent-memory-m50)
 - [Artifacts](ARTIFACTS.md): pages workers publish, the comments people leave on them, and how those come back.
-  - [28. Artifacts and Louvre (M51)](ARTIFACTS.md#28-artifacts-and-louvre-m51)
+  - [29. Artifacts and Louvre (M52)](ARTIFACTS.md#29-artifacts-and-louvre-m52)
 
 ## 1. Problem
 
@@ -104,9 +106,9 @@ cannot reach internal systems and require handing a vendor write access.
 ## 3. Non-goals
 
 - Replacing human review, approval, or merge.
-- A hosted service, a background daemon, or a workflow DSL. `canopy loop` (§6) runs in the foreground, where the
-  operator started it. A listener is allowed only on loopback or the operator's private network, behind the operator's
-  secret (TRUST_MODEL T8, D055); none is built yet.
+- A hosted service, a service installed with the OS, or a workflow DSL. `canopy loop` (§6) runs where the operator
+  started it, in the foreground or detached by `canopy daemon`, and nothing restarts it. A listener is allowed only on
+  loopback or the operator's private network, behind the operator's secret (TRUST_MODEL T8, D055); none is built yet.
 - Tracker-specific code. Any issue tracker with an MCP server works; provider differences live in config and optional
   provider skills (§17). A second VCS host is likewise a prompt and config concern, not code.
 - A sandbox the harness knows about. Sandboxing is an opt-in prefix on the command templates (§24), and the harness
@@ -138,8 +140,8 @@ cannot reach internal systems and require handing a vendor write access.
 ## 5. Components
 
 The harness is one Python package, `canopy`, in layered subpackages (D041). Top to bottom: `__main__`; `cli`; `loop`;
-the features, `runs`, `setup`, `chores`, `notify`, `reviews`, and `serve`; `core`; `infra`. A module imports from its
-own package and lower layers only. Features never import each other; what two share moves down a layer.
+the features, `runs`, `setup`, `chores`, `notify`, `reviews`, `memory`, and `serve`; `core`; `infra`. A module imports
+from its own package and lower layers only. Features never import each other; what two share moves down a layer.
 `tests/canopy/test_layers.py` enforces this and fails on a module outside the packages it lists.
 
 ```text
@@ -151,6 +153,7 @@ canopy (harness, Python)
   chores/      the operator's recurring chores (§19)
   notify/      notification sinks (§20)
   reviews/     adversarial reviews of PRs (§21)
+  memory/      agent memory's feature (§28): the operator's verbs on it, proposals' expiry, its attention items
   serve/       the web UI's server (§22, D079); the only package that imports fastapi, starlette, uvicorn, or anyio
   setup/       canopy init, the sandbox's setup, and workspace sync (§18, §24)
   core/        what every feature shares: config, the Context, the journal and its typed rows, vocabularies, contracts,

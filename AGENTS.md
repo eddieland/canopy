@@ -58,8 +58,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   Google docstring, with Returns, Yields, and Raises sections that match its body. Opt out with a commented `ignore`
   entry or a `noqa` with a code; never narrow `select`.
 - `make all` runs fmt, lint (including type checks), and tests. It must pass before any PR.
-- `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it, except on a pull request
-  that changes only docs, where every check passes without running; run `make all` before pushing one anyway.
+- `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it, as two jobs side by side
+  (`lint test` and `ui-check`), except on a pull request that changes only docs, where every check passes without
+  running; run `make all` before pushing one anyway.
 - `make install-check` installs canopy with `uv tool install` into an empty HOME and runs a dry tick against the
   fakes (D046). CI runs it too; run it when you change packaging, bundled files, or the install steps.
 - Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only when
@@ -185,8 +186,9 @@ If code and the design disagree, the design doc wins until a decision entry says
 ## Do not build (unless a ROADMAP milestone says so)
 
 - Web UI pages or features no milestone lists. `canopy status` and a markdown file stay the CLI's surface.
-- Webhooks, network listeners, or background daemons. The loop is `canopy loop`, a foreground command that runs one
-  tick after another (D042). A milestone that adds a listener follows TRUST_MODEL T8 (D055).
+- Webhooks, network listeners, or background services. The loop is `canopy loop`, which runs one tick after another,
+  in the foreground or detached by `canopy daemon`; nothing installs it with the OS or restarts it (D042). A milestone
+  that adds a listener follows TRUST_MODEL T8 (D055).
 - A tracker adapter interface. The tracker is a prompt and config concern.
 - A runtime plugin interface. The agent runtime is a command template in config.
 - Sandboxing beyond what ROADMAP M26 lists. It plugs into the command template; see DESIGN §24.
@@ -201,5 +203,6 @@ If code and the design disagree, the design doc wins until a decision entry says
 - `make all` passes.
 - New behavior has a test using the fakes.
 - Docs updated: the design where it states the behavior, within its bar, `README.md` if the install path or daily surface
-  changed (and the install path is still five steps), and `DECISIONS.md` only if the change passes its bar.
+  changed (and the install path is still five steps), the web UI's guide (`ui/src/guide/`) where a page of it
+  describes what changed, and `DECISIONS.md` only if the change passes its bar.
 - No new capability lets the loop do something `TRUST_MODEL.md` says it must not.

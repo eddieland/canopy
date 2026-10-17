@@ -155,9 +155,10 @@ Rules:
   places the thread in a second column (`2xl:col-start-2 2xl:row-span-N`), over rows whose last is `1fr`, so a long
   thread leaves no gaps between the panels beside it.
 - Between the header's name and its readouts, the ticker crawls joke headlines (Fun, below).
-- The header carries the loop's pause (`LoopPause`), the latest tick (`tick:12 · 3m ago`, its status when not `ok`, in
-  `status-failed` when it failed or was abandoned, its summary on hover, linking to its page), the stream's state (and
-  `mock`), and the theme toggle, in three groups with a hairline rule between each: the pause, the readouts, the theme.
+- The header carries the loop's pause (`LoopPause`) and Tick now (`TickNow`), the latest tick (`tick:12 · 3m ago`,
+  its status when not `ok`, in `status-failed` when it failed or was abandoned, its summary on hover, linking to its
+  page), the stream's state (and `mock`), and the theme toggle, in three groups with a hairline rule between each: the
+  actions, the readouts, the theme.
   The readouts hug their text, inset as far as a ghost button's label, so each rule sits midway. The counters are the
   attention page's, and the nav's Attention item shows how many items it lists, on every page, split by severity as the
   Attention counter splits them: broken in `status-failed`, waiting on the operator's answer in `status-blocked`, the
@@ -170,11 +171,25 @@ Rules:
   from where on hover) and a Resume button. The button keeps one width in both states. It has no `Notice`: what it
   did is the state it shows, which the stream also sends when the loop's terminal or the CLI pauses. A failure colors
   the button `status-failed`, with the reason on hover and in an `sr-only` alert.
+- **Tick now** stands after the pause, a ghost button beside the latest tick's readout, which shows the tick it starts:
+  `t` at the loop's terminal, so the loop's wait ends at once, paused or not. It is disabled while the latest tick
+  runs. Like the
+  pause it has no `Notice`, since the tick it asked for shows in the readouts, and a failure looks the same.
 - **The notice to workers** (`NoticeBanner`, `canopy notice`) heads the content column, above every page, only while
   one is in force: a band on a `status-blocked` tint with its border, since every run waits on what the operator said,
   the notice's words through `LinkedText`, until when runs hear it (when and from where on hover), and a ghost Clear.
   It is not in the header, which has no room for a sentence, and it leaves with the stream's word when it lapses.
   Settings sets one, in its own panel, with how long it lasts as a toggle group; any other duration is the CLI's.
+- **Agent memory** (docs/design §28) shows only while a tier is on, and always says each tier's mode in words, never by
+  color alone, so recorded memory is never taken for memory in use. The header's readout, after the latest tick, is
+  `memory: recording` or `memory: in use` in muted readout type, each tier's mode on hover and to a screen reader,
+  opening the memory page, which is in no section and so reached from there. A tier's **band** heads its panel there
+  and on a ticket's page: a chip naming the tier and its mode (the running tone at `use`, plain while recording) and
+  the server's sentence on what reads it. What a worker wrote is `MemoryText`: plain text, never `LinkedText`, since
+  a link in a note would be a worker's link read as canopy's, with each character that hides text named
+  (`<U+200B>`) on a `status-failed` tint, so it is seen. A digest is the prompt's own text in monospace, labelled
+  `would be served at use` while recording. A run's page lists what it wrote and read, and reads `none, recording
+  only` for a run that read nothing because its tier was recording. The UI reads memory and writes none.
 - **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
   (`NewerBuild`): an accent button, the action to take, saying on hover why and that unsent text is lost. It never
   reloads on its own, since the operator may be typing. The page knows its build from the `canopy-build` meta tag the
@@ -344,8 +359,8 @@ and utilities are in `src/index.css`.
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
   new one is ready, because navigations run inside React transitions.
 - A page's blocks rise in one after another (`stagger` on the page column), and so do the attention list's rows, the
-  Working rows, and a conversation's bubbles. A row or bubble the stream adds later rises in on its own. A bubble pops
-  (`[--enter:pop]`) from the corner nearest its side.
+  Working rows, and a conversation's bubbles. Any other list's rows arrive with their panel, as one block. A row or
+  bubble the stream adds later rises in on its own. A bubble pops (`[--enter:pop]`) from the corner nearest its side.
 - Counter values are odometers (`RollingNumber`): each digit rolls to its new value, the units first, and rolls up from
   zero when the counter first shows. The value is in the text once, for screen readers and tests; the digits are
   drawn by CSS.
@@ -421,7 +436,8 @@ list, an empty state, or a skeleton by hand.
   the row's end (`from="title"`), never a hand-computed indent: no `pl-[…]` in `src/routes` or `src/components`. A
   summary starts under the row's name: a ticket's title on the runs page, the run's id under its subject, a tick's
   status, a decision's action. What sits under a row outside it, a tool call's body, is a **`RowGrid`** of the same
-  kind with a `RowLine` in it. A new list is a new kind in `ROW_COLUMNS`, its columns written out there.
+  kind with a `RowLine` in it. A new list is a new kind in `ROW_COLUMNS`, its columns written out there. An age column
+  is `6rem` and a cost column `4rem` in every kind (`AGE`, `COST`), so they line up from one list to the next.
 - **`Fields`** and **`Field`** (`src/components/fields.tsx`): a detail page's field list, an `8rem` label column and
   the values beside it, the label in `panel-label` type and the value in prose or, with `mono`, in monospace data.
   The rows sit on their first baseline, so a label stays level with the first line of a value that wraps (a summary,
@@ -432,10 +448,12 @@ list, an empty state, or a skeleton by hand.
   `ownPr` leaves that PR out of them, as it does from `Decisions`.
 - **`Empty`** (`src/components/panel.tsx`): what a list or page says when it has nothing to show, in muted text, in two
   sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
-  around it. Its words are `no X yet` and one clause on why or what to do (`no runs yet: the overseer starts one when
-  it is due`); `now` for what comes and goes rather than `yet` (`no open findings now`). A search that finds nothing
-  says so; a page whose subject is missing says why. An error is never an `Empty`, and never a red sentence in a
-  panel: it is a `Notice`, which names a refusal's guard.
+  around it, as one sentence whatever links or commands it holds. Its words are `no X yet` and one clause on why or
+  what to do (`no runs yet: the overseer starts one when it is due`); `now` for what comes and goes rather than `yet`
+  (`no open findings now`). A search that finds nothing says so; a page whose subject is missing (a 404) says why. An
+  error is never an `Empty`, and never a red sentence in a panel: it is a `Notice`, which names a refusal's guard and
+  sets its `code` spans as code, as an attention item's detail is. A page whose read was refused (a 409) shows its
+  `Notice` in its main panel.
 - **`None`** (`src/components/none.tsx`): what a field or a cell holds when it has no value, `none` in muted text in
   its place's own type, never a sentence of its own. With a reason, the reason follows a colon; in a column too narrow
   for it (`brief`), the reason is on hover. One phrase per concept: a summary, a branch, a PR, a session, or a tick's
@@ -448,8 +466,12 @@ list, an empty state, or a skeleton by hand.
   what sits there empty (the rail's keycap). Its two sizes are the rail's and a list filter's (`h-8`, `text-sm`) and a
   panel's own line of data (`sm`, `h-7`, `text-xs`). No page builds a field by hand.
 - **`PanelSkeleton`** (`src/components/panel.tsx`): what a panel shows while its data has not arrived at all, `rows`
-  shimmering bars, each shorter than the last. It takes the minimum height its content will (`min-h-72` for a page's
-  main panel), so nothing moves when the data lands.
+  shimmering bars, each shorter than the last. It takes the minimum height its content will, so nothing moves when
+  the data lands: `min-h-72` for a page's main panel or a list that runs long (tickets, runs, ticks), `min-h-40` for
+  a list that holds a few (the attention list, the chores, a pool's slots).
+- **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel: its column heads in
+  `panel-label` type, its row heads in plain text, its figures right-aligned readouts. Its panel's header repeats none
+  of its rows.
 
 ## Patterns
 
@@ -684,49 +706,82 @@ list, an empty state, or a skeleton by hand.
   its text and strong pieces go through `LinkedText`, so a URL outside code is a link to itself. In a list's row it
   shows the first four lines and a `show N more lines` toggle in the accent; text one line over shows whole.
   A conversation's bubbles keep their own `whitespace-pre-wrap`.
+- **The guide** (`/guide/PAGE`, `src/lib/guide.ts`, `GuideText`) is the operator's documentation, a page each, as
+  Markdown in `src/guide/` (docs/design/CONVERSATIONS.md §22), laid out as a documentation site rather than in panels.
+  On the left, the pages by group (`SOURCES`), each group a heading over its pages on a hairline, the page shown in
+  the accent on an accent stroke; under `lg` the same list folds into a `Guide pages` toggle above the page. In the
+  middle, the article at `max-w-3xl`: the group as the header's trail, the title, and the lead, then the body at
+  `text-base` with soft line breaks read as spaces, each `##` a section under a hairline and each heading a `#` link to
+  itself on hover, and at its foot Previous and Next, the pages either side in the sidebar's order. On the right from
+  `xl`, `On this page`, its `##` headings. The sidebar and contents stick as the article scrolls. `/guide` opens the
+  first page. It reads what rich text reads, `##` and `###` headings as real headings, each with its anchor as its id,
+  and labelled links in the accent, underlined: `[text](page)` or `(page#heading)` to the guide, `(#heading)` on this
+  page, `(/runs)` to a section, and `(https://...)` to the web in a new tab. A link to anything else stays characters,
+  and `guide.test.ts` fails on it. A page opens with `# Title` and then a lead of a sentence or two, says what the
+  operator sees and does in the UI's own words (`waiting on you`, not `blocked`), and leaves how the code does it to
+  the code and why to the design. A new page is a file there and a line in its group in `SOURCES`; the rail's foot,
+  beside the version, opens the guide.
 - **A plan in its editor** (`PlanEditor`, `src/components/plan-editor.tsx`; docs/design/PLANNING.md §25): the plan in a
   `Plan` panel, its toolbar in the panel's header, and the comments in a `Comments` panel beside it, 20rem wide, once
-  the page gives both 60rem (a container query, so the rail's width counts), and under it, as a list, below that. Beside
-  the plan, the comments are its margin, as a shared document's are (`src/lib/plan-margin.ts`): each open comment is a
-  card of its own at the height of its passage, in the plan's order, and one that would overlap the card before it moves
-  down to clear it. The open one, or the comment being written, sits exactly at its passage, and the cards before it
-  move up to make room. A comment being written opens in its place among them, beside its passage, so opening one never
-  scrolls the page away from what it is on. Each card is placed by its top margin and stays in the column's flow, so the
-  comments whose passage is gone, the resolved ones, and `Ask for changes` follow the last; the cards move with their
-  passages as the plan is edited, and with each other as one grows. Under the plan, the comments are rows split by
-  hairlines, as before. The plan is laid out as a document (`.plan-doc` in `src/index.css`): `text-sm` prose up to
-  `max-w-3xl`, headings at `text-xl`, `text-base`, and `text-sm` semibold, code as rich text sets it, a table in
-  hairlines with its header row on `surface-raised` at half, a quote muted behind a hairline. What the plan holds as
-  characters (HTML, an image) is muted monospace; a link is underlined in `muted-foreground` with its address on hover,
-  never a link. The toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by hairlines: undo and redo, the
-  paragraph's style, the marks and the blocks (each on or off, raised while on at the cursor), then `Comment`, enabled
-  while text is selected. Each control's tooltip names it and the shortcut the editor binds to it, on this keyboard
-  (`Bold (⌘B)`, `Bold (Ctrl+B)` elsewhere), and declares the same keys as `aria-keyshortcuts`. The paragraph's style is
-  a menu, as a document's is: its button names the style in force (`Heading 2 ▾`), and it lists Text and Heading 1 to 4,
-  each set as the plan sets it, with its keys at the right in muted monospace and a check in the accent on the one in
-  force; a style chosen leaves the cursor in the plan. After the blocks, a `Table` menu inserts a table where none is (a
-  header row and two rows of three columns, as a plan's Files table is), and inside one adds a row above or below or a
-  column left or right, and deletes a row, a column, or the table; what the cursor's place does not allow is disabled,
-  and an action leaves the cursor in the plan. An empty plan shows its prompt in `muted-foreground` where its first line
-  starts: `Write the plan here, or paste its Markdown.` The plan's header, with the toolbar, is `sticky`, and what the
-  editor scrolls into view (the cursor as it types, a passage a comment shows) stops 48px below it. A selection also
-  shows a `Comment` bubble over it. A commented passage sits on the accent's tint at 14%; the open one, or the one being
-  commented on, at 28% and underlined in the accent; clicking a passage opens its thread, and the cursor leaving it, or
-  Escape, closes it. A thread is its passage quoted (two lines, a hairline in the accent at its left, the whole on
-  hover; a button that shows it in the plan), the comment and its replies as text with their ages, and ghost `xs`
-  actions, `Reply`, `Resolve` (`Reopen`), and `Delete`. While the thread is open, the comment and each reply carry an
-  `Edit` beside their age, in `text-2xs`, which turns it into the comment form in place, holding its words, with `Save`;
-  the actions hide while it is open. `Delete` asks first, in the actions' place, since nothing brings a thread back:
+  the page gives both 60rem (a container query, so the rail's width counts), and under it, as a list, below that. Under
+  the plan, the comment being written, and a thread opened by a click on its passage, float over the plan under that
+  passage instead, a card 24rem wide on `surface` with a hairline border, so the page never goes down to the list and
+  back; it goes when the thread closes or the comment is sent or dropped. The plan's panel stops at its text's measure,
+  51rem, so on a wide page the comments stay against the text and the room left over goes after them. Beside the plan,
+  the comments are its margin, as a shared document's are (`src/lib/plan-margin.ts`): each open comment is a card of its
+  own at the height of its passage, in the plan's order, and one that would overlap the card before it moves down to
+  clear it. The open one, or the comment being written, sits exactly at its passage, and the cards before it move up to
+  make room. A comment being written opens in its place among them, beside its passage, so opening one never scrolls the
+  page away from what it is on. Each card is placed by its top margin and stays in the column's flow, so the comments
+  whose passage is gone and the resolved ones follow the last; the cards move with their passages as the plan is edited,
+  and with each other as one grows. Under the plan, the comments are rows split by hairlines, as before. The plan is
+  laid out as a document (`.plan-doc` in `src/index.css`): `text-sm` prose up to `max-w-3xl`, headings at `text-xl`,
+  `text-base`, and `text-sm` semibold, code as rich text sets it, a table in hairlines with its header row on
+  `surface-raised` at half, a quote muted behind a hairline. What the plan holds as characters (HTML, an image) is muted
+  monospace; a link is underlined in `muted-foreground` with its address on hover, never a link. The toolbar (`Toolbar`,
+  below) is `icon-xs` toggles in groups split by hairlines: undo and redo, the paragraph's style, the marks and the
+  blocks (each on or off, raised while on at the cursor), then `Comment`, enabled while text is selected. Each control's
+  tooltip names it and the shortcut the editor binds to it, on this keyboard (`Bold (⌘B)`, `Bold (Ctrl+B)` elsewhere),
+  and declares the same keys as `aria-keyshortcuts`. The paragraph's style is a menu, as a document's is: its button
+  names the style in force (`Heading 2 ▾`), and it lists Text and Heading 1 to 4, each set as the plan sets it, with its
+  keys at the right in muted monospace and a check in the accent on the one in force; a style chosen leaves the cursor
+  in the plan. After the blocks, a `Table` menu inserts a table where none is (a header row and two rows of three
+  columns, as a plan's Files table is), and inside one adds a row above or below or a column left or right, and deletes
+  a row, a column, or the table; what the cursor's place does not allow is disabled, and an action leaves the cursor in
+  the plan. An empty plan shows its prompt in `muted-foreground` where its first line starts:
+  `Write the plan here, or paste its Markdown.` The plan's header, with the toolbar, is `sticky`, and what the editor
+  scrolls into view (the cursor as it types, a passage a comment shows) stops 48px below it. A selection also shows a
+  `Comment` bubble over it. A commented passage sits on the accent's tint at 14%; the open one, or the one being
+  commented on, at 28% and underlined in the accent; the cursor in a passage, by a click or the keyboard, opens its
+  thread, and so does a click anywhere on its card, or Tab into it, which leaves the plan where it is; the cursor
+  leaving it, or Escape, closes it. A thread is its passage quoted (two lines, a hairline in the accent at its left, the
+  whole on hover; a button that shows it in the plan), the comment and its replies as text with their ages, and its
+  actions: `Resolve` (`Reopen`) and `Delete`, ghost `icon-xs` buttons at the right of its quote, and a ghost `xs`
+  `Reply` under the open card alone, or one whose passage is gone, so the rest stay short and near their passages, as a
+  shared document's do. While the thread is open, the comment and each reply carry an `Edit` beside their age, in
+  `text-2xs`, which turns it into the comment form in place, holding its words, with `Save`; the actions hide while it
+  is open. `Delete` asks first, in the actions' place, since nothing brings a thread back:
   `Delete this comment and its replies?` in muted `text-xs`, then `Keep`, which takes the focus, and `Delete` in
   `destructive`; Escape keeps it too, and the focus goes back to `Delete`; the open thread sits on the accent's tint, as
-  a selected row does. A thread whose passage is gone carries a `passage gone` chip and stays in the list, last.
-  Resolved threads fold under a `Disclosure` (`Show 2 resolved`). A comment or reply form sends on the key Settings
-  names, as a reply does, and Escape drops it. A form takes the cursor when it opens, after any words it holds.
-  `Comment` again, on new words, moves an empty comment to them; one half written stays on its passage, and the cursor
-  goes back to it, so its words are never lost or carried to other words. The comments end in `Ask for changes`: a note
-  on the whole plan and the button, with how many open comments go with it, or how far over a reply's bound the request
-  is. Until plans reach a ticket's page (M44), the editor is on `/plan-editor`, over a sample plan on mock data only,
-  with what the planner would read and the plan's Markdown under it.
+  a selected row does. A thread whose passage is gone carries a `passage gone` chip and stays in the list, last; two or
+  more such follow a line that counts them, with `Resolve all 3`, since a new plan rewrites what it was asked to change
+  and the comments on it lose their passages together. Resolved threads fold under a `Disclosure` (`Show 2 resolved`). A
+  comment or reply form sends on the key Settings names, as a reply does; Escape drops one that holds nothing new, and
+  puts one with the operator's words aside, open with them, so one key never loses what was typed (`Cancel` drops it). A
+  form takes the cursor when it opens, after any words it holds; once a comment is sent, resolved, deleted, put aside,
+  or cancelled, the cursor goes back to the plan after its passage, as a shared document's does, rather than to the top
+  of the page. `Comment` again, on new words, moves an empty comment to them; one half written stays on its passage, and
+  the cursor goes back to it, so its words are never lost or carried to other words. Under the plan and its comments, a
+  bar of actions sticks to the bottom of the page while the plan scrolls, as a document's do, so a long plan is approved
+  or sent back from where it is read: with the plan this one replaces, `Changes since plan 1` first, a pressed `Toggle`
+  that marks what changed since it over the plan (the words added on `diff-add` at 18%, those removed struck through on
+  `diff-del` at 14%, where they were, as `ins` and `del`), then the caller's own actions (a ticket's `Approve`, `Save`,
+  and `Skip the plan`), then `Ask for changes`, a note on the whole plan, one line that grows as it is written, how many
+  open comments go with it, or how far over a reply's bound the request is, and the button (the request says the plan
+  was edited, when it was); what the caller's actions will do, or what one did, goes on a line under them. The editor
+  keeps what it scrolls into view clear of the bar too. Until plans reach a ticket's page (M44), the editor is on
+  `/plan-editor`, over a sample plan on mock data only, with what the planner would read and the plan's Markdown under
+  it.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then how often it may start and its window (`cadenceText`: `every 360 minutes`, as
   the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed
@@ -773,17 +828,17 @@ list, an empty state, or a skeleton by hand.
   its phase; those lines scroll inside the panel past `15rem` (`PanelScroll`), so its total cost, its actions, and the
   reply stay in reach. A worktree's branch links the same way, its name in the accent with its `LinkOutIcon`, when its
   repository has a branch link.
-- **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch on a ticket's, run's,
-  or PR's page, a run's worktrees and log path, a session id wherever one shows (a tick's page, a transcript's header,
-  a run's row, a chore run's row), and a review's commit, whole though the page shows its first 7 characters. A path
-  copies whole though the page shows it from the workspace root (`CopyablePath`), joined to `/meta`'s root; until that
-  is read there is no button, so a copy is never the short path. The button is a ghost `icon-xs` with the
-  `Copy` icon, muted until hovered; a click shows `Check` in the accent, or `X` in `status-failed` when the browser
-  refuses, for 1.5 seconds, and names what happened (`Copied branch`), and a toast says the same with the text it
-  copied, on one line. In a dense list (a worktree slot's path and branch, a run's or chore run's session id) it shows
-  only while its row (`group/copy`) is hovered or it has the focus, keeping its space so nothing moves, and always on
-  a touch screen. The clipboard needs a secure context (https or localhost), so elsewhere there is no button and the
-  text stays selectable.
+- **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch on a ticket's, run's, or
+  PR's page, a run's worktrees and log path, a chore run's log path (on its page and its row), a tick's output path, a
+  session id wherever one shows (a tick's page, a transcript's header, a run's row, a chore run's row), and a review's
+  commit, whole though the page shows its first 7 characters. A path copies whole though the page shows it from the
+  workspace root (`CopyablePath`), joined to `/meta`'s root; until that is read there is no button, so a copy is never
+  the short path. The button is a ghost `icon-xs` with the `Copy` icon, muted until hovered; a click shows `Check` in
+  the accent, or `X` in `status-failed` when the browser refuses, for 1.5 seconds, and names what happened
+  (`Copied branch`), and a toast says the same with the text it copied, on one line. In a dense list (a worktree slot's
+  path and branch, a run's or chore run's session id, a chore run's log) it shows only while its row (`group/copy`) is
+  hovered or it has the focus, keeping its space so nothing moves, and always on a touch screen. The clipboard needs a
+  secure context (https or localhost), so elsewhere there is no button and the text stays selectable.
 - **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was
   done shows too little of it: a copy names what it copied. It sits at the bottom center of the window on `surface`
   with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title in `text-sm`, and a line under it

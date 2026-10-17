@@ -101,6 +101,8 @@ export type Pause = Schemas['Pause']
 export type PauseChanged = Schemas['PauseChanged']
 /** What asking the loop to read its config again found: the keys that change, and whether a tick must end first. */
 export type ConfigReload = Schemas['ConfigReload']
+/** What asking the loop for a tick now found: whether a running tick must end first. */
+export type TickAsked = Schemas['TickAsked']
 /** One tick: what `canopy decisions ID` prints. */
 export type TickDetail = Schemas['TickDetail']
 /** One decision a tick recorded (DESIGN §6): the overseer's, or the harness's attention items and refusals. */
@@ -179,3 +181,19 @@ export const WORKTREE_STATES = [
     'idle',
     'broken',
 ] as const satisfies readonly WorktreeState[]
+/** One tier of agent memory and what reads it (DESIGN §28), in the words every surface uses. */
+export type MemoryTier = Schemas['MemoryTier']
+/** Agent memory's tiers while one is on: the header's readout and each tier's mode. */
+export type MemoryState = Schemas['MemoryState']
+/** One note, proposal, or lesson. Its text is a worker's, or the operator's for a lesson: plain text. */
+export type MemoryEntry = Schemas['MemoryEntry']
+/** A proposal waiting on the operator, with where it came from. */
+export type MemoryProposal = Schemas['MemoryProposal']
+/** What a run would be served of one tier, as its prompt would carry it. */
+export type MemoryDigest = Schemas['MemoryDigest']
+/** Every tier's memory: the notes in force, the proposals waiting, and the lessons. */
+export type MemoryOverview = Schemas['MemoryOverview']
+/** One ticket's notes, and what its next run would be served. */
+export type TicketMemory = Schemas['TicketMemory']
+/** What a run wrote and read of memory, and what it had refused. */
+export type RunMemory = Schemas['RunMemory']

@@ -930,8 +930,8 @@ class Tick(_Model):
     """Whether `canopy loop` found it idle (DESIGN §6, Idle pacing); None on a tick no loop ran, and until the loop
     records it, just after the tick ends. Its change is sent on the stream, which marks the spend page stale."""
     woken_by: str | None = None
-    """What ended the loop's wait before it: start | timer | gate | message | starts | grant | run | key. None when
-    `idle` is."""
+    """What ended the loop's wait before it: start | timer | gate | message | starts | grant | notice | run | key |
+    web. None when `idle` is."""
 
 
 class TickDetail(_Model):
@@ -1148,8 +1148,38 @@ class WorkerNotice(_Model):
     """How it was set."""
 
 
+type MemoryModeName = Annotated[
+    Literal["off", "record", "use"],
+    Field(description="A memory tier's mode (DESIGN §28): `record` writes and serves nothing; `use` serves too."),
+]
+
+
+class MemoryTier(_Model):
+    """One tier of agent memory and what reads it (DESIGN §28), in the words every surface uses."""
+
+    mode: MemoryModeName
+    """Its mode."""
+    words: str
+    """Its mode in words: `off`, `recording`, or `in use`. No two modes share them."""
+    band: str
+    """What reads this tier, in a sentence that starts with its mode: `Recording only. ...` or `In use. ...`."""
+
+
+class MemoryState(_Model):
+    """Agent memory's tiers while one is on (DESIGN §28): the header's readout and each tier's mode."""
+
+    readout: str
+    """`memory: recording` while no tier is at `use`, `memory: in use` once one is."""
+    tiers: str
+    """Each tier's mode in words, as the readout's hover says it: `ticket notes: recording, lessons: off`."""
+    ticket_notes: MemoryTier
+    """Notes a ticket's runs write for its later runs."""
+    lessons: MemoryTier
+    """Lessons workers propose and the operator promotes, `memory.proposals`."""
+
+
 class LoopState(_Model):
-    """Whether the loop is paused, and the notice to workers in force.
+    """Whether the loop is paused, the notice to workers in force, and agent memory's tiers.
 
     While paused, no tick starts until the operator resumes it; a tick running when paused finishes.
     """
@@ -1158,6 +1188,144 @@ class LoopState(_Model):
     """The pause; None when the loop is not paused."""
     notice: WorkerNotice | None = None
     """The notice to workers in force; None without one."""
+    memory: MemoryState | None = None
+    """Agent memory's tiers; None while both are off, when memory shows nowhere."""
+
+
+type MemoryScopeName = Annotated[
+    Literal["ticket", "proposal", "lesson"],
+    Field(description="What a memory is: a ticket's note, a worker's proposal, or the operator's lesson."),
+]
+type MemoryStatusName = Annotated[
+    Literal["active", "pending", "superseded", "invalid"],
+    Field(description="Where a memory stands: in force, waiting on the operator, replaced, or no longer in force."),
+]
+
+
+class MemoryEntry(_Model):
+    """One note, proposal, or lesson (DESIGN §28). Its text is a worker's, or the operator's for a lesson."""
+
+    id: int
+    """Its id, as the CLI and a run's result name it."""
+    scope: MemoryScopeName
+    """What it is."""
+    ticket_key: str | None
+    """A note's ticket, or a proposal's source ticket; None for a lesson."""
+    repo: str | None
+    """The repository a proposal or lesson is about; None for every repository, and for a note."""
+    key: str
+    """Its key: lowercase words joined by hyphens."""
+    text: str | None
+    """What it says, untrusted and shown as plain text with hidden characters named; None once forgotten or purged."""
+    status: MemoryStatusName
+    """Where it stands."""
+    why: str | None
+    """The harness's words for its latest change of status, such as `superseded by note 41`."""
+    run_id: int | None
+    """The run that wrote it; None for a lesson."""
+    head: str | None
+    """The commit the run's branch was at when its worker ended, `repo@commit` each for a joint run."""
+    created_at: datetime
+    """When it was written."""
+    use_count: int
+    """How many runs said they relied on it."""
+    last_used_at: datetime | None
+    """When a run last said so; None if none has: read by no run."""
+    review_at: datetime | None
+    """A lesson's next review."""
+    wrong_at: datetime | None
+    """When a run last reported a lesson wrong, until the operator renews it."""
+    wrong_run_id: int | None
+    """The run that reported it."""
+    promoted_from: int | None
+    """A lesson's proposal."""
+
+
+class MemoryProposal(_Model):
+    """A proposal waiting on the operator, with where it came from (DESIGN §28)."""
+
+    entry: MemoryEntry
+    """The proposal."""
+    run_kind: str | None
+    """The kind of the run that proposed it."""
+    run_status: str | None
+    """How that run ended."""
+    private: bool
+    """Whether that run was on a private ticket, whose text may hold what the operator kept off the tracker."""
+    ticket_done: bool
+    """Whether its ticket is marked done: its work merged or closed, as far as the journal knows."""
+
+
+class MemoryDigest(_Model):
+    """What a run would be served of one tier, as its prompt would carry it (DESIGN §28)."""
+
+    text: str
+    """The section, as plain text."""
+    ids: list[int]
+    """The memories in it."""
+    left_out: int
+    """How many the cap left out."""
+    served: bool
+    """True while its tier is at `use`: the next run gets it. False while recording: what `use` would serve."""
+
+
+class MemoryOverview(_Model):
+    """Every tier's memory (DESIGN §28): the ticket notes in force, the proposals waiting, and the lessons."""
+
+    state: MemoryState | None
+    """The tiers; None while both are off."""
+    notes: list[MemoryEntry]
+    """Every ticket's notes in force, by ticket and key."""
+    proposals: list[MemoryProposal]
+    """The proposals waiting on the operator, oldest first."""
+    lessons: list[MemoryEntry]
+    """The lessons in force, in key order."""
+    lessons_digest: MemoryDigest | None
+    """What every run would be served of the lessons; None while proposals are off."""
+
+
+class TicketMemory(_Model):
+    """One ticket's notes (DESIGN §28): every one its runs wrote, and what its next run would be served."""
+
+    state: MemoryState | None
+    """The tiers; None while both are off."""
+    notes: list[MemoryEntry]
+    """Every note of the ticket, in force or not, by key and newest first."""
+    digest: MemoryDigest | None
+    """What its next run would be served; None while ticket notes are off."""
+
+
+class MemoryRefusal(_Model):
+    """An entry a run sent that `_run` did not write, in the harness's words; never its text (DESIGN §28)."""
+
+    field: str
+    """The result field it was in: `notes` or `proposals`."""
+    key: str | None
+    """Its key, when it had a valid one."""
+    why: str
+    """Why it was refused."""
+
+
+class RunMemoryModes(_Model):
+    """The mode of each memory tier a run's prompt was rendered under: `off` for a tier its kind does not hear."""
+
+    ticket_notes: MemoryModeName
+    """Ticket notes' mode for this run."""
+    lessons: MemoryModeName
+    """Lessons' mode for this run."""
+
+
+class RunMemory(_Model):
+    """What a run wrote of agent memory, what was rendered into its prompt, and what it had refused (DESIGN §28)."""
+
+    rendered: RunMemoryModes | None
+    """The modes it was rendered under; None for a run rendered with memory off, which wrote and read nothing."""
+    wrote: list[MemoryEntry]
+    """What it wrote, in order."""
+    read: list[MemoryEntry]
+    """What was rendered into its prompt. Empty while recording: then nothing was served."""
+    refused: list[MemoryRefusal]
+    """What it sent that was not written."""
 
 
 class NoticeRequest(_Model):
@@ -1197,6 +1365,13 @@ class ConfigReload(_Model):
     """The changed keys that take effect only when the loop restarts: the web UI's listener."""
     after_tick: bool
     """A tick is running: it finishes on the config it started with, and the reload follows when it ends."""
+
+
+class TickAsked(_Model):
+    """What asking the loop for a tick now found (DESIGN §6): it starts at once, or when a running tick ends."""
+
+    after_tick: bool
+    """A tick is running: the one asked for starts when it ends."""
 
 
 class SpendWindow(_Model):
@@ -1721,6 +1896,8 @@ class LoopUpdated(_Model):
     """The pause; None when the loop is not paused."""
     notice: WorkerNotice | None = None
     """The notice to workers in force; None without one."""
+    memory: MemoryState | None = None
+    """Agent memory's tiers; None while both are off."""
 
 
 class StreamEvent(

@@ -53,7 +53,7 @@ function PullRequestsPage() {
                         no PRs yet: none of the loop&apos;s tickets has one, and nothing was reviewed
                     </Empty>
                 ) : (
-                    <ul className="stagger divide-y" data-testid="pull-requests">
+                    <ul className="divide-y" data-testid="pull-requests">
                         {ordered('pull-requests', order, data).map((pr) => (
                             <Row key={pr.url} pr={pr} />
                         ))}

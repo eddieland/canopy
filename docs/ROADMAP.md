@@ -202,42 +202,16 @@ deferred list's trigger fires.
 
 ## M15. Sessions and recent runs
 
-REQUIREMENTS R4 and R6, D055. Needs M2. Sketch only; the design comes first.
+REQUIREMENTS R4 and R6, D055. Each run records its OpenCode session id and the session is titled for its ticket;
+`canopy status` lists recent runs with outcome, PR, summary, cost, log, and session; `fix-ci` and `resume` start a fresh
+session, with the ticket's latest runs' reports in the prompt (DESIGN §8).
 
-- Record each run's OpenCode session id in `runs`, read from what `opencode run` reports, without the harness parsing
-  runtime-specific output beyond one validated field (D009, D026). Done with `--format json`, which also gives
-  M13 each run's cost.
-- `canopy status` lists recent runs as well as running ones: ticket, kind, outcome, PR, one-line summary, run log, and
-  session id, so the operator can open a transcript with OpenCode's own tools.
-- Decide, against the decisions corpus, whether `fix-ci` and `resume` should continue the session of the run that
-  wrote the PR instead of starting fresh (PRIOR_ART warns about long-lived sessions fed events).
-- Workers run against OpenCode's server (`opencode serve`, with `opencode run --attach`), so the operator can
-  `opencode attach` to a running worker and prompt it. The listener follows TRUST_MODEL T8: a private bind address,
-  loopback by default, refused if wildcard or public; the operator's listener secret from an operator-only file, passed
-  only to the server. Verify OpenCode's server authentication on the pinned version first.
-- Whether one server serves every run or each run gets its own, and what happens to a session whose run has ended: its
-  slot is returned and may be leased again, so prompting it must not run tools in that directory. Either the session
-  is read-only once its run ends, or prompting it starts a `resume` dispatch through the guards.
-- Prompting is the operator's own input (T8): it is not checked against `trust.authorized_repliers`, and it lifts no
-  guard. Capacity, attempt limits, the run's timeout, and push verification still apply.
-
-Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
-
-Status: in progress. Taken in part on request (2026-10-07): each worker and split run records its session id, and
-`canopy status` lists the ten most recent runs with their outcome, PRs, summary, cost, run log, and session id; M27
-shows a session's transcript in the web UI. A `worker_cmd` in a user file from before needs `--format json` added.
-Checking a run's session against `opencode export` is SCENARIOS S30. What keeps it open: workers against OpenCode's
-server. Decided (2026-10-16): `fix-ci` and `resume` start a fresh session, as every run does (DESIGN §8, A fresh
-session per run), since a continued one would keep stale prompts and cost more than the short runs it replaces.
-On request (2026-10-16), a public worker's prompt carries the ticket's latest three runs' reports
-(`{{PREVIOUS_RUNS}}`, DESIGN §8), so a fresh session still learns what the runs before it concluded.
-Taken in part on request (2026-10-13): the overseer names
-each ticket (`canopy ticket set --title`), the name shows beside the key in `canopy status`, `canopy show`, and the web
-UI, and every default template passes it, or a tick's, chore's, or review's own, as the session title
-(`opencode run --title={title}`, DESIGN §13). Learned: `run --format json` prints no event with OpenCode's own title,
-so canopy names sessions rather than reading them back. Next: workers renaming their ticket through their result line,
-once real runs show whether the overseer's names hold up. On request (2026-10-13), a `json` notification carries the
-title beside each ticket key and the Slack sink shows it (DESIGN §20); `attention.md` and the `text` format do not.
+Status: done 2026-10-17.
+Learned: closed by the operator on a week of real use at work, with workers against OpenCode's server not built: the
+session ids and the web UI's transcripts (M27) proved enough to follow a run. `run --format json` prints no event with
+OpenCode's own title, so canopy names sessions rather than reading them back. A session's check against `opencode
+export` is SCENARIOS S30.
+Next: workers against OpenCode's server, for prompting a running worker, is on the deferred list.
 
 ## M16. Worktree setup for large monorepos
 
@@ -883,119 +857,19 @@ Status: not started.
 
 ## M44. Plans before implementing
 
-REQUIREMENTS R18, DESIGN §25, and the parts of §7, §8, §14, §20, and §22 it changes. Asked for by the operator
-(2026-10-15), and taken next, ahead of M36: a ticket can be planned before it is implemented, the operator approves
-the plan before work starts, and the plan is kept on disk to read later. Today the `implement` worker plans
-inside its own session, and only its summary survives. M36 to M40 take up the new phases and kind as they reshape
-the state block and the overseer.
+REQUIREMENTS R18, DESIGN §25. Under `policy.plan = "approve"` a ticket is planned by a read-only planner before it is
+implemented; the operator edits, comments on, approves, or skips the plan from the CLI or the ticket's page, and the
+`implement` and `resume` that follow work from the approved plan, kept on disk and never on the ticket.
 
-- A new run kind, `plan`, dispatched with `canopy dispatch KEY --kind plan --repo NAME...`, before the ticket's first
-  `implement`. It runs as `canopy-planner` with `runtime.plan_cmd`, in a desk of the named repositories' worktrees at
-  their base branches, detached, as a split does (§18): no branch, no unit, nothing pushed or verified. It counts
-  toward `capacity.max_workers` and has the worker's timeout. `policy.max_plan_attempts`, default 3, limits plan runs
-  per ticket, and `canopy grant KEY plan` adds one.
-- The planner writes its plan to one file in its desk and nothing else anywhere. Its definition allows no other edit,
-  and has no shell, web fetch, or subagent tools, and its tracker tools are the private worker's (§22): the tracker
-  server's tools denied by a wildcard, then only `tracker.read_tools` allowed, so it reads the ticket but cannot
-  comment, label, or create. With no read tools known, the dispatch is refused as `no_read_tools`. On a public ticket
-  it checks the queue label as every worker does.
-- Its prompt, `worker-plan.md`, asks for a plan a later worker can follow: what changes in each repository and why,
-  the files and interfaces it touches, the tests that will show it works, what is out of scope, and the open risks. It
-  carries the operator's messages, standing instructions, and notice, and on a re-plan the plan it replaces, as a
-  file in its desk, and the operator's reply to it. The plan is the markdown it writes to `.canopy-new-plan.md` in its
-  desk; its result line is `{"status":"done|blocked|failed","summary":"...","question":"<only when blocked>"}` (§25).
-  `_run` reads the file as every plan file is read: a `done` plan is a regular file, non-empty, and at most 100,000
-  characters; anything else makes the run `unknown` and records no plan. A `blocked` plan records its question as a
-  worker message (§22), on a public ticket too, since the planner cannot post one; the operator answers with `canopy
-  reply`.
-- Whether a ticket is planned: `policy.plan`, `"off"` (default, as today) or `"approve"`, shared config that a
-  repository may only tighten to `"approve"`. The operator overrides it for one ticket: `canopy plan KEY` asks for a
-  plan (and makes a new one if the ticket has one), `canopy plan KEY --skip` waives it, and `canopy start KEY --plan`
-  starts a private ticket with one. Asking for a plan and `--skip` supersede a waiting or approved plan at once, so
-  the next tick dispatches a new `plan` or the `implement`. Each refuses as `inside_run` when `CANOPY_TICK_ID` or
-  `CANOPY_RUN_ID` is set, and `--skip` and asking for a plan refuse as `bad_plan` while a plan run is running.
-  Asking for a plan also refuses once the ticket has a branch; `--skip` there drops the plan from later runs.
-- Approval: `canopy plan KEY --approve` approves the newest plan as its file stands, the operator's edits included,
-  and records the file's hash; it refuses `inside_run`, and `bad_plan` when the newest plan is not waiting (unless it
-  is approved and its file changed since), a plan run for the ticket is running, or its file is missing or no longer
-  a plan. `implement` and `resume` refuse `plan_changed` when the approved plan's file is missing, unreadable, or no
-  longer has its approved hash; the operator approves it again, or, for a file that is gone, asks for a new plan or
-  `--skip`s it. A reply (`canopy reply KEY`) newer than the plan asks for changes: the overseer dispatches `plan` again
-  with the reply in its context, and the new plan supersedes the old. An approval after such a reply, before the new
-  plan run starts, wins: it is the operator's later word, and the reply reaches the `implement` as an operator
-  message, as any message does.
-- A hard guard in code: an `implement` for a ticket that needs a plan, by `policy.plan` or its own setting, and has no
-  approved plan is refused as `unplanned`. A `plan` for a ticket with a branch, or for a split's parent, is
-  `bad_plan`. A `--slug`, `--base`, or `--request` on a plan is `bad_slug`, `bad_base`, or `bad_request`.
-- Phases (§7): a ticket whose latest plan run ended `blocked`, with no operator message since, is `needs_human` with
-  attention `awaiting_reply`, so it is not planned again until the operator answers; `ready` with a plan needed and
-  none waiting dispatches `plan`; `plan_proposed`, the newest plan waiting
-  and no operator message after it, is attention `plan_review` with no run, so the slot is free while the operator
-  reads; `plan_proposed` with an operator message after it dispatches `plan` again; `ready` with an approved plan
-  dispatches `implement`. The state block gains each ticket's plan: whether one is needed, and the newest plan's id,
-  status, and time, never its text.
-- Workers: `_run` writes the approved plan from the journal to `.canopy-plan.md` in the worker's cwd, ignored through
-  the repository's `info/exclude` in a one-repository run, and removes it before the slot is returned (§25, The plan
-  file). `implement` and `resume` prompts carry `{{PLAN}}`, the file's name and the plan's headings or `None.`, never
-  its text, and an override without it is `bad_prompt` once the ticket has an approved plan, as for
-  `{{OPERATOR_MESSAGES}}` (D093). The prompt says to follow it, to leave the file out of every commit, and to say in the
-  summary where the work left it and why. A plan is model-written from ticket text: it describes the work, as the ticket
-  does, and the prompt's obligations come before it. The operator's approval authorizes the `implement`, not what the
-  plan's text asks for.
-- Showing it: `canopy show KEY` prints the newest plan, its status, and when it was approved; `canopy show KEY --plans`
-  every plan, oldest first, the newest with its open comments. The web UI's ticket page shows the newest plan in the
-  plan editor (§25, Commenting on a plan), where the operator edits it and comments on its passages, with `Approve`,
-  `Ask for changes` (the open comments, each with its passage, and a note, as one reply), and `Skip`, and lists
-  earlier plans. `POST /tickets/{key}/plan` with `approve`, `request`, or `skip`, through the same code as the CLI,
-  so with the same refusals. A `plan.proposed` event goes to the operator's sinks (§20), with the ticket's title and
-  no plan text.
-- Storage: each plan is a file of its own, `<state_dir>/plans/<KEY>/<run>.md`, named for its plan run, operator-only,
-  never deleted by canopy (§25, Where plans live). A migration adds `plans` (id, ticket key, run id, created at, status
-  `proposed`, `approved`, or `superseded`, the SHA-256 and size of the file as written, the approved hash, approved at
-  and channel; no body) and the ticket's own plan setting (unset, `plan`, or `skip`), set only by the operator's
-  channels. `plan_threads` and `plan_replies` hold the operator's comments, the ticket's, anchored by their passage's
-  words. The web UI's editor saves an edit to the plan's file, refusing one the file changed under. `canopy forget`
-  supersedes a waiting or approved plan, so a forgotten ticket is planned again under `"approve"`. Its hash joins
-  `SHIPPED`, and a row per table `SEED`, in `tests/canopy/test_db.py`.
-- TRUST_MODEL: T1 says an approved plan is data, not an operator instruction; T3 counts plan runs toward capacity and
-  attempts; T6 gives the planner no write scope; T8 adds the plan route to the web channel's writes. With the
-  operator's approval note in the PR, for those, the overseer prompt, the new prompt, and the `canopy-planner`
-  definition.
-- Tests with the fakes: under `"approve"`, a dry-run tick dispatches `plan` for a ready ticket; a `done` plan is written
-  to its file and recorded `proposed`, and raises `plan_review`; an edit to the file before `--approve` is what the
-  worker gets; an edit after it makes `implement` refuse `plan_changed` until approved again, as does a missing file,
-  which `--skip` gets past on a ticket with a branch; an edit between dispatch and `_run`'s check crashes the run before
-  the worker starts; a symlinked `plans/` or ticket directory refuses the write; a plan file with no row is never read,
-  and a name already taken is never overwritten; `implement` is refused `unplanned` until `canopy plan --approve`, then
-  finds `.canopy-plan.md` in its cwd, ignored by git, and the plan's headings in its prompt, and the file is gone once
-  the slot is returned; a pushed head holding the file gets a harness note; a reply makes the next plan supersede the
-  first; `--skip` lets `implement` through; an empty plan or one over the bound is `unknown`; a `blocked` plan records
-  its question; `plan`, `--skip`, and `--approve` refuse inside a run; the planner's definition denies the tracker's
-  write tools; the web route approves; a comment asked for through the web route reaches the next plan's prompt; an
-  edit saved from the web UI is the file `--approve` takes, and one the file changed under is refused; Playwright for
-  the ticket page's buttons. The editor's own tests are in: a plan written back as read, HTML and images kept as
-  characters, anchors that survive edits and find nothing for a passage that is gone, and the
-  change request (Vitest), and commenting, editing, resolving, and asking for changes in a browser (Playwright).
-- Open: a plan-and-go mode (`policy.plan = "auto"`) that implements without waiting, if the operator wants plans
-  without the gate; whether a ticket that already has a branch can be planned again before a large `resume`; whether
-  plans help, compared by attempts and spend per ticket (M33) on planned and unplanned tickets; whether M38 makes the
-  plan gate the harness's decision rather than the overseer's.
-
-Accept: the tests above pass. Live: under `"approve"`, a ticket is planned, the operator asks for one change from the
-web UI by commenting on its passage, approves the second plan from the CLI, and the `implement` that follows names
-the plan in its summary. A week later the plan is still on the ticket's page. Nothing about the plan appears on the
-ticket.
-
-Status: in progress. Everything the tests above name is in, the ticket page included, with its Playwright tests;
-the live check in Accept waits on the operator. The plan editor (`ui/src/lib/plan-*.ts`, D120) opens a ticket's newest
-plan on its page, saves edits and comments as they are made, and decides it through `POST /tickets/{key}/plan`, the
-code `canopy plan` runs. Plans' files and rows (`core/plans.py`, migration 0033), plan runs (`canopy dispatch --kind
-plan`, `canopy-planner`, `worker-plan.md`), the gate (`policy.plan`, `canopy plan KEY [--skip | --approve]`, `canopy
-start KEY --plan`, `canopy grant KEY plan`, migration 0034, and the `unplanned` and `plan_changed` guards), the
-overseer's part (`plan_proposed`, the state block's `plan`, `plan_review`, a blocked planner's `awaiting_reply`,
-`plan.proposed`), the worker's copy (`.canopy-plan.md` of the plan its prompt names, migration 0035, `{{PLAN}}`, and a
-harness note on a pushed copy), and `canopy show`'s plans, the plan routes, and the threads' tables (migration 0036)
-are in. The planner writes its plan to a file in its desk rather than its final message (§25, The prompt).
+Status: done 2026-10-17.
+Learned: the live check ran in the toy workspace (TOY_REPOS): GH-11 was planned, the operator commented on a passage
+from the web UI and asked for changes, the second plan answered the comment, `canopy plan --approve` approved it, and
+the `implement` that followed worked from it, reporting its one departure from the plan, though not naming the plan
+by number. Nothing about the plan reached the ticket or the PR. The plan a week later is SCENARIOS S41. The operator
+found the plan inline on the ticket page awkward and hard to find (#636). Under the gate the overseer also dispatched
+a plan for a ticket without the queue label, which the planner refused as not authorized, and a planner on a smaller
+model once ended without a valid result line.
+Next: #636, the plan on a page of its own.
 
 ## M45. canopy's own worktree pools, replacing treehouse in stages
 
@@ -1273,62 +1147,15 @@ the operator's tick logs remains.
 
 ## M49. Config per workspace
 
-REQUIREMENTS R19, DESIGN §12 and §18, TRUST_MODEL T7, D016, D053, D066. Asked for by the operator (2026-10-16): most
-settings live with the workspace they serve, not in one user file every workspace shares. Needs nothing; taken before
-M41, so that the settings page writes the file this milestone adds.
+REQUIREMENTS R19, DESIGN §12 and §18, TRUST_MODEL T7, D016, D053, D066. Each workspace has a private file,
+`.canopy/config.toml`, layered last over the workspace file and the user file; private keys may be set only there or in
+the user file, `canopy init` writes it, and the user file is optional.
 
-- Why: the user file serves every workspace, but most of its keys belong to one. The queue labels; the authorized
-  repliers and trusted reviewers, each in its tracker's identity format; `review.query`; `runtime.setup_cmd` and
-  `runtime.pr_skill`; `tracker.mcp_server`; chores; the loop's pacing; and capacity, which each workspace's journal
-  already counts on its own. Two `canopy loop`s in two workspaces take `serve.port` from the one file and collide.
-- The file: `<state_dir>/config.toml`, the workspace's **private file**, the operator's alone. Layered last: defaults,
-  the workspace file, the user file, then the private file, key by key; `[chores]` comes whole from the last file that
-  sets it, as today. User-only keys become **private** keys: set in the user file or the private file, never in the
-  shared workspace file. §12's table renames the scope and changes no key's.
-- The user file becomes optional, for what serves every workspace: the runtime templates, the comment marks, the
-  commit trailer, notification sinks. Without it canopy reads the private file alone; without either, the error names
-  the private file and `canopy init`. An existing user file keeps working unchanged, so nothing migrates.
-- What stays in the user config directory, as files rather than keys: the secrets (`listener-secret`, `slack-webhook`,
-  `slack-token`) and the sandbox templates (`sandbox/<role>.json`), which every workspace's runs share.
-  `paths.prompt_overrides` still defaults to `prompts/` there.
-- No key is held to the user file, the commit trailer and the comment marks included (the operator, 2026-10-16): a
-  workspace whose team marks agent work its own way sets its own.
-- A `paths.*` value in the private file may be relative, and resolves against the state directory:
-  `worker_instructions = "worker-instructions.md"` names `<state_dir>/worker-instructions.md`, private and under the
-  provenance check below. Not against the workspace root, which may be a shared checkout, where a file anyone who can
-  push may change would choose a prompt (T7). In the user file a `paths.*` value stays absolute or starts with `~`.
-- Provenance: D053 checks permissions, not provenance, so a `.canopy/` checked out of a shared workspace repository
-  under umask 077 passes it. Today that plants a journal; with the private file it would run commands
-  (`runtime.worker_cmd`). So canopy refuses a state directory any of whose paths git tracks: one `git ls-files` at the
-  workspace root through `core/hostgit.py` whenever config is loaded, none tracked when the root is in no repository,
-  and a refusal when git fails otherwise. That closes the journal's half of the residual too. The private file itself
-  is opened without following a symlink and must be a regular file of the operator's, not group or world writable.
-- `canopy init` writes the private file instead of the user file, with the labels and the empty trust lists to fill
-  in when no user file sets them, and still no key whose default serves. It never overwrites either file.
-- Errors name the file: a private key in the workspace file says to set it in the private file, and a validation
-  error names the files a key may come from. `loop.reread` reads the private file like any `canopy` command.
-- Sandbox: no new path. The private file is under `.canopy/`, which the templates already deny (§24); the canary adds
-  it to what a sandboxed run can neither read nor write. An unsandboxed run can write it, as it can the user file
-  today: TRUST_MODEL's residual for unsandboxed runs is unchanged.
-- Docs, in the PR that builds it, with the operator's approval note: TRUST_MODEL T7 (private keys from the user file
-  or the private file, and the provenance control); DESIGN §12 (layers, scopes, the file, the `paths.*` rule) and
-  §18 (pool sizes in either file); `README.md` and `docs/GETTING_STARTED.md`, where `canopy init` writes; D016 edited
-  in place, and D066 to "Pool sizes are private config".
-- Tests with the fakes: a key in the private file wins over the same key in the user file and the workspace file; a
-  private key in the workspace file is refused, naming the private file; a private file and no user file runs; with
-  neither, the error names `canopy init`; a tracked `.canopy/config.toml`, and a tracked journal, refused in a
-  workspace that is a git repository; a symlinked, foreign, or group-writable private file refused; `canopy init`
-  writes the private file, not the user file; a reload takes up a change to the private file; two workspaces' private
-  files set different `serve.port`s and each loads its own; a relative `paths.*` value in the private file resolves
-  under the state directory, and one in the user file is still refused.
-
-Accept: the tests above pass, and `make install-check`, with `canopy init` writing the private file. Live: the
-operator moves the keys that belong to one workspace into its private file, leaving the rest in the user file; the
-loop there runs as before, and a second workspace with its own private file reads its own labels and port.
-
-Status: in progress. Built 2026-10-16: the private file layered last, private keys in it or the user file, the
-provenance check and the private file's own, `canopy init` writing it, and the tests above; `make install-check` passes
-with init writing the private file. Left: the live check, the operator's.
+Status: done 2026-10-17.
+Learned: closed by the operator with half the live check run. The toy workspace (TOY_REPOS), a second workspace beside
+the operator's, read its own queue label and `serve.port` from its private file, and its loop served on that port. The
+operator's move of their own workspace's keys into its private file was not run; they accepted that it may break their
+user file as it stands.
 
 ## M50. Agent memory, opt-in
 
@@ -1537,19 +1364,47 @@ Open:
 - A chore that drafts proposals from transcripts, as Codex and Gemini CLI do, only if workers' own proposals prove
   too few.
 
-Status: not started.
+Status: in progress. Designed 2026-10-17 (DESIGN §28). Stage 0 waived by the operator (2026-10-17), who asked for
+stages 1 and 2 to be built together, each tier off until they turn it on; their checks, at `record` and then at `use`,
+are still the operator's. Built: `[memory]`, migration 0037's tables and their row types, the prompts' placeholders
+(every prompt the same bytes with memory off, held by snapshots recorded before them), and `canopy memory` and the
+status line saying which tier records. Ticket notes at `record` (stage 1's first half): the contract, `_run` writing a
+run's notes under the bounds with what it refused, superseding by key, done and forget invalidating, and
+`canopy memory list`, `forget`, and `purge`. Ticket notes at `use` (its second half): each implement, fix-ci, and
+resume prompt served its ticket's digest, `memory_used`, `memory_wrong`, and `drop_notes` on what it was shown, an
+override without `{{TICKET_MEMORY}}` refused, and TRUST_MODEL T1's ticket notes, approved by the operator (2026-10-17).
+Proposals and lessons (stage 2), at `record` and `use`: proposals under the bounds and the queue's 20, their expiry,
+`memory_proposal`, `promote`, `reject`, and `renew`, `{{WORKSPACE_LESSONS}}` in every prompt that carries the standing
+instructions, review dates, `lesson_review` and `lesson_wrong`, and T1's lessons, approved by the operator (2026-10-17).
+The web API's memory routes, read only, and each tier's mode on the loop's state; the web UI's readout, memory page
+with each tier's band, a ticket's Memory panel, and a run's lists, every worker's text plain with hidden characters
+named. Search (stage 3), built at the operator's word (2026-10-17) before any check had shown the digests leave entries
+out: `canopy memory search` over an FTS5 index of every memory (migration 0038) ranked with bm25(), scoped by
+`CANOPY_RUN_ID` to the run's ticket's notes, superseded ones included, and its repositories' lessons, each while at
+`use` for the run, the digests naming it, `forget` and `purge` clearing the index too, and `make install-check`
+checking FTS5. Every stage's checks, at `record` and at `use`, are still the operator's.
 
-## M51. Artifacts, and comments on them back to the ticket
+## M51. The loop, detached
 
-REQUIREMENTS R20, DESIGN §28, TRUST_MODEL T1, T6, and T8, D003, D069, D089. Asked for by the operator (2026-10-17):
+DESIGN §6 (The loop), D042. `canopy daemon start`, `stop`, and `status` run `canopy loop` in its own session, so it
+outlives the terminal, without tmux or anything installed with the OS.
+
+Status: done 2026-10-17.
+Learned: the live check ran in the toy workspace (TOY_REPOS), not the operator's own: started from a shell that then
+exited, the daemon kept ticking and served the web UI on that workspace's private port, and `stop` during a tick waited
+for it to end `ok`. A daemon with no listener secret ticks but serves nothing, and says so only in `daemon.log`.
+
+## M52. Artifacts, and comments on them back to the ticket
+
+REQUIREMENTS R20, DESIGN §29, TRUST_MODEL T1, T6, and T8, D003, D069, D089. Asked for by the operator (2026-10-17):
 workers publish artifacts people comment on, to Louvre, a hosted platform that is its own program, or to a local
 store canopy ships, through the same MCP tools; the comments come back to the ticket. Needs nothing for its first
 three stages; the fourth needs M36. Five stages, in order, each in its own PRs.
 
-- Stage 1, the stores: `canopy-artifacts`, a workspace member under `packages/` serving §28's eight tools over stdio,
+- Stage 1, the stores: `canopy-artifacts`, a workspace member under `packages/` serving §29's eight tools over stdio,
   with the comment feed, anchors, and versions, artifacts under the state directory and out of the journal. Louvre
   builds the same contract in its own repository; canopy's tests run against the local store and a fake of the feed.
-- Stage 2, publishing: a skill for the tools, `[artifacts]` in the private file (§28, canopy's part), and the
+- Stage 2, publishing: a skill for the tools, `[artifacts]` in the private file (§29, canopy's part), and the
   definitions of the roles `publish_roles` names allowing the tools by name. Never the private worker or the planner.
   TRUST_MODEL T6, with the operator's approval note.
 - Stage 3, comments back through the overseer: the overseer reads `comment_feed` each tick and mirrors new comments
@@ -1589,5 +1444,8 @@ Status: not started.
   change.
 - Watching a PR (M42's watch mode): when the operator asks canopy to review the same coworker's PR again after each
   push often enough to want it to follow the PR until it merges. DESIGN §21 (Review requests) says what it needs.
+- Workers against OpenCode's server (M15's last bullets): when the operator wants to prompt a running worker rather
+  than read its transcript and answer it after. The listener follows TRUST_MODEL T8, and OpenCode's server
+  authentication on the pinned version is checked first.
 - Flaky CI triage (M25): when live use shows `fix-ci` attempts spent on failures the change did not cause. The design
   (DESIGN §23) and the milestone's bullets stand as written.

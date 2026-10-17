@@ -2,7 +2,7 @@
 
 Part of the canopy design, normative like all of it: the MCP tools canopy serves the overseer, in place of the CLI it
 runs through bash. Sections are numbered across the whole design; the [README](README.md) has the map. Previous:
-[Garbage collection](GARBAGE_COLLECTION.md). Next: [Artifacts](ARTIFACTS.md).
+[Garbage collection](GARBAGE_COLLECTION.md). Next: [Agent memory](MEMORY.md).
 
 ## 27. The overseer's tools (M48)
 

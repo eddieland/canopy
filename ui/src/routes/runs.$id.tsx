@@ -2,12 +2,13 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
-import { runQuery, runTranscriptQuery } from '@/api/queries'
+import { runMemoryQuery, runQuery, runTranscriptQuery } from '@/api/queries'
 import type { Run } from '@/api/types'
 import { Age } from '@/components/age'
 import { Copyable, CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
+import { MemoryRows } from '@/components/memory'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
@@ -20,6 +21,7 @@ import { runDescription } from '@/lib/descriptions'
 import { runRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
+import { readNothingText } from '@/lib/memory'
 import { RUN_TOKENS_TITLE, runTokens } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
 import { None } from '@/components/none'
@@ -74,6 +76,7 @@ function Loaded({ id }: { id: number }) {
             <div className="stagger flex flex-col gap-6">
                 <RunPanel run={data} />
                 <TranscriptPanel transcript={transcript} running={data.state === 'running'} live />
+                <RunMemoryPanel id={data.id} />
             </div>
         </>
     )
@@ -150,4 +153,52 @@ function RunPanel({ run }: { run: Run }) {
             </Fields>
         </Panel>
     )
+}
+
+/**
+ * What the run wrote and read of agent memory (DESIGN §28), and what it had refused; only for a run rendered while a
+ * tier was on. A run rendered while recording read `none, recording only`: nothing was served, which is not an empty
+ * digest.
+ */
+function RunMemoryPanel({ id }: { id: number }) {
+    const { data } = useQuery(runMemoryQuery(id))
+    const rendered = data?.rendered ?? null
+    if (data === undefined || rendered === null) {
+        return null
+    }
+    const served = rendered.ticket_notes === 'use' || rendered.lessons === 'use'
+    return (
+        <Panel data-testid="run-memory">
+            <PanelHeader label="Memory">
+                <span className="readout text-xs text-muted-foreground">
+                    ticket notes {words(rendered.ticket_notes)}, lessons {words(rendered.lessons)}
+                </span>
+            </PanelHeader>
+            <h3 className="px-3 pt-2 panel-label">Wrote</h3>
+            {data.wrote.length === 0 ? <Empty>none</Empty> : <MemoryRows entries={data.wrote} ownRun={id} />}
+            <h3 className="border-t px-3 pt-2 panel-label">Read</h3>
+            {data.read.length === 0 ? <Empty>{readNothingText(served)}</Empty> : <MemoryRows entries={data.read} />}
+            {data.refused.length > 0 && (
+                <>
+                    <h3 className="border-t px-3 pt-2 panel-label">Refused</h3>
+                    <ul className="flex flex-col gap-1 px-3 py-2 text-xs" data-testid="memory-refused">
+                        {data.refused.map((r, i) => (
+                            <li key={i}>
+                                <span className="font-mono">
+                                    {r.field}
+                                    {r.key === null ? '' : ` ${r.key}`}
+                                </span>
+                                : {r.why}
+                            </li>
+                        ))}
+                    </ul>
+                </>
+            )}
+        </Panel>
+    )
+}
+
+/** A tier's mode for a run, in the CLI's words. */
+function words(mode: 'off' | 'record' | 'use'): string {
+    return mode === 'use' ? 'in use' : mode === 'record' ? 'recording' : 'off'
 }

@@ -292,18 +292,26 @@ page-level detail.
 - **A comment** is a thread on a passage: the comment and its replies, open until the operator resolves it. It is
   anchored by the passage's words and a little text either side, never by a position, which the first edit above it
   would make wrong. On a new plan, each thread is looked for again by its words. A passage that is gone is found
-  nowhere, and its thread says `passage gone` rather than move to other words: a reworded passage may no longer be
-  what the comment was about. An open thread's comment and replies can be edited in place; nothing marks one edited.
+  nowhere, and its thread says `passage gone` rather than move to other words: a reworded passage may no longer be what
+  the comment was about. A new plan rewrites what it was asked to change, so its comments lose their passages together,
+  and the operator can resolve all of those at once. To read what a new plan changed rather than the whole of it again,
+  the editor marks, while asked, the words it added and those it removed since the plan it replaces, word by word, as
+  each plan reads in the editor (`ui/src/lib/plan-diff.ts`), so formatting alone is no change. An open thread's comment
+  and replies can be edited in place; nothing marks one edited.
 - **Ask for changes** sends the open threads, in the plan's order, as one operator message: each passage quoted, its
-  comment and replies, then the operator's note on the whole plan, if any. It is a reply, within `canopy reply`'s
-  bound (§22), so the re-plan works as Approving a plan, above, says. A request over the bound is not sent; the
-  operator resolves or shortens some. Resolved threads ask for nothing.
+  comment and replies, then the operator's note on the whole plan, if any, and, when the operator edited the plan's
+  text, a line saying so: the planner keeps what it was not asked to change, but reads the plan it replaces as its own,
+  and the line says which words are the operator's, to keep. It is a reply, within `canopy reply`'s bound (§22), so the
+  re-plan works as Approving a plan, above, says. A request over the bound is not sent; the operator resolves or
+  shortens some. Resolved threads ask for nothing.
 - **Editing** in the web UI edits the plan's file, as the operator's own editor would: through the web channel behind
   its token (T8), with the same care as the planner's write (operator-only, refusing a symlink or a file that is not
   regular), replaced whole so a reader never sees half a file. It saves only a `proposed` or approved plan's file, an
   approved one then needing approval again (`plan_changed`); it refuses `bad_plan` while a plan run for the ticket is
   running, and when the file changed since the editor read it, by its hash, so an edit made elsewhere is never
-  overwritten unseen. This save is the largest body the web channel takes, which sets its body limit (§22).
+  overwritten unseen. This save is the largest body the web channel takes, which sets its body limit (§22). Until an
+  edit is saved, the editor says `Unsaved edits` beside `Save`, and ⌘S (Ctrl+S) saves it, as a document's Save does,
+  rather than open the browser's own.
 - **In the journal** (M44): a thread belongs to the ticket, not to one plan, so it carries from plan to plan and is
   anchored again on each. Threads and replies are written only by the web channel, behind its token (T8). A comment
   is the operator's words and the passage it quotes, not the plan, so it lives in the journal while the plan's text

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Save, SkipForward } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 
 import {
     changePlanThread,
@@ -25,6 +25,12 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { planText } from '@/lib/outcomes'
 import { fromServer, movedAnchors, threadChanges } from '@/lib/plan-threads'
 import type { PlanThread, ThreadChange } from '@/lib/plan-threads'
+import { isApple } from '@/lib/send-key'
+import { ariaKeys, isPressed, keysLabel } from '@/lib/shortcut'
+
+const APPLE = isApple(navigator.userAgent)
+// Save, as a document's: anywhere on the page while the plan is open.
+const SAVE_KEYS = 'Mod-s'
 
 /**
  * A ticket's plan (docs/design/PLANNING.md §25): its newest plan in the plan editor, where the operator edits it and
@@ -108,6 +114,11 @@ function NewestPlan({
     text: string
 }) {
     const client = useQueryClient()
+    // The plan this one replaces, the newest before it, for what changed since.
+    const before = plans.plans.findLast(
+        (plan) => plan.id !== newest.plan.id && plan.created_at <= newest.plan.created_at,
+    )
+    const replaced = useQuery({ ...ticketPlanQuery(ticketKey, before?.id ?? 0), enabled: before !== undefined }).data
     const saved = fromServer(plans.threads)
     const [held, setHeld] = useState(saved)
     const [seen, setSeen] = useState(plans.threads)
@@ -205,6 +216,22 @@ function NewestPlan({
         enqueue(async () => setSaid(await work()))
     }
 
+    const onSaveKey = useEffectEvent((event: KeyboardEvent) => {
+        if (!isPressed(SAVE_KEYS, event, APPLE)) {
+            return
+        }
+        // Never the browser's own Save, which would keep a copy of the page rather than save the plan.
+        event.preventDefault()
+        if (dirty && busy === 0) {
+            act(saveAndSay)
+        }
+    })
+    useEffect(() => {
+        const listener = (event: KeyboardEvent) => onSaveKey(event)
+        document.addEventListener('keydown', listener)
+        return () => document.removeEventListener('keydown', listener)
+    }, [])
+
     function decide(action: PlanChanged['action']) {
         act(async () => {
             if (dirty && action === 'approve') {
@@ -231,48 +258,57 @@ function NewestPlan({
     }
 
     return (
-        <>
-            <PlanEditor
-                markdown={text}
-                threads={held}
-                onThreadsChange={onThreadsChange}
-                onChange={setMarkdown}
-                editable={editable}
-                onAskForChanges={status === 'proposed' ? askForChanges : undefined}
-            />
-            {editable && (
-                <Panel>
-                    <div className="flex flex-col gap-2 p-3" data-testid="plan-actions">
-                        <div className="flex flex-wrap items-center gap-2">
-                            {approvable && (
-                                <Button onClick={() => decide('approve')} disabled={busy > 0}>
-                                    <Check />
-                                    {dirty ? 'Save and approve' : 'Approve'}
-                                </Button>
-                            )}
-                            <Button variant="outline" onClick={() => act(saveAndSay)} disabled={busy > 0 || !dirty}>
-                                <Save />
-                                Save
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                className="ml-auto"
-                                onClick={() => decide('skip')}
-                                disabled={busy > 0}
-                            >
-                                <SkipForward />
-                                Skip the plan
-                            </Button>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                            Approving takes the plan as saved, your edits included, and lets its implement go ahead.
-                            {status === 'approved' && ' Saving an edit means approving it again.'}
-                        </p>
-                        <Notice error={failure}>{said}</Notice>
-                    </div>
-                </Panel>
-            )}
-        </>
+        <PlanEditor
+            markdown={text}
+            threads={held}
+            onThreadsChange={onThreadsChange}
+            onChange={setMarkdown}
+            editable={editable}
+            edited={newest.edited}
+            previous={
+                before !== undefined && typeof replaced?.text === 'string'
+                    ? { label: `plan ${before.id}`, markdown: replaced.text }
+                    : undefined
+            }
+            onAskForChanges={status === 'proposed' ? askForChanges : undefined}
+            actions={
+                <div className="flex flex-wrap items-center gap-2" data-testid="plan-actions">
+                    {approvable && (
+                        <Button onClick={() => decide('approve')} disabled={busy > 0}>
+                            <Check />
+                            {dirty ? 'Save and approve' : 'Approve'}
+                        </Button>
+                    )}
+                    <Button
+                        variant="outline"
+                        onClick={() => act(saveAndSay)}
+                        disabled={busy > 0 || !dirty}
+                        title={`Save (${keysLabel(SAVE_KEYS, APPLE)})`}
+                        aria-keyshortcuts={ariaKeys(SAVE_KEYS, APPLE)}
+                    >
+                        <Save />
+                        Save
+                    </Button>
+                    {dirty && (
+                        // As a document says it, so an edit not yet in the plan's file is never taken for one that is.
+                        <span className="text-xs text-muted-foreground">Unsaved edits</span>
+                    )}
+                    <Button variant="ghost" onClick={() => decide('skip')} disabled={busy > 0}>
+                        <SkipForward />
+                        Skip the plan
+                    </Button>
+                </div>
+            }
+            actionsNote={
+                <div className="flex flex-col gap-2">
+                    <p className="text-xs text-muted-foreground">
+                        Approving takes the plan as saved, your edits included, and lets its implement go ahead.
+                        {status === 'approved' && ' Saving an edit means approving it again.'}
+                    </p>
+                    <Notice error={failure}>{said}</Notice>
+                </div>
+            }
+        />
     )
 }
 

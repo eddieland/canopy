@@ -114,14 +114,16 @@ posture in [docs/TRUST_MODEL.md](docs/TRUST_MODEL.md).
    `canopy loop --dry-run --ticks 1` in the workspace and read the plan.
 
    Once you trust it, leave `canopy loop` running. It ticks, waits `loop.interval_minutes` (15 by default, longer while
-   nothing changes), and repeats until you press Ctrl-C. It also serves the web UI at `http://127.0.0.1:8765/`;
+   nothing changes), and repeats until you press Ctrl-C. `canopy daemon start` runs it in the background instead, until
+   `canopy daemon stop`. It also serves the web UI at `http://127.0.0.1:8765/`;
    `canopy secret` prints the listener secret its sign-in page asks for.
 
 ## Daily surface
 
-Leave `canopy loop` running (tmux works) and work from the web UI it serves at `http://127.0.0.1:8765/`. It shows the
-attention list, runs, worktrees, every ticket's conversation, canopy's reviews with their findings on the diff, and your
-chores, with a search box (`/`) over the whole journal.
+Leave `canopy loop` running (tmux works, or `canopy daemon start`) and work from the web UI it serves at
+`http://127.0.0.1:8765/`. It shows the attention list, runs, worktrees, every ticket's conversation, canopy's reviews
+with their findings on the diff, and your chores, with a search box (`/`) over the whole journal. Its guide, opened
+from the foot of the rail, says what each page holds and how to act on it.
 
 Your part is to label tickets with your queue label, answer the agents' questions on the ticket, and review their PRs.
 Humans approve and merge; the agent never does. Only reviewers in `trust.trusted_reviewers` send a worker back to a PR
@@ -135,7 +137,7 @@ on their own; anyone else's comments wait on the attention list as `untrusted_re
 
 | To | Run |
 | --- | --- |
-| Tick now, or pause and resume the loop | `t` or `p` in its terminal; `canopy pause`, `canopy resume` |
+| Tick now, or pause and resume the loop | `t` or `p` in its terminal, or the web UI's header; `canopy pause`, `canopy resume` |
 | Tell every run about a CI outage until it is over | `canopy notice 'TEXT' --for 4h`, or the web UI's settings |
 | Read your config again after editing it | Reload in the web UI's settings, or `kill -HUP` the loop |
 | Read the attention list | `canopy status`, or `.canopy/attention.md` |

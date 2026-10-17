@@ -14,7 +14,7 @@ from canopy.cli.main import main
 from canopy.core import conversation, db, notice, prompts
 from canopy.core.config import load
 from canopy.core.context import Context
-from canopy.loop import pacing, reread, web
+from canopy.loop import pacing, reread, tick_now, web
 from canopy.serve import live
 from canopy.serve.schema import LoopUpdated
 from tests.canopy.helpers import (
@@ -284,7 +284,7 @@ def test_the_web_channel_sets_and_clears_the_notice_as_canopy_notice_does(ctx: C
     assert c.get("/api/loop").json() == response["loop"]
 
     cleared = c.post("/api/loop/notice/clear", headers=headers).json()
-    assert cleared == {"already": False, "loop": {"paused": None, "notice": None}}
+    assert cleared == {"already": False, "loop": {"paused": None, "notice": None, "memory": None}}
     assert notice.current(ctx.conn) is None
     assert c.post("/api/loop/notice/clear", headers=headers).json()["already"] is True
     [row] = ctx.conn.execute("SELECT ended_channel FROM notices").fetchall()
@@ -293,7 +293,7 @@ def test_the_web_channel_sets_and_clears_the_notice_as_canopy_notice_does(ctx: C
 
 def test_the_stream_sends_a_notice_and_its_lapse_which_commits_nothing(ctx: Context) -> None:
     # The banner leaves when the notice lapses, though nothing reaches the journal then for the stream to see.
-    reader = live._Reader(web.backend(ctx, reread.Reload()))  # noqa: SLF001  (one stream's reads)
+    reader = live._Reader(web.backend(ctx, reread.Reload(), tick_now.TickNow()))  # noqa: SLF001  (one stream's reads)
     try:
         reader.read()
         held = notice.set_notice(ctx.conn, OUTAGE, minutes=60, channel="cli")

@@ -39,6 +39,10 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
                 if (logged(shown) !== logged(run)) {
                     void client.invalidateQueries({ queryKey: keys.runTranscript(run.id) })
                 }
+                // A run writes its memory as it ends.
+                if (shown.status !== run.status) {
+                    void client.invalidateQueries({ queryKey: keys.runMemory(run.id) })
+                }
             }
             break
         }
@@ -91,13 +95,15 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             void client.invalidateQueries({ queryKey: keys.ticks, refetchType: 'active' })
             void client.invalidateQueries({ queryKey: ['ticket'], refetchType: 'active' })
             void client.invalidateQueries({ queryKey: keys.reviews, refetchType: 'active' })
+            // A tick expires proposals, and the runs it saw end wrote memory.
+            void client.invalidateQueries({ queryKey: keys.memory, refetchType: 'active' })
             // A PR's phase, decisions, and reviews move with the ticks too, and the spend page's idle ticks.
             void client.invalidateQueries({ queryKey: keys.pullRequests, refetchType: 'active' })
             void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
             break
         }
         case 'loop.updated': {
-            client.setQueryData(keys.loop, { paused: event.paused, notice: event.notice })
+            client.setQueryData(keys.loop, { paused: event.paused, notice: event.notice, memory: event.memory })
             break
         }
     }
@@ -161,10 +167,12 @@ export function parseStreamEvent(data: string): StreamEvent | null {
         return known && (acknowledged === null || typeof acknowledged === 'number') ? (value as StreamEvent) : null
     }
     if (type === 'loop.updated') {
-        const { paused, notice } = value as { paused?: unknown; notice?: unknown }
-        // `typeof null` is 'object' too: running is `paused: null`, no notice `notice: null`, and a missing key is no
-        // event.
-        return typeof paused === 'object' && typeof notice === 'object' ? (value as StreamEvent) : null
+        const { paused, notice, memory } = value as { paused?: unknown; notice?: unknown; memory?: unknown }
+        // `typeof null` is 'object' too: running is `paused: null`, no notice `notice: null`, memory off
+        // `memory: null`, and a missing key is no event.
+        return typeof paused === 'object' && typeof notice === 'object' && typeof memory === 'object'
+            ? (value as StreamEvent)
+            : null
     }
     if (type === 'spend.updated') {
         const spend = (value as { spend?: unknown }).spend

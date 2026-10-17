@@ -24,10 +24,10 @@ export function parseBuddy(raw: string | null): BuddySetting {
 }
 
 /**
- * Sprig's tips for each view, by its route id: every route but the root, which only redirects. A section's list and
- * one of its items are views of their own (`/tickets/` and `/tickets/$key`). The routes are not imported here, which
- * would bring them all into the unit tests' types: src/components/shell/buddy.tsx holds them to these keys, so a new
- * route fails the type check until it has its own tips.
+ * Sprig's tips for each view, by its route id: every route but those that only redirect, the root and the guide's. A
+ * section's list and one of its items are views of their own (`/tickets/` and `/tickets/$key`). The routes are not
+ * imported here, which would bring them all into the unit tests' types: src/components/shell/buddy.tsx holds them to
+ * these keys, so a new route fails the type check until it has its own tips.
  */
 export const TIPS = {
     '/attention': [
@@ -182,6 +182,20 @@ export const TIPS = {
         'Did you know? Searching for "Sprig" finds nothing. I am unindexed. I am free.',
         'Hot take: it is always in the last place you search. So search there first.',
         'Fun fact: every search is a tiny wish. Mine is for a crown.',
+    ],
+    '/memory': [
+        "It looks like you're reading what workers remember. I remember nothing. Very restful.",
+        'Unhelpful tip: a lesson is a note that the operator believed. I believe in snacks.',
+        'Dear diary, a worker proposed a lesson today. I proposed a hat. Only one of us got promoted.',
+        'Fun fact: recording is not using. I record everything and use none of it.',
+        'Hot take: a note that says "it works on my machine" is a note about the machine.',
+    ],
+    '/guide/$page': [
+        "It looks like you're reading documentation. Would you like me to skim it for you, badly?",
+        'Dear diary, they read a whole page of the guide. I read the title and felt informed.',
+        'Hot take: every link in the guide goes somewhere. A test makes sure. I go nowhere, freely.',
+        'Unhelpful tip: "On this page" lists what is on this page. I am also on this page. I am not listed.',
+        'Fun fact: the guide is written in Markdown. I am written in wire and optimism.',
     ],
 } as const satisfies Record<string, readonly string[]>
 

@@ -56,6 +56,8 @@ SHIPPED = {
     34: "18b330ab2f43affbbe58dfefd346b2602638d37758a20a29dd682ba7681718b0",
     35: "6419d0559893c443f8f74df7bd184f98ce3fc058aa925c6eeb44db13a388dbe0",
     36: "bd963d5fa78e9ce18716c7c9c9094773283f68d172fc9ae89cea4d88e2d85da7",
+    37: "3c0ed312175a51a89e4ea452d2c725eafc521fae3582d73ad7462cccd83930cd",
+    38: "8abccaf065f80d842420331da89c8b0594deb34c5a5ae8749f1137c7099137b2",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -134,6 +136,13 @@ SEED: Mapping[str, str] = {
         "VALUES ('OLD-1', 'the route', 'Add ', ' to it', 'Why here?', 'x', NULL)"
     ),
     "plan_replies": "INSERT INTO plan_replies (thread_id, body, created_at) VALUES (1, 'Because.', 'y')",
+    "memories": (
+        "INSERT INTO memories (scope, ticket_key, key, body, status, author, run_id, tick_id, head, created_at) "
+        "VALUES ('ticket', 'OLD-1', 'ci-flake', 'The lint job fails on a cold cache.', 'active', 'worker', 1, 1, "
+        "'abc1234', 'x')"
+    ),
+    "run_memory": "INSERT INTO run_memory (run_id, ticket_notes, proposals) VALUES (1, 'use', 'off')",
+    "memory_reads": "INSERT INTO memory_reads (run_id, memory_id) VALUES (1, 1)",
 }
 
 
@@ -142,10 +151,19 @@ def fresh(journals: Journals, tmp_path: Path) -> sqlite3.Connection:
 
 
 def tables(conn: sqlite3.Connection) -> list[str]:
+    """The journal's tables but `schema_migrations`, and but full-text indexes and the tables SQLite keeps them in.
+
+    An index is built from its content table, which holds the rows: `memories_fts` is rebuilt from `memories`.
+    """
     rows = conn.execute(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
-    )
-    return [r[0] for r in rows if r[0] != "schema_migrations"]
+        "SELECT name, sql FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+    ).fetchall()
+    virtual = [str(r[0]) for r in rows if str(r[1]).upper().startswith("CREATE VIRTUAL TABLE")]
+    return [
+        str(r[0])
+        for r in rows
+        if r[0] != "schema_migrations" and not any(r[0] == v or str(r[0]).startswith(f"{v}_") for v in virtual)
+    ]
 
 
 def contents(conn: sqlite3.Connection) -> dict[str, tuple[list[str], Counter[tuple[object, ...]]]]:
@@ -525,3 +543,27 @@ def test_review_runs_from_before_their_purpose_are_own_only_where_their_tickets_
     assert db.migrate(conn, resources.migrations_dir()) == versions_after(21)
     purposes = [r[0] for r in conn.execute("SELECT purpose FROM review_runs ORDER BY id")]
     assert purposes == ["own", "own", "query", "query", "query"]
+
+
+def test_the_memory_index_is_built_from_what_the_journal_holds_and_kept_in_step(
+    tmp_path: Path, journals: Journals
+) -> None:
+    """0038 indexes the memories already written, and its triggers follow every later write and delete."""
+    conn = journal_at(journals, tmp_path, 37)
+    conn.execute(
+        "INSERT INTO memories (scope, key, body, status, author, created_at) "
+        "VALUES ('lesson', 'api-tests', 'Run the whole suite with make check.', 'active', 'operator', 'x')"
+    )
+    assert db.migrate(conn, resources.migrations_dir()) == versions_after(37)
+
+    def found(word: str) -> list[int]:
+        return [r[0] for r in conn.execute("SELECT rowid FROM memories_fts WHERE memories_fts MATCH ?", (word,))]
+
+    assert found("suite") == [1]
+    conn.execute("UPDATE memories SET body = 'Lint with make lint.' WHERE id = 1")
+    assert (found("suite"), found("lint")) == ([], [1])
+    conn.execute("UPDATE memories SET body = NULL WHERE id = 1")
+    assert found("lint") == []
+    conn.execute("DELETE FROM memories WHERE id = 1")
+    # Raises if the index and the rows it is built from disagree.
+    conn.execute("INSERT INTO memories_fts (memories_fts) VALUES ('integrity-check')")

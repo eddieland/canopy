@@ -294,6 +294,49 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/loop/tick": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask the loop for a tick now
+         * @description Ask the loop for a tick now, as `t` at its terminal does. It writes nothing.
+         *
+         *     The wait ends at once, before `loop.min_gap_minutes` and while the loop is paused, which it stays. Asked for during
+         *     a tick, it starts when that one ends.
+         */
+        post: operations["tickNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get agent memory
+         * @description Each tier's mode, every ticket's notes in force, the proposals waiting, and the lessons and what they serve.
+         */
+        get: operations["getMemory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/meta": {
         parameters: {
             query?: never;
@@ -549,6 +592,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{run_id}/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a run's memory
+         * @description The modes the run's prompt was rendered under, what it wrote and read of memory, and what it had refused.
+         */
+        get: operations["getRunMemory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}/transcript": {
         parameters: {
             query?: never;
@@ -763,6 +826,28 @@ export type paths = {
          *     ticket has had runs in one repository only; else it is refused `unknown_repo`, as a ticket with no runs is.
          */
         post: operations["grantTicket"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tickets/{key}/memory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a ticket's notes
+         * @description Every note the ticket's runs wrote, and what its next run would be served.
+         *
+         *     A key that is not a ticket's is refused `bad_ref` or `unsupported`; one canopy has no record of is a 404.
+         */
+        get: operations["getTicketMemory"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1860,11 +1945,13 @@ export type components = {
         LimitKind: "implement" | "fix-ci" | "resume" | "review";
         /**
          * LoopState
-         * @description Whether the loop is paused, and the notice to workers in force.
+         * @description Whether the loop is paused, the notice to workers in force, and agent memory's tiers.
          *
          *     While paused, no tick starts until the operator resumes it; a tick running when paused finishes.
          */
         LoopState: {
+            /** @description Agent memory's tiers; None while both are off, when memory shows nowhere. */
+            memory: components["schemas"]["MemoryState"] | null;
             /** @description The notice to workers in force; None without one. */
             notice: components["schemas"]["WorkerNotice"] | null;
             /** @description The pause; None when the loop is not paused. */
@@ -1877,6 +1964,8 @@ export type components = {
          *     The payload is what `GET /loop` returns.
          */
         LoopUpdated: {
+            /** @description Agent memory's tiers; None while both are off. */
+            memory: components["schemas"]["MemoryState"] | null;
             /** @description The notice to workers in force; None without one. */
             notice: components["schemas"]["WorkerNotice"] | null;
             /** @description The pause; None when the loop is not paused. */
@@ -1886,6 +1975,245 @@ export type components = {
              * @enum {string}
              */
             type: "loop.updated";
+        };
+        /**
+         * MemoryDigest
+         * @description What a run would be served of one tier, as its prompt would carry it (DESIGN §28).
+         */
+        MemoryDigest: {
+            /**
+             * Ids
+             * @description The memories in it.
+             */
+            ids: number[];
+            /**
+             * Left Out
+             * @description How many the cap left out.
+             */
+            left_out: number;
+            /**
+             * Served
+             * @description True while its tier is at `use`: the next run gets it. False while recording: what `use` would serve.
+             */
+            served: boolean;
+            /**
+             * Text
+             * @description The section, as plain text.
+             */
+            text: string;
+        };
+        /**
+         * MemoryEntry
+         * @description One note, proposal, or lesson (DESIGN §28). Its text is a worker's, or the operator's for a lesson.
+         */
+        MemoryEntry: {
+            /**
+             * Created At
+             * Format: date-time
+             * @description When it was written.
+             */
+            created_at: string;
+            /**
+             * Head
+             * @description The commit the run's branch was at when its worker ended, `repo@commit` each for a joint run.
+             */
+            head: string | null;
+            /**
+             * Id
+             * @description Its id, as the CLI and a run's result name it.
+             */
+            id: number;
+            /**
+             * Key
+             * @description Its key: lowercase words joined by hyphens.
+             */
+            key: string;
+            /**
+             * Last Used At
+             * @description When a run last said so; None if none has: read by no run.
+             */
+            last_used_at: string | null;
+            /**
+             * Promoted From
+             * @description A lesson's proposal.
+             */
+            promoted_from: number | null;
+            /**
+             * Repo
+             * @description The repository a proposal or lesson is about; None for every repository, and for a note.
+             */
+            repo: string | null;
+            /**
+             * Review At
+             * @description A lesson's next review.
+             */
+            review_at: string | null;
+            /**
+             * Run Id
+             * @description The run that wrote it; None for a lesson.
+             */
+            run_id: number | null;
+            /** @description What it is. */
+            scope: components["schemas"]["MemoryScopeName"];
+            /** @description Where it stands. */
+            status: components["schemas"]["MemoryStatusName"];
+            /**
+             * Text
+             * @description What it says, untrusted and shown as plain text with hidden characters named; None once forgotten or purged.
+             */
+            text: string | null;
+            /**
+             * Ticket Key
+             * @description A note's ticket, or a proposal's source ticket; None for a lesson.
+             */
+            ticket_key: string | null;
+            /**
+             * Use Count
+             * @description How many runs said they relied on it.
+             */
+            use_count: number;
+            /**
+             * Why
+             * @description The harness's words for its latest change of status, such as `superseded by note 41`.
+             */
+            why: string | null;
+            /**
+             * Wrong At
+             * @description When a run last reported a lesson wrong, until the operator renews it.
+             */
+            wrong_at: string | null;
+            /**
+             * Wrong Run Id
+             * @description The run that reported it.
+             */
+            wrong_run_id: number | null;
+        };
+        /**
+         * @description A memory tier's mode (DESIGN §28): `record` writes and serves nothing; `use` serves too.
+         * @enum {string}
+         */
+        MemoryModeName: "off" | "record" | "use";
+        /**
+         * MemoryOverview
+         * @description Every tier's memory (DESIGN §28): the ticket notes in force, the proposals waiting, and the lessons.
+         */
+        MemoryOverview: {
+            /**
+             * Lessons
+             * @description The lessons in force, in key order.
+             */
+            lessons: components["schemas"]["MemoryEntry"][];
+            /** @description What every run would be served of the lessons; None while proposals are off. */
+            lessons_digest: components["schemas"]["MemoryDigest"] | null;
+            /**
+             * Notes
+             * @description Every ticket's notes in force, by ticket and key.
+             */
+            notes: components["schemas"]["MemoryEntry"][];
+            /**
+             * Proposals
+             * @description The proposals waiting on the operator, oldest first.
+             */
+            proposals: components["schemas"]["MemoryProposal"][];
+            /** @description The tiers; None while both are off. */
+            state: components["schemas"]["MemoryState"] | null;
+        };
+        /**
+         * MemoryProposal
+         * @description A proposal waiting on the operator, with where it came from (DESIGN §28).
+         */
+        MemoryProposal: {
+            /** @description The proposal. */
+            entry: components["schemas"]["MemoryEntry"];
+            /**
+             * Private
+             * @description Whether that run was on a private ticket, whose text may hold what the operator kept off the tracker.
+             */
+            private: boolean;
+            /**
+             * Run Kind
+             * @description The kind of the run that proposed it.
+             */
+            run_kind: string | null;
+            /**
+             * Run Status
+             * @description How that run ended.
+             */
+            run_status: string | null;
+            /**
+             * Ticket Done
+             * @description Whether its ticket is marked done: its work merged or closed, as far as the journal knows.
+             */
+            ticket_done: boolean;
+        };
+        /**
+         * MemoryRefusal
+         * @description An entry a run sent that `_run` did not write, in the harness's words; never its text (DESIGN §28).
+         */
+        MemoryRefusal: {
+            /**
+             * Field
+             * @description The result field it was in: `notes` or `proposals`.
+             */
+            field: string;
+            /**
+             * Key
+             * @description Its key, when it had a valid one.
+             */
+            key: string | null;
+            /**
+             * Why
+             * @description Why it was refused.
+             */
+            why: string;
+        };
+        /**
+         * @description What a memory is: a ticket's note, a worker's proposal, or the operator's lesson.
+         * @enum {string}
+         */
+        MemoryScopeName: "ticket" | "proposal" | "lesson";
+        /**
+         * MemoryState
+         * @description Agent memory's tiers while one is on (DESIGN §28): the header's readout and each tier's mode.
+         */
+        MemoryState: {
+            /** @description Lessons workers propose and the operator promotes, `memory.proposals`. */
+            lessons: components["schemas"]["MemoryTier"];
+            /**
+             * Readout
+             * @description `memory: recording` while no tier is at `use`, `memory: in use` once one is.
+             */
+            readout: string;
+            /** @description Notes a ticket's runs write for its later runs. */
+            ticket_notes: components["schemas"]["MemoryTier"];
+            /**
+             * Tiers
+             * @description Each tier's mode in words, as the readout's hover says it: `ticket notes: recording, lessons: off`.
+             */
+            tiers: string;
+        };
+        /**
+         * @description Where a memory stands: in force, waiting on the operator, replaced, or no longer in force.
+         * @enum {string}
+         */
+        MemoryStatusName: "active" | "pending" | "superseded" | "invalid";
+        /**
+         * MemoryTier
+         * @description One tier of agent memory and what reads it (DESIGN §28), in the words every surface uses.
+         */
+        MemoryTier: {
+            /**
+             * Band
+             * @description What reads this tier, in a sentence that starts with its mode: `Recording only. ...` or `In use. ...`.
+             */
+            band: string;
+            /** @description Its mode. */
+            mode: components["schemas"]["MemoryModeName"];
+            /**
+             * Words
+             * @description Its mode in words: `off`, `recording`, or `in use`. No two modes share them.
+             */
+            words: string;
         };
         /**
          * Message
@@ -3022,6 +3350,39 @@ export type components = {
             tool: string;
         };
         /**
+         * RunMemory
+         * @description What a run wrote of agent memory, what was rendered into its prompt, and what it had refused (DESIGN §28).
+         */
+        RunMemory: {
+            /**
+             * Read
+             * @description What was rendered into its prompt. Empty while recording: then nothing was served.
+             */
+            read: components["schemas"]["MemoryEntry"][];
+            /**
+             * Refused
+             * @description What it sent that was not written.
+             */
+            refused: components["schemas"]["MemoryRefusal"][];
+            /** @description The modes it was rendered under; None for a run rendered with memory off, which wrote and read nothing. */
+            rendered: components["schemas"]["RunMemoryModes"] | null;
+            /**
+             * Wrote
+             * @description What it wrote, in order.
+             */
+            wrote: components["schemas"]["MemoryEntry"][];
+        };
+        /**
+         * RunMemoryModes
+         * @description The mode of each memory tier a run's prompt was rendered under: `off` for a tier its kind does not hear.
+         */
+        RunMemoryModes: {
+            /** @description Lessons' mode for this run. */
+            lessons: components["schemas"]["MemoryModeName"];
+            /** @description Ticket notes' mode for this run. */
+            ticket_notes: components["schemas"]["MemoryModeName"];
+        };
+        /**
          * @description A run's status, in five groups the UI colors (DESIGN §22). `blocked` asked a question; `failed` is every ending a human must look at (failed, crashed, unpushed, unknown, timeout); `stopped` is the operator's.
          * @enum {string}
          */
@@ -3652,10 +4013,21 @@ export type components = {
             summary: string | null;
             /**
              * Woken By
-             * @description What ended the loop's wait before it: start | timer | gate | message | starts | grant | run | key. None when
-             *     `idle` is.
+             * @description What ended the loop's wait before it: start | timer | gate | message | starts | grant | notice | run | key |
+             *     web. None when `idle` is.
              */
             woken_by: string | null;
+        };
+        /**
+         * TickAsked
+         * @description What asking the loop for a tick now found (DESIGN §6): it starts at once, or when a running tick ends.
+         */
+        TickAsked: {
+            /**
+             * After Tick
+             * @description A tick is running: the one asked for starts when it ends.
+             */
+            after_tick: boolean;
         };
         /**
          * TickDetail
@@ -3728,6 +4100,21 @@ export type components = {
              * @description Its work in each repository.
              */
             units: components["schemas"]["Unit"][];
+        };
+        /**
+         * TicketMemory
+         * @description One ticket's notes (DESIGN §28): every one its runs wrote, and what its next run would be served.
+         */
+        TicketMemory: {
+            /** @description What its next run would be served; None while ticket notes are off. */
+            digest: components["schemas"]["MemoryDigest"] | null;
+            /**
+             * Notes
+             * @description Every note of the ticket, in force or not, by key and newest first.
+             */
+            notes: components["schemas"]["MemoryEntry"][];
+            /** @description The tiers; None while both are off. */
+            state: components["schemas"]["MemoryState"] | null;
         };
         /**
          * TicketPlans
@@ -5375,6 +5762,136 @@ export interface operations {
             };
         };
     };
+    tickNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TickAsked"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryOverview"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     getMeta: {
         parameters: {
             query?: never;
@@ -6331,6 +6848,92 @@ export interface operations {
             };
         };
     };
+    getRunMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The run's id, as `run:ID` names it. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunMemory"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such run. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     getRunTranscript: {
         parameters: {
             query?: never;
@@ -7150,6 +7753,101 @@ export interface operations {
             };
             /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getTicketMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketMemory"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such ticket. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -256,7 +256,7 @@ and the user file is optional (§12).
 
 ### R20. Publish artifacts people comment on, and bring their comments back to the ticket
 
-Gap (M51, §28). Written down 2026-10-17. A worker should be able to publish what it made for people to read, such as a
+Gap (M52, §29). Written down 2026-10-17. A worker should be able to publish what it made for people to read, such as a
 report, a design, or an HTML mock-up, to an artifact store, and anyone the operator shares it with should be able to
 comment on its passages. Those comments should come back to the ticket that produced the artifact, where they steer
 its next run as review feedback does, and the worker's revision should answer them in place. The store is Louvre, a

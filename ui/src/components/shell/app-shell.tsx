@@ -27,6 +27,7 @@ import { Rave } from './rave'
 import { SearchBox } from './search-box'
 import { ThemeToggle } from './theme-toggle'
 import { Ticker } from './ticker'
+import { TickNow } from './tick-now'
 import { NoticeBanner } from './worker-notice'
 
 /**
@@ -109,10 +110,11 @@ export function AppShell() {
                         <span className="font-mono text-sm font-medium tracking-tight">canopy</span>
                     </div>
                     <Ticker />
-                    {/* Three groups, the action, the readouts, and the theme, a rule between each. */}
+                    {/* Three groups, the actions, the readouts, and the theme, a rule between each. */}
                     <div className="flex items-center gap-2">
                         <NewerBuild />
                         <LoopPause />
+                        <TickNow />
                         <Rule />
                         <LiveReadouts stream={stream} />
                         <Rule />
