@@ -77,12 +77,12 @@ carries one.
 Each refuses `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, so no agent run can ask for, skip, or approve
 a plan, and `unknown` for a ticket canopy has no record of, as `canopy reply` does: the setting is a column of the
 ticket's row. Each holds the dispatch lock (§8) while it reads and writes, so a dispatch's guards read a ticket's plans
-from before the verb or after it, never between. Asking for a plan and `--skip` refuse `bad_plan` while a plan run for
-the ticket is running: its plan would land after the request. The operator asks again once it ends. Asking for a plan
-also refuses `bad_plan` once the ticket has a branch. Dispatch records the branch when it inserts the ticket's first
-`implement` (§8 step 2), so this covers an `implement` that is running too: a plan now would describe work already
-started (Open, below). `--skip` does not: on a ticket with a branch it drops the plan from the ticket's later runs,
-which is the way out when an approved plan's file is gone (`plan_changed`, below).
+from before the verb or after it, never between. Asking for a plan, `--skip`, and `start --plan` refuse `bad_plan`
+while a plan run for the ticket is running: its plan would land after the request. The operator asks again once it
+ends. Asking for a plan also refuses `bad_plan` once the ticket has a branch. Dispatch records the branch when it
+inserts the ticket's first `implement` (§8 step 2), so this covers an `implement` that is running too: a plan now
+would describe work already started (Open, below). `--skip` does not: on a ticket with a branch it drops the plan from
+the ticket's later runs, which is the way out when an approved plan's file is gone (`plan_changed`, below).
 
 ### Approving a plan
 
