@@ -72,6 +72,15 @@ the tier that owns it allows it, so tiers at different modes need no rule of the
 - `memory_used` and `memory_wrong` while either tier is at `use`, citing only ids rendered into that run's prompt. A
   worker shown no memory has no key to drop and no id to cite.
 
+The contract gives each entry a shape, so notes and proposals read the same from run to run, for the next worker and
+for the operator who judges them. A note's key starts with its kind (`cause-`, `dead-end-`, `cmd-`, `env-`), so a later
+run that learns more about the same thing reuses the key and supersedes the note, rather than writing a second one
+beside it. Its text says what holds, the evidence a later run can check it by, and what to do next. The contract asks
+for nothing the summary, the branch, or its commits already say, since those reach the next run anyway. A proposal
+says what any worker should do, why, and when it applies, and only what the run itself showed and the repository's own
+docs do not say. The harness checks none of this shape: a text that departs from it is held to the bounds alone.
+Rejected: evidence and next step as fields of their own, each needing bounds, for what one line carries.
+
 Every field is optional. A field the run's modes did not ask for changes nothing. Once a key is not off, a prompt
 override without the placeholders its mode needs is `bad_prompt`, as for the standing instructions and the notice:
 `{{MEMORY_CONTRACT}}` for a tier at `record`, and that tier's digest placeholder too at `use`.

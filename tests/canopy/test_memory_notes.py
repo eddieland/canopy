@@ -205,6 +205,7 @@ def test_at_record_each_prompt_differs_from_its_off_self_by_the_contract_alone(
     contract = rendered.values[memory.MEMORY_CONTRACT]
     assert contract.startswith("\n\nThat JSON object may also carry these fields")
     assert '`"notes":' in contract
+    assert "Evidence: <" in contract
     assert "drop_notes" not in contract
     assert "memory_used" not in contract
     assert "proposals" not in contract
