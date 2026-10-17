@@ -202,5 +202,6 @@ If code and the design disagree, the design doc wins until a decision entry says
 - `make all` passes.
 - New behavior has a test using the fakes.
 - Docs updated: the design where it states the behavior, within its bar, `README.md` if the install path or daily surface
-  changed (and the install path is still five steps), and `DECISIONS.md` only if the change passes its bar.
+  changed (and the install path is still five steps), the web UI's guide (`ui/src/guide/`) where a page of it
+  describes what changed, and `DECISIONS.md` only if the change passes its bar.
 - No new capability lets the loop do something `TRUST_MODEL.md` says it must not.

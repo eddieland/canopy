@@ -29,6 +29,7 @@ export const ROUTES = [
     'search?q=web',
     'plan-editor',
     'memory',
+    'guide/overview',
 ] as const
 /** A page in ROUTES. */
 export type Route = (typeof ROUTES)[number]
