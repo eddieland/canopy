@@ -66,6 +66,8 @@ relying on a permission they check.
 - **S12. Stacked tickets** (M4). Two tickets, the second blocked by the first. Expect the second to wait, then be
   dispatched with `--base` on the first's branch once its PR is open and green. Then merge the first and watch what
   happens to the second's PR: nothing in canopy checks it.
+- **S41. A plan a week later** (M44). A week after a ticket's plan was approved and implemented, open the ticket's
+  page. Expect every plan it had still there, the approved one marked, with its comments.
 
 ## Several repositories
 
