@@ -99,16 +99,18 @@ jobs:
       - name: Install Claude Code
         run: npm install --global @anthropic-ai/claude-code@2.1.287
 
-      # Reads inside the checkout need no rule; a bare Read allow would approve them anywhere, and the setting refuses
-      # file tools outside it outright. The one write is the notes file (an Edit rule governs Write too). Headless,
-      # anything else that would ask is refused. --disallowedTools takes every word after it, so the prompt is stdin.
+      # The tag's tree is not trusted with the token: --restricted ignores its .claude/ settings and hooks, removes
+      # the tools that run commands, and confines file tools to the checkout; --strict-mcp-config ignores its
+      # .mcp.json. Reads inside the checkout need no rule; a bare Read allow would approve them anywhere. The one
+      # write is the notes file (an Edit rule governs Write too). Headless, anything else that would ask is refused.
+      # --disallowedTools takes every word after it, so the prompt is stdin.
       - name: Write the notes with Claude
         id: claude
         continue-on-error: true
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
         run: |
-          claude -p --max-turns 40 \
+          claude -p --max-turns 40 --restricted --strict-mcp-config \
             --settings '{"permissions":{"blockReadsOutsideWorkingDirectories":true}}' \
             --allowedTools "Edit(./release-notes/notes.md)" \
             --disallowedTools "Bash,WebFetch,WebSearch,Read(//proc/**),Read(//sys/**)" \
