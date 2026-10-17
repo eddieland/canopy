@@ -1,10 +1,10 @@
-"""The sinks canopy ships (DESIGN §20): the desktop sink, and the Slack sink against a local HTTP server."""
+"""The Slack sink canopy ships (DESIGN §20), against a local HTTP server."""
 
 import io
 import json
 import os
 import threading
-from collections.abc import Generator, Iterable, Iterator, Mapping
+from collections.abc import Generator, Iterable, Mapping
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any, ClassVar, override
@@ -12,10 +12,6 @@ from unittest import mock
 
 import canopy_notify_slack as slack
 import pytest
-
-from canopy.infra.procs import SubprocessRunner
-from canopy.notify import desktop
-from tests.conftest import executable
 
 MESSAGE: dict[str, Any] = {
     "version": 1,
@@ -57,59 +53,6 @@ MESSAGE: dict[str, Any] = {
     "digest": None,
     "text": "canopy attention: 1 new, 1 resolved\n+ PROJ-3 needs_reviewer: x\nFull list: /home/me/attention.md\n",
 }
-
-
-# Desktop
-
-
-@pytest.fixture
-def tools(tmp_path: Path) -> Iterator[Path]:
-    """`notify-send` and `osascript` on PATH, each appending its argv as a JSON line to the returned file."""
-    calls = tmp_path / "calls.jsonl"
-    bin_dir = tmp_path / "bin"
-    bin_dir.mkdir()
-    for name in ("notify-send", "osascript"):
-        tool = bin_dir / name
-        record = f"open({str(calls)!r}, 'a').write(json.dumps(sys.argv) + '\\n')"
-        executable(tool, f"#!/usr/bin/env python3\nimport json, sys\n{record}\n")
-    with mock.patch.dict(os.environ, {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}):
-        yield calls
-
-
-def test_the_desktop_sink_shows_a_json_message(tools: Path) -> None:
-    assert desktop.run([], io.StringIO(json.dumps(MESSAGE)), runner=SubprocessRunner(), platform="linux") == 0
-    [argv] = [json.loads(line) for line in tools.read_text().splitlines()]
-    assert argv[1:4] == ["--app-name=canopy", "--", "canopy: api"]
-    assert argv[4] == "canopy attention: 1 new, 1 resolved\n+ PROJ-3 needs_reviewer: x"
-
-
-def test_the_desktop_sink_passes_text_to_osascript_as_arguments(tools: Path) -> None:
-    text = 'canopy attention: 1 new, 0 resolved\n+ PROJ-1 crashed: "quoted" and \\ backslash\nFull list: /x\n'
-    assert desktop.run([], io.StringIO(text), runner=SubprocessRunner(), platform="darwin") == 0
-    [argv] = [json.loads(line) for line in tools.read_text().splitlines()]
-    assert argv[1:7] == [
-        "-e",
-        "on run argv",
-        "-e",
-        "display notification (item 2 of argv) with title (item 1 of argv)",
-        "-e",
-        "end run",
-    ]
-    assert argv[7:] == ["canopy", 'canopy attention: 1 new, 0 resolved\n+ PROJ-1 crashed: "quoted" and \\ backslash']
-
-
-def test_the_desktop_sink_bounds_its_body() -> None:
-    title, body = desktop.message("\n".join(f"line {n}" for n in range(30)))
-    assert title == "canopy"
-    assert body.splitlines()[-1] == "... and 19 more lines"
-    assert len(body.splitlines()) == desktop.MAX_LINES
-
-
-def test_the_desktop_sink_without_its_tool(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
-    with mock.patch.dict(os.environ, {"PATH": str(tmp_path)}):
-        assert desktop.run([], io.StringIO("hello\n"), runner=SubprocessRunner(), platform="linux") == 2
-        assert "notify-send is not installed" in capsys.readouterr().err
-        assert desktop.run([], io.StringIO(""), runner=SubprocessRunner(), platform="linux") == 2
 
 
 # Slack
@@ -382,14 +325,10 @@ class _Unread(io.StringIO):
 
 
 def test_help_never_waits_for_stdin(capsys: pytest.CaptureFixture[str]) -> None:
-    with pytest.raises(SystemExit) as desktop_exit:
-        desktop.run(["--help"], _Unread(), runner=SubprocessRunner(), platform="linux")
-    with pytest.raises(SystemExit) as slack_exit:
+    with pytest.raises(SystemExit) as exit_:
         slack.run(["--help"], _Unread())
-    assert (desktop_exit.value.code, slack_exit.value.code) == (0, 0)
-    out = capsys.readouterr().out
-    assert "usage: canopy-notify-desktop" in out
-    assert "usage: canopy-notify-slack" in out
+    assert exit_.value.code == 0
+    assert "usage: canopy-notify-slack" in capsys.readouterr().out
 
 
 # Slack with a bot token

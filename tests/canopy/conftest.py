@@ -1,6 +1,5 @@
 """Fixtures for the tests of canopy: the workspace's journal and context, the web UI's mock backend, notification
-commands that record what they are sent, Markdown snapshots, workspaces of several repositories (DESIGN §18), and a
-pool of worktrees."""
+commands that record what they are sent, Markdown snapshots, workspaces of several repositories (DESIGN §18)."""
 
 import contextlib
 import json
@@ -21,7 +20,7 @@ from canopy.infra import resources
 from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
 from tests.canopy.helpers import context
-from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, Journals, executable, git, pool_state
+from tests.conftest import HERMETIC_GIT, CanopyEnv, Journals, executable, git
 
 
 @pytest.fixture
@@ -151,18 +150,3 @@ def seed_pools(ws: Ws, treehouse_state: Path) -> None:
 def th(treehouse_state: Path) -> dict[str, list[object]]:
     state: dict[str, list[object]] = json.loads(treehouse_state.read_text())
     return state
-
-
-@pytest.fixture
-def worktree_pool(
-    canopy_env: CanopyEnv, git_pool: GitPool, treehouse_state: Path, tmp_path: Path
-) -> tuple[Path, list[Path]]:
-    """The primary clone and two worktree slots of it, which the fake treehouse leases instead of `git_pool`'s."""
-    primary = tmp_path / "primary"
-    git("clone", "--quiet", str(git_pool.origin), str(primary), cwd=tmp_path)
-    slots = [tmp_path / "wpool" / name / "repo" for name in ("1", "2")]
-    for slot in slots:
-        git("worktree", "add", "--quiet", "--detach", str(slot), cwd=primary)
-    state = [{"name": str(i), "path": str(p), "status": "available"} for i, p in enumerate(slots, 1)]
-    treehouse_state.write_text(pool_state(canopy_env.repo, state, max_trees=len(slots)))
-    return primary, slots
