@@ -487,8 +487,8 @@ function Tool({
 }
 
 /**
- * A model call's end: one muted line, its reason, tokens, and cost, that opens to its tokens by kind. What it wrote and
- * ran are the rows above it; what it was sent, the runtime does not print.
+ * A model call's end: one muted line, its reason, its tokens in and out as By call says them, and its cost, that opens
+ * to its tokens by kind. What it wrote and ran are the rows above it; what it was sent, the runtime does not print.
  */
 function ModelCall({ entry, start }: { entry: TranscriptStep; start: string | null }) {
     const line = (
@@ -497,7 +497,11 @@ function ModelCall({ entry, start }: { entry: TranscriptStep; start: string | nu
             <span>model call</span>
             {/* Every call but the last ends in tool calls: only another reason says something. */}
             {entry.reason && entry.reason !== 'tool-calls' && <Chip word={entry.reason} />}
-            <span className="readout ml-auto">{entry.tokens === null ? '' : `${tokenCount(entry.tokens)} tokens`}</span>
+            <span className="readout ml-auto">
+                {entry.split === null
+                    ? ''
+                    : `${tokenCount(sentTokens(entry.split))} in · ${tokenCount(wroteTokens(entry.split))} out`}
+            </span>
             <Cost usd={entry.cost_usd} className="w-14 shrink-0 text-right" />
         </>
     )

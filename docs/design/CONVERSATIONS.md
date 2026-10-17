@@ -691,6 +691,9 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   event of a known type that does not validate is counted, not shown.
 - A model call shows what the runtime prints of it. What it wrote and ran are the text and tool calls above it; its
   reasoning only with OpenCode's `--thinking`, which the default templates leave out. What it was sent is below.
+- A model call's tokens show as what it was sent and what it wrote, `30.2k in · 2.1k out`, in either view, never as
+  every kind summed: that sum counts the call's cache reads and its output together, so a call's line read larger than
+  the peak context the chart and the run's header show, and its `tokens` meant something else than the header's.
 - Bounded: at most 32 MiB of the file, to its last whole line; at most 2000 entries and 2 million characters in all;
   each text, output, and error cut at 20,000 characters, and an input at 5,000. A cut says so. Control characters are
   dropped, line breaks kept. A log that is a symlink, a FIFO, or anything but a regular file is not read: it is opened
