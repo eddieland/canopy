@@ -30,7 +30,7 @@ decision that matters.
   what you need: find tickets, read a ticket (body, labels, open or closed), read its comments with author account ids
   and timestamps, read its blockers. When the tracker is GitHub Issues, the tracker MCP and the GitHub MCP are the same
   server.
-- GitHub MCP: find the PR for a branch, read checks, reviews, review comments,
+- GitHub MCP: find the PR for a branch, read checks (check runs; see "Phase table"), reviews, review comments,
   merge state.
 - `bash`, restricted to:
   - `canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume|split|plan --repo NAME [--repo NAME ...]
@@ -228,6 +228,12 @@ If the tracker cannot say when a label was added, use the worker's question comm
 A `ci_red` ticket whose failure is not newer than the `ci` cursor was already handed to a fix-ci worker. If that
 worker's run ended `done` and checks are still failing on the same run, the fix did not reach CI yet or did not help:
 record `wait` until a newer check run exists. If it ended `blocked`, the ticket is `needs_human`.
+
+Read a PR's checks as its head commit's check runs (on GitHub's server, `pull_request_read` with method
+`get_check_runs`): GitHub Actions writes only those. Its commit statuses (`get_status`) hold only what CI writes as a
+status: read them too for a repository whose CI does, never instead. An empty `pending` from `get_status`
+(`total_count` 0) means nothing wrote a status, not that checks are running: it makes a unit neither `ci_running` nor
+anything else.
 
 A PR that conflicts with its base gets no new checks: GitHub runs none on a PR it cannot merge, so its checks look
 pending with nothing running, or show an earlier head's results. Read the PR's mergeability before its checks. When
