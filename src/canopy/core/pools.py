@@ -3,7 +3,7 @@
 A pool leases slots, git worktrees of one repository's primary clone, to holders: `canopy:<KEY>` for a ticket's run,
 `canopy:review:<id>` for a review, and `canopy-sync` while `canopy workspace sync` makes slots. `Pool` is the four
 operations every caller uses; treehouse (`core/treehouse.py`) is one implementation and canopy's own pool
-(`core/pool.py`) the other. `tests/canopy/test_pool_contract.py` holds both to the same guarantees.
+(`core/pool.py`) the other. `tests/canopy/core/test_pool_contract.py` holds both to the same guarantees.
 """
 
 from __future__ import annotations

@@ -15,7 +15,7 @@ from canopy.infra.procs import SubprocessRunner
 from tests.canopy.helpers import WORK, dispatch_and_run, pool, present, slot_of, worker_does
 from tests.conftest import CanopyEnv, GitPool, executable, git
 
-PACKAGE = Path(__file__).resolve().parents[2] / "src" / "canopy"
+PACKAGE = Path(__file__).resolve().parents[3] / "src" / "canopy"
 # The worker's own git is not under test: it runs with the flags too, so only host-side git could fire a hook.
 WORKER_COMMIT = hostgit.argv("commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work")
 HOOKS = ("post-checkout", "reference-transaction", "pre-push", "post-index-change")

@@ -298,8 +298,8 @@ Controls now:
   wrote objects is checked out detached at `origin/<base>`, without the run's own refs or reflog, before the run's
   object directory is deleted and the slot returned, by `_run` or, for a `_run` that was killed, by reconcile (DESIGN
   §8, §15).
-- The sandbox canary (`tests/canopy/test_sandbox_canary.py`, HOST_ISOLATION §6) runs a plain script, no model, through
-  the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
+- The sandbox canary (`tests/canopy_sandbox/test_sandbox_canary.py`, HOST_ISOLATION §6) runs a plain script, no model,
+  through the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
   so that a sandbox that refuses everything fails. CI runs it on Linux.
 
 Residual: an unsandboxed run has a filesystem-wide shell as the operator, and the sandbox is opt-in. A sandboxed one

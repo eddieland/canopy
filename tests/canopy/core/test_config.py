@@ -14,7 +14,7 @@ from canopy.core.context import Context
 from canopy.loop import reread
 from tests.conftest import HERMETIC_GIT, SHARED_TOML, CanopyEnv, git, user_toml
 
-EXAMPLES = Path(__file__).parents[2] / "examples"
+EXAMPLES = Path(__file__).parents[3] / "examples"
 
 
 def test_defaults_fill_in_everything_else(canopy_env: CanopyEnv) -> None:

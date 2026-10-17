@@ -72,7 +72,7 @@ permission:
     "gh run view *": allow
   # MCP tools are permissioned by name, `<server>_<tool>`, as for canopy-worker (D084): the private worker opens and
   # updates its PRs and replies on them, and nothing else. Its PR update tool can close the PR; the prompt keeps it to
-  # the PR's own text. tests/canopy/test_definitions.py checks these rules against real tool names.
+  # the PR's own text. tests/canopy/core/test_definitions.py checks these rules against real tool names.
   "*merge*": deny
   "*review_write*": deny
   "*pending_review*": deny
