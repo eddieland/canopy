@@ -804,7 +804,10 @@ list, an empty state, or a skeleton by hand.
   bar of actions sticks to the bottom of the page while the plan scrolls, as a document's do, so a long plan is approved
   or sent back from where it is read: with the plan this one replaces, `Changes since plan 1` first, a pressed `Toggle`
   that marks what changed since it over the plan (the words added on `diff-add` at 18%, those removed struck through on
-  `diff-del` at 14%, where they were, as `ins` and `del`), then the caller's own actions (a ticket's `Approve`, `Save`,
+  `diff-del` at 14%, where they were, as `ins` and `del`), pressed as a waiting plan opens, since that is when it is
+  read for what changed; while pressed, how many changes it marks (`12 changes`, a removal and what replaced it one)
+  and ghost `icon-xs` buttons that step the cursor to the change before or after it, round to the other end, the plan
+  scrolling to it; then the caller's own actions (a ticket's `Approve`, `Save`,
   and `Skip the plan`), then `Ask for changes`, a note on the whole plan, one line that grows as it is written, how many
   open comments go with it, or how far over a reply's bound the request is, and the button (the request says the plan
   was edited, when it was); what the caller's actions will do, or what one did, goes on a line under them. The editor
