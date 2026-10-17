@@ -170,6 +170,59 @@ test("a failed run's transcript ends in the runtime's error, and a running one's
     await expect(tools.last()).toContainText('npm test -- login')
 })
 
+test("a transcript's chart names what grew each call's context, and shows the largest addition's row", async ({
+    page,
+}) => {
+    await page.goto('runs/39')
+    await settled(page)
+    const transcript = page.getByTestId('transcript')
+    const context = transcript.getByTestId('transcript-context')
+    await expect(context).toContainText('peak 30.2k at call 3')
+    // The largest single addition, on the chart's line: the test run's output, a coverage table.
+    const largest = context.getByTestId('context-largest')
+    await expect(largest).toHaveText('largest additionbashnpm test -- search≈4.2k into call 3')
+
+    // At first the chart picks the call it grew, and lists what grew it, largest first, each its share by characters.
+    const calls = context.getByRole('radiogroup', { name: 'Model calls' })
+    await expect(calls.getByRole('radio')).toHaveCount(3)
+    await expect(calls.getByRole('radio', { name: 'call 3: 30.2k sent, +4.3k on the call before' })).toBeChecked()
+    const grew = context.getByTestId('context-grew')
+    await expect(grew).toContainText('call 3, 30.2k sent, +4.3k on call 2, from what call 2 printed, largest first:')
+    await expect(grew.getByRole('listitem')).toHaveText([
+        '≈4.2kbashnpm test -- search',
+        '≈62writesrc/search/useSearch.ts',
+        "≈34textThere is no search hook yet. I'll add one that debounces and aborts the stale request.",
+    ])
+    // The first call is canopy's prompt and the runtime's own.
+    await calls.getByRole('radio', { name: 'call 1: 24.6k sent' }).click()
+    await expect(context).toContainText('call 1, 24.6k sent: ≈176 canopy’s prompt, ≈24.4k the runtime’s own')
+
+    // By call says each call's step on its line.
+    const find = transcript.getByRole('searchbox', { name: 'Find lines in the transcript' })
+    await find.fill('push')
+    await transcript.getByRole('button', { name: 'By call' }).click()
+    await expect(transcript.getByTestId('transcript-call').nth(2)).toContainText('30.2k in (+4.3k) · ')
+
+    // One click from the chart shows the row in order, whatever the view and the search: opened, scrolled to, focused.
+    await largest.getByRole('button').click()
+    await expect(transcript.getByRole('button', { name: 'By call' })).toHaveAttribute('aria-pressed', 'false')
+    await expect(find).toHaveValue('')
+    const run = transcript.getByTestId('transcript-tool').filter({ hasText: 'npm test -- search' })
+    await expect(run.locator('details')).toHaveAttribute('open', '')
+    await expect(run).toContainText('src/search/query.ts')
+    await expect(run.locator('summary')).toBeFocused()
+    await expect(run.locator('summary')).toBeInViewport()
+    await expect(transcript.locator('details[open]')).toHaveCount(1)
+})
+
+test("a session of one model call has its context's line, and no bars", async ({ page }) => {
+    await page.goto('ticks/2')
+    await settled(page)
+    const context = page.getByTestId('transcript-context')
+    await expect(context).toContainText('call 1, 9.3k sent: ≈84 canopy’s prompt, ≈9.2k the runtime’s own')
+    await expect(context.getByRole('radio')).toHaveCount(0)
+})
+
 test("a tick's page shows its overseer's session under its decisions", async ({ page }) => {
     await page.goto('ticks/2')
     await settled(page)

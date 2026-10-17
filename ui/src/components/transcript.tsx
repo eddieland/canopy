@@ -10,6 +10,7 @@ import type {
     TranscriptTokens,
     TranscriptTool,
 } from '@/api/types'
+import { ContextChart } from '@/components/context-chart'
 import { Copyable } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { SearchField } from '@/components/input'
@@ -29,6 +30,7 @@ import { localTime } from '@/lib/time'
 import {
     byCall,
     callLine,
+    contextShape,
     duration,
     elapsed,
     findQueryOf,
@@ -36,6 +38,7 @@ import {
     outcome,
     sentTokens,
     shownOutput,
+    signed,
     startOf,
     summary,
     tally,
@@ -51,11 +54,12 @@ const NO_WORDS: readonly string[] = []
 /**
  * A session's transcript (DESIGN §22): the agent's text, each tool call (what it did and how it ended on its line,
  * its input and output open on a click), each model call's cost, and the runtime's errors, in the order the runtime
- * printed them. By call, the same entries are grouped by the model call they came from, each opening to what it was
- * sent and what it did. In order, a search keeps the rows with a line that holds it, its matches marked, and opens a
- * tool call whose input or output holds it. All of it is agent output, rendered as text. `running` says the session
- * has not ended: its events reach the log when it does, or with `live`, a worker run's, as the runtime prints them.
- * Its header names the session, but for `session={false}`, on a page whose identity panel names it already.
+ * printed them. Above them, a chart of each model call's context and what grew it, whose entries show their rows. By
+ * call, the same entries are grouped by the model call they came from, each opening to what it was sent and what it
+ * did. In order, a search keeps the rows with a line that holds it, its matches marked, and opens a tool call whose
+ * input or output holds it. All of it is agent output, rendered as text. `running` says the session has not ended:
+ * its events reach the log when it does, or with `live`, a worker run's, as the runtime prints them. Its header names
+ * the session, but for `session={false}`, on a page whose identity panel names it already.
  */
 export function TranscriptPanel({
     transcript,
@@ -75,6 +79,15 @@ export function TranscriptPanel({
     const entries = transcript?.entries ?? []
     const counts = tally(entries)
     const calls = byCall(entries)
+    const shape = contextShape(entries, transcript?.prompt ?? null)
+    // The row the chart last showed, by its place in the log; each showing a round, so showing it again scrolls again.
+    const [target, setTarget] = useState<{ i: number; round: number } | null>(null)
+    // The chart shows a row in order and unsearched, where every row is.
+    const show = (i: number) => {
+        setGrouped(false)
+        setTyped('')
+        setTarget((t) => ({ i, round: (t?.round ?? 0) + 1 }))
+    }
     const callView = grouped && calls.calls.length > 0
     // The search is the events' in order: By call keeps its own, whole.
     const query = callView ? null : findQueryOf(deferred)
@@ -187,6 +200,7 @@ export function TranscriptPanel({
                             />
                         )}
                     </div>
+                    <ContextChart shape={shape} onShow={show} />
                     {callView ? (
                         <ol className="divide-y" data-testid="transcript-calls">
                             {ordered('transcript', order, [
@@ -197,6 +211,7 @@ export function TranscriptPanel({
                                     <CallRow
                                         key={`${call.n}-${opened.round}`}
                                         call={call}
+                                        step={shape.calls.find((c) => c.n === call.n)?.step ?? null}
                                         prompt={transcript.prompt}
                                         start={startOf(entries)}
                                         open={opened.open}
@@ -209,15 +224,17 @@ export function TranscriptPanel({
                     ) : (
                         <ol className="divide-y" data-testid="transcript-entries">
                             {shown.map(({ entry, i, hits }) => {
-                                // A row whose place changes remounts to it.
-                                const open = opened.open || searchOpens(hits)
+                                const targeted = target?.i === i
+                                // A row whose place changes remounts to it, as does the one the chart shows.
+                                const open = opened.open || searchOpens(hits) || targeted
                                 return (
                                     <Entry
-                                        key={`${i}-${opened.round}-${open}`}
+                                        key={`${i}-${opened.round}-${open}-${targeted ? target.round : ''}`}
                                         entry={entry}
                                         start={startOf(entries)}
                                         open={open}
                                         words={words}
+                                        targeted={targeted}
                                     />
                                 )
                             })}
@@ -299,16 +316,18 @@ function Entry({
     start,
     open,
     words = NO_WORDS,
+    targeted = false,
 }: {
     entry: TranscriptEntry
     start: string | null
     open: boolean
     words?: readonly string[]
+    targeted?: boolean
 }) {
     switch (entry.kind) {
         case 'text': {
             return (
-                <Row at={entry.at} start={start}>
+                <Row at={entry.at} start={start} targeted={targeted}>
                     <p
                         className={cn(
                             'min-w-0 flex-1 text-sm break-words whitespace-pre-wrap',
@@ -323,7 +342,7 @@ function Entry({
             )
         }
         case 'tool': {
-            return <Tool entry={entry} start={start} open={open} words={words} />
+            return <Tool entry={entry} start={start} open={open} words={words} targeted={targeted} />
         }
         case 'step': {
             return <ModelCall entry={entry} start={start} />
@@ -343,24 +362,39 @@ function Entry({
     }
 }
 
-/** An entry's line: when it was printed, from the session's first event, then the entry. */
+/**
+ * An entry's line: when it was printed, from the session's first event, then the entry. The one the context chart
+ * showed sits on the accent's tint, scrolled to and focused.
+ */
 function Row({
     at,
     start,
+    targeted = false,
     className,
     children,
 }: {
     at: string | null
     start: string | null
+    targeted?: boolean
     className?: string
     children: ReactNode
 }) {
     return (
-        <li className={cn('flex items-baseline gap-3 px-3 py-2', className)}>
+        <li
+            ref={targeted ? reveal : undefined}
+            tabIndex={targeted ? -1 : undefined}
+            className={cn('flex items-baseline gap-3 px-3 py-2 outline-none', targeted && 'bg-accent/14', className)}
+        >
             <When at={at} start={start} />
             {children}
         </li>
     )
+}
+
+/** Scrolls the row the context chart showed to the middle of the window, and gives it the focus. */
+function reveal(element: HTMLElement | null) {
+    element?.scrollIntoView({ block: 'center' })
+    element?.focus({ preventScroll: true })
 }
 
 function When({ at, start }: { at: string | null; start: string | null }) {
@@ -383,19 +417,22 @@ function Tool({
     start,
     open,
     words,
+    targeted,
 }: {
     entry: TranscriptTool
     start: string | null
     open: boolean
     words: readonly string[]
+    targeted: boolean
 }) {
     const { verdict, guard, line } = outcome(entry)
     const failed = verdict !== 'done'
     const did = summary(entry)
     return (
-        <li data-testid="transcript-tool">
+        <li data-testid="transcript-tool" className={cn(targeted && 'bg-accent/14')}>
             <details open={open} className="group">
                 <summary
+                    ref={targeted ? reveal : undefined}
                     className={cn(
                         'flex cursor-pointer list-none items-center gap-3 px-3 py-2 hover:bg-surface-raised',
                         '[&::-webkit-details-marker]:hidden',
@@ -527,11 +564,13 @@ const TOKEN_KINDS = [
  */
 function CallRow({
     call,
+    step,
     prompt,
     start,
     open,
 }: {
     call: Call
+    step: number | null
     prompt: TranscriptPrompt | null
     start: string | null
     open: boolean
@@ -539,6 +578,8 @@ function CallRow({
     const end = call.end
     const split = end?.split ?? null
     const first = call.output[0]?.at ?? end?.at ?? null
+    // Its step on the call before, after its input: `30.2k in (+4.3k)`.
+    const grew = step === null ? '' : ` (${signed(step)})`
     return (
         <Collapsible asChild defaultOpen={open}>
             <li data-testid="transcript-call" className="group/call">
@@ -554,10 +595,13 @@ function CallRow({
                     </span>
                     {end === null && <Chip word="unfinished" />}
                     {end?.reason && end.reason !== 'tool-calls' && <Chip word={end.reason} />}
-                    <span className="readout hidden shrink-0 text-xs text-muted-foreground sm:inline">
+                    <span
+                        className="readout hidden shrink-0 text-xs text-muted-foreground sm:inline"
+                        title={step === null ? undefined : `in: ${signed(step)} on call ${call.n - 1}`}
+                    >
                         {split === null
                             ? ''
-                            : `${tokenCount(sentTokens(split))} in · ${tokenCount(wroteTokens(split))} out`}
+                            : `${tokenCount(sentTokens(split))} in${grew} · ${tokenCount(wroteTokens(split))} out`}
                     </span>
                     <Cost
                         usd={end?.cost_usd ?? null}

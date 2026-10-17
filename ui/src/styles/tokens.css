@@ -65,6 +65,11 @@
     --spend-reviews: oklch(0.55 0.18 330);
     --spend-dry-run: oklch(0.6 0.02 275);
 
+    /* A transcript's context chart (src/components/context-chart.tsx), as fills: what a model call carried from the
+     * one before it, or the runtime's own overhead, in a neutral; what it added, canopy's prompt first, in a hue. */
+    --context-carried: oklch(0.6 0.03 275);
+    --context-added: oklch(0.48 0.11 195);
+
     /* The header ticker's RuneScape chat colors: flair only, never state. Darker here, to read on white. */
     --flair-yellow: oklch(0.62 0.13 85);
     --flair-red: oklch(0.56 0.2 27);
@@ -140,6 +145,9 @@
     --spend-reviews: oklch(0.72 0.16 330);
     --spend-dry-run: oklch(0.6 0.02 270);
 
+    --context-carried: oklch(0.58 0.035 270);
+    --context-added: oklch(0.78 0.12 195);
+
     --flair-yellow: oklch(0.9 0.17 100);
     --flair-red: oklch(0.68 0.21 27);
     --flair-green: oklch(0.82 0.2 142);
@@ -205,6 +213,8 @@
     --color-spend-chores: var(--spend-chores);
     --color-spend-reviews: var(--spend-reviews);
     --color-spend-dry-run: var(--spend-dry-run);
+    --color-context-carried: var(--context-carried);
+    --color-context-added: var(--context-added);
 
     --color-flair-yellow: var(--flair-yellow);
     --color-flair-red: var(--flair-red);
