@@ -101,6 +101,8 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   prints no events, nor for one recorded before migration 0032.
 - `attempt_grants`: one row per `canopy grant`; the ticket, repository, kind, runs granted, and when (§22).
   Only added to.
+- `plan_threads` and `plan_replies`: the operator's comments on a ticket's plan, each a thread on a passage anchored
+  by its words, and the replies under it; written only by the web channel (§25).
 - `ticket_grants`: one row per `canopy grant KEY plan`; the ticket, the kind, runs granted, and when (§25). Only
   added to.
 - `review_grants`: one row per `canopy grant URL review`; the PR's URL, review runs granted, and when (§21, §22).
