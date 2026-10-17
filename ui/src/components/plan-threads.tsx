@@ -172,18 +172,21 @@ export function PlanThreads({
 export function AskForChanges({
     threads,
     starts,
+    edited,
     onAsk,
 }: {
     /** The plan's threads. */
     threads: PlanThread[]
     /** Where each found thread's passage starts, for their order. */
     starts: ReadonlyMap<string, number>
+    /** Whether the operator edited the plan's text, which the message then says. */
+    edited: boolean
     /** Sends the message. */
     onAsk: (message: string) => void
 }) {
     const id = useId()
     const [note, setNote] = useState('')
-    const message = changeRequest(threads, starts, note)
+    const message = changeRequest(threads, starts, note, edited)
     const open = threads.filter((thread) => !thread.resolved).length
     const over = message.length > MAX_REQUEST
 
