@@ -212,9 +212,12 @@ def test_comments_asked_for_from_the_web_reach_the_next_plans_prompt(
     request = 'Change the plan where I commented. Each comment quotes the passage it is on.\n\n1. On "red":\n   Blue.'
     reply = c.post(f"/api/tickets/{KEY}/replies", json={"body": request, "submission": "abcdefgh"}, headers=headers)
     assert reply.status_code == 200
+    # The page says so until a planner reads it, as the overseer's state block does.
+    assert c.get(f"/api/tickets/{KEY}/plans").json()["changes_asked"] is not None
     with planner_does(plan="# Plan, blue\n"):
         second = dispatch_and_run(conn, *PLAN)
     assert second["status"] == RunStatus.DONE
+    assert c.get(f"/api/tickets/{KEY}/plans").json()["changes_asked"] is None
     prompt = prompt_of(canopy_env, int(second["id"]))
     assert '1. On "red":' in prompt
     assert "   Blue." in prompt
