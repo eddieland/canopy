@@ -26,8 +26,10 @@ If code and the design disagree, the design doc wins until a decision entry says
   from. A milestone the operator closes on real use, before every live check in its Accept has run, moves the
   unrun ones there.
 - Small PRs. One concern per PR. Conventional commit messages.
-- Every behavior change updates the relevant doc in the same PR. A PR that changes the tick algorithm and does not touch
-  the design is incomplete.
+- A behavior change updates the docs that state it, in the same PR: a PR that changes what a tick does and leaves the
+  design saying otherwise is incomplete. The design says what canopy does and why, not how the code does it; what
+  belongs there, and where the rest goes, is at the top of `docs/design/README.md`. Most PRs add a sentence there, or
+  change one, or none.
 - Every new runtime dependency gets a `docs/DECISIONS.md` entry saying why stdlib was insufficient. A dev-only tool (a
   linter, a checker, a test plugin) gets none; a comment where it is configured says what it is for.
 - Most PRs add no decision entry. `docs/DECISIONS.md` holds only what every future agent must know, whatever part of
@@ -198,6 +200,6 @@ If code and the design disagree, the design doc wins until a decision entry says
 
 - `make all` passes.
 - New behavior has a test using the fakes.
-- Docs updated: the design for behavior and why it is that way, `README.md` if the install path or daily surface
+- Docs updated: the design where it states the behavior, within its bar, `README.md` if the install path or daily surface
   changed (and the install path is still five steps), and `DECISIONS.md` only if the change passes its bar.
 - No new capability lets the loop do something `TRUST_MODEL.md` says it must not.
