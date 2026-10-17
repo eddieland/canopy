@@ -56,6 +56,8 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy grant URL review` | Lets the PR at URL, at `max_reviews_per_pr`, have one more review; `--runs N` for more. |
 | `canopy plan KEY` | Has a ticket planned before its implement; `--approve` the plan as its file stands, `--skip` it. |
 | `canopy pause`, `canopy resume` | The loop starts no tick until resumed; running workers keep going. `p` in the loop too. |
+| `canopy memory list [KEY]` | Agent memory's tiers in words, then the ticket notes workers recorded; `--run ID`, `--digest`. |
+| `canopy memory forget ID`, `purge` | Deletes one memory's text, or many (`--ticket`, `--run`, `--all`); the rows stay. |
 | `canopy notice 'TEXT' [--for 4h]` | Every run dispatched until it lapses hears TEXT, such as a CI outage; `--clear` lifts it. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |

@@ -315,6 +315,18 @@ def waits(*keys: str) -> list[list[str]]:
     return [canopy("decide", key, "wait", "--rationale", "nothing to do yet") for key in keys]
 
 
+def with_memory(canopy_env: CanopyEnv, ticket_notes: str = "off", proposals: str = "off") -> None:
+    """Set agent memory's tiers (DESIGN §28) in the workspace's private file, which holds nothing else in the tests."""
+    canopy_env.write_private(f'[memory]\nticket_notes = "{ticket_notes}"\nproposals = "{proposals}"\n')
+
+
+def worker_result(**memory: object) -> str:
+    """A worker's result line: done on KEY's `work` branch in `repo`, carrying the memory fields given."""
+    return json.dumps(
+        {"status": "done", "branch": f"agent/{KEY}-work", "prs": {"repo": None}, "summary": "did it", **memory}
+    )
+
+
 @contextmanager
 def worker_does(*commands: list[str], result: str = WORKER_DONE) -> Iterator[None]:
     """Until the block ends, the fake worker runs `commands` and then prints `result`."""

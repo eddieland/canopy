@@ -659,6 +659,7 @@ def insert_run(
     private: bool = False,
     check: Callable[[], None] | None = None,
     plan_id: int | None = None,
+    rendered: Callable[[int], None] | None = None,
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
@@ -668,6 +669,7 @@ def insert_run(
     transaction, or None when no sink takes it. `private` marks a run on a private ticket (DESIGN §22). `check` runs
     first in the transaction and refuses the run by raising: what it reads cannot change before the row is written.
     `plan_id` is the approved plan an `implement` or `resume` follows, the one its prompt names (DESIGN §25).
+    `rendered` records, from the run's id, what its prompt was rendered under of agent memory (DESIGN §28).
 
     Returns:
         The new run's id.
@@ -690,6 +692,8 @@ def insert_run(
         event = started(run_id) if started is not None else None
         if event is not None:
             record_event(conn, event)
+        if rendered is not None:
+            rendered(run_id)
         if not works_units:
             return run_id
         conn.execute("UPDATE tickets SET branch = ? WHERE key = ?", (branch, key))
@@ -740,12 +744,13 @@ def finish_ticket_run(
     *,
     messages: Sequence[tuple[str, str]] = (),
     event: Callable[[int | None], Event | None] | None = None,
+    then: Callable[[], object] | None = None,
 ) -> bool:
     """Close a running worker or split run, with the messages it reports and its event, as `finish_run` closes any run.
 
     `messages` are the run's `(kind, body)` messages about its ticket (DESIGN §22), recorded in order. `event` builds
-    the `run.ended` event from the id of the last of them, or None if there are none. Nothing changes for a run already
-    closed.
+    the `run.ended` event from the id of the last of them, or None if there are none. `then` writes what else the run
+    reported, such as its memory (DESIGN §28), in the same transaction. Nothing changes for a run already closed.
 
     Returns:
         True if this call closed the run.
@@ -762,6 +767,8 @@ def finish_ticket_run(
         built = event(last) if event is not None else None
         if built is not None:
             record_event(conn, built)
+        if then is not None:
+            then()
     return True
 
 

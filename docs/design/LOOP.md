@@ -539,12 +539,12 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
    on any exit path: normal exit, exception, and SIGTERM, SIGHUP, or SIGINT (the run is then `crashed`). Then delete
    the object directory. A slot that cannot be tidied is not returned, and the directory is kept for the operator.
    SIGKILL cannot be trapped; reconcile tidies and returns that run's slots from what step 2 recorded.
-7. Close the run with its end time, status, and result, and in the same transaction record its messages about its
-   ticket (§22): a `report` (its summary, else the harness's note, else the status, with each PR on a line), and for a
-   `blocked` run its `question`. A git failure before or after the worker is `crashed`. The stored result is the
-   validated one, text fields cut at 2000 characters, plus a `harness` note saying why the status differs from what
-   the worker reported. `prs` is kept to the run's repositories; each plain `https://` URL becomes its unit's PR, for
-   display and the next run's prompt.
+7. Close the run with its end time, status, and result, and in the same transaction record its messages about its ticket
+   (§22), and what it wrote of agent memory while a tier was on (§28): a `report` (its summary, else the harness's note,
+   else the status, with each PR on a line), and for a `blocked` run its `question`. A git failure before or after the
+   worker is `crashed`. The stored result is the validated one, text fields cut at 2000 characters, plus a `harness`
+   note saying why the status differs from what the worker reported. `prs` is kept to the run's repositories; each plain
+   `https://` URL becomes its unit's PR, for display and the next run's prompt.
 
 Every git the harness runs, here, in a review (§21), and in `canopy init` and `canopy workspace sync`, runs with hooks,
 the filesystem monitor, submodule fetches, and the `ext::` transport turned off (D107). A slot shares its git directory

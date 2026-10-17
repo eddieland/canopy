@@ -138,8 +138,8 @@ cannot reach internal systems and require handing a vendor write access.
 ## 5. Components
 
 The harness is one Python package, `canopy`, in layered subpackages (D041). Top to bottom: `__main__`; `cli`; `loop`;
-the features, `runs`, `setup`, `chores`, `notify`, `reviews`, and `serve`; `core`; `infra`. A module imports from its
-own package and lower layers only. Features never import each other; what two share moves down a layer.
+the features, `runs`, `setup`, `chores`, `notify`, `reviews`, `memory`, and `serve`; `core`; `infra`. A module imports
+from its own package and lower layers only. Features never import each other; what two share moves down a layer.
 `tests/canopy/test_layers.py` enforces this and fails on a module outside the packages it lists.
 
 ```text
@@ -151,6 +151,7 @@ canopy (harness, Python)
   chores/      the operator's recurring chores (§19)
   notify/      notification sinks (§20)
   reviews/     adversarial reviews of PRs (§21)
+  memory/      agent memory's feature (§28): the operator's verbs on what workers recorded
   serve/       the web UI's server (§22, D079); the only package that imports fastapi, starlette, uvicorn, or anyio
   setup/       canopy init, the sandbox's setup, and workspace sync (§18, §24)
   core/        what every feature shares: config, the Context, the journal and its typed rows, vocabularies, contracts,
