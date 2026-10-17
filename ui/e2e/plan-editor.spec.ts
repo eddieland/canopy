@@ -494,6 +494,19 @@ test('a comment and a reply are edited in place, and the planner reads what they
     await expect(page.getByLabel('Change request')).toContainText('Reply: It buffers up to 2 MB.')
 })
 
+test('Ask for changes stays at the bottom of the page while the plan is read, and rests under it at its end', async ({
+    page,
+}) => {
+    const ask = page.getByRole('form', { name: 'Ask for changes' }).getByRole('button', { name: 'Ask for changes' })
+    await expect(plan(page).locator('blockquote')).not.toBeInViewport()
+    await expect(ask).toBeInViewport()
+    await plan(page).locator('blockquote').scrollIntoViewIfNeeded()
+    await page.mouse.wheel(0, 2000)
+    const bar = await page.getByTestId('plan-bar').boundingBox()
+    const doc = await plan(page).boundingBox()
+    expect(bar?.y).toBeGreaterThan((doc?.y ?? 0) + (doc?.height ?? 0))
+})
+
 test('Ask for changes sends the open comments, each on its passage, with the note', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'proxy in front' })
     await thread.getByText('Does the proxy').click()

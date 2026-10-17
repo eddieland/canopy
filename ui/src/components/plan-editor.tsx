@@ -67,6 +67,8 @@ const BUBBLE = new PluginKey('planBubble')
 // How far below the top of the page the editor keeps what it scrolls into view, in pixels: the sticky toolbar's height
 // (`min-h-9`) and a little air. A passage's highlight keeps the same as its scroll margin (`.plan-comment`).
 const TOOLBAR_CLEARANCE = 48
+// How far above the bottom of the page: the bar of actions, which sticks there (`min-h-12`), and a little air.
+const BAR_CLEARANCE = 64
 // The shortcut that comments on the selection (`PlanHighlights`).
 const COMMENT_KEYS = 'Mod-Alt-m'
 // A comment floating under its passage, over the plan, while the comments sit under it.
@@ -91,6 +93,8 @@ export function PlanEditor({
     editable = true,
     edited = false,
     onAskForChanges,
+    actions,
+    actionsNote,
 }: {
     /** The plan, as Markdown. Read when the editor opens. */
     markdown: string
@@ -106,6 +110,10 @@ export function PlanEditor({
     edited?: boolean
     /** Sends the open comments, and a note on the whole plan, to the planner as one message. */
     onAskForChanges?: (message: string) => void
+    /** The caller's own word on the plan, such as Approve, at the start of the bar under it. */
+    actions?: ReactNode
+    /** What the caller says about those, under them in the bar: what they will do, or what one did. */
+    actionsNote?: ReactNode
 }) {
     const editor = useEditor({
         extensions: planExtensions([
@@ -126,8 +134,8 @@ export function PlanEditor({
         editorProps: {
             // What the editor scrolls into view (the cursor as it types, a passage shown from its comment) stays clear
             // of the toolbar, which sticks over the top of the page.
-            scrollMargin: { top: TOOLBAR_CLEARANCE, bottom: 16, left: 0, right: 0 },
-            scrollThreshold: { top: TOOLBAR_CLEARANCE, bottom: 16, left: 0, right: 0 },
+            scrollMargin: { top: TOOLBAR_CLEARANCE, bottom: BAR_CLEARANCE, left: 0, right: 0 },
+            scrollThreshold: { top: TOOLBAR_CLEARANCE, bottom: BAR_CLEARANCE, left: 0, right: 0 },
             attributes: {
                 class: 'plan-doc',
                 'aria-label': 'Plan',
@@ -332,7 +340,7 @@ export function PlanEditor({
     }
 
     const open = threads.filter((thread) => !thread.resolved).length
-    const actions: ThreadActions = {
+    const threadActions: ThreadActions = {
         onActivate: (id) => activate(id, true),
         onOpen: (id) => editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id })),
         onReply: (id, body) =>
@@ -403,9 +411,22 @@ export function PlanEditor({
                                 ),
                             )
                         }
-                        {...actions}
+                        {...threadActions}
                     />
-                    {editable && onAskForChanges !== undefined && (
+                </Panel>
+            </div>
+            {editable && (actions !== undefined || onAskForChanges !== undefined) && (
+                // The plan's actions stay at the bottom of the page while it scrolls, as a document's do, so a long
+                // plan is approved or sent back from where it is read rather than from under its last line.
+                <div
+                    data-testid="plan-bar"
+                    className={cn(
+                        'sticky bottom-0 z-10 mt-3 flex min-h-12 flex-wrap items-center gap-2 rounded-md border',
+                        'bg-surface px-3 py-2',
+                    )}
+                >
+                    {actions}
+                    {onAskForChanges !== undefined && (
                         <AskForChanges
                             threads={threads}
                             starts={starts}
@@ -413,8 +434,9 @@ export function PlanEditor({
                             onAsk={onAskForChanges}
                         />
                     )}
-                </Panel>
-            </div>
+                    {actionsNote !== undefined && <div className="basis-full">{actionsNote}</div>}
+                </div>
+            )}
             {draftFloats && (
                 <div ref={float} data-testid="plan-float" className={cn(FLOAT, 'bg-accent/14 px-3 py-2.5')}>
                     <DraftForm
@@ -428,7 +450,7 @@ export function PlanEditor({
             )}
             {!draftFloats && floating !== undefined && (
                 <div ref={float} data-testid="plan-float" className={FLOAT}>
-                    <ThreadCard thread={floating} lost={false} active editable={editable} {...actions} />
+                    <ThreadCard thread={floating} lost={false} active editable={editable} {...threadActions} />
                 </div>
             )}
         </div>
