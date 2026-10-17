@@ -129,7 +129,7 @@ denies all of `gh`.
 
 ### Trust model changes
 
-Proposed, for the operator's approval note in M25's PR:
+Proposed, for M25's PR:
 
 - T1: the triage agent reads CI logs, among the easiest text to shape, and its verdict starts a write. A steered
   verdict can rerun failed jobs, at most `max_triage_ci_attempts` times per unit, or say `real`, which is today's

@@ -41,8 +41,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   feature, command, config key, or default is not a decision by itself. When in doubt, leave it out.
 - An entry that passes is short: a title that states the decision and two to four one-line bullets. The bar and the
   format are at the top of `docs/DECISIONS.md`.
-- Changes to `docs/TRUST_MODEL.md`, `prompts/overseer.md`, or anything under `agents/` require an explicit human
-  approval note in the PR description. These files define what the loop is allowed to do.
+- `docs/TRUST_MODEL.md`, `.agents/prompts/overseer.md`, and everything under `.agents/agents/` define what the loop is
+  allowed to do. A PR that changes them says in its summary what the change lets the loop do; the operator approves it
+  by merging the PR, and no separate approval note is asked for.
 - When unsure, prefer the smaller change and leave a note in the PR. Do not invent requirements.
 
 ## Toolchain

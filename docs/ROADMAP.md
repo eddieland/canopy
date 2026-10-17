@@ -299,7 +299,7 @@ Learned: closed on the operator's real use; the day-long check is SCENARIOS S29.
 REQUIREMENTS R14, DESIGN §23. Needs M3. Asked for by the operator (2026-10-09): a check that fails for a
 reason the change did not cause sends a `fix-ci` worker to change code that is not broken, and spends its attempts.
 
-- TRUST_MODEL T1, T3, T6, T7, §6, and §7 as DESIGN §23 lists them, with the operator's approval note in the PR.
+- TRUST_MODEL T1, T3, T6, T7, §6, and §7 as DESIGN §23 lists them.
 - Config: `policy.max_triage_ci_attempts` (default 0), `runtime.triage_cmd`, `runtime.triage_timeout_minutes`,
   `runtime.triage_skill`.
 - `canopy dispatch --kind triage-ci`: `triage_off`, one unit, no slot. `_run` runs it in the unit's primary clone after
@@ -350,7 +350,7 @@ canopy, not built after an incident.
 - Settled before Accept, each in HOST_ISOLATION §7 or a decision: what treehouse's `return` runs in a slot; caches that
   tools keep as git repositories under the per-run object directory; OpenCode's local MCP servers inside the sandbox.
 - TRUST_MODEL T4 and T6: the sandbox as a control, what it does not cover (the shared kernel, exfiltration through an
-  allowed host), and that it is opt-in, with the operator's approval note in the PR. DESIGN §8 and §15 for the object
+  allowed host), and that it is opt-in. DESIGN §8 and §15 for the object
   directory and reconcile's cleanup; HOST_ISOLATION's settled parts move to DESIGN.
 - Tests with the fakes: an empty object directory sets no git variable for step 5 and is deleted; a worker that commits
   through it is pushed and leaves the slot on step 2's commit with `git gc` clean in the primary clone; a `_run`
@@ -593,7 +593,7 @@ This milestone adds the connectors and the derivation without changing what the 
   the block says so and the overseer runs the query itself that tick, as today. A cheaper overseer skipped the query and
   read only the block's tickets, which stalls new work with no tick failing (2026-10-15 F31, DESIGN §7). A tick whose
   query was due now fails without `canopy queried` (DESIGN §6 step 5), which catches a skipped query but not a result
-  read short or named short. TRUST_MODEL T1, with the approval note.
+  read short or named short. TRUST_MODEL T1.
 - Tests with the fakes: `tests/fakes/connector` prints configured lines; a line out of bounds is refused and the
   rest kept; a cut-off output keeps the previous observations; the derivation over journals written by hand, one
   case per row of the phase table, each a snapshot test (syrupy) as the state block's are.
@@ -608,9 +608,9 @@ Status: not started.
 
 ## M37. The overseer reads the journal
 
-Needs M36's measurement, with the disagreements that were the derivation's fixed, and M48's second stage, which
-waits on the operator's approval note. Sketch only; the design comes first. This is M30's cut, taken from the journal
-rather than a probe, and it is where the trust model gains its first code checks on what the overseer claims.
+Needs M36's measurement, with the disagreements that were the derivation's fixed, and M48's second stage. Sketch
+only; the design comes first. This is M30's cut, taken from the journal rather than a probe, and it is where the trust
+model gains its first code checks on what the overseer claims.
 
 - The state block carries the observations: per ticket, its title, state, labels, blockers, and the comments newer
   than its comment cursor (id, author, time, body, and whether the author is an authorized replier, decided in code);
@@ -620,7 +620,7 @@ rather than a probe, and it is where the trust model gains its first code checks
   (M34's order).
 - The prompt's procedure drops its reads: no tracker search, no ticket or PR reads, no mirror, no provider skill.
   An MCP call is allowed only for a subject the block marks `stale`, one no connector has covered within
-  `connect.max_age_minutes`, with the operator's approval note; M39 removes that too.
+  `connect.max_age_minutes`; M39 removes that too.
 - Claims become references to observations, checked in code: `canopy dispatch --label` is refused `unauthorized`
   unless the connector saw that label on the ticket (D051 gains a code check before the worker's own); a
   `human_replied` resume must name a comment by an authorized replier or an operator message; a `resume` for review
@@ -638,7 +638,7 @@ rather than a probe, and it is where the trust model gains its first code checks
   a tracker with no connector keeps the live-read procedure, or a connector is required (recommended: required; the
   two shipped cover the operator's trackers, and the contract is a page of Python for another).
 - TRUST_MODEL T1 (labels, repliers, and reviewers checked in code; the overseer's MCP narrowed to stale subjects),
-  T2 (a connector's credentials), T7 (`connect.*`), with the approval note; DESIGN §6, §7, §17, §22; D003 edited in
+  T2 (a connector's credentials), T7 (`connect.*`); DESIGN §6, §7, §17, §22; D003 edited in
   place (M48 superseded D081).
 
 Accept: written with the design, before work starts. Live, once built: a re-measurement (MEASUREMENTS) with
@@ -685,7 +685,7 @@ showed the derivation getting right: a rule moves into code only with that evide
   decision about any other ticket is refused `decided`. A dispatch for new items advances the cursors to the items
   the block showed, so the overseer passes `--cursor` only to leave feedback alone.
 - The prompt shrinks to the judgment sections: candidates, the phase table, cursors, mirroring, and the attention
-  list section go, with the operator's approval note.
+  list section go.
 - Tests with the fakes: the harness's decisions over journals written by hand, one per row; a decision on a ticket
   not left to the overseer refused; a fake overseer that handles only the listed tickets closes the tick `ok`.
 
@@ -710,7 +710,7 @@ trust change: the overseer runs when the journal leaves it something to judge, n
   connector that fails during a poll raises `connector_failed` and the loop falls back to today's pacing.
 - The overseer's definition loses the tracker and GitHub MCP servers: it has canopy's tools (M48) and nothing else,
   since a `stale` subject now gets `wait` instead of a live read. TRUST_MODEL T1: the overseer can be steered only by
-  text the journal holds, bounded and labeled by source, and can call no tracker or VCS tool at all. Approval note.
+  text the journal holds, bounded and labeled by source, and can call no tracker or VCS tool at all.
 - M29's open questions are answered by M36's contract (which subjects to watch), `connect.every_minutes` (how often),
   and M40 (a cold overseer run after a long gap). If M36's measurement leaves the derivation untrusted, the series
   need not stop there for want of M29: a gate on the observations alone, running the overseer only when one changed
@@ -786,7 +786,7 @@ no config (TRUST_MODEL T8).
   `PATCH /config`, the changed keys and that hash. The settings page edits them, beside Reload.
 - TRUST_MODEL T8: "It cannot write config" becomes the allowlist, ceilings, and stricter-only keys above, and its
   residual gains a stolen session raising limits up to their ceilings, which outlives a new secret until the operator
-  sees it. With the operator's approval note in the PR. DESIGN §12 marks the keys the page edits and their ceilings,
+  sees it. DESIGN §12 marks the keys the page edits and their ceilings,
   and §22 the routes and the settings page. DECISIONS: an entry for what the web channel may write to config (a rule
   the trust boundary relies on), and one for the TOML writer.
 - Tests with the fakes: an allowed key written and reloaded, the file's comments kept; a key outside the allowlist, a
@@ -846,8 +846,7 @@ word".
   harness checking afterwards that what was posted is the approved text. Open which, and whether canopy should only
   create a pending review for the operator to submit on GitHub themselves, so that submitting stays a human's click.
 - TRUST_MODEL §6 (never submit a PR review, unless this changes it), T1, T5 (what a posted review says it is, with no
-  bot identity, so it speaks in the operator's name), T6, and T8 (publishing from the web channel), and D114, with the
-  operator's approval note in the PR.
+  bot identity, so it speaks in the operator's name), T6, and T8 (publishing from the web channel), and D114.
 - Open: whether a published review is followed on the next commit (M32's open question of a finding's identity across
   commits); whether the loop's own PRs ever get it, for a coworker's benefit; a bound on what one review may post.
 
@@ -958,7 +957,7 @@ What treehouse does that canopy relies on or works around, from its source at th
 - Goes: treehouse's implementation, `pools.backend` (a config still setting it is warned about, then ignored), the
   fake and its fixture, `make treehouse` and the CI job, README's install step, and the mock's pool hashes.
 - Docs: D002 (rewritten as settled), D033's last `Rejected` line, D066's first bullet, DESIGN §8, §9, §18, §22, and
-  §24, REQUIREMENTS R2, README, GETTING_STARTED, PRIOR_ART, and TRUST_MODEL, with the operator's approval note.
+  §24, REQUIREMENTS R2, README, GETTING_STARTED, PRIOR_ART, and TRUST_MODEL.
 
 Open: whether a seeded symlink is copied as a link (treehouse writes its target text into a regular file), checked
 against TRUST_MODEL T4; whether sync warms a new slot (what `post_create` did for M17) or the first run's `setup_cmd`
@@ -1014,7 +1013,7 @@ of the repo." Humans still authorize everything that lands; canopy still never m
   ticket, worked under its ticket's authorization; authorization checks on tickets are best effort, and the backstops
   are the guards in code and review of what lands") and T6 (a worker's write scope adds creating and linking tickets
   in its ticket's project), a decision entry for the new line, and the overseer prompt, worker
-  prompts, and definitions, with the operator's approval note in the PR.
+  prompts, and definitions.
 - Open: what a parent's phase is once its work has moved into follow-ups; whether a private ticket's worker should
   file journal-only follow-ups; whether an operator who wants the old line should get a private switch that makes
   follow-ups wait for a label.
@@ -1039,7 +1038,7 @@ remote branch is deleted; and no flag shortens retention, which only the user fi
 
 - `canopy gc --dry-run [--json]`: for each kind in §26's table, the count, the bytes, and what a pass with the
   proposed defaults would remove. It refuses when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set; TRUST_MODEL T1 adds
-  `gc` to the commands that do, with the operator's approval note in the PR.
+  `gc` to the commands that do.
 - `[retention]` in the user file (§26, Configuration), validated in full now (non-negative integers), so a later
   stage changes no key; read by nothing but the dry run yet.
 - Check: the operator runs it on their live workspace, the result is a dated section of `MEASUREMENTS.md`, and the
@@ -1114,7 +1113,7 @@ PRs, a stage starting only once the one before has passed its check, recorded on
   descendant and outlives it. The server writes nothing to stderr, and exits when its stdin closes.
 - Check: `make check`, and a hand-run `canopy _mcp` in a dry tick answering an OpenCode client.
 
-**Stage 2, the overseer switches.** With the operator's approval note.
+**Stage 2, the overseer switches.**
 
 - The harness gives the overseer's run the server's entry, removes it from every run it starts, and removes the code
   mode flags from the overseer's environment; the definition
@@ -1283,7 +1282,7 @@ each check recorded on the `Status:` line as it passes.
   the run's lists, and the CLI's lines, built with the `record` half, since that is when the operator most needs them.
 - TRUST_MODEL T1, with the `use` half: a worker may write notes its own ticket's later runs read as data, the same
   exposure as its reports in `{{PREVIOUS_RUNS}}`, with one new property: a note outlives the tracker comment that
-  steered it, bounded by the ticket's life and by `forget`. With the operator's approval note.
+  steered it, bounded by the ticket's life and by `forget`.
 - Tests with the fakes: with `memory` unset, every worker prompt kind and the state block match their snapshots before
   this milestone, and a result carrying `notes` stores nothing. At `record`: a note is stored and is in no prompt of any
   kind; each prompt kind differs from its snapshot when off only by the contract, which asks for `notes` alone;
@@ -1306,7 +1305,7 @@ each check recorded on the `Status:` line as it passes.
   so what moves past it is reading's doing. If notes do not move the baseline, the milestone stops here.
 
 **Stage 2, proposals and lessons.** Behind `memory.proposals`, at `record` first, then at `use`, which needs the
-operator's approval note.
+operator's approval.
 
 - A worker's result gains `proposals` (`{key, text, repo?}`, text at most 600 characters), stored `pending` under the
   same bounds. **A pending proposal is rendered into no prompt.** At most 20 pending per workspace, refusing new ones

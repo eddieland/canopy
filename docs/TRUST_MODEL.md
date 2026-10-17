@@ -1,6 +1,6 @@
 # canopy trust model
 
-Normative. Changes require explicit human approval in the PR. The purpose of
+Normative. Changes require human approval: the operator's merge of the PR. The purpose of
 this document is to be handed to a security reviewer as-is.
 
 ## 1. Summary

@@ -2,7 +2,8 @@
 
 <!--
 What this PR does and why, in a few sentences. Name the milestone (M50) if it is part of one, and the PR it is stacked
-on, if any. One concern per PR (AGENTS.md, How to work). For a fix, say what was wrong before what changes.
+on, if any. One concern per PR (AGENTS.md, How to work). For a fix, say what was wrong before what changes. For a
+change to docs/TRUST_MODEL.md, .agents/prompts/overseer.md, or .agents/agents/, say what it lets the loop do.
 -->
 
 ## What changes
@@ -31,10 +32,3 @@ and docs/DECISIONS.md only if the change passes the bar at the top of that file.
 ## Screenshots
 
 <!-- For a change under ui/: which screenshots change, and whether the Screenshots workflow has run. Else delete. -->
-
-## Approval note
-
-<!--
-Required for any change to docs/TRUST_MODEL.md, .agents/prompts/overseer.md, or anything under .agents/agents/: the
-operator states here that they approve it, and what the change lets the loop do. Else delete this section.
--->
