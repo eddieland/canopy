@@ -272,13 +272,15 @@ def from_runs(conn: sqlite3.Connection) -> list[RunItem]:
     """Return an item for each open ticket whose latest run ended in a status that raises a `run_reason`.
 
     The cause holds until a newer run starts for the ticket, the ticket is marked done, or the operator forgets its
-    work.
+    work. It is set aside while the operator has stopped the ticket, which nothing dispatches, so no reply could answer
+    it, and holds again once they start it (DESIGN §14, §22).
     """
     done = {str(r[0]) for r in conn.execute("SELECT key FROM tickets WHERE done = 1")}
+    stopped = set(conversation.stopped(conn))
     items: list[RunItem] = []
     for key, run in sorted(db.latest_runs(conn).items()):
         reason = run_reason(RunStatus(run["status"]))
-        if reason is None or key in done:
+        if reason is None or key in done or key in stopped:
             continue
         items.append(RunItem(key, reason, _detail(run)))
     return items
