@@ -184,7 +184,8 @@ def test_the_lessons_digest_is_capped_in_key_order(conn: sqlite3.Connection, can
     digest = memory.lessons_digest(conn, None, cite=False)
     assert digest.ids == tuple(ids[: len(digest.ids)])
     assert digest.left_out == 6 - len(digest.ids) > 0
-    assert f"[{digest.left_out} more lessons are left out of this prompt.]" in digest.text
+    left_out = f"[{digest.left_out} more lessons are left out of this prompt; `{memory.SEARCH_COMMAND}` finds them.]"
+    assert left_out in digest.text
 
 
 @pytest.mark.usefixtures("git_pool")

@@ -185,8 +185,9 @@ If code and the design disagree, the design doc wins until a decision entry says
 ## Do not build (unless a ROADMAP milestone says so)
 
 - Web UI pages or features no milestone lists. `canopy status` and a markdown file stay the CLI's surface.
-- Webhooks, network listeners, or background daemons. The loop is `canopy loop`, a foreground command that runs one
-  tick after another (D042). A milestone that adds a listener follows TRUST_MODEL T8 (D055).
+- Webhooks, network listeners, or background services. The loop is `canopy loop`, which runs one tick after another,
+  in the foreground or detached by `canopy daemon`; nothing installs it with the OS or restarts it (D042). A milestone
+  that adds a listener follows TRUST_MODEL T8 (D055).
 - A tracker adapter interface. The tracker is a prompt and config concern.
 - A runtime plugin interface. The agent runtime is a command template in config.
 - Sandboxing beyond what ROADMAP M26 lists. It plugs into the command template; see DESIGN §24.

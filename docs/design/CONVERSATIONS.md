@@ -343,7 +343,7 @@ Served by `canopy loop` from a thread (D073):
   working now and the recent spend, and the loop's pause and any notice to workers. Actions: the CLI's verbs above,
   where their subject is shown. OpenCode's session attach (M15) is not in the UI: a run's page shows its session id
   and its transcript as it goes, and attach joins once M15 runs workers against OpenCode's server.
-- The guide (M51): the operator's documentation, a page each, at `/guide` and opened from the rail's foot. Its pages
+- The guide (M52): the operator's documentation, a page each, at `/guide` and opened from the rail's foot. Its pages
   are Markdown in `ui/src/guide/`, bundled with the build, so the guide describes the canopy that serves it, and needs
   no route of the server's. It is canopy's own text, not the journal's, so the parser below reads its labelled links
   too, to another page, a section of the app, or the web, still into React elements. Not at `/docs`, which the server
@@ -600,7 +600,7 @@ it.
 
 How it serves, true of every page:
 
-- Under one path prefix (`serve.base_path`; `--base-path` for `python -m canopy.serve`; empty by default), so a proxy
+- Under one path prefix (`serve.base_path`, empty by default), so a proxy
   can mount it anywhere: the API at `{base}/api`, the app's hashed files at `{base}/assets/`, and `index.html` for
   every other GET or HEAD. One build serves under any prefix. The prefix comes from config, never from a request
   header.

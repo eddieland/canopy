@@ -194,6 +194,26 @@ holds; `serve.*` keys and the listener secret take a restart (§22).
   a journal row for the request, as the pause has (the request is for this process alone, and a signal reaches it from
   any shell).
 
+Detached: `canopy daemon start [LOOP OPTIONS]` runs the same loop, with the options `canopy loop` takes, in its own
+session from the workspace root, so it outlives the terminal and the shell that started it (D042).
+
+- It is started as dispatch starts `_run` (§8): the interpreter running canopy, in the environment of the shell that
+  ran `start`, so the agents find what a loop in that shell would. Its output is appended to
+  `<state_dir>/daemon.log`, and a lifelock beside the log for its whole life, which is what says it runs. Its pid is in
+  `daemon.pid`, for `stop` to signal; a pid alone is never taken to mean it runs.
+- `start` refuses while the daemon runs or another loop holds `loop.lock`, and waits until the loop takes that lock. A
+  loop that exits first, on a config error or an option `canopy loop` refuses, fails the start with what it printed.
+- `stop` sends SIGTERM, so the loop ends as Stopping (above) says: at once during the wait, once the running tick
+  finishes otherwise, and `stop` waits for that. `status` says whether it runs, since when, and where its output is,
+  and tells a daemon that ended without `stop` apart from one never started.
+- With no controlling terminal, its output is plain text, no keys are read, and every SIGHUP is a reload.
+- `start` and `stop` refuse inside canopy's own ticks and runs (`inside_run`), as `pause` does: the overseer may run
+  any `canopy` command, and one that could stop the loop could end every tick after its own (TRUST_MODEL T1).
+- Nothing is installed with the OS and nothing restarts it: a daemon that ends, or a reboot, leaves the loop stopped
+  until the operator starts it again. Its log is appended to across starts and never trimmed.
+- Rejected: launchd or systemd units (an install step, which the operator did not want); restarting it on failure
+  (a loop that exits on a config error would restart into the same error).
+
 Prompt files are read every tick.
 
 Output uses rich (D043): on a terminal, a spinner during a tick and a countdown during the wait; to a file or pipe,

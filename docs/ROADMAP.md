@@ -1551,9 +1551,33 @@ Proposals and lessons (stage 2), at `record` and `use`: proposals under the boun
 instructions, review dates, `lesson_review` and `lesson_wrong`, and T1's lessons, approved by the operator (2026-10-17).
 The web API's memory routes, read only, and each tier's mode on the loop's state; the web UI's readout, memory page
 with each tier's band, a ticket's Memory panel, and a run's lists, every worker's text plain with hidden characters
-named.
+named. Search (stage 3), built at the operator's word (2026-10-17) before any check had shown the digests leave entries
+out: `canopy memory search` over an FTS5 index of every memory (migration 0038) ranked with bm25(), scoped by
+`CANOPY_RUN_ID` to the run's ticket's notes, superseded ones included, and its repositories' lessons, each while at
+`use` for the run, the digests naming it, `forget` and `purge` clearing the index too, and `make install-check`
+checking FTS5. Every stage's checks, at `record` and at `use`, are still the operator's.
 
-## M51. A user guide in the web UI
+## M51. The loop, detached
+
+DESIGN §6 (The loop), D042. Asked for by the operator (2026-10-17), with no install step: `canopy daemon start`,
+`stop`, and `status` run `canopy loop` in its own session, so it outlives the terminal, without tmux.
+
+- `start [LOOP OPTIONS]` passes the options to `canopy loop`, refuses while the daemon runs or another loop holds
+  `loop.lock`, and fails with the loop's output when it exits before taking the lock. Output goes to
+  `.canopy/daemon.log`.
+- `stop` sends SIGTERM and waits for the loop to end as Stopping says. `status` exits 0 only while it runs.
+- `start` and `stop` refuse inside canopy's ticks and runs (`inside_run`).
+- Nothing installed with the OS, no restart on failure, no start at login.
+- Tests with the fakes: a daemon ticks against the fake overseer and stops in its wait; one that ends on its own reads
+  so in `status`; a loop option `canopy loop` refuses fails the start with its output; the lock held refuses the start;
+  both verbs refuse inside a run.
+
+Accept: the tests above pass. Live: the operator starts the daemon in their workspace, closes the terminal, and the
+loop keeps ticking and serving the web UI; `canopy daemon stop` during a tick lets it finish, then ends the loop.
+
+Status: in progress. Built 2026-10-17: the three commands and the tests above. Left: the live check, the operator's.
+
+## M52. A user guide in the web UI
 
 DESIGN §22 (The web UI), `ui/DESIGN.md` (The guide). Asked for by the operator (2026-10-17): documentation for the
 person using canopy, inside the web UI, in reach where the question comes up and true of the build that serves it. No
