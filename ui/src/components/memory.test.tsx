@@ -1,7 +1,11 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { QueryClient } from '@tanstack/react-query'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { MemoryBand, MemoryText } from './memory'
+import type { MemoryEntry } from '@/api/types'
+import { renderRouted } from '@/test-utils'
+
+import { MemoryBand, MemoryDigestView, MemoryRows, MemoryText } from './memory'
 
 afterEach(() => {
     cleanup()
@@ -43,5 +47,96 @@ describe('MemoryBand', () => {
         )
         expect(screen.getByText('ticket notes: in use')).toBeTruthy()
         expect(screen.queryByText(/recording/u)).toBeNull()
+    })
+})
+
+const NOTE: MemoryEntry = {
+    id: 12,
+    key: 'export-encoding',
+    text: 'The CSV writer must emit a BOM for Excel.',
+    scope: 'ticket',
+    status: 'active',
+    ticket_key: 'ABC-102',
+    repo: 'web',
+    run_id: 41,
+    head: 'a1b2c3d',
+    why: null,
+    review_at: null,
+    wrong_at: null,
+    wrong_run_id: null,
+    use_count: 2,
+    last_used_at: '2026-10-08T11:30:00Z',
+    promoted_from: null,
+    created_at: '2026-10-08T10:00:00Z',
+}
+
+// Renders rows under a router, for their links, with no query that would fetch: a ticket's tracker link reads none.
+function renderRows(rows: React.JSX.Element) {
+    return renderRouted(rows, { client: new QueryClient({ defaultOptions: { queries: { enabled: false } } }) })
+}
+
+describe('MemoryRows', () => {
+    it('says what a memory says, how runs used it, and which run wrote it at which commit', async () => {
+        await renderRows(<MemoryRows entries={[NOTE]} />)
+        const row = screen.getByRole('listitem')
+        expect(within(row).getByText(NOTE.text ?? '')).toBeDefined()
+        expect(within(row).getByText('used by 2 runs')).toBeDefined()
+        expect(within(row).getByRole('link', { name: 'run:41' }).getAttribute('href')).toBe('/runs/41')
+        expect(within(row).getByText('at a1b2c3d')).toBeDefined()
+        expect(within(row).queryByRole('link', { name: 'ABC-102' })).toBeNull()
+    })
+
+    it('names each note’s ticket only in a list across tickets', async () => {
+        await renderRows(<MemoryRows entries={[NOTE, { ...NOTE, id: 13, ticket_key: null }]} ticket />)
+        expect(screen.getAllByRole('link', { name: 'ABC-102' }).map((link) => link.getAttribute('href'))).toEqual([
+            '/tickets/ABC-102',
+        ])
+    })
+
+    it('leaves out the run whose page it is, and says which run reported a memory wrong', async () => {
+        await renderRows(<MemoryRows entries={[{ ...NOTE, status: 'invalid', wrong_run_id: 44 }]} ownRun={41} />)
+        expect(screen.queryByRole('link', { name: 'run:41' })).toBeNull()
+        expect(screen.getByText(/^reported wrong by/u).textContent).toBe('reported wrong by run:44')
+        expect(screen.getByText('invalid')).toBeDefined()
+    })
+
+    it('says a deleted text was deleted, and a memory no run has read so', async () => {
+        await renderRows(<MemoryRows entries={[{ ...NOTE, text: null, use_count: 0, last_used_at: null }]} />)
+        expect(screen.getByText('text deleted')).toBeDefined()
+        expect(screen.getByText('read by no run')).toBeDefined()
+    })
+
+    it('says why a memory stands as it does, and when it is up for review', async () => {
+        const pending = {
+            ...NOTE,
+            status: 'pending' as const,
+            why: 'proposed from 3 notes',
+            review_at: NOTE.created_at,
+        }
+        await renderRows(<MemoryRows entries={[pending]} />)
+        expect(screen.getByTitle('proposed from 3 notes').textContent).toBe('pending')
+        expect(screen.getByText('proposed from 3 notes')).toBeDefined()
+        expect(screen.getByText(/^review at/u).textContent).toMatch(/^review at \S/u)
+    })
+
+    it('adds what goes under a row by its id, and under no other', async () => {
+        const below = new Map([[13, <p key="13">from notes 4 and 5</p>]])
+        await renderRows(<MemoryRows entries={[NOTE, { ...NOTE, id: 13 }]} below={below} />)
+        const [first, second] = screen.getAllByRole('listitem')
+        expect(first && within(first).queryByText('from notes 4 and 5')).toBeNull()
+        expect(second && within(second).getByText('from notes 4 and 5')).toBeDefined()
+    })
+})
+
+describe('MemoryDigestView', () => {
+    it('labels a digest served at use as served, and one while recording as what would be', () => {
+        const digest = { ids: [12], left_out: 0, served: true, text: '- export-encoding: emit a BOM' }
+        const { rerender } = render(<MemoryDigestView digest={digest} served="served to the next run" />)
+        const region = screen.getByRole('region', { name: 'served to the next run' })
+        expect(within(region).getByText('- export-encoding: emit a BOM')).toBeDefined()
+
+        rerender(<MemoryDigestView digest={{ ...digest, served: false }} served="served to the next run" />)
+        expect(screen.getByRole('region', { name: 'would be served at use' })).toBeDefined()
+        expect(screen.queryByText('served to the next run')).toBeNull()
     })
 })

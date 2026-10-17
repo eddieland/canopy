@@ -35,7 +35,7 @@ function PullRequestsPage() {
                 activity first. A PR&apos;s page has its ticket, the runs that pushed to it, canopy&apos;s reviews of
                 it, and what the loop decided.
             </PageHeader>
-            <Panel className="mb-6">
+            <Panel>
                 <PanelHeader label="Review a PR" />
                 <ReviewRequestForm />
             </Panel>
@@ -53,7 +53,7 @@ function PullRequestsPage() {
                         no PRs yet: none of the loop&apos;s tickets has one, and nothing was reviewed
                     </Empty>
                 ) : (
-                    <ul className="stagger divide-y" data-testid="pull-requests">
+                    <ul className="divide-y" data-testid="pull-requests">
                         {ordered('pull-requests', order, data).map((pr) => (
                             <Row key={pr.url} pr={pr} />
                         ))}

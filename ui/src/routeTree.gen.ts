@@ -19,6 +19,8 @@ import { Route as SpendRouteImport } from './routes/spend'
 import { Route as WorktreesRouteImport } from './routes/worktrees'
 import { Route as ChoresIndexRouteImport } from './routes/chores.index'
 import { Route as ChoresNameRouteImport } from './routes/chores.$name'
+import { Route as GuideIndexRouteImport } from './routes/guide.index'
+import { Route as GuidePageRouteImport } from './routes/guide.$page'
 import { Route as PullRequestsIndexRouteImport } from './routes/pull-requests.index'
 import { Route as PullRequestsPrRouteImport } from './routes/pull-requests.pr'
 import { Route as ReviewsIndexRouteImport } from './routes/reviews.index'
@@ -79,6 +81,16 @@ const ChoresIndexRoute = ChoresIndexRouteImport.update({
 const ChoresNameRoute = ChoresNameRouteImport.update({
   id: '/chores/$name',
   path: '/chores/$name',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuideIndexRoute = GuideIndexRouteImport.update({
+  id: '/guide/',
+  path: '/guide/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GuidePageRoute = GuidePageRouteImport.update({
+  id: '/guide/$page',
+  path: '/guide/$page',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PullRequestsIndexRoute = PullRequestsIndexRouteImport.update({
@@ -147,12 +159,14 @@ export interface FileRoutesByFullPath {
   '/spend': typeof SpendRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
+  '/guide/$page': typeof GuidePageRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
   '/chores/': typeof ChoresIndexRoute
+  '/guide/': typeof GuideIndexRoute
   '/pull-requests/': typeof PullRequestsIndexRoute
   '/reviews/': typeof ReviewsIndexRoute
   '/runs/': typeof RunsIndexRoute
@@ -170,12 +184,14 @@ export interface FileRoutesByTo {
   '/spend': typeof SpendRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
+  '/guide/$page': typeof GuidePageRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
   '/chores': typeof ChoresIndexRoute
+  '/guide': typeof GuideIndexRoute
   '/pull-requests': typeof PullRequestsIndexRoute
   '/reviews': typeof ReviewsIndexRoute
   '/runs': typeof RunsIndexRoute
@@ -194,12 +210,14 @@ export interface FileRoutesById {
   '/spend': typeof SpendRoute
   '/worktrees': typeof WorktreesRoute
   '/chores/$name': typeof ChoresNameRoute
+  '/guide/$page': typeof GuidePageRoute
   '/pull-requests/pr': typeof PullRequestsPrRoute
   '/reviews/$id': typeof ReviewsIdRoute
   '/runs/$id': typeof RunsIdRoute
   '/tickets/$key': typeof TicketsKeyRoute
   '/ticks/$id': typeof TicksIdRoute
   '/chores/': typeof ChoresIndexRoute
+  '/guide/': typeof GuideIndexRoute
   '/pull-requests/': typeof PullRequestsIndexRoute
   '/reviews/': typeof ReviewsIndexRoute
   '/runs/': typeof RunsIndexRoute
@@ -219,12 +237,14 @@ export interface FileRouteTypes {
     | '/spend'
     | '/worktrees'
     | '/chores/$name'
+    | '/guide/$page'
     | '/pull-requests/pr'
     | '/reviews/$id'
     | '/runs/$id'
     | '/tickets/$key'
     | '/ticks/$id'
     | '/chores/'
+    | '/guide/'
     | '/pull-requests/'
     | '/reviews/'
     | '/runs/'
@@ -242,12 +262,14 @@ export interface FileRouteTypes {
     | '/spend'
     | '/worktrees'
     | '/chores/$name'
+    | '/guide/$page'
     | '/pull-requests/pr'
     | '/reviews/$id'
     | '/runs/$id'
     | '/tickets/$key'
     | '/ticks/$id'
     | '/chores'
+    | '/guide'
     | '/pull-requests'
     | '/reviews'
     | '/runs'
@@ -265,12 +287,14 @@ export interface FileRouteTypes {
     | '/spend'
     | '/worktrees'
     | '/chores/$name'
+    | '/guide/$page'
     | '/pull-requests/pr'
     | '/reviews/$id'
     | '/runs/$id'
     | '/tickets/$key'
     | '/ticks/$id'
     | '/chores/'
+    | '/guide/'
     | '/pull-requests/'
     | '/reviews/'
     | '/runs/'
@@ -289,12 +313,14 @@ export interface RootRouteChildren {
   SpendRoute: typeof SpendRoute
   WorktreesRoute: typeof WorktreesRoute
   ChoresNameRoute: typeof ChoresNameRoute
+  GuidePageRoute: typeof GuidePageRoute
   PullRequestsPrRoute: typeof PullRequestsPrRoute
   ReviewsIdRoute: typeof ReviewsIdRoute
   RunsIdRoute: typeof RunsIdRoute
   TicketsKeyRoute: typeof TicketsKeyRoute
   TicksIdRoute: typeof TicksIdRoute
   ChoresIndexRoute: typeof ChoresIndexRoute
+  GuideIndexRoute: typeof GuideIndexRoute
   PullRequestsIndexRoute: typeof PullRequestsIndexRoute
   ReviewsIndexRoute: typeof ReviewsIndexRoute
   RunsIndexRoute: typeof RunsIndexRoute
@@ -373,6 +399,20 @@ declare module '@tanstack/react-router' {
       path: '/chores/$name'
       fullPath: '/chores/$name'
       preLoaderRoute: typeof ChoresNameRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guide/': {
+      id: '/guide/'
+      path: '/guide'
+      fullPath: '/guide/'
+      preLoaderRoute: typeof GuideIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/guide/$page': {
+      id: '/guide/$page'
+      path: '/guide/$page'
+      fullPath: '/guide/$page'
+      preLoaderRoute: typeof GuidePageRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pull-requests/': {
@@ -465,12 +505,14 @@ const rootRouteChildren: RootRouteChildren = {
   SpendRoute: SpendRoute,
   WorktreesRoute: WorktreesRoute,
   ChoresNameRoute: ChoresNameRoute,
+  GuidePageRoute: GuidePageRoute,
   PullRequestsPrRoute: PullRequestsPrRoute,
   ReviewsIdRoute: ReviewsIdRoute,
   RunsIdRoute: RunsIdRoute,
   TicketsKeyRoute: TicketsKeyRoute,
   TicksIdRoute: TicksIdRoute,
   ChoresIndexRoute: ChoresIndexRoute,
+  GuideIndexRoute: GuideIndexRoute,
   PullRequestsIndexRoute: PullRequestsIndexRoute,
   ReviewsIndexRoute: ReviewsIndexRoute,
   RunsIndexRoute: RunsIndexRoute,

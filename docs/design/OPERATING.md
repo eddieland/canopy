@@ -55,8 +55,7 @@ read a dry run's plan. The web UI shows the same (§22).
 `canopy spend` weighs what agent runs cost against what they got done, by UTC day over a window (7 days by default,
 today's so far included), so that comparing two windows tells whether spending more bought more: each kind's cost, the
 ticks by what they bought and what woke them, the tickets done and the spend per ticket done, each ticket's and PR's
-own cost, and which tools put the most into context. `--json` adds each kind's first calls by definitions snapshot,
-for a re-measurement (`docs/MEASUREMENTS.md`) to start from. The web UI's spend page shows it (§22). What it counts:
+own cost, and which tools put the most into context. The web UI's spend page shows it (§22). What it counts:
 
 - Every figure is by start: a run counts on the day it started, within the window, all read at one moment.
 - A ticket is done in the window by its newest `done` decision there (§7), if still done and not forgotten. That is
@@ -471,9 +470,10 @@ names the skill and the prompt then says to use it (§8). Prefer that to a promp
 
 `canopy skill` prints a skill named `canopy` that teaches an agent in the operator's own session the canopy CLI and the
 state directory, how to read the journal read-only, and how to look into what canopy did and found. canopy installs it
-nowhere: the operator saves it where their runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again
-after upgrading. It is not in the definitions snapshot, where it would help no run. It tells an agent started by canopy
-to follow its prompt instead, and grants nothing: the overseer's and worker's bash rules apply either way.
+only when asked: `canopy skill --install [DIR]` saves it as `canopy/SKILL.md` in `DIR`, `~/.agents/skills` unless
+given, and the operator runs it again after upgrading. It is not in the definitions snapshot, where it would help no
+run. It tells an agent started by canopy to follow its prompt instead, and grants nothing: the overseer's and worker's
+bash rules apply either way.
 
 ### Shell completion
 
@@ -507,7 +507,9 @@ run's status maps to a reason: `crashed` to `crashed`, `unpushed` to `unpushed`,
 the run log. The cause is gone when a newer run starts for the ticket or the ticket is marked done. The overseer does
 not dispatch such a ticket again until an authorized replier comments after the run ended; that is how a human says
 "try again". An operator message after the run ended says it too (§22, D093), the only way on a private ticket.
-`blocked` and `stopped` raise nothing here.
+`blocked` and `stopped` raise nothing here. Nor does a ticket the operator stopped (§22), whatever its latest run: nothing
+dispatches it, so no reply could answer the item, and stopping it says they have seen to it. An `unpushed` run's commits
+stay where `canopy show` names them. Started again, the ticket raises its item again.
 
 The harness raises `awaiting_reply` every tick for each started ticket, not done, whose latest question has no operator
 message after it (§22), and for each public ticket, not done, whose latest plan run ended `blocked` with its question

@@ -310,7 +310,9 @@ page-level detail.
   regular), replaced whole so a reader never sees half a file. It saves only a `proposed` or approved plan's file, an
   approved one then needing approval again (`plan_changed`); it refuses `bad_plan` while a plan run for the ticket is
   running, and when the file changed since the editor read it, by its hash, so an edit made elsewhere is never
-  overwritten unseen. This save is the largest body the web channel takes, which sets its body limit (§22).
+  overwritten unseen. This save is the largest body the web channel takes, which sets its body limit (§22). Until an
+  edit is saved, the editor says `Unsaved edits` beside `Save`, and ⌘S (Ctrl+S) saves it, as a document's Save does,
+  rather than open the browser's own.
 - **In the journal** (M44): a thread belongs to the ticket, not to one plan, so it carries from plan to plan and is
   anchored again on each. Threads and replies are written only by the web channel, behind its token (T8). A comment
   is the operator's words and the passage it quotes, not the plan, so it lives in the journal while the plan's text

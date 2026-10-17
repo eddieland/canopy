@@ -109,10 +109,12 @@ in order:
    cursor and marks nothing done; `canopy mirror` moves no mirror cursor. The rest of the tick is live: reconcile, and
    the attention list and its notifications.
 
-   `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` omits the key. What the overseer writes is
-   rendered into the next prompt, so the CLI bounds it: keys and attention reasons are validated, phases come from §7's
-   table, cursor ids must match `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and rationales, details, and worker context are cut at
-   2000 characters.
+   `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` omits the key. Its rationale must give a
+   tick-wide reason (`mcp_unavailable`, `tracker_unsupported`), and a ticket's skip may not give one. Why: an overseer
+   left to guess the form put a tick-wide reason under a made-up key (`queue`) on ticks whose tracker worked, and on
+   one of them ended at the skip with every ticket undecided. What the overseer writes is rendered into the next
+   prompt, so the CLI bounds it: keys and attention reasons are validated, phases come from §7's table, cursor ids must
+   match `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and rationales, details, and worker context are cut at 2000 characters.
 6. Close the tick with a summary.
 7. **Publish attention** (§14): rewrite `attention.md` from the journal, then deliver to each notification sink (§20)
    the list's change since that sink last heard, the events it takes, and a digest when due; `notify.cmd` is the sink
@@ -153,8 +155,10 @@ messages and slots, a review's slot); a new kind joins that set rather than copy
    tick began, whatever ended it, which bounds how often the overseer runs: a burst of messages, runs ending one after
    another, or a gate opening just after a tick would otherwise run ticks back to back. On a terminal, pressing `t`
    ends it at once, with no floor (a keypress is deliberate, as a hand-run `canopy tick` is); keys pressed during the
-   tick are dropped, except `p` (below). While the loop is paused, the wait does not end at its deadline (Pausing,
-   below).
+   tick are dropped, except `p` (below). Tick now in the web UI (§22) does the same, but one asked for during a tick is
+   kept, and ends the wait after it at once: a click is not stray input the way a key typed at a spinner can be. Like
+   a reload, the request is for this process alone, with no journal row. While the loop is paused, the wait does not
+   end at its deadline (Pausing, below).
 6. Repeat from 3 until `--ticks N` ticks have run or the operator stops the loop.
 
 Pausing: the operator can hold the loop's ticks without stopping it, so the web UI stays up and dispatched workers keep
@@ -164,7 +168,8 @@ going.
   and `canopy resume`, and the web UI (§22), each recording its channel. It outlives the loop, lifted only by a resume.
 - Paused, the wait does not end at its deadline, on an operator message, or on a run ending, though those still move
   the deadline (step 5), so a resume past it ticks at once. A tick running when a pause comes finishes. A loop started
-  while paused holds its first tick. `t` runs one tick and the loop stays paused, as a hand-run `canopy tick` does.
+  while paused holds its first tick. `t`, or Tick now in the web UI, runs one tick and the loop stays paused, as a
+  hand-run `canopy tick` does.
 - `canopy pause` and `canopy resume` refuse inside canopy's own ticks and runs (`inside_run`), as `start` and `reply`
   do: an agent that could pause the loop could hold off every tick after its own, and one that could resume it could
   undo the operator's pause (TRUST_MODEL T1).
@@ -193,6 +198,26 @@ holds; `serve.*` keys and the listener secret take a restart (§22).
 - Rejected: reading the files before every tick (a half-saved edit would apply itself; the operator chooses when), and
   a journal row for the request, as the pause has (the request is for this process alone, and a signal reaches it from
   any shell).
+
+Detached: `canopy daemon start [LOOP OPTIONS]` runs the same loop, with the options `canopy loop` takes, in its own
+session from the workspace root, so it outlives the terminal and the shell that started it (D042).
+
+- It is started as dispatch starts `_run` (§8): the interpreter running canopy, in the environment of the shell that
+  ran `start`, so the agents find what a loop in that shell would. Its output is appended to
+  `<state_dir>/daemon.log`, and a lifelock beside the log for its whole life, which is what says it runs. Its pid is in
+  `daemon.pid`, for `stop` to signal; a pid alone is never taken to mean it runs.
+- `start` refuses while the daemon runs or another loop holds `loop.lock`, and waits until the loop takes that lock. A
+  loop that exits first, on a config error or an option `canopy loop` refuses, fails the start with what it printed.
+- `stop` sends SIGTERM, so the loop ends as Stopping (above) says: at once during the wait, once the running tick
+  finishes otherwise, and `stop` waits for that. `status` says whether it runs, since when, and where its output is,
+  and tells a daemon that ended without `stop` apart from one never started.
+- With no controlling terminal, its output is plain text, no keys are read, and every SIGHUP is a reload.
+- `start` and `stop` refuse inside canopy's own ticks and runs (`inside_run`), as `pause` does: the overseer may run
+  any `canopy` command, and one that could stop the loop could end every tick after its own (TRUST_MODEL T1).
+- Nothing is installed with the OS and nothing restarts it: a daemon that ends, or a reboot, leaves the loop stopped
+  until the operator starts it again. Its log is appended to across starts and never trimmed.
+- Rejected: launchd or systemd units (an install step, which the operator did not want); restarting it on failure
+  (a loop that exits on a config error would restart into the same error).
 
 Prompt files are read every tick.
 

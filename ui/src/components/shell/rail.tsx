@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
+import { BookOpen } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 import { metaQuery, runsQuery, spendQuery } from '@/api/queries'
@@ -11,6 +12,9 @@ import { TicketTitle } from '@/components/ticket-title'
 import { Skeleton } from '@/components/ui/skeleton'
 import { runRef } from '@/lib/refs'
 import { railRuns } from '@/lib/run-state'
+
+// Where the version links: every release's notes, newest first.
+const RELEASES = 'https://github.com/eddieland/canopy/releases'
 
 // Rows the rail lists before `+N more`: with the nav and the spend, four keep the sticky part within an 800px window.
 const RAIL_RUNS = 4
@@ -93,14 +97,36 @@ export function RailSpend() {
     )
 }
 
-/** The rail's foot: the version canopy serves. Always at the window's foot, however long the page. */
+/**
+ * The rail's foot: the version canopy serves, opening the releases on GitHub in a new tab, and the guide, the
+ * operator's documentation, bundled with that version. Always at the window's foot, however long the page.
+ */
 export function RailFooter() {
     const meta = useQuery(metaQuery).data
     return (
-        <div className="mx-2 flex border-t px-2.5 py-3 text-2xs text-muted-foreground" data-testid="rail-footer">
-            <span className="readout min-h-4 truncate" title={meta?.version} data-testid="rail-version">
+        <div
+            className="mx-2 flex items-center gap-2 border-t px-2.5 py-3 text-2xs text-muted-foreground"
+            data-testid="rail-footer"
+        >
+            <a
+                href={RELEASES}
+                target="_blank"
+                rel="noreferrer noopener"
+                title={meta === undefined ? undefined : `canopy ${meta.version}: the releases on GitHub`}
+                className="readout min-h-4 min-w-0 truncate rounded-sm hover:text-foreground"
+                data-testid="rail-version"
+            >
                 {meta === undefined ? '' : `canopy ${meta.version}`}
-            </span>
+            </a>
+            <Link
+                to="/guide"
+                title="How the web UI works, a page each"
+                className="ml-auto flex shrink-0 items-center gap-1 rounded-sm hover:text-foreground"
+                data-testid="rail-guide"
+            >
+                <BookOpen aria-hidden className="size-3" />
+                Guide
+            </Link>
         </div>
     )
 }

@@ -57,6 +57,14 @@ echo "$sandbox" | grep -q "npm is not on PATH, so srt [0-9.]* is not installed" 
 # Output is captured before grep, so a command that fails after printing the expected text still fails the check.
 skill=$(canopy skill)
 echo "$skill" | grep -qx 'name: canopy' || fail "canopy skill did not print the operator skill"
+canopy skill --install >/dev/null || fail "canopy skill --install failed"
+[ "$(cat "$HOME/.agents/skills/canopy/SKILL.md")" = "$skill" ] || fail "canopy skill --install did not save the skill"
+
+# The journal's memory index needs SQLite built with FTS5 (DESIGN §28): every journal's migrations create it.
+"$UV_TOOL_DIR/canopy/bin/python" -c '
+import sqlite3
+sqlite3.connect(":memory:").execute("CREATE VIRTUAL TABLE t USING fts5(x)")
+' || fail "the installed Python's SQLite has no FTS5, which the journal's memory index needs"
 
 # A workspace of one repository, cloned from a local origin as `canopy init` clones any URL it is given.
 origin="$work/project.git"
@@ -92,6 +100,8 @@ canopy tick --dry-run
 decisions=$(canopy decisions)
 echo "$decisions" | grep -Eq 'GH-1 +wait +install check' || fail "the dry tick's decision was not recorded"
 canopy status >/dev/null
+found=$(canopy memory search cache)
+echo "$found" | grep -q '^No memories found' || fail "canopy memory search did not search the index: $found"
 
 # canopy runs each sink by the name in its cmd (DESIGN §20), as a child of its own process. The Slack sink has no
 # webhook file and fails saying so; the desktop sink shows the test or fails in its own words. canopy run in a sink's

@@ -135,9 +135,9 @@ Rules:
   run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window.
   The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
   is shown nowhere else, but for the lifetime total Sprig's hats are bought with (Fun, below). The footer (the
-  version) sits at the foot of the sticky column, so at the window's foot however long the page; in a window too
-  short for the rest, the part above it scrolls on its own. The room left between the blocks and the footer is
-  Sprig's (Fun, below).
+  version, a link out to canopy's releases on GitHub, and the guide) sits at the foot of the sticky column, so at the
+  window's foot however long the page; in a window too short for the rest, the part above it scrolls on its own. The
+  room left between the blocks and the footer is Sprig's (Fun, below).
 - **Narrower than `lg`, the rail is a strip** (`useRailMode`), since half of a second monitor is under it and a whole
   rail there left a list too little room: 3.5rem of the nav's icons (the nav's `compact`), each named on hover and to
   a screen reader, Attention's count one number on its icon's corner in its most severe item's color. A button atop
@@ -155,9 +155,10 @@ Rules:
   places the thread in a second column (`2xl:col-start-2 2xl:row-span-N`), over rows whose last is `1fr`, so a long
   thread leaves no gaps between the panels beside it.
 - Between the header's name and its readouts, the ticker crawls joke headlines (Fun, below).
-- The header carries the loop's pause (`LoopPause`), the latest tick (`tick:12 · 3m ago`, its status when not `ok`, in
-  `status-failed` when it failed or was abandoned, its summary on hover, linking to its page), the stream's state (and
-  `mock`), and the theme toggle, in three groups with a hairline rule between each: the pause, the readouts, the theme.
+- The header carries the loop's pause (`LoopPause`) and Tick now (`TickNow`), the latest tick (`tick:12 · 3m ago`,
+  its status when not `ok`, in `status-failed` when it failed or was abandoned, its summary on hover, linking to its
+  page), the stream's state (and `mock`), and the theme toggle, in three groups with a hairline rule between each: the
+  actions, the readouts, the theme.
   The readouts hug their text, inset as far as a ghost button's label, so each rule sits midway. The counters are the
   attention page's, and the nav's Attention item shows how many items it lists, on every page, split by severity as the
   Attention counter splits them: broken in `status-failed`, waiting on the operator's answer in `status-blocked`, the
@@ -170,6 +171,10 @@ Rules:
   from where on hover) and a Resume button. The button keeps one width in both states. It has no `Notice`: what it
   did is the state it shows, which the stream also sends when the loop's terminal or the CLI pauses. A failure colors
   the button `status-failed`, with the reason on hover and in an `sr-only` alert.
+- **Tick now** stands after the pause, a ghost button beside the latest tick's readout, which shows the tick it starts:
+  `t` at the loop's terminal, so the loop's wait ends at once, paused or not. It is disabled while the latest tick
+  runs. Like the
+  pause it has no `Notice`, since the tick it asked for shows in the readouts, and a failure looks the same.
 - **The notice to workers** (`NoticeBanner`, `canopy notice`) heads the content column, above every page, only while
   one is in force: a band on a `status-blocked` tint with its border, since every run waits on what the operator said,
   the notice's words through `LinkedText`, until when runs hear it (when and from where on hover), and a ghost Clear.
@@ -228,7 +233,10 @@ Rules:
   decisions, and the attention detail, the other place a ticket is answered, reads in the same order: the item, the
   ticket's actions and any limit it is stuck at, then its conversation and the reply. An action over a whole list
   sits in that list's panel header, as a transcript's All open does: the worktrees' Read again heads their one Pools
-  panel, a section per pool in it.
+  panel, a section per pool in it. A ticket whose plan waits on the operator (proposed, no planner running) leads with
+  the plan instead, above its Work panel, since the plan is what they came to answer and its own line says where the
+  ticket stands; otherwise its plan follows the lists. Where it sits is settled as the page opens, so a plan approved
+  there stays where it was read.
 - **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
   section's name in its color, then the pages between it and this one. On the section's own list the name is plain
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
@@ -289,24 +297,29 @@ The ticker:
 Sprig:
 
 - Sprig (`Buddy`, `src/components/shell/buddy.tsx`) is a bent wire with a sprig on top and googly eyes, behind a
-  keyboard it vibe codes on (`Keyboard`), at the foot of the side rail, under a speech bubble offering a tip about
-  the page. The keyboard stands in front of the wire's foot, inside the figure's own box, so Sprig takes no more room
-  for it. It is off until Settings turns it on. Its tips are by view (`TIPS` in `src/lib/buddy.ts`), by the route's
-  id: several of its own for every route, a section's list and one of its items apart (`/tickets/` and
-  `/tickets/$key`), so the same joke never shows on two views; then ones for anywhere. A new route is a type error
-  there until it has its own. Every one is a joke, and none opens with "Tip:",
-  which on the ticker names something real; a joke dressed as a tip opens with "Unhelpful tip:". The jokes come in
-  several voices (the paperclip's "It looks like you're...", a false "Fun fact:", a "Hot take:", a diary entry, a
-  haiku, a riddle), mixed in each list so that no voice follows itself. Clicking Sprig, or the bubble's Another tip,
-  offers the next; the bubble closes with its button or after 20 seconds, and "Don't show me tips again" turns Sprig
-  off.
-- Its place is the rail's column, between the blocks and the footer: the room left there is its slot, and it stands
-  at the slot's foot. A slot with room for Sprig and its bubble (with the mock's three working runs, a window about
-  1100px tall) covers nothing. A laptop's window never leaves that much, and the operator would rather see Sprig
-  standing over the spend a little than not at all: so a shorter slot, down to one that leaves Sprig over the foot of
-  the spend by 40px, still shows it, the one exception to Fun's first rule. There the bubble would cover the runs
-  working now, so a tip shows only when asked for, by a click on Sprig, and closes as any other. A slot shorter
-  still leaves Sprig out. The bubble keeps its room once closed, so closing it never moves Sprig.
+  keyboard it vibe codes on (`Keyboard`), at the foot of the side rail, under a speech bubble offering, now and then, a
+  tip about the page. The keyboard stands in front of the wire's foot, inside the figure's own box, so Sprig takes no
+  more room for it. It is off until Settings turns it on. Its tips are by view (`TIPS` in `src/lib/buddy.ts`), by the
+  route's id: several of its own for every route, a section's list and one of its items apart (`/tickets/` and
+  `/tickets/$key`), so the same joke never shows on two views; then ones for anywhere. A new route is a type error there
+  until it has its own. Every one is a joke, and none opens with "Tip:", which on the ticker names something real; a
+  joke dressed as a tip opens with "Unhelpful tip:". The jokes come in several voices (the paperclip's "It looks like
+  you're...", a false "Fun fact:", a "Hot take:", a diary entry, a haiku, a riddle), mixed in each list so that no voice
+  follows itself. Sprig keeps its own time, not the pages': a page loads with no tip up, and the first comes at random,
+  two to six minutes on, about whatever view is on screen then; each later one comes as long again after the last
+  closes, in a tab in sight. Turning a page neither offers a tip nor puts the next off, which a tip on every page did
+  once, too often to be funny: the operator asked for the timer. A tip is about the view it was offered on, so another
+  view hides it, a list filtered another way does not, and it closes on time all the same. Clicking Sprig, or the
+  bubble's Another tip, offers the next at once; the bubble closes with its button or 20 seconds after it opened, and
+  "Don't show me tips again" turns Sprig off.
+- Its place is the rail's column, between the blocks and the footer: the room left there is its slot, and it stands at
+  the slot's foot. A slot with room for Sprig and its bubble (with the mock's three working runs, a window about 1100px
+  tall) covers nothing. A laptop's window never leaves that much, and the operator would rather see Sprig standing over
+  the spend a little than not at all: so a shorter slot, down to one that leaves Sprig over the foot of the spend by
+  40px, still shows it, the one exception to Fun's first rule. There the bubble would cover the runs working now, so a
+  tip shows only when asked for, by a click on Sprig, and closes as any other; one Sprig would offer on its own it lets
+  pass, and waits again. A slot shorter still leaves Sprig out. The bubble keeps its room once closed, so closing it
+  never moves Sprig.
 - **Sprig's hats** are bought at the foot of Settings' Fun panel (`HatShop` in `src/routes/settings.tsx`, the shop in
   `src/lib/hats.ts`, the drawings in `src/components/hat.tsx`). The wallet is `total_usd` from `GET /api/spend`,
   everything canopy has ever spent, less the price of each hat bought, so it fills as canopy works; nothing real is
@@ -354,8 +367,8 @@ and utilities are in `src/index.css`.
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
   new one is ready, because navigations run inside React transitions.
 - A page's blocks rise in one after another (`stagger` on the page column), and so do the attention list's rows, the
-  Working rows, and a conversation's bubbles. A row or bubble the stream adds later rises in on its own. A bubble pops
-  (`[--enter:pop]`) from the corner nearest its side.
+  Working rows, and a conversation's bubbles. Any other list's rows arrive with their panel, as one block. A row or
+  bubble the stream adds later rises in on its own. A bubble pops (`[--enter:pop]`) from the corner nearest its side.
 - Counter values are odometers (`RollingNumber`): each digit rolls to its new value, the units first, and rolls up from
   zero when the counter first shows. The value is in the text once, for screen readers and tests; the digits are
   drawn by CSS.
@@ -376,7 +389,7 @@ and utilities are in `src/index.css`.
   animation that fills forwards: the row is let go once it has played.
 - The lightswitch rave flicks the lights off and on every 0.6 seconds in steps, the switch's lever flicking with them,
   while its beams turn once every 8 seconds (Fun, above).
-- Sprig's tip pops in a moment after a page arrives, its brows rise once with each new tip, its eyes blink now and
+- Sprig's tip pops in a moment after it is offered, its brows rise once with each new tip, its eyes blink now and
   then and look toward the pointer, and every 5 seconds it types a burst on its keyboard, each key it presses sinking
   and lighting in the accent for a moment.
 - A toast rises in from below and fades out.
@@ -431,7 +444,8 @@ list, an empty state, or a skeleton by hand.
   the row's end (`from="title"`), never a hand-computed indent: no `pl-[…]` in `src/routes` or `src/components`. A
   summary starts under the row's name: a ticket's title on the runs page, the run's id under its subject, a tick's
   status, a decision's action. What sits under a row outside it, a tool call's body, is a **`RowGrid`** of the same
-  kind with a `RowLine` in it. A new list is a new kind in `ROW_COLUMNS`, its columns written out there.
+  kind with a `RowLine` in it. A new list is a new kind in `ROW_COLUMNS`, its columns written out there. An age column
+  is `6rem` and a cost column `4rem` in every kind (`AGE`, `COST`), so they line up from one list to the next.
 - **`Fields`** and **`Field`** (`src/components/fields.tsx`): a detail page's field list, an `8rem` label column and
   the values beside it, the label in `panel-label` type and the value in prose or, with `mono`, in monospace data.
   The rows sit on their first baseline, so a label stays level with the first line of a value that wraps (a summary,
@@ -442,10 +456,12 @@ list, an empty state, or a skeleton by hand.
   `ownPr` leaves that PR out of them, as it does from `Decisions`.
 - **`Empty`** (`src/components/panel.tsx`): what a list or page says when it has nothing to show, in muted text, in two
   sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
-  around it. Its words are `no X yet` and one clause on why or what to do (`no runs yet: the overseer starts one when
-  it is due`); `now` for what comes and goes rather than `yet` (`no open findings now`). A search that finds nothing
-  says so; a page whose subject is missing says why. An error is never an `Empty`, and never a red sentence in a
-  panel: it is a `Notice`, which names a refusal's guard.
+  around it, as one sentence whatever links or commands it holds. Its words are `no X yet` and one clause on why or
+  what to do (`no runs yet: the overseer starts one when it is due`); `now` for what comes and goes rather than `yet`
+  (`no open findings now`). A search that finds nothing says so; a page whose subject is missing (a 404) says why. An
+  error is never an `Empty`, and never a red sentence in a panel: it is a `Notice`, which names a refusal's guard and
+  sets its `code` spans as code, as an attention item's detail is. A page whose read was refused (a 409) shows its
+  `Notice` in its main panel.
 - **`None`** (`src/components/none.tsx`): what a field or a cell holds when it has no value, `none` in muted text in
   its place's own type, never a sentence of its own. With a reason, the reason follows a colon; in a column too narrow
   for it (`brief`), the reason is on hover. One phrase per concept: a summary, a branch, a PR, a session, or a tick's
@@ -458,8 +474,12 @@ list, an empty state, or a skeleton by hand.
   what sits there empty (the rail's keycap). Its two sizes are the rail's and a list filter's (`h-8`, `text-sm`) and a
   panel's own line of data (`sm`, `h-7`, `text-xs`). No page builds a field by hand.
 - **`PanelSkeleton`** (`src/components/panel.tsx`): what a panel shows while its data has not arrived at all, `rows`
-  shimmering bars, each shorter than the last. It takes the minimum height its content will (`min-h-72` for a page's
-  main panel), so nothing moves when the data lands.
+  shimmering bars, each shorter than the last. It takes the minimum height its content will, so nothing moves when
+  the data lands: `min-h-72` for a page's main panel or a list that runs long (tickets, runs, ticks), `min-h-40` for
+  a list that holds a few (the attention list, the chores, a pool's slots).
+- **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel: its column heads in
+  `panel-label` type, its row heads in plain text, its figures right-aligned readouts. Its panel's header repeats none
+  of its rows.
 
 ## Patterns
 
@@ -694,6 +714,21 @@ list, an empty state, or a skeleton by hand.
   its text and strong pieces go through `LinkedText`, so a URL outside code is a link to itself. In a list's row it
   shows the first four lines and a `show N more lines` toggle in the accent; text one line over shows whole.
   A conversation's bubbles keep their own `whitespace-pre-wrap`.
+- **The guide** (`/guide/PAGE`, `src/lib/guide.ts`, `GuideText`) is the operator's documentation, a page each, as
+  Markdown in `src/guide/` (docs/design/CONVERSATIONS.md §22), laid out as a documentation site rather than in panels.
+  On the left, the pages by group (`SOURCES`), each group a heading over its pages on a hairline, the page shown in
+  the accent on an accent stroke; under `lg` the same list folds into a `Guide pages` toggle above the page. In the
+  middle, the article at `max-w-3xl`: the group as the header's trail, the title, and the lead, then the body at
+  `text-base` with soft line breaks read as spaces, each `##` a section under a hairline and each heading a `#` link to
+  itself on hover, and at its foot Previous and Next, the pages either side in the sidebar's order. On the right from
+  `xl`, `On this page`, its `##` headings. The sidebar and contents stick as the article scrolls. `/guide` opens the
+  first page. It reads what rich text reads, `##` and `###` headings as real headings, each with its anchor as its id,
+  and labelled links in the accent, underlined: `[text](page)` or `(page#heading)` to the guide, `(#heading)` on this
+  page, `(/runs)` to a section, and `(https://...)` to the web in a new tab. A link to anything else stays characters,
+  and `guide.test.ts` fails on it. A page opens with `# Title` and then a lead of a sentence or two, says what the
+  operator sees and does in the UI's own words (`waiting on you`, not `blocked`), and leaves how the code does it to
+  the code and why to the design. A new page is a file there and a line in its group in `SOURCES`; the rail's foot,
+  beside the version, opens the guide.
 - **A plan in its editor** (`PlanEditor`, `src/components/plan-editor.tsx`; docs/design/PLANNING.md §25): the plan in a
   `Plan` panel, its toolbar in the panel's header, and the comments in a `Comments` panel beside it, 20rem wide, once
   the page gives both 60rem (a container query, so the rail's width counts), and under it, as a list, below that. Under
@@ -804,17 +839,17 @@ list, an empty state, or a skeleton by hand.
   its phase; those lines scroll inside the panel past `15rem` (`PanelScroll`), so its total cost, its actions, and the
   reply stay in reach. A worktree's branch links the same way, its name in the accent with its `LinkOutIcon`, when its
   repository has a branch link.
-- **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch on a ticket's, run's,
-  or PR's page, a run's worktrees and log path, a session id wherever one shows (a tick's page, a transcript's header,
-  a run's row, a chore run's row), and a review's commit, whole though the page shows its first 7 characters. A path
-  copies whole though the page shows it from the workspace root (`CopyablePath`), joined to `/meta`'s root; until that
-  is read there is no button, so a copy is never the short path. The button is a ghost `icon-xs` with the
-  `Copy` icon, muted until hovered; a click shows `Check` in the accent, or `X` in `status-failed` when the browser
-  refuses, for 1.5 seconds, and names what happened (`Copied branch`), and a toast says the same with the text it
-  copied, on one line. In a dense list (a worktree slot's path and branch, a run's or chore run's session id) it shows
-  only while its row (`group/copy`) is hovered or it has the focus, keeping its space so nothing moves, and always on
-  a touch screen. The clipboard needs a secure context (https or localhost), so elsewhere there is no button and the
-  text stays selectable.
+- **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch on a ticket's, run's, or
+  PR's page, a run's worktrees and log path, a chore run's log path (on its page and its row), a tick's output path, a
+  session id wherever one shows (a tick's page, a transcript's header, a run's row, a chore run's row), and a review's
+  commit, whole though the page shows its first 7 characters. A path copies whole though the page shows it from the
+  workspace root (`CopyablePath`), joined to `/meta`'s root; until that is read there is no button, so a copy is never
+  the short path. The button is a ghost `icon-xs` with the `Copy` icon, muted until hovered; a click shows `Check` in
+  the accent, or `X` in `status-failed` when the browser refuses, for 1.5 seconds, and names what happened
+  (`Copied branch`), and a toast says the same with the text it copied, on one line. In a dense list (a worktree slot's
+  path and branch, a run's or chore run's session id, a chore run's log) it shows only while its row (`group/copy`) is
+  hovered or it has the focus, keeping its space so nothing moves, and always on a touch screen. The clipboard needs a
+  secure context (https or localhost), so elsewhere there is no button and the text stays selectable.
 - **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was
   done shows too little of it: a copy names what it copied. It sits at the bottom center of the window on `surface`
   with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title in `text-sm`, and a line under it

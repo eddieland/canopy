@@ -61,16 +61,19 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy memory proposals` | The lessons workers proposed that wait on you, each with where it came from. |
 | `canopy memory promote ID [--text T]` | Makes a proposal a lesson in your words; `reject ID` ends one instead. |
 | `canopy memory lessons`, `renew ID` | The lessons you promoted, their review dates and reports; `renew` keeps one. |
+| `canopy memory search WORDS` | Every memory with its text, best match first; `--ticket KEY` for one ticket's. |
 | `canopy notice 'TEXT' [--for 4h]` | Every run dispatched until it lapses hears TEXT, such as a CI outage; `--clear` lifts it. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run; `--no-record` records nothing. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
+| `canopy daemon start [LOOP OPTIONS]`, `stop` | The loop, detached; output in `.canopy/daemon.log`. The operator runs these. |
+| `canopy daemon status` | Whether the detached loop runs, since when, and where its output is. |
 | `canopy init [--provider NAME] [[NAME=]URL...]` | Sets up a workspace here and its private config; adds and syncs URLs. |
 | `canopy workspace sync [--dry-run]` | Converges `repos/` on the map and each pool on its declared size (DESIGN §18). |
 | `canopy workspace add [NAME=]URL...` | Adds repositories to the map by clone URL, then syncs. |
 | `canopy notify test [SINK]` | Sends a test message to every notification sink, or one, now. Changes nothing. |
-| `canopy skill` | Prints this skill. |
+| `canopy skill [--install [DIR]]` | Prints this skill, or saves it in `DIR/canopy/`, `~/.agents/skills` by default. |
 | `canopy --version`, `canopy --help` | As usual; `canopy <command> --help` for options. |
 
 ## Where things are

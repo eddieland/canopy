@@ -75,7 +75,7 @@ produce it, and that one the shadowing check refuses (below).
 | Tool | Today | Input |
 | --- | --- | --- |
 | `dispatch` | `canopy dispatch` | its arguments and options as fields, `repos` a list |
-| `decide` | `canopy decide` | `key` (optional only for a tick-wide `skip`), `action`, `rationale` |
+| `decide` | `canopy decide` | `key` (omitted only for a tick-wide `skip`, whose `rationale` gives its reason), `action`, `rationale` |
 | `queried` | `canopy queried` | `keys`, a list, empty for none |
 | `attention` | `canopy attention` | its arguments and options as fields |
 | `ticket-set` | `canopy ticket set` | its arguments and options as fields |
@@ -162,7 +162,7 @@ OpenCode's patch. The design above rests on each of these; a later OpenCode is r
 
 ### What changes elsewhere, in stage 2
 
-With the operator's approval note: the overseer's prompt names tools, not commands; its definition as above; the state
+The overseer's prompt names tools, not commands; its definition as above; the state
 block drops the heredoc delimiter; §6's overseer step, preflight, and dry-run wording; §13's `canopy-overseer`; §22's
 mirroring; TRUST_MODEL T1 (the overseer acts only through canopy's tools, whose guards are code; the heredoc paragraph
 goes) and T7 (the server's name); D020 edited to name the tools, D081 superseded, and a new entry: canopy serves MCP

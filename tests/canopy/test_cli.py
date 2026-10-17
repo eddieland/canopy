@@ -125,8 +125,32 @@ def test_skill_prints_the_operator_skill(capsys: pytest.CaptureFixture[str]) -> 
 def test_skill_help_keeps_the_install_commands_on_their_own_lines(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["skill", "--help"]) == 0
     lines = [line.strip() for line in capsys.readouterr().out.splitlines()]
-    assert "mkdir -p ~/.agents/skills/canopy" in lines
-    assert "canopy skill > ~/.agents/skills/canopy/SKILL.md" in lines
+    assert "canopy skill --install" in lines
+    assert "canopy skill --install ~/.claude/skills" in lines
+
+
+def test_skill_install_saves_it_in_the_home_skills_directory(
+    capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    saved = tmp_path / ".agents" / "skills" / "canopy" / "SKILL.md"
+    with mock.patch.dict(os.environ, {"HOME": str(tmp_path)}):
+        assert main(["skill", "--install"]) == 0
+    assert saved.read_text(encoding="utf-8") == resources.operator_skill().read_text(encoding="utf-8")
+    assert capsys.readouterr().out == f"wrote {saved}\n"
+
+
+def test_skill_install_saves_it_in_the_directory_given_over_an_older_one(tmp_path: Path) -> None:
+    saved = tmp_path / "skills" / "canopy" / "SKILL.md"
+    saved.parent.mkdir(parents=True)
+    saved.write_text("an older canopy's skill\n", encoding="utf-8")
+    assert main(["skill", "--install", str(tmp_path / "skills")]) == 0
+    assert saved.read_text(encoding="utf-8") == resources.operator_skill().read_text(encoding="utf-8")
+
+
+def test_skill_install_reports_a_directory_it_cannot_write(capsys: pytest.CaptureFixture[str], tmp_path: Path) -> None:
+    (tmp_path / "file").touch()
+    assert main(["skill", "--install", str(tmp_path / "file")]) == 1
+    assert "could not save the skill" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize("shell", ["bash", "zsh", "fish"])

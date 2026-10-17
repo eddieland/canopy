@@ -1,8 +1,8 @@
 """A journal seeded from fixtures, for the UI's development server and its end-to-end tests (`--mock`).
 
 The server reads and writes it through the same code as the loop's journal: only the attention list, ending a run, a
-reload, the attempt and review limits and their grants, and the pools' slots are stand-ins, since the first four belong
-to the loop, `runs`, and `reviews`, and there is no treehouse to ask (backend.py).
+reload, a tick asked for, the attempt and review limits and their grants, and the pools' slots are stand-ins, since the
+first five belong to the loop, `runs`, and `reviews`, and there is no treehouse to ask (backend.py).
 It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds one
 slot past its declared size, and run 43 holds a slot in both. Two chores are configured (§19): `deps`, whose latest run
 found the advisory the attention list shows and which has a note from the operator, and `build-health`, running. Two
@@ -216,8 +216,8 @@ def seed(directory: Path) -> Backend:
     """Write a workspace, a user config, and a seeded journal under `directory`, and return a Backend over them.
 
     Returns:
-        A mock Backend whose clock is T0, with the fixtures' attention list and pools, and stand-ins for ending a run
-        and reloading.
+        A mock Backend whose clock is T0, with the fixtures' attention list and pools, and stand-ins for ending a run,
+        reloading, and asking for a tick.
     """
     root = directory / "acme"
     root.mkdir(parents=True)
@@ -244,6 +244,7 @@ def seed(directory: Path) -> Backend:
         attention=_attention,
         end_run=_end_run,
         reload=_reload,
+        tick_now=_tick_now,
         limits=_limits,
         review_limit=_review_limit,
         grant=_grant,
@@ -287,6 +288,11 @@ def _end_run(ctx: Context, run: sqlite3.Row) -> bool:
 def _reload(_ctx: Context) -> Reloading:
     # No loop runs on the mock's config, so there is nothing to read again.
     return Reloading(changed=(), restart=(), after_tick=False)
+
+
+def _tick_now() -> bool:
+    # No loop runs on the mock's journal, so no tick follows.
+    return False
 
 
 def _limits(ctx: Context, key: str) -> list[Limit]:
@@ -365,10 +371,15 @@ async def changes(backend: Backend, seconds: float | None) -> None:
         return
     while True:
         await asyncio.sleep(seconds)
-        with backend.open() as ctx:
-            ctx.conn.execute(
-                "UPDATE runs SET cost_usd = round(cost_usd + 0.01, 2) WHERE id = ? AND status = 'running'", (LIVE_RUN,)
-            )
+        # On a thread, as the routes keep journal work: a write that waits on another's lock would stall every request.
+        await asyncio.to_thread(_add_a_cent, backend)
+
+
+def _add_a_cent(backend: Backend) -> None:
+    with backend.open() as ctx:
+        ctx.conn.execute(
+            "UPDATE runs SET cost_usd = round(cost_usd + 0.01, 2) WHERE id = ? AND status = 'running'", (LIVE_RUN,)
+        )
 
 
 def _fixtures(conn: sqlite3.Connection, root: Path) -> None:

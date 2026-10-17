@@ -5,7 +5,7 @@ import { ApiError } from '@/api/client'
 import { tickDetailQuery, tickTranscriptQuery } from '@/api/queries'
 import type { TickDetail, Transcript } from '@/api/types'
 import { Age } from '@/components/age'
-import { Copyable } from '@/components/copy-button'
+import { Copyable, CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { Decisions } from '@/components/decisions'
 import { Field, Fields } from '@/components/fields'
@@ -124,7 +124,7 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                             <span title={RUN_TOKENS_TITLE}>{runTokens(tick.new_tokens, tick.peak_context)}</span>
                         </Field>
                         <Field label="output" mono title="the overseer's stdout and stderr: yours alone">
-                            {output ?? <None />}
+                            {output === null ? <None /> : <CopyablePath path={output} label="output path" />}
                         </Field>
                     </Fields>
                 </Panel>

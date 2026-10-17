@@ -28,6 +28,10 @@ from canopy.setup import workspace as setup_workspace
 SHELLS: dict[str, type[ShellComplete]] = {"bash": BashComplete, "zsh": ZshComplete, "fish": FishComplete}
 COMPLETE_VAR = "_CANOPY_COMPLETE"
 
+# Where `canopy skill --install` saves the skill when given no directory: the home skills directory shared by agent
+# runtimes (DESIGN §13).
+SKILLS_DIR = "~/.agents/skills"
+
 
 @click.command("init")
 @click.option("--provider", help="Tracker provider for a new workspace map (jira, github, linear, ...).")
@@ -217,16 +221,35 @@ def _worker_cmd(runner: procs.Runner, user_file: Path) -> str:
 
 
 @click.command("skill")
-def cmd_skill() -> int:
-    """Print the canopy skill for your own agent sessions.
+@click.option(
+    "--install",
+    "skills_dir",
+    is_flag=False,
+    flag_value=SKILLS_DIR,
+    metavar="[DIR]",
+    help="Save the skill as canopy/SKILL.md in DIR, where your agent runtime reads skills, instead of printing it. "
+    f"DIR defaults to {SKILLS_DIR}.",
+)
+def cmd_skill(skills_dir: str | None) -> int:
+    """Print the canopy skill for your own agent sessions, or save it with --install.
 
     Save it where your agent runtime reads skills, and again after upgrading canopy:
 
     \b
-        mkdir -p ~/.agents/skills/canopy
-        canopy skill > ~/.agents/skills/canopy/SKILL.md
+        canopy skill --install
+        canopy skill --install ~/.claude/skills
     """  # noqa: D301  (\b is click's marker for a paragraph it must not rewrap)
-    click.echo(resources.operator_skill().read_text(encoding="utf-8"), nl=False)
+    text = resources.operator_skill().read_text(encoding="utf-8")
+    if skills_dir is None:
+        click.echo(text, nl=False)
+        return 0
+    path = Path(skills_dir).expanduser() / "canopy" / "SKILL.md"
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    except OSError as e:
+        raise CliError(f"could not save the skill: {e}") from None
+    click.echo(f"wrote {path}")
     return 0
 
 

@@ -94,6 +94,9 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
   `canopy/serve/mock.py`, a workspace of three repositories; the header shows `mock`. Its times are fixed around
   2026-10-08 12:00 UTC: a screenshot test freezes the browser's clock (`NOW` in `e2e/helpers.ts`). `src/api/mocks.ts`
   holds a few typed rows for unit tests.
+- **The guide says what the pages do.** The operator's documentation is Markdown in `src/guide/` (`DESIGN.md`, "The
+  guide"). A change to what a page shows or does updates the guide's page about it in the same PR, as a change to a
+  behavior updates the design. Its links are checked by `src/lib/guide.test.ts`.
 - **API docs.** The server serves Swagger UI at `/api/docs`, over the schema at `/api/openapi.json`, from the copy
   `vite.config.ts` puts in the build's `api-docs/`: through the dev server too, once `npm run build` has run.
 
@@ -137,4 +140,4 @@ to the rest; a write goes through `canopy.core.conversation`, never SQL of its o
 
 - `make check` passes (it runs `npm run check`), and `make ui-e2e` passes.
 - New behavior has a unit test or a Playwright test; a new route has its screenshots.
-- `DESIGN.md` here is updated for any new token, pattern, or rule.
+- `DESIGN.md` here is updated for any new token, pattern, or rule, and the guide for anything a page of it describes.

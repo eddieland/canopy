@@ -220,8 +220,8 @@ export function ThreadScroll({ label, end, children }: { label: string; end: 'to
 
 /**
  * What a list or a page says when it has nothing to show, in muted text: `no X yet`, then one clause on why or what to
- * do. A `row` stands where a panel's list would be, as its one row; a `panel` fills a page's main panel. Never an
- * error: that is a `Notice`.
+ * do. A `row` stands where a panel's list would be, as its one row; a `panel` fills a page's main panel, its words
+ * centered in it as one sentence, whatever links or code they hold. Never an error: that is a `Notice`.
  */
 export function Empty({
     size = 'row',
@@ -235,16 +235,16 @@ export function Empty({
     /** What it says. */
     children: ReactNode
 }) {
+    if (size === 'row') {
+        return <p className={cn('px-3 py-2.5 text-sm text-muted-foreground', className)}>{children}</p>
+    }
+    // The grid centers its one child, the sentence, so a link or a command in it stays on its line.
     return (
-        <p
-            className={cn(
-                'text-sm text-muted-foreground',
-                size === 'row' ? 'px-3 py-2.5' : 'grid min-h-40 place-items-center p-6 text-center',
-                className,
-            )}
+        <div
+            className={cn('grid min-h-40 place-items-center p-6 text-center text-sm text-muted-foreground', className)}
         >
-            {children}
-        </p>
+            <p className="max-w-prose text-balance">{children}</p>
+        </div>
     )
 }
 
