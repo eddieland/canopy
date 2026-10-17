@@ -31,7 +31,9 @@ test("a PR's URL in a worker's report is named as the PR is anywhere: its page, 
     await expect(out).toHaveAttribute('rel', 'noreferrer noopener')
     await conversation.getByRole('link', { name: 'acme/web#91', exact: true }).click()
     await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#91 Move billing to the v2 API')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+        'acme/web#91 ABC-103: move billing to v2 and drop the v1 client',
+    )
 })
 
 test("a ticket's conversation ends on the run working it now, and only while one is", async ({ page }) => {

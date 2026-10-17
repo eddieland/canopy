@@ -576,7 +576,8 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
    else the status, with each PR on a line), and for a `blocked` run its `question`. A git failure before or after the
    worker is `crashed`. The stored result is the validated one, text fields cut at 2000 characters, plus a `harness`
    note saying why the status differs from what the worker reported. `prs` is kept to the run's repositories; each plain
-   `https://` URL becomes its unit's PR, for display and the next run's prompt.
+   `https://` URL becomes its unit's PR, for display and the next run's prompt, and its title in `pr_titles`, if any,
+   is kept by that URL, replacing the one an earlier run reported.
 
 Every git the harness runs, here, in a review (§21), and in `canopy init` and `canopy workspace sync`, runs with hooks,
 the filesystem monitor, submodule fetches, and the `ext::` transport turned off (D107). A slot shares its git directory
@@ -600,11 +601,17 @@ Worker result contract, one JSON line, last line of the worker's text (§13):
 
 ```json
 {"status":"done|blocked|failed","branch":"agent/KEY-slug","prs":{"api":"https://...|null"},
- "summary":"one paragraph","question":"only when blocked"}
+ "pr_titles":{"api":"KEY: ...|null"},"summary":"one paragraph","question":"only when blocked"}
 ```
 
 `prs` maps each repository the run worked in to its PR. A single-URL `pr`, as older prompt overrides print, is still
-read for a run in one repository.
+read for a run in one repository. `pr_titles` maps the same repositories to each PR's title as it stands, which need
+not be the ticket's: a worker names its PR for the change it made, and a resume may rename it. Only `implement` and
+`resume` prompts ask for it, as `{{PR_TITLES}}`, since only they open or reword PRs; it is optional, so an override
+without it still records its PRs, untitled. A title is one line of at most 256 characters, GitHub's own limit, and is
+for display only: the harness never reads it back, and the overseer and later workers read the PR itself. It is kept
+by the PR's URL rather than on the unit, so `canopy forget`, which drops the unit, leaves it, as it leaves the PR's
+reviews.
 
 Worker obligations, stated in every worker prompt:
 

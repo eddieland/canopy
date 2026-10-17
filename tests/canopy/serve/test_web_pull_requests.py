@@ -26,12 +26,14 @@ def test_the_list_has_each_pr_once_with_its_ticket_branch_and_latest_review(back
         2,
     )
     assert ours["latest_review"]["id"] == 4  # the newest of its two review runs
+    assert ours["title"] == "ABC-099: debounce the search box by 250 ms"  # the PR's own, not its ticket's
     theirs = by_url[mock_reviews.PR_12]
     assert (theirs["ticket_key"], theirs["branch"], theirs["latest_review"]["verdict"]) == (None, None, "clean")
     # A PR the operator asked to have reviewed is listed before its first review, with its request and repository.
     requested = by_url[mock_reviews.PR_95]
     assert (requested["reviews"], requested["review_request"]["end_reason"]) == (0, None)
     assert theirs["review_request"] is None
+    assert theirs["title"] is None  # no worker of canopy's reported one
 
 
 def test_a_prs_page_has_the_runs_that_pushed_to_it_its_reviews_and_its_decisions(backend: Backend) -> None:
@@ -111,3 +113,14 @@ def test_a_tickets_title_is_one_printable_line(backend: Backend) -> None:
         db.set_ticket(ctx.conn, "ABC-099", ctx.repo, title="Debounce\x1b[2J\n search")
     [ours] = [p for p in client(None, backend).get("/api/pull-requests").json() if p["ticket_key"] == "ABC-099"]
     assert ours["ticket_title"] == " ".join(conversation.printable("Debounce\x1b[2J\n search").split())
+
+
+def test_a_prs_own_title_is_the_latest_reported_one_printable_and_outlives_its_unit(backend: Backend) -> None:
+    with backend.open() as ctx:
+        db.set_pr_title(ctx.conn, mock_reviews.PR_88, "ABC-099: debounce\x1b[2J\n the box")
+        with db.transaction(ctx.conn):
+            db.forget_ticket(ctx.conn, "ABC-099")
+    page = client(None, backend).get("/api/pull-request", params={"url": mock_reviews.PR_88}).json()
+    assert page["pull_request"]["title"] == " ".join(
+        conversation.printable("ABC-099: debounce\x1b[2J\n the box").split()
+    )
