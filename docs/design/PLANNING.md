@@ -276,12 +276,17 @@ canopy ships `canopy-planner` in the definitions directory (§13):
 - `canopy show KEY` prints the newest plan as its file stands, its status, and when it was approved, and says when the
   file was edited since the planner wrote it, changed since it was approved, or is not a plan any more; `--plans`
   prints every plan and the open comments. A ticket plans do not touch shows no plan.
-- The web UI's ticket page (§22) shows the newest plan in the plan editor, with `Approve`, `Ask for changes`, and
-  `Skip`, and earlier plans read only. A waiting or approved plan is editable while no plan run for the ticket is
-  running, and `Approve` or `Ask for changes` saves an unsaved edit first, so the approval takes what the operator sees
-  and the planner reads it. `Approve`, `Skip`, and asking for a plan go through the same code as `canopy plan`, with
-  the same refusals; `Ask for changes` is a reply. Leaving the page, by a link or by closing the tab, while an edit is
-  not saved or a comment or the note holds words not yet sent, asks first, so nothing typed is lost unseen.
+- The web UI gives a ticket's plan a page of its own (§22), `/tickets/KEY/plan`: the newest plan in the plan editor,
+  with `Approve`, `Ask for changes`, and `Skip`, and earlier plans read only. A plan is a long document with comments
+  in a margin beside it, which wants the page's width, and a page is linked to and left with Back. The ticket's page
+  has the plan's card instead, which says where it stands, which plan it is, the run that wrote it and when, and how
+  many comments are open, and links to the plan's page; it edits and decides nothing, so the ticket's page never loads
+  the editor. A `plan_review` item links to the plan's page too. A waiting or approved plan is editable while no plan
+  run for the ticket is running, and `Approve` or `Ask for changes` saves an unsaved edit first, so the approval takes
+  what the operator sees and the planner reads it. `Approve`, `Skip`, and asking for a plan go through the same code
+  as `canopy plan`, with the same refusals; `Ask for changes` is a reply. Leaving the page, by a link or by closing
+  the tab, while an edit is not saved or a comment or the note holds words not yet sent, asks first, so nothing typed
+  is lost unseen.
 - A `plan.proposed` event (§20) tells the operator's sinks a plan is waiting: the ticket and its title, the run, and the
   plan's id. It carries no plan text, so nothing of the plan leaves the machine through a Slack sink. It is in the
   `runs` group and urgent to a batching sink; a sink that takes only attention hears of the plan from `plan_review`.

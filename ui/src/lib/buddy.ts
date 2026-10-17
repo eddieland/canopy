@@ -168,6 +168,14 @@ export const TIPS = {
         'Hot take: every plan is a sample plan until somebody runs it.',
         'Haiku: a plan on the page / comments hang off its margin / like leaves off a twig',
     ],
+    '/tickets/$key_/plan': [
+        "It looks like you're reading a plan. Shall I approve it unread, like terms of service?",
+        'Unhelpful tip: Skip the plan is also how I handle most weekends.',
+        'Fun fact: a plan with no open comments is either perfect or unread.',
+        'Dear diary, a planner wrote three pages. The implement will read the first one.',
+        'Hot take: Ask for changes is the most polite way to say "no" in canopy.',
+        'Haiku: approve it, they said / the implement reads it once / then does what it likes',
+    ],
     '/settings': [
         "It looks like you're in Settings. You can turn me off here. I'd rather you didn't.",
         'Unhelpful tip: the Spicy ticker is for professionals.',
