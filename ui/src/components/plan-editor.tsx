@@ -89,6 +89,7 @@ export function PlanEditor({
     onThreadsChange,
     onChange,
     editable = true,
+    edited = false,
     onAskForChanges,
 }: {
     /** The plan, as Markdown. Read when the editor opens. */
@@ -101,6 +102,8 @@ export function PlanEditor({
     onChange?: (markdown: string) => void
     /** Whether the operator may edit the plan and its comments; without it both are read only. */
     editable?: boolean
+    /** Whether the plan was edited before it was opened here, as an edit made here marks it too. */
+    edited?: boolean
     /** Sends the open comments, and a note on the whole plan, to the planner as one message. */
     onAskForChanges?: (message: string) => void
 }) {
@@ -134,6 +137,11 @@ export function PlanEditor({
         },
     })
     const [draft, setDraft] = useState<Draft | undefined>(undefined)
+    // Whether the plan here says other than it did when it opened, by the editor's own Markdown for both: the planner's
+    // may be written otherwise (`*` for `-`), and an edit undone can leave an empty paragraph at the end, neither of
+    // which the operator wrote.
+    const [original] = useState(() => editor.getMarkdown().trimEnd())
+    const [changed, setChanged] = useState(false)
     const seen = useEditorState({
         editor,
         selector: ({ editor: current }) => {
@@ -223,7 +231,9 @@ export function PlanEditor({
         if (next !== threads) {
             onThreadsChange(next)
         }
-        onChange?.(editor.getMarkdown())
+        const now = editor.getMarkdown()
+        setChanged(now.trimEnd() !== original)
+        onChange?.(now)
     })
     const onPassageClick = useEffectEvent(({ id }: { id: string }) => activate(id, false))
     const onCommentKey = useEffectEvent(() => startComment())
@@ -396,7 +406,12 @@ export function PlanEditor({
                         {...actions}
                     />
                     {editable && onAskForChanges !== undefined && (
-                        <AskForChanges threads={threads} starts={starts} onAsk={onAskForChanges} />
+                        <AskForChanges
+                            threads={threads}
+                            starts={starts}
+                            edited={edited || changed}
+                            onAsk={onAskForChanges}
+                        />
                     )}
                 </Panel>
             </div>

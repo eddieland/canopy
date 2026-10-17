@@ -238,6 +238,7 @@ function NewestPlan({
                 onThreadsChange={onThreadsChange}
                 onChange={setMarkdown}
                 editable={editable}
+                edited={newest.edited}
                 onAskForChanges={status === 'proposed' ? askForChanges : undefined}
             />
             {editable && (
