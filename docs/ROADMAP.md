@@ -1573,7 +1573,8 @@ state reaches the PR before they accept. Sketch only; the design comes first, in
   splits by reviewer before a plan: each new item on the unit's PR (a review comment from anyone, canopy's review
   findings, a failed check, a conflict with the base, an authorized reply on the ticket) goes to the planner, with the
   PR's checks at its head. A failed check is an item because M56 makes fixing CI part of `resume`, so one plan, and one
-  run, covers a round's comments and its red CI together. A worker's own comments and the replies the operator sent
+  run, covers a round's comments and its red CI together. A round that is only red CI waits on its plan too, as the
+  operator asked; M55's triage can waive a trivial one. A worker's own comments and the replies the operator sent
   through canopy (M53) are not items. The plan shows each item's author, and whether they are trusted, so the operator
   weighs it; trust no longer decides what runs.
 - **The planner.** M44's planner, definition, desk, prompt shape, and file, with the PR and its items in place of a
@@ -1707,13 +1708,19 @@ prompt, cooldown, and attempt limit, and each pushing to the same branch. Sketch
   log, under the context's reason for the run; `worker-fix-ci.md` and its private variant go. A prompt override of
   either fix-ci file is refused with a message saying what to merge into the resume override.
 - **One limit, higher.** `policy.max_resume_attempts` bounds every `resume` of a unit, whatever it was for, an old
-  `fix-ci` run counted among them (D030: derived from `runs`, no reset), with its default raised to 6, more than
-  today's two limits together (2 and 3), since one run now does what two did. The operator chose one simpler limit
-  (2026-10-17), accepting that a PR that keeps going red can spend the attempts its reviewers would have had.
-  `policy.max_fix_ci_attempts` becomes a removed key, whose error says to raise `max_resume_attempts`, and
-  `canopy grant KEY fix-ci` is refused naming `resume`. The cooldown stays, renamed `policy.ci_cooldown_minutes`
-  (`fix_ci_cooldown_minutes` a removed key naming it): it holds a `resume` whose only reason is a failed check, so a
-  red build still waits between attempts.
+  `fix-ci` run counted among them (D030: derived from `runs`, no reset), with its default raised to 6, more than today's
+  two limits together (2 and 3), since one run now does what two did. The operator chose one simpler limit (2026-10-17),
+  accepting that a PR that keeps going red can spend the attempts its reviewers would have had. Nothing is migrated:
+  every run counts, and a unit's `fix-ci` grants count toward the new limit as its `resume` grants do, so a unit within
+  the old defaults (at most 2 and 3, 5 together) is within 6 on upgrade, and one past them had grants that carry over.
+  `policy.max_fix_ci_attempts` becomes a removed key, whose error says to raise `max_resume_attempts`, and `canopy grant
+  KEY fix-ci` is refused naming `resume`. The cooldown stays, renamed `policy.ci_cooldown_minutes`
+  (`fix_ci_cooldown_minutes` a removed key naming it): it holds a `resume` whose only reason is a failed check, so a red
+  build still waits between attempts.
+- **Under M54.** With `policy.feedback_plan = "approve"`, a `resume` for a failed check alone waits on an approved plan
+  like any other, so a CI fix that ran unattended as `fix-ci` now waits for the operator. That is intended: the
+  operator asked for CI rounds to be planned too (2026-10-17). M55's triage, where it is on, can waive the plan for a
+  trivial one. With feedback plans off, a red check sends its `resume` unattended, as `fix-ci` did.
 - **What else changes.** M25's `triage-ci`, once built, comes before a `resume` for a failed check as it would have
   before `fix-ci`; M35's notice holds that `resume` as it held `fix-ci`; M38 moves `ci_red`'s `dispatch resume` into
   code under its own evidence rule; the overseer prompt's phase table and the web UI's kind chips and guide pages say
