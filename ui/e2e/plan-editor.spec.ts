@@ -266,6 +266,42 @@ test.describe('with the comments under the plan', () => {
         await expect(page.locator('.plan-margin[data-aligned]')).toHaveCount(0)
     })
 
+    test('a comment being written floats under its passage, and the page stays where it is', async ({ page }) => {
+        await select(page, 'iter_rows()')
+        const scrolled = await page.evaluate(() => globalThis.scrollY)
+        await page.keyboard.press('ControlOrMeta+Alt+m')
+        const float = page.getByTestId('plan-float')
+        const form = float.getByRole('form', { name: 'Comment' })
+        await expect(form.getByRole('textbox')).toBeFocused()
+        const passage = await plan(page).getByText('iter_rows()').first().boundingBox()
+        const box = await float.boundingBox()
+        expect(box?.y).toBeGreaterThan((passage?.y ?? 0) + (passage?.height ?? 0))
+        expect(box?.y).toBeLessThan((passage?.y ?? 0) + (passage?.height ?? 0) + 24)
+        expect(await page.evaluate(() => globalThis.scrollY)).toBe(scrolled)
+        await page.keyboard.type('Why not rows()?')
+        await form.getByRole('button', { name: 'Comment' }).click()
+        await expect(float).toBeHidden()
+        await expect(comments(page).filter({ hasText: 'Why not rows()?' })).toHaveCount(1)
+        await expect(plan(page)).toBeFocused()
+    })
+
+    test('a passage clicked opens its thread over the plan, not down in the list, and Escape closes it', async ({
+        page,
+    }) => {
+        await plan(page).locator('[data-thread=sample-2]').click()
+        const float = page.getByTestId('plan-float')
+        await expect(float.getByRole('article')).toContainText('name the ticket')
+        await expect(comments(page).filter({ hasText: 'name the ticket' })).toHaveCount(1)
+        await page.keyboard.press('Escape')
+        await expect(float).toBeHidden()
+        await expect(comments(page).filter({ hasText: 'name the ticket' })).toHaveCount(1)
+
+        // The caret back in the passage opens its thread in the list: only a click floats it.
+        await page.keyboard.press('ArrowRight')
+        await expect(comments(page).filter({ hasText: 'name the ticket' })).toHaveAttribute('data-active', 'true')
+        await expect(float).toBeHidden()
+    })
+
     test('a comment shows its passage in the plan, clear of the toolbar', async ({ page }) => {
         const card = comments(page).filter({ hasText: 'proxy in front' })
         await card.scrollIntoViewIfNeeded()
@@ -275,6 +311,18 @@ test.describe('with the comments under the plan', () => {
         await expect(passage).toBeInViewport()
         const toolbar = await page.getByRole('toolbar', { name: 'Format' }).boundingBox()
         expect((await passage.boundingBox())?.y).toBeGreaterThanOrEqual((toolbar?.y ?? 0) + (toolbar?.height ?? 0))
+    })
+})
+
+test.describe('on a wide monitor', () => {
+    test.use({ viewport: { width: 1700, height: 900 } })
+
+    test("the comments stay against the plan's text, the room left over after them", async ({ page }) => {
+        const text = await plan(page).boundingBox()
+        const column = await page.locator('.plan-margin').boundingBox()
+        const gap = (column?.x ?? Infinity) - ((text?.x ?? 0) + (text?.width ?? 0))
+        // The panel's padding and the grid's gap: 1.5rem and 1.5rem, and no more.
+        expect(gap).toBeLessThanOrEqual(56)
     })
 })
 
@@ -372,6 +420,18 @@ test.describe('copying out of the plan', () => {
     })
 })
 
+test('a card carries Resolve and Delete in its header, and Reply only while it is the open one', async ({ page }) => {
+    const thread = comments(page).filter({ hasText: 'name the ticket' })
+    await expect(thread.getByRole('button', { name: 'Resolve' })).toBeVisible()
+    await expect(thread.getByRole('button', { name: 'Delete' })).toBeVisible()
+    await expect(thread.getByRole('button', { name: 'Reply', exact: true })).toHaveCount(0)
+    await thread.getByText('Keep this out').click()
+    await expect(thread.getByRole('button', { name: 'Reply', exact: true })).toBeVisible()
+    // One whose passage is gone cannot be opened from the plan, so it keeps its Reply.
+    const lost = comments(page).filter({ hasText: 'passage gone' })
+    await expect(lost.getByRole('button', { name: 'Reply', exact: true })).toBeVisible()
+})
+
 test('resolving a thread folds it away and takes its highlight off the plan', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'name the ticket' })
     await thread.getByRole('button', { name: 'Resolve' }).click()
@@ -413,7 +473,7 @@ test('a comment and a reply are edited in place, and the planner reads what they
     await thread.getByRole('button', { name: 'Edit reply' }).click()
     const reply = thread.getByRole('form', { name: 'Edit reply' }).getByRole('textbox')
     await reply.fill('It buffers up to 2 MB.')
-    await page.keyboard.press('Escape')
+    await thread.getByRole('button', { name: 'Cancel' }).click()
     await expect(thread).toContainText('It buffers up to 1 MB.')
     await thread.getByRole('button', { name: 'Edit reply' }).click()
     await reply.fill('It buffers up to 2 MB.')
@@ -425,10 +485,9 @@ test('a comment and a reply are edited in place, and the planner reads what they
 })
 
 test('Ask for changes sends the open comments, each on its passage, with the note', async ({ page }) => {
-    await comments(page)
-        .filter({ hasText: 'proxy in front' })
-        .getByRole('button', { name: 'Reply', exact: true })
-        .click()
+    const thread = comments(page).filter({ hasText: 'proxy in front' })
+    await thread.getByText('Does the proxy').click()
+    await thread.getByRole('button', { name: 'Reply', exact: true }).click()
     const reply = page.getByRole('form', { name: 'Reply' })
     await reply.getByRole('textbox').fill('And a test that reads the first row before the last is written.')
     await reply.getByRole('button', { name: 'Reply' }).click()
@@ -450,6 +509,28 @@ test('clicking a commented passage opens its thread and puts the cursor there', 
     // The paragraph's style shows the cursor moved from the heading it opened in.
     const menu = page.getByRole('toolbar', { name: 'Format' }).getByRole('button', { name: /^Text style/u })
     await expect(menu).toHaveAccessibleName('Text style: Text')
+})
+
+test('the cursor moved into a commented passage by the keyboard opens its thread, and out of it closes it', async ({
+    page,
+}) => {
+    const card = comments(page).filter({ hasText: 'name the ticket' })
+    await plan(page).locator('li').filter({ hasText: "Excel's own format" }).click()
+    await expect(card).toHaveAttribute('data-active', 'false')
+    await page.keyboard.press('ArrowDown')
+    await expect(card).toHaveAttribute('data-active', 'true')
+    await expect(plan(page).locator('[data-thread=sample-2]')).toHaveClass(/plan-comment-active/u)
+    await page.keyboard.press('ArrowDown')
+    await expect(card).toHaveAttribute('data-active', 'false')
+})
+
+test("a click anywhere on a thread's card opens it, and the plan stays where it is", async ({ page }) => {
+    const card = comments(page).filter({ hasText: 'name the ticket' })
+    const scrolled = await page.evaluate(() => globalThis.scrollY)
+    await card.getByText('Keep this out').click()
+    await expect(card).toHaveAttribute('data-active', 'true')
+    await expect(plan(page).locator('[data-thread=sample-2]')).toHaveClass(/plan-comment-active/u)
+    expect(await page.evaluate(() => globalThis.scrollY)).toBe(scrolled)
 })
 
 test('a click elsewhere in the plan, or Escape, closes the open thread', async ({ page }) => {
@@ -498,6 +579,48 @@ test('commenting again on a comment half written keeps it on its passage, with i
     const thread = comments(page).filter({ hasText: 'Why not rows()? It reads them all.' })
     const id = await thread.getAttribute('data-thread')
     await expect(page.locator(`.plan-doc [data-thread="${id}"]`)).toHaveText('iter_rows()')
+})
+
+test('Escape puts a half-written comment aside with its words, and the cursor goes back to the plan', async ({
+    page,
+}) => {
+    await select(page, 'iter_rows()')
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    await page.keyboard.type('Why not rows()?')
+    await page.keyboard.press('Escape')
+    const form = page.getByRole('form', { name: 'Comment' })
+    await expect(plan(page)).toBeFocused()
+    await expect(form.getByRole('textbox')).toHaveValue('Why not rows()?')
+    await form.getByRole('button', { name: 'Cancel' }).click()
+    await expect(form).toBeHidden()
+    await expect(plan(page)).toBeFocused()
+})
+
+test('a reply half written is kept on Escape too, and an edit with nothing changed closes on it', async ({ page }) => {
+    const thread = comments(page).filter({ hasText: 'proxy in front' })
+    await thread.getByText('Does the proxy').click()
+    await thread.getByRole('button', { name: 'Reply', exact: true }).click()
+    await page.keyboard.type('Ask ops.')
+    await page.keyboard.press('Escape')
+    await expect(plan(page)).toBeFocused()
+    await expect(thread.getByRole('form', { name: 'Reply' }).getByRole('textbox')).toHaveValue('Ask ops.')
+    const other = comments(page).filter({ hasText: 'name the ticket' })
+    await other.getByRole('button', { name: 'Edit comment' }).click()
+    await page.keyboard.press('Escape')
+    await expect(other.getByRole('form', { name: 'Edit comment' })).toBeHidden()
+    await expect(plan(page)).toBeFocused()
+})
+
+test('once a comment is sent or resolved, the cursor is back in the plan after its passage', async ({ page }) => {
+    await select(page, "Excel's own format")
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    await page.keyboard.type('Say why not.')
+    await page.getByRole('form', { name: 'Comment' }).getByRole('button', { name: 'Comment' }).click()
+    await expect(plan(page)).toBeFocused()
+    await page.keyboard.type(' (XLSX)')
+    await expect(plan(page).locator('li').filter({ hasText: "Excel's own format (XLSX), which" })).toBeVisible()
+    await comments(page).filter({ hasText: 'name the ticket' }).getByRole('button', { name: 'Resolve' }).click()
+    await expect(plan(page)).toBeFocused()
 })
 
 test('the shortcut and the bubble over a selection both open a comment on it', async ({ page }) => {
