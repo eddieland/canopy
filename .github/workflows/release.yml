@@ -75,9 +75,12 @@ jobs:
 
           A commit that builds part of a milestone (M<n>) does not mean the milestone shipped. docs/ROADMAP.md, as of
           this release, ends each milestone with a "Status:" line: read it for every milestone the commits name.
-          Present a milestone as a feature only when its status is done. One still in progress goes in an
-          "In progress" section that says plainly what an operator can and cannot use yet (a page over mock data, a
-          backend that is not the default, a step still to come), never as a Highlight.
+          - Done: a feature, as usual.
+          - In progress, but built and usable, with only the operator's live check left: a feature, saying in its
+            bullet that it is not yet checked live, and that it is opt-in where it is.
+          - In progress and not usable yet (a page over mock data, a command or step still to come): never a
+            Highlight. It goes in an "In progress" section that says plainly what an operator can and cannot use
+            yet.
 
           Write the notes to release-notes/notes.md, in GitHub Markdown, for an operator deciding whether to
           upgrade:
