@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import {
     diffFile,
-    guideReadsSpecimen,
+    placeholderGuide,
     LIGHT_ROUTES,
     NOW,
     ROUTES,
@@ -24,7 +24,7 @@ for (const theme of THEMES) {
             await storeTheme(page, theme)
             await signIn(page)
             if (route === 'guide/overview') {
-                await guideReadsSpecimen(page, 'overview')
+                await placeholderGuide(page, 'overview')
             }
             await page.goto(route)
             await settled(page)
