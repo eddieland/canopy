@@ -292,9 +292,11 @@ export function PlanEditor({
     const open = threads.filter((thread) => !thread.resolved).length
     return (
         // The comments sit beside the plan once both fit (a 20rem column beside a plan of about 40rem), by the space
-        // the page gives them rather than the window's width, since the rail takes some of it.
+        // the page gives them rather than the window's width, since the rail takes some of it. The plan's column
+        // stops at its text's measure (`.plan-doc`'s 48rem and the panel's padding), so on a wide page the comments
+        // stay against the text, as a shared document's margin does, and the room left over goes after them.
         <div className="@container min-w-0">
-            <div className="grid min-w-0 items-start gap-6 @min-[60rem]:grid-cols-[minmax(0,1fr)_20rem]">
+            <div className="grid min-w-0 items-start gap-6 @min-[60rem]:grid-cols-[minmax(0,51rem)_20rem]">
                 <Panel>
                     <PanelHeader label="Plan" sticky>
                         {editable && <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />}
