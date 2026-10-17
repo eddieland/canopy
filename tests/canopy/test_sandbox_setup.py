@@ -19,7 +19,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.infra.procs import SubprocessRunner
 from canopy.setup import sandbox
-from tests.conftest import CanopyEnv
+from tests.conftest import CanopyEnv, executable
 
 # Records its arguments and working directory, prints $FAKE_STDOUT_<NAME>, then exits with $FAKE_EXIT_<NAME>, or 0.
 STUB = """\
@@ -69,8 +69,7 @@ class Machine:
     def install(self, *names: str) -> None:
         for name in names:
             path = self.bin / name
-            path.write_text((NPM if name == "npm" else STUB).format(python=sys.executable, log=str(self.log)))
-            path.chmod(0o755)
+            executable(path, (NPM if name == "npm" else STUB).format(python=sys.executable, log=str(self.log)))
 
     def calls(self, name: str) -> list[Call]:
         if not self.log.exists():

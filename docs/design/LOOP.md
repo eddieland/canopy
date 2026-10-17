@@ -319,6 +319,10 @@ escapes it; it stays out of `attention.md` and the `text` format. `canopy forget
 | `human_replied` | authorized reply newer than the label, or an operator message newer than the message cursor | dispatch `resume` pointing at the reply; the worker removes the label |
 | `split` | a split's parent (§18) | wait; `split_unlabeled` for unlabeled children; done once every child is closed |
 
+A PR's checks are its head commit's check runs, which is all GitHub Actions writes, and its commit statuses only
+beside them, for CI that writes statuses: statuses alone read an Actions repository as pending forever, with nothing
+written, and a red PR waits instead of getting its `fix-ci`.
+
 A unit is `conflicted` when GitHub reports that its PR does not merge cleanly into its base; a mergeability not yet
 computed is not a conflict. GitHub runs no `pull_request` checks on a PR it cannot merge, so `conflicted` comes before
 every CI and review phase. Its `resume` points at the conflict and the base, with `--base` for a stacked PR (§10), and

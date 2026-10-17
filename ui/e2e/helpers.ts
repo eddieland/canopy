@@ -218,9 +218,18 @@ export function plan(page: Page): Locator {
     return page.getByRole('textbox', { name: 'Plan', exact: true })
 }
 
+/** What `select` reads of the plan's ProseMirror view, which Tiptap keeps on the element it draws in as `editor`. */
+interface PlanView {
+    state: { selection: { from: number; to: number } }
+    posAtDOM: (node: Node, offset: number) => number
+}
+
 /**
- * Selects `text` inside the plan, as a drag over it would. ProseMirror reads the page's selection on `selectionchange`,
- * which the browser fires later, so this waits for it: a key pressed next acts on these words, not the ones before.
+ * Selects `text` inside the plan, as a drag over it would, and waits for the editor to hold it: a key pressed next acts
+ * on these words, not the ones before. ProseMirror reads the page's selection on `selectionchange`, which the browser
+ * fires later. When the selection moves the focus into the plan from outside it, ProseMirror also puts its own
+ * selection back 20 ms on if it has not read the page's by then, which a loaded machine can make it miss: a drag gives
+ * it all the time it needs, but a selection made at once does not, so this makes it again until the editor holds it.
  */
 export async function select(page: Page, text: string): Promise<void> {
     await plan(page).evaluate(async (root, wanted) => {
@@ -231,21 +240,25 @@ export async function select(page: Page, text: string): Promise<void> {
                 const range = document.createRange()
                 range.setStart(node, at)
                 range.setEnd(node, at + wanted.length)
-                const selection = globalThis.getSelection()
-                const current = selection !== null && selection.rangeCount > 0 ? selection.getRangeAt(0) : undefined
-                if (
-                    current?.compareBoundaryPoints(Range.START_TO_START, range) === 0 &&
-                    current.compareBoundaryPoints(Range.END_TO_END, range) === 0
-                ) {
-                    // Already selected: no selectionchange would come.
-                    return
+                const { view } = (root as typeof root & { editor: { view: PlanView } }).editor
+                const from = view.posAtDOM(node, at)
+                const held = (): boolean =>
+                    view.state.selection.from === from && view.state.selection.to === from + wanted.length
+                for (let tries = 0; tries < 5 && !held(); tries += 1) {
+                    const selection = globalThis.getSelection()
+                    selection?.removeAllRanges()
+                    selection?.addRange(range)
+                    // Long past ProseMirror's 20 ms, so a try it undid is seen as undone, not as still to come.
+                    const until = performance.now() + 100
+                    while (!held() && performance.now() < until) {
+                        await new Promise((resolve) => {
+                            setTimeout(resolve, 5)
+                        })
+                    }
                 }
-                const read = new Promise((resolve) => {
-                    document.addEventListener('selectionchange', resolve, { once: true })
-                })
-                selection?.removeAllRanges()
-                selection?.addRange(range)
-                await read
+                if (!held()) {
+                    throw new Error(`the plan did not take the selection of ${wanted}`)
+                }
                 return
             }
         }

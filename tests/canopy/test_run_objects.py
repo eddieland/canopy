@@ -15,6 +15,7 @@ from canopy.core import db, hostgit
 from canopy.core.vocab import TickStatus
 from canopy.infra.procs import SubprocessRunner
 from tests.canopy.helpers import (
+    BRANCH,
     DEAD_PID,
     InlineRunner,
     in_tick,
@@ -26,7 +27,6 @@ from tests.canopy.helpers import (
 )
 from tests.conftest import CanopyEnv, GitPool, git
 
-BRANCH = "agent/PROJ-1-work"
 # What a sandbox wrapper does before git runs: new objects to the run's directory, the slot's shared ones read through.
 SANDBOXED = (
     'export GIT_OBJECT_DIRECTORY="$CANOPY_GIT_OBJECTS" '

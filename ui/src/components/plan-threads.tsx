@@ -10,6 +10,7 @@ import { Chip } from '@/components/status'
 import { Disclosure } from '@/components/disclosure'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import { usePending } from '@/hooks/use-pending'
 import { changeRequest, MAX_COMMENT, MAX_REQUEST } from '@/lib/plan-threads'
 import type { PlanThread } from '@/lib/plan-threads'
 import { sends, useSendKey } from '@/lib/send-key'
@@ -185,6 +186,7 @@ export function AskForChanges({
     onAsk: (message: string) => void
 }) {
     const [note, setNote] = useState('')
+    usePending(note.trim() !== '')
     const message = changeRequest(threads, starts, note, edited)
     const open = threads.filter((thread) => !thread.resolved).length
     const over = message.length > MAX_REQUEST
@@ -582,6 +584,7 @@ function CommentForm({
     const [own, setOwn] = useState(initial)
     const body = value ?? own
     const setBody = onValueChange ?? setOwn
+    usePending(body.trim() !== '' && body !== initial)
 
     // The form opens on a click that asks for it, so the field takes the focus as it opens, once, after any words it
     // holds already; the page scrolls to it a frame on, once the comments are placed beside the plan. Only then: a

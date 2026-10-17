@@ -182,7 +182,7 @@ def test_with_rebase_workers_may_push_with_a_lease_and_no_other_force(canopy_env
     path = f"agents/{agent}.md"
     rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
     assert not _allowed(_rules_in(rendered, "bash"), LEASED_PUSH)
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[trust]\nrebase = true\n")
+    canopy_env.append_user("\n[trust]\nrebase = true\n")
     rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
     rules = _rules_in(rendered, "bash")
     assert _allowed(rules, LEASED_PUSH)

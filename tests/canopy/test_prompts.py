@@ -5,7 +5,7 @@ import pytest
 from canopy.core import prompts, vocab
 from canopy.core.config import load
 from canopy.infra import resources
-from tests.canopy.helpers import PROMPT_VALUES
+from tests.canopy.helpers import PROMPT_VALUES, with_rebase
 from tests.conftest import CanopyEnv
 
 # A row of the overseer prompt's phase table: `| `phase` | evidence | action |`.
@@ -239,13 +239,11 @@ def test_a_pr_skill_does_not_constrain_kinds_that_open_no_pr(canopy_env: CanopyE
 
 
 def with_trailer(env: CanopyEnv, name: str, email: str) -> None:
-    env.write_user(
-        env.user_file.read_text() + f'\n[trust]\ncommit_trailer_name = "{name}"\ncommit_trailer_email = "{email}"\n'
-    )
+    env.append_user(f'\n[trust]\ncommit_trailer_name = "{name}"\ncommit_trailer_email = "{email}"\n')
 
 
 def without_trailer(env: CanopyEnv) -> None:
-    env.write_user(env.user_file.read_text() + "\n[trust]\ncommit_trailer = false\n")
+    env.append_user("\n[trust]\ncommit_trailer = false\n")
 
 
 @pytest.mark.parametrize("private", [False, True])
@@ -327,10 +325,6 @@ def test_a_custom_trailer_does_not_constrain_a_split(canopy_env: CanopyEnv) -> N
     prompts.render_worker(
         load(canopy_env.root, canopy_env.user_file), "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT
     )
-
-
-def with_rebase(env: CanopyEnv) -> None:
-    env.write_user(env.user_file.read_text() + "\n[trust]\nrebase = true\n")
 
 
 @pytest.mark.parametrize("private", [False, True])

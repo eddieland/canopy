@@ -16,10 +16,9 @@ from canopy.core import config, workspace
 from canopy.infra import lock
 from canopy.setup import workspace as setup_workspace
 from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools
-from tests.canopy.helpers import InlineRunner, in_tick
+from tests.canopy.helpers import LABEL, InlineRunner, in_tick
 from tests.conftest import CanopyEnv, git, user_toml
 
-LABEL = "agent-ready-tester"
 GIT_AUTHORS = ("GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL")
 
 

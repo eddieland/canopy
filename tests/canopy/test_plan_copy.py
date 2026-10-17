@@ -5,11 +5,9 @@ prompt names that file and the plan's outline, never its text. `_run` checks the
 again before the worker starts, and a pushed branch that holds the copy gets a harness note.
 """
 
-import json
 import sqlite3
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -19,11 +17,13 @@ from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import logs, procs
 from canopy.runs import tidy
 from tests.canopy.helpers import (
+    BRANCH,
     KEY,
     LABEL,
     WORK,
     InlineRunner,
     agent_runs,
+    commands_run,
     commit_and_push,
     dispatch_and_run,
     dispatch_refused,
@@ -37,7 +37,6 @@ from tests.conftest import CanopyEnv, GitPool
 
 PLAN = ("--label", LABEL, "--kind", "plan")
 TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n\n```sh\n# not a heading\n```\n\n### Tests\n\nOne test.\n"
-BRANCH = f"agent/{KEY}-work"
 
 
 def approved(conn: sqlite3.Connection) -> int:
@@ -48,11 +47,6 @@ def approved(conn: sqlite3.Connection) -> int:
     return int(run["id"])
 
 
-def commands_run(agent_log: Path) -> list[dict[str, Any]]:
-    """The commands the last fake agent run ran: each one's argv, exit code, stdout, and stderr."""
-    return json.loads(agent_log.read_text().splitlines()[-1])["commands"]
-
-
 def test_an_implement_finds_the_approved_plan_ignored_and_it_is_gone_after(
     canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
 ) -> None:
@@ -61,7 +55,7 @@ def test_an_implement_finds_the_approved_plan_ignored_and_it_is_gone_after(
     with worker_does(*looks, *commit_and_push(BRANCH)):
         run = dispatch_and_run(conn, *WORK)
     assert run["status"] == RunStatus.DONE, Path(run["log_path"]).read_text()
-    cat, status, ignored, *_ = commands_run(agent_log)
+    *_, (cat, status, ignored, *_) = commands_run(agent_log)
     assert cat["stdout"] == TEXT
     assert status["stdout"] == ""
     assert ignored["returncode"] == 0
@@ -88,7 +82,7 @@ def test_without_an_approved_plan_the_prompt_says_none(
 ) -> None:
     with worker_does(["test", "-e", plans.COPY], *commit_and_push(BRANCH)):
         run = dispatch_and_run(conn, *WORK)
-    [exists, *_] = commands_run(agent_log)
+    *_, [exists, *_] = commands_run(agent_log)
     assert exists["returncode"] == 1
     assert "## The plan\n\nNone.\n" in prompt_of(canopy_env, int(run["id"]))
 
@@ -141,7 +135,7 @@ def test_a_plan_approved_after_dispatch_is_not_copied_for_a_run_its_prompt_named
     with planner_does(plan=TEXT):
         dispatch_and_run(conn, *PLAN)
     run = dispatched_then(conn, lambda: operator("plan", KEY, "--approve"))
-    [exists] = commands_run(agent_log)
+    *_, [exists] = commands_run(agent_log)
     assert exists["returncode"] == 1
     assert run["plan_id"] is None
     assert "## The plan\n\nNone.\n" in prompt_of(canopy_env, int(run["id"]))

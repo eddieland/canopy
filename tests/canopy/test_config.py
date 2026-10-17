@@ -37,9 +37,7 @@ def test_defaults_fill_in_everything_else(canopy_env: CanopyEnv) -> None:
 
 
 def test_trusted_reviewers_take_logins_and_canopys_reviewer(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_user(
-        canopy_env.user_file.read_text() + '\n[trust]\ntrusted_reviewers = ["octocat", "canopy:review", "ci[bot]"]\n'
-    )
+    canopy_env.append_user('\n[trust]\ntrusted_reviewers = ["octocat", "canopy:review", "ci[bot]"]\n')
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert cfg.trust.trusted_reviewers == ("octocat", "canopy:review", "ci[bot]")
 
@@ -55,7 +53,7 @@ def test_user_file_wins_over_the_workspace_file_for_shared_keys(canopy_env: Cano
 
 
 def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + 'needs_human_label = "blocked-on-team"\n')
+    canopy_env.append_shared('needs_human_label = "blocked-on-team"\n')
     assert load(canopy_env.root, canopy_env.user_file).tracker.needs_human_label == "blocked-on-team"
     canopy_env.write_user(
         canopy_env.user_file.read_text().replace("[tracker]\n", '[tracker]\nneeds_human_label = "ask-me"\n', 1)
@@ -89,21 +87,21 @@ def test_needs_human_label_is_set_by_the_workspace_and_overridden_by_the_user(ca
 def test_the_workspace_file_may_not_set_user_only_keys(canopy_env: CanopyEnv, section_key: tuple[str, str]) -> None:
     section, line = section_key
     extra = f"\n[{section}]\n{line}\n" if section != "tracker" else f"{line}\n"
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + extra)
+    canopy_env.append_shared(extra)
     with pytest.raises(ConfigError, match="is private"):
         load(canopy_env.root, canopy_env.user_file)
 
 
 def test_a_removed_key_says_what_to_do(canopy_env: CanopyEnv) -> None:
     """`paths.state_dir` was in the example user config; a copy of it must say to delete the key (D016)."""
-    canopy_env.write_user(canopy_env.user_file.read_text() + 'state_dir = "~/.canopy"\n')
+    canopy_env.append_user('state_dir = "~/.canopy"\n')
     with pytest.raises(ConfigError, match=r"paths\.state_dir was removed: delete it; state is always in the workspace"):
         load(canopy_env.root, canopy_env.user_file)
 
 
 def test_a_removed_pr_label_says_to_delete_it(canopy_env: CanopyEnv) -> None:
     """`trust.pr_label` was in the example workspace file; a copy of it must say to delete the key."""
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + '[trust]\npr_label = "agent"\n')
+    canopy_env.append_shared('[trust]\npr_label = "agent"\n')
     with pytest.raises(ConfigError, match=r"trust\.pr_label was removed: delete it"):
         load(canopy_env.root, canopy_env.user_file)
 
@@ -111,17 +109,16 @@ def test_a_removed_pr_label_says_to_delete_it(canopy_env: CanopyEnv) -> None:
 @pytest.mark.parametrize("where", ["workspace", "user"])
 def test_unknown_keys_are_errors(canopy_env: CanopyEnv, where: str) -> None:
     if where == "workspace":
-        canopy_env.write_shared(canopy_env.shared_file.read_text() + "jql = 'x'\n")
+        canopy_env.append_shared("jql = 'x'\n")
     else:
-        canopy_env.write_user(canopy_env.user_file.read_text() + "\n[extras]\nfoo = 1\n")
+        canopy_env.append_user("\n[extras]\nfoo = 1\n")
     with pytest.raises(ConfigError, match="unknown key"):
         load(canopy_env.root, canopy_env.user_file)
 
 
 def test_workspace_policy_only_tightens(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_shared(
-        canopy_env.shared_file.read_text()
-        + "[policy]\nmax_fix_ci_attempts = 9\nfix_ci_cooldown_minutes = 5\nmax_resume_attempts = 1\n"
+    canopy_env.append_shared(
+        "[policy]\nmax_fix_ci_attempts = 9\nfix_ci_cooldown_minutes = 5\nmax_resume_attempts = 1\n"
     )
     policy = load(canopy_env.root, canopy_env.user_file).policy
     assert policy.max_fix_ci_attempts == 2  # looser than the default: ignored
@@ -130,8 +127,8 @@ def test_workspace_policy_only_tightens(canopy_env: CanopyEnv) -> None:
 
 
 def test_user_policy_may_loosen(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + "[policy]\nmax_fix_ci_attempts = 1\n")
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[policy]\nmax_fix_ci_attempts = 5\n")
+    canopy_env.append_shared("[policy]\nmax_fix_ci_attempts = 1\n")
+    canopy_env.append_user("\n[policy]\nmax_fix_ci_attempts = 5\n")
     assert load(canopy_env.root, canopy_env.user_file).policy.max_fix_ci_attempts == 5
 
 
@@ -140,14 +137,14 @@ def test_stacking_defaults_to_auto(canopy_env: CanopyEnv) -> None:
 
 
 def test_the_workspace_may_turn_stacking_off_and_the_user_back_on(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + '[policy]\nstacking = "never"\n')
+    canopy_env.append_shared('[policy]\nstacking = "never"\n')
     assert load(canopy_env.root, canopy_env.user_file).policy.stacking == "never"  # stricter: used
-    canopy_env.write_user(canopy_env.user_file.read_text() + '\n[policy]\nstacking = "auto"\n')
+    canopy_env.append_user('\n[policy]\nstacking = "auto"\n')
     assert load(canopy_env.root, canopy_env.user_file).policy.stacking == "auto"  # the user file may loosen
 
 
 def test_unknown_stacking_value_is_an_error_naming_the_file(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + '[policy]\nstacking = "sometimes"\n')
+    canopy_env.append_shared('[policy]\nstacking = "sometimes"\n')
     with pytest.raises(ConfigError, match=r"canopy-workspace\.toml.*policy\.stacking"):
         load(canopy_env.root, canopy_env.user_file)
 
@@ -259,7 +256,7 @@ def test_command_template_is_checked(canopy_env: CanopyEnv, replacement: str, me
 def test_ticket_url_is_a_shared_template_with_the_key_once(canopy_env: CanopyEnv) -> None:
     assert load(canopy_env.root, canopy_env.user_file).tracker.ticket_url == ""
     template = "https://acme.atlassian.net/browse/{key}?focusedCommentId=1"
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + f'ticket_url = "{template}"\n')
+    canopy_env.append_shared(f'ticket_url = "{template}"\n')
     assert load(canopy_env.root, canopy_env.user_file).tracker.ticket_url == template
 
 
@@ -277,7 +274,7 @@ def test_ticket_url_is_a_shared_template_with_the_key_once(canopy_env: CanopyEnv
     ],
 )
 def test_ticket_url_is_refused_unless_a_plain_https_template(canopy_env: CanopyEnv, template: str) -> None:
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + f'ticket_url = "{template}"\n')
+    canopy_env.append_shared(f'ticket_url = "{template}"\n')
     with pytest.raises(ConfigError, match=r"tracker\.ticket_url: Value error, must be empty, or a plain https://"):
         load(canopy_env.root, canopy_env.user_file)
 
@@ -348,7 +345,7 @@ def test_examples_are_valid(tmp_path: Path) -> None:
 
 
 def test_empty_prompt_overrides_means_the_default(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + 'prompt_overrides = ""\n')
+    canopy_env.append_user('prompt_overrides = ""\n')
     cfg = load(canopy_env.root, canopy_env.user_file)
     assert cfg.paths.prompt_overrides == canopy_env.user_file.parent / "prompts"
 
@@ -367,7 +364,7 @@ def test_user_paths_must_not_resolve_against_the_workspace(canopy_env: CanopyEnv
 
 
 def test_user_paths_expand_the_home_directory(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + 'prompt_overrides = "~/my-prompts"\n')
+    canopy_env.append_user('prompt_overrides = "~/my-prompts"\n')
     paths = load(canopy_env.root, canopy_env.user_file).paths
     assert paths.prompt_overrides == canopy_env.home / "my-prompts"
 
@@ -375,10 +372,9 @@ def test_user_paths_expand_the_home_directory(canopy_env: CanopyEnv) -> None:
 def test_changed_names_the_keys_whose_values_differ_in_the_schemas_order(canopy_env: CanopyEnv) -> None:
     before = load(canopy_env.root, canopy_env.user_file)
     assert config.changed(before, before) == []
-    canopy_env.write_user(
-        canopy_env.user_file.read_text()
-        + "\n[serve]\nport = 9000\n\n[capacity]\nmax_workers = 3\n"
-        + '\n[chores.deps]\nprompt = "~/chores/deps.md"\nevery_minutes = 60\n'
+    canopy_env.append_user(
+        "\n[serve]\nport = 9000\n\n[capacity]\nmax_workers = 3\n"
+        '\n[chores.deps]\nprompt = "~/chores/deps.md"\nevery_minutes = 60\n'
     )
     after = load(canopy_env.root, canopy_env.user_file)
     # A table section is one key, whichever of its tables changed.
@@ -387,8 +383,8 @@ def test_changed_names_the_keys_whose_values_differ_in_the_schemas_order(canopy_
 
 
 def test_the_private_file_wins_over_the_user_file_and_the_workspace_file(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + '\n[trust]\nbranch_prefix = "team/"\n')
-    canopy_env.write_user(canopy_env.user_file.read_text() + '\n[trust]\nbranch_prefix = "mine/"\n')
+    canopy_env.append_shared('\n[trust]\nbranch_prefix = "team/"\n')
+    canopy_env.append_user('\n[trust]\nbranch_prefix = "mine/"\n')
     canopy_env.write_private(
         '[tracker]\nlabels = ["agent-ready-acme"]\nquery = "project = MINE"\n\n[trust]\nbranch_prefix = "acme/"\n'
     )
@@ -401,7 +397,7 @@ def test_the_private_file_wins_over_the_user_file_and_the_workspace_file(canopy_
 
 
 def test_a_private_key_in_the_workspace_file_names_the_private_file(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + "\n[serve]\nport = 9000\n")
+    canopy_env.append_shared("\n[serve]\nport = 9000\n")
     with pytest.raises(ConfigError) as e:
         load(canopy_env.root, canopy_env.user_file)
     assert str(e.value) == (
@@ -522,6 +518,6 @@ def test_a_relative_path_in_the_private_file_names_a_file_in_the_state_directory
     assert paths.prompt_overrides == canopy_env.home / "p"
 
     canopy_env.private_file.unlink()
-    canopy_env.write_user(canopy_env.user_file.read_text() + 'worker_instructions = "worker-instructions.md"\n')
+    canopy_env.append_user('worker_instructions = "worker-instructions.md"\n')
     with pytest.raises(ConfigError, match=r"paths\.worker_instructions: Value error, must be an absolute path or"):
         load(canopy_env.root, canopy_env.user_file)

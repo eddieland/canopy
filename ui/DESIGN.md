@@ -727,8 +727,17 @@ list, an empty state, or a skeleton by hand.
   page, `(/runs)` to a section, and `(https://...)` to the web in a new tab. A link to anything else stays characters,
   and `guide.test.ts` fails on it. A page opens with `# Title` and then a lead of a sentence or two, says what the
   operator sees and does in the UI's own words (`waiting on you`, not `blocked`), and leaves how the code does it to
-  the code and why to the design. A new page is a file there and a line in its group in `SOURCES`; the rail's foot,
-  beside the version, opens the guide.
+  the code and why to the design. It talks to the operator as `you`, in plain, direct sentences, as good developer
+  docs do, with the odd dry aside from a staff engineer who has seen a few incidents: an aside rides on a fact, never
+  stands in for one, and they stay rare enough to land. A new page is a file there and a line in its group in
+  `SOURCES`; the rail's foot, beside the version, opens the guide.
+- **A question before losing work** (`AlertDialog`, `src/components/ui/alert-dialog.tsx`): a page that holds the
+  operator's work not yet saved or sent asks before it is left, in a dialog centred over the canvas at 70%, on
+  `surface` with a hairline border: its question as the title (`Leave this page?`), what leaving loses under it, then
+  an outline `Stay`, which takes the focus and which Escape gives, and `Leave` in `destructive`. A form says it holds
+  words not yet sent with `usePending` (`src/hooks/use-pending.ts`); a move within the page, such as a list flipped,
+  never asks. Closing the tab asks too, in the browser's own words. A question about one item, such as deleting a
+  comment, asks in that item's place instead.
 - **A plan in its editor** (`PlanEditor`, `src/components/plan-editor.tsx`; docs/design/PLANNING.md §25): the plan in a
   `Plan` panel, its toolbar in the panel's header, and the comments in a `Comments` panel beside it, 20rem wide, once
   the page gives both 60rem (a container query, so the rail's width counts), and under it, as a list, below that. Under
