@@ -13,7 +13,7 @@ import { Decisions } from '@/components/decisions'
 import { Field, Fields } from '@/components/fields'
 import { GrantLimits } from '@/components/grant-limits'
 import { OrderToggle } from '@/components/order-toggle'
-import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll } from '@/components/panel'
 import { ReviewRequestStatus } from '@/components/review-request'
 import { ReviewsTable } from '@/components/reviews-table'
 import { RunsTable } from '@/components/runs-table'
@@ -54,7 +54,8 @@ function PullRequestPage() {
 }
 
 function Loaded({ url }: { url: string }) {
-    const { data, error } = useQuery(pullRequestQuery(url))
+    const query = useQuery(pullRequestQuery(url))
+    const { data, error } = query
     const title = pullRequestLabel(url)
     if (error instanceof ApiError && (error.status === 404 || error.status === 422)) {
         return <Missing title={title}>{error.message}</Missing>
@@ -64,7 +65,7 @@ function Loaded({ url }: { url: string }) {
             <>
                 <PageHeader title={title} />
                 <Panel>
-                    <PanelSkeleton rows={1} className="min-h-72" />
+                    <PanelLoading query={query} rows={1} className="min-h-72" />
                 </Panel>
             </>
         )

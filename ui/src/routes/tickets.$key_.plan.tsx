@@ -4,7 +4,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ApiError } from '@/api/client'
 import { ticketPlansQuery, ticketQuery } from '@/api/queries'
 import { Notice } from '@/components/notice'
-import { Empty, PageHeader, Panel, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelLoading } from '@/components/panel'
 import { TicketPlan } from '@/components/ticket-plan'
 
 /**
@@ -20,7 +20,8 @@ function PlanPage() {
     const { key } = Route.useParams()
     // The ticket for its title alone; the plans are the page.
     const title = useQuery(ticketQuery(key)).data?.ticket.title
-    const { data, error } = useQuery(ticketPlansQuery(key))
+    const query = useQuery(ticketPlansQuery(key))
+    const { data, error } = query
     const header = (
         <PageHeader parents={<TicketCrumb ticketKey={key} />} title="Plan" tab={`${key} plan`}>
             {title ?? ''}
@@ -41,7 +42,7 @@ function PlanPage() {
             <>
                 {header}
                 <Panel>
-                    <PanelSkeleton rows={1} className="min-h-72" />
+                    <PanelLoading query={query} rows={1} className="min-h-72" />
                 </Panel>
             </>
         )

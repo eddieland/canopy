@@ -13,7 +13,7 @@ import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
 import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
-import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll } from '@/components/panel'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunDot, Word } from '@/components/status'
@@ -39,7 +39,8 @@ export const Route = createFileRoute('/chores/$name')({
 
 function ChorePage() {
     const { name } = Route.useParams()
-    const { data, error } = useQuery(choreQuery(name))
+    const query = useQuery(choreQuery(name))
+    const { data, error } = query
     if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
         return (
             <>
@@ -60,7 +61,7 @@ function ChorePage() {
             <>
                 <PageHeader title={choreRef(name)} />
                 <Panel>
-                    <PanelSkeleton rows={1} className="min-h-72" />
+                    <PanelLoading query={query} rows={1} className="min-h-72" />
                 </Panel>
             </>
         )

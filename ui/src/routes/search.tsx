@@ -5,7 +5,7 @@ import { searchQuery } from '@/api/queries'
 import type { SearchHit, SearchSource } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreLink, ChoreRunLink } from '@/components/chore-link'
-import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { MarkedText } from '@/components/marked-text'
@@ -54,11 +54,12 @@ function SearchPage() {
 }
 
 function Results({ q }: { q: string }) {
-    const { data, isPlaceholderData } = useQuery(searchQuery(q))
+    const query = useQuery(searchQuery(q))
+    const { data, isPlaceholderData } = query
     if (data === undefined) {
         return (
             <Panel>
-                <PanelSkeleton className="min-h-72" />
+                <PanelLoading query={query} className="min-h-72" />
             </Panel>
         )
     }
