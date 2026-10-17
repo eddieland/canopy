@@ -303,11 +303,12 @@ canopy ships `canopy-planner` in the definitions directory (§13):
 - The web UI's ticket page (§22) shows the newest plan in the plan editor (Commenting on a plan, below), with
   `Approve`, `Ask for changes`, and `Skip`, and lists earlier plans, each opened read only. A ticket plans do not
   touch shows no plan. A waiting or approved plan is editable while no plan run for the ticket is running: `Save`
-  writes the edit, and `Approve` with an edit not yet saved saves it first, so the approval takes what the operator
-  sees. A comment, a reply, an edit of either, a resolve, and a delete are each saved as they are made, one after
-  another; a passage an edit of the plan moved is saved with the plan, so its comment stays on its words. `Approve`
-  and `Skip` call `POST /tickets/{key}/plan` with `approve` or `skip`, through the same code as the CLI, so with the
-  same refusals; `request` is `canopy plan KEY`, and `Ask for changes` a reply.
+  writes the edit, and `Approve` or `Ask for changes` with an edit not yet saved saves it first, so the approval
+  takes what the operator sees and the planner reads it. The page stays busy until it has read the plans again, so a
+  second save sends the hash of the file as saved. A comment, a reply, an edit of either, a resolve, and a delete are
+  each saved as they are made, one after another; a passage an edit of the plan moved is saved with the plan, so its
+  comment stays on its words. `Approve` and `Skip` call `POST /tickets/{key}/plan` with `approve` or `skip`, through
+  the same code as the CLI, so with the same refusals; `request` is `canopy plan KEY`, and `Ask for changes` a reply.
 - A `plan.proposed` event (§20) tells the operator's sinks a plan is waiting: the ticket and its title, the run, and the
   plan's id. It carries no plan text, so nothing of the plan leaves the machine through a Slack sink. It is in the
   `runs` group, recorded with the plan's row, and urgent to a batching sink; a sink that takes only attention hears of

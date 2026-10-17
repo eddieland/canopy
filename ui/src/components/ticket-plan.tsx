@@ -138,10 +138,8 @@ function NewestPlan({
         setBusy((n) => n + 1)
         const next = queue.current.then(work).catch((error: unknown) => setFailure(error))
         queue.current = next
-        void next.finally(() => {
-            setBusy((n) => n - 1)
-            void refresh()
-        })
+        // Busy until the plans are read again: a save before then would send the hash of the file as it was.
+        void next.then(refresh).finally(() => setBusy((n) => n - 1))
     }
 
     async function serverId(id: string): Promise<number> {
@@ -218,6 +216,11 @@ function NewestPlan({
 
     function askForChanges(message: string) {
         act(async () => {
+            // The planner reads the plan's file: an edit only in the editor would not reach it, and the new plan
+            // would replace it unseen.
+            if (dirty) {
+                await save()
+            }
             const replied = await replyTicket(ticketKey, message, newSubmission())
             void client.invalidateQueries({ queryKey: keys.ticket(ticketKey) })
             return (
