@@ -11,7 +11,8 @@ or reopen it, without knowing. In practice that is one of:
 - a constraint or principle that spans the codebase (the layers, the subprocess seam, no network in the harness,
   guards in code);
 - a rule the trust boundary relies on, such as one `TRUST_MODEL.md` cites;
-- a runtime dependency or a toolchain choice;
+- a toolchain choice, or a dependency that code across canopy is shaped around, that handles untrusted input, or
+  that would otherwise be proposed again;
 - a direction the operator settled that would otherwise be proposed again (build rather than adopt, never PyPI).
 
 Everything else goes where the next person to change that code will look:

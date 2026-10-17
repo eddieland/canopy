@@ -26,6 +26,9 @@ memory, and do not upgrade in passing.
 - oxlint (with the React Compiler's rules and eslint-plugin-jsdoc's, and type-aware rules through oxlint-tsgolint)
   and oxfmt, Vitest, Playwright.
 
+Add a library as the repository's `AGENTS.md` says, when it clearly beats the code we would write instead, and pin it
+exactly like the rest. One that only a few files need is held to them, as Tiptap (D120) and Shiki (D121) are.
+
 ## Commands
 
 From `ui/` (or `make ui-check`, `make ui-e2e`, `make ui-fmt` from the root):
