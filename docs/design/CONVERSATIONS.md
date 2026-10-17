@@ -118,8 +118,9 @@ list and runs; there is no separate `list`.
   on, label, or edit the ticket; the result line's `summary` and `question` are the report. The agent definition is
   `canopy-worker-private`: `canopy-worker`, its MCP tools denied by name included (D084), with every tool of the
   tracker's MCP server denied by wildcard and only its read tools allowed by name, and the tracker CLIs canopy knows
-  (`gh`, `acli`, `jira`) denied in its bash rules, but for `gh pr view`, which reads a PR and never the ticket, so a
-  resumed worker can read the review comments it was pointed at.
+  (`gh`, `acli`, `jira`) denied in its bash rules, but for `gh pr view`, `gh pr checks`, `gh pr diff`, and
+  `gh run view`, which read a PR and its CI and never the ticket, so a resumed worker can read the review comments it
+  was pointed at and a fix-ci one the failing checks.
   - The server is `tracker.mcp_server` and its tools `tracker.read_tools`, both private, each with a default for the
     shipped provider's usual MCP server: `atlassian` with Jira's read tools for `jira`, and `github` for `github`,
     whose server is also the one PRs go through, so its list adds the PR tools a worker needs and leaves out every
