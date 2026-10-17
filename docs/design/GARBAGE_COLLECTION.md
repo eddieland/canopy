@@ -32,6 +32,7 @@ maintenance (§18) and nothing runs maintenance in its place.
 | A run's lock, object directory, desk, and review checkout | one per run | when the run ends, or by reconcile | unchanged |
 | `runtime/<digest>/` | one per definitions change | by reconcile when no run is live (§13) | unchanged |
 | Notification events | each event | after 7 days once every sink has passed them (§20) | unchanged |
+| Agent memory's notes and proposals no longer in force (§28) | each one replaced, dropped, or retired | never; `canopy memory forget` and `purge` delete its text | text deleted after `memory_days`, the row kept |
 
 ### What it never removes
 
@@ -139,6 +140,7 @@ tick_files_days = 7    # a tick's log and prompt; a tick not `ok` keeps them for
 journal_days = 90      # harness attention rows, past the window the attention list reads
 log_max_mib = 50       # canopy.log is rotated past this
 log_keep = 3           # and this many rotated files are kept
+memory_days = 30       # the text of a note or proposal no longer in force (§28); a lesson is never pruned
 ```
 
 Each is a non-negative integer, and `0` keeps that kind forever. The values are a proposal: M47's first stage
