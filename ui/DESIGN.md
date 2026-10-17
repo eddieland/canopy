@@ -694,6 +694,17 @@ list, an empty state, or a skeleton by hand.
   its text and strong pieces go through `LinkedText`, so a URL outside code is a link to itself. In a list's row it
   shows the first four lines and a `show N more lines` toggle in the accent; text one line over shows whole.
   A conversation's bubbles keep their own `whitespace-pre-wrap`.
+- **The guide** (`/guide`, `src/lib/guide.ts`, `GuideText`) is the operator's documentation, a page each, as
+  Markdown in `src/guide/` (docs/design/CONVERSATIONS.md §22). Its list is a panel of the pages in `SOURCES` order,
+  each its title as a link over its lead, muted. A page is its title and lead in its header, then its body in one
+  panel, prose at `max-w-3xl` with soft line breaks read as spaces, and beside it, under `lg` below it, an `On this
+  page` panel of its `##` headings and a `Guide` panel of every page, this one raised. It reads what rich text reads,
+  `##` and `###` headings as real headings, each with its anchor as its id, and labelled links in the accent,
+  underlined: `[text](page)` or `(page#heading)` to the guide, `(#heading)` on this page, `(/runs)` to a section, and
+  `(https://...)` to the web in a new tab. A link to anything else stays characters, and `guide.test.ts` fails on it.
+  A page opens with `# Title` and then a lead of a sentence or two, says what the operator sees and does in the UI's
+  own words (`waiting on you`, not `blocked`), and leaves how the code does it to the code and why to the design. A new
+  page is a file there and a line in `SOURCES`; the rail's foot, beside the version, opens the list.
 - **A plan in its editor** (`PlanEditor`, `src/components/plan-editor.tsx`; docs/design/PLANNING.md §25): the plan in a
   `Plan` panel, its toolbar in the panel's header, and the comments in a `Comments` panel beside it, 20rem wide, once
   the page gives both 60rem (a container query, so the rail's width counts), and under it, as a list, below that. Under

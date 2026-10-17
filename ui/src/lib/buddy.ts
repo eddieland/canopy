@@ -190,6 +190,20 @@ export const TIPS = {
         'Fun fact: recording is not using. I record everything and use none of it.',
         'Hot take: a note that says "it works on my machine" is a note about the machine.',
     ],
+    '/guide/': [
+        "It looks like you're reading the manual. Bold move. Nobody reads the manual.",
+        'Unhelpful tip: the guide ships with this build, so it is never out of date. I am, constantly.',
+        'Fun fact: I am not in the guide. I am the guide to the guide.',
+        'Haiku: a page for each page / the guide explains canopy / who explains the guide',
+        'Riddle: what has pages but no paper? The guide. Also my diary, which is mostly hats.',
+    ],
+    '/guide/$page': [
+        "It looks like you're reading documentation. Would you like me to skim it for you, badly?",
+        'Dear diary, they read a whole page of the guide. I read the title and felt informed.',
+        'Hot take: every link in the guide goes somewhere. A test makes sure. I go nowhere, freely.',
+        'Unhelpful tip: "On this page" lists what is on this page. I am also on this page. I am not listed.',
+        'Fun fact: the guide is written in Markdown. I am written in wire and optimism.',
+    ],
 } as const satisfies Record<string, readonly string[]>
 
 /** A view Sprig has tips for, by its route id. */
