@@ -12,6 +12,7 @@ import { TicketTitle } from '@/components/ticket-title'
 import { Skeleton } from '@/components/ui/skeleton'
 import { runRef } from '@/lib/refs'
 import { railRuns } from '@/lib/run-state'
+import { cn } from '@/lib/utils'
 
 // Where the version links: every release's notes, newest first.
 const RELEASES = 'https://github.com/eddieland/canopy/releases'
@@ -99,15 +100,17 @@ export function RailSpend() {
 
 /**
  * The rail's foot, on two lines: the version canopy serves, with the width to itself so it shows whole, opening the
- * releases on GitHub in a new tab; and under it the guide, the operator's documentation, bundled with that version,
- * and Settings, which the operator opens too seldom to take a place in the nav. Always at the window's foot, however
- * long the page.
+ * releases on GitHub in a new tab; and under it two buttons alike, the guide, the operator's documentation, bundled
+ * with that version, and Settings, which the operator opens too seldom to take a place in the nav. Always at the
+ * window's foot, however long the page.
  */
 export function RailFooter() {
     const meta = useQuery(metaQuery).data
     return (
+        // py-1, not py-2: the buttons' 24px row takes the 8px back, so the footer stays as tall as with links, and
+        // the room above it, Sprig's slot in a laptop's window, stays the same.
         <div
-            className="mx-2 flex flex-col gap-1 border-t px-2.5 py-2 text-2xs text-muted-foreground"
+            className="mx-2 flex flex-col gap-1 border-t px-2.5 py-1 text-2xs text-muted-foreground"
             data-testid="rail-footer"
         >
             <a
@@ -120,27 +123,49 @@ export function RailFooter() {
             >
                 {meta === undefined ? '' : `canopy ${meta.version}`}
             </a>
-            <div className="flex items-center gap-3">
-                <Link
-                    to="/guide"
-                    title="How the web UI works, a page each"
-                    className="flex items-center gap-1 rounded-sm hover:text-foreground"
-                    data-testid="rail-guide"
-                >
-                    <BookOpen aria-hidden className="size-3" />
+            <div className="flex items-center gap-1.5">
+                <FooterLink to="/guide" title="How the web UI works, a page each" testId="rail-guide">
+                    <BookOpen aria-hidden />
                     Guide
-                </Link>
-                <Link
+                </FooterLink>
+                <FooterLink
                     to="/settings"
                     title="The theme, the send key, the fun, and the session"
-                    className="flex items-center gap-1 rounded-sm hover:text-foreground"
-                    data-testid="rail-settings"
+                    testId="rail-settings"
                 >
-                    <SlidersHorizontal aria-hidden className="size-3" />
+                    <SlidersHorizontal aria-hidden />
                     Settings
-                </Link>
+                </FooterLink>
             </div>
         </div>
+    )
+}
+
+/** A page the rail's foot opens, as a filled pill in `foreground` so it stands out from the version's print. */
+function FooterLink({
+    to,
+    title,
+    testId,
+    children,
+}: {
+    to: '/guide' | '/settings'
+    title: string
+    testId: string
+    children: ReactNode
+}) {
+    return (
+        <Link
+            to={to}
+            title={title}
+            data-testid={testId}
+            className={cn(
+                'flex h-6 items-center gap-1.5 rounded-md bg-surface-raised px-2 text-xs text-foreground',
+                'transition-colors outline-none hover:bg-surface focus-visible:ring-2 focus-visible:ring-ring',
+                '[&_svg]:size-3',
+            )}
+        >
+            {children}
+        </Link>
     )
 }
 
