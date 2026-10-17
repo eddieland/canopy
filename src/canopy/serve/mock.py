@@ -434,12 +434,13 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
         "INSERT INTO ticket_units (ticket_key, repo, branch, pr_url, phase) VALUES (?, 'web', ?, ?, ?)",
         ("ABC-103", "agent/ABC-103-billing-v2", "https://github.com/acme/web/pull/91", "review_pending"),
     )
-    # Each PR's own title, as its worker reported it: not its ticket's.
+    # Each PR's own title, as its worker or its review reported it: not its ticket's, and #12 has no ticket at all.
     conn.executemany(
         "INSERT INTO pr_titles (pr_url, title, updated_at) VALUES (?, ?, ?)",
         [
             ("https://github.com/acme/web/pull/88", "ABC-099: debounce the search box by 250 ms", at(-59)),
             ("https://github.com/acme/web/pull/91", "ABC-103: move billing to v2 and drop the v1 client", at(-125)),
+            ("https://github.com/acme/api/pull/12", "Bump the retry budget for flaky upstreams", at(-79)),
         ],
     )
     runs = (

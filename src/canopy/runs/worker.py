@@ -55,8 +55,6 @@ MAX_TEXT = 2000
 # A child key is a ticket key, and bounded like every other value an agent reports.
 MAX_CHILD_KEY = 100
 MAX_PR_URL = 500
-# GitHub's own limit on a PR's title.
-MAX_PR_TITLE = 256
 _GIT_TIMEOUT_SECONDS = 300
 # The repository whose slot `setup_cmd` runs in, by its name in the map, and the run's branch, which the slot has
 # checked out detached (DESIGN §8).
@@ -73,7 +71,7 @@ class _SetupError(Exception):
 
 
 Text = Annotated[StrictStr, contract.bounded(MAX_TEXT)]
-PrTitle = Annotated[StrictStr, contract.one_line, contract.bounded(MAX_PR_TITLE)]
+PrTitle = Annotated[StrictStr, contract.one_line, contract.bounded(contract.MAX_PR_TITLE)]
 
 
 class WorkerResult(BaseModel):

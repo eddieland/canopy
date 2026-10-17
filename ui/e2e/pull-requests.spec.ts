@@ -21,6 +21,7 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     await expect(ours.getByTestId('pull-request-review')).toContainText('review:4')
     // A PR canopy only reviews has no ticket, whoever asked for the review.
     await expect(rows.filter({ hasText: 'acme/api#12' })).toContainText('none: canopy only reviews it')
+    await expect(rows.filter({ hasText: 'acme/api#12' })).toContainText('Bump the retry budget for flaky upstreams')
     // One the operator asked canopy to review is listed before its first review.
     await expect(rows.filter({ hasText: 'acme/web#95' })).toContainText('requested')
 
@@ -62,7 +63,9 @@ test('a PR the journal does not know says so, and a decision about a PR opens it
     await settled(page)
     await page.getByTestId('decisions').getByRole('link', { name: 'acme/api#12', exact: true }).first().click()
     await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/api#12')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+        'acme/api#12 Bump the retry budget for flaky upstreams',
+    )
 })
 
 test('a PR named on a run, a review, a decision, or a ticket opens its page in one click, and its icon GitHub', async ({
