@@ -19,12 +19,12 @@ import os
 import re
 import secrets
 import sqlite3
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, TypedDict
 
-from canopy.core import chore_view, contract, db, outbox, review_result
+from canopy.core import chore_view, contract, db, memory, outbox, review_result
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
 from canopy.core.vocab import PlanSetting, ReviewRunStatus, RunKind, RunStatus, StartStatus
@@ -567,6 +567,8 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, dispatch_lock: Path) -> Forgot
             )
         prs = [str(u["pr_url"]) for u in db.units(conn, ref.id) if u["pr_url"]]
         db.forget_ticket(conn, ref.id)
+        # Its notes are about work that is gone, as its earlier runs' reports are (DESIGN §28, Retention).
+        memory.end_ticket_notes(conn, ref.id, "forgotten work")
     return Forgot(branch=ticket.branch, prs=prs)
 
 
@@ -964,9 +966,17 @@ def run_messages(status: RunStatus, result_json: str | None) -> list[tuple[str, 
 
 
 def close_run(
-    conn: sqlite3.Connection, config: Config, run: sqlite3.Row, status: RunStatus, result_json: str | None
+    conn: sqlite3.Connection,
+    config: Config,
+    run: sqlite3.Row,
+    status: RunStatus,
+    result_json: str | None,
+    *,
+    then: Callable[[], object] | None = None,
 ) -> bool:
     """Close a running run as `status`, recording its messages and its `run.ended` event with it, in one transaction.
+
+    `then` writes what else the run reported in the same transaction, such as its memory (DESIGN §28).
 
     Returns:
         True if this closed the run. False if it was already closed: nothing is recorded.
@@ -978,6 +988,7 @@ def close_run(
         result_json,
         messages=run_messages(status, result_json),
         event=outbox.run_ended(config, run, status, result_json),
+        then=then,
     )
 
 

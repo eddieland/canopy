@@ -107,8 +107,8 @@ cannot reach internal systems and require handing a vendor write access.
 ## 5. Components
 
 The harness is one Python package, `canopy`, in layered subpackages (D041). Top to bottom: `__main__`; `cli`; `loop`;
-the features, `runs`, `setup`, `chores`, `notify`, `reviews`, and `serve`; `core`; `infra`. A module imports from its
-own package and lower layers only. Features never import each other; what two share moves down a layer.
+the features, `runs`, `setup`, `chores`, `notify`, `reviews`, `memory`, and `serve`; `core`; `infra`. A module imports
+from its own package and lower layers only. Features never import each other; what two share moves down a layer.
 `tests/canopy/test_layers.py` enforces this and fails on a module outside the packages it lists.
 
 ```text
@@ -132,7 +132,7 @@ canopy (harness, Python)
     chores.py      chore run, chore wait, chore try, _chore
     notify.py      notify test
     reviews.py     review run, review wait, review end, review show, _review
-    memory.py      memory list: agent memory's tiers and what they hold (§28)
+    memory.py      memory list, forget, purge: agent memory's tiers and what they hold (§28)
 
   loop/            the tick (§6), which drives the features below
     tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
@@ -175,6 +175,9 @@ canopy (harness, Python)
     view.py        the state block's reviews
     findings.py    a review as a resumed worker and canopy review show read it, from the journal
     reconcile.py   review runs whose _review is gone: reviewer killed, slot returned, marked crashed
+
+  memory/          agent memory's feature (§28)
+    manage.py      the operator's verbs: forget one memory, purge many, each a secure delete leaving a tombstone
 
   serve/           the web UI's server (§22, D079); the only package that imports fastapi, starlette, uvicorn, or anyio
     app.py         create_app(): the guard, the API under {base}/api, the single-page app under {base}/
@@ -230,7 +233,10 @@ canopy (harness, Python)
     outbox.py      the events notification sinks receive, recorded with the fact they report (§20)
     pause.py       the loop's pause, which every channel writes: whether `canopy loop` starts another tick (§6)
     notice.py      the operator's notice to workers, which every channel writes: what every later run hears (§8)
-    memory.py      agent memory (§28): each tier's mode, in the words every surface shows it
+    memory.py      agent memory (§28): each tier's mode in words, a run's part of the prompt and what it was rendered
+                   under, writing what a run sent in the transaction that closes it, and the digests
+    memory_text.py what a memory's text may hold (§28, Bounds): a slug key, one line without hidden characters or
+                   secrets; and its text with every hidden character named, as every surface shows it
     plans.py       each plan's file, written once and read bounded, and its row: current, superseded, approved
                    by its file's hash (§25)
     definitions.py the snapshot of agents/ and skills/ that agent runs load (§13), the private worker's rendered from

@@ -10,14 +10,10 @@ from canopy.cli.main import main
 from canopy.core import memory
 from canopy.core.config import ConfigError, load
 from canopy.core.vocab import MemoryMode
+from tests.canopy.helpers import with_memory
 
 if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
-
-
-def with_memory(canopy_env: CanopyEnv, ticket_notes: str = "off", proposals: str = "off") -> None:
-    """Set `[memory]` in the workspace's private file."""
-    canopy_env.write_private(f'[memory]\nticket_notes = "{ticket_notes}"\nproposals = "{proposals}"\n')
 
 
 def test_memory_is_off_unless_the_operator_turns_a_tier_on(canopy_env: CanopyEnv) -> None:

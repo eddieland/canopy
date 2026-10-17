@@ -170,9 +170,9 @@ none writes nothing. In order:
    lesson's `review_at` is pushed out to 90 days from now if it was sooner.
 3. `drop_notes`, while ticket notes were at `use`: each active note under a key rendered into the prompt is
    invalidated (`dropped by run N`).
-4. `notes`, while ticket notes were not off: at most 5 a run, each `{key, text}`, text at most 400 characters. A note
-   under an active key supersedes it; nothing is edited in place. A body equal, once normalized (casefolded, its
-   whitespace collapsed), to an active note of the same ticket is refused as a repeat.
+4. `notes`, while ticket notes were not off: at most 5 a run, counting every entry it sent, each `{key, text}`, text at
+   most 400 characters. A note under an active key supersedes it; nothing is edited in place. A body equal, once
+   normalized (casefolded, its whitespace collapsed), to an active note of the same ticket is refused as a repeat.
 5. `proposals`, while proposals were not off: at most 3 a run, so one run cannot fill the queue, each
    `{key, text, repo?}`, text at most 600 characters, stored `pending` (Proposals and lessons, below). `repo`, if
    given, must be a repository the run worked in. A body equal, once normalized, to a pending proposal or an active
@@ -190,9 +190,11 @@ In code, at write, for a note and a proposal alike, and for a lesson's text at p
   each a way to hide text from the operator that a model still reads. A note is one line of plain text.
 - A note that looks like a secret is refused: a known token's shape (a private key's header, an AWS key id, a GitHub,
   GitLab, Slack, or OpenAI-style token, a JWT, `password=`, `api_key=`, `secret=`, or `token=` and a value, a
-  `Bearer` header), or a word of at least 20 characters that mixes upper and lower case and digits with a Shannon
-  entropy of at least 4.2 bits a character. Hexadecimal words, such as commit ids, are not scanned for entropy: notes
-  name commits.
+  `Bearer` header), or a word of at least 20 characters of a base64 or URL-safe alphabet that mixes upper and lower
+  case and digits, changes between the three at least 45% of the way along, and has a Shannon entropy of at least 3.5
+  bits a character. Identifiers in CamelCase change about once a word, so they pass; a random token of 20 characters
+  or more is caught about nine times in ten. Hexadecimal words, such as commit ids, are never taken for one: notes name
+  commits.
 
 A refused entry is logged and recorded in its run's `run_memory.refused` with the field, the key if it had a valid one,
 and the reason in the harness's words, never the text. The run's page and `canopy memory list --run` show them.

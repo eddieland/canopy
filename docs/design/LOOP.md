@@ -731,12 +731,13 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
    and SIGTERM, SIGHUP, or SIGINT (the run is then `crashed`). Then delete the object directory. A slot that cannot be
    tidied is not returned, and the directory is kept for the operator. SIGKILL cannot be trapped; reconcile tidies and
    returns that run's slots from what step 2 recorded.
-7. Update the `runs` row: ended_at, status, result_json, and in the same transaction record the run's messages about
-   its ticket (§22): a `report`, its summary (else the harness's note, else the status) with each PR on a line, and
-   for a `blocked` run its `question`. A git failure before or after the worker is `crashed`.
-   `result_json` holds the validated result, text fields cut at 2000 characters, plus a `harness` note saying why the
-   status differs from what the worker reported. `prs` is kept to the run's repositories, or filled from `pr` for a
-   run in one; each plain `https://` URL is copied to its unit's `pr_url`, for display and the next run's prompt.
+7. Update the `runs` row: ended_at, status, result_json, and in the same transaction record the run's messages about its
+   ticket (§22), and, for a run rendered with a memory tier on, what it wrote of memory (§28): a `report`, its summary
+   (else the harness's note, else the status) with each PR on a line, and for a `blocked` run its `question`. A git
+   failure before or after the worker is `crashed`. `result_json` holds the validated result, text fields cut at 2000
+   characters, plus a `harness` note saying why the status differs from what the worker reported. `prs` is kept to the
+   run's repositories, or filled from `pr` for a run in one; each plain `https://` URL is copied to its unit's `pr_url`,
+   for display and the next run's prompt.
 
 Every git the harness runs, here, in a review (§21), and in `canopy init` and `canopy workspace sync`, goes through
 `core/hostgit.py`, which adds `-c core.hooksPath=/dev/null -c core.fsmonitor=false -c fetch.recurseSubmodules=false

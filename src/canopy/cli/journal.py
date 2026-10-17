@@ -20,7 +20,7 @@ from canopy.cli.params import (
     TitleType,
     valid_key,
 )
-from canopy.core import conversation, db, vocab
+from canopy.core import conversation, db, memory, vocab
 from canopy.infra import logs
 from canopy.loop import attention, duties
 from canopy.reviews import grants
@@ -205,6 +205,9 @@ def cmd_ticket_set(
         done=done and not dry_run,
         title=title,
     )
+    if done and not dry_run:
+        # A done ticket's notes are invalidated: its work merged or was closed (DESIGN §28, Retention).
+        memory.end_ticket_notes(ctx.conn, key, "ticket done")
     unit_cursors: dict[str, str] = {} if dry_run else dict(unit_pairs)
     if unit is not None and (unit_phase is not None or unit_cursors):
         db.set_unit(ctx.conn, key, ctx.repo, unit, phase=unit_phase, cursors=unit_cursors)
