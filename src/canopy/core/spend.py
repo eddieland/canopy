@@ -13,7 +13,6 @@ from __future__ import annotations
 import json
 import statistics
 from collections import Counter
-from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, timedelta
 from typing import TYPE_CHECKING, Literal
@@ -22,7 +21,7 @@ from canopy.core import contract, db, records
 
 if TYPE_CHECKING:
     import sqlite3
-    from collections.abc import Collection, Iterable, Iterator, Mapping
+    from collections.abc import Collection, Iterable, Mapping
     from datetime import datetime
 
 type Group = Literal["idle", "busy", "hand_run", "not_ok", "dry_run"]
@@ -230,7 +229,8 @@ def breakdown(conn: sqlite3.Connection, now: datetime, days: int) -> Breakdown:
     since = db.format_time(start)
     # Bounded at the window's end too, so a row the clock puts after today is in no figure rather than in some.
     until = db.format_time(start + timedelta(days=days))
-    with _snapshot(conn):
+    # One read transaction, so a run or tick ending between two of the reads is in all of them or none.
+    with db.read_snapshot(conn):
         rows = _tick_rows(conn, since, until)
         by_day: dict[str, dict[str, float | None]] = {}
         for kind, table in _TABLES.items():
@@ -310,20 +310,6 @@ class _TickRow:
     def live_loop(self) -> bool:
         """Whether these ended live ticks the loop ran: what `woken_by` counts."""
         return self.woken_by is not None and self.group not in {None, "dry_run"}
-
-
-# Every read of a breakdown in one read transaction, so a run or tick ending between two of them is in all or none.
-# The journal's connections are autocommit; one already in a transaction reads in that one.
-@contextmanager
-def _snapshot(conn: sqlite3.Connection) -> Iterator[None]:
-    if conn.in_transaction:
-        yield
-        return
-    conn.execute("BEGIN")
-    try:
-        yield
-    finally:
-        conn.execute("COMMIT")
 
 
 def _tick_rows(conn: sqlite3.Connection, since: str, until: str) -> list[_TickRow]:

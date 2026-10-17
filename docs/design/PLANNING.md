@@ -273,7 +273,8 @@ canopy ships `canopy-planner` in the definitions directory (§13):
   `Skip`, and earlier plans read only. A waiting or approved plan is editable while no plan run for the ticket is
   running, and `Approve` or `Ask for changes` saves an unsaved edit first, so the approval takes what the operator sees
   and the planner reads it. `Approve`, `Skip`, and asking for a plan go through the same code as `canopy plan`, with
-  the same refusals; `Ask for changes` is a reply.
+  the same refusals; `Ask for changes` is a reply. Leaving the page, by a link or by closing the tab, while an edit is
+  not saved or a comment or the note holds words not yet sent, asks first, so nothing typed is lost unseen.
 - A `plan.proposed` event (§20) tells the operator's sinks a plan is waiting: the ticket and its title, the run, and the
   plan's id. It carries no plan text, so nothing of the plan leaves the machine through a Slack sink. It is in the
   `runs` group and urgent to a batching sink; a sink that takes only attention hears of the plan from `plan_review`.

@@ -135,9 +135,9 @@ Rules:
   run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window.
   The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
   is shown nowhere else, but for the lifetime total Sprig's hats are bought with (Fun, below). The footer (the
-  version) sits at the foot of the sticky column, so at the window's foot however long the page; in a window too
-  short for the rest, the part above it scrolls on its own. The room left between the blocks and the footer is
-  Sprig's (Fun, below).
+  version, a link out to canopy's releases on GitHub, and the guide) sits at the foot of the sticky column, so at the
+  window's foot however long the page; in a window too short for the rest, the part above it scrolls on its own. The
+  room left between the blocks and the footer is Sprig's (Fun, below).
 - **Narrower than `lg`, the rail is a strip** (`useRailMode`), since half of a second monitor is under it and a whole
   rail there left a list too little room: 3.5rem of the nav's icons (the nav's `compact`), each named on hover and to
   a screen reader, Attention's count one number on its icon's corner in its most severe item's color. A button atop
@@ -233,7 +233,10 @@ Rules:
   decisions, and the attention detail, the other place a ticket is answered, reads in the same order: the item, the
   ticket's actions and any limit it is stuck at, then its conversation and the reply. An action over a whole list
   sits in that list's panel header, as a transcript's All open does: the worktrees' Read again heads their one Pools
-  panel, a section per pool in it.
+  panel, a section per pool in it. A ticket whose plan waits on the operator (proposed, no planner running) leads with
+  the plan instead, above its Work panel, since the plan is what they came to answer and its own line says where the
+  ticket stands; otherwise its plan follows the lists. Where it sits is settled as the page opens, so a plan approved
+  there stays where it was read.
 - **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
   section's name in its color, then the pages between it and this one. On the section's own list the name is plain
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
@@ -726,6 +729,13 @@ list, an empty state, or a skeleton by hand.
   operator sees and does in the UI's own words (`waiting on you`, not `blocked`), and leaves how the code does it to
   the code and why to the design. A new page is a file there and a line in its group in `SOURCES`; the rail's foot,
   beside the version, opens the guide.
+- **A question before losing work** (`AlertDialog`, `src/components/ui/alert-dialog.tsx`): a page that holds the
+  operator's work not yet saved or sent asks before it is left, in a dialog centred over the canvas at 70%, on
+  `surface` with a hairline border: its question as the title (`Leave this page?`), what leaving loses under it, then
+  an outline `Stay`, which takes the focus and which Escape gives, and `Leave` in `destructive`. A form says it holds
+  words not yet sent with `usePending` (`src/hooks/use-pending.ts`); a move within the page, such as a list flipped,
+  never asks. Closing the tab asks too, in the browser's own words. A question about one item, such as deleting a
+  comment, asks in that item's place instead.
 - **A plan in its editor** (`PlanEditor`, `src/components/plan-editor.tsx`; docs/design/PLANNING.md §25): the plan in a
   `Plan` panel, its toolbar in the panel's header, and the comments in a `Comments` panel beside it, 20rem wide, once
   the page gives both 60rem (a container query, so the rail's width counts), and under it, as a list, below that. Under
