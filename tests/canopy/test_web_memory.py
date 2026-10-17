@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core import db
+from canopy.core.vocab import RunKind
 from canopy.infra import resources
-from tests.canopy.helpers import context, with_memory
+from tests.canopy.helpers import BRANCH, KEY, context, in_tick, with_memory
 from tests.canopy.web_helpers import at, client, signed_in_client
 
 if TYPE_CHECKING:
@@ -40,7 +42,7 @@ def test_with_memory_off_the_loop_state_has_no_memory(canopy_env: CanopyEnv) -> 
     c, _ = signed_in_client(migrated(canopy_env))
     assert c.get("/api/loop").json()["memory"] is None
     overview = c.get("/api/memory").json()
-    assert (overview["state"], overview["notes"], overview["lessons_digest"]) == (None, [], None)
+    assert (overview["state"], overview["tickets"], overview["lessons_digest"]) == (None, [], None)
 
 
 def test_recording_is_never_called_in_use(canopy_env: CanopyEnv) -> None:
@@ -50,15 +52,15 @@ def test_recording_is_never_called_in_use(canopy_env: CanopyEnv) -> None:
     assert (state["readout"], state["ticket_notes"]["words"]) == ("memory: recording", "recording")
 
 
-def test_the_overview_holds_the_notes_in_force_the_proposals_and_the_lessons(backend: Backend) -> None:
+def test_the_overview_counts_the_notes_in_force_by_ticket_and_holds_the_proposals_and_lessons(
+    backend: Backend,
+) -> None:
     overview = client(None, backend).get("/api/memory").json()
-    assert [(n["id"], n["ticket_key"], n["key"]) for n in overview["notes"]] == [
-        (3, "ABC-100", "ci-cache"),
-        (2, "ABC-100", "flaky-checkout"),
-        (4, "ABC-102", "export-encoding"),
+    # By ticket, the newest note first: a ticket's own memory lists them.
+    assert [(t["ticket_key"], t["count"], t["used"]) for t in overview["tickets"]] == [
+        ("ABC-102", 1, 0),
+        ("ABC-100", 2, 0),
     ]
-    # Sent as the journal holds it, a hand-written zero-width space and all: the UI names it.
-    assert "\u200b" in overview["notes"][0]["text"]
     assert [(p["entry"]["id"], p["run_kind"], p["private"], p["ticket_done"]) for p in overview["proposals"]] == [
         (5, "implement", False, False),
         (6, "implement", True, False),
@@ -78,6 +80,8 @@ def test_a_tickets_memory_is_every_note_and_the_digest_its_next_run_gets(backend
         (2, "active", None),
         (1, "superseded", "superseded by note 2"),
     ]
+    # Sent as the journal holds it, a hand-written zero-width space and all: the UI names it.
+    assert "\u200b" in found["notes"][0]["text"]
     assert found["notes"][2]["use_count"] == 1
     assert found["notes"][2]["last_used_at"] == at(-115)
     assert (found["digest"]["ids"], found["digest"]["served"]) == ([3, 2], True)
@@ -99,3 +103,24 @@ def test_a_runs_memory_is_what_it_wrote_read_and_had_refused(backend: Backend) -
     # Rendered with memory off: no row at all.
     assert c.get("/api/runs/41/memory").json() == {"rendered": None, "wrote": [], "read": [], "refused": []}
     assert c.get("/api/runs/999/memory").status_code == 404
+
+
+def test_the_overview_lists_lessons_reported_wrong_first_then_by_review_date(canopy_env: CanopyEnv) -> None:
+    with_memory(canopy_env, proposals="use")
+    ctx = migrated(canopy_env)
+    with in_tick(ctx.conn) as tick_id:
+        db.touch_ticket(ctx.conn, KEY, "repo")
+        run_id = db.insert_run(
+            ctx.conn, tick_id=tick_id, key=KEY, kind=RunKind.IMPLEMENT, branch=BRANCH, slots=(), runs_dir=Path("/r")
+        )
+    ctx.conn.executemany(
+        "INSERT INTO memories (id, scope, key, body, status, author, created_at, review_at, wrong_at, wrong_run_id) "
+        "VALUES (?, 'lesson', ?, 'A lesson.', 'active', 'operator', '2026-10-01T00:00:00.000Z', ?, ?, ?)",
+        [
+            (1, "a-due-last", "2027-03-01T00:00:00.000Z", None, None),
+            (2, "b-due-first", "2027-01-01T00:00:00.000Z", None, None),
+            (3, "c-reported-wrong", "2027-06-01T00:00:00.000Z", "2026-10-01T00:00:00.000Z", run_id),
+        ],
+    )
+    c, _ = signed_in_client(ctx)
+    assert [lesson["id"] for lesson in c.get("/api/memory").json()["lessons"]] == [3, 2, 1]

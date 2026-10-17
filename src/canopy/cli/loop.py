@@ -273,7 +273,8 @@ def cmd_decisions(click_ctx: click.Context, tick_id: int | None, ticket_key: str
         return 0
     dry = " (dry run)" if row.dry_run else ""
     started = f"started {row.started_at} ({attention.age(row.started_at)} ago)"
-    click.echo(f"Tick {row.id}: {row.status}{dry}, {started}")
+    ran_on = f" on canopy {row.canopy_version}" if row.canopy_version else ""
+    click.echo(f"Tick {row.id}: {row.status}{dry}, {started}{ran_on}")
     if row.summary:
         click.echo(f"  {row.summary}")
     if row.session_id or row.cost_usd is not None:

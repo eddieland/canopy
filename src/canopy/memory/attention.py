@@ -1,9 +1,10 @@
 """The attention items memory raises (DESIGN §14, §28), every tick their cause holds, for the operator alone.
 
 `memory_proposal`, about a ticket marked done, while a proposal from its runs waits: a merge has checked the work it
-came from. `lesson_review`, one item naming every lesson due, and `lesson_wrong`, one naming every lesson a run reported
-wrong since its last renewal: both only at `use`, since no run reads a lesson before. None arises while
-`memory.proposals` is off. The overseer never sees them: they are harness reasons (`attention.HARNESS_REASONS`).
+came from. `lesson_review`, one item naming the lessons due, longest overdue first, and `lesson_wrong`, one naming the
+lessons a run reported wrong since their last renewal: both only at `use`, since no run reads a lesson before. An item
+names at most `MAX_NAMED` and counts the rest. None arises while `memory.proposals` is off. The overseer never sees
+them: they are harness reasons (`attention.HARNESS_REASONS`).
 """
 
 from __future__ import annotations
@@ -17,8 +18,12 @@ from canopy.core.vocab import MemoryMode
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Sequence
 
     from canopy.core.config import Config
+
+# The most ids one item names; the rest are counted, so a workspace with many lessons due raises one short item.
+MAX_NAMED = 10
 
 
 @dataclass(frozen=True)
@@ -59,23 +64,31 @@ def items(conn: sqlite3.Connection, config: Config, now: datetime | None = None)
         return found
     stamp = db.format_time(now or datetime.now(UTC))
     lessons = memory.active_lessons(conn)
-    due = [m.id for m in lessons if m.review_at is not None and m.review_at <= stamp]
+    overdue = [m for m in lessons if m.review_at is not None and m.review_at <= stamp]
+    due = [m.id for m in sorted(overdue, key=lambda m: (m.review_at or "", m.id))]
     if due:
         detail = (
             f"{_named('lesson', due)} {'is' if len(due) == 1 else 'are'} due for review: renew each with "
             "`canopy memory renew ID`, graduate it into a repository's AGENTS.md or a skill, or forget it"
         )
         found.append(Item(None, memory.REVIEW_REASON, detail))
-    wrong = [(m.id, m.wrong_run_id) for m in lessons if m.wrong_at is not None]
+    wrong = [f"{m.id} (run {m.wrong_run_id})" for m in lessons if m.wrong_at is not None]
     if wrong:
-        said = ", ".join(f"{i} (run {run})" for i, run in wrong)
         detail = (
-            f"a run reported lesson{'s' if len(wrong) > 1 else ''} {said} wrong: read it with `canopy memory lessons`, "
-            "then renew or forget it"
+            f"a run reported lesson{'s' if len(wrong) > 1 else ''} {_listed(wrong)} wrong: read it with "
+            "`canopy memory lessons`, then renew or forget it"
         )
         found.append(Item(None, memory.WRONG_REASON, detail))
     return found
 
 
-def _named(what: str, ids: list[int]) -> str:
-    return f"{what} {ids[0]}" if len(ids) == 1 else f"{what}s {', '.join(map(str, ids))}"
+def _named(what: str, ids: Sequence[int]) -> str:
+    return f"{what} {ids[0]}" if len(ids) == 1 else f"{what}s {_listed([str(i) for i in ids])}"
+
+
+def _listed(names: Sequence[str]) -> str:
+    more = len(names) - MAX_NAMED
+    # Never `and 1 more`: naming the last one takes no more room than counting it.
+    if more <= 1:
+        return ", ".join(names)
+    return f"{', '.join(names[:MAX_NAMED])}, and {more} more"

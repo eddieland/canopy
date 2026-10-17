@@ -2,6 +2,7 @@
 
 import sqlite3
 from collections.abc import Iterable
+from importlib.metadata import version
 
 import pytest
 
@@ -194,6 +195,7 @@ def test_decisions_prints_a_ticks_plan(
     assert main(["decisions", str(first)]) == 0
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("Tick 1: ok (dry run), started ")
+    assert lines[0].endswith(f" ago) on canopy {version('canopy')}")
     assert lines[1] == "  dry run; 2 decisions"
     assert lines[-3:] == [
         "Decisions (2):",
