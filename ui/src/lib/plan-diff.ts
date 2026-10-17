@@ -22,10 +22,14 @@ export interface Change {
     at: number
 }
 
-/** The diff's state: the old plan's text, while changes are shown, and what the editor draws. */
-interface Changes {
+/** The diff's state: the old plan's text, while changes are shown, what the editor draws, and where each change is. */
+export interface Changes {
+    /** The old plan's text as the editor reads it, while changes are shown. */
     base: string | undefined
+    /** The added words and the removed ones, as the editor draws them. */
     decorations: DecorationSet
+    /** Where each change starts in the plan, in its order, a removal and the words that replaced it one change. */
+    starts: number[]
 }
 
 /** How many words may differ before the plans are shown as all changed: past it, the comparison costs too much. */
@@ -48,7 +52,7 @@ export const PlanChanges = Extension.create({
             new Plugin<Changes>({
                 key: changesKey,
                 state: {
-                    init: () => ({ base: undefined, decorations: DecorationSet.empty }),
+                    init: () => ({ base: undefined, decorations: DecorationSet.empty, starts: [] }),
                     apply: (tr, prev, _, state) => next(tr, prev, state),
                 },
                 props: {
@@ -97,12 +101,13 @@ function next(tr: Transaction, prev: Changes, state: EditorState): Changes {
         return prev
     }
     const base = action === undefined ? prev.base : action.base
-    return { base, decorations: base === undefined ? DecorationSet.empty : draw(state, base) }
+    return base === undefined ? { base, decorations: DecorationSet.empty, starts: [] } : { base, ...draw(state, base) }
 }
 
-function draw(state: EditorState, base: string): DecorationSet {
+function draw(state: EditorState, base: string): Pick<Changes, 'decorations' | 'starts'> {
     const { text, positions } = docText(state.doc)
     const decorations: Decoration[] = []
+    const starts = new Set<number>()
     for (const change of diffWords(base, text)) {
         if (change.kind === 'same' || change.text.trim() === '') {
             continue
@@ -111,13 +116,19 @@ function draw(state: EditorState, base: string): DecorationSet {
             const range = rangeOf(positions, change.at, change.at + change.text.trimEnd().length)
             if (range !== undefined) {
                 decorations.push(Decoration.inline(range.from, range.to, { nodeName: 'ins', class: 'plan-ins' }))
+                starts.add(range.from)
             }
         } else {
             const removed = change.text.replaceAll(/\s+/gu, ' ').trim()
-            decorations.push(Decoration.widget(at(positions, change.at), () => struck(removed), { side: -1 }))
+            const where = at(positions, change.at)
+            decorations.push(Decoration.widget(where, () => struck(removed), { side: -1 }))
+            starts.add(where)
         }
     }
-    return DecorationSet.create(state.doc, decorations)
+    return {
+        decorations: DecorationSet.create(state.doc, decorations),
+        starts: [...starts].toSorted((a, b) => a - b),
+    }
 }
 
 // Where the text's offset `offset` falls in the document: just after the character before it, so words removed at the

@@ -62,10 +62,15 @@ describe('PlanChanges', () => {
         const removed = [...editor.view.dom.querySelectorAll('del.plan-del')].map((node) => node.textContent)
         expect(added).toEqual(['the client'])
         expect(removed).toEqual(['a file'])
+        // A removal and the words that replaced it are one change, where they start.
+        const starts = changesKey.getState(editor.state)?.starts ?? []
+        expect(starts).toHaveLength(1)
+        expect(editor.state.doc.textBetween(starts[0] ?? 0, (starts[0] ?? 0) + 'the client'.length)).toBe('the client')
         editor.commands.insertContentAt(editor.state.doc.content.size - 1, ' Then close it.')
         expect(editor.view.dom.querySelector('ins.plan-ins:last-of-type')?.textContent).toContain('Then close it')
         editor.view.dispatch(editor.state.tr.setMeta(changesKey, { base: undefined }))
         expect(editor.view.dom.querySelectorAll('ins.plan-ins, del.plan-del')).toHaveLength(0)
+        expect(changesKey.getState(editor.state)?.starts).toEqual([])
         editor.destroy()
     })
 })

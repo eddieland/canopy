@@ -24,6 +24,13 @@ test("a ticket's newest plan opens in the editor, its comments on their passages
     await expect(page.getByRole('form', { name: 'Ask for changes' })).toBeVisible()
 })
 
+test('a waiting plan that replaced one opens with its changes marked, and counted', async ({ page }) => {
+    const bar = page.getByTestId('plan-bar')
+    await expect(bar.getByRole('button', { name: 'Changes since plan 1' })).toHaveAttribute('aria-pressed', 'true')
+    await expect(bar.getByText(/^\d+ changes$/u)).toBeVisible()
+    await expect(plan(page).locator('ins').filter({ hasText: 'owner_timezone()' }).first()).toBeVisible()
+})
+
 test('an earlier plan opens read only', async ({ page }) => {
     const earlier = page.getByTestId('earlier-plans')
     await expect(earlier).toContainText('superseded')

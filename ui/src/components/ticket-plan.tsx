@@ -243,9 +243,10 @@ function NewestPlan({
             onChange={setMarkdown}
             editable={editable}
             edited={newest.edited}
+            // A waiting plan that replaced one is read for what changed, so its changes show first.
             previous={
                 before !== undefined && typeof replaced?.text === 'string'
-                    ? { label: `plan ${before.id}`, markdown: replaced.text }
+                    ? { label: `plan ${before.id}`, markdown: replaced.text, shown: status === 'proposed' }
                     : undefined
             }
             onAskForChanges={status === 'proposed' ? askForChanges : undefined}
