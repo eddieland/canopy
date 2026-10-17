@@ -77,7 +77,7 @@ export const HEADLINES: Record<TickerTopic, readonly string[]> = {
         'Tip: canopy show run:ID shows one run, and chore:NAME a chore',
         'Tip: canopy chore try NAME runs a chore now, in the foreground',
         'Tip: Reload in Settings, or kill -HUP, has the loop read its config again',
-        'Tip: canopy skill prints a skill that teaches your own agent sessions canopy',
+        'Tip: canopy skill --install saves a skill that teaches your own agent sessions canopy',
         'Tip: canopy secret --rotate, then a restart, signs every browser out',
         "Tip: a list's order toggle, in its panel header, flips it to oldest first",
         'Tip: Settings picks the key that sends a reply; Shift+Enter is always a new line',
