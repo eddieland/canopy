@@ -167,6 +167,13 @@ relying on a permission they check.
   overseer to record `wait` for the `ci_red` unit whose check the outage failed, naming the notice, with no `fix-ci`;
   once the notice lapses, `notice_rerun` on the attention list until the operator reruns the check, and no `fix-ci`
   before that newer run; and the next worker's prompt after the lapse to carry `None.` for the notice.
+- **S40. What each agent's first request holds** (M34's prefix, taken on request 2026-10-17). After an OpenCode
+  upgrade, a new MCP server or toolset, or a change under `agents/`, record one short session of each canopy agent
+  against a recorder on loopback and split its first request by source, as MEASUREMENTS' 2026-10-17 section says
+  (Re-measuring the first request), on the operator's machine with their MCP servers. Expect OpenCode's own prompt
+  absent and the agent's body first; no schema for a tool a definition denies outright; and, against that section, a
+  difference only where the change made one. A body the split cannot find means OpenCode moved it. Record the tables
+  in `MEASUREMENTS.md`.
 
 ## The web UI
 
