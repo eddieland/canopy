@@ -19,7 +19,9 @@ from canopy.infra import procs
 from canopy.loop import attention
 from tests.canopy.helpers import (
     InlineRunner,
+    agent_runs,
     commit_and_push,
+    in_run,
     in_tick,
     lifelock_left,
     messages,
@@ -27,6 +29,7 @@ from tests.canopy.helpers import (
     overseer_does,
     pool,
     pool_statuses,
+    present,
     state_block,
     tools_of,
     waits,
@@ -99,7 +102,7 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         assert result.stored(row.result_json) == result.ReviewResult.model_validate(FINDINGS)
         assert (row.pr_url, row.sha, row.ticket_key) == (PR, sha, "PROJ-1")
 
-        [reviewer] = [json.loads(line) for line in agent_log.read_text().splitlines()]
+        [reviewer] = agent_runs(agent_log)
         run_dir = reviews.state_dir / "reviews" / "1"
         assert reviewer["cwd"] == str(run_dir)
         assert reviewer["argv"][:3] == ["run", "--agent", "canopy-reviewer"]
@@ -200,10 +203,9 @@ def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_s
     with reviewer_reports(CLEAN):
         run_inline(conn, sha=head(git_pool))
         run_inline(conn, sha=head(git_pool), pr=f"{PR}0")
-        with in_tick(conn) as tick_id:
+        with in_tick(conn, ends_ok=True) as tick_id:
             assert main(review(sha="b" * 40), runner=InlineRunner()) == 1
             assert [d[2] for d in review_decisions(conn, tick_id)] == ["refused:review_limit", "attention:review_limit"]
-            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
 
         assert operator("grant", PR, "review") == 0
         assert f"{PR} has had 1 review runs, and may now have 2." in capsys.readouterr().out
@@ -212,7 +214,7 @@ def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_s
     assert "This is review 2 of at most 2 of this PR." in prompt
 
     # The granted run counted like any other, and the grant is that PR's only.
-    with in_tick(conn) as tick_id:
+    with in_tick(conn, ends_ok=True) as tick_id:
         assert main(review(sha="c" * 40), runner=InlineRunner()) == 1
         assert main(review(sha="c" * 40, pr=f"{PR}0"), runner=InlineRunner()) == 1
         reasons = [(d[1], d[3]) for d in review_decisions(conn, tick_id) if d[2] == "refused:review_limit"]
@@ -220,7 +222,6 @@ def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_s
             (PR, "this PR has had 2 review runs and the limit is 2"),
             (f"{PR}0", "this PR has had 1 review runs and the limit is 1"),
         ]
-        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     assert operator("grant", PR, "review", "--runs", "2") == 0
     assert "has had 2 review runs, and may now have 4." in capsys.readouterr().out
 
@@ -243,13 +244,10 @@ def test_only_the_operator_grants_reviews(
     with reviewer_reports(CLEAN):
         run_inline(conn, sha=head(git_pool))
     capsys.readouterr()
-    in_run: dict[str, str] = {"CANOPY_RUN_ID": "1"} if env == "CANOPY_RUN_ID" else {}
-    with in_tick(conn) as tick_id, mock.patch.dict(os.environ, in_run):
-        if env == "CANOPY_RUN_ID":
-            os.environ.pop("CANOPY_TICK_ID")
+    # Inside a tick, as the overseer; or inside a run, as its agent, with no tick named.
+    with in_tick(conn, ends_ok=True) if env == "CANOPY_TICK_ID" else in_run(1):
         assert main(["grant", PR, "review"]) == 1
         assert "grant refused (inside_run)" in capsys.readouterr().err
-        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     assert conn.execute("SELECT count(*) FROM review_grants").fetchone()[0] == 0
 
 
@@ -346,8 +344,7 @@ def test_the_harness_checks_what_it_can_of_a_result(
     conn = reviews.journal()
     with reviewer_reports(report):
         run_id = run_inline(conn, sha=head(git_pool))
-        row = db.get_review_run(conn, run_id)
-        assert row is not None
+        row = present(db.get_review_run(conn, run_id))
         assert row.status == status
         assert row.result_json is not None
         stored = json.loads(row.result_json)
@@ -365,8 +362,7 @@ def test_a_plugin_notice_after_the_result_does_not_hide_it(
         with_events(reviews, "canopy-reviewer")
     conn = reviews.journal()
     with reviewer_reports(f"{json.dumps(FINDINGS)}\n[policy-plugin] session audited, 0 violations"):
-        row = db.get_review_run(conn, run_inline(conn, sha=head(git_pool)))
-        assert row is not None
+        row = present(db.get_review_run(conn, run_inline(conn, sha=head(git_pool))))
         assert row.status == "done"
         assert json.loads(row.result_json)["verdict"] == "findings"
 
@@ -388,10 +384,9 @@ def test_links_out_of_the_checkout_are_removed_before_the_reviewer_reads_it(
     git("checkout", "--quiet", "--detach", cwd=work)
     with reviewer_reports(FINDINGS, ["ls", "checkout/"]):
         run_id = run_inline(conn := reviews.journal(), sha=sha)
-        row = db.get_review_run(conn, run_id)
-        assert row is not None
+        row = present(db.get_review_run(conn, run_id))
         assert row.status == "done", Path(row.log_path).read_text()
-        [reviewer] = [json.loads(line) for line in agent_log.read_text().splitlines()]
+        [reviewer] = agent_runs(agent_log)
         [listing] = reviewer["commands"]
         names = listing["stdout"].split()
         assert "inside" in names
@@ -414,8 +409,7 @@ def test_a_commit_origin_does_not_have_fails_the_review(
     """A PR of another repository fails here: its commit cannot be fetched from this one's origin."""
     conn = reviews.journal()
     run_id = run_inline(conn, sha="d" * 40)
-    row = db.get_review_run(conn, run_id)
-    assert row is not None
+    row = present(db.get_review_run(conn, run_id))
     assert row.status == "failed"
     assert json.loads(row.result_json)["harness"].startswith("git fetch failed: ")
     assert not agent_log.exists()  # the reviewer never ran
@@ -427,9 +421,8 @@ def test_a_killed_review_is_crashed_on_the_next_tick(
 ) -> None:
     conn = reviews.journal()
     with reviewer_reports(CLEAN, sleep=60):
-        with in_tick(conn) as tick_id:
+        with in_tick(conn, ends_ok=True):
             assert main(review(sha=head(git_pool))) == 0
-            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         deadline = time.monotonic() + 30
         row = db.get_review_run(conn, 1)
         while (row is None or row.agent_pid is None) and time.monotonic() < deadline:
@@ -448,8 +441,7 @@ def test_a_killed_review_is_crashed_on_the_next_tick(
 
         with overseer_does(*waits("PROJ-1")):
             assert main(["tick"]) == 0
-            crashed = db.get_review_run(conn, 1)
-            assert crashed is not None
+            crashed = present(db.get_review_run(conn, 1))
             assert crashed.status == "crashed"
             assert not procs.lifelock(Path(crashed.log_path)).exists()
             while procs.alive(agent_pid) and time.monotonic() < deadline:
@@ -464,14 +456,12 @@ def test_reconcile_leaves_a_running_reviews_slot_alone(
     reviews: CanopyEnv, git_pool: GitPool, treehouse_state: Path, agent_log: Path
 ) -> None:
     conn = reviews.journal()
-    with in_tick(conn) as tick_id:
+    with in_tick(conn, ends_ok=True):
         assert main(review(sha=head(git_pool)), runner=InlineRunner()) == 0  # claimed by this live process
-        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     with overseer_does(*waits("PROJ-1")):
         assert main(["tick"]) == 0
         assert pool_statuses(treehouse_state) == ["leased", "available"]
-        row = db.get_review_run(conn, 1)
-        assert row is not None
+        row = present(db.get_review_run(conn, 1))
         assert row.status == "running"
 
 
@@ -579,12 +569,10 @@ def test_a_review_run_records_what_it_cost(reviews: CanopyEnv, git_pool: GitPool
     with reviewer_reports(FINDINGS, ["echo", "read it"], session="ses_review"):
         conn = reviews.journal()
         run_id = run_inline(conn, sha=head(git_pool))
-    row = db.get_review_run(conn, run_id)
-    assert row is not None
+    row = present(db.get_review_run(conn, run_id))
     assert row.status == "done", Path(row.log_path).read_text()  # the result line is read from the text events
     assert row.session_id == "ses_review"
-    usage = db.usage_of(row)
-    assert usage is not None
+    usage = present(db.usage_of(row))
     assert usage.cost_usd == 0.25  # two model calls at 0.125
     assert (usage.first_call, usage.first_cache_write) == (5500, 500)
     assert (reviews.state_dir / definitions.RUNTIME_DIR / row.definitions_digest).is_dir()
@@ -602,8 +590,7 @@ def test_a_timed_out_review_records_what_it_reported_before_the_kill(reviews: Ca
     conn = reviews.journal()
     runner = InlineRunner(timeout_agent=True, timeout_stdout=stdout)
     run_id = run_inline(conn, sha=head(git_pool), runner=runner)
-    row = db.get_review_run(conn, run_id)
-    assert row is not None
+    row = present(db.get_review_run(conn, run_id))
     assert row.status == "timeout"
     assert (row.session_id, row.cost_usd, row.tokens_cache_write) == ("ses_slow", 0.5, 4)
 
@@ -721,9 +708,7 @@ def feature_commit(git_pool: GitPool, tmp_path: Path) -> str:
     git("add", "retry.py", cwd=seed)
     git("commit", "--quiet", "-m", "retry", cwd=seed)
     git("push", "--quiet", str(git_pool.origin), "feature", cwd=seed)
-    sha = git_pool.remote_head("feature")
-    assert sha is not None
-    return sha
+    return present(git_pool.remote_head("feature"))
 
 
 def test_a_review_keeps_its_commits_diff_for_the_web_ui(
@@ -734,13 +719,11 @@ def test_a_review_keeps_its_commits_diff_for_the_web_ui(
     conn = reviews.journal()
     with reviewer_reports(FINDINGS):
         run_id = run_inline(conn, sha=sha)
-        row = db.get_review_run(conn, run_id)
-        assert row is not None
+        row = present(db.get_review_run(conn, run_id))
         assert (row.status, row.base_branch) == ("done", "main")
         path = review_diff.path_for(row.log_path)
         assert path.stat().st_mode & 0o777 == 0o600
-        diff = review_diff.read(path)
-        assert diff is not None
+        diff = present(review_diff.read(path))
         [changed] = diff.files
         assert changed.path == "retry.py"
         assert [(ln.kind, ln.new, ln.text) for ln in changed.hunks[0].lines] == [
@@ -758,8 +741,7 @@ def test_a_review_without_its_base_branch_still_runs(
     conn = reviews.journal()
     with reviewer_reports(FINDINGS):
         run_id = run_inline(conn, sha=sha)
-        row = db.get_review_run(conn, run_id)
-        assert row is not None
+        row = present(db.get_review_run(conn, run_id))
         assert row.status == "done", Path(row.log_path).read_text()
         assert not review_diff.path_for(row.log_path).exists()
 
@@ -856,7 +838,7 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
     ref = f"review:{review_id}"
     implemented(conn)
 
-    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "1"}):
+    with in_run(1):
         assert main(["send", ref, "1"]) == 1
         assert "send refused (inside_run)" in capsys.readouterr().err
     assert main(["dismiss", ref, "2"]) == 0

@@ -12,6 +12,7 @@ from canopy.core import db
 from tests.canopy.helpers import (
     LABEL,
     InlineRunner,
+    agent_runs,
     decisions,
     dispatch_and_run,
     in_tick,
@@ -155,14 +156,14 @@ def test_a_continued_branch_whose_base_is_gone_is_crashed(
         dispatch_and_run(
             conn, "--label", LABEL, "--kind", "implement", "--slug", "second", "--base", FIRST, key="PROJ-2"
         )
-        workers = len(agent_log.read_text().splitlines())
+        workers = len(agent_runs(agent_log))
 
         # The blocker's branch is deleted after PROJ-2's branch exists; a resume still naming it must not start.
         git("branch", "--quiet", "-D", FIRST, cwd=git_pool.origin)
         run = dispatch_and_run(conn, "--label", LABEL, "--kind", "resume", "--base", FIRST, key="PROJ-2")
         assert run["status"] == "crashed"
         assert json.loads(run["result_json"])["harness"].startswith(f"repo: the base branch {FIRST} is not on origin")
-        assert len(agent_log.read_text().splitlines()) == workers  # the worker never ran
+        assert len(agent_runs(agent_log)) == workers  # the worker never ran
         assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 

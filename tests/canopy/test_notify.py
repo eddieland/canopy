@@ -14,7 +14,6 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.config import ConfigError, load
 from canopy.core.items import fingerprint
-from canopy.core.vocab import TickStatus
 from canopy.notify import journal as notify_journal
 from canopy.notify import message
 from tests.canopy.helpers import (
@@ -131,14 +130,13 @@ def test_a_json_sink_hears_about_runs(
     conn = canopy_env.journal()
     question = "Should the retry be per request or per session?\nThe ticket says both."
     blocked = json.dumps({"status": "blocked", "branch": "agent/PROJ-1-work", "summary": "x", "question": question})
-    with in_tick(conn) as tick_id, worker_does(result=blocked):
+    with in_tick(conn, ends_ok=True), worker_does(result=blocked):
         assert main(["ticket", "set", "PROJ-1", "--title", "Retry failed checkouts"]) == 0
         runner = InlineRunner()
         assert (
             main(["dispatch", "PROJ-1", "--repo", "repo", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
         )
         assert main(["_run", "1"], runner=runner) == 0
-        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     with overseer_records(("PROJ-9", "needs_reviewer"), waiting=("PROJ-1",)):
         tick()
 
@@ -309,12 +307,11 @@ def test_a_digest_arrives_on_its_interval_even_when_quiet(
 
 def run_worker(conn: sqlite3.Connection, ticket: str, *, result: str = WORKER_DONE) -> None:
     """Dispatch and run one implement worker on `ticket` in a tick of its own, recording its run's events."""
-    with in_tick(conn) as tick_id, worker_does(result=result):
+    with in_tick(conn, ends_ok=True), worker_does(result=result):
         runner = InlineRunner()
         assert main(["dispatch", ticket, "--repo", "repo", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
         run_id = conn.execute("SELECT max(id) FROM runs").fetchone()[0]
         assert main(["_run", str(run_id)], runner=runner) == 0
-        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
 
 
 def test_a_batching_sink_holds_what_is_not_urgent_until_its_window_ends(
@@ -451,14 +448,13 @@ def test_a_json_digest_names_each_ticket_by_its_title(
     add_sink(canopy_env, sink_script, "daily", out, extra="events = []\ndigest_every_minutes = 60\n")
     conn = canopy_env.journal()
     blocked = json.dumps({"status": "blocked", "summary": "x", "question": "Which?"})
-    with in_tick(conn) as tick_id, worker_does(result=blocked):
+    with in_tick(conn, ends_ok=True), worker_does(result=blocked):
         assert main(["ticket", "set", "PROJ-1", "--title", "Retry failed checkouts"]) == 0
         runner = InlineRunner()
         assert (
             main(["dispatch", "PROJ-1", "--repo", "repo", "--label", LABEL, "--kind", "implement"], runner=runner) == 0
         )
         assert main(["_run", "1"], runner=runner) == 0
-        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     with overseer_records(waiting=("PROJ-1",)):
         tick()
 
@@ -588,10 +584,9 @@ def test_chore_runs_reach_a_sink_that_takes_chores(
     chore: dict[str, object] = {"status": "ok", "summary": "all clear", "findings": []}
     # The chore's result stays set through the next tick, as the overseer's does.
     with overseer_does(), chore_reports(chore):
-        with in_tick(conn) as tick_id:
+        with in_tick(conn, ends_ok=True):
             assert main(["chore", "run", "check"], runner=InlineRunner()) == 0
             assert main(["_chore", "1"], runner=InlineRunner()) == 0
-            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         tick()
     [message] = messages(out)
     assert "< chore:check run 1 ended ok (0 findings): all clear\n" in message

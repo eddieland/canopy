@@ -41,20 +41,29 @@ const PADDING_REM = 1.5
  * list lines up with the others whatever its cells hold; the free one takes the rest, and never less than the floor.
  * What goes under a row's head line starts at a named column (`RowLine`), never at a hand-computed indent.
  *
+ * A row reads in one order in every kind (`ui/DESIGN.md`, "Lists are rows in a panel"): its state, where it has one,
+ * so the left edge of a list is a column of dots; its own id; what it belongs to; the chips that describe it; the
+ * free column; then only readouts, right-aligned, age last.
+ *
  * A column with a third entry gives way on a narrow list, in that order: 1 goes first. It shows only where the list
  * has room for it, every column that gives way after it, and the ones that never do (`rowTiers`).
  */
 export const ROW_COLUMNS = {
-    /** A run with its ticket, on the runs page: the state, the ticket and its title, the run's id and chips. */
+    /** A run with its ticket, on the runs page: the state, the run's id, the ticket, the run's chips, the title. */
     run: [
         ['state', '5rem'],
+        ['run', '4rem', 4],
         ['key', '6rem'],
+        // Its chips go before its age: they describe the run, where the age says whether it is current.
+        ['kind', '10rem', 2],
         ['title', FREE],
-        ['facts', '14rem', 3],
         ['cost', COST, 1],
-        ['age', AGE, 2],
+        ['age', AGE, 3],
     ],
-    /** A run under its subject (a ticket's, a PR's, a chore's): the state, then the run's id and chips. */
+    /**
+     * A run under its subject (a ticket's, a PR's, a chore's): the state, then the run's id at a fixed width and its
+     * chips, the order a run's row has on the runs page.
+     */
     'own-run': [
         ['state', '5rem'],
         ['facts', FREE],
@@ -62,12 +71,14 @@ export const ROW_COLUMNS = {
         ['age', AGE, 2],
     ],
     /**
-     * A tick: its id, its status, how many decisions, its overseer's cost, tokens, and peak context, and when. The
-     * token counts give way before the cost, which says the same in dollars.
+     * A tick: its status, its id, a dry run's chip, how many decisions, its overseer's cost, tokens, and peak context,
+     * and when. The token counts give way before the cost, which says the same in dollars.
      */
     tick: [
+        // A long status (`overseer failed`) is cut to fit: a wider column would leave the free one under its floor.
+        ['state', '6rem'],
         ['id', '5rem'],
-        ['state', FREE],
+        ['facts', FREE],
         ['decisions', '6rem', 4],
         ['cost', COST, 3],
         ['tokens', '6rem', 1],
@@ -83,42 +94,47 @@ export const ROW_COLUMNS = {
         ['state', FREE],
         ['findings', '14rem', 1],
     ],
-    /** A review run on the reviews page: its id, verdict, ticket, PR and commit, impact, cost, and when. */
+    /** A review run on the reviews page: its verdict, id, ticket, impact, PR and commit, cost, and when. */
     review: [
-        ['id', '5rem'],
         // `3 findings, 1 blocking` on one line, with its dot.
         ['verdict', '12rem', 5],
+        ['id', '5rem'],
         ['key', '6rem', 3],
-        ['pr', FREE],
         ['impact', '7rem', 2],
+        ['pr', FREE],
         ['cost', COST, 1],
         ['age', AGE, 4],
     ],
     /** A review run on its PR's page: as on the reviews page, without the ticket and the PR. */
     'own-review': [
-        ['id', '5rem'],
         ['verdict', '12rem', 4],
-        ['commit', FREE],
+        ['id', '5rem'],
         ['impact', '7rem', 2],
+        ['commit', FREE],
         ['cost', COST, 1],
         ['age', AGE, 3],
     ],
-    /** A PR: the PR, its ticket and title and phase, the run working it, its latest review, and its age. */
+    /**
+     * A PR: its state (the run working it, else its latest review), the PR, its unit's phase, its ticket and title, and
+     * its age. The ticket shares the free column with its title: a column of its own beside the review's would not fit
+     * a list in a 1280px window.
+     */
     'pull-request': [
-        ['pr', '11rem'],
-        ['key', FREE],
-        ['run', '5rem', 1],
         // `review:4 3 findings, 1 blocking` on one line, with its dot.
-        ['review', '16rem', 3],
+        ['state', '16rem', 3],
+        ['pr', '11rem'],
+        // Room for the longest phase's chip, `changes requested`.
+        ['phase', '9rem', 1],
+        ['title', FREE],
         ['age', AGE, 2],
     ],
-    /** A ticket: its key, its title, public or private, its phase, its run or `waiting on you`, and its age. */
+    /** A ticket: its run or `waiting on you`, its key, its phase, public or private, its title, and its age. */
     ticket: [
-        ['key', '6rem'],
-        ['title', FREE],
-        ['access', '9rem', 2],
-        ['phase', '10rem', 1],
         ['run', '8rem', 4],
+        ['key', '6rem'],
+        ['phase', '10rem', 2],
+        ['access', '9rem', 1],
+        ['title', FREE],
         ['age', AGE, 3],
     ],
     /** A worktree slot: its state, its number, what holds it, its branch and processes, and for how long. */
@@ -164,15 +180,15 @@ export const ROW_COLUMNS = {
         ['age', AGE, 1],
     ],
     /**
-     * A note, proposal, or lesson (DESIGN §28): its id, its key, where it stands, how runs used it, and when it was
+     * A note, proposal, or lesson (DESIGN §28): where it stands, its id, its key, how runs used it, and when it was
      * written. What it says goes under its key.
      */
     memory: [
-        ['id', '4rem'],
+        ['state', '6rem'],
+        ['id', '5rem'],
         ['key', FREE],
-        ['state', '9rem', 2],
         ['use', '11rem', 1],
-        ['age', AGE, 3],
+        ['age', AGE, 2],
     ],
     /** A transcript's row: its time, its mark, and its text, under which a tool call's body opens. */
     transcript: [
@@ -300,13 +316,13 @@ const FROM: Record<RowColumn, string> = {
     id: 'col-[id/end]',
     impact: 'col-[impact/end]',
     key: 'col-[key/end]',
+    kind: 'col-[kind/end]',
     label: 'col-[label/end]',
     mark: 'col-[mark/end]',
     name: 'col-[name/end]',
     peak: 'col-[peak/end]',
     phase: 'col-[phase/end]',
     pr: 'col-[pr/end]',
-    review: 'col-[review/end]',
     run: 'col-[run/end]',
     severity: 'col-[severity/end]',
     slot: 'col-[slot/end]',

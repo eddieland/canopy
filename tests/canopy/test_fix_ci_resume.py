@@ -18,6 +18,7 @@ from tests.canopy.helpers import (
     dispatch_and_run,
     dispatch_refused,
     in_tick,
+    last_tick,
     overseer_does,
     prompt_of,
     state_block,
@@ -225,8 +226,7 @@ def test_state_block_shows_attempts_and_the_cooldown(
 
 
 def tick_decisions(conn: sqlite3.Connection) -> list[str]:
-    tick = db.last_tick(conn)
-    assert tick is not None
+    tick = last_tick(conn)
     assert tick.status == TickStatus.OK, tick.summary
     return [d.action for d in db.decisions_for_tick(conn, tick.id)]
 

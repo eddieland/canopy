@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import os
 import sqlite3
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
-from unittest import mock
 
 import pytest
 
@@ -28,11 +26,13 @@ from tests.canopy.helpers import (
     WORK,
     context,
     dispatch_and_run,
+    in_run,
     in_tick,
     last_run,
     memories,
     overseer_does,
     planner_does,
+    present,
     prompt_of,
     run_with,
     state_block,
@@ -259,7 +259,7 @@ def test_promote_reject_and_renew_refuse_inside_a_run(
 ) -> None:
     with_memory(canopy_env, proposals="use")
     proposed(conn)
-    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "7"}):
+    with in_run(7):
         assert main(["memory", *args]) == 1
     assert memories(conn)[0].status is MemoryStatus.PENDING
 
@@ -279,8 +279,7 @@ def test_promote_takes_the_operators_words_and_supersedes_the_lesson_under_its_k
     again = manage.promote(conn, cfg, proposed(conn, "Different words."), text="  Use `make test-api`. ")
     assert again.superseded == first.id
     assert (again.lesson.body, again.served) == ("Use `make test-api`.", True)
-    old = memory.get(conn, first.id)
-    assert old is not None
+    old = present(memory.get(conn, first.id))
     assert (old.status, old.why) == (MemoryStatus.SUPERSEDED, f"superseded by lesson {again.lesson.id}")
     with pytest.raises(Exception, match="hides text"):
         manage.promote(conn, cfg, proposed(conn, "Third."), text="bad\u202etext")
@@ -309,8 +308,7 @@ def test_proposals_past_the_bounds_are_refused(canopy_env: CanopyEnv, conn: sqli
         ],
     )
     assert [m.key for m in memory.pending_proposals(conn)] == ["fine"]
-    rendered = memory.run_memory(conn, int(run["id"]))
-    assert rendered is not None
+    rendered = present(memory.run_memory(conn, int(run["id"])))
     assert [(r.key, r.why) for r in memory.refused_of(rendered)] == [
         ("elsewhere", "its repository is not one the run worked in"),
         ("repeat", f"it repeats lesson {memories(conn)[1].id}"),
@@ -325,8 +323,7 @@ def test_the_queue_refuses_the_twenty_first_pending_proposal(canopy_env: CanopyE
         proposed(conn, f"Proposal {i}.", key=f"p{i}")
     run = run_with(conn, *WORK, proposals=[{"key": "one-more", "text": "The twenty-first."}])
     assert len(memory.pending_proposals(conn)) == memory.MAX_PENDING
-    rendered = memory.run_memory(conn, int(run["id"]))
-    assert rendered is not None
+    rendered = present(memory.run_memory(conn, int(run["id"])))
     assert [r.why for r in memory.refused_of(rendered)] == ["20 proposals already wait on the operator"]
 
 

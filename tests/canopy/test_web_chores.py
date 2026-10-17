@@ -12,14 +12,9 @@ from canopy.core import chore_view, conversation, db
 from canopy.serve import mock
 from canopy.serve.backend import Backend
 from tests.canopy.helpers import json_block
-from tests.canopy.web_helpers import SECRET, client, signed_in
+from tests.canopy.web_helpers import SECRET, at, client, signed_in
 
 NOTE = "Leave out lodash-advisory until 2026-10-15: the date picker's upgrade is merging."
-
-
-def at(minutes: int) -> str:
-    """A mock time as the API sends it."""
-    return mock.at(minutes).replace(".000Z", "Z")
 
 
 def test_the_chores_list_is_each_configured_chore_as_canopy_status_lists_it(backend: Backend) -> None:

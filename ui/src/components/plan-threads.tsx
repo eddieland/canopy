@@ -174,6 +174,7 @@ export function AskForChanges({
     threads,
     starts,
     edited,
+    asked = false,
     onAsk,
 }: {
     /** The plan's threads. */
@@ -182,6 +183,8 @@ export function AskForChanges({
     starts: ReadonlyMap<string, number>
     /** Whether the operator edited the plan's text, which the message then says. */
     edited: boolean
+    /** Whether they asked already and no planner has read it, so another request is asking again. */
+    asked?: boolean
     /** Sends the message. */
     onAsk: (message: string) => void
 }) {
@@ -220,9 +223,10 @@ export function AskForChanges({
                     ? `${message.length - MAX_REQUEST} characters over a reply's bound: resolve or shorten some`
                     : `${open} open ${open === 1 ? 'comment goes' : 'comments go'} with it`}
             </span>
-            <Button type="submit" disabled={!message || over}>
+            {/* The main action while comments are open, as the caller's own Approve steps back; outlined otherwise. */}
+            <Button type="submit" variant={open > 0 ? 'default' : 'outline'} disabled={!message || over}>
                 <Send aria-hidden />
-                Ask for changes
+                {asked ? 'Ask again' : 'Ask for changes'}
             </Button>
         </form>
     )

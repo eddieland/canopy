@@ -1,6 +1,5 @@
 """The overseer's duties, checked when a tick ends (DESIGN §6 step 5), and `canopy queried`, which records the query."""
 
-import sqlite3
 from pathlib import Path
 
 import pytest
@@ -9,25 +8,12 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.vocab import TickStatus
 from canopy.loop import attention, duties
-from tests.canopy.helpers import canopy, chore_toml, in_tick, operator, overseer_does, state_block
+from tests.canopy.helpers import canopy, chore_toml, in_tick, last_tick, operator, overseer_does, seen, state_block
 from tests.conftest import CanopyEnv
 
 
 def wait(key: str) -> list[str]:
     return canopy("decide", key, "wait", "--rationale", "nothing new")
-
-
-def last_tick(conn: sqlite3.Connection) -> sqlite3.Row:
-    row = conn.execute("SELECT * FROM ticks ORDER BY id DESC LIMIT 1").fetchone()
-    assert row is not None
-    return row
-
-
-def seen(conn: sqlite3.Connection, canopy_env: CanopyEnv, *keys: str) -> None:
-    """Put `keys` in the journal, as tickets an earlier tick saw, so the state block carries them."""
-    with db.transaction(conn):
-        for key in keys:
-            db.touch_ticket(conn, key, str(canopy_env.root))
 
 
 @pytest.mark.usefixtures("treehouse_state", "agent_log")
@@ -36,7 +22,7 @@ def test_a_tick_that_does_every_duty_closes_ok(canopy_env: CanopyEnv) -> None:
     seen(conn, canopy_env, "PROJ-1")
     with overseer_does(wait("PROJ-1"), wait("PROJ-2"), queried='["PROJ-1", "PROJ-2"]'):
         assert main(["tick"]) == 0
-    assert last_tick(conn)["status"] == "ok"
+    assert last_tick(conn).status == "ok"
 
 
 @pytest.mark.usefixtures("treehouse_state")
@@ -45,8 +31,8 @@ def test_a_due_query_with_no_record_fails_the_tick_and_stays_due(canopy_env: Can
     with overseer_does(queried="skip"):
         assert main(["tick"]) == 1
     failed = last_tick(conn)
-    assert failed["status"] == "overseer_failed"
-    assert "no `canopy queried` recorded it" in failed["summary"]
+    assert failed.status == "overseer_failed"
+    assert "no `canopy queried` recorded it" in failed.summary
     # Not counted as run: the next tick's block says it is due again.
     canopy_env.write_user(
         canopy_env.user_file.read_text().replace("[tracker]\n", "[tracker]\nquery_every_minutes = 60\n")
@@ -82,8 +68,8 @@ def test_a_ticket_left_out_fails_the_tick_and_keeps_its_attention_item(canopy_en
     with overseer_does(canopy(*mirror, "--body", "hello")):
         assert main(["tick"]) == 1
     failed = last_tick(conn)
-    assert failed["status"] == "overseer_failed"
-    assert failed["summary"] == "overseer left duties undone: no decision for PROJ-1, PROJ-2"
+    assert failed.status == "overseer_failed"
+    assert failed.summary == "overseer left duties undone: no decision for PROJ-1, PROJ-2"
     # The items of the tickets it left out are not taken as resolved.
     assert [(i.ticket_key, i.reason) for i in attention.current(conn)] == [("PROJ-1", "needs_reviewer")]
 
@@ -95,7 +81,7 @@ def test_a_ticket_the_query_found_is_owed_a_decision_and_kept_for_the_next_tick(
     conn = canopy_env.journal()
     with overseer_does(queried='["PROJ-9"]'):
         assert main(["tick"]) == 1
-    assert last_tick(conn)["summary"] == "overseer left duties undone: no decision for PROJ-9"
+    assert last_tick(conn).summary == "overseer left duties undone: no decision for PROJ-9"
     with overseer_does(wait("PROJ-9")):
         assert main(["tick"]) == 0
     assert [t["key"] for t in state_block(agent_log)["tickets"]] == ["PROJ-9"]
@@ -114,7 +100,7 @@ def test_stopped_and_recently_done_tickets_are_owed_nothing(canopy_env: CanopyEn
     # The query still finds both open in the tracker, and the overseer names them as it found them.
     with overseer_does(queried='["PROJ-1", "PROJ-2"]'):
         assert main(["tick"]) == 0
-    assert last_tick(conn)["status"] == "ok"
+    assert last_tick(conn).status == "ok"
 
 
 @pytest.mark.usefixtures("treehouse_state", "agent_log")
@@ -126,7 +112,7 @@ def test_a_due_chore_left_undecided_fails_the_tick(canopy_env: CanopyEnv) -> Non
     conn = canopy_env.journal()
     with overseer_does():
         assert main(["tick"]) == 1
-    assert last_tick(conn)["summary"] == "overseer left duties undone: no run or wait for chore build-health"
+    assert last_tick(conn).summary == "overseer left duties undone: no run or wait for chore build-health"
     with overseer_does(canopy("chore", "wait", "build-health", "--rationale", "not now")):
         assert main(["tick"]) == 0
 
@@ -137,7 +123,7 @@ def test_a_tick_wide_skip_is_not_held_to_the_duties(canopy_env: CanopyEnv) -> No
     seen(conn, canopy_env, "PROJ-1")
     with overseer_does(canopy("decide", "skip", "--rationale", "mcp_unavailable: tracker"), queried="skip"):
         assert main(["tick"]) == 1
-    assert last_tick(conn)["status"] == "skipped"
+    assert last_tick(conn).status == "skipped"
 
 
 def test_decisions_before_the_overseer_ran_are_the_harnesss(canopy_env: CanopyEnv) -> None:

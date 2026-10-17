@@ -12,7 +12,7 @@ from canopy.core import db, plans
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.conversation import Refused
 from canopy.core.vocab import PlanStatus
-from tests.canopy.helpers import KEY
+from tests.canopy.helpers import KEY, present
 from tests.conftest import CanopyEnv
 
 PLAN = "# Plan\n\n## api\n\nAdd the endpoint.\n"
@@ -208,8 +208,7 @@ def test_approval_refuses_no_plan_and_a_file_that_is_no_longer_one(conn: sqlite3
     plans.path_for(state_dir, KEY, run_id).write_text("x" * (plans.MAX_CHARS + 1))
     with pytest.raises(Refused, match="is over the bound, so it cannot be approved"):
         plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
-    current = plans.current(conn, KEY)
-    assert current is not None
+    current = present(plans.current(conn, KEY))
     assert current.status is PlanStatus.PROPOSED
     # A proposed plan is never text a worker gets.
     assert plans.approved_text(state_dir, current) is None

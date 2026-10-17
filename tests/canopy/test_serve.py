@@ -49,6 +49,7 @@ from canopy.serve.schema import (
 )
 from canopy.serve.spa import content_security_policy
 from canopy.serve.sse import QuietLeaving
+from tests.canopy.helpers import present
 from tests.canopy.web_helpers import ORIGIN, SECRET, client, signed_in
 from tests.conftest import Journals
 
@@ -365,8 +366,7 @@ def test_a_session_is_signed_with_the_secret_and_expires() -> None:
     hosts = frozenset({"127.0.0.1"})
     sessions = Sessions(SECRET, port=1, base_path="", hosts=hosts, clock=lambda: clock[0])
     value = sessions.issue()
-    signed = sessions.check(value)
-    assert signed is not None
+    signed = present(sessions.check(value))
     # Another secret's server, a loop after `canopy secret --rotate`, does not accept it.
     assert Sessions("other" * 10, port=1, base_path="", hosts=hosts, clock=lambda: clock[0]).check(value) is None
     version, issued, nonce, mac = value.split(".")

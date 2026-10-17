@@ -177,19 +177,14 @@ function TextFilter() {
     )
 }
 
+/**
+ * A ticket: where its run stands (working, or waiting on you), its key, its phase, public or private, its title, and
+ * its age.
+ */
 function Row({ ticket }: { ticket: TicketSummary }) {
     const done = ticket.done ? ', done' : ''
     return (
         <ListRow kind="ticket" data-testid={`ticket-${ticket.key}`}>
-            <TicketLink ticketKey={ticket.key} className="truncate" />
-            <TicketTitle title={ticket.title} />
-            <span className="flex">
-                <Chip>{ticket.private ? `private, ${ticket.start ?? ''}` : 'public'}</Chip>
-            </span>
-            {/* Cut to fit, the whole on hover in the CLI's spelling. */}
-            <span className="truncate font-mono text-xs text-muted-foreground" title={phaseWord(ticket) + done}>
-                {phaseLabel(ticket) + done}
-            </span>
             <span className="flex flex-col gap-0.5 whitespace-nowrap">
                 {ticket.running_run !== null && (
                     <span className="flex items-center gap-1.5 font-mono text-xs text-status-running">
@@ -204,6 +199,15 @@ function Row({ ticket }: { ticket: TicketSummary }) {
                     </span>
                 )}
             </span>
+            <TicketLink ticketKey={ticket.key} className="truncate" />
+            {/* Cut to fit, the whole on hover in the CLI's spelling. */}
+            <span className="truncate font-mono text-xs text-muted-foreground" title={phaseWord(ticket) + done}>
+                {phaseLabel(ticket) + done}
+            </span>
+            <span className="flex">
+                <Chip>{ticket.private ? `private, ${ticket.start ?? ''}` : 'public'}</Chip>
+            </span>
+            <TicketTitle title={ticket.title} />
             <Age at={ticket.active_at} variant="ago" className="text-right" />
         </ListRow>
     )

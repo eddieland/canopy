@@ -14,7 +14,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, conversation, db, definitions, outbox
-from canopy.core.vocab import RunStatus, StartStatus, TickStatus
+from canopy.core.vocab import RunStatus, StartStatus
 from canopy.infra import procs, resources
 from canopy.loop import attention, repeat
 from canopy.serve import views
@@ -37,6 +37,7 @@ from tests.canopy.helpers import (
     operator,
     overseer_does,
     pool,
+    present,
     private_worker_does,
     state_block,
     versions_after,
@@ -145,13 +146,11 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(  # noqa: P
             prompt = (canopy_env.state_dir / "runs" / f"{resumed['id']}.prompt").read_text()
             assert reply in prompt
             assert "the operator's reply to message" in prompt
-            ticket = db.get_ticket(conn, KEY)
-            assert ticket is not None
+            ticket = present(db.get_ticket(conn, KEY))
             assert ticket.last_message_id == db.latest_message_id(conn, source="operator")
             # The reply answered the question: the next tick raises no `awaiting_reply`, and acknowledges the reply.
             assert conversation.awaiting(conn) == []
-            acknowledged = db.acknowledged_message_id(conn)
-            assert acknowledged is not None
+            acknowledged = present(db.acknowledged_message_id(conn))
             assert acknowledged >= db.latest_message_id(conn, source="operator")
 
 
@@ -230,8 +229,7 @@ def test_a_reply_answers_the_latest_question(canopy_env: CanopyEnv, conn: sqlite
     question = db.insert_message(conn, "ticket", KEY, source="worker", kind="question", channel="run", body="A or B?")
     with mock.patch.object(sys, "stdin", io.StringIO("B\n")):
         assert main(["reply", KEY]) == 0
-    reply = db.get_message(conn, question + 1)
-    assert reply is not None
+    reply = present(db.get_message(conn, question + 1))
     assert (reply["body"], reply["answers"]) == ("B", question)
     assert conversation.latest_question(conn, KEY) is None
 
@@ -251,8 +249,7 @@ def test_a_stopped_ticket_is_dispatched_by_nothing_until_started_again(
     assert dispatch_in_tick(conn, "--label", "agent-ready-tester", "--kind", "implement", runner=runner).code == 1
     assert "dispatch refused (stopped)" in capsys.readouterr().err
     assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
-    record = conversation.start_of(conn, KEY)
-    assert record is not None
+    record = present(conversation.start_of(conn, KEY))
     assert record.status == StartStatus.STOPPED
     assert operator("start", KEY) == 0
     assert dispatch_in_tick(conn, "--kind", "implement", runner=runner).code == 0
@@ -353,8 +350,7 @@ def test_with_tracker_private_a_labeled_tickets_first_dispatch_starts_it_private
         assert "label agent-ready-tester; starts it privately (tracker.private)" in capsys.readouterr().out
         run = last_run(conn)
         assert run["private"] == 1
-        record = conversation.start_of(conn, KEY)
-        assert record is not None
+        record = present(conversation.start_of(conn, KEY))
         assert (record.status, record.channel) == (StartStatus.STARTED, conversation.LABEL)
         assert main(["_run", str(run["id"])], runner=runner) == 0
     [worker] = agent_runs(agent_log)
@@ -471,8 +467,7 @@ def test_the_private_worker_definition_allows_only_the_trackers_read_tools(canop
     cfg = config.load(canopy_env.root)
     text = (definitions.ensure(canopy_env.state_dir, cfg) / "agents" / "canopy-worker-private.md").read_text()
     rules = [line.strip() for line in text.splitlines() if line.startswith('  "atlassian_')]
-    tools = cfg.tracker.tools()
-    assert tools is not None
+    tools = present(cfg.tracker.tools())
     # The wildcard deny comes first: the last matching rule wins (D021).
     assert rules == ['"atlassian_*": deny', *(f'"atlassian_{t}": allow' for t in tools.allowed)]
     writes = ("addOrEditJiraIssueComment", "editJiraIssue", "createJiraIssue", "transitionJiraIssue", "executeWrite")
@@ -535,8 +530,7 @@ def test_run_ended_names_the_message_the_run_recorded(canopy_env: CanopyEnv, con
     run_id = db.insert_run(
         conn, tick_id=tick_id, key=KEY, kind="implement", branch=BRANCH, slots=[], runs_dir=canopy_env.state_dir
     )
-    run = db.get_run(conn, run_id)
-    assert run is not None
+    run = present(db.get_run(conn, run_id))
     result = json.dumps({"summary": "s", "question": "Q?"})
     assert conversation.close_run(conn, cfg, run, RunStatus.BLOCKED, result)
     event = conn.execute("SELECT fields FROM notify_events WHERE kind = 'run.ended'").fetchone()
@@ -568,8 +562,7 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(
         assert private["awaiting_reply"] is None
         # A handled message moves the cursor past it.
         assert main(["ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={question + 1}"]) == 0
-        ticket = db.get_ticket(conn, KEY)
-        assert ticket is not None
+        ticket = present(db.get_ticket(conn, KEY))
         assert conversation.state_section(conn, ticket) == {
             **private,
             "message_cursor": question + 1,
@@ -622,9 +615,8 @@ def test_a_ticket_a_tick_decided_about_without_recording_a_phase_is_seen(
         return found.phase, found.last_decision
 
     def in_a_tick(*args: str) -> None:
-        with in_tick(conn) as tick_id:
+        with in_tick(conn, ends_ok=True):
             assert main(list(args)) == 0
-            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
 
     assert operator("start", KEY) == 0
     assert phase_line() == "not seen by a tick yet"

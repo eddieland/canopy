@@ -12,7 +12,7 @@ import pytest
 
 from canopy.core import hostgit
 from canopy.infra.procs import SubprocessRunner
-from tests.canopy.helpers import WORK, dispatch_and_run, pool, slot_of, worker_does
+from tests.canopy.helpers import WORK, dispatch_and_run, pool, present, slot_of, worker_does
 from tests.conftest import CanopyEnv, GitPool, executable, git
 
 PACKAGE = Path(__file__).resolve().parents[2] / "src" / "canopy"
@@ -134,8 +134,7 @@ def test_a_worker_that_rewrites_commondir_crashes_the_run_and_commondir_is_put_b
 
     assert run["status"] == "crashed"
     slot = Path(slot_of(conn, run["id"])["slot_path"])
-    own = commondirs[slot]
-    assert own is not None
+    own = present(commondirs[slot])
     result = json.loads(run["result_json"])
     assert result["harness"] == f"repo: the worker rewrote {own / 'commondir'}; nothing was checked or pushed"
     assert not fired.exists()  # no git ran in the slot after the worker
@@ -161,10 +160,8 @@ def test_commondir_must_name_the_directory_that_holds_the_slots_git_directory(
     worktree_pool: tuple[Path, list[Path]],
 ) -> None:
     primary, slots = worktree_pool
-    link = hostgit.read_link(slots[0])
-    assert link is not None
-    own = hostgit.own_git_dir(slots[0], link)
-    assert own is not None
+    link = present(hostgit.read_link(slots[0]))
+    own = present(hostgit.own_git_dir(slots[0], link))
     if content is None:
         (own / "commondir").unlink()
     else:
@@ -174,10 +171,8 @@ def test_commondir_must_name_the_directory_that_holds_the_slots_git_directory(
 
 def test_commondir_is_never_followed_and_is_put_back(worktree_pool: tuple[Path, list[Path]], tmp_path: Path) -> None:
     _, slots = worktree_pool
-    link = hostgit.read_link(slots[0])
-    assert link is not None
-    own = hostgit.own_git_dir(slots[0], link)
-    assert own is not None
+    link = present(hostgit.read_link(slots[0]))
+    own = present(hostgit.own_git_dir(slots[0], link))
     outside = tmp_path / "outside"
     outside.write_bytes(b"../..\n")
     (own / "commondir").unlink()

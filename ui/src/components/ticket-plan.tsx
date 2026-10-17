@@ -123,6 +123,12 @@ function PlanStatus({ plans }: { plans: TicketPlans }) {
                 <span>None yet: the next tick dispatches a planner.</span>
             )}
             {plans.planning !== null && <span>Run {plans.planning} is writing a new plan.</span>}
+            {plans.planning === null && plans.changes_asked !== null && (
+                <span>
+                    You asked for changes <Age at={plans.changes_asked} variant="ago" />: the next tick asks the planner
+                    for a new plan.
+                </span>
+            )}
         </p>
     )
 }
@@ -170,6 +176,9 @@ function NewestPlan({
     const dirty = markdown !== text
     usePending(dirty, 'edit')
     const approvable = status === 'proposed' || (status === 'approved' && (newest.changed_since_approval || dirty))
+    // Open comments reach no one on Approve: the implement reads the plan alone. While any are, Approve steps back for
+    // Ask for changes, and the line under the actions says why.
+    const open = held.filter((thread) => !thread.resolved).length
 
     function refresh(): Promise<void> {
         return client.invalidateQueries({ queryKey: keys.ticketPlans(ticketKey) })
@@ -303,10 +312,15 @@ function NewestPlan({
                     : undefined
             }
             onAskForChanges={status === 'proposed' ? askForChanges : undefined}
+            asked={plans.changes_asked !== null}
             actions={
                 <div className="flex flex-wrap items-center gap-2" data-testid="plan-actions">
                     {approvable && (
-                        <Button onClick={() => decide('approve')} disabled={busy > 0}>
+                        <Button
+                            variant={status === 'proposed' && open > 0 ? 'outline' : 'default'}
+                            onClick={() => decide('approve')}
+                            disabled={busy > 0}
+                        >
                             <Check />
                             {dirty ? 'Save and approve' : 'Approve'}
                         </Button>
@@ -336,12 +350,22 @@ function NewestPlan({
                     <p className="text-xs text-muted-foreground">
                         Approving takes the plan as saved, your edits included, and lets its implement go ahead.
                         {status === 'approved' && ' Saving an edit means approving it again.'}
+                        {status === 'proposed' && open > 0 && ` ${openText(open)}`}
                     </p>
                     <Notice error={failure}>{said}</Notice>
                 </div>
             }
         />
     )
+}
+
+// What approving does to the comments still open, which reach the planner only through Ask for changes.
+function openText(open: number): string {
+    const which =
+        open === 1
+            ? '1 comment is still open: approving does not send it'
+            : `${open} comments are still open: approving sends none of them`
+    return `${which}, since the implement reads the plan alone. Ask for changes does.`
 }
 
 /** The ticket's earlier plans, newest first, each read only once opened. */
