@@ -27,6 +27,8 @@ _QUERIED_NONE = "the query returned no open ticket"
 _QUERIED_SOME = "the query returned these open tickets: "
 # How many omitted tickets the failure names before it counts the rest.
 _NAMED = 10
+# The reasons a skip with no key gives, its rationale's first word: the overseer could not see the world this tick.
+TICK_WIDE_SKIPS = ("mcp_unavailable", "tracker_unsupported")
 
 
 @dataclass(frozen=True)
@@ -69,6 +71,15 @@ def owed(
         chores=frozenset(c["name"] for c in chores if c["due"] and not c["running"]),
         harness=max((d.id for d in recorded), default=0),
     )
+
+
+def tick_wide(rationale: str) -> bool:
+    """Whether a skip's rationale gives a tick-wide reason, as `mcp_unavailable: <which>` does.
+
+    Returns:
+        True when the rationale's text before its first colon is one of `TICK_WIDE_SKIPS`.
+    """
+    return rationale.split(":", 1)[0].strip() in TICK_WIDE_SKIPS
 
 
 def queried_rationale(keys: Sequence[str]) -> str:

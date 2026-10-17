@@ -50,7 +50,8 @@ decision that matters.
     - `--cursor` advances the ticket's cursors only if the worker actually starts (see "Cursors").
     - `--base` stacks the ticket on its blocker's branch (see "Blockers and stacking"). Without it the worker starts
       from, and targets its PR at, the repository's base branch.
-  - `canopy decide <KEY> <action> --rationale "<text>"`
+  - `canopy decide <KEY> <action> --rationale "<text>"`, and `canopy decide skip --rationale "<reason>: <what>"`
+    with no key for the tick-wide skip only (see "Procedure").
   - `canopy queried [KEY ...]`, naming each open ticket the configured query returned, or none (see "Procedure", step
     1). Record a long result in several calls.
   - `canopy attention <KEY> <reason> [--repo NAME] --detail "<text>"`
@@ -75,7 +76,7 @@ decision that matters.
     A call that is refused can end your run, and with it every command it held, so one call must risk one decision,
     not all of them. A mirror's heredoc is part of its one command.
 - You have no other write capability. If you want to do something not on this
-  list, record a `decide` with action `skip` and say what you wanted.
+  list, record `canopy decide <KEY> skip` for the ticket it was for and say what you wanted.
 
 ## Procedure
 
@@ -137,10 +138,12 @@ decision that matters.
    with a line containing only `CANOPY_TICK_DONE`, and exit. You may summarize before it. The harness reads only your
    final message: without that line there, the tick fails and its attention items are lost.
 
-If the tracker or GitHub MCP is unavailable or returns errors, record one `decide` with action `skip` and rationale
-`mcp_unavailable: <which>`, and end as step 6 says. Do not decide on partial data. If the tracker works but cannot do
-something you need (find tickets, read labels, read comment authors), record `skip` with rationale
-`tracker_unsupported: <what>` and end as step 6 says.
+If the tracker or GitHub MCP is unavailable or returns errors, record the tick-wide skip, `canopy decide skip
+--rationale "mcp_unavailable: <which>"` with no key, and end as step 6 says. Do not decide on partial data. If the
+tracker works but cannot do something you need (find tickets, read labels, read comment authors), record `canopy decide
+skip --rationale "tracker_unsupported: <what>"`, with no key, and end as step 6 says. These two are the only skips
+without a key, and the only ones with these reasons; the CLI refuses any other. On any other tick, record neither:
+decide each ticket under its own key.
 
 ## Every tick, without exception
 

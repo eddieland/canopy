@@ -109,10 +109,12 @@ in order:
    cursor and marks nothing done; `canopy mirror` moves no mirror cursor. The rest of the tick is live: reconcile, and
    the attention list and its notifications.
 
-   `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` omits the key. What the overseer writes is
-   rendered into the next prompt, so the CLI bounds it: keys and attention reasons are validated, phases come from §7's
-   table, cursor ids must match `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and rationales, details, and worker context are cut at
-   2000 characters.
+   `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` omits the key. Its rationale must give a
+   tick-wide reason (`mcp_unavailable`, `tracker_unsupported`), and a ticket's skip may not give one. Why: an overseer
+   left to guess the form put a tick-wide reason under a made-up key (`queue`) on ticks whose tracker worked, and on
+   one of them ended at the skip with every ticket undecided. What the overseer writes is rendered into the next
+   prompt, so the CLI bounds it: keys and attention reasons are validated, phases come from §7's table, cursor ids must
+   match `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and rationales, details, and worker context are cut at 2000 characters.
 6. Close the tick with a summary.
 7. **Publish attention** (§14): rewrite `attention.md` from the journal, then deliver to each notification sink (§20)
    the list's change since that sink last heard, the events it takes, and a digest when due; `notify.cmd` is the sink
