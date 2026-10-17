@@ -59,10 +59,17 @@ permission:
     "acli *": deny
     "jira": deny
     "jira *": deny
-    # Reading a PR writes nothing: a resumed worker reads the review comments it was pointed at, as `canopy-worker`
-    # can. `gh pr view` reads only PRs, never the ticket, and compound commands are checked command by command.
+    # Reading a PR and its CI writes nothing, and these read no ticket: a resumed worker reads the review comments it
+    # was pointed at, and a fix-ci one the failing checks and their logs, as `canopy-worker` can. Compound commands are
+    # checked command by command, so none of these lets another `gh` command through.
     "gh pr view": allow
     "gh pr view *": allow
+    "gh pr checks": allow
+    "gh pr checks *": allow
+    "gh pr diff": allow
+    "gh pr diff *": allow
+    "gh run view": allow
+    "gh run view *": allow
   # MCP tools are permissioned by name, `<server>_<tool>`, as for canopy-worker (D084): the private worker opens and
   # updates its PRs and replies on them, and nothing else. Its PR update tool can close the PR; the prompt keeps it to
   # the PR's own text. tests/canopy/test_definitions.py checks these rules against real tool names.

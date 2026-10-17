@@ -119,7 +119,7 @@ runtime config, allows exactly that tool, and points `triage_cmd` at it, as for 
 Workers lose what this section gives the triage: `canopy-worker` denies `gh run rerun*`, `gh run cancel*`,
 `gh run delete*`, and `gh workflow*` (today its bash allows them; only the MCP names are denied), so a triage is the
 only run that reruns CI. `gh run view` stays: reading a failure is `fix-ci`'s job. `canopy-worker-private` already
-denies all of `gh` but `gh pr view`.
+denies all of `gh` but its reads of a PR and its CI, `gh run view` among them.
 
 ### Journal
 
