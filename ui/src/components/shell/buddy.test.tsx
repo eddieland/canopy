@@ -65,12 +65,16 @@ describe('Buddy', () => {
         expect(said(tipFor('/attention', 2, NOW))).not.toBeNull()
     })
 
-    it("starts a new page at that page's own first tip", async () => {
+    it('keeps a tip with the page it was offered on, and offers the next about the page turned to', async () => {
         const router = await renderBuddy('/attention')
         fireEvent.click(screen.getByRole('button', { name: 'Another tip' }))
 
         await act(() => router.navigate({ to: '/settings' }))
-        expect(said(tipFor('/settings', 0, NOW))).not.toBeNull()
+        expect(said(tipFor('/attention', 1, NOW))).not.toBeNull()
+        expect(said(tipFor('/settings', 0, NOW))).toBeNull()
+
+        fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
+        expect(said(tipFor('/settings', 2, NOW))).not.toBeNull()
     })
 
     it('turns itself off, as Settings does, when told not to show tips again', async () => {
