@@ -1537,7 +1537,9 @@ Open:
 - A chore that drafts proposals from transcripts, as Codex and Gemini CLI do, only if workers' own proposals prove
   too few.
 
-Status: not started.
+Status: in progress. Designed 2026-10-17 (DESIGN §28). Stage 0 waived by the operator (2026-10-17), who asked for
+stages 1 and 2 to be built together, each tier off until they turn it on; their checks, at `record` and then at `use`,
+are still the operator's.
 
 ## Deferred, with the trigger that would unblock each
 
