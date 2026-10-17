@@ -165,16 +165,12 @@ jobs:
           fail_ci_if_error: false
 
   # The sandbox canary (DESIGN §24, The canary): the shipped wrapper and policy templates under the real srt, with
-  # bubblewrap on Linux and sandbox-exec on macOS, set up the way docs/SANDBOX.md tells the operator to.
+  # bubblewrap, set up the way docs/SANDBOX.md tells the operator to. Linux only: macOS is the operator's to check.
   sandbox-canary:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     needs: changes
     if: ${{ !cancelled() }}
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
     steps:
       - name: Check out repository
         if: needs.changes.outputs.code != 'false'
@@ -196,19 +192,14 @@ jobs:
           node-version: "22"
 
       - name: Install bubblewrap, socat, and ripgrep
-        if: needs.changes.outputs.code != 'false' && runner.os == 'Linux'
+        if: needs.changes.outputs.code != 'false'
         run: sudo apt-get update && sudo apt-get install -y bubblewrap socat ripgrep
 
       # Ubuntu 24.04 restricts unprivileged user namespaces through AppArmor, which leaves bubblewrap without the
       # capabilities it needs. docs/SANDBOX.md gives the operator the same command.
       - name: Allow unprivileged user namespaces
-        if: needs.changes.outputs.code != 'false' && runner.os == 'Linux'
+        if: needs.changes.outputs.code != 'false'
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-
-      # sandbox-exec comes with macOS; srt needs ripgrep beside it.
-      - name: Install ripgrep
-        if: needs.changes.outputs.code != 'false' && runner.os == 'macOS'
-        run: brew install ripgrep
 
       - name: Install dependencies
         if: needs.changes.outputs.code != 'false'
@@ -219,7 +210,7 @@ jobs:
         if: needs.changes.outputs.code != 'false'
         run: uv run canopy sandbox setup
 
-      # One case runs under the temp directory canopy itself would have, which on macOS is a deep one per user.
+      # One case runs under the temp directory canopy itself would have.
       - name: Canary
         if: needs.changes.outputs.code != 'false'
         run: |
@@ -229,14 +220,10 @@ jobs:
   # The pool contract (ROADMAP M45, DESIGN §18 What a pool guarantees) against real treehouse, built at the commit
   # `make treehouse` pins. Go is needed only here, as Node is for the sandbox canary: canopy itself never runs it.
   pool-contract:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     needs: changes
     if: ${{ !cancelled() }}
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
     steps:
       - name: Check out repository
         if: needs.changes.outputs.code != 'false'
@@ -330,14 +317,10 @@ jobs:
   # README's install step, from this commit, into an empty HOME: the wheel's bundled files, its dependencies' wheels,
   # and the installed `canopy` running a dry tick against the fakes (ROADMAP M5).
   install-check:
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     needs: changes
     if: ${{ !cancelled() }}
     timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
     steps:
       - name: Check out repository
         if: needs.changes.outputs.code != 'false'

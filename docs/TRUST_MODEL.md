@@ -300,7 +300,7 @@ Controls now:
   §8, §15).
 - The sandbox canary (`tests/canopy/test_sandbox_canary.py`, HOST_ISOLATION §6) runs a plain script, no model, through
   the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
-  so that a sandbox that refuses everything fails. CI runs it on Linux and macOS.
+  so that a sandbox that refuses everything fails. CI runs it on Linux.
 
 Residual: an unsandboxed run has a filesystem-wide shell as the operator, and the sandbox is opt-in. A sandboxed one
 shares the kernel, so code written to escape it is not contained. The overseer, `notify.cmd`, and the harness's own

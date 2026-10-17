@@ -249,7 +249,7 @@ what needs root (§12, D117); `canopy init` prints a suggested `worker_cmd`. Nei
 ### The canary
 
 OpenCode's permissions needed a model to test (D021). The sandbox does not: it is the boundary, so a plain script run
-through the real prefix is the test. The canary, opt-in, run by `make sandbox-canary` and in CI on Linux and macOS,
+through the real prefix is the test. The canary, opt-in, run by `make sandbox-canary` and in CI on Linux,
 sets the machine up as docs/SANDBOX.md tells the operator to, and uses the shipped templates unchanged, with a primary
 clone and two slots under a fake `$HOME`. An attempt that failed because nothing ran fails the test, and a write is
 checked on the host, never by whether the attempt reported an error. Every attempt must fail:
