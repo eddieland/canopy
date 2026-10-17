@@ -26,6 +26,7 @@ export const ROUTES = [
     'ticks/2',
     'spend',
     'settings',
+    'settings/limits',
     'search?q=web',
     'plan-editor',
 ] as const

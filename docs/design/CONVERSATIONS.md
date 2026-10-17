@@ -304,7 +304,7 @@ own server thread (D073). Capacity, attempt limits, and cooldowns hold as for an
 |---|---|---|---|
 | tracker | comments, mirrored (M19) | worker comments on public tickets | `trust.authorized_repliers`, read by agents |
 | cli | `canopy start`, `stop`, `reply` (public tickets too), `forget`, `grant`, `dismiss`, `send`, `notice` | `canopy show`, `canopy status` | the operator's shell (T1 below) |
-| web (M20) | reply, start, stop, forget, grant; notes to chores (M23), dismissing chores' and reviews' findings, sending reviews' findings to a worker (M32); pause, resume; setting and clearing a notice to workers (M35) | pages | the listener secret (TRUST_MODEL T8) |
+| web (M20) | reply, start, stop, forget, grant; notes to chores (M23), dismissing chores' and reviews' findings, sending reviews' findings to a worker (M32); pause, resume; setting and clearing a notice to workers (M35); limits and trust settings (M41) | pages | the listener secret (TRUST_MODEL T8) |
 | slack (later) | thread replies | §20's sink | Slack user ids the operator lists |
 
 Outbound, every channel uses §20's events: a sink posts them, and the web UI reads the same journal.
@@ -326,9 +326,11 @@ Served by `canopy loop` from a thread (D073):
   CLI's verbs use, with channel `web`: `start`, `stop` (with `now`, the same end of the run as `canopy stop --now`),
   `reply` (a note to a chore is a reply on its subject, as `canopy reply chore:NAME` is, and sending a review's
   findings a reply on its ticket, §21), `forget`, `grant` (one run each), `dismiss`, `send`, `pause` and `resume`
-  (§6), `notice` and its clear (§8), and `plan` (§25). Beyond the CLI's verbs it writes only the operator's own words
-  on a plan: the plan editor's save and comments on its passages (§25). Reload asks the loop to read its config
-  again, as SIGHUP does (§6); it writes nothing, and the files stay the operator's to edit.
+  (§6), `notice` and its clear (§8), and `plan` (§25). Beyond the CLI's verbs it writes the operator's own words on a
+  plan, the plan editor's save and comments on its passages (§25), and the limits and trust settings §12 lists, to the
+  workspace's private file alone, within their bounds and trust only toward stricter (`serve.config_edit`,
+  TRUST_MODEL T8), then asks for a reload. Reload asks the loop to read its config again, as SIGHUP does (§6); it
+  writes nothing, and every other key stays the operator's to edit in the files.
 - A forget cannot be undone from the UI, so its request carries the ticket's key as the operator typed it, and the
   server refuses `not_confirmed` before reading anything when it does not match, so no client skips the challenge; one
   more click, as Stop now asks, is too easy to give by mistake. Its outcome names the branch and PRs canopy no longer
@@ -339,10 +341,12 @@ Served by `canopy loop` from a thread (D073):
   stops it, waiting briefly for open streams.
 - Pages: the attention list (the home page, beside the selected item's conversation and reply form), runs (each with a
   page and its session's transcript), worktrees, tickets (each with its conversation and the decisions about it), pull
-  requests, reviews (§21), chores, ticks, search, spend, and settings. Every page shows the runs working now and the
-  recent spend, and the loop's pause and any notice to workers. Actions: the CLI's verbs above, where their subject is
-  shown. OpenCode's session attach (M15) is not in the UI: a run's page shows its session id and its transcript as it
-  goes, and attach joins once M15 runs workers against OpenCode's server.
+  requests, reviews (§21), chores, ticks, search, spend, and settings, with Limits and trust under it (§12): each key
+  in words over its name in the file, its value, which file sets it, and its bound, and that a change to a value from
+  the user file is for this workspace alone. Every page shows the runs working now and the recent spend, and the
+  loop's pause and any notice to workers. Actions: the CLI's verbs above, where their subject is shown. OpenCode's
+  session attach (M15) is not in the UI: a run's page shows its session id and its transcript as it goes, and attach
+  joins once M15 runs workers against OpenCode's server.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads. The
   server installs no signal handlers (the loop's own handle Ctrl-C, §6) and logs nothing to the terminal. Request
   bodies and path parameters are validated with pydantic models and the reference parser, as everything else parsed

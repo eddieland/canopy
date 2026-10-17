@@ -81,6 +81,11 @@ slots_per_repo = 2
 [capacity.repo_slots]
 web = 4
 
+[trust]
+authorized_repliers = ["mock-operator"]
+# Whose review feedback a worker addresses unasked; the settings page may only remove one.
+trusted_reviewers = ["canopy:review", "lint-bot"]
+
 [chores.deps]
 prompt = "{chores}/deps.md"
 every_minutes = 360
@@ -246,6 +251,7 @@ def seed(directory: Path) -> Backend:
         mock=True,
         slots=slots,
         clock=lambda: T0,
+        user_file=user_file,
     )
     with backend.open() as ctx:
         db.migrate(ctx.conn, resources.migrations_dir())
@@ -280,7 +286,7 @@ def _end_run(ctx: Context, run: sqlite3.Row) -> bool:
 
 
 def _reload(_ctx: Context) -> Reloading:
-    # No loop runs on the mock's config, so there is nothing to read again.
+    # No loop runs on the mock's config, so there is nothing to read again, a save from the settings page included.
     return Reloading(changed=(), restart=(), after_tick=False)
 
 

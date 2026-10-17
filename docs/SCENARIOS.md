@@ -192,3 +192,9 @@ relying on a permission they check.
   then a phrase from a run's summary. Expect the ticket, by its branch, and the run's report among the hits, each
   opening the page that holds it. Then search for something nothing matches: expect the answer in under a second, and
   time `GET /search` in the browser's network tab. Over a quarter of a second is the cue to revisit FTS5 (DESIGN §22).
+- **S40. Limits and trust from the web UI** (M41). While `canopy loop` runs, change `capacity.slots_per_repo` and remove
+  a trusted reviewer on the web UI's Settings, Limits and trust page. Expect the next tick to lease under the new size
+  and its overseer's state block to carry the shorter list, and the workspace's private file, `.canopy/config.toml`, to
+  keep its comments, with only those two values changed, and `~/.config/canopy/config.toml` untouched. Then try a
+  count past its ceiling and adding a reviewer back by hand-crafting the request: expect each refused, naming its
+  guard, and the files unchanged.

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
-import { LogOut, Megaphone, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
+import { createFileRoute, Link } from '@tanstack/react-router'
+import { ChevronRight, LogOut, Megaphone, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 
@@ -33,7 +33,10 @@ import type { ThemePreference } from '@/theme/store'
 import { switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
-/** What this browser keeps (the theme, the send key, the fun, the session), and reloading the loop's config. */
+/**
+ * What this browser keeps (the theme, the send key, the fun, the session), the limits and trust settings of the user
+ * config, and reloading the loop's config.
+ */
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
 })
@@ -75,7 +78,7 @@ function SettingsPage() {
         <>
             <PageHeader title="Settings">
                 The theme, the send key, and the fun are kept in this browser. Everything else canopy reads from its
-                config files.
+                config files, whose limits and trust settings can be changed here.
             </PageHeader>
             <Panel>
                 <PanelHeader label="Theme" />
@@ -101,6 +104,7 @@ function SettingsPage() {
             </Panel>
             <SendKeyPanel />
             <NoticePanel />
+            <LimitsPanel />
             <ConfigPanel />
             {/* Second to last: below what changes how canopy works, above signing out. */}
             <FunPanel />
@@ -384,6 +388,27 @@ function SendKeyPanel() {
                         </ToggleGroupItem>
                     ))}
                 </ToggleGroup>
+            </div>
+        </Panel>
+    )
+}
+
+/** Where the limits and trust settings are changed: a page of their own, as many as they are. */
+function LimitsPanel() {
+    return (
+        <Panel>
+            <PanelHeader label="Limits and trust" />
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p className="text-sm text-muted-foreground">
+                    How many workers, chores, and reviews run, how often a ticket is tried, how often the loop ticks,
+                    and whose words it acts on. Changed in this workspace&apos;s own config.toml, its comments kept.
+                </p>
+                <Button asChild variant="outline" data-testid="limits-open">
+                    <Link to="/settings/limits">
+                        Open
+                        <ChevronRight />
+                    </Link>
+                </Button>
             </div>
         </Panel>
     )

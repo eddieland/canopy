@@ -444,3 +444,19 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Rejected: Prism (its grammars register on a global, and are rougher than an editor's), highlight.js (returns
   HTML), Lezer (no TOML, shell, or SQL without CodeMirror).
 - Revisit: if its core grows past what the page should load, or diffs need grammars it does not have.
+
+## D122. The web channel writes only named config keys: limits within ceilings, trust only stricter
+
+- An allowlist by key name in `serve/config_edit.py`, never a section; a new key is not writable until named. Only the
+  workspace's private file (M49), never the workspace file or the user file. Settled by the operator (ROADMAP M41).
+- Why: a config write outlives the listener secret. A raised limit is spend, bounded by a ceiling; an added replier or
+  reviewer would steer workers after a new secret, so trust settings only tighten.
+- Nothing that runs a command, picks a prompt, is read as words, or moves the listener. No CLI verb: it would be in
+  reach of the overseer's `canopy *` rule.
+
+## D123. tomlkit edits the private config in place
+
+- `tomllib` only reads. tomlkit keeps the operator's comments and layout through a write; only `canopy.serve` imports
+  it (`tests/canopy/test_layers.py`).
+- Rejected: writing the file anew with the stdlib (comments lost); a file of canopy's own layered after the private
+  file (a hand edit to the private file would be silently overridden).

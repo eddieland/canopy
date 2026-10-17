@@ -37,6 +37,7 @@ dependencies = [
     "fastapi>=0.143.0",
     "pydantic>=2.14.0",
     "rich>=15.0.0",
+    "tomlkit>=0.15.1",
     "uvicorn>=0.54.0",
 ]
 

@@ -221,7 +221,7 @@ def run(
             # other `canopy` command, the ones the overseer and workers run included.
             from canopy.loop import web  # noqa: PLC0415
 
-            serving = web.start(ctx, log, settings.reload)
+            serving = web.start(ctx, log, settings.reload, interval_minutes)
             settings.backend = serving.backend
         try:
             _header(

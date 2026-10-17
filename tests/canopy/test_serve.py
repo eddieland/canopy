@@ -867,6 +867,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/loop/notice",
         "/api/loop/notice/clear",
         "/api/loop/reload",
+        "/api/config",
     }
     assert set(schema["paths"]) == paths
 

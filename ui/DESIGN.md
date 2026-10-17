@@ -835,6 +835,18 @@ list, an empty state, or a skeleton by hand.
   (`ToggleGroup`, `src/components/ui/toggle-group.tsx`): the options in a well on the canvas, the picked one raised on
   `surface-raised` with `shadow-xs`. It is a radio group, so one option is always picked: the arrow keys move between
   them, Space picks one, and Tab leaves the group.
+- **A config page** (`ConfigForm`, `/settings/limits`, which Settings links to from a one-line panel so Settings stays
+  short): the keys in panels by what they govern (`CONFIG_GROUPS` in `src/lib/config-settings.ts`), two to a row on a
+  wide window and Trust across the whole row, a key no panel names in an `Other` panel. A row is the key in words over
+  its name in the file in monospace, where its value comes from, and how far the page may take it, and its control at
+  the row's end: a numeric field in `readout` type, a checkbox for a switch, and a list's entries as checkboxes to
+  clear. A switch already on its stricter side is disabled, not hidden, so the page still says what it is.
+  `capacity.repo_slots` lists only the repositories with a count of their own, a field each, and under them a field that
+  takes another repository's name (the workspace's offered as suggestions), so a workspace of many repositories does not
+  get a field per repository. One save bar, sticky at the page's foot so a change far down the page is never left
+  unseen, says how many changes wait, with Discard and Save, each disabled until something changed; a field that is not
+  a whole number is named in its `Notice` and keeps Save disabled. A save reads the file again, and the `Notice` keeps
+  what the save did over the fresh form.
 - **An action** is a button in the foot of its subject's identity panel (the detail skeleton, above) or under its
   form, with one line under it (`Notice`): what the action did, in the CLI's words, or its refusal in
   `status-failed`, naming the guard. An action that kills something asks

@@ -18,9 +18,10 @@ from collections.abc import Callable, Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, db, pools
+from canopy.core import chore_view, config, db, pools
 from canopy.core.context import Context, db_path
 from canopy.infra import procs
 
@@ -105,6 +106,10 @@ class Backend:
     # Rewrite `attention.md` after a write that changes the list without a tick, such as a dismissal. The mock's
     # writes nothing.
     write_attention: Callable[[Context], object] = field(default=lambda _ctx: None)
+    # The user config the loop read, under the private file the settings page edits (config_edit.py).
+    user_file: Path = field(default_factory=config.user_config_path)
+    # `canopy loop --every`'s minutes, which set the pace whatever `loop.interval_minutes` says, or None.
+    every: int | None = None
     # Held while `config` and `workspace` are read or replaced, so a request never gets one of each.
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False, compare=False)
     # When chores' findings started, as the last read found them, handed to every Context opened, so a request or a
