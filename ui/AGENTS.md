@@ -97,6 +97,11 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
 - **The guide says what the pages do.** The operator's documentation is Markdown in `src/guide/` (`DESIGN.md`, "The
   guide"). A change to what a page shows or does updates the guide's page about it in the same PR, as a change to a
   behavior updates the design. Its links are checked by `src/lib/guide.test.ts`.
+- **The guide has a voice.** World-class developer docs, with the undertone of a funny, sage staff engineer. Talk to
+  the operator as `you`, in plain, direct sentences: lead with what a thing does and how to use it. The humor is dry
+  and earned, an aside from someone who has seen a few incidents, never a pun for its own sake: it rides on a fact,
+  never stands in for one, and stays rare enough to land (a few to a page, not one a line). Use dashes sparingly.
+  `src/guide/overview.md` sets the bar; this voice is the guide's alone, not the CLI's, the design's, or a page's.
 - **API docs.** The server serves Swagger UI at `/api/docs`, over the schema at `/api/openapi.json`, from the copy
   `vite.config.ts` puts in the build's `api-docs/`: through the dev server too, once `npm run build` has run.
 
