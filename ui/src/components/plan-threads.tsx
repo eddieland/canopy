@@ -174,7 +174,7 @@ export function AskForChanges({
     threads,
     starts,
     edited,
-    asked,
+    asked = false,
     onAsk,
 }: {
     /** The plan's threads. */
@@ -184,7 +184,7 @@ export function AskForChanges({
     /** Whether the operator edited the plan's text, which the message then says. */
     edited: boolean
     /** Whether they asked already and no planner has read it, so another request is asking again. */
-    asked: boolean
+    asked?: boolean
     /** Sends the message. */
     onAsk: (message: string) => void
 }) {
