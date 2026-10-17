@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 
-import { metaQuery, tickQuery } from '@/api/queries'
-import type { Tick } from '@/api/types'
+import { loopQuery, metaQuery, tickQuery } from '@/api/queries'
+import type { MemoryState, Tick } from '@/api/types'
 import { Age } from '@/components/age'
 import { Word } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
@@ -17,16 +18,18 @@ const STREAM_LABEL: Record<StreamStatus, string> = {
 }
 
 /**
- * The header's readouts: the latest tick, the stream's state, and `mock` over fixture data. The counters are the
- * attention page's.
+ * The header's readouts: the latest tick, agent memory while a tier is on, the stream's state, and `mock` over fixture
+ * data. The counters are the attention page's.
  */
 export function LiveReadouts({ stream }: { stream: StreamStatus }) {
     const meta = useQuery(metaQuery)
     const last = useQuery(tickQuery)
+    const memory = useQuery(loopQuery).data?.memory ?? null
     return (
         // Inset as far as a ghost button's label, so the rules either side sit midway between their neighbors.
         <div className="flex items-center gap-4 px-2.5" data-testid="live-readouts">
             {last.data?.tick && <LastTick tick={last.data.tick} />}
+            {memory !== null && <MemoryReadout memory={memory} />}
             <span
                 className={cn(
                     'readout inline-flex items-center gap-1.5 text-2xs uppercase',
@@ -70,5 +73,24 @@ function LastTick({ tick }: { tick: Tick }) {
                 <Age at={tick.ended_at} variant="ago" className="text-inherit" />
             )}
         </span>
+    )
+}
+
+/**
+ * `memory: recording` while no tier is at `use`, `memory: in use` once one is (DESIGN §28): words, never color alone,
+ * so recorded memory is never taken for memory in use. Each tier's mode on hover and to a screen reader; it opens the
+ * memory page.
+ */
+function MemoryReadout({ memory }: { memory: MemoryState }) {
+    return (
+        <Link
+            to="/memory"
+            className="readout text-xs whitespace-nowrap text-muted-foreground underline-offset-4 hover:underline"
+            title={memory.tiers}
+            aria-label={`${memory.readout}: ${memory.tiers}`}
+            data-testid="memory-readout"
+        >
+            {memory.readout}
+        </Link>
     )
 }

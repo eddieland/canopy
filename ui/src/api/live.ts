@@ -39,6 +39,10 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
                 if (logged(shown) !== logged(run)) {
                     void client.invalidateQueries({ queryKey: keys.runTranscript(run.id) })
                 }
+                // A run writes its memory as it ends.
+                if (shown.status !== run.status) {
+                    void client.invalidateQueries({ queryKey: keys.runMemory(run.id) })
+                }
             }
             break
         }
@@ -91,6 +95,8 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             void client.invalidateQueries({ queryKey: keys.ticks, refetchType: 'active' })
             void client.invalidateQueries({ queryKey: ['ticket'], refetchType: 'active' })
             void client.invalidateQueries({ queryKey: keys.reviews, refetchType: 'active' })
+            // A tick expires proposals, and the runs it saw end wrote memory.
+            void client.invalidateQueries({ queryKey: keys.memory, refetchType: 'active' })
             // A PR's phase, decisions, and reviews move with the ticks too, and the spend page's idle ticks.
             void client.invalidateQueries({ queryKey: keys.pullRequests, refetchType: 'active' })
             void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })

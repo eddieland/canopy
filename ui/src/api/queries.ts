@@ -44,6 +44,11 @@ export const keys = {
     pullRequests: ['pull-requests'] as const,
     pullRequest: (url: string) => ['pull-requests', url] as const,
     loop: ['loop'] as const,
+    // Agent memory: every tier's, read again at each tick; a ticket's under its ticket's key, so the stream's
+    // `ticket.changed` marks it stale with the ticket; a run's, read again when the run's status changes.
+    memory: ['memory'] as const,
+    ticketMemory: (key: string) => ['ticket', key, 'memory'] as const,
+    runMemory: (id: number) => ['run-memory', id] as const,
 }
 
 /** Whether this browser is signed in. Never stale on its own: sign-in, sign-out, and a 401 set it. */
@@ -310,6 +315,32 @@ export function reviewQuery(id: number) {
         queryKey: keys.review(id),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/reviews/{run_id}', { params: { path: { run_id: id } }, signal })),
+        placeholderData: undefined,
+    })
+}
+
+/** Every tier of agent memory (DESIGN §28): the notes in force, the proposals waiting, the lessons. Reads only. */
+export const memoryQuery = queryOptions({
+    queryKey: keys.memory,
+    queryFn: async ({ signal }) => unwrap(await api.GET('/api/memory', { signal })),
+})
+
+/** A ticket's notes, and what its next run would be served (DESIGN §28). */
+export function ticketMemoryQuery(key: string) {
+    return queryOptions({
+        queryKey: keys.ticketMemory(key),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/tickets/{key}/memory', { params: { path: { key } }, signal })),
+        placeholderData: undefined,
+    })
+}
+
+/** What a run wrote and read of memory, and what it had refused (DESIGN §28). */
+export function runMemoryQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.runMemory(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/runs/{run_id}/memory', { params: { path: { run_id: id } }, signal })),
         placeholderData: undefined,
     })
 }

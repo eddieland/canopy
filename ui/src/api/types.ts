@@ -179,3 +179,19 @@ export const WORKTREE_STATES = [
     'idle',
     'broken',
 ] as const satisfies readonly WorktreeState[]
+/** One tier of agent memory and what reads it (DESIGN §28), in the words every surface uses. */
+export type MemoryTier = Schemas['MemoryTier']
+/** Agent memory's tiers while one is on: the header's readout and each tier's mode. */
+export type MemoryState = Schemas['MemoryState']
+/** One note, proposal, or lesson. Its text is a worker's, or the operator's for a lesson: plain text. */
+export type MemoryEntry = Schemas['MemoryEntry']
+/** A proposal waiting on the operator, with where it came from. */
+export type MemoryProposal = Schemas['MemoryProposal']
+/** What a run would be served of one tier, as its prompt would carry it. */
+export type MemoryDigest = Schemas['MemoryDigest']
+/** Every tier's memory: the notes in force, the proposals waiting, and the lessons. */
+export type MemoryOverview = Schemas['MemoryOverview']
+/** One ticket's notes, and what its next run would be served. */
+export type TicketMemory = Schemas['TicketMemory']
+/** What a run wrote and read of memory, and what it had refused. */
+export type RunMemory = Schemas['RunMemory']

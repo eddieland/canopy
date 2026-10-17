@@ -183,6 +183,13 @@ export const TIPS = {
         'Hot take: it is always in the last place you search. So search there first.',
         'Fun fact: every search is a tiny wish. Mine is for a crown.',
     ],
+    '/memory': [
+        "It looks like you're reading what workers remember. I remember nothing. Very restful.",
+        'Unhelpful tip: a lesson is a note that the operator believed. I believe in snacks.',
+        'Dear diary, a worker proposed a lesson today. I proposed a hat. Only one of us got promoted.',
+        'Fun fact: recording is not using. I record everything and use none of it.',
+        'Hot take: a note that says "it works on my machine" is a note about the machine.',
+    ],
 } as const satisfies Record<string, readonly string[]>
 
 /** A view Sprig has tips for, by its route id. */

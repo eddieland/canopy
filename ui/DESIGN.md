@@ -175,6 +175,16 @@ Rules:
   the notice's words through `LinkedText`, until when runs hear it (when and from where on hover), and a ghost Clear.
   It is not in the header, which has no room for a sentence, and it leaves with the stream's word when it lapses.
   Settings sets one, in its own panel, with how long it lasts as a toggle group; any other duration is the CLI's.
+- **Agent memory** (docs/design §28) shows only while a tier is on, and always says each tier's mode in words, never by
+  color alone, so recorded memory is never taken for memory in use. The header's readout, after the latest tick, is
+  `memory: recording` or `memory: in use` in muted readout type, each tier's mode on hover and to a screen reader,
+  opening the memory page, which is in no section and so reached from there. A tier's **band** heads its panel there
+  and on a ticket's page: a chip naming the tier and its mode (the running tone at `use`, plain while recording) and
+  the server's sentence on what reads it. What a worker wrote is `MemoryText`: plain text, never `LinkedText`, since
+  a link in a note would be a worker's link read as canopy's, with each character that hides text named
+  (`<U+200B>`) on a `status-failed` tint, so it is seen. A digest is the prompt's own text in monospace, labelled
+  `would be served at use` while recording. A run's page lists what it wrote and read, and reads `none, recording
+  only` for a run that read nothing because its tier was recording. The UI reads memory and writes none.
 - **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
   (`NewerBuild`): an accent button, the action to take, saying on hover why and that unsent text is lost. It never
   reloads on its own, since the operator may be typing. The page knows its build from the `canopy-build` meta tag the
