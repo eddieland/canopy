@@ -447,6 +447,11 @@ The API, under `{base}/api`:
 | `POST /tickets/{key}/stop` | `canopy stop`, with `now` for `--now` |
 | `POST /tickets/{key}/replies` | `canopy reply`, with the form's submission id |
 | `POST /tickets/{key}/grants` | `canopy grant KEY KIND [--repo NAME]`, for one run: `implement`, `fix-ci`, or `resume` |
+| `GET /tickets/{key}/plans` | whether it needs a plan and why, the plan run writing one now, its newest plan as the file stands, every plan, and the operator's comments (§25) |
+| `GET /tickets/{key}/plans/{id}` | one of its plans, earlier ones too, as the file stands: `canopy show --plans` (§25) |
+| `POST /tickets/{key}/plan` | `canopy plan KEY --approve`, `canopy plan KEY`, or `--skip`: `approve`, `request`, or `skip` (§25) |
+| `PUT /tickets/{key}/plans/{id}/file` | the plan editor's save: its Markdown over the current plan's file, refused if the file changed since it was read, by its hash (§25) |
+| `POST /tickets/{key}/plan-threads` | a comment on a passage of its plan; `POST .../{id}/replies` a reply, `PATCH .../{id}` an edit or a resolve, `DELETE .../{id}` the thread (§25) |
 | `GET /chores` | each configured chore, as `canopy status` lists it: its runs, due time, window, and open findings |
 | `GET /chores/{name}` | one chore defined for this workspace: what `canopy show chore:NAME` prints; 404 for any other |
 | `POST /chores/{name}/replies` | `canopy reply chore:NAME`: a note its next runs read, with the form's submission id |
@@ -856,10 +861,11 @@ How it serves, built in M20's foundation and true of every page:
 - The Host header must name a loopback host or the bind address, on any route: that stops DNS rebinding. An `Origin`
   header on an API route must name one of those too: that stops another site's page from calling the API or opening
   the stream. Ports are not compared, so an SSH forward to another local port works.
-- A request body over 256 KiB is refused 413, and a chunked one, with no Content-Length, 411, on any route. FastAPI
+- A request body over 1,280 KiB is refused 413, and a chunked one, with no Content-Length, 411, on any route. FastAPI
   reads a body before the session check runs, so without this a client that never signed in could make the server hold
-  a body of any size. The largest body the API takes, a reply of 20,000 characters, fits under it even when every one is
-  escaped as a surrogate pair (240,000 bytes).
+  a body of any size. The largest body the API takes, an edited plan of 100,000 characters (§25), fits under it even
+  when every one is escaped as a surrogate pair (1,200,000 bytes). It was 256 KiB, a reply's 20,000 characters, before
+  the plan editor saved plans.
 - The event stream is FastAPI's SSE: `Cache-Control: no-cache`, `X-Accel-Buffering: no` so a proxy or forward does not
   buffer it, and a keepalive comment after 15 idle seconds. Nothing compresses it.
 - The page makes no request to another origin: fonts and icons are bundled.

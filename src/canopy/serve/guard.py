@@ -29,9 +29,10 @@ SECURITY_HEADERS: tuple[tuple[bytes, bytes], ...] = (
     (b"x-frame-options", b"DENY"),
     (b"referrer-policy", b"no-referrer"),
 )
-# The largest body a request may carry. The largest the API takes is a reply's 20,000 characters: at most 240,000 bytes
-# of JSON when every one is outside the BMP and escaped as a surrogate pair, `\ud83d\ude00`, 12 bytes each.
-MAX_BODY_BYTES = 256 * 1024
+# The largest body a request may carry. The largest the API takes is an edited plan's 100,000 characters (DESIGN §25):
+# at most 1,200,000 bytes of JSON when every one is outside the BMP and escaped as a surrogate pair, `\ud83d\ude00`, 12
+# bytes each.
+MAX_BODY_BYTES = 1280 * 1024
 
 
 def host_name(host: str) -> str:

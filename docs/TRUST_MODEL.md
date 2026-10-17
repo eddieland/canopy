@@ -507,6 +507,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   control characters dropped, rendered as text. That adds what the transcript leaves out: the runtime's stderr,
   which may name the operator's paths and config, and every field of the overseer's events. A run's log is never
   served this way.
+- It serves a ticket's plans (DESIGN §25): each plan's file as it stands, model-written from ticket text, read
+  bounded from a regular file opened without following links, and drawn in the plan editor as text, its HTML and
+  images kept as characters (D113).
 - It serves canopy's reviews (DESIGN §21, M32): each review run's findings, and the diff of the commit it read, which
   `_review` writes beside the run's log. The diff is the PR's own text, by whoever wrote the PR, `review.query`'s
   other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened
@@ -517,12 +520,15 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   note something to a chore as `canopy reply chore:NAME` does, dismiss a chore's or a review's finding or take that
   back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, make and end a review
   request on a PR as `canopy start URL --review` and `canopy stop URL` do, pause and resume the loop as
-  `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, and ask the
-  loop
-  to read its config files again as SIGHUP does, nothing else. It cannot write config: a reload reads only the
-  operator's own files, and a `serve.*` change waits for a restart, so the listener's bind and port never change under
-  it. A forget must carry the ticket's key typed out, checked in code. A grant allows one more run a request, with
-  `canopy grant`'s guards. It cannot run a chore.
+  `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, ask for, skip,
+  or approve a ticket's plan as `canopy plan` does, and ask the loop to read its config files again as SIGHUP does.
+  Beyond the CLI's verbs it writes two things, both the operator's own words on a plan (DESIGN §25): an edit of a
+  plan's file, saved as the operator's own editor would, operator-only and never through a link, only over the
+  ticket's current plan, never while a plan run for it is running, and never over a file that changed since the
+  editor read it; and the operator's comments on a plan's passages, in the journal. Nothing else. It cannot write
+  config: a reload reads only the operator's own files, and a `serve.*` change waits for a restart, so the listener's
+  bind and port never change under it. A forget must carry the ticket's key typed out, checked in code. A grant
+  allows one more run a request, with `canopy grant`'s guards. It cannot run a chore.
 
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
 credentials. A notice set that way reaches every run's prompt, every ticket's, until it lapses, at most seven days, or
