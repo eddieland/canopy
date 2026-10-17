@@ -371,8 +371,6 @@ posts one message per delivery, as Block Kit built from the `json` fields with t
   same checks and must hold an `xoxb-` bot token: a user token acts as the operator with all its scopes. A post counts
   as delivered only when Slack's reply says `ok`, since the Web API answers 200 to a refused post. Like the URL, the
   token is never in canopy's config, argv, journal, or logs, nor in the sink's own messages.
-- `--username` and `--icon-emoji`, with `--channel` only, post under a name and emoji of the operator's choosing
-  (scope `chat:write.customize`).
 - Journal text is escaped for Slack markup (`&`, `<`, `>`) and every text object is `verbatim`, so Slack parses no
   `@here`, `@channel`, person, or channel name in it, and nothing can disguise a link. A URL is shown as itself; one
   holding `|`, which would take a label, stays text.
