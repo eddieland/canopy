@@ -1,6 +1,6 @@
 import { useRouterState } from '@tanstack/react-router'
 import { X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 
 import { HatDrawing } from '@/components/hat'
@@ -14,38 +14,79 @@ import type { FileRoutesById } from '@/routeTree.gen'
 
 /** How long a tip stays up before Sprig takes the hint. */
 const TIP_SECONDS = 20
+/** The shortest and longest Sprig waits, after a tip closes, before offering the next unasked: picked at random. */
+const WAIT_SECONDS = { least: 120, most: 360 }
 /** How far Sprig may stand over the foot of the rail's blocks, the spend, in a rail too short to hold it whole. */
 const OVERLAP_PX = 40
 
 /** How Sprig fits its slot: with the room for its bubble too, or only for itself, standing over the spend a little. */
 type Room = 'roomy' | 'tight'
 
+/** The tip Sprig last offered: on which view, its place in that view's tips, whether it is up, and if it was asked. */
+interface Offer {
+    /** The view it was offered on, which it is about. */
+    view: View | undefined
+    /** How many tips came before it, since the page loaded: its place in its view's tips (`tipFor`). */
+    n: number
+    /** Whether its bubble is up, till it is closed or its time runs out. */
+    open: boolean
+    /** Whether the reader asked for it with a click, rather than Sprig offering it on its own. */
+    asked: boolean
+}
+
 /**
  * Sprig, the helper at the foot of the side rail: a bent wire with a sprig on top and googly eyes that follow the
- * pointer. On every view it offers a tip about that view, the dumber the better (`TIPS` in src/lib/buddy.ts); clicking
- * it offers another. The tip closes with its button, or by itself after a while. Settings turns Sprig off, and so
- * does the tip's "Don't show me tips again".
+ * pointer. Now and then, at random, it offers a tip about the view on screen, the dumber the better (`TIPS` in
+ * src/lib/buddy.ts); clicking it offers another at once. Its clock is its own: turning a page neither offers a tip nor
+ * puts the next one off, and a tip offered on one view is not shown on another. The tip closes with its button, or by
+ * itself after a while, and the next comes a few minutes after that. Settings turns Sprig off, and so does the tip's
+ * "Don't show me tips again".
  *
  * It has a slot of its own in the rail's column, between what the rail holds and its footer: the slot is the room
  * left under the rail's blocks, and Sprig stands at its foot. A slot with room for Sprig and its bubble covers
  * nothing. A shorter one, as a laptop's window leaves, still shows Sprig if it can stand over the foot of the spend
  * by `OVERLAP_PX` or less, as the operator asked; there the bubble would cover the blocks above, so a tip shows only
- * when asked for, with a click. A slot shorter still leaves Sprig out, rather than squeeze the blocks above.
+ * when asked for, with a click, and Sprig lets the ones it would offer on its own pass. A slot shorter still leaves
+ * Sprig out, rather than squeeze the blocks above.
  */
 export function Buddy() {
     const view = viewOf(useRouterState({ select: (state) => state.matches.at(-1)?.routeId }))
     // Read once per page load, as the ticker's reel is: the tip must not change under the reader.
     const [today] = useState(() => Date.now())
-    // How many more tips the reader asked for, counted per view: a new one starts at its own first tip.
-    const [asked, setAsked] = useState<{ view: View | undefined; n: number }>({ view, n: 0 })
-    const n = asked.view === view ? asked.n : 0
-    const another = () => setAsked({ view, n: n + 1 })
-    const tip = tipFor(view, n, today)
+    // Closed until the first is offered, the bubble holding the view's first tip's room meanwhile.
+    const [offer, setOffer] = useState<Offer>({ view, n: 0, open: false, asked: false })
+    const tip = tipFor(offer.view, offer.n, today)
     const [slot, room] = useFits(roomFor)
     const { worn } = useWardrobe()
-    // A different tip opens a new bubble: the key remounts it, open, and raises Sprig's brows. A page that offers the
-    // tip already shown (the same view, filtered another way) leaves the bubble as it is, open or closed. Sprig, and a
-    // bubble shown in a tight slot, rise out of the slot over the blocks above: positioned, so they paint over them.
+    const another = () => setOffer({ view, n: offer.n + 1, open: true, asked: true })
+    // Offers the next tip unasked, for the view on screen when the time comes, if the bubble would cover nothing and
+    // the tab is in sight to read it.
+    const offerUnasked = useEffectEvent(() => {
+        if (room === 'roomy' && document.visibilityState === 'visible') {
+            setOffer({ view, n: offer.n + 1, open: true, asked: false })
+        }
+    })
+    const close = () => setOffer((last) => ({ ...last, open: false }))
+    // Waits while no tip is up, a while picked at random, then offers one. One let pass waits again.
+    useEffect(() => {
+        if (offer.open) {
+            return
+        }
+        let timer: ReturnType<typeof globalThis.setTimeout> | undefined
+        const wait = () => {
+            const seconds = WAIT_SECONDS.least + Math.random() * (WAIT_SECONDS.most - WAIT_SECONDS.least)
+            timer = globalThis.setTimeout(() => {
+                offerUnasked()
+                wait()
+            }, seconds * 1000)
+        }
+        wait()
+        return () => globalThis.clearTimeout(timer)
+    }, [offer.open])
+    const shown = offer.open && offer.view === view && (room === 'roomy' || offer.asked)
+    // A new tip opens a new bubble: the key remounts it, popping it in, and raises Sprig's brows. Closed, the bubble
+    // keeps the last tip's room, whatever the page, so Sprig does not move. Sprig, and a bubble shown in a tight slot,
+    // rise out of the slot over the blocks above: positioned, so they paint over them.
     return (
         <div ref={slot} className="flex min-h-0 flex-1 flex-col justify-end print:hidden">
             <aside
@@ -57,7 +98,7 @@ export function Buddy() {
                     room === false && 'invisible',
                 )}
             >
-                <Bubble key={tip} tip={tip} shown={room === 'roomy' || n > 0} onAnother={another} />
+                <Bubble key={offer.n} tip={tip} open={offer.open} shown={shown} onAnother={another} onClose={close} />
                 <button
                     type="button"
                     aria-label="Ask Sprig for a tip"
@@ -68,7 +109,7 @@ export function Buddy() {
                         'outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:hover:-translate-y-0.5',
                     )}
                 >
-                    <Figure cue={tip} hat={worn} />
+                    <Figure cue={offer.n} hat={worn} />
                 </button>
             </aside>
         </div>
@@ -103,25 +144,37 @@ function roomFor(slot: HTMLElement): Room | false {
 }
 
 /**
- * The speech bubble above Sprig: the tip, another, and the way out. Its tail points down at Sprig. Closed, or not
- * `shown`, it is hidden but keeps its room, so Sprig does not move.
+ * The speech bubble above Sprig: the tip, another, and the way out. Its tail points down at Sprig. It closes itself
+ * once its tip has been up a while, counted from when it opened, shown or not: a tip is only offered where it shows.
+ * Not `shown`, it is hidden but keeps its room, so Sprig does not move.
  */
-function Bubble({ tip, shown, onAnother }: { tip: string; shown: boolean; onAnother: () => void }) {
-    const [open, setOpen] = useState(true)
-    // Its time runs only while it shows: a tip waiting unseen in a tight slot is not used up before a roomier one.
+function Bubble({
+    tip,
+    open,
+    shown,
+    onAnother,
+    onClose,
+}: {
+    tip: string
+    open: boolean
+    shown: boolean
+    onAnother: () => void
+    onClose: () => void
+}) {
+    const expire = useEffectEvent(onClose)
     useEffect(() => {
-        if (!shown) {
+        if (!open) {
             return
         }
-        const timer = globalThis.setTimeout(() => setOpen(false), TIP_SECONDS * 1000)
+        const timer = globalThis.setTimeout(expire, TIP_SECONDS * 1000)
         return () => globalThis.clearTimeout(timer)
-    }, [shown])
+    }, [open])
     return (
         <div
             data-testid="buddy-tip"
             className={cn(
                 'animate-buddy-tip relative w-full rounded-md border bg-surface-raised p-3 text-sm',
-                !(open && shown) && 'invisible',
+                !shown && 'invisible',
             )}
         >
             <p className="panel-label mb-1">Sprig</p>
@@ -148,7 +201,7 @@ function Bubble({ tip, shown, onAnother }: { tip: string; shown: boolean; onAnot
             <button
                 type="button"
                 aria-label="Close the tip"
-                onClick={() => setOpen(false)}
+                onClick={onClose}
                 className="absolute top-2 right-2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
                 data-testid="buddy-close"
             >
@@ -169,7 +222,7 @@ function Bubble({ tip, shown, onAnother }: { tip: string; shown: boolean; onAnot
  * now and then and look toward the pointer, and the keys are typed on in bursts, but under reduced motion, which keeps
  * them still.
  */
-function Figure({ cue, hat }: { cue: string; hat: HatId | null }) {
+function Figure({ cue, hat }: { cue: number; hat: HatId | null }) {
     const figure = useRef<SVGSVGElement>(null)
     useEffect(() => {
         const svg = figure.current
