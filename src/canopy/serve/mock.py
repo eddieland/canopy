@@ -18,6 +18,7 @@ Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser'
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
@@ -535,6 +536,8 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             "UPDATE runs SET activity_tool = ?, activity = ?, activity_at = ? WHERE id = ?",
             (tool, did, at(minutes), run_id),
         )
+    # Run 39's peak is the most one model call in its transcript was sent (_transcripts), as its page's chart shows.
+    conn.execute("UPDATE runs SET tokens_peak_context = 30200 WHERE id = 39")
     run_slots = (
         # run, repo, slot, lease, holder: run 43 is joint, a slot in web and one in mobile; 37 and 40 ended long ago
         (37, "web", 4, "lease-37", "canopy:ABC-100"),
@@ -798,9 +801,10 @@ def _tool(session: str, minutes: float, tool: str, state: Mapping[str, object], 
     )
 
 
-def _step(session: str, minutes: float, cost: float, reason: str = "tool-calls") -> str:
-    # Most of what a call sends is read back from the provider's cache, after the first.
-    sent = int(cost * 30_000)
+def _step(session: str, minutes: float, cost: float, reason: str = "tool-calls", sent: int | None = None) -> str:
+    # Most of what a call sends is read back from the provider's cache, after the first. `sent` is the call's context,
+    # for a session whose context grows as a real one does; without it, a share of the cost.
+    sent = int(cost * 30_000) if sent is None else sent
     tokens = {
         "input": sent // 4,
         "output": int(cost * 3_000),
@@ -820,6 +824,25 @@ def _done(session: str, minutes: float, title: str, command: str, output: str, *
     """
     state = {"status": "completed", "input": {"command": command, "description": title}, "output": output}
     return _tool(session, minutes, "bash", {**state, "title": title}, seconds)
+
+
+def _coverage() -> str:
+    """The table Jest prints after a run's tests when it collects coverage: a line per file, a long tool result.
+
+    Returns:
+        The table, as printed.
+    """
+    dirs = ("api", "components", "hooks", "lib", "pages", "routes", "search", "store", "styles", "utils")
+    names = ("client", "format", "index", "keys", "list", "menu", "panel", "query", "table", "toast", "types", "view")
+    rule = f"{'-' * 36}|---------|----------|---------|---------|-------------------"
+    lines = [rule, f"{'File':<36}| % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s", rule]
+    for i, (folder, name) in enumerate(itertools.product(dirs, names)):
+        uncovered = (i * 37) % 41
+        covered = 100 - uncovered
+        missed = f"{12 + i % 30}-{40 + i % 50}" if uncovered else ""
+        row = f"{covered:>8.2f} | {covered - i % 9:>8.2f} | {covered - i % 5:>7.2f} | {covered:>7.2f}"
+        lines.append(f"{f'src/{folder}/{name}.ts':<36}|{row} | {missed}")
+    return "\n".join([*lines, rule, ""])
 
 
 _SEARCH_BOX = """\
@@ -932,7 +955,7 @@ def _transcripts(state_dir: Path) -> None:
                 "error": f"File not found: {web}/src/search/useSearch.ts",
             },
         ),
-        _step(s39, -89.3, 0.82),
+        _step(s39, -89.3, 0.82, sent=24_600),
         _start(s39, -89.2),
         _text(s39, -80, "There is no search hook yet. I'll add one that debounces and aborts the stale request."),
         _tool(
@@ -952,10 +975,10 @@ def _transcripts(state_dir: Path) -> None:
             "Run the search tests",
             "npm test -- search",
             "PASS src/search/SearchBox.test.tsx\n  ✓ debounces input (310 ms)\n  ✓ cancels a stale request (12 ms)\n\n"
-            "Tests: 2 passed, 2 total\n",
+            f"Tests: 2 passed, 2 total\n\n{_coverage()}",
             seconds=14,
         ),
-        _step(s39, -69.9, 0.97),
+        _step(s39, -69.9, 0.97, sent=25_900),
         _start(s39, -69.8),
         _done(
             s39,
@@ -988,7 +1011,7 @@ def _transcripts(state_dir: Path) -> None:
             '{"status": "done", "summary": "Search now debounces input and cancels stale requests.", '
             '"prs": {"web": "https://github.com/acme/web/pull/88"}}',
         ),
-        _step(s39, -61, 0.52, reason="stop"),
+        _step(s39, -61, 0.52, reason="stop", sent=30_200),
     ]
     run_40 = [
         _start(s40, -74.1),

@@ -117,6 +117,8 @@ export type ChoreRunFinding = Schemas['ChoreRunFinding']
 export type Transcript = Schemas['Transcript']
 /** One entry of a transcript, told apart by its `kind`: text, a tool call, a model call's end, or an error. */
 export type TranscriptEntry = Transcript['entries'][number]
+/** A finished piece of the agent's text, or of its reasoning. */
+export type TranscriptText = Schemas['TranscriptText']
 /** One tool call, once it ended: its input as indented JSON, and its output, or its error. */
 export type TranscriptTool = Schemas['TranscriptTool']
 /** One model call's end: why, what it cost, and its tokens together and by kind. */

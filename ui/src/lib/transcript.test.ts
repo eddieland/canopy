@@ -4,6 +4,7 @@ import type { TranscriptEntry, TranscriptStep, TranscriptTool } from '@/api/type
 
 import {
     byCall,
+    contextShape,
     callLine,
     duration,
     elapsed,
@@ -14,6 +15,7 @@ import {
     runTokens,
     sentTokens,
     shownOutput,
+    signed,
     startOf,
     summary,
     tally,
@@ -40,6 +42,7 @@ describe('elapsed', () => {
 describe('duration and tokenCount', () => {
     it('read as the CLI says them', () => {
         expect([duration(840), duration(14_000), duration(185_000)]).toEqual(['840ms', '14s', '3m 05s'])
+        expect([signed(4310), signed(-2000), signed(0)]).toEqual(['+4.3k', '-2.0k', '+0'])
         expect([tokenCount(950), tokenCount(12_340), tokenCount(1_240_000)]).toEqual(['950', '12.3k', '1.2M'])
     })
 })
@@ -297,5 +300,65 @@ describe('sentTokens and wroteTokens', () => {
     it('count what a call was sent, cached or not, and what it wrote, reasoning included', () => {
         const split = { input: 10, cache_read: 300, cache_write: 20, output: 5, reasoning: 2 }
         expect([sentTokens(split), wroteTokens(split)]).toEqual([330, 7])
+    })
+})
+
+// A call's end, sent `n` tokens: a quarter fresh, the rest read from the cache.
+const sent = (call: number, n: number): TranscriptStep => ({
+    ...step(call),
+    split: { input: n / 4, cache_read: n - n / 4, cache_write: 0, output: 100, reasoning: 0 },
+})
+
+describe('contextShape', () => {
+    const prompt = { text: 'x'.repeat(4000), truncated: false }
+
+    it("splits the first call into canopy's prompt and the runtime's own, and shares a step up by characters", () => {
+        const big = tool('completed', { input: '{}', output: 'y'.repeat(2998), call: 1 })
+        const small = tool('completed', { input: '{}', output: 'y'.repeat(998), call: 1 })
+        const entries = [text('ab', 1), small, big, sent(1, 12_000), text('done', 2), sent(2, 15_000)]
+        const shape = contextShape(entries, prompt)
+        expect(shape.prompt).toBe(1000)
+        expect(shape.calls.map((c) => [c.n, c.sent, c.carried, c.added, c.step])).toEqual([
+            [1, 12_000, 11_000, 1000, null],
+            [2, 15_000, 12_000, 3000, 3000],
+        ])
+        // Largest first, each the share of the step its characters hold, linked by its place in the transcript.
+        expect(shape.calls[1]?.additions.map((a) => [a.i, a.chars, a.tokens])).toEqual([
+            [2, 3000, 2249],
+            [1, 1000, 750],
+            [0, 2, 1],
+        ])
+        expect(shape.peak?.n).toBe(2)
+        expect(shape.largest?.call.n).toBe(2)
+        expect(shape.largest?.addition.entry).toBe(big)
+    })
+
+    it('finds the largest addition across steps, not in the largest step', () => {
+        const one = tool('completed', { output: 'a'.repeat(1000), call: 1 })
+        const two = tool('completed', { output: 'b'.repeat(1000), call: 1 })
+        const three = tool('completed', { output: 'c'.repeat(1000), call: 2 })
+        const shape = contextShape([one, two, sent(1, 1000), three, sent(2, 5000), sent(3, 8000)], null)
+        expect(shape.calls.map((c) => c.step)).toEqual([null, 4000, 3000])
+        expect(shape.largest?.addition.entry).toBe(three)
+        expect(shape.largest?.addition.tokens).toBe(3000)
+    })
+
+    it('adds nothing where the context shrank, and leaves a call the runtime counted none of empty', () => {
+        const read = tool('completed', { output: 'file', call: 1 })
+        const shape = contextShape([read, sent(1, 9000), sent(2, 7000), step(3), sent(4, 8000)], null)
+        expect(shape.calls.map((c) => [c.sent, c.carried, c.added, c.step, c.additions.length])).toEqual([
+            [9000, 9000, 0, null, 0],
+            [7000, 7000, 0, -2000, 0],
+            [null, 0, 0, null, 0],
+            [8000, 8000, 0, null, 0],
+        ])
+        expect(shape.peak?.n).toBe(1)
+        expect(shape.largest).toBeNull()
+    })
+
+    it('never sets the prompt above what the first call was sent, and has no peak without counts', () => {
+        expect(contextShape([sent(1, 400)], prompt).calls[0]).toMatchObject({ carried: 0, added: 400 })
+        expect(contextShape([text('hi', 1), step(1)], prompt).peak).toBeNull()
+        expect(contextShape([text('before any call', null)], null).calls).toEqual([])
     })
 })
