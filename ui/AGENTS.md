@@ -121,7 +121,7 @@ to the rest; a write goes through `canopy.core.conversation`, never SQL of its o
   deliberately and the PR says why; look at each new image before it merges. The Screenshots workflow never deletes an
   image: a PR that stops taking one deletes its baseline. Every screenshot applies `e2e/screenshot.css`, which hides
   what changes with the build or the run rather than the page (the rail's version, which names the commit, and the
-  mock's user config path, in a temporary directory). `README.md` shows `attention-dark`, `tickets-ABC-102-dark`,
+  mock's private config path, in a temporary directory). `README.md` shows `attention-dark`, `tickets-ABC-102-dark`,
   `runs-39-dark`, `reviews-4-dark`, and `ticks-2-dark`: rename them there too.
   The baselines are CI's Chromium and fonts, so regenerate them there: push the branch, then run the Screenshots
   workflow on it (`gh workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or an agent's GitHub tools). It

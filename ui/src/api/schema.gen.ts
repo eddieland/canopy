@@ -5131,7 +5131,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -5209,7 +5209,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
