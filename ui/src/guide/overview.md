@@ -99,6 +99,9 @@ Everything else only reads the journal and changes nothing. Pages update as the 
 so there's no need to reload. The worktrees are the one exception: reading them asks every pool, so that page rereads
 them every 10 seconds while you're looking at it, and has a Read again button.
 
+When a page can't read what it shows, it says so where the content would be, with the server's answer or the news that
+nothing answered at all, and a **Read again** button. A placeholder that shimmers forever is optimism, not a status.
+
 ## Signing in
 
 The UI asks for the listener secret once, then keeps this browser signed in for 30 days. [Signing in](signing-in)
