@@ -63,10 +63,7 @@ def add(conn: sqlite3.Connection, key: str, *, quote: str, prefix: str, suffix: 
             empty comment or one over 4000 characters.
     """
     conversation.check_operator()
-    if not quote.strip() or len(quote) > MAX_QUOTE:
-        raise Refused("bad_anchor", f"a comment's passage is 1 to {MAX_QUOTE} characters")
-    if len(prefix) > MAX_CONTEXT or len(suffix) > MAX_CONTEXT:
-        raise Refused("bad_anchor", f"the text either side of a passage is at most {MAX_CONTEXT} characters")
+    _check_anchor(quote, prefix, suffix)
     text = _body(body)
     with db.transaction(conn):
         if db.get_ticket(conn, key) is None:
@@ -111,8 +108,12 @@ def change(
     body: str | None = None,
     reply_id: int | None = None,
     resolved: bool | None = None,
+    anchor: tuple[str, str, str] | None = None,
 ) -> Thread:
     """Change one of the ticket's threads: its comment's words, or with `reply_id` a reply's, or whether it is resolved.
+
+    `anchor`, the passage's quote and the text either side, moves the thread to its passage's words as they stand after
+    the operator's edit of the plan, which the web UI's editor saves with it.
 
     Nothing marks a comment edited: the journal keeps its body alone, and only the operator writes there.
 
@@ -121,9 +122,11 @@ def change(
 
     Raises:
         Refused: `inside_run`, `unknown` for a thread or reply the ticket does not have, `bad_body` as for a comment,
-            or for a reply named with no words to give it.
+            or for a reply named with no words to give it, and `bad_anchor` as for a comment.
     """
     conversation.check_operator()
+    if anchor is not None:
+        _check_anchor(*anchor)
     if reply_id is not None and body is None:
         raise Refused("bad_body", f"name the words for reply {reply_id}, or leave out the reply")
     text = _body(body) if body is not None else None
@@ -137,6 +140,8 @@ def change(
                 raise Refused("unknown", f"thread {thread_id} of {key} has no reply {reply_id}")
         elif text is not None:
             conn.execute("UPDATE plan_threads SET body = ? WHERE id = ?", (text, thread_id))
+        if anchor is not None:
+            conn.execute("UPDATE plan_threads SET quote = ?, prefix = ?, suffix = ? WHERE id = ?", (*anchor, thread_id))
         if resolved is not None:
             # Resolving it again keeps when it was first resolved.
             conn.execute(
@@ -175,6 +180,18 @@ def _thread(conn: sqlite3.Connection, key: str, thread_id: int) -> records.PlanT
     if found is None:
         raise Refused("unknown", f"{key} has no plan comment {thread_id}")
     return found
+
+
+def _check_anchor(quote: str, prefix: str, suffix: str) -> None:
+    """Refuse a passage no comment can be on.
+
+    Raises:
+        Refused: (`bad_anchor`) the passage is empty or over its bound, or the text either side is over its.
+    """
+    if not quote.strip() or len(quote) > MAX_QUOTE:
+        raise Refused("bad_anchor", f"a comment's passage is 1 to {MAX_QUOTE} characters")
+    if len(prefix) > MAX_CONTEXT or len(suffix) > MAX_CONTEXT:
+        raise Refused("bad_anchor", f"the text either side of a passage is at most {MAX_CONTEXT} characters")
 
 
 def _body(body: str) -> str:

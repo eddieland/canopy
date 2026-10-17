@@ -179,6 +179,8 @@ def test_comments_are_threads_on_passages_the_tickets_own(ctx: Context) -> None:
     assert edited["body"] == "Why red, not blue?"
     edited = c.patch(f"{base}/{thread}", json={"body": "Brand red.", "reply": first["id"]}, headers=headers).json()
     assert edited["replies"][0]["body"] == "Brand red."
+    moved = {"anchor": {"quote": "Add the blue button", "prefix": "## repo ", "suffix": ""}}
+    assert c.patch(f"{base}/{thread}", json=moved, headers=headers).json()["quote"] == "Add the blue button"
     assert c.patch(f"{base}/{thread}", json={"resolved": True}, headers=headers).json()["resolved"] is True
     assert c.patch(f"{base}/{thread}", json={"resolved": False}, headers=headers).json()["resolved"] is False
     [listed] = c.get(f"/api/tickets/{KEY}/plans").json()["threads"]

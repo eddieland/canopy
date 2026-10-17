@@ -10,9 +10,9 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { SAMPLE_PLAN, SAMPLE_THREADS } from '@/lib/plan-sample'
 
 /**
- * The plan editor over a sample plan, on mock data alone: until M44 gives a ticket its plans, there is no plan to open
- * on a real journal, and this page is where the editor is tried and tested (docs/design/PLANNING.md §25). Nothing on it
- * is saved: what Ask for changes would send the planner shows under the editor instead, with the plan's Markdown.
+ * The plan editor over a sample plan, on mock data alone: where the editor is tried and tested on its own
+ * (docs/design/PLANNING.md §25). A ticket's own plan opens on its page. Nothing here is saved: what Ask for changes
+ * would send the planner shows under the editor instead, with the plan's Markdown.
  */
 export const Route = createFileRoute('/plan-editor')({
     component: PlanEditorPage,
@@ -23,8 +23,8 @@ function PlanEditorPage() {
     return (
         <>
             <PageHeader root="Plans" title="Plan editor">
-                A sample plan to edit and comment on. A ticket&apos;s plan opens like this on its page once plans are
-                built (M44); nothing here is saved.
+                A sample plan to edit and comment on. A ticket&apos;s own plan opens like this on its page; nothing here
+                is saved.
             </PageHeader>
             {meta === undefined && (
                 <Panel>
@@ -33,9 +33,7 @@ function PlanEditorPage() {
             )}
             {meta?.mock === false && (
                 <Panel>
-                    <Empty size="panel">
-                        no plan editor here yet: a ticket&apos;s plan opens on its page once plans are built (M44)
-                    </Empty>
+                    <Empty size="panel">no sample here: a ticket&apos;s plan opens on its page</Empty>
                 </Panel>
             )}
             {meta?.mock === true && <Sample />}

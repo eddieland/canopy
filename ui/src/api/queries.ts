@@ -19,6 +19,10 @@ export const keys = {
     tickOutput: (id: number) => ['transcript', 'tick', id, 'output'] as const,
     tickets: ['tickets'] as const,
     ticket: (key: string) => ['ticket', key] as const,
+    // Under the ticket's key, so the stream's `ticket.changed` marks its plans stale too: a plan run's end changes
+    // both.
+    ticketPlans: (key: string) => ['ticket', key, 'plans'] as const,
+    ticketPlan: (key: string, id: number) => ['ticket', key, 'plans', id] as const,
     chores: ['chores'] as const,
     chore: (name: string) => ['chore', name] as const,
     // A chore run, and its transcript: read again only when the stream says the run's status changed.
@@ -160,6 +164,28 @@ export function ticketQuery(key: string) {
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/tickets/{key}', { params: { path: { key } }, signal })),
         // A ticket from another page's data is a different ticket: never show it while this one loads.
+        placeholderData: undefined,
+    })
+}
+
+/** A ticket's plans: whether it needs one, its newest as the file stands, every plan, and the comments (DESIGN §25). */
+export function ticketPlansQuery(key: string) {
+    return queryOptions({
+        queryKey: keys.ticketPlans(key),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/tickets/{key}/plans', { params: { path: { key } }, signal })),
+        placeholderData: undefined,
+    })
+}
+
+/** One of a ticket's plans, an earlier one too, as its file stands: what `canopy show --plans` prints. */
+export function ticketPlanQuery(key: string, id: number) {
+    return queryOptions({
+        queryKey: keys.ticketPlan(key, id),
+        queryFn: async ({ signal }) =>
+            unwrap(
+                await api.GET('/api/tickets/{key}/plans/{plan_id}', { params: { path: { key, plan_id: id } }, signal }),
+            ),
         placeholderData: undefined,
     })
 }

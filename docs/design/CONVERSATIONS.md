@@ -451,7 +451,7 @@ The API, under `{base}/api`:
 | `GET /tickets/{key}/plans/{id}` | one of its plans, earlier ones too, as the file stands: `canopy show --plans` (§25) |
 | `POST /tickets/{key}/plan` | `canopy plan KEY --approve`, `canopy plan KEY`, or `--skip`: `approve`, `request`, or `skip` (§25) |
 | `PUT /tickets/{key}/plans/{id}/file` | the plan editor's save: its Markdown over the current plan's file, refused if the file changed since it was read, by its hash (§25) |
-| `POST /tickets/{key}/plan-threads` | a comment on a passage of its plan; `POST .../{id}/replies` a reply, `PATCH .../{id}` an edit or a resolve, `DELETE .../{id}` the thread (§25) |
+| `POST /tickets/{key}/plan-threads` | a comment on a passage of its plan; `POST .../{id}/replies` a reply, `PATCH .../{id}` an edit, a resolve, or the passage's words after an edit of the plan, `DELETE .../{id}` the thread (§25) |
 | `GET /chores` | each configured chore, as `canopy status` lists it: its runs, due time, window, and open findings |
 | `GET /chores/{name}` | one chore defined for this workspace: what `canopy show chore:NAME` prints; 404 for any other |
 | `POST /chores/{name}/replies` | `canopy reply chore:NAME`: a note its next runs read, with the form's submission id |
@@ -609,6 +609,8 @@ for prompt changes (§6), and "why has the loop not picked this up" is answered 
 - A rationale is the overseer's text: untrusted, its control characters dropped and its line breaks kept, where
   `canopy decisions` prints it on one line. It was cut at 2000 characters when recorded (§6).
 - A ticket's page lists the latest 20 decisions about it, its units' included, newest first, each with its tick.
+- A ticket plans touch shows its plan below the rest of its page, in the plan editor, with its comments, its
+  earlier plans, and the operator's word on it (§25, Reading plans).
 - A ticket's page shows its total cost (asked for by the operator, 2026-10-14), as the runtime reported it (§13): every
   run of it, however long ago, and every review run that names it, with how many of each it counted and how many
   reported nothing. Not the overseer's: a tick decides for the whole workspace, so its cost is no ticket's.

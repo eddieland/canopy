@@ -986,20 +986,16 @@ web UI by commenting on its passage, approves the second plan from the CLI, and 
 the plan in its summary. A week later the plan is still on the ticket's page. Nothing about the plan appears on the
 ticket.
 
-Status: in progress. The plan editor is in, over mock data at `/plan-editor`: Markdown in and out, comments anchored
-by their words, and Ask for changes composing the reply (`ui/src/lib/plan-*.ts`, D120). Plans' files and rows are
-in (`core/plans.py`, migration 0033): written once and never replaced, read bounded, approved by the file's hash, and
-superseded by `canopy forget`. Plan runs are in: `canopy dispatch --kind plan` with its guards, `canopy-planner`,
-`worker-plan.md`, and `_run` writing a `done` plan to its file and recording it `proposed`, with the copy of the plan
-it replaces in its desk. The planner writes its plan to a file in its desk rather than its final message (§25, The
-prompt). The gate is in: `policy.plan`, `canopy plan KEY [--skip | --approve]`, `canopy start KEY --plan`, `canopy
-grant KEY plan` (migration 0034, `ticket_grants`), and the `unplanned` and `plan_changed` guards. The overseer's part
-is in: the `plan_proposed` phase and the plan rows, the state block's `plan`, `plan_review`, a blocked planner's
-`awaiting_reply` on a public ticket, and `plan.proposed`. The worker's copy is in: `.canopy-plan.md` where an
-`implement` or `resume` starts, the plan its prompt names (migration 0035, `runs.plan_id`), checked against the
-approved hash, ignored, and removed before the slot goes back, `{{PLAN}}` with the plan's outline, and a harness note
-on a pushed copy. Reading and editing are in for every channel but the page: `canopy show` and `--plans`, the plan
-routes, saving an edit, and the threads' tables (migration 0036). What keeps it open: the ticket page.
+Status: in progress. Everything the tests above name is in, the ticket page included, with its Playwright tests;
+the live check in Accept waits on the operator. The plan editor (`ui/src/lib/plan-*.ts`, D120) opens a ticket's newest
+plan on its page, saves edits and comments as they are made, and decides it through `POST /tickets/{key}/plan`, the
+code `canopy plan` runs. Plans' files and rows (`core/plans.py`, migration 0033), plan runs (`canopy dispatch --kind
+plan`, `canopy-planner`, `worker-plan.md`), the gate (`policy.plan`, `canopy plan KEY [--skip | --approve]`, `canopy
+start KEY --plan`, `canopy grant KEY plan`, migration 0034, and the `unplanned` and `plan_changed` guards), the
+overseer's part (`plan_proposed`, the state block's `plan`, `plan_review`, a blocked planner's `awaiting_reply`,
+`plan.proposed`), the worker's copy (`.canopy-plan.md` of the plan its prompt names, migration 0035, `{{PLAN}}`, and a
+harness note on a pushed copy), and `canopy show`'s plans, the plan routes, and the threads' tables (migration 0036)
+are in. The planner writes its plan to a file in its desk rather than its final message (§25, The prompt).
 
 ## M45. canopy's own worktree pools, replacing treehouse in stages
 
