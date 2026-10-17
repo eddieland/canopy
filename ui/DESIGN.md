@@ -628,14 +628,15 @@ list, an empty state, or a skeleton by hand.
   not JSON; then how long it took. A canopy command that printed a refusal is `failed`, with a `refused: <guard>` chip
   in `status-failed`. It opens to its input and its output (or error), JSON indented and colored as a tick's output is
   with Pretty on (below), every value as written, in monospace blocks at most 24rem tall. A model call is a muted line
-  with its tokens and cost, and its reason only when it is not `tool-calls`, as every call but the last is; it opens the
-  same way to its tokens by kind, each a label and a readout on one line, and All open leaves it closed. A runtime error
-  is tinted `status-failed`. The header has the session id, then a hairline rule and the modes: the order, By call, and
-  All open, a `Toggle` that opens every call turned on and closes them all turned off, and is on too while a search has
-  opened what it found. Above the rows, how many tool calls, failed and refused ones, and model calls, and at that
-  line's end a search field (`Find lines`, `SearchField` at its `sm` size). A search keeps only the rows with a line
-  that holds it, letters in either case and every character taken literally, and says how many lines and rows that is in
-  the field; its matches are marked on the accent's tint as the search page's are (`MarkedText`), inside a block's
+  with its tokens `in · out`, as By call says them, and its cost, and its reason only when it is not `tool-calls`, as
+  every call but the last is; it opens the same way to its tokens by kind, each a label and a readout on one line, and
+  All open leaves it closed. A runtime error is tinted `status-failed`. The header has the session id, then a hairline
+  rule and the modes: the order, By call, and All open, a `Toggle` that opens every call turned on and closes them all
+  turned off, and is on too while a search has opened what it found. Above the rows, how many tool calls, failed and
+  refused ones, and model calls, and at that line's end a search field (`Find lines`, `SearchField` at its `sm` size).
+  A search keeps only the rows with a line that holds it, letters in either case and every character taken literally,
+  and says how many lines and rows that is in the field; its matches are marked on the accent's tint as the search
+  page's are (`MarkedText`), inside a block's
   colored JSON too (`markedTokens`). A tool call whose input or output holds it opens to it, until All open is turned on
   or off; a model call is numbers alone and is never kept. Escape or the clear button empties it, and a search nothing
   matches says so in place of the rows. A By call `Toggle` in the header, as Pretty is, groups the rows by the model
