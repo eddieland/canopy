@@ -46,7 +46,7 @@ from pydantic import (
 )
 
 from canopy.core import contract, hostgit
-from canopy.core.vocab import PoolKind
+from canopy.core.vocab import MemoryMode, PoolKind
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -608,6 +608,29 @@ class Review(Section):
     low_impact: Annotated[StrictStr, Scope.PRIVATE] = ""
 
 
+class Memory(Section):
+    """The `[memory]` table: what workers record of what they learn, and whether later runs read it (DESIGN §28).
+
+    Each tier is `off`, `record` (workers write, no agent reads), or `use`. Private: `use` changes what agents may write
+    into later prompts, and `record` fills what `use` would serve (TRUST_MODEL T7).
+    """
+
+    # Notes a ticket's runs write for its later runs.
+    ticket_notes: Annotated[MemoryMode, Scope.PRIVATE] = MemoryMode.OFF
+    # Lessons workers propose for every run in the workspace, which reach a prompt only once the operator promotes one.
+    proposals: Annotated[MemoryMode, Scope.PRIVATE] = MemoryMode.OFF
+
+    @property
+    def on(self) -> bool:
+        """Whether either tier is on, recording or in use."""
+        return (self.ticket_notes, self.proposals) != (MemoryMode.OFF, MemoryMode.OFF)
+
+    @property
+    def in_use(self) -> bool:
+        """Whether a tier is at `use`, so some run may read memory."""
+        return MemoryMode.USE in (self.ticket_notes, self.proposals)
+
+
 class Loop(Section):
     """The `[loop]` table: how `canopy loop` paces ticks. Every tick runs the overseer, so this sets its spend."""
 
@@ -858,6 +881,7 @@ class Config(Section):
     paths: Paths
     notify: Notify
     serve: Serve
+    memory: Memory
     # Tables of tables, keyed by name; private as a whole (TABLE_SECTIONS).
     chores: Annotated[dict[ChoreName, Chore], Scope.PRIVATE] = {}
 
@@ -879,6 +903,7 @@ SECTIONS: dict[str, type[Section]] = {
     "paths": Paths,
     "notify": Notify,
     "serve": Serve,
+    "memory": Memory,
 }
 
 

@@ -351,7 +351,9 @@ export function PlanEditor({
                         <BubbleMenu
                             editor={editor}
                             pluginKey={BUBBLE}
-                            options={{ placement: 'top' }}
+                            // Fixed, so a bubble over a passage below the window never makes the window scroll: the
+                            // window would scroll back as the bubble hides, under a click on the toolbar's Comment.
+                            options={{ placement: 'top', strategy: 'fixed' }}
                             className="rounded-md border bg-surface p-0.5"
                             data-testid="plan-bubble"
                         >

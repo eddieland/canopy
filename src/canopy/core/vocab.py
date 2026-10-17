@@ -160,3 +160,39 @@ class PoolKind(StrEnum):
 
     TREEHOUSE = "treehouse"
     CANOPY = "canopy"
+
+
+class MemoryMode(StrEnum):
+    """A memory tier's mode, `memory.ticket_notes` and `memory.proposals`, and `run_memory`'s columns (DESIGN §28)."""
+
+    OFF = "off"
+    # Workers write, and no agent reads what they wrote.
+    RECORD = "record"
+    USE = "use"
+
+
+class MemoryScope(StrEnum):
+    """What a memory is, `memories.scope` (DESIGN §28): a ticket's note, a worker's proposal, or a lesson."""
+
+    TICKET = "ticket"
+    PROPOSAL = "proposal"
+    LESSON = "lesson"
+
+
+class MemoryStatus(StrEnum):
+    """Where a memory stands, `memories.status` (DESIGN §28)."""
+
+    # A note or a lesson in force.
+    ACTIVE = "active"
+    # A proposal waiting on the operator.
+    PENDING = "pending"
+    # A newer one replaced it under its key, or a proposal the operator promoted.
+    SUPERSEDED = "superseded"
+    INVALID = "invalid"
+
+
+class MemoryAuthor(StrEnum):
+    """Who wrote a memory, `memories.author` (DESIGN §28): a worker a note or a proposal, the operator a lesson."""
+
+    WORKER = "worker"
+    OPERATOR = "operator"
