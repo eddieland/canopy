@@ -2784,6 +2784,11 @@ export type components = {
              */
             ticket_title: string | null;
             /**
+             * Title
+             * @description Its own title, as the worker that opened or last updated it reported it: untrusted text; None until one does.
+             */
+            title: string | null;
+            /**
              * Url
              * @description The PR's URL: an opaque https:// string canopy never parses.
              */

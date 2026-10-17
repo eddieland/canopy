@@ -36,6 +36,8 @@ from tests.canopy.helpers import (
 from tests.conftest import CanopyEnv, executable, git
 
 PRS = {"api": "https://x.test/api/pull/1", "web": "https://x.test/web/pull/2", "docs": "https://x.test/docs/pull/3"}
+# Each PR's own title as the worker reports it: web's spans lines, and docs is not one of the run's repositories.
+TITLES = {"api": "PROJ-1: add the endpoint", "web": "PROJ-1: call\n  the endpoint", "docs": "PROJ-1: document it"}
 
 
 def dispatch(key: str, *args: str, kind: str = "implement") -> list[str]:
@@ -50,8 +52,9 @@ def push_in(repo: str, message: str = "PROJ-1: the change") -> list[list[str]]:
     ]
 
 
-def done(prs: dict[str, str]) -> str:
-    return json.dumps({"status": "done", "branch": BRANCH, "prs": prs, "summary": "changed both"})
+def done(prs: dict[str, str], titles: dict[str, str] | None = None) -> str:
+    result = {"status": "done", "branch": BRANCH, "prs": prs, "summary": "changed both"}
+    return json.dumps(result if titles is None else {**result, "pr_titles": titles})
 
 
 def slots_of(conn: sqlite3.Connection, run_id: int) -> dict[str, Path]:
@@ -66,7 +69,7 @@ def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
     conn = ws.journal()
     with (
         in_tick(conn) as tick_id,
-        worker_does(["readlink", "api"], *push_in("api"), *push_in("web"), result=done(PRS)),
+        worker_does(["readlink", "api"], *push_in("api"), *push_in("web"), result=done(PRS, TITLES)),
     ):
         assert main(dispatch("PROJ-1", "--repo", "api", "--repo", "web", "--repo", "api")) == 0
         run = wait_for_run(conn, 1)
@@ -92,6 +95,10 @@ def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
             "web": (BRANCH, PRS["web"]),
         }
         assert json.loads(run["result_json"])["prs"] == {"api": PRS["api"], "web": PRS["web"]}
+        # Each PR's own title is recorded by its URL, on one line; docs's is not.
+        titles = {"api": TITLES["api"], "web": "PROJ-1: call the endpoint"}
+        assert json.loads(run["result_json"])["pr_titles"] == titles
+        assert {r["url"]: r["pr_title"] for r in db.pull_requests(conn, 10)} == {PRS[r]: t for r, t in titles.items()}
         [(action, rationale)] = decisions(conn, tick_id)
         assert action == "dispatch:implement"
         assert (
@@ -105,6 +112,7 @@ def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
         assert f"- `web` at `{desk / 'web'}`: branch `{BRANCH}` from `main`; PR: not recorded;" in prompt
         assert "Each PR's body links its sibling PRs and says which one merges first." in prompt
         assert '"prs":{"api":"<url or null>","web":"<url or null>"}' in prompt
+        assert '"pr_titles":{"api":"<its title or null>","web":"<its title or null>"}' in prompt
 
         # The next run is told each unit's PR.
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")

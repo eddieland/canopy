@@ -126,4 +126,4 @@ Do not guess on decisions that would be expensive to reverse.
 
 Your last line of stdout must be exactly one JSON object and nothing after it:
 
-{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"summary":"<one paragraph>","question":"<only when blocked>"}{{MEMORY_CONTRACT}}
+{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"pr_titles":{{PR_TITLES}},"summary":"<one paragraph>","question":"<only when blocked>"}{{MEMORY_CONTRACT}}

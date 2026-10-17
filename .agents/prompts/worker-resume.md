@@ -147,4 +147,4 @@ body you wrote.
 
 Last line of stdout, exactly one JSON object:
 
-{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"summary":"<what you addressed>","question":"<only when blocked>"}{{MEMORY_CONTRACT}}
+{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"pr_titles":{{PR_TITLES}},"summary":"<what you addressed>","question":"<only when blocked>"}{{MEMORY_CONTRACT}}

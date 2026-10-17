@@ -90,12 +90,12 @@ def _pull_request(conn: sqlite3.Connection, row: sqlite3.Row, reviews: Sequence[
     request = review_requests.latest_request(conn, str(row["url"]))
     key = row["ticket_key"] or next((r.ticket_key for r in reviews if r.ticket_key), None)
     repo = row["repo"] or next((r.repo for r in reviews if r.repo), None)
-    title = " ".join(conversation.printable(str(row["title"])).split()) if row["title"] else ""
     running = db.running_run_of(conn, str(key)) if key else None
     return PullRequest(
         url=str(row["url"]),
         ticket_key=str(key) if key else None,
-        ticket_title=title or None,
+        ticket_title=_one_line(row["title"]),
+        title=_one_line(row["pr_title"]),
         repo=str(repo) if repo else None,
         branch=str(row["branch"]) if row["branch"] else None,
         phase=str(row["phase"]) if row["phase"] else None,
@@ -105,6 +105,11 @@ def _pull_request(conn: sqlite3.Connection, row: sqlite3.Row, reviews: Sequence[
         latest_review=summary(reviews[0]) if reviews else None,
         review_request=review_request(request) if request is not None else None,
     )
+
+
+def _one_line(text: object) -> str | None:
+    found = " ".join(conversation.printable(str(text)).split()) if text else ""
+    return found or None
 
 
 def _runs(conn: sqlite3.Connection, key: str, url: str) -> list[sqlite3.Row]:

@@ -506,6 +506,15 @@ def set_unit(
             conn.execute(f"UPDATE ticket_units SET pr_url = ? {where}", (pr_url, key, unit))  # noqa: S608
 
 
+def set_pr_title(conn: sqlite3.Connection, pr_url: str, title: str) -> None:
+    """Record `title` as the PR's own title, replacing any earlier one: for display, never as truth (DESIGN §22)."""
+    conn.execute(
+        "INSERT INTO pr_titles (pr_url, title, updated_at) VALUES (?, ?, ?) "
+        "ON CONFLICT (pr_url) DO UPDATE SET title = excluded.title, updated_at = excluded.updated_at",
+        (pr_url, title, now()),
+    )
+
+
 def units(conn: sqlite3.Connection, key: str) -> list[sqlite3.Row]:
     """Return `key`'s units, by repository."""
     return conn.execute("SELECT * FROM ticket_units WHERE ticket_key = ? ORDER BY repo", (key,)).fetchall()
@@ -1208,8 +1217,8 @@ def pull_requests(conn: sqlite3.Connection, limit: int, *, url: str | None = Non
     A PR is known by a ticket's unit, whose activity is the ticket's last sighting, by a review run, whose activity
     is its start or end, or by the operator's review request, whose activity is when it was made or ended. Each row
     has `url` and `active_at`, and the unit's `ticket_key`, `repo`, `branch`, `phase`, and the ticket's `title`, all
-    NULL for a PR no unit records. Decisions are not a source: they are many. Only the candidates `_candidates` finds
-    are weighed, so the read costs what `limit` does.
+    NULL for a PR no unit records, and the PR's own `pr_title`, NULL until a worker reports one. Decisions are not a
+    source: they are many. Only the candidates `_candidates` finds are weighed, so the read costs what `limit` does.
     """
     if limit < 1:
         return []
@@ -1220,7 +1229,7 @@ def pull_requests(conn: sqlite3.Connection, limit: int, *, url: str | None = Non
 
 def _weighed_pull_requests(conn: sqlite3.Connection, urls: str, limit: int) -> list[sqlite3.Row]:
     return conn.execute(
-        "SELECT k.url, max(k.at) AS active_at, u.ticket_key, u.repo, u.branch, u.phase, t.title "
+        "SELECT k.url, max(k.at) AS active_at, u.ticket_key, u.repo, u.branch, u.phase, t.title, p.title AS pr_title "
         "FROM ("
         "  SELECT u.pr_url AS url, t.last_seen_at AS at FROM ticket_units u JOIN tickets t ON t.key = u.ticket_key"
         "  WHERE u.pr_url IN (SELECT value FROM json_each(?))"
@@ -1230,6 +1239,7 @@ def _weighed_pull_requests(conn: sqlite3.Connection, urls: str, limit: int) -> l
         "  WHERE pr_url IN (SELECT value FROM json_each(?))"
         ") k "
         "LEFT JOIN ticket_units u ON u.pr_url = k.url LEFT JOIN tickets t ON t.key = u.ticket_key "
+        "LEFT JOIN pr_titles p ON p.pr_url = k.url "
         "GROUP BY k.url ORDER BY active_at DESC, k.url LIMIT ?",
         (urls, urls, urls, limit),
     ).fetchall()

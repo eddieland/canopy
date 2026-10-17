@@ -59,6 +59,7 @@ def test_worker_that_pushes_is_done(
         "branch": "agent/PROJ-1-work",
         "pr": "https://example.test/pr/1",
         "prs": {"repo": "https://example.test/pr/1"},  # a result from before joint runs is read as the new contract
+        "pr_titles": None,  # nor did it report its PR's title
         "summary": "did it",
         "question": None,
     }

@@ -56,6 +56,7 @@ PROMPT_VALUES = {
     "PR_URL": "https://example.test/pr/1",
     "REPOSITORIES": "This run works in one repository:\n- `repo` at `/pool/1/repo`: branch `agent/PROJ-1-work`",
     "PRS": '{"repo":"<url or null>"}',
+    "PR_TITLES": '{"repo":"<its title or null>"}',
     "CONTEXT": "None.",
     "AUTHORIZED_REPLIERS": "`alice`",
     "LABELS": "`agent-ready-alice`",

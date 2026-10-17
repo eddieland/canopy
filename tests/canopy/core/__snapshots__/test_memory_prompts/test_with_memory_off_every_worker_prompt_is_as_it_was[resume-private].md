@@ -130,4 +130,4 @@ body you wrote.
 
 Last line of stdout, exactly one JSON object:
 
-{"status":"done|blocked|failed","branch":"agent/PROJ-1-work","prs":{"repo":"<url or null>"},"summary":"<what you addressed>","question":"<only when blocked>"}
+{"status":"done|blocked|failed","branch":"agent/PROJ-1-work","prs":{"repo":"<url or null>"},"pr_titles":{"repo":"<its title or null>"},"summary":"<what you addressed>","question":"<only when blocked>"}

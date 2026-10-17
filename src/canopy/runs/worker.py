@@ -55,6 +55,8 @@ MAX_TEXT = 2000
 # A child key is a ticket key, and bounded like every other value an agent reports.
 MAX_CHILD_KEY = 100
 MAX_PR_URL = 500
+# GitHub's own limit on a PR's title.
+MAX_PR_TITLE = 256
 _GIT_TIMEOUT_SECONDS = 300
 # The repository whose slot `setup_cmd` runs in, by its name in the map, and the run's branch, which the slot has
 # checked out detached (DESIGN §8).
@@ -71,13 +73,14 @@ class _SetupError(Exception):
 
 
 Text = Annotated[StrictStr, contract.bounded(MAX_TEXT)]
+PrTitle = Annotated[StrictStr, contract.one_line, contract.bounded(MAX_PR_TITLE)]
 
 
 class WorkerResult(BaseModel):
     """The worker result contract (DESIGN §8, §18): the last line of the worker's stdout. Untrusted, so bounded.
 
-    `prs` maps each repository's name to its PR. `pr` is the contract before joint runs, still accepted for a run in
-    one repository.
+    `prs` maps each repository's name to its PR, and `pr_titles` to that PR's title, which need not be the ticket's.
+    `pr` is the contract before joint runs, still accepted for a run in one repository.
     """
 
     model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
@@ -86,15 +89,22 @@ class WorkerResult(BaseModel):
     branch: Text | None = None
     pr: Text | None = None
     prs: dict[StrictStr, Text | None] | None = None
+    pr_titles: dict[StrictStr, PrTitle | None] | None = None
     summary: Text = ""
     question: Text | None = None
 
     def for_repos(self, repos: Sequence[str]) -> Self:
-        """Return this result with `prs` kept to `repos`, the repositories the run worked in, and filled from `pr`."""
+        """Return this result with `prs` and `pr_titles` kept to `repos`, the repositories the run worked in.
+
+        `prs` is filled from `pr`; a result old enough to use `pr` carries no titles.
+        """
         prs = {r: self.prs.get(r) for r in repos if r in self.prs} if self.prs is not None else None
         if prs is None and self.pr is not None and len(repos) == 1:
             prs = {repos[0]: self.pr}
-        return self.model_copy(update={"prs": prs})
+        titles = self.pr_titles
+        if titles is not None:
+            titles = {r: titles[r] for r in repos if r in titles}
+        return self.model_copy(update={"prs": prs, "pr_titles": titles})
 
 
 class SplitResult(BaseModel):
@@ -977,12 +987,15 @@ def _remove_desk(ctx: Context, key: str, log: logs.TickAdapter) -> None:
 
 
 def _record_prs(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
-    """Record each PR the worker reported as its unit's, for display and the next worker's prompt."""
+    """Record each PR the worker reported as its unit's, for display and the next worker's prompt, and its title."""
     if not isinstance(outcome.result, WorkerResult) or not outcome.result.prs:
         return
+    titles = outcome.result.pr_titles or {}
     for repo, url in outcome.result.prs.items():
         if url and contract.plain_url(url, MAX_PR_URL):
             db.set_unit(ctx.conn, str(run["ticket_key"]), ctx.repo, repo, pr_url=url)
+            if title := titles.get(repo):
+                db.set_pr_title(ctx.conn, url, title)
 
 
 class _Git:
