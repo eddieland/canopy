@@ -130,12 +130,31 @@ describe('PlanHighlights', () => {
         expect(highlightsKey.getState(editor.state)?.active).toBeUndefined()
     })
 
+    it('opens the thread whose passage the cursor moves into, the innermost, never a resolved one', () => {
+        const editor = open(PLAN)
+        sync(editor, [placed('a', 'Stream the rows'), placed('b', 'the rows'), placed('c', 'a large report', true)])
+        editor.commands.setTextSelection(posOf(editor, 'Stream') + 1)
+        expect(highlightsKey.getState(editor.state)?.active).toBe('a')
+        editor.commands.setTextSelection(posOf(editor, 'rows') + 1)
+        expect(highlightsKey.getState(editor.state)?.active).toBe('b')
+        editor.commands.setTextSelection(posOf(editor, 'large') + 1)
+        expect(highlightsKey.getState(editor.state)?.active).toBeUndefined()
+    })
+
     it('closes the open thread on Escape, and leaves Escape alone with none open', () => {
         const editor = open(PLAN)
         sync(editor, [placed('a', 'the rows')])
         expect(press(editor, 'Escape')).toBe(false)
         editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id: 'a' }))
         expect(press(editor, 'Escape')).toBe(true)
+        expect(highlightsKey.getState(editor.state)?.active).toBeUndefined()
+    })
+
+    it('closes the open thread when it is resolved', () => {
+        const editor = open(PLAN)
+        sync(editor, [placed('a', 'the rows')])
+        editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id: 'a' }))
+        sync(editor, [placed('a', 'the rows', true)])
         expect(highlightsKey.getState(editor.state)?.active).toBeUndefined()
     })
 
