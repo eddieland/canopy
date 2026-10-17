@@ -71,6 +71,20 @@ def test_decide_needs_a_key_except_for_skip(canopy_env: CanopyEnv, conn: sqlite3
         assert main(["decide", "PROJ-1", "wait", "extra", "--rationale", "r"]) == 2
 
 
+def test_only_a_tick_wide_reason_skips_the_tick(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with in_tick(conn) as tick_id:
+        assert main(["decide", "skip", "--rationale", "wanted to relabel PROJ-1"]) == 2
+        assert "a skip about one ticket names its key" in capsys.readouterr().err
+        assert main(["decide", "queue", "skip", "--rationale", "tracker_unsupported: queue is not an issue"]) == 2
+        assert "'tracker_unsupported' skips the whole tick and names no key" in capsys.readouterr().err
+        assert main(["decide", "skip", "--rationale", "tracker_unsupported: labels"]) == 0
+        assert main(["decide", "PROJ-1", "wait", "--rationale", "mcp_unavailable: github, for its PR"]) == 0
+        rows = [(d.ticket_key, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]
+        assert rows == [(None, "tracker_unsupported: labels"), ("PROJ-1", "mcp_unavailable: github, for its PR")]
+
+
 def test_long_text_is_truncated(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     with in_tick(conn) as tick_id:
         assert main(["decide", "PROJ-1", "wait", "--rationale", "x" * 5000]) == 0
