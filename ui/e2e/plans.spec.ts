@@ -31,6 +31,31 @@ test("a ticket's newest plan opens in the editor, its comments on their passages
     await expect(page.getByRole('form', { name: 'Ask for changes' })).toBeVisible()
 })
 
+test('a plan that waits on the operator leads the page, above its Work panel', async ({ page }) => {
+    const section = await page.getByTestId('ticket-plan').boundingBox()
+    const work = await page.getByTestId('ticket-actions').boundingBox()
+    expect(section?.y).toBeLessThan(work?.y ?? 0)
+    await expect(page.getByTestId('ticket-plan')).toBeInViewport()
+})
+
+test('the page waits for its plans to paint, so a plan that leads it never pushes it down', async ({ page }) => {
+    let release: (() => void) | undefined
+    const held = new Promise<void>((resolve) => {
+        release = resolve
+    })
+    await page.route('**/api/tickets/ABC-105/plans', async (route) => {
+        await held
+        await route.continue()
+    })
+    await page.reload()
+    await expect(page.getByRole('heading', { name: /ABC-105/u })).toBeVisible()
+    await expect(page.getByTestId('ticket-actions')).toHaveCount(0)
+    release?.()
+    const section = await page.getByTestId('ticket-plan').boundingBox()
+    const work = await page.getByTestId('ticket-actions').boundingBox()
+    expect(section?.y).toBeLessThan(work?.y ?? 0)
+})
+
 test('an earlier plan opens read only', async ({ page }) => {
     const earlier = page.getByTestId('earlier-plans')
     await expect(earlier).toContainText('superseded')

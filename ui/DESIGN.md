@@ -233,7 +233,10 @@ Rules:
   decisions, and the attention detail, the other place a ticket is answered, reads in the same order: the item, the
   ticket's actions and any limit it is stuck at, then its conversation and the reply. An action over a whole list
   sits in that list's panel header, as a transcript's All open does: the worktrees' Read again heads their one Pools
-  panel, a section per pool in it.
+  panel, a section per pool in it. A ticket whose plan waits on the operator (proposed, no planner running) leads with
+  the plan instead, above its Work panel, since the plan is what they came to answer and its own line says where the
+  ticket stands; otherwise its plan follows the lists. Where it sits is settled as the page opens, so a plan approved
+  there stays where it was read.
 - **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
   section's name in its color, then the pages between it and this one. On the section's own list the name is plain
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
