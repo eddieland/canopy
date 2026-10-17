@@ -232,8 +232,13 @@ function ThreadCard({
     // What is being edited: the comment, or a reply by its id.
     const [editing, setEditing] = useState<string | undefined>(undefined)
     const [deleting, setDeleting] = useState(false)
+    // Nothing in the card is open: no reply, edit, or question being answered.
+    const idle = editable && editing === undefined && !replying && !deleting
     // An open thread's words can be edited while nothing else in its card is open.
-    const startEdit = editable && !thread.resolved && editing === undefined && !replying && !deleting
+    const startEdit = idle && !thread.resolved
+    // Reply shows on the card that is open, as a shared document's does, so the rest stay short and near their
+    // passages; on one whose passage is gone too, which cannot be opened from the plan.
+    const canReply = idle && !thread.resolved && (active || lost)
     // Keep gives the focus back to Delete, which opened the question, rather than drop it to the page's top.
     const [kept, setKept] = useState(false)
     const deleteAction = useRef<HTMLButtonElement>(null)
@@ -277,6 +282,32 @@ function ThreadCard({
                 <Quote text={thread.anchor.quote} onClick={lost ? undefined : () => onActivate(thread.id)} />
                 {lost && <Chip className="mt-0.5">passage gone</Chip>}
                 {thread.resolved && <Chip className="mt-0.5">resolved</Chip>}
+                {idle && (
+                    <div className="-my-0.5 -mr-1.5 flex shrink-0 items-center">
+                        <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={thread.resolved ? 'Reopen' : 'Resolve'}
+                            title={thread.resolved ? 'Reopen' : 'Resolve'}
+                            onClick={() => onResolve(thread.id, !thread.resolved)}
+                        >
+                            {thread.resolved ? <RotateCcw aria-hidden /> : <Check aria-hidden />}
+                        </Button>
+                        <Button
+                            ref={deleteAction}
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label="Delete"
+                            title="Delete"
+                            onClick={() => {
+                                setKept(false)
+                                setDeleting(true)
+                            }}
+                        >
+                            <Trash2 aria-hidden />
+                        </Button>
+                    </div>
+                )}
             </div>
             {editing === COMMENT ? (
                 <CommentForm
@@ -353,29 +384,11 @@ function ThreadCard({
                     }}
                 />
             )}
-            {editable && !replying && !deleting && editing === undefined && (
-                <div className="-ml-2 flex flex-wrap items-center gap-0.5">
-                    {!thread.resolved && (
-                        <Button variant="ghost" size="xs" onClick={() => setReplying(true)}>
-                            <Reply aria-hidden />
-                            Reply
-                        </Button>
-                    )}
-                    <Button variant="ghost" size="xs" onClick={() => onResolve(thread.id, !thread.resolved)}>
-                        {thread.resolved ? <RotateCcw aria-hidden /> : <Check aria-hidden />}
-                        {thread.resolved ? 'Reopen' : 'Resolve'}
-                    </Button>
-                    <Button
-                        ref={deleteAction}
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => {
-                            setKept(false)
-                            setDeleting(true)
-                        }}
-                    >
-                        <Trash2 aria-hidden />
-                        Delete
+            {canReply && (
+                <div className="-ml-2">
+                    <Button variant="ghost" size="xs" onClick={() => setReplying(true)}>
+                        <Reply aria-hidden />
+                        Reply
                     </Button>
                 </div>
             )}
