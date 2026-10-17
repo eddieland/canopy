@@ -20,6 +20,7 @@ from tests.canopy.helpers import (
     in_tick,
     overseer_does,
     prompt_of,
+    state_block,
     unit_of,
     wait_for_run,
     worker_does,
@@ -58,7 +59,7 @@ def test_fix_ci_continues_the_recorded_branch(
 def test_resume_prompt_points_at_the_reply_and_names_the_repliers(
     canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
 ) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + '\n[trust]\nauthorized_repliers = ["alice", "5b10ac"]\n')
+    canopy_env.append_user('\n[trust]\nauthorized_repliers = ["alice", "5b10ac"]\n')
     blocked = json.dumps({"status": "blocked", "summary": "unclear", "question": "which API?"})
     with worker_does(result=blocked):
         first = dispatch_and_run(conn, "--label", "agent-ready-tester", "--kind", "implement")
@@ -131,7 +132,7 @@ def test_implement_attempt_limit_refuses_and_raises_attention(
 def test_a_limit_of_zero_disables_the_kind(
     canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection
 ) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[policy]\nmax_resume_attempts = 0\n")
+    canopy_env.append_user("\n[policy]\nmax_resume_attempts = 0\n")
     db.touch_ticket(conn, "PROJ-1", "repo")
     conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-work'")
     conn.execute("INSERT INTO ticket_units (ticket_key, repo, branch) VALUES ('PROJ-1', 'repo', 'agent/PROJ-1-work')")
@@ -158,7 +159,7 @@ def test_fix_ci_cooldown_runs_from_the_end_of_the_last_fix(
 def test_cursors_advance_only_when_the_worker_starts(
     canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
 ) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[capacity]\nmax_workers = 1\n")
+    canopy_env.append_user("\n[capacity]\nmax_workers = 1\n")
     with in_tick(conn):
         runner = InlineRunner()
         assert (
@@ -212,8 +213,7 @@ def test_state_block_shows_attempts_and_the_cooldown(
         fix = dispatch_and_run(conn, "--label", "agent-ready-tester", "--kind", "fix-ci")
     with overseer_does(canopy("decide", "PROJ-1", "wait", "--rationale", "the fix-ci cooldown holds")):
         assert main(["tick"]) == 0
-    prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
-    state = json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])
+    state = state_block(agent_log)
     [ticket] = state["tickets"]
     [unit] = ticket["units"]
     assert (unit["repo"], unit["branch"]) == ("repo", "agent/PROJ-1-work")

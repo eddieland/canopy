@@ -1,9 +1,7 @@
 """The overseer's duties, checked when a tick ends (DESIGN §6 step 5), and `canopy queried`, which records the query."""
 
-import os
 import sqlite3
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
@@ -11,10 +9,8 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.vocab import TickStatus
 from canopy.loop import attention, duties
-from tests.canopy.helpers import canopy, chore_toml, in_tick, overseer_does, state_block
+from tests.canopy.helpers import canopy, chore_toml, in_tick, operator, overseer_does, state_block
 from tests.conftest import CanopyEnv
-
-LABEL = "agent-ready-tester"
 
 
 def wait(key: str) -> list[str]:
@@ -113,10 +109,8 @@ def test_stopped_and_recently_done_tickets_are_owed_nothing(canopy_env: CanopyEn
         db.set_ticket(conn, "PROJ-2", repo, done=True)
         db.record_decision(conn, tick_id, "PROJ-2", "done", "merged")
         db.finish_tick(conn, tick_id, TickStatus.OK, "")
-    with mock.patch.dict(os.environ):
-        os.environ.pop("CANOPY_TICK_ID", None)
-        assert main(["start", "PROJ-1"]) == 0
-        assert main(["stop", "PROJ-1"]) == 0
+    assert operator("start", "PROJ-1") == 0
+    assert operator("stop", "PROJ-1") == 0
     # The query still finds both open in the tracker, and the overseer names them as it found them.
     with overseer_does(queried='["PROJ-1", "PROJ-2"]'):
         assert main(["tick"]) == 0
@@ -128,7 +122,7 @@ def test_a_due_chore_left_undecided_fails_the_tick(canopy_env: CanopyEnv) -> Non
     prompt = canopy_env.home / "chores" / "build-health.md"
     prompt.parent.mkdir()
     prompt.write_text("# Build health\n")
-    canopy_env.write_user(canopy_env.user_file.read_text() + chore_toml())
+    canopy_env.append_user(chore_toml())
     conn = canopy_env.journal()
     with overseer_does():
         assert main(["tick"]) == 1

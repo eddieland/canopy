@@ -4,7 +4,6 @@ import contextlib
 import json
 import os
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
@@ -14,10 +13,19 @@ from canopy.core.vocab import RunStatus
 from canopy.loop import attention
 from canopy.setup import workspace as setup_workspace
 from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools, th
-from tests.canopy.helpers import InlineRunner, commit_and_push, decisions, in_tick, wait_for_run, worker_does
+from tests.canopy.helpers import (
+    LABEL,
+    InlineRunner,
+    canopy,
+    commit_and_push,
+    decisions,
+    in_tick,
+    json_block,
+    overseer_does,
+    wait_for_run,
+    worker_does,
+)
 from tests.conftest import CanopyEnv, git
-
-LABEL = "agent-ready-tester"
 
 
 def dispatch(key: str, *args: str) -> list[str]:
@@ -170,14 +178,13 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(ws: Ws, treehous
         map_text(("api", str(ws.origins["api"])), ("docs", "https://x.test/docs.git"), ("web", str(ws.origins["web"])))
     )
     (ws.root / "MAP.md").write_text("# map\n")
-    commands = json.dumps([["canopy", *dispatch("PROJ-1", "--repo", "api")], ["canopy", *dispatch("PROJ-2")]])
-    with mock.patch.dict(os.environ, {"FAKE_AGENT_COMMANDS": commands, "FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does(canopy(*dispatch("PROJ-1", "--repo", "api")), canopy(*dispatch("PROJ-2"))):
         assert main(["tick", "--dry-run"]) == 0
 
     [run] = [json.loads(line) for line in agent_log.read_text().splitlines()]
     assert run["cwd"] == str(ws.root)
     prompt = run["argv"][3]
-    state = json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])
+    state = json_block(prompt)
     assert state["workspace"] == {"name": "acme", "map": str(ws.root / "MAP.md")}
     assert [(r["name"], r["summary"], r["cloned"], r["leased_slots"]) for r in state["repositories"]] == [
         ("api", "The api repository.", True, []),
@@ -217,7 +224,7 @@ def test_items_about_two_repositories_are_two_items(
     notified = tmp_path / "notified.txt"
     user = Path(os.environ["XDG_CONFIG_HOME"]) / "canopy" / "config.toml"
     user.write_text(user.read_text() + f"\n[notify]\ncmd = 'sh -c \"cat >> {notified}\"'\n")
-    with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does():
         assert main(["tick", "--dry-run"]) == 0
         assert [(i.subject, i.reason) for i in attention.current(ws.journal())] == [
             ("a", "repo_missing"),
@@ -328,8 +335,7 @@ def test_reconcile_returns_leases_in_each_pool(ws: Ws, treehouse_state: Path, ag
             env={"TREEHOUSE_ROOT": str(ws.root)},
         ).ok
         conn.execute("UPDATE runs SET pid = 999999999")  # _run is gone
-    wait = json.dumps([["canopy", "decide", "PROJ-1", "wait", "--rationale", "its run crashed"]])
-    with mock.patch.dict(os.environ, {"FAKE_AGENT_COMMANDS": wait, "FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does(canopy("decide", "PROJ-1", "wait", "--rationale", "its run crashed")):
         assert main(["tick", "--dry-run"]) == 0
 
     run = db.get_run(conn, 1)

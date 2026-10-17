@@ -13,7 +13,7 @@ import pytest
 from canopy.core import hostgit
 from canopy.infra.procs import SubprocessRunner
 from tests.canopy.helpers import WORK, dispatch_and_run, pool, slot_of, worker_does
-from tests.conftest import CanopyEnv, GitPool, git
+from tests.conftest import CanopyEnv, GitPool, executable, git
 
 PACKAGE = Path(__file__).resolve().parents[2] / "src" / "canopy"
 # The worker's own git is not under test: it runs with the flags too, so only host-side git could fire a hook.
@@ -25,11 +25,9 @@ def plant(primary: Path, fired: Path) -> None:
     """Plant hooks and a filesystem monitor in the shared git directory, each recording that it ran."""
     for name in HOOKS:
         hook = primary / ".git" / "hooks" / name
-        hook.write_text(f"#!/bin/sh\necho {name} >> {fired}\ncat > /dev/null\n")
-        hook.chmod(0o755)
+        executable(hook, f"#!/bin/sh\necho {name} >> {fired}\ncat > /dev/null\n")
     monitor = primary / ".git" / "fsmonitor"
-    monitor.write_text(f"#!/bin/sh\necho fsmonitor >> {fired}\nexit 1\n")
-    monitor.chmod(0o755)
+    executable(monitor, f"#!/bin/sh\necho fsmonitor >> {fired}\nexit 1\n")
     git("config", "core.fsmonitor", str(monitor), cwd=primary)
 
 

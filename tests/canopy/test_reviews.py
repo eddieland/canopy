@@ -5,8 +5,6 @@ import os
 import signal
 import sqlite3
 import time
-from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
 
@@ -24,10 +22,15 @@ from tests.canopy.helpers import (
     commit_and_push,
     in_tick,
     lifelock_left,
+    messages,
     operator,
+    overseer_does,
     pool,
+    pool_statuses,
     state_block,
     tools_of,
+    waits,
+    with_events,
     worker_does,
 )
 from tests.canopy.review_helpers import (
@@ -56,20 +59,10 @@ def reviews(canopy_env: CanopyEnv) -> CanopyEnv:
     return canopy_env
 
 
-@contextmanager
-def overseer_waits(*keys: str) -> Iterator[None]:
-    """Until the block ends, the fake overseer waits on each of `keys` and ends the tick, finding nothing to do."""
-    commands = [["canopy", "decide", key, "wait", "--rationale", "nothing to do yet"] for key in keys]
-    with mock.patch.dict(
-        os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(commands), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
-    ):
-        yield
-
-
 def test_with_reviews_off_nothing_about_them_reaches_the_overseer(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
-    with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does():
         assert main(["tick", "--dry-run"]) == 0
         assert "reviews" not in state_block(agent_log)
         conn = canopy_env.journal()
@@ -79,14 +72,14 @@ def test_with_reviews_off_nothing_about_them_reaches_the_overseer(
 
 
 def test_max_reviews_zero_turns_reviews_off(reviews: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
-    reviews.write_user(reviews.user_file.read_text() + "\n[capacity]\nmax_reviews = 0\n")
-    with overseer_waits("PROJ-1"):
+    reviews.append_user("\n[capacity]\nmax_reviews = 0\n")
+    with overseer_does(*waits("PROJ-1")):
         assert main(["tick", "--dry-run"]) == 0
         assert "reviews" not in state_block(agent_log)
 
 
 def test_a_review_runs_outside_the_checkout_at_the_commit(
-    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path
+    reviews: CanopyEnv, git_pool: GitPool, treehouse_state: Path, agent_log: Path
 ) -> None:
     """M11 against the fakes: the reviewer reads the checkout at the commit through a link, and the slot goes back."""
     conn = reviews.journal()
@@ -115,7 +108,7 @@ def test_a_review_runs_outside_the_checkout_at_the_commit(
         assert checked["stdout"].strip() == sha
         assert not run_dir.exists()  # removed, and its link with it, once the run ended
         assert not lifelock_left(row)
-        assert [s["status"] for s in pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))] == ["available", "available"]
+        assert pool_statuses(treehouse_state) == ["available", "available"]
         [(ticket, pr, action, rationale)] = review_decisions(conn, tick_id)
         assert (ticket, pr, action) == ("PROJ-1", PR, "dispatch:review")
         assert rationale.startswith(f"review run 1: {sha} in ")
@@ -158,8 +151,8 @@ def test_bad_pr(reviews: CanopyEnv, args: list[str], sha: str, reason: str) -> N
         assert rationale.startswith(reason)
 
 
-def test_review_guards(reviews: CanopyEnv, git_pool: GitPool, agent_log: Path) -> None:
-    reviews.write_user(reviews.user_file.read_text() + "\n[policy]\nmax_reviews_per_pr = 2\n")
+def test_review_guards(reviews: CanopyEnv, git_pool: GitPool, treehouse_state: Path, agent_log: Path) -> None:
+    reviews.append_user("\n[policy]\nmax_reviews_per_pr = 2\n")
     conn = reviews.journal()
     sha = head(git_pool)
     other = "b" * 40
@@ -170,15 +163,11 @@ def test_review_guards(reviews: CanopyEnv, git_pool: GitPool, agent_log: Path) -
         assert main(review(sha=sha), runner=runner) == 1  # running
         assert main(review(sha=sha, pr=f"{PR}0"), runner=runner) == 1  # review_capacity: max_reviews is 1
         assert db.finish_run(conn, "review_runs", 1, ReviewRunStatus.DONE, json.dumps(CLEAN))
-        assert runner.run(
-            ["treehouse", "return", "--force", str(pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))[0]["path"])]
-        ).ok
+        assert runner.run(["treehouse", "return", "--force", str(pool(treehouse_state)[0]["path"])]).ok
         assert main(review(sha=sha), runner=runner) == 1  # reviewed
         assert main(review(sha=other), runner=runner) == 0
         assert db.finish_run(conn, "review_runs", 2, ReviewRunStatus.FAILED, "{}")
-        assert runner.run(
-            ["treehouse", "return", "--force", str(pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))[0]["path"])]
-        ).ok
+        assert runner.run(["treehouse", "return", "--force", str(pool(treehouse_state)[0]["path"])]).ok
         assert main(review(sha="c" * 40), runner=runner) == 1  # review_limit
         actions = [d[2] for d in review_decisions(conn, tick_id)]
         assert actions == [
@@ -206,7 +195,7 @@ def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_s
     agent_log: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    reviews.write_user(reviews.user_file.read_text() + "\n[policy]\nmax_reviews_per_pr = 1\n")
+    reviews.append_user("\n[policy]\nmax_reviews_per_pr = 1\n")
     conn = reviews.journal()
     with reviewer_reports(CLEAN):
         run_inline(conn, sha=head(git_pool))
@@ -236,7 +225,7 @@ def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_s
     assert "has had 2 review runs, and may now have 4." in capsys.readouterr().out
 
     # The state block shows a granted PR's grants beside its review runs; a PR with none has no key.
-    with overseer_waits("PROJ-1"):
+    with overseer_does(*waits("PROJ-1")):
         assert main(["tick", "--dry-run"]) == 0
     prs = {p["url"]: p for p in state_block(agent_log)["reviews"]["prs"]}
     assert (prs[PR]["review_runs"], prs[PR]["granted"]) == (2, 3)
@@ -291,7 +280,7 @@ def test_review_grant_refusals(
 def test_a_review_waits_for_its_tickets_worker_and_counts_against_max_workers(
     reviews: CanopyEnv, git_pool: GitPool, agent_log: Path
 ) -> None:
-    reviews.write_user(reviews.user_file.read_text() + "\n[capacity]\nmax_workers = 1\nmax_reviews = 2\n")
+    reviews.append_user("\n[capacity]\nmax_workers = 1\nmax_reviews = 2\n")
     conn = reviews.journal()
     with in_tick(conn) as tick_id:
         runner = InlineRunner()
@@ -305,7 +294,7 @@ def test_a_review_waits_for_its_tickets_worker_and_counts_against_max_workers(
 
 
 def test_a_running_review_takes_worker_capacity(reviews: CanopyEnv, git_pool: GitPool, agent_log: Path) -> None:
-    reviews.write_user(reviews.user_file.read_text() + "\n[capacity]\nmax_workers = 1\n")
+    reviews.append_user("\n[capacity]\nmax_workers = 1\n")
     conn = reviews.journal()
     with in_tick(conn) as tick_id:
         runner = InlineRunner()
@@ -373,10 +362,7 @@ def test_a_plugin_notice_after_the_result_does_not_hide_it(
 ) -> None:
     # A plugin the operator must load prints after the agent's last word; it lands in the text (DESIGN §13).
     if events:
-        text = reviews.user_file.read_text()
-        reviews.write_user(
-            text.replace("--agent canopy-reviewer {prompt}", "--agent canopy-reviewer --format json {prompt}")
-        )
+        with_events(reviews, "canopy-reviewer")
     conn = reviews.journal()
     with reviewer_reports(f"{json.dumps(FINDINGS)}\n[policy-plugin] session audited, 0 violations"):
         row = db.get_review_run(conn, run_inline(conn, sha=head(git_pool)))
@@ -422,7 +408,9 @@ def test_the_review_phases_are_a_units(reviews: CanopyEnv, phase: str) -> None:
         assert unit["phase"] == phase
 
 
-def test_a_commit_origin_does_not_have_fails_the_review(reviews: CanopyEnv, git_pool: GitPool, agent_log: Path) -> None:
+def test_a_commit_origin_does_not_have_fails_the_review(
+    reviews: CanopyEnv, git_pool: GitPool, treehouse_state: Path, agent_log: Path
+) -> None:
     """A PR of another repository fails here: its commit cannot be fetched from this one's origin."""
     conn = reviews.journal()
     run_id = run_inline(conn, sha="d" * 40)
@@ -431,12 +419,14 @@ def test_a_commit_origin_does_not_have_fails_the_review(reviews: CanopyEnv, git_
     assert row.status == "failed"
     assert json.loads(row.result_json)["harness"].startswith("git fetch failed: ")
     assert not agent_log.exists()  # the reviewer never ran
-    assert [s["status"] for s in pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))] == ["available", "available"]
+    assert pool_statuses(treehouse_state) == ["available", "available"]
 
 
-def test_a_killed_review_is_crashed_on_the_next_tick(reviews: CanopyEnv, git_pool: GitPool, agent_log: Path) -> None:
+def test_a_killed_review_is_crashed_on_the_next_tick(
+    reviews: CanopyEnv, git_pool: GitPool, treehouse_state: Path, agent_log: Path
+) -> None:
     conn = reviews.journal()
-    with mock.patch.dict(os.environ, {"FAKE_REVIEWER_SLEEP": "60"}):
+    with reviewer_reports(CLEAN, sleep=60):
         with in_tick(conn) as tick_id:
             assert main(review(sha=head(git_pool))) == 0
             db.finish_tick(conn, tick_id, TickStatus.OK, "test")
@@ -454,10 +444,9 @@ def test_a_killed_review_is_crashed_on_the_next_tick(reviews: CanopyEnv, git_poo
         os.kill(pid, signal.SIGKILL)
         while procs.alive(pid) and time.monotonic() < deadline:
             time.sleep(0.05)
-        treehouse_state = Path(os.environ["FAKE_TREEHOUSE_STATE"])
-        assert [s["status"] for s in pool(treehouse_state)] == ["leased", "available"]
+        assert pool_statuses(treehouse_state) == ["leased", "available"]
 
-        with overseer_waits("PROJ-1"):
+        with overseer_does(*waits("PROJ-1")):
             assert main(["tick"]) == 0
             crashed = db.get_review_run(conn, 1)
             assert crashed is not None
@@ -466,19 +455,21 @@ def test_a_killed_review_is_crashed_on_the_next_tick(reviews: CanopyEnv, git_poo
             while procs.alive(agent_pid) and time.monotonic() < deadline:
                 time.sleep(0.05)
             assert not procs.alive(agent_pid)
-            assert [s["status"] for s in pool(treehouse_state)] == ["available", "available"]
+            assert pool_statuses(treehouse_state) == ["available", "available"]
             assert not run_dir.exists()
             assert git_pool.slots[0].is_dir()  # removing the run's directory never follows its link
 
 
-def test_reconcile_leaves_a_running_reviews_slot_alone(reviews: CanopyEnv, git_pool: GitPool, agent_log: Path) -> None:
+def test_reconcile_leaves_a_running_reviews_slot_alone(
+    reviews: CanopyEnv, git_pool: GitPool, treehouse_state: Path, agent_log: Path
+) -> None:
     conn = reviews.journal()
     with in_tick(conn) as tick_id:
         assert main(review(sha=head(git_pool)), runner=InlineRunner()) == 0  # claimed by this live process
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
-    with overseer_waits("PROJ-1"):
+    with overseer_does(*waits("PROJ-1")):
         assert main(["tick"]) == 0
-        assert [s["status"] for s in pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))] == ["leased", "available"]
+        assert pool_statuses(treehouse_state) == ["leased", "available"]
         row = db.get_review_run(conn, 1)
         assert row is not None
         assert row.status == "running"
@@ -488,7 +479,7 @@ def test_the_state_block_shows_reviewed_prs(reviews: CanopyEnv, git_pool: GitPoo
     conn = reviews.journal()
     with reviewer_reports(FINDINGS):
         run_inline(conn, "--ticket", "PROJ-1", sha=head(git_pool))
-    with overseer_waits("PROJ-1"):
+    with overseer_does(*waits("PROJ-1")):
         assert main(["tick", "--dry-run"]) == 0
     section = state_block(agent_log)["reviews"]
     assert section["agent_prs"] is True
@@ -522,9 +513,7 @@ def test_attention_about_a_pr_without_a_ticket(
         ["canopy", "attention", "--pr", PR, "review_failed", "--detail", "review run 3 ended crashed"],
         ["canopy", "attention", "PROJ-1", "review_limit", "--pr", f"{PR}0", "--detail", "3 of 3 reviews"],
     ]
-    with mock.patch.dict(
-        os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(commands), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
-    ):
+    with overseer_does(*commands):
         assert main(["tick"]) == 0
         conn = reviews.journal()
         assert [(i.subject, i.reason, i.detail) for i in attention.current(conn)] == [
@@ -554,27 +543,23 @@ def test_review_wait_records_a_plain_pr_url_and_refuses_anything_else(
 
 
 def test_a_sink_that_takes_reviews_hears_when_one_ends(
-    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, tmp_path: Path
+    reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, sink_script: Path, tmp_path: Path
 ) -> None:
     out = tmp_path / "sink.txt"
-    script = tmp_path / "sink"
-    script.write_text('#!/bin/sh\ncat >> "$1"\necho "--" >> "$1"\n')
-    script.chmod(0o755)
-    reviews.write_user(
-        reviews.user_file.read_text()
-        + f"\n[notify.sinks.s]\ncmd = '{script} {out}'\nformat = 'text'\nevents = ['reviews']\n"
-    )
-    with overseer_waits("PROJ-1"):
+    reviews.append_user(f"\n[notify.sinks.s]\ncmd = '{sink_script} {out}'\nformat = 'text'\nevents = ['reviews']\n")
+    with overseer_does(*waits("PROJ-1")):
         assert main(["tick"]) == 0
         conn = reviews.journal()
         with reviewer_reports(FINDINGS):
             run_inline(conn, "--ticket", "PROJ-1", sha=head(git_pool))
             assert main(["tick"]) == 0
-            [message] = out.read_text().split("--\n")[:-1]
+            [message] = messages(out)
             assert f"< review run 1 of {PR} (PROJ-1) ended done: findings normal (1 findings)\n" in message
 
 
-def test_a_reviewer_prompt_that_does_not_render_costs_the_pr_nothing(reviews: CanopyEnv, git_pool: GitPool) -> None:
+def test_a_reviewer_prompt_that_does_not_render_costs_the_pr_nothing(
+    reviews: CanopyEnv, git_pool: GitPool, treehouse_state: Path
+) -> None:
     overrides = reviews.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "reviewer.md").write_text("Review {{PR_URL}}\n")
@@ -585,19 +570,13 @@ def test_a_reviewer_prompt_that_does_not_render_costs_the_pr_nothing(reviews: Ca
         assert action == "refused:bad_prompt"
         assert reason.endswith("missing required placeholder {{SHA}}, {{CHECKOUT}}")
         assert conn.execute("SELECT count(*) FROM review_runs").fetchone()[0] == 0
-        assert [s["status"] for s in pool(Path(os.environ["FAKE_TREEHOUSE_STATE"]))] == ["available", "available"]
+        assert pool_statuses(treehouse_state) == ["available", "available"]
 
 
 def test_a_review_run_records_what_it_cost(reviews: CanopyEnv, git_pool: GitPool) -> None:
     """With OpenCode's JSON events, as the default `review_cmd` asks for, a review run records its session and cost."""
-    text = reviews.user_file.read_text()
-    reviews.write_user(
-        text.replace("--agent canopy-reviewer {prompt}", "--agent canopy-reviewer --format json {prompt}")
-    )
-    with (
-        reviewer_reports(FINDINGS, ["echo", "read it"]),
-        mock.patch.dict(os.environ, {"FAKE_REVIEWER_SESSION": "ses_review"}),
-    ):
+    with_events(reviews, "canopy-reviewer")
+    with reviewer_reports(FINDINGS, ["echo", "read it"], session="ses_review"):
         conn = reviews.journal()
         run_id = run_inline(conn, sha=head(git_pool))
     row = db.get_review_run(conn, run_id)
@@ -828,7 +807,7 @@ def test_a_dismissed_finding_reaches_no_worker_and_no_tick(
     assert "findings, 2 findings (1 dismissed), impact normal" in capsys.readouterr().out
 
     # The overseer reads only the findings the operator kept.
-    with overseer_waits("PROJ-1"):
+    with overseer_does(*waits("PROJ-1")):
         assert main(["tick", "--dry-run"]) == 0
         latest = state_block(agent_log)["reviews"]["prs"][0]["latest"]
         assert (latest["findings"], latest["dismissed_findings"]) == (["retry never stops"], 1)
@@ -912,7 +891,7 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
     assert "already went to PROJ-1" in capsys.readouterr().out
 
     # The next tick reads it as the operator's go-ahead, and a resume for the review hears both.
-    with overseer_waits("PROJ-1"):
+    with overseer_does(*waits("PROJ-1")):
         assert main(["tick", "--dry-run"]) == 0
     tickets = {t["key"]: t for t in state_block(agent_log)["tickets"]}
     assert [m["body"] for m in tickets["PROJ-1"]["operator"]["new_operator_messages"]] == [body]

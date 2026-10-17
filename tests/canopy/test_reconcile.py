@@ -27,7 +27,7 @@ from tests.canopy.helpers import (
     waits,
     worker_does,
 )
-from tests.conftest import CanopyEnv, GitPool, pool_state
+from tests.conftest import CanopyEnv, GitPool, executable, pool_state
 
 
 def lease(treehouse_state: Path, key: str) -> dict[str, str]:
@@ -236,8 +236,7 @@ def test_treehouse_return_failure_stops_the_tick(
     add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=DEAD_PID)
     broken = tmp_path / "bin"
     broken.mkdir()
-    (broken / "treehouse").write_text('#!/bin/sh\n[ "$1" = status ] && echo "[]" && exit 0\necho boom >&2; exit 2\n')
-    (broken / "treehouse").chmod(0o755)
+    executable(broken / "treehouse", '#!/bin/sh\n[ "$1" = status ] && echo "[]" && exit 0\necho boom >&2; exit 2\n')
     with mock.patch.dict(os.environ, {"PATH": f"{broken}{os.pathsep}{os.environ['PATH']}"}):
         assert main(["tick"]) == 1
         tick = db.last_tick(conn)
@@ -293,8 +292,7 @@ def test_killed_worker_is_detected_on_the_next_tick(
 ) -> None:
     """M2 acceptance, against the fakes: a killed worker is found by the next tick and its slot returned."""
     with (
-        worker_does(),
-        mock.patch.dict(os.environ, {"FAKE_WORKER_SLEEP": "60"}),
+        worker_does(sleep=60),
         in_tick(conn) as tick_id,
     ):
         dispatch = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]

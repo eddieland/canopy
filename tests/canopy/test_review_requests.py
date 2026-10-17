@@ -14,7 +14,7 @@ from canopy.core.config import load
 from canopy.core.context import Context
 from canopy.core.vocab import TickStatus
 from canopy.infra import resources
-from tests.canopy.helpers import InlineRunner, context, in_tick, operator, state_block
+from tests.canopy.helpers import InlineRunner, context, in_tick, operator, overseer_does, state_block
 from tests.canopy.review_helpers import CLEAN, FINDINGS, head, review, review_decisions, reviewer_reports, run_inline
 from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
@@ -173,7 +173,7 @@ def test_a_request_refuses_recording_nothing(requests_env: CanopyEnv, capsys: py
     assert operator("stop", PR) == 1
     assert f"stop refused (not_requested): {PR} has no open review request" in capsys.readouterr().err
 
-    requests_env.write_user(requests_env.user_file.read_text() + "\n[capacity]\nmax_reviews = 0\n")
+    requests_env.append_user("\n[capacity]\nmax_reviews = 0\n")
     assert operator("start", PR, "--review") == 1
     assert "start refused (reviews_off)" in capsys.readouterr().err
     assert requests_of(conn) == []
@@ -197,7 +197,7 @@ def test_status_lists_an_open_request_and_stop_ends_it(
 
 def test_the_state_block_carries_the_open_requests(requests_env: CanopyEnv, git_pool: GitPool, agent_log: Path) -> None:
     conn = requests_env.journal()
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does():
         # No request, no query, and agent_prs off: nothing about reviews reaches the overseer.
         assert main(["tick", "--dry-run"]) == 0
         assert "reviews" not in state_block(agent_log)

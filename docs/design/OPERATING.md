@@ -74,6 +74,12 @@ own cost, and which tools put the most into context. The web UI's spend page sho
   started cold, a heuristic; the journal keeps both counts.
 - The overseer's tools and first calls include dry runs'.
 
+`canopy health` reads the same window for how the runs in it ended: each kind's runs by sort and status, with what they
+cost, the newest that failed with a note on each, and the overseer's asks a guard refused, by guard. A failure is a run
+that did not do what it was started for: a tick that did not close `ok`, or a worker, chore, or review run that ended
+`failed`, `unknown`, `unpushed`, `crashed`, or `timeout`; a worker that asked a question or that the operator stopped
+did. Beside `canopy spend --json`, it is what a chore that looks at canopy itself reads (`examples/chores/`).
+
 ## 12. Configuration
 
 Configuration is layered. Each layer overrides the one before it, key by key:

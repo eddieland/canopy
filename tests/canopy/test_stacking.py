@@ -1,29 +1,31 @@
 """Blockers and stacking: `canopy dispatch --base` and a stacked run's branch and PR base (DESIGN §10)."""
 
 import json
-import os
 import sqlite3
 from collections.abc import Iterator
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
 from tests.canopy.helpers import (
+    LABEL,
     InlineRunner,
     decisions,
     dispatch_and_run,
     in_tick,
+    operator,
+    overseer_does,
     pool,
     slot_of,
+    state_block,
     wait_for_run,
+    waits,
     worker_does,
 )
 from tests.conftest import CanopyEnv, GitPool, git
 
-LABEL = "agent-ready-tester"
 FIRST = "agent/PROJ-1-first"
 SECOND = "agent/PROJ-2-second"
 
@@ -118,14 +120,9 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(
         assert subjects(git_pool, "agent/PROJ-2-second")[:2] == ["PROJ-2: review fix", "PROJ-2: stacked"]
 
         # The overseer sees which base each ticket's latest run started from.
-        waits = [["canopy", "decide", key, "wait", "--rationale", "PR open"] for key in ("PROJ-1", "PROJ-2")]
-        with mock.patch.dict(
-            os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(waits), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
-        ):
-            os.environ.pop("CANOPY_TICK_ID", None)
-            assert main(["tick"]) == 0
-            prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
-            state = json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])
+        with overseer_does(*waits("PROJ-1", "PROJ-2", rationale="PR open")):
+            assert operator("tick") == 0
+            state = state_block(agent_log)
             bases = {t["key"]: t["last_run"]["repos"] for t in state["tickets"]}
             assert bases == {"PROJ-1": [{"repo": "repo", "base": "main"}], "PROJ-2": [{"repo": "repo", "base": "main"}]}
 
@@ -278,8 +275,7 @@ def test_two_linked_tickets_are_worked_in_order(
         ["canopy", "decide", "PROJ-2", "wait", "--rationale", "blocked_by: PROJ-1"],
         ["canopy", "ticket", "set", "PROJ-2", "--repo", "repo", "--phase", "blocked"],
     ]
-    overseer = {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE", "FAKE_OVERSEER_COMMANDS": json.dumps(first)}
-    with worker_does(commit("the change")), mock.patch.dict(os.environ, overseer):
+    with worker_does(commit("the change")), overseer_does(*first):
         assert main(["tick"]) == 0
         assert wait_for_run(conn, 1)["status"] == "done"
 
@@ -301,7 +297,7 @@ def test_two_linked_tickets_are_worked_in_order(
                 FIRST,
             ],
         ]
-        with mock.patch.dict(os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(then)}):
+        with overseer_does(*then):
             assert main(["tick"]) == 0
             second = wait_for_run(conn, 2)
             assert (second["status"], slot_of(conn, 2)["base_branch"]) == ("done", FIRST)
@@ -319,11 +315,10 @@ def test_two_linked_tickets_are_worked_in_order(
 @pytest.mark.usefixtures("treehouse_state")
 def test_the_state_block_carries_the_stacking_policy(canopy_env: CanopyEnv, agent_log: Path) -> None:
     def stacking() -> str:
-        with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+        with overseer_does():
             assert main(["tick"]) == 0
-            prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
-            return json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])["policy"]["stacking"]
+            return state_block(agent_log)["policy"]["stacking"]
 
     assert stacking() == "auto"
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + '[policy]\nstacking = "never"\n')
+    canopy_env.append_shared('[policy]\nstacking = "never"\n')
     assert stacking() == "never"

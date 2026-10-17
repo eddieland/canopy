@@ -12,9 +12,9 @@ from canopy.core import db, plans
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.conversation import Refused
 from canopy.core.vocab import PlanStatus
+from tests.canopy.helpers import KEY
 from tests.conftest import CanopyEnv
 
-KEY = "PROJ-1"
 PLAN = "# Plan\n\n## api\n\nAdd the endpoint.\n"
 
 
