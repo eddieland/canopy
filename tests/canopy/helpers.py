@@ -67,6 +67,7 @@ PROMPT_VALUES = {
     "OPERATOR_MESSAGES": "No messages from the operator.",
     "PREVIOUS_RUNS": "None: no earlier run of this ticket has ended.",
     "REVIEW_FINDINGS": "None.",
+    "PLAN": "None.",
 }
 
 

@@ -21,6 +21,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import os
+import re
 import secrets
 import stat
 from dataclasses import dataclass
@@ -39,13 +40,25 @@ if TYPE_CHECKING:
 # What a planner can write in one message and an operator can read before approving (DESIGN §25, The prompt).
 MAX_CHARS = 100_000
 DIR_NAME = "plans"
-# In a plan run's desk: the copy of the plan it replaces, which the planner reads, and the file it writes its plan to,
-# the one file its definition lets it edit (DESIGN §25). `.agents/agents/canopy-planner.md` names `WRITTEN` too.
-REPLACED = ".canopy-plan.md"
+# A copy of a plan in a run's working directory: in a worker's, the approved plan it follows, and in a plan run's desk,
+# the plan it replaces (DESIGN §25, The worker's copy). Written fresh for each run and removed before its slots go back.
+COPY = ".canopy-plan.md"
+REPLACED = COPY
+# The file a planner writes its plan to in its desk, the one file its definition lets it edit (DESIGN §25).
+# `.agents/agents/canopy-planner.md` names it too.
 WRITTEN = ".canopy-new-plan.md"
+# A plan's outline in a worker's prompt: its markdown headings outside fenced code, at most this many, each cut at
+# `MAX_HEADING` characters (DESIGN §25, Workers follow the plan).
+MAX_OUTLINE = 200
+MAX_HEADING = 200
 # The most bytes `MAX_CHARS` characters of UTF-8 can take: one more and the file is over the bound however it decodes.
 _MAX_BYTES = 4 * MAX_CHARS
 _CHUNK = 64 * 1024
+
+# CommonMark's: an ATX heading, and a fence's opening or closing marker, each indented at most three spaces.
+_HEADING_RE = re.compile(r"#{1,6}(?:[ \t]|$)")
+_FENCE_RE = re.compile(r"(`{3,}|~{3,})")
+_MAX_INDENT = 3
 
 # Why a file is not a plan, as `canopy show` and the refusals say it.
 type Problem = Literal["missing", "not a regular file", "unreadable", "not UTF-8", "empty", "over the bound"]
@@ -454,6 +467,43 @@ def approved_text(state_dir: Path, plan: records.Plan) -> str | None:
         return None
     reading = read(path_for(state_dir, plan.ticket_key, plan.run_id))
     return reading.text if reading.sha256 == plan.approved_sha256 else None
+
+
+def approved_of(conn: sqlite3.Connection, key: str) -> records.Plan | None:
+    """The ticket's approved plan, the one a worker follows, if it has one.
+
+    Returns:
+        The plan's row, or None when the ticket's current plan is waiting, or it has none.
+    """
+    plan = current(conn, key)
+    return plan if plan is not None and plan.status is PlanStatus.APPROVED else None
+
+
+def outline(text: str) -> list[str]:
+    """A plan's outline: its markdown headings, outside fenced code blocks, as written, in order.
+
+    Returns:
+        At most `MAX_OUTLINE` heading lines, each cut at `MAX_HEADING` characters, without control characters.
+    """
+    found: list[str] = []
+    fence = ""
+    for line in text.splitlines():
+        stripped = line.lstrip(" ")
+        indent = len(line) - len(stripped)
+        marker = _FENCE_RE.match(stripped) if indent <= _MAX_INDENT else None
+        if fence:
+            if marker is not None and marker.group(1)[0] == fence[0] and len(marker.group(1)) >= len(fence):
+                fence = ""
+            continue
+        if marker is not None:
+            fence = marker.group(1)
+            continue
+        if indent <= _MAX_INDENT and _HEADING_RE.match(stripped):
+            heading = "".join(c if c.isprintable() else " " for c in stripped.rstrip())
+            found.append(heading[:MAX_HEADING])
+            if len(found) == MAX_OUTLINE:
+                break
+    return found
 
 
 def supersede(conn: sqlite3.Connection, key: str) -> int | None:

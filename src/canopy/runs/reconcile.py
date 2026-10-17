@@ -198,7 +198,7 @@ def end_run(ctx: Context, run: sqlite3.Row, status: RunStatus, note: str, log: l
         outcomes.append(outcome.value)
     if tidied:
         tidy.remove_objects(objects, log)
-    if len(slots) > 1:
+    if dispatch.in_desk(str(run["kind"]), slots):
         desks.remove(desks.path(ctx.workspace.root, str(run["ticket_key"])))
     log.warning("run closed without its `_run`", extra={**fields, "status": status, "note": note, "returned": outcomes})
     return returned

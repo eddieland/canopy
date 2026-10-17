@@ -62,6 +62,11 @@ Controls:
   ticket. The independent check is the worker's: every worker prompt has it re-read the ticket's labels and stop,
   changing nothing, without one, and a worker prompt that cannot carry the labels is refused. Both checks are agent
   judgment, so they reduce the chance of unlabeled work rather than exclude it; human review of every PR remains.
+- An approved plan (DESIGN §25) is data, not an operator instruction. A planner wrote it from ticket text, which anyone
+  who can edit the ticket shapes, so the operator's approval authorizes the `implement`, not what the plan's text asks
+  for. A worker's prompt names its copy and gives its outline, never its text, and says the prompt's obligations come
+  before it, as before the standing instructions; a plan cannot widen what a worker may do. The worker reads the
+  approved text alone: `_run` checks the file against the hash the operator approved before it writes the copy.
 - Workers can push only to `trust.branch_prefix` branches, with one exception: the head branch of an open PR the
   operator authored and labeled with one of `tracker.labels` (PR-scoped work, ROADMAP M14, D056). Enforced by the
   worker prompt and by repository branch protection, which the operator must configure. canopy `init` prints the
@@ -328,7 +333,9 @@ Controls:
   are known, and a run is refused where the worktree's OpenCode config names any of that server's tools. It reads the
   worktrees linked from its desk, at their base branches. canopy reads its plan from the desk, never through a link,
   into an operator-only file under the state directory (T2), and never sends it to the tracker, public ticket or
-  private.
+  private. Residual: a worker reads the approved plan from a copy in its working directory, ignored by git, and can
+  still commit it by name, which on a private ticket publishes the plan with its branch. The prompt forbids it, and
+  push verification gives the run a harness note when a pushed branch holds the copy; nothing prevents it.
 - A private ticket's worker (DESIGN §22) runs `canopy-worker-private`, whose definition canopy renders from the user
   config: every tool of the tracker's MCP server (`tracker.mcp_server`) is denied by a wildcard, then only
   `tracker.read_tools` are allowed by name, so a write tool missing from the list fails closed; the tracker CLIs canopy
