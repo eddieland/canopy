@@ -23,8 +23,8 @@ import { Fragment, useEffect, useEffectEvent, useLayoutEffect, useRef, useState 
 import type { ReactNode } from 'react'
 
 import { Panel, PanelHeader } from '@/components/panel'
-import { AskForChanges, PlanThreads } from '@/components/plan-threads'
-import type { Draft } from '@/components/plan-threads'
+import { AskForChanges, DraftForm, PlanThreads, ThreadCard } from '@/components/plan-threads'
+import type { Draft, ThreadActions } from '@/components/plan-threads'
 import { Button } from '@/components/ui/button'
 import {
     DropdownMenu,
@@ -44,7 +44,7 @@ import {
 } from '@/components/ui/toolbar'
 import { anchorFor, anchorsOf, highlightsKey, PlanHighlights, withHighlight } from '@/lib/plan-highlights'
 import type { Range } from '@/lib/plan-highlights'
-import { alignComments } from '@/lib/plan-margin'
+import { alignComments, floatUnder } from '@/lib/plan-margin'
 import { planExtensions } from '@/lib/plan-schema'
 import {
     addReply,
@@ -58,6 +58,7 @@ import {
 } from '@/lib/plan-threads'
 import type { PlanThread } from '@/lib/plan-threads'
 import { isApple } from '@/lib/send-key'
+import { cn } from '@/lib/utils'
 import { ariaKeys, keysLabel } from '@/lib/shortcut'
 
 const APPLE = isApple(navigator.userAgent)
@@ -68,6 +69,8 @@ const BUBBLE = new PluginKey('planBubble')
 const TOOLBAR_CLEARANCE = 48
 // The shortcut that comments on the selection (`PlanHighlights`).
 const COMMENT_KEYS = 'Mod-Alt-m'
+// A comment floating under its passage, over the plan, while the comments sit under it.
+const FLOAT = 'absolute z-20 w-[min(24rem,100%)] overflow-hidden rounded-md border bg-surface'
 
 /**
  * A plan in a rich editor, with the operator's comments on its passages beside it (docs/design/PLANNING.md §25,
@@ -153,20 +156,46 @@ export function PlanEditor({
             ? 0
             : ordered.filter((thread) => !thread.resolved && (starts.get(thread.id) ?? Infinity) < draftFrom).length
     const list = useRef<HTMLDivElement>(null)
+    // Whether the comments sit beside the plan, as `alignComments` last found them.
+    const [beside, setBeside] = useState(true)
+    // The thread opened from its passage, which floats there while the comments sit under the plan.
+    const [clicked, setClicked] = useState<string | undefined>(undefined)
+    if (clicked !== undefined && clicked !== seen.active) {
+        // Closed, or another thread opened: the caret coming back to that passage opens it in the list, not afloat.
+        setClicked(undefined)
+    }
+    // Under the plan, the comment being written, and a thread opened from its passage while it stays open, float
+    // under their passage (`floatUnder`), so the page need not go down to the list and back.
+    const draftFloats = !beside && draft !== undefined
+    const floating = beside || clicked === undefined ? undefined : threads.find((thread) => thread.id === clicked)
+    const frame = useRef<HTMLDivElement>(null)
+    const float = useRef<HTMLDivElement>(null)
 
-    // Each comment beside its passage while the comments sit beside the plan (`src/lib/plan-margin.ts`): after each
-    // render, and whenever an edit, a resize, or a card that grows (a reply being written) moves a passage or a card.
+    // Each comment beside its passage while the comments sit beside the plan (`src/lib/plan-margin.ts`), or the one
+    // floating under its passage while they do not: after each render, and whenever an edit, a resize, or a card that
+    // grows (a reply being written) moves a passage or a card.
+    const place = useEffectEvent(() => {
+        const highlights = highlightsKey.getState(editor.state)
+        const range = draftFloats ? highlights?.draft : floating && highlights?.ranges.get(floating.id)
+        if (float.current !== null && frame.current !== null && range !== undefined) {
+            floatUnder(editor, range, float.current, frame.current)
+        }
+    })
     useLayoutEffect(() => {
         if (list.current !== null) {
             alignComments(editor, list.current)
         }
+        place()
     })
     useEffect(() => {
         const element = list.current
         if (element === null) {
             return
         }
-        const align = () => alignComments(editor, element)
+        const align = () => {
+            setBeside(alignComments(editor, element))
+            place()
+        }
         const observer = new ResizeObserver(align)
         observer.observe(element)
         observer.observe(editor.view.dom)
@@ -233,8 +262,10 @@ export function PlanEditor({
     }
 
     function cancelComment() {
+        const range = highlightsKey.getState(editor.state)?.draft
         setDraft(undefined)
         editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'draft', range: undefined }))
+        backToPlan(range)
     }
 
     function addComment(body: string) {
@@ -249,6 +280,26 @@ export function PlanEditor({
         const id = crypto.randomUUID()
         onThreadsChange(addThread(threads, { id, anchor, body, at: new Date().toISOString() }))
         editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'add', id, range }))
+        backToPlan(range)
+    }
+
+    // Puts the cursor back in the plan after `range`, a comment's passage, as a shared document does once a comment is
+    // sent, resolved, or put aside: the keyboard carries on in the plan rather than from the top of the page, where the
+    // focus falls when the control that had it goes. With no passage, the plan takes the focus where its cursor was.
+    function backToPlan(range: Range | undefined) {
+        if (range === undefined) {
+            editor.commands.focus()
+        } else {
+            editor.commands.focus(range.to)
+        }
+    }
+
+    // What the operator did to thread `id` from its card, then the cursor back after its passage: looked up first, as
+    // a thread deleted takes its passage with it.
+    function onThread(id: string, next: PlanThread[]) {
+        const range = highlightsKey.getState(editor.state)?.ranges.get(id)
+        onThreadsChange(next)
+        backToPlan(range)
     }
 
     // Marks a thread the open one; from its card, the plan scrolls to its passage, and from its passage, the column to
@@ -261,6 +312,9 @@ export function PlanEditor({
             // By its highlight: ProseMirror scrolls to its selection only while the page's selection is in the editor,
             // and the card's button holds it now. Its scroll margin keeps it clear of the toolbar (`src/index.css`).
             editor.view.dom.querySelector(`[data-thread="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest' })
+        } else if (!fromCard && !beside) {
+            // Under the plan, the card floats at its passage rather than send the page down to it.
+            setClicked(id)
         } else if (!fromCard) {
             // The thread's card, not its highlight in the plan, which carries the same attribute.
             document.querySelector(`article[data-thread="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'nearest' })
@@ -268,11 +322,26 @@ export function PlanEditor({
     }
 
     const open = threads.filter((thread) => !thread.resolved).length
+    const actions: ThreadActions = {
+        onActivate: (id) => activate(id, true),
+        onOpen: (id) => editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id })),
+        onReply: (id, body) =>
+            onThread(id, addReply(threads, id, { id: crypto.randomUUID(), body, at: new Date().toISOString() })),
+        onResolve: (id, resolved) => onThread(id, setResolved(threads, id, resolved)),
+        onDelete: (id) => onThread(id, removeThread(threads, id)),
+        onEdit: (id, body, replyId) =>
+            onThread(id, replyId === undefined ? editThread(threads, id, body) : editReply(threads, id, replyId, body)),
+        onBack: (id) => backToPlan(highlightsKey.getState(editor.state)?.ranges.get(id)),
+    }
+    const onDraftChange = (body: string) => setDraft(draft && { ...draft, body })
+    const onDraftLeave = () => backToPlan(highlightsKey.getState(editor.state)?.draft)
     return (
         // The comments sit beside the plan once both fit (a 20rem column beside a plan of about 40rem), by the space
-        // the page gives them rather than the window's width, since the rail takes some of it.
-        <div className="@container min-w-0">
-            <div className="grid min-w-0 items-start gap-6 @min-[60rem]:grid-cols-[minmax(0,1fr)_20rem]">
+        // the page gives them rather than the window's width, since the rail takes some of it. The plan's column
+        // stops at its text's measure (`.plan-doc`'s 48rem and the panel's padding), so on a wide page the comments
+        // stay against the text, as a shared document's margin does, and the room left over goes after them.
+        <div ref={frame} className="@container relative min-w-0">
+            <div className="grid min-w-0 items-start gap-6 @min-[60rem]:grid-cols-[minmax(0,51rem)_20rem]">
                 <Panel>
                     <PanelHeader label="Plan" sticky>
                         {editable && <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />}
@@ -308,34 +377,38 @@ export function PlanEditor({
                         threads={ordered}
                         found={new Set(starts.keys())}
                         active={seen.active}
-                        draft={draft}
+                        draft={draftFloats ? undefined : draft}
                         draftAt={draftAt}
+                        hidden={floating?.id}
                         listRef={list}
                         editable={editable}
-                        onDraftChange={(body) => setDraft(draft && { ...draft, body })}
+                        onDraftChange={onDraftChange}
                         onDraftSubmit={addComment}
                         onDraftCancel={cancelComment}
-                        onActivate={(id) => activate(id, true)}
-                        onReply={(id, body) =>
-                            onThreadsChange(
-                                addReply(threads, id, { id: crypto.randomUUID(), body, at: new Date().toISOString() }),
-                            )
-                        }
-                        onResolve={(id, resolved) => onThreadsChange(setResolved(threads, id, resolved))}
-                        onDelete={(id) => onThreadsChange(removeThread(threads, id))}
-                        onEdit={(id, body, replyId) =>
-                            onThreadsChange(
-                                replyId === undefined
-                                    ? editThread(threads, id, body)
-                                    : editReply(threads, id, replyId, body),
-                            )
-                        }
+                        onDraftLeave={onDraftLeave}
+                        {...actions}
                     />
                     {editable && onAskForChanges !== undefined && (
                         <AskForChanges threads={threads} starts={starts} onAsk={onAskForChanges} />
                     )}
                 </Panel>
             </div>
+            {draftFloats && (
+                <div ref={float} data-testid="plan-float" className={cn(FLOAT, 'bg-accent/14 px-3 py-2.5')}>
+                    <DraftForm
+                        draft={draft}
+                        onDraftChange={onDraftChange}
+                        onDraftSubmit={addComment}
+                        onDraftCancel={cancelComment}
+                        onDraftLeave={onDraftLeave}
+                    />
+                </div>
+            )}
+            {!draftFloats && floating !== undefined && (
+                <div ref={float} data-testid="plan-float" className={FLOAT}>
+                    <ThreadCard thread={floating} lost={false} active editable={editable} {...actions} />
+                </div>
+            )}
         </div>
     )
 }
