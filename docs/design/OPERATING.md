@@ -470,9 +470,10 @@ names the skill and the prompt then says to use it (§8). Prefer that to a promp
 
 `canopy skill` prints a skill named `canopy` that teaches an agent in the operator's own session the canopy CLI and the
 state directory, how to read the journal read-only, and how to look into what canopy did and found. canopy installs it
-nowhere: the operator saves it where their runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again
-after upgrading. It is not in the definitions snapshot, where it would help no run. It tells an agent started by canopy
-to follow its prompt instead, and grants nothing: the overseer's and worker's bash rules apply either way.
+only when asked: `canopy skill --install [DIR]` saves it as `canopy/SKILL.md` in `DIR`, `~/.agents/skills` unless
+given, and the operator runs it again after upgrading. It is not in the definitions snapshot, where it would help no
+run. It tells an agent started by canopy to follow its prompt instead, and grants nothing: the overseer's and worker's
+bash rules apply either way.
 
 ### Shell completion
 
