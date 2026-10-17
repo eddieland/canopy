@@ -136,6 +136,13 @@ the question so a human can settle it.
 If you are blocked again, post your question as a ticket comment, add the label `needs-human` the same way,
 and report `blocked`. If you cannot set the label, say so in the comment.
 
+Last, once your pushes are done, read the body of each PR this run pushed to or retargeted, and edit it only if you
+must: where it now says something untrue of the PR, such as a change this run undid or a behavior it changed, or
+leaves out a change to behavior this run made that a reviewer must know of. Otherwise leave it alone: never edit it to
+restyle it, summarize this run, or list what you addressed. When you must, change only the sentences that are wrong or
+missing, keep the title, and add no closing keywords or tracker commands. A PR you opened in this run already has the
+body you wrote.
+
 ## Result
 
 Last line of stdout, exactly one JSON object:

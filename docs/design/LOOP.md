@@ -619,6 +619,10 @@ Worker obligations, stated in every worker prompt:
 - Open each PR through the GitHub MCP, or, with `runtime.pr_skill` set, only with that skill (below).
 - Comment on the ticket describing what was done and linking every PR. In a joint run, each PR's body links its sibling
   PRs and says which merges first.
+- A `resume` worker, once its pushes are done, reads the body of each PR it pushed to or retargeted, and edits it only
+  where the body is now untrue of the PR or leaves out a change to behavior a reviewer must know of. It changes only
+  those sentences, never the title, and never edits a body to restyle it or recount the run: a reviewer reads every
+  edit, and the run's account is its replies and summary.
 - On `blocked`: post the question as a ticket comment, add `needs_human_label`, and push nothing half-finished or
   speculative beyond a WIP commit. A private ticket's worker posts nothing on the ticket: its result line's `summary`
   and `question` are its report and question (§22).
