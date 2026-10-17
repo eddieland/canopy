@@ -21,10 +21,9 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
-from canopy.core.vocab import TickStatus
 from canopy.infra import procs
 from canopy.infra.procs import SubprocessRunner
-from tests.canopy.helpers import DEAD_PID, InlineRunner, in_tick, pool, slot_of, worker_does
+from tests.canopy.helpers import DEAD_PID, InlineRunner, in_tick, pool, present, slot_of, worker_does
 from tests.canopy.review_helpers import CLEAN, PR, reviewer_reports, run_inline
 from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, executable, git, user_toml
 
@@ -569,21 +568,18 @@ def test_canopys_sandboxed_worker_commits_through_the_wrapper_and_is_pushed(
     commit = ["git", "-c", "core.hooksPath=/dev/null", "commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"]
     with worker_does(commit):
         runner = InlineRunner()
-        with in_tick(conn) as tick_id:
+        with in_tick(conn, ends_ok=True):
             args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
             assert main([*args, "--slug", "work"], runner=runner) == 0
-            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         assert main(["_run", str(run_id)], runner=runner) == 0
 
-    run = db.get_run(conn, run_id)
-    assert run is not None
+    run = present(db.get_run(conn, run_id))
     assert run["status"] == "done"
     call = sandbox.only_call()
     definitions = call["argv"][call["argv"].index("--") + 2].removeprefix("OPENCODE_CONFIG_DIR=")
     assert definitions in call["settings"]["filesystem"]["allowRead"]
-    pushed = git_pool.remote_head("agent/PROJ-1-work")
-    assert pushed is not None
+    pushed = present(git_pool.remote_head("agent/PROJ-1-work"))
     assert not SubprocessRunner().run(["git", "cat-file", "-e", pushed], cwd=primary).ok  # never in the shared one
     slot = Path(slot_of(conn, run_id)["slot_path"])
     assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")
@@ -610,8 +606,7 @@ def test_canopys_sandboxed_reviewer_reads_the_checkout_through_the_wrapper(
     with reviewer_reports(CLEAN, ["git", "-C", "checkout", "rev-parse", "HEAD"]):
         run_id = run_inline(conn, "--ticket", "PROJ-1", sha=sha)
 
-    row = db.get_review_run(conn, run_id)
-    assert row is not None
+    row = present(db.get_review_run(conn, run_id))
     assert row.status == "done", Path(row.log_path).read_text()
     call = sandbox.only_call()
     assert call["cwd"] == str(canopy_env.state_dir / "reviews" / str(run_id))

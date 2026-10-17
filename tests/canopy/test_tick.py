@@ -19,7 +19,9 @@ from tests.canopy.helpers import (
     agent_runs,
     canopy,
     in_tick,
+    only_tick,
     overseer_does,
+    present,
     state_block,
     tools_of,
     tools_printed,
@@ -69,9 +71,9 @@ def test_dry_run_tick_records_the_overseer_plan(
         assert "\n# canopy overseer\n" in (snapshot / "agents" / "canopy-overseer.md").read_text()
 
         conn = canopy_env.journal(migrate=False)
-        [tick] = conn.execute("SELECT * FROM ticks").fetchall()
-        assert (tick["status"], tick["dry_run"]) == ("ok", 1)
-        assert tick["ended_at"] is not None
+        tick = only_tick(conn)
+        assert (tick.status, tick.dry_run) == ("ok", 1)
+        assert tick.ended_at is not None
         decisions = [(d.ticket_key, d.action) for d in db.decisions_for_tick(conn, 1)]
         assert decisions == [
             (None, "queried"),
@@ -262,9 +264,9 @@ def test_overseer_failure_closes_the_tick(
     exit_code, last_line, summary = case
     with overseer_does(result=last_line, exit_code=exit_code):
         assert main(["tick", "--dry-run"]) == 1
-        tick = canopy_env.journal(migrate=False).execute("SELECT * FROM ticks").fetchone()
-        assert tick["status"] == "overseer_failed"
-        assert summary in tick["summary"]
+        tick = only_tick(canopy_env.journal(migrate=False))
+        assert tick.status == "overseer_failed"
+        assert summary in tick.summary
 
 
 @pytest.mark.parametrize(
@@ -300,8 +302,8 @@ def test_the_done_token_in_an_earlier_message_fails_the_tick(
     with_events(canopy_env, "canopy-overseer")
     with overseer_does(result="Now reading the next ticket.", says="CANOPY_TICK_DONE"):
         main(["tick", "--dry-run"])
-        tick = canopy_env.journal(migrate=False).execute("SELECT status, summary FROM ticks").fetchone()
-        assert (tick["status"], tick["summary"]) == (
+        tick = only_tick(canopy_env.journal(migrate=False))
+        assert (tick.status, tick.summary) == (
             "overseer_failed",
             "overseer's final message has no CANOPY_TICK_DONE line",
         )
@@ -337,17 +339,17 @@ def test_a_tick_records_and_prints_what_its_overseer_cost(
         main(["tick", "--dry-run"])
 
         conn = canopy_env.journal(migrate=False)
-        tick = conn.execute("SELECT * FROM ticks").fetchone()
-        assert (tick["session_id"], tick["cost_usd"]) == ("ses_o1", 0.25)  # two model calls, summed
+        tick = only_tick(conn)
+        assert (tick.session_id, tick.cost_usd) == ("ses_o1", 0.25)  # two model calls, summed
         tokens = ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
-        assert tuple(tick[c] for c in tokens) == (2000, 400, 60, 8000, 1000)
-        assert tick["tokens_peak_context"] == 5500
-        assert (tick["tokens_first_call"], tick["tokens_first_cache_write"]) == (5500, 500)
-        assert (canopy_env.state_dir / definitions.RUNTIME_DIR / tick["definitions_digest"]).is_dir()
+        assert tuple(getattr(tick, c) for c in tokens) == (2000, 400, 60, 8000, 1000)
+        assert tick.tokens_peak_context == 5500
+        assert (tick.tokens_first_call, tick.tokens_first_cache_write) == (5500, 500)
+        assert (canopy_env.state_dir / definitions.RUNTIME_DIR / present(tick.definitions_digest)).is_dir()
         # `canopy queried` and the echo, each a `bash` call that returned its stdout.
-        [(tool, calls, _, _)] = tools_of(conn, "ticks", tick["id"])
+        [(tool, calls, _, _)] = tools_of(conn, "ticks", tick.id)
         assert (tool, calls) == ("bash", 2)
-        assert tools_of(conn, "ticks", tick["id"]) == tools_printed(agent_log, "canopy-overseer")
+        assert tools_of(conn, "ticks", tick.id) == tools_printed(agent_log, "canopy-overseer")
         assert capsys.readouterr().out.rstrip().endswith("(cost $0.25, 3.5k tokens, 5.5k peak context)")
 
 
@@ -377,8 +379,8 @@ def test_a_tick_whose_overseer_reports_nothing_records_no_cost(
     """Plain stdout, as from a template without `--format json`, reports no session and no cost."""
     with overseer_does():
         main(["tick", "--dry-run"])
-        tick = canopy_env.journal(migrate=False).execute("SELECT * FROM ticks").fetchone()
-        assert (tick["status"], tick["session_id"], tick["cost_usd"]) == ("ok", None, None)
+        tick = only_tick(canopy_env.journal(migrate=False))
+        assert (tick.status, tick.session_id, tick.cost_usd) == ("ok", None, None)
         assert "cost" not in capsys.readouterr().out
 
 
@@ -389,9 +391,9 @@ def test_overseer_refuses_to_start_when_the_workspace_defines_its_agent(
     config = canopy_env.root / "opencode.json"
     config.write_text('{"agent": {"canopy-overseer": {"permission": {"bash": {"*": "deny", "rm *": "allow"}}}}}')
     assert main(["tick", "--dry-run"]) == 1
-    tick = canopy_env.journal(migrate=False).execute("SELECT * FROM ticks").fetchone()
-    assert tick["status"] == "overseer_failed"
-    assert f"defines one of canopy's agents ({config})" in tick["summary"]
+    tick = only_tick(canopy_env.journal(migrate=False))
+    assert tick.status == "overseer_failed"
+    assert f"defines one of canopy's agents ({config})" in tick.summary
     assert not agent_log.exists()
 
 
@@ -422,24 +424,24 @@ class TimingOutAgent:
 
 def test_overseer_timeout(canopy_env: CanopyEnv, treehouse_state: Path) -> None:
     assert main(["tick", "--dry-run"], runner=TimingOutAgent()) == 1
-    tick = canopy_env.journal(migrate=False).execute("SELECT * FROM ticks").fetchone()
-    assert (tick["status"], tick["summary"]) == ("overseer_failed", "overseer timed out after 15 minutes")
+    tick = only_tick(canopy_env.journal(migrate=False))
+    assert (tick.status, tick.summary) == ("overseer_failed", "overseer timed out after 15 minutes")
 
 
 def test_missing_overseer_command(canopy_env: CanopyEnv, treehouse_state: Path) -> None:
     canopy_env.write_user(canopy_env.user_file.read_text().replace("'env ", "'no-such-program ", 1))
     assert main(["tick", "--dry-run"]) == 1
-    tick = canopy_env.journal(migrate=False).execute("SELECT * FROM ticks").fetchone()
-    assert tick["status"] == "overseer_failed"
-    assert "command not found" in tick["summary"]
+    tick = only_tick(canopy_env.journal(migrate=False))
+    assert tick.status == "overseer_failed"
+    assert "command not found" in tick.summary
 
 
 def test_treehouse_failure_skips_the_overseer(canopy_env: CanopyEnv, agent_log: Path) -> None:
     with mock.patch.dict(os.environ):
         os.environ.pop("FAKE_TREEHOUSE_STATE", None)  # the fake treehouse then exits 2
         assert main(["tick", "--dry-run"]) == 1
-        tick = canopy_env.journal(migrate=False).execute("SELECT * FROM ticks").fetchone()
-        assert tick["status"] == "reconcile_failed"
+        tick = only_tick(canopy_env.journal(migrate=False))
+        assert tick.status == "reconcile_failed"
         assert not agent_log.exists()
 
 

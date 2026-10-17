@@ -11,7 +11,7 @@ import pytest
 
 from canopy.core import db, records
 from canopy.core.vocab import ChoreRunStatus, Phase, PlanSetting, PoolKind, ReviewRunStatus, StartStatus, TickStatus
-from tests.canopy.helpers import in_tick
+from tests.canopy.helpers import in_tick, present
 from tests.conftest import Journals
 
 # The field types a column of each declared type may be read as.
@@ -160,8 +160,7 @@ def test_a_flag_that_is_not_0_or_1_is_refused(conn: sqlite3.Connection) -> None:
 def test_a_vocabulary_column_reads_as_its_member(conn: sqlite3.Connection, tmp_path: Path) -> None:
     run_id = db.insert_chore_run(conn, tick_id=None, chore="deps", logs_dir=tmp_path)
     db.finish_run(conn, "chore_runs", run_id, ChoreRunStatus.OK, "{}")
-    run = db.get_chore_run(conn, run_id)
-    assert run is not None
+    run = present(db.get_chore_run(conn, run_id))
     assert run.status is ChoreRunStatus.OK
 
 
@@ -174,8 +173,7 @@ def test_a_value_the_vocabulary_does_not_hold_is_refused(conn: sqlite3.Connectio
 
 def test_columns_reads_a_typed_row_and_a_sqlite_row_alike(conn: sqlite3.Connection, tmp_path: Path) -> None:
     run_id = db.insert_chore_run(conn, tick_id=None, chore="deps", logs_dir=tmp_path)
-    typed = db.get_chore_run(conn, run_id)
-    assert typed is not None
+    typed = present(db.get_chore_run(conn, run_id))
     untyped = conn.execute("SELECT * FROM chore_runs WHERE id = ?", (run_id,)).fetchone()
     assert {k: records.columns(typed)[k] for k in untyped.keys()} == dict(untyped)  # noqa: SIM118
 
@@ -194,8 +192,7 @@ def test_a_review_run_reads_its_status_and_pool_as_their_members(conn: sqlite3.C
 def test_a_start_reads_its_status_as_its_member(conn: sqlite3.Connection) -> None:
     with db.transaction(conn):
         db.set_start(conn, db.SUBJECT_TICKET, "PROJ-1", status=StartStatus.STARTED, channel="cli")
-    started = db.get_start(conn, db.SUBJECT_TICKET, "PROJ-1")
-    assert started is not None
+    started = present(db.get_start(conn, db.SUBJECT_TICKET, "PROJ-1"))
     assert (started.status, started.stopped_at, started.channel) == (StartStatus.STARTED, None, "cli")
     with db.transaction(conn):
         db.set_start(conn, db.SUBJECT_TICKET, "PROJ-1", status=StartStatus.STOPPED, channel="web")
@@ -209,8 +206,7 @@ def test_a_tick_reads_its_status_as_its_member_and_its_flags_as_bools(conn: sqli
     tick_id = db.start_tick(conn, dry_run=True)
     db.set_tick_loop(conn, tick_id, idle=False, woken_by="timer")
     db.finish_tick(conn, tick_id, TickStatus.CANOPY_UNAVAILABLE, "canopy --version failed")
-    tick = db.get_tick(conn, tick_id)
-    assert tick is not None
+    tick = present(db.get_tick(conn, tick_id))
     assert (tick.status, tick.dry_run, tick.idle, tick.query_due) == (TickStatus.CANOPY_UNAVAILABLE, True, False, None)
     assert isinstance(tick.status, TickStatus)
 
@@ -226,8 +222,7 @@ def test_recent_ticks_count_each_ticks_decisions(conn: sqlite3.Connection) -> No
 def test_a_ticket_reads_its_phase_and_plan_setting_as_members_and_done_as_a_flag(conn: sqlite3.Connection) -> None:
     db.set_ticket(conn, "PROJ-1", "/ws", phase=Phase.CI_RED, done=True)
     conn.execute("UPDATE tickets SET plan_setting = 'skip' WHERE key = 'PROJ-1'")
-    ticket = db.get_ticket(conn, "PROJ-1")
-    assert ticket is not None
+    ticket = present(db.get_ticket(conn, "PROJ-1"))
     assert (ticket.phase, ticket.plan_setting, ticket.done) == (Phase.CI_RED, PlanSetting.SKIP, True)
     assert isinstance(ticket.phase, Phase)
     assert isinstance(ticket.plan_setting, PlanSetting)

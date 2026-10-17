@@ -11,7 +11,6 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import conversation, db
-from canopy.core.vocab import TickStatus
 from canopy.infra import resources
 from canopy.loop import attention
 from tests.canopy.helpers import (
@@ -20,8 +19,10 @@ from tests.canopy.helpers import (
     context,
     in_tick,
     journal_at,
+    last_tick,
     operator,
     overseer_does,
+    present,
     state_block,
     versions_after,
 )
@@ -50,15 +51,14 @@ def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str | None, 
 
 
 def mirror_cursor(conn: sqlite3.Connection, key: str = KEY) -> str | None:
-    ticket = db.get_ticket(conn, key)
-    assert ticket is not None
+    ticket = present(db.get_ticket(conn, key))
     return ticket.last_mirrored_id
 
 
 def test_a_comment_is_mirrored_once_and_moves_the_mirror_cursor(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    with in_tick(conn) as tick_id:
+    with in_tick(conn, ends_ok=True) as tick_id:
         assert mirror(*comment()) == 0
         assert "mirrored comment 10234 on PROJ-1 as message 1 (tracker)" in capsys.readouterr().out
         [message] = mirrored(conn)
@@ -78,7 +78,6 @@ def test_a_comment_is_mirrored_once_and_moves_the_mirror_cursor(
         # Again, in this tick or a later one: nothing new, whatever the overseer passes this time.
         assert mirror(*comment(), body="edited since") == 0
         assert "comment 10234 on PROJ-1 is already message 1; nothing new recorded" in capsys.readouterr().out
-        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     with in_tick(conn) as later:
         assert mirror(*comment()) == 0
         assert [m["id"] for m in mirrored(conn)] == [1]
@@ -92,8 +91,7 @@ def test_a_comment_is_mirrored_once_and_moves_the_mirror_cursor(
         assert mirror(*comment(key="PROJ-2")) == 0
         assert len(mirrored(conn, "PROJ-2")) == 1
         # The comment cursor is the phases', and mirroring never moves it.
-        ticket = db.get_ticket(conn, KEY)
-        assert ticket is not None
+        ticket = present(db.get_ticket(conn, KEY))
         assert ticket.last_comment_id is None
 
 
@@ -136,7 +134,7 @@ def test_mirror_refuses_what_it_cannot_record_and_records_each_refusal(
 
 def test_a_tick_mirrors_at_most_its_limit(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     with mock.patch.object(conversation, "MIRRORS_PER_TICK", 2):
-        with in_tick(conn) as tick_id:
+        with in_tick(conn, ends_ok=True) as tick_id:
             assert mirror(*comment("1")) == 0
             assert mirror(*comment("2")) == 0
             assert mirror(*comment("3")) == 1
@@ -144,14 +142,13 @@ def test_a_tick_mirrors_at_most_its_limit(canopy_env: CanopyEnv, conn: sqlite3.C
             assert decisions(conn, tick_id)[-1][1] == "refused:mirror_limit"
             # The rest wait for the next tick, past the cursor.
             assert mirror_cursor(conn) == "2"
-            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         with in_tick(conn):
             assert mirror(*comment("3")) == 0
             assert mirror_cursor(conn) == "3"
 
 
 def test_a_dry_run_records_the_mirror_and_moves_no_cursor(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    with in_tick(conn, dry_run=True) as tick_id:
+    with in_tick(conn, dry_run=True, ends_ok=True) as tick_id:
         assert mirror(*comment()) == 0
         assert len(mirrored(conn)) == 1
         assert mirror_cursor(conn) is None
@@ -159,7 +156,6 @@ def test_a_dry_run_records_the_mirror_and_moves_no_cursor(canopy_env: CanopyEnv,
         assert action == "mirror"
         assert rationale.endswith("; dry run, mirror cursor not advanced")
         # The live tick that follows finds it mirrored, and moves the cursor.
-        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     with in_tick(conn):
         assert mirror(*comment()) == 0
         assert len(mirrored(conn)) == 1
@@ -215,10 +211,8 @@ def test_a_mirrored_comment_on_a_private_ticket_authorizes_nothing(
 
         # Not an operator message: the ticket is not `human_replied`, the question still waits, and the loop does not
         # wake.
-        ticket = db.get_ticket(conn, KEY)
-        assert ticket is not None
-        section = conversation.state_section(conn, ticket)
-        assert section is not None
+        ticket = present(db.get_ticket(conn, KEY))
+        section = present(conversation.state_section(conn, ticket))
         assert section["new_operator_messages"] == []
         assert section["awaiting_reply"] is not None
         assert [a.key for a in conversation.awaiting(conn)] == [KEY]
@@ -253,8 +247,7 @@ def test_the_overseer_mirrors_through_a_heredoc_with_the_ticks_delimiter(
             [message] = mirrored(conn)
             assert message["body"] == body
             assert not pwned.exists()
-            tick = db.last_tick(conn)
-            assert tick is not None
+            tick = last_tick(conn)
             assert "mirror=1" in str(tick.summary)
 
         # The next tick's state block carries the ticket's mirror cursor, apart from its comment cursor.

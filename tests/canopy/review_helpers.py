@@ -7,7 +7,6 @@ from typing import Unpack
 
 from canopy.cli.main import main
 from canopy.core import db
-from canopy.core.vocab import TickStatus
 from tests.canopy.helpers import Behavior, InlineRunner, in_tick, reported, scripted
 from tests.conftest import GitPool, git
 
@@ -38,11 +37,10 @@ def run_inline(
     runner: InlineRunner | None = None,
 ) -> int:
     """Start a review in its own tick and do its `_review` in this process, as the detached one would."""
-    with in_tick(conn) as tick_id:
+    with in_tick(conn, ends_ok=True):
         assert main(review(*args, sha=sha, pr=pr), runner=InlineRunner()) == 0
         run_id = int(conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
         assert main(["_review", str(run_id)], runner=runner or InlineRunner()) == 0
-        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     return run_id
 
 

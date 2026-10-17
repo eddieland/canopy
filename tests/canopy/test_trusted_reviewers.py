@@ -5,12 +5,12 @@ operator's reply on a public ticket is its go-ahead, carried in the state block 
 import json
 import sqlite3
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 from canopy.cli.main import main
 from canopy.core import conversation, db
-from canopy.core.vocab import TickStatus
 from canopy.loop.state import OverseerState, TicketState
 from tests.canopy.helpers import (
     KEY,
@@ -19,6 +19,8 @@ from tests.canopy.helpers import (
     in_tick,
     operator,
     overseer_does,
+    present,
+    state_block,
     waits,
     worker_does,
 )
@@ -39,9 +41,7 @@ def reply(conn: sqlite3.Connection, text: str) -> int:
 
 
 def overseer_state(agent_log: Path) -> OverseerState:
-    overseer = json.loads(agent_log.read_text().splitlines()[-1])
-    state: OverseerState = json.loads(overseer["argv"][-1].split("```json\n", 1)[1].split("\n```", 1)[0])
-    return state
+    return cast("OverseerState", state_block(agent_log))
 
 
 def tickets_of(state: OverseerState) -> dict[str, TicketState]:
@@ -50,14 +50,11 @@ def tickets_of(state: OverseerState) -> dict[str, TicketState]:
 
 def run_once(conn: sqlite3.Connection, *args: str) -> sqlite3.Row:
     runner = InlineRunner()
-    with in_tick(conn) as tick_id:
+    with in_tick(conn, ends_ok=True):
         assert main(["dispatch", KEY, "--repo", "repo", "--label", "agent-ready-tester", *args], runner=runner) == 0
-        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
     assert main(["_run", str(run_id)], runner=runner) == 0
-    run = db.get_run(conn, run_id)
-    assert run is not None
-    return run
+    return present(db.get_run(conn, run_id))
 
 
 def test_the_overseer_reads_the_trusted_list_and_a_public_tickets_operator_messages(
@@ -85,8 +82,7 @@ def test_the_overseer_reads_the_trusted_list_and_a_public_tickets_operator_messa
 
         # Handled, the message moves the cursor past it, and the ticket has nothing new from the operator.
         assert main(["ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={message}"]) == 0
-        ticket = db.get_ticket(conn, KEY)
-        assert ticket is not None
+        ticket = present(db.get_ticket(conn, KEY))
         assert conversation.operator_section(conn, ticket) is None
 
 
@@ -95,11 +91,9 @@ def test_a_started_tickets_messages_stay_in_its_private_section(
 ) -> None:
     assert main(["start", KEY]) == 0
     reply(conn, GO_AHEAD)
-    ticket = db.get_ticket(conn, KEY)
-    assert ticket is not None
+    ticket = present(db.get_ticket(conn, KEY))
     assert conversation.operator_section(conn, ticket) is None
-    private = conversation.state_section(conn, ticket)
-    assert private is not None
+    private = present(conversation.state_section(conn, ticket))
     assert [m["body"] for m in private["new_operator_messages"]] == [GO_AHEAD]
 
 
@@ -126,8 +120,7 @@ def test_a_public_resume_hears_the_operator_and_knows_whom_to_trust(
             in prompt
         )
         # The dispatch carried the message cursor, so the next tick does not read the go-ahead again.
-        ticket = db.get_ticket(conn, KEY)
-        assert ticket is not None
+        ticket = present(db.get_ticket(conn, KEY))
         assert ticket.last_message_id == message
         assert conversation.operator_section(conn, ticket) is None
 

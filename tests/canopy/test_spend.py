@@ -10,6 +10,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db, spend
 from canopy.core.agent_output import ToolUse, Usage
+from tests.canopy.helpers import earlier
 from tests.conftest import CanopyEnv, Journals
 
 NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
@@ -18,10 +19,6 @@ NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
 def noon_today() -> datetime:
     """Today at noon UTC, so a journal written around it has the same UTC days whenever the test runs."""
     return datetime.now(UTC).replace(hour=12, minute=0, second=0, microsecond=0)
-
-
-def at(now: datetime, days: float, hours: float = 0) -> str:
-    return db.format_time(now - timedelta(days=days, hours=hours))
 
 
 def tick(
@@ -45,21 +42,25 @@ def tick(
 
 def journal_of_a_week(conn: sqlite3.Connection, now: datetime) -> None:
     """Three days of ticks and runs, one before the window, and one run of each kind that reported no cost."""
-    first = tick(conn, at(now, 9), 5.0, idle=False, woken_by="start")  # before a week
-    tick(conn, at(now, 2), 1.0, idle=False, woken_by="start")
-    tick(conn, at(now, 2, 1), 0.25, idle=True, woken_by="timer")
-    tick(conn, at(now, 1), 0.25, idle=True, woken_by="timer")
-    tick(conn, at(now, 1, 1), 0.5, idle=False, woken_by="message")
-    tick(conn, at(now, 1, 2), None, idle=True, woken_by="timer")  # reported nothing
-    tick(conn, at(now, 1, 3), 0.1, status="overseer_failed", woken_by="gate")
-    tick(conn, at(now, 0, 1), 0.4)  # by hand: the loop did not run it
-    tick(conn, at(now, 0, 2), 0.3, dry_run=True, idle=True, woken_by="timer")  # a dry loop's
-    tick(conn, at(now, 0), None, status="running", woken_by="timer")
+    first = tick(conn, earlier(now, 9), 5.0, idle=False, woken_by="start")  # before a week
+    tick(conn, earlier(now, 2), 1.0, idle=False, woken_by="start")
+    tick(conn, earlier(now, 2, 1), 0.25, idle=True, woken_by="timer")
+    tick(conn, earlier(now, 1), 0.25, idle=True, woken_by="timer")
+    tick(conn, earlier(now, 1, 1), 0.5, idle=False, woken_by="message")
+    tick(conn, earlier(now, 1, 2), None, idle=True, woken_by="timer")  # reported nothing
+    tick(conn, earlier(now, 1, 3), 0.1, status="overseer_failed", woken_by="gate")
+    tick(conn, earlier(now, 0, 1), 0.4)  # by hand: the loop did not run it
+    tick(conn, earlier(now, 0, 2), 0.3, dry_run=True, idle=True, woken_by="timer")  # a dry loop's
+    tick(conn, earlier(now, 0), None, status="running", woken_by="timer")
     conn.execute(
         "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at) VALUES ('PROJ-1', 'ws', ?, ?)",
-        (at(now, 9), at(now, 9)),
+        (earlier(now, 9), earlier(now, 9)),
     )
-    for started, cost, status in ((at(now, 9), 7.0, "done"), (at(now, 2), 2.0, "done"), (at(now, 1), None, "failed")):
+    for started, cost, status in (
+        (earlier(now, 9), 7.0, "done"),
+        (earlier(now, 2), 2.0, "done"),
+        (earlier(now, 1), None, "failed"),
+    ):
         conn.execute(
             "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, status, log_path, cost_usd) "
             "VALUES (?, 'PROJ-1', 'implement', 'agent/PROJ-1', ?, ?, 'l', ?)",
@@ -68,9 +69,9 @@ def journal_of_a_week(conn: sqlite3.Connection, now: datetime) -> None:
     conn.execute(
         "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, status, log_path) "
         "VALUES (?, 'PROJ-1', 'fix-ci', 'agent/PROJ-1', ?, 'running', 'l')",
-        (first, at(now, 0)),
+        (first, earlier(now, 0)),
     )
-    for started, cost in ((at(now, 1), 0.75), (at(now, 0), None)):
+    for started, cost in ((earlier(now, 1), 0.75), (earlier(now, 0), None)):
         conn.execute(
             "INSERT INTO chore_runs (tick_id, chore, started_at, status, log_path, cost_usd) "
             "VALUES (NULL, 'deps', ?, 'ok', 'l', ?)",
@@ -79,14 +80,14 @@ def journal_of_a_week(conn: sqlite3.Connection, now: datetime) -> None:
     conn.execute(
         "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, status, log_path, cost_usd) "
         "VALUES (?, 'https://e.test/pr/7', 'abc', ?, 'done', 'l', 1.5)",
-        (first, at(now, 0)),
+        (first, earlier(now, 0)),
     )
 
 
 def ticket(conn: sqlite3.Connection, key: str, *, title: str | None = None, done: bool = False) -> None:
     conn.execute(
         "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, title, done) VALUES (?, 'ws', ?, ?, ?, ?)",
-        (key, at(NOW, 30), at(NOW, 30), title, int(done)),
+        (key, earlier(NOW, 30), earlier(NOW, 30), title, int(done)),
     )
 
 
@@ -188,9 +189,9 @@ def test_idle_ticks_are_the_newest_live_idle_ones_in_the_window(canopy_env: Cano
     week = spend.breakdown(conn, NOW, 7)
     rows = spend.idle_ticks(conn, week.since, week.until)
     assert [(r.started_at, r.cost_usd) for r, _ in rows] == [
-        (at(NOW, 1, 2), None),
-        (at(NOW, 1), 0.25),
-        (at(NOW, 2, 1), 0.25),
+        (earlier(NOW, 1, 2), None),
+        (earlier(NOW, 1), 0.25),
+        (earlier(NOW, 2, 1), 0.25),
     ]
     today = spend.breakdown(conn, NOW, 1)
     assert spend.idle_ticks(conn, today.since, today.until) == []  # today's one idle tick is dry
@@ -239,8 +240,8 @@ def test_canopy_spend_reads_at_most_a_year(canopy_env: CanopyEnv) -> None:
 def test_a_running_dry_run_is_never_the_live_overseers(tmp_path: Path, journals: Journals) -> None:
     """A tick records its overseer's cost before it closes, so a dry run still acting is already priced."""
     conn = journals.open(tmp_path / "canopy.db")
-    tick(conn, at(NOW, 0, 1), 0.5, status="running", dry_run=True)
-    tick(conn, at(NOW, 0, 2), 0.25, status="running")
+    tick(conn, earlier(NOW, 0, 1), 0.5, status="running", dry_run=True)
+    tick(conn, earlier(NOW, 0, 2), 0.25, status="running")
     found = spend.breakdown(conn, NOW, 1)
     assert (found.totals.dry_run, found.totals.overseer) == (0.5, 0.25)
     assert [g.ticks for g in found.ticks] == [0] * len(spend.GROUPS)  # neither has ended
@@ -250,7 +251,7 @@ def test_a_running_dry_run_is_never_the_live_overseers(tmp_path: Path, journals:
 def test_canopy_spend_says_when_every_run_reported_a_cost(
     canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    tick(canopy_env.journal(), at(noon_today(), 0), 0.25, idle=True, woken_by="timer")
+    tick(canopy_env.journal(), earlier(noon_today(), 0), 0.25, idle=True, woken_by="timer")
     assert main(["spend", "--days", "1"]) == 0
     out = capsys.readouterr().out.splitlines()
     assert out[0].startswith("Spend over 1 day, since ")
@@ -261,7 +262,7 @@ def test_a_row_after_the_window_is_in_no_figure(tmp_path: Path, journals: Journa
     """A clock behind the journal's puts a row after today: it is in no day, no total, and no count."""
     conn = journals.open(tmp_path / "canopy.db")
     tick(conn, db.format_time(NOW + timedelta(days=1)), 9.0, idle=True, woken_by="timer")
-    tick(conn, at(NOW, 0), 1.0, idle=False, woken_by="start")
+    tick(conn, earlier(NOW, 0), 1.0, idle=False, woken_by="start")
     found = spend.breakdown(conn, NOW, 1)
     assert (found.totals.overseer, found.totals.idle) == (1.0, None)
     assert [(g.group, g.ticks) for g in found.ticks if g.ticks] == [("busy", 1)]
@@ -273,9 +274,9 @@ def test_a_row_after_the_window_is_in_no_figure(tmp_path: Path, journals: Journa
 def test_idle_share_is_of_the_live_ticks_that_ended(tmp_path: Path, journals: Journals) -> None:
     """A running tick has reported its cost and is in no group yet, so it is in neither part of the share."""
     conn = journals.open(tmp_path / "canopy.db")
-    tick(conn, at(NOW, 0, 2), 0.25, idle=True, woken_by="timer")
-    tick(conn, at(NOW, 0, 1), 0.75, idle=False, woken_by="message")
-    tick(conn, at(NOW, 0), 2.0, status="running")
+    tick(conn, earlier(NOW, 0, 2), 0.25, idle=True, woken_by="timer")
+    tick(conn, earlier(NOW, 0, 1), 0.75, idle=False, woken_by="message")
+    tick(conn, earlier(NOW, 0), 2.0, status="running")
     found = spend.breakdown(conn, NOW, 1)
     assert found.totals.overseer == 3.0  # the running tick's cost counts, as the rail's counters count it
     assert found.idle_share == 0.25
@@ -283,7 +284,7 @@ def test_idle_share_is_of_the_live_ticks_that_ended(tmp_path: Path, journals: Jo
 
 def test_what_each_ticket_and_pr_cost_and_what_the_window_got_done(tmp_path: Path, journals: Journals) -> None:
     conn = journals.open(tmp_path / "canopy.db")
-    t = tick(conn, at(NOW, 1), 4.0, idle=False, woken_by="start")
+    t = tick(conn, earlier(NOW, 1), 4.0, idle=False, woken_by="start")
     web, api, other = "https://e.test/web/pull/1", "https://e.test/api/pull/2", "https://e.test/x/pull/9"
     ticket(conn, "A-1", title="Merged", done=True)
     ticket(conn, "A-2", title="Closed in the tracker", done=True)
@@ -293,18 +294,18 @@ def test_what_each_ticket_and_pr_cost_and_what_the_window_got_done(tmp_path: Pat
     conn.execute(
         "INSERT INTO ticket_units (ticket_key, repo, pr_url, phase) VALUES ('A-1', 'web', ?, 'merged')", (web,)
     )
-    run(conn, t, "A-1", at(NOW, 2), 3.0, {"web": web, "api": api})  # a joint run: on each PR, once on its ticket
-    run(conn, t, "A-1", at(NOW, 9), 50.0, {"web": web})  # before the window
-    run(conn, t, "A-2", at(NOW, 1), 1.0, None)
-    run(conn, t, "A-3", at(NOW, 0), 0.5, {"web": "not a url"})
-    run(conn, t, "A-4", at(NOW, 3), None, None)
-    review(conn, t, web, "A-1", at(NOW, 1), 0.25)
-    review(conn, t, other, None, at(NOW, 0), 0.75)
-    decide(conn, t, "A-1", at(NOW, 1), "done", "every PR merged")
-    decide(conn, t, "A-2", at(NOW, 3), "done", "every PR merged")
-    decide(conn, t, "A-2", at(NOW, 1), "done", db.CLOSED_RATIONALE)  # the newest says how
-    decide(conn, t, "A-4", at(NOW, 8), "done", "every PR merged")
-    decide(conn, t, "A-5", at(NOW, 0), "done", "every PR merged")
+    run(conn, t, "A-1", earlier(NOW, 2), 3.0, {"web": web, "api": api})  # a joint run: on each PR, once on its ticket
+    run(conn, t, "A-1", earlier(NOW, 9), 50.0, {"web": web})  # before the window
+    run(conn, t, "A-2", earlier(NOW, 1), 1.0, None)
+    run(conn, t, "A-3", earlier(NOW, 0), 0.5, {"web": "not a url"})
+    run(conn, t, "A-4", earlier(NOW, 3), None, None)
+    review(conn, t, web, "A-1", earlier(NOW, 1), 0.25)
+    review(conn, t, other, None, earlier(NOW, 0), 0.75)
+    decide(conn, t, "A-1", earlier(NOW, 1), "done", "every PR merged")
+    decide(conn, t, "A-2", earlier(NOW, 3), "done", "every PR merged")
+    decide(conn, t, "A-2", earlier(NOW, 1), "done", db.CLOSED_RATIONALE)  # the newest says how
+    decide(conn, t, "A-4", earlier(NOW, 8), "done", "every PR merged")
+    decide(conn, t, "A-5", earlier(NOW, 0), "done", "every PR merged")
     found = spend.breakdown(conn, NOW, 7)
 
     assert found.done == 3
@@ -312,11 +313,11 @@ def test_what_each_ticket_and_pr_cost_and_what_the_window_got_done(tmp_path: Pat
     assert found.totals.total == pytest.approx(9.5)
     assert found.per_done == pytest.approx(9.5 / 3)  # the window's whole spend, the overseer's included
     assert found.tickets == [
-        spend.TicketSpend("A-1", "Merged", 1, 1, 3.25, "merged", at(NOW, 1)),
-        spend.TicketSpend("A-2", "Closed in the tracker", 1, 0, 1.0, "closed", at(NOW, 1)),
+        spend.TicketSpend("A-1", "Merged", 1, 1, 3.25, "merged", earlier(NOW, 1)),
+        spend.TicketSpend("A-2", "Closed in the tracker", 1, 0, 1.0, "closed", earlier(NOW, 1)),
         spend.TicketSpend("A-3", None, 1, 0, 0.5),
         spend.TicketSpend("A-4", None, 1, 0, None),  # done before the window: not done in it
-        spend.TicketSpend("A-5", None, 0, 0, None, "merged", at(NOW, 0)),
+        spend.TicketSpend("A-5", None, 0, 0, None, "merged", earlier(NOW, 0)),
     ]
     assert found.pull_requests == [
         spend.PullRequestSpend(web, "A-1", "merged", runs=1, reviews=1, cost_usd=3.25),
@@ -327,12 +328,12 @@ def test_what_each_ticket_and_pr_cost_and_what_the_window_got_done(tmp_path: Pat
 
 def test_a_ticket_forgotten_or_reopened_since_it_was_done_is_not_done(tmp_path: Path, journals: Journals) -> None:
     conn = journals.open(tmp_path / "canopy.db")
-    t = tick(conn, at(NOW, 1), 1.0)
+    t = tick(conn, earlier(NOW, 1), 1.0)
     ticket(conn, "A-1", done=True)
     ticket(conn, "A-2")  # reopened: no longer done
-    decide(conn, t, "A-1", at(NOW, 1), "done", "every PR merged")
-    decide(conn, t, "A-2", at(NOW, 1), "done", "every PR merged")
-    conn.execute("UPDATE tickets SET forgotten_at = ? WHERE key = 'A-1'", (at(NOW, 0),))
+    decide(conn, t, "A-1", earlier(NOW, 1), "done", "every PR merged")
+    decide(conn, t, "A-2", earlier(NOW, 1), "done", "every PR merged")
+    conn.execute("UPDATE tickets SET forgotten_at = ? WHERE key = 'A-1'", (earlier(NOW, 0),))
     found = spend.breakdown(conn, NOW, 7)
     assert (found.done, found.per_done, found.tickets) == (0, None, [])
 
@@ -342,17 +343,17 @@ def test_canopy_spend_prints_the_tickets_done_and_the_costliest(
 ) -> None:
     now = noon_today()
     conn = canopy_env.journal()
-    t = tick(conn, at(now, 0), 1.0)
+    t = tick(conn, earlier(now, 0), 1.0)
     for n in range(12):
         ticket(conn, f"A-{n}", done=n == 11)
-        run(conn, t, f"A-{n}", at(now, 0), n + 1.0, None)
-    decide(conn, t, "A-11", at(now, 0), "done", "every PR merged")
+        run(conn, t, f"A-{n}", earlier(now, 0), n + 1.0, None)
+    decide(conn, t, "A-11", earlier(now, 0), "done", "every PR merged")
     assert main(["spend", "--days", "1"]) == 0
     out = capsys.readouterr().out.splitlines()
     assert "1 ticket marked done, $79.00 of all spend for each." in out
     words = [line.split() for line in out]
     first = words.index(["ticket", "runs", "spent", "done"]) + 1
-    assert words[first] == ["A-11", "1", "$12.00", at(now, 0)[:10], "merged"]
+    assert words[first] == ["A-11", "1", "$12.00", earlier(now, 0)[:10], "merged"]
     assert [w[0] for w in words[first : first + 10]] == [f"A-{n}" for n in range(11, 1, -1)]  # the costliest ten
     assert words[first + 10] == ["and", "2", "more;", "--json", "lists", "every", "one"]
 
@@ -369,29 +370,29 @@ def test_first_calls_are_by_kind_and_snapshot_with_their_median_and_cold_share(
     calls = [(5, 50_000, 49_000, "old"), (4, 52_000, 3_000, "old"), (3, 51_000, 2_000, "old")]
     calls += [(2, 60_000, 58_000, "new"), (1, 62_000, 5_000, "new")]
     for hours, sent, written, digest in calls:
-        db.set_tick_report(conn, tick(conn, at(NOW, 0, hours), 0.1), "s", first_call(sent, written), digest=digest)
-    dry = tick(conn, at(NOW, 0, 0.5), 0.1, dry_run=True)  # its first call is a live tick's
+        db.set_tick_report(conn, tick(conn, earlier(NOW, 0, hours), 0.1), "s", first_call(sent, written), digest=digest)
+    dry = tick(conn, earlier(NOW, 0, 0.5), 0.1, dry_run=True)  # its first call is a live tick's
     db.set_tick_report(conn, dry, "s", first_call(61_000, 4_000), digest="new")
-    before = tick(conn, at(NOW, 1), 0.1)  # before the window
+    before = tick(conn, earlier(NOW, 1), 0.1)  # before the window
     db.set_tick_report(conn, before, "s", first_call(10, 10), digest="new")
-    tick(conn, at(NOW, 0, 0.25), 0.1)  # recorded before canopy kept the first call
+    tick(conn, earlier(NOW, 0, 0.25), 0.1)  # recorded before canopy kept the first call
     ticket(conn, "PROJ-1")
-    run(conn, dry, "PROJ-1", at(NOW, 0, 1), 0.1, None)
+    run(conn, dry, "PROJ-1", earlier(NOW, 0, 1), 0.1, None)
     run_id = conn.execute("SELECT max(id) FROM runs").fetchone()[0]
     db.set_run_report(conn, "runs", run_id, "s", first_call(30_000, 1_000), digest="new")
 
     found = spend.breakdown(conn, NOW, 1)
     assert found.first_calls == [
-        spend.FirstCalls("overseer", "old", 3, 51_000, 1 / 3, at(NOW, 0, 5), at(NOW, 0, 3)),
-        spend.FirstCalls("overseer", "new", 3, 61_000, 1 / 3, at(NOW, 0, 2), at(NOW, 0, 0.5)),
-        spend.FirstCalls("workers", "new", 1, 30_000, 0.0, at(NOW, 0, 1), at(NOW, 0, 1)),
+        spend.FirstCalls("overseer", "old", 3, 51_000, 1 / 3, earlier(NOW, 0, 5), earlier(NOW, 0, 3)),
+        spend.FirstCalls("overseer", "new", 3, 61_000, 1 / 3, earlier(NOW, 0, 2), earlier(NOW, 0, 0.5)),
+        spend.FirstCalls("workers", "new", 1, 30_000, 0.0, earlier(NOW, 0, 1), earlier(NOW, 0, 1)),
     ]
 
 
 def test_canopy_spend_json_has_the_first_calls(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
     conn = canopy_env.journal()
     now = noon_today()
-    db.set_tick_report(conn, tick(conn, at(now, 0), 0.1), "s", first_call(50_000, 49_000), digest="abc")
+    db.set_tick_report(conn, tick(conn, earlier(now, 0), 0.1), "s", first_call(50_000, 49_000), digest="abc")
     assert main(["spend", "--json"]) == 0
     assert json.loads(capsys.readouterr().out)["first_calls"] == [
         {
@@ -400,8 +401,8 @@ def test_canopy_spend_json_has_the_first_calls(canopy_env: CanopyEnv, capsys: py
             "runs": 1,
             "first_call": 50_000,
             "cold_share": 1.0,
-            "first_started": at(now, 0),
-            "last_started": at(now, 0),
+            "first_started": earlier(now, 0),
+            "last_started": earlier(now, 0),
         }
     ]
 
@@ -410,20 +411,20 @@ def tools_journal(conn: sqlite3.Connection, now: datetime) -> None:
     """Tool calls of each kind of run in the window, a dry tick's among them, and of a tick before it."""
     usage = Usage(0.1, 0, 0, 0, 0, 0)
     reads = [ToolUse("github_pull_request_read", 3, 0, 40_000), ToolUse("bash", 2, 1, 900)]
-    db.set_tick_report(conn, tick(conn, at(now, 0, 1), 0.1), "s", usage, tools=reads)
-    db.set_tick_report(conn, tick(conn, at(now, 0, 2), 0.1, dry_run=True), "s", usage, tools=reads[:1])
-    db.set_tick_report(conn, tick(conn, at(now, 9), 0.1), "s", usage, tools=[ToolUse("bash", 50, 0, 10**6)])
+    db.set_tick_report(conn, tick(conn, earlier(now, 0, 1), 0.1), "s", usage, tools=reads)
+    db.set_tick_report(conn, tick(conn, earlier(now, 0, 2), 0.1, dry_run=True), "s", usage, tools=reads[:1])
+    db.set_tick_report(conn, tick(conn, earlier(now, 9), 0.1), "s", usage, tools=[ToolUse("bash", 50, 0, 10**6)])
     ticket(conn, "PROJ-1")
     first = int(conn.execute("SELECT min(id) FROM ticks").fetchone()[0])
-    run(conn, first, "PROJ-1", at(now, 0, 3), 0.1, None)
+    run(conn, first, "PROJ-1", earlier(now, 0, 3), 0.1, None)
     run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
     db.set_run_report(conn, "runs", run_id, "s", usage, tools=[ToolUse("bash", 30, 4, 20_000)])
     conn.execute(
-        "INSERT INTO chore_runs (chore, started_at, status, log_path) VALUES ('deps', ?, 'ok', 'l')", (at(now, 0),)
+        "INSERT INTO chore_runs (chore, started_at, status, log_path) VALUES ('deps', ?, 'ok', 'l')", (earlier(now, 0),)
     )
     chore_id = int(conn.execute("SELECT max(id) FROM chore_runs").fetchone()[0])
     db.set_run_report(conn, "chore_runs", chore_id, "s", usage, tools=[ToolUse("read", 1, 0, 10)])
-    review(conn, first, "https://e.test/pr/1", None, at(now, 0), 0.1)
+    review(conn, first, "https://e.test/pr/1", None, earlier(now, 0), 0.1)
     review_id = int(conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
     db.set_run_report(conn, "review_runs", review_id, "s", usage, tools=[ToolUse("bash", 1, 0, 900)])
 
@@ -453,7 +454,7 @@ def test_canopy_spend_prints_the_tools_that_returned_the_most(
 
     tools_journal(conn, now)
     many = [ToolUse(f"mcp_{n}", 1, 0, n) for n in range(1, 11)]
-    db.set_tick_report(conn, tick(conn, at(now, 0, 4), 0.1), "s", Usage(0.1, 0, 0, 0, 0, 0), tools=many)
+    db.set_tick_report(conn, tick(conn, earlier(now, 0, 4), 0.1), "s", Usage(0.1, 0, 0, 0, 0, 0), tools=many)
     assert main(["spend", "--days", "1"]) == 0
     out = capsys.readouterr().out.splitlines()
     first = out.index(next(line for line in out if line.startswith("tool ")))
@@ -485,6 +486,6 @@ def test_tools_read_only_the_windows_runs(tmp_path: Path, journals: Journals, ta
     """
     conn = journals.open(tmp_path / "canopy.db")
     sql = spend._TOOLS_SQL.format(table=table)  # noqa: SLF001 (the query the plan is of)
-    plan = [str(row[3]) for row in conn.execute(f"EXPLAIN QUERY PLAN {sql}", (table, at(NOW, 7), at(NOW, 0)))]
+    plan = [str(row[3]) for row in conn.execute(f"EXPLAIN QUERY PLAN {sql}", (table, earlier(NOW, 7), earlier(NOW, 0)))]
     assert plan[0].startswith(f"SEARCH r USING COVERING INDEX {table}_spent (started_at>? AND started_at<?)"), plan
     assert plan[1].startswith("SEARCH t USING PRIMARY KEY (run_table=? AND run_id=?)"), plan

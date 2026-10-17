@@ -18,11 +18,14 @@ from canopy.infra import lock, procs
 from canopy.loop import attention
 from tests.canopy.helpers import (
     DEAD_PID,
+    agent_runs,
     canopy,
     commit_and_push,
     in_tick,
+    last_tick,
     overseer_does,
     pool,
+    present,
     wait_for_run,
     waits,
     worker_does,
@@ -68,8 +71,7 @@ def add_run(
 
 
 def last_tick_decisions(conn: sqlite3.Connection) -> list[tuple[str | None, str, str]]:
-    tick = db.last_tick(conn)
-    assert tick is not None
+    tick = last_tick(conn)
     return [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(conn, tick.id)]
 
 
@@ -86,12 +88,10 @@ def test_dead_worker_is_crashed_and_its_slot_returned(
 
         assert main(["tick"]) == 0
         for run_id in (dead, never_started):
-            run = db.get_run(conn, run_id)
-            assert run is not None
+            run = present(db.get_run(conn, run_id))
             assert run["status"] == "crashed"
             assert json.loads(run["result_json"]) == {"harness": "the worker process is gone"}
-        still = db.get_run(conn, live)
-        assert still is not None
+        still = present(db.get_run(conn, live))
         assert still["status"] == "running"
         assert [s["status"] for s in pool(treehouse_state)] == ["available", "available", "leased"]
 
@@ -104,7 +104,7 @@ def test_dead_worker_is_crashed_and_its_slot_returned(
             ("PROJ-2", "wait"),
             ("PROJ-3", "wait"),
         ]
-        [prompt] = [r["argv"][-1] for r in map(json.loads, agent_log.read_text().splitlines())]
+        [prompt] = [r["argv"][-1] for r in agent_runs(agent_log)]
         assert '"running":1' in prompt
         assert '"available":1' in prompt
         assert '"status":"crashed"' in prompt  # the ticket's last run, for the overseer
@@ -239,8 +239,7 @@ def test_treehouse_return_failure_stops_the_tick(
     executable(broken / "treehouse", '#!/bin/sh\n[ "$1" = status ] && echo "[]" && exit 0\necho boom >&2; exit 2\n')
     with mock.patch.dict(os.environ, {"PATH": f"{broken}{os.pathsep}{os.environ['PATH']}"}):
         assert main(["tick"]) == 1
-        tick = db.last_tick(conn)
-        assert tick is not None
+        tick = last_tick(conn)
         assert tick.status == TickStatus.RECONCILE_FAILED
         assert "boom" in str(tick.summary)
         assert not agent_log.exists()
@@ -278,7 +277,7 @@ def test_live_tick_takes_a_ticket_to_a_pushed_branch(
         assert main(["tick"]) == 0
     calls = json.loads(treehouse_state.read_text())["calls"]
     assert [c[0] for c in calls] == ["status", "get", "return", "status"]
-    prompt = json.loads(agent_log.read_text().splitlines()[-1])["argv"][-1]
+    prompt = agent_runs(agent_log)[-1]["argv"][-1]
     assert '"last_run":{"run_id":1,' in prompt
     assert '"status":"done"' in prompt
 
@@ -293,11 +292,10 @@ def test_killed_worker_is_detected_on_the_next_tick(
     """M2 acceptance, against the fakes: a killed worker is found by the next tick and its slot returned."""
     with (
         worker_does(sleep=60),
-        in_tick(conn) as tick_id,
+        in_tick(conn, ends_ok=True),
     ):
         dispatch = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
         assert main(dispatch) == 0
-        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
 
     # Wait for both, in either order. `_run` records the worker's pid only after starting it, so the agent log can come
     # first. The log is written after the fake's stdout chatter: killing `_run` before then would break the worker's
@@ -321,8 +319,7 @@ def test_killed_worker_is_detected_on_the_next_tick(
 
     with overseer_does(*waits("PROJ-1")):
         assert main(["tick"]) == 0
-    crashed = db.get_run(conn, 1)
-    assert crashed is not None
+    crashed = present(db.get_run(conn, 1))
     assert crashed["status"] == "crashed"
     while procs.alive(worker_pid) and time.monotonic() < deadline:
         time.sleep(0.05)

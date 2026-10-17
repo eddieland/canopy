@@ -1,22 +1,20 @@
 """`canopy grant` (DESIGN §8, §22): the operator lets a unit at its attempt limit run again; every run still counts."""
 
 import json
-import os
 import sqlite3
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, db
-from canopy.core.vocab import TickStatus
 from canopy.runs import policy
 from tests.canopy.helpers import (
     KEY,
     canopy,
     dispatch_and_run,
     dispatch_refused,
+    in_run,
     in_tick,
     operator,
     overseer_does,
@@ -106,13 +104,10 @@ def test_only_the_operator_grants(
 ) -> None:
     fail_twice(conn)
     capsys.readouterr()
-    in_run: dict[str, str] = {"CANOPY_RUN_ID": "1"} if env == "CANOPY_RUN_ID" else {}
-    with in_tick(conn) as tick_id, mock.patch.dict(os.environ, in_run):
-        if in_run:
-            os.environ.pop("CANOPY_TICK_ID")
+    # Inside a tick, as the overseer; or inside a run, as its agent, with no tick named.
+    with in_tick(conn, ends_ok=True) if env == "CANOPY_TICK_ID" else in_run(1):
         assert main(["grant", KEY, "implement"]) == 1
         assert "grant refused (inside_run)" in capsys.readouterr().err
-        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         assert grants(conn) == []
 
 

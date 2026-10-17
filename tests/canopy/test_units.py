@@ -22,10 +22,12 @@ from tests.canopy.helpers import (
     BRANCH,
     LABEL,
     InlineRunner,
+    agent_runs,
     decisions,
     in_tick,
     overseer_does,
     pool_statuses,
+    present,
     state_block,
     wait_for_run,
     waits,
@@ -74,7 +76,7 @@ def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
         slots = slots_of(conn, 1)
         assert list(slots) == ["api", "web"]
         desk = ws.root / "desks" / "PROJ-1"
-        [worker] = [json.loads(line) for line in agent_log.read_text().splitlines()]
+        [worker] = agent_runs(agent_log)
         assert worker["cwd"] == str(desk)
         assert [c["returncode"] for c in worker["commands"]] == [0, 0, 0, 0, 0]
         assert worker["commands"][0]["stdout"].strip() == os.path.relpath(slots["api"], desk)
@@ -294,16 +296,14 @@ def test_journal_commands_name_a_unit(ws: Ws, capsys: pytest.CaptureFixture[str]
             reviewed,
             None,
         )
-        ticket = db.get_ticket(conn, "PROJ-1")
-        assert ticket is not None
+        ticket = present(db.get_ticket(conn, "PROJ-1"))
         assert ticket.phase is None  # a phase about the PR is the unit's
         # A phase about the PR needs its unit; the ticket's own phases are the ticket's, --repo or not.
         assert main(["ticket", "set", "PROJ-1", "--phase", "approved"]) == 2
         assert "the approved phase belongs to one unit: name its repository with --repo" in capsys.readouterr().err
         assert main(["ticket", "set", "PROJ-1", "--repo", "api", "--phase", "needs_human"]) == 0
         capsys.readouterr()
-        ticket = db.get_ticket(conn, "PROJ-1")
-        assert ticket is not None
+        ticket = present(db.get_ticket(conn, "PROJ-1"))
         assert ticket.phase == "needs_human"
         assert [u["phase"] for u in db.units(conn, "PROJ-1")] == ["ci_red"]
 
@@ -333,8 +333,7 @@ def test_a_merge_conflict_is_a_units_phase(ws: Ws, capsys: pytest.CaptureFixture
         assert main(["ticket", "set", "PROJ-1", "--repo", "web", "--phase", "conflicted"]) == 0
         [unit] = db.units(conn, "PROJ-1")
         assert (unit["repo"], unit["phase"]) == ("web", "conflicted")
-        ticket = db.get_ticket(conn, "PROJ-1")
-        assert ticket is not None
+        ticket = present(db.get_ticket(conn, "PROJ-1"))
         assert ticket.phase is None
 
 
@@ -348,8 +347,7 @@ def test_untrusted_review_is_a_units_phase(ws: Ws, capsys: pytest.CaptureFixture
         assert main(["ticket", "set", "PROJ-1", "--repo", "api", "--phase", "untrusted_review"]) == 0
     [unit] = db.units(conn, "PROJ-1")
     assert (unit["repo"], unit["phase"]) == ("api", "untrusted_review")
-    ticket = db.get_ticket(conn, "PROJ-1")
-    assert ticket is not None
+    ticket = present(db.get_ticket(conn, "PROJ-1"))
     assert ticket.phase is None
 
 
@@ -379,9 +377,8 @@ def test_a_killed_joint_run_is_detected_and_all_its_slots_returned(
     seed_pools(ws, treehouse_state)
     conn = ws.journal()
     with worker_does(sleep=60):
-        with in_tick(conn) as tick_id:
+        with in_tick(conn, ends_ok=True):
             assert main(dispatch("PROJ-1", "--repo", "api", "--repo", "web")) == 0
-            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
 
         deadline = time.monotonic() + 30
         run = db.get_run(conn, 1)
@@ -402,8 +399,7 @@ def test_a_killed_joint_run_is_detected_and_all_its_slots_returned(
 
         with overseer_does(*waits("PROJ-1")):
             assert main(["tick"]) == 0
-        crashed = db.get_run(conn, 1)
-        assert crashed is not None
+        crashed = present(db.get_run(conn, 1))
         assert crashed["status"] == "crashed"
         while procs.alive(worker_pid) and time.monotonic() < deadline:
             time.sleep(0.05)

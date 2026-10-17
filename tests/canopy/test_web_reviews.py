@@ -9,6 +9,7 @@ from pathlib import Path
 from canopy.core import db, review_diff
 from canopy.serve import mock_reviews
 from canopy.serve.backend import Backend
+from tests.canopy.helpers import present
 from tests.canopy.web_helpers import SECRET, client, signed_in
 
 
@@ -162,8 +163,7 @@ def test_findings_sent_from_the_web_reach_the_ticket_as_the_cli_sends_them(backe
         "new": True,
     }
     with backend.open() as ctx:
-        message = db.get_message(ctx.conn, recorded["message_id"])
-        assert message is not None
+        message = present(db.get_message(ctx.conn, recorded["message_id"]))
         assert (message["subject_id"], message["source"], message["channel"]) == ("ABC-099", "operator", "web")
         assert message["body"] == (
             f"Address findings 1 and 3 of canopy's review run 4, of commit {mock_reviews.SHA_88[:12]}. "

@@ -30,6 +30,7 @@ from tests.canopy.helpers import (
     in_tick,
     operator,
     planner_does,
+    present,
     prompt_of,
     worker_does,
 )
@@ -96,9 +97,7 @@ def dispatched_then(conn: sqlite3.Connection, between: Callable[[], object]) -> 
         between()
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         main(["_run", str(run_id)], runner=runner)
-    run = db.get_run(conn, run_id)
-    assert run is not None
-    return run
+    return present(db.get_run(conn, run_id))
 
 
 @pytest.mark.parametrize("change", ["a new plan", "approved again"])
@@ -155,8 +154,7 @@ def test_an_edit_between_dispatch_and_run_crashes_the_run_before_the_worker(
         path.write_text(TEXT + "\nAnd more.\n")
         run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
         main(["_run", str(run_id)], runner=runner)
-    run = db.get_run(conn, run_id)
-    assert run is not None
+    run = present(db.get_run(conn, run_id))
     assert run["status"] == RunStatus.CRASHED
     note = str(contract.stored_object(run["result_json"]).get("harness"))
     assert note == f"plan 1's file {path} is no longer the text the operator approved; the worker did not start"

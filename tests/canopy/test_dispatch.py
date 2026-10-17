@@ -19,6 +19,7 @@ from tests.canopy.helpers import (
     in_tick,
     lifelock_left,
     pool,
+    present,
     slot_of,
     wait_for_run,
     worker_does,
@@ -53,8 +54,7 @@ def test_dispatch_leases_records_and_spawns(
             == 0
         )
 
-        run = db.get_run(conn, 1)
-        assert run is not None
+        run = present(db.get_run(conn, 1))
         assert (run["ticket_key"], run["kind"], run["status"]) == ("PROJ-1", "implement", "running")
         assert run["branch"] == "agent/PROJ-1-add-login"
         assert run["pid"] == os.getpid()
@@ -430,8 +430,7 @@ def test_spawn_failure_returns_the_slot_and_closes_the_run(
             == 1
         )
         assert decisions(conn, tick_id) == [("refused:spawn_failed", "no processes left")]
-        run = db.get_run(conn, 1)
-        assert run is not None
+        run = present(db.get_run(conn, 1))
         assert run["status"] == "crashed"
         assert json.loads(run["result_json"]) == {"harness": "could not start the worker: no processes left"}
         assert all(s["status"] == "available" for s in pool(treehouse_state))

@@ -5,10 +5,8 @@
 needs one (`unplanned`), and neither an `implement` nor a `resume` follows a plan whose file changed (`plan_changed`).
 """
 
-import os
 import sqlite3
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
@@ -24,9 +22,13 @@ from tests.canopy.helpers import (
     dispatch_and_run,
     dispatch_in_tick,
     dispatch_refused,
+    in_run,
     last_run,
     operator,
+    plan_file,
     planner_does,
+    present,
+    seen,
 )
 from tests.conftest import CanopyEnv, GitPool
 
@@ -38,21 +40,12 @@ VERBS: tuple[tuple[str, ...], ...] = ((), ("--skip",), ("--approve",))
 UNPLANNED = "PROJ-1 needs a plan before its implement, and {}; dispatch `plan` or wait for it"
 
 
-def seen(conn: sqlite3.Connection, env: CanopyEnv, key: str = KEY) -> None:
-    """Record `key` as a tick that saw it would: the operator's plan verbs act on a ticket canopy knows."""
-    db.touch_ticket(conn, key, str(env.root))
-
-
 def planned(conn: sqlite3.Connection) -> int:
     """Run a planner that writes TEXT; returns the plan's run id."""
     with planner_does(plan=TEXT):
         run = dispatch_and_run(conn, *PLAN)
     assert run["status"] == RunStatus.DONE, Path(run["log_path"]).read_text()
     return int(run["id"])
-
-
-def plan_path(env: CanopyEnv, run_id: int) -> Path:
-    return env.state_dir / "plans" / KEY / f"{run_id}.md"
 
 
 def close_last_run(env: CanopyEnv, conn: sqlite3.Connection) -> None:
@@ -76,13 +69,12 @@ def test_under_approve_an_implement_waits_on_an_approved_plan(
     assert dispatch_refused(conn, *WORK) == [("refused:unplanned", waiting)]
 
     # The operator's edit before approving is what is approved.
-    plan_path(canopy_env, run_id).write_text(TEXT + "\nRed, not blue.\n")
+    plan_file(canopy_env, run_id).write_text(TEXT + "\nRed, not blue.\n")
     capsys.readouterr()
     assert operator("plan", KEY, "--approve") == 0
-    path = plan_path(canopy_env, run_id)
+    path = plan_file(canopy_env, run_id)
     assert f"Plan 1 of {KEY} is approved as {path} stands now." in capsys.readouterr().out
-    plan = plans.current(conn, KEY)
-    assert plan is not None
+    plan = present(plans.current(conn, KEY))
     assert (plan.status, plan.approved_channel) == (PlanStatus.APPROVED, "cli")
     assert plans.approved_text(canopy_env.state_dir, plan) == TEXT + "\nRed, not blue.\n"
     assert dispatch_in_tick(conn, *WORK).code == 0
@@ -99,9 +91,8 @@ def test_skip_lets_the_implement_through_and_supersedes_the_plan(
     assert "Plan 1 of PROJ-1 is superseded; its file stays." in out
     assert "PROJ-1's plan is skipped: its implement goes ahead without one." in out
     assert [p.status for p in plans.history(conn, KEY)] == [PlanStatus.SUPERSEDED]
-    assert plan_path(canopy_env, run_id).read_text() == TEXT
-    ticket = db.get_ticket(conn, KEY)
-    assert ticket is not None
+    assert plan_file(canopy_env, run_id).read_text() == TEXT
+    ticket = present(db.get_ticket(conn, KEY))
     assert ticket.plan_setting is PlanSetting.SKIP
     assert dispatch_in_tick(conn, *WORK).code == 0
 
@@ -132,7 +123,7 @@ def test_an_edit_after_approval_holds_the_implement_until_approved_again(
     approve_policy(canopy_env)
     run_id = planned(conn)
     assert operator("plan", KEY, "--approve") == 0
-    path = plan_path(canopy_env, run_id)
+    path = plan_file(canopy_env, run_id)
     path.write_text(TEXT + "\nAnd a test.\n")
     changed = (
         f"plan 1 of {KEY}, {path}, is no longer the text the operator approved; they approve it again, or ask for a "
@@ -151,7 +142,7 @@ def test_a_missing_plan_holds_a_resume_until_skipped(
     assert operator("plan", KEY, "--approve") == 0
     assert dispatch_in_tick(conn, *WORK).code == 0
     close_last_run(canopy_env, conn)
-    path = plan_path(canopy_env, run_id)
+    path = plan_file(canopy_env, run_id)
     path.unlink()
     changed = (
         f"plan 1 of {KEY}, {path}, is no longer the text the operator approved; they approve it again, or ask for a "
@@ -173,11 +164,10 @@ def test_the_operators_plan_verbs_refuse_inside_a_run(
 ) -> None:
     seen(conn, canopy_env)
     for flags in VERBS:
-        with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "7"}):
+        with in_run(7):
             assert main(["plan", KEY, *flags]) == 1
         assert "plan refused (inside_run): CANOPY_RUN_ID is set" in capsys.readouterr().err
-    ticket = db.get_ticket(conn, KEY)
-    assert ticket is not None
+    ticket = present(db.get_ticket(conn, KEY))
     assert ticket.plan_setting is None
 
 
@@ -211,8 +201,7 @@ def test_start_with_plan_starts_a_private_ticket_planned(
 ) -> None:
     assert operator("start", KEY, "--plan") == 0
     assert "It is planned first" in capsys.readouterr().out
-    ticket = db.get_ticket(conn, KEY)
-    assert ticket is not None
+    ticket = present(db.get_ticket(conn, KEY))
     assert ticket.plan_setting is PlanSetting.PLAN
     assert conversation.is_started(conversation.start_of(conn, KEY))
     assert plans.needed("off", ticket.plan_setting)
@@ -260,7 +249,7 @@ def test_grant_plan_refuses_inside_a_run_and_an_unknown_ticket(
     assert operator("grant", KEY, "plan") == 1
     assert "grant refused (unknown): canopy has no record of PROJ-1" in capsys.readouterr().err
     seen(conn, canopy_env)
-    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "7"}):
+    with in_run(7):
         assert main(["grant", KEY, "plan"]) == 1
     assert "grant refused (inside_run)" in capsys.readouterr().err
     assert conn.execute("SELECT count(*) FROM ticket_grants").fetchone()[0] == 0

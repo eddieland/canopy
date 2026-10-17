@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import os
 import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING
-from unittest import mock
 
 import pytest
 
@@ -23,9 +21,11 @@ from tests.canopy.helpers import (
     dispatch_and_run,
     dispatch_in_tick,
     dispatch_refused,
+    in_run,
     in_tick,
     last_run,
     memories,
+    present,
     prompt_of,
     run_with,
     with_memory,
@@ -77,8 +77,7 @@ def test_at_record_a_run_is_journaled_with_its_modes_and_no_ids(
     with_memory(canopy_env, ticket_notes="record")
     run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
     second = run_with(conn, *FIX_CI)
-    rendered = memory.run_memory(conn, int(second["id"]))
-    assert rendered is not None
+    rendered = present(memory.run_memory(conn, int(second["id"])))
     assert (rendered.ticket_notes, rendered.proposals) == (MemoryMode.RECORD, MemoryMode.OFF)
     assert memory.read_by(conn, int(second["id"])) == []
 
@@ -168,8 +167,7 @@ def test_entries_past_the_bounds_are_refused_alone_and_recorded(
 
 
 def refusals(conn: sqlite3.Connection, run: sqlite3.Row) -> list[tuple[str, str | None, str]]:
-    rendered = memory.run_memory(conn, int(run["id"]))
-    assert rendered is not None
+    rendered = present(memory.run_memory(conn, int(run["id"])))
     return [(r.field, r.key, r.why) for r in memory.refused_of(rendered)]
 
 
@@ -177,8 +175,7 @@ def refusals(conn: sqlite3.Connection, run: sqlite3.Row) -> list[tuple[str, str 
 def test_notes_that_are_not_a_list_are_refused(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     with_memory(canopy_env, ticket_notes="record")
     run = run_with(conn, *WORK, notes={"key": "lint", "text": NOTE})
-    rendered = memory.run_memory(conn, int(run["id"]))
-    assert rendered is not None
+    rendered = present(memory.run_memory(conn, int(run["id"])))
     assert [(r.field, r.why) for r in memory.refused_of(rendered)] == [("notes", "`notes` is not a list")]
     assert memories(conn) == []
 
@@ -326,7 +323,7 @@ def test_the_digest_keeps_the_most_recently_used_within_its_cap(conn: sqlite3.Co
 @pytest.mark.parametrize("args", [["forget", "1"], ["purge", "--all"]])
 def test_forget_and_purge_refuse_inside_a_run(canopy_env: CanopyEnv, args: list[str]) -> None:
     with_memory(canopy_env, ticket_notes="record")
-    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "7"}):
+    with in_run(7):
         assert main(["memory", *args]) == 1
 
 

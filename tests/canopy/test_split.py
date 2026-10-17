@@ -15,11 +15,13 @@ from tests.canopy.conftest import Ws, seed_pools
 from tests.canopy.helpers import (
     LABEL,
     InlineRunner,
+    agent_runs,
     decisions,
     in_tick,
     operator,
     overseer_does,
     pool_statuses,
+    present,
     splitter_reports,
     state_block,
     wait_for_run,
@@ -52,7 +54,7 @@ def test_a_split_reads_a_desk_and_records_its_children(ws: Ws, treehouse_state: 
         assert run["status"] == "done", Path(run["log_path"]).read_text()
 
         desk = ws.root / "desks" / "PROJ-12"
-        [splitter] = [json.loads(line) for line in agent_log.read_text().splitlines()]
+        [splitter] = agent_runs(agent_log)
         assert splitter["argv"][:3] == ["run", "--agent", "canopy-splitter"]
         assert splitter["cwd"] == str(desk)
         # Each worktree is at its base, detached: a split creates no branch.
@@ -72,8 +74,7 @@ def test_a_split_reads_a_desk_and_records_its_children(ws: Ws, treehouse_state: 
             "PROJ-12 was split into PROJ-13, PROJ-14; dispatch those instead",
         )
         # The parent gets no branch and no units: the children carry the work.
-        parent = db.get_ticket(conn, "PROJ-12")
-        assert parent is not None
+        parent = present(db.get_ticket(conn, "PROJ-12"))
         assert parent.branch is None
         assert db.units(conn, "PROJ-12") == []
         assert run["branch"] == ""
@@ -262,8 +263,7 @@ def test_a_timed_out_split_records_the_children_it_reported(ws: Ws, treehouse_st
         runner = InlineRunner(timeout_agent=True, timeout_stdout=json.dumps(result) + "\n")
         assert main(split("PROJ-12", "--request", "1", "--repo", "api", "--repo", "web"), runner=runner) == 0
         assert main(["_run", "1"], runner=runner) == 0
-        run = db.get_run(conn, 1)
-        assert run is not None
+        run = present(db.get_run(conn, 1))
         assert run["status"] == "timeout"
         assert json.loads(run["result_json"])["harness"] == "the splitter timed out after 45 minutes"
         # The child exists in the tracker, so the journal knows it and a retry cannot make it again.

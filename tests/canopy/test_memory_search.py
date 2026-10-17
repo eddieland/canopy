@@ -23,6 +23,7 @@ from tests.canopy.helpers import (
     canopy,
     commit_and_push,
     dispatch_and_run,
+    in_run,
     in_tick,
     with_memory,
     worker_does,
@@ -78,7 +79,7 @@ def live_run(conn: sqlite3.Connection, *, notes: str, lessons: str, key: str = K
 
 def searched(run_id: int | str, *words: str) -> int:
     """`canopy memory search` with `words`, as the run `run_id` calls it."""
-    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": str(run_id)}):
+    with in_run(run_id):
         return main(["memory", "search", *words])
 
 

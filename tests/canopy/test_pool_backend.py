@@ -15,7 +15,16 @@ from canopy.core.vocab import PoolKind, RunStatus, TickStatus
 from canopy.infra import logs, procs, resources
 from canopy.runs import reconcile
 from tests.canopy.conftest import Ws, seed_pools
-from tests.canopy.helpers import BRANCH, LABEL, InlineRunner, commit_and_push, in_tick, running_run, worker_does
+from tests.canopy.helpers import (
+    BRANCH,
+    LABEL,
+    InlineRunner,
+    commit_and_push,
+    in_tick,
+    present,
+    running_run,
+    worker_does,
+)
 from tests.canopy.helpers import context as loop_context
 from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import CanopyEnv, git, user_toml
@@ -78,8 +87,7 @@ def test_under_canopy_a_run_leases_from_canopy_s_pool_and_its_slot_goes_back_the
         assert Path(slot["slot_path"]) == ws.root / pool.POOLS_DIR / "api" / "1" / "api"
         assert canopy_rows(conn) == [("api", slot["slot_path"], "canopy:PROJ-1")]
         assert main(["_run", "1"], runner=runner) == 0
-    run = db.get_run(conn, 1)
-    assert run is not None
+    run = present(db.get_run(conn, 1))
     assert run["status"] == RunStatus.DONE
     assert canopy_rows(conn) == [("api", slot["slot_path"], None)]
     assert ws.remote_head("api", BRANCH) is not None

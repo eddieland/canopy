@@ -21,6 +21,7 @@ import pytest
 from canopy.core import pool, pools, workspace
 from canopy.infra import cwds, logs, procs
 from canopy.runs import reconcile
+from tests.canopy.helpers import present
 from tests.conftest import HERMETIC_GIT, CanopyEnv, Journals, git
 
 REPO = "repo"
@@ -141,8 +142,7 @@ def test_a_slot_whose_git_link_was_rewritten_is_never_touched(ws: Ws, tmp_path: 
     assert ws.pool().status()[0].status == "damaged"
     again = ws.pool().lease("PROJ-2")
     assert again.path != lease.path
-    kept = ws.pool().destroy(lease.path)
-    assert kept is not None
+    kept = present(ws.pool().destroy(lease.path))
     assert "damaged" in kept
     assert lease.path.is_dir()
 

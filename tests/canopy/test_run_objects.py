@@ -21,6 +21,7 @@ from tests.canopy.helpers import (
     in_tick,
     overseer_does,
     pool,
+    present,
     slot_of,
     waits,
     worker_does,
@@ -77,8 +78,7 @@ def test_a_sandboxed_workers_commits_are_pushed_from_the_run_directory_and_the_s
         run_id = dispatch(conn, runner)
         assert main(["_run", str(run_id)], runner=runner) == 0
 
-        run = db.get_run(conn, run_id)
-        assert run is not None
+        run = present(db.get_run(conn, run_id))
         assert run["status"] == "done"
         pushed = git_pool.remote_head(BRANCH)
         assert pushed is not None  # `_run`'s own push read the commit from the run's directory
@@ -136,8 +136,7 @@ def test_reconcile_tidies_the_slots_of_a_killed_run(
     run_id = dispatch(conn, InlineRunner())
     slot = Path(slot_of(conn, run_id)["slot_path"])
     link = (slot / ".git").read_bytes()
-    own = hostgit.own_git_dir(slot, link)
-    assert own is not None
+    own = present(hostgit.own_git_dir(slot, link))
     sandboxed_worker_then_kill(canopy_env, conn, run_id, slot)
     if rewrites == ".git":
         (slot / ".git").write_text("gitdir: /somewhere/else\n")
@@ -147,8 +146,7 @@ def test_reconcile_tidies_the_slots_of_a_killed_run(
     with overseer_does(*waits("PROJ-1")):
         assert main(["tick"]) == 0
 
-        run = db.get_run(conn, run_id)
-        assert run is not None
+        run = present(db.get_run(conn, run_id))
         assert run["status"] == "crashed"
         assert (slot / ".git").read_bytes() == link  # put back, from what `_run` recorded, before any git ran there
         assert (own / "commondir").read_bytes() == hostgit.COMMONDIR_CONTENT

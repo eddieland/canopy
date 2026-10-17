@@ -34,7 +34,7 @@ import pytest
 from canopy.core import hostgit, pools, treehouse
 from canopy.core import pool as canopy_pool
 from canopy.infra import procs
-from tests.canopy.helpers import KEY
+from tests.canopy.helpers import KEY, present
 from tests.conftest import HERMETIC_GIT, Journals, git
 
 # Found before any fixture puts the fake first on PATH.
@@ -348,8 +348,7 @@ def test_a_slot_is_a_detached_worktree_of_the_primary_clone(pool: Contract) -> N
     [slot] = pool.status()
     assert (slot.branch, slot.detached, slot.branch_error) == ("", True, "")
     # `_run` reads the `.git` file and checks `commondir` (D118): a slot is a linked worktree, never a clone.
-    link = hostgit.read_link(lease.path)
-    assert link is not None
+    link = present(hostgit.read_link(lease.path))
     assert not hostgit.commondir_moved(lease.path, link)
     common = git("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=lease.path)
     assert Path(common).resolve() == (pool.clone / ".git").resolve()

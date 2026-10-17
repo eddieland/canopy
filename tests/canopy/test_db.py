@@ -13,7 +13,7 @@ from canopy.core import db
 from canopy.core.agent_output import ToolUse, Usage
 from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import resources
-from tests.canopy.helpers import DEAD_PID, journal_at, shipped_through, versions_after
+from tests.canopy.helpers import DEAD_PID, journal_at, present, shipped_through, versions_after
 from tests.conftest import Journals
 
 # Each shipped migration's sha256, over LF line endings. A journal applies a migration once, so an edit to a shipped
@@ -326,8 +326,7 @@ def test_a_report_keeps_the_first_call_and_the_snapshot_only_with_what_the_runti
 
     # A cost recorded before the first call was kept reads it as unknown.
     db.set_tick_report(conn, tick, "ses_o1", Usage(0.25, 10, 2, 0, 400, 50, peak_context=900))
-    usage = db.usage_of(conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone())
-    assert usage is not None
+    usage = present(db.usage_of(conn.execute("SELECT * FROM ticks WHERE id = ?", (tick,)).fetchone()))
     assert (usage.first_call, usage.first_cache_write) == (None, None)
 
 
@@ -401,8 +400,7 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     db.record_decision(conn, tick, "PROJ-1", "wait", "checks pending")
     db.finish_tick(conn, tick, TickStatus.OK, "1 decision")
 
-    row = db.get_tick(conn, stale)
-    assert row is not None
+    row = present(db.get_tick(conn, stale))
     assert row.status == TickStatus.ABANDONED
     [ticket] = db.open_tickets(conn)
     assert (ticket.key, ticket.phase, ticket.last_comment_id) == ("PROJ-1", "ci_red", "c-7")
@@ -410,8 +408,7 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     assert (unit["repo"], unit["phase"], unit["last_ci_run_id"], unit["branch"]) == ("api", "ci_red", "run-7", None)
     [decision] = db.decisions_for_tick(conn, tick)
     assert (decision.ticket_key, decision.action) == ("PROJ-1", "wait")
-    last = db.last_tick(conn)
-    assert last is not None
+    last = present(db.last_tick(conn))
     assert (last.id, last.status, last.dry_run) == (tick, TickStatus.OK, True)
 
 
@@ -496,17 +493,13 @@ def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: 
         "VALUES (1, 'https://github.com/acme/api/pull/7', 'abc', 'x', 'done', 'l')"
     )
     assert db.migrate(conn, resources.migrations_dir()) == versions_after(1)
-    review_run = db.get_review_run(conn, 1)
-    assert review_run is not None
+    review_run = present(db.get_review_run(conn, 1))
     assert (review_run.session_id, review_run.cost_usd, review_run.tokens_input) == (None, None, None)
-    chore_run = db.get_chore_run(conn, 1)
-    assert chore_run is not None
+    chore_run = present(db.get_chore_run(conn, 1))
     assert (chore_run.session_id, chore_run.cost_usd, chore_run.tokens_input) == (None, None, None)
-    run = db.get_run(conn, 1)
-    assert run is not None
+    run = present(db.get_run(conn, 1))
     assert (run["session_id"], run["cost_usd"], run["tokens_input"]) == (None, None, None)
-    tick = db.get_tick(conn, 1)
-    assert tick is not None
+    tick = present(db.get_tick(conn, 1))
     assert (tick.session_id, tick.cost_usd, tick.tokens_input) == (None, None, None)
     # Nor did the loop say whether it was idle or what woke it.
     assert (tick.idle, tick.woken_by) == (None, None)
@@ -556,14 +549,14 @@ def test_the_memory_index_is_built_from_what_the_journal_holds_and_kept_in_step(
     )
     assert db.migrate(conn, resources.migrations_dir()) == versions_after(37)
 
-    def found(word: str) -> list[int]:
+    def indexed(word: str) -> list[int]:
         return [r[0] for r in conn.execute("SELECT rowid FROM memories_fts WHERE memories_fts MATCH ?", (word,))]
 
-    assert found("suite") == [1]
+    assert indexed("suite") == [1]
     conn.execute("UPDATE memories SET body = 'Lint with make lint.' WHERE id = 1")
-    assert (found("suite"), found("lint")) == ([], [1])
+    assert (indexed("suite"), indexed("lint")) == ([], [1])
     conn.execute("UPDATE memories SET body = NULL WHERE id = 1")
-    assert found("lint") == []
+    assert indexed("lint") == []
     conn.execute("DELETE FROM memories WHERE id = 1")
     # Raises if the index and the rows it is built from disagree.
     conn.execute("INSERT INTO memories_fts (memories_fts) VALUES ('integrity-check')")
