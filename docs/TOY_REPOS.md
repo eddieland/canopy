@@ -69,8 +69,10 @@ jobs:
 - `cancel-in-progress` keeps a worker's successive pushes from stacking runs.
 - `check` is the one required status check, so "require status checks" is real.
 - Switches that need no code change:
-  - **A failing check for `fix-ci` (S9):** a catalog issue whose obvious fix breaks a test it says not to touch, and a
-    `ci/must_fail` marker the reset script can commit to a branch.
+  - **A failing check for `fix-ci` (S9):** `ci/branch_check.py` fails a PR whose branch matches the repository
+    variable `TOY_FAIL_BRANCH`, which the reset script points at the S9 issue's branches. A worker cannot change a
+    variable, so no push fixes it. An issue that cannot be done as written does not serve: on 2026-10-17 the worker
+    saw the contradiction and asked, opening no PR.
   - **A staged CI outage (S37, the notice):** `fetch_check.py` fetches the URL in the repository variable
     `TOY_FETCH_URL`. Point it at an unreachable host to stage the outage, and back to end it.
 - Actions in the org require approval to run for every outside contributor, so a drive-by fork cannot run anything.
@@ -114,13 +116,13 @@ A GitHub App owned by the org is the answer if a scenario ever needs two distinc
 ## The issue catalog
 
 `kit/issues/<repo>/NN-slug.md`, each with front matter: the title, the scenario it serves, whether the queue label is
-applied at seed time (`autolabel`, off by default), and the catalog slugs it is blocked by. Each is small enough for a
+applied at seed time (`autolabel`, off by default), whether its PRs fail CI (`fail_ci`), and the catalog slugs it is blocked by. Each is small enough for a
 worker to finish in a few minutes.
 
 | Scenario | Issue, and repository |
 | --- | --- |
 | S8 | "Add a `pow` subcommand" (calc): small and unambiguous |
-| S9 | "Make division by zero exit 2" (calc), whose obvious fix breaks a test the issue says not to change |
+| S9 | "Make division by zero exit 2" (calc), marked `fail_ci` so its PR fails `ci/branch_check.py` |
 | S10 | "Rename `--precision` to `--places`" (calc), with a commit to `main` the reset script lands after dispatch |
 | S11 | "Add rounding modes; ask which default before starting" (calc) |
 | S12 | "Add a `parse` module", then "Use `parse` in the CLI", blocked by the first (calc) |
@@ -137,7 +139,8 @@ labels it.
 
 ## Reset
 
-`kit/toys.py reset <repo|all>`, with the operator's admin `gh`:
+`kit/toys.py reset <repo|all>`, with the operator's admin `gh` (`reseed` first replaces the seed with the template as
+it is now):
 
 1. Close every open PR and delete every branch under `agent/`.
 2. Force `main` back to the `seed` tag: set the ruleset's enforcement to disabled, force-push, and set it back to
