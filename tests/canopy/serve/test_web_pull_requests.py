@@ -33,7 +33,7 @@ def test_the_list_has_each_pr_once_with_its_ticket_branch_and_latest_review(back
     requested = by_url[mock_reviews.PR_95]
     assert (requested["reviews"], requested["review_request"]["end_reason"]) == (0, None)
     assert theirs["review_request"] is None
-    assert theirs["title"] is None  # no worker of canopy's reported one
+    assert theirs["title"] == "Bump the retry budget for flaky upstreams"  # its review reported it
 
 
 def test_a_prs_page_has_the_runs_that_pushed_to_it_its_reviews_and_its_decisions(backend: Backend) -> None:

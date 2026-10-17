@@ -97,6 +97,9 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             ended = outbox.review_ended(ctx.config, run, outcome.status, stored)
             if not db.finish_run(ctx.conn, "review_runs", run_id, outcome.status, stored, event=ended):
                 log.warning("review run was already closed; its outcome is not recorded", extra=fields)
+            elif outcome.result is not None and outcome.result.pr_title:
+                # The PR's title as the reviewer read it, for display: the newest report wins, a worker's or a review's.
+                db.set_pr_title(ctx.conn, run.pr_url, outcome.result.pr_title)
             procs.drop_lifelock(Path(run.log_path))
             log.info("review run finished", extra={**fields, "status": outcome.status})
     return outcome
