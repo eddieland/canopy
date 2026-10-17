@@ -113,8 +113,8 @@ export function AppShell() {
                     {/* Three groups, the actions, the readouts, and the theme, a rule between each. */}
                     <div className="flex items-center gap-2">
                         <NewerBuild />
-                        <TickNow />
                         <LoopPause />
+                        <TickNow />
                         <Rule />
                         <LiveReadouts stream={stream} />
                         <Rule />
