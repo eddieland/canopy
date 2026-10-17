@@ -11,6 +11,10 @@
     {
       "name": "jsdoc-js",
       "specifier": "eslint-plugin-jsdoc"
+    },
+    {
+      "name": "playwright",
+      "specifier": "eslint-plugin-playwright"
     }
   ],
   // Strict and consistent: every rule in these categories is an error, and a rule from style or restriction is
@@ -232,10 +236,52 @@
       }
     },
     {
-      // A browser test acts in order: each step waits on the page the last one left.
+      // A browser test acts in order: each step waits on the page the last one left. eslint-plugin-playwright's
+      // recommended rules, as errors, catch most of what makes one flaky: an action or assertion not awaited, a fixed
+      // wait, a forced click, an element handle, or an assertion that reads the page once instead of retrying.
       "files": ["e2e/**"],
       "rules": {
-        "eslint/no-await-in-loop": "off"
+        "eslint/no-await-in-loop": "off",
+        "playwright/consistent-spacing-between-blocks": "error",
+        // A screenshot is an assertion: the helpers that take one compare it with its baseline.
+        "playwright/expect-expect": ["error", { "assertFunctionNames": ["screenshotMain", "screenshotWhole"] }],
+        "playwright/max-nested-describe": "error",
+        "playwright/missing-playwright-await": "error",
+        // A test made in a loop, over routes or themes, may branch on its case, and assert what only that case shows;
+        // what makes a test flaky is the rest.
+        "playwright/no-conditional-expect": "off",
+        "playwright/no-conditional-in-test": "off",
+        "playwright/no-duplicate-hooks": "error",
+        "playwright/no-duplicate-slow": "error",
+        "playwright/no-element-handle": "error",
+        "playwright/no-eval": "error",
+        "playwright/no-focused-test": "error",
+        "playwright/no-force-option": "error",
+        "playwright/no-identical-title": "error",
+        "playwright/no-nested-step": "error",
+        "playwright/no-networkidle": "error",
+        "playwright/no-page-pause": "error",
+        "playwright/no-skipped-test": "error",
+        "playwright/no-standalone-expect": "error",
+        "playwright/no-unnecessary-assertions": "error",
+        "playwright/no-unsafe-references": "error",
+        "playwright/no-unused-locators": "error",
+        "playwright/no-useless-await": "error",
+        "playwright/no-useless-not": "error",
+        "playwright/no-wait-for-navigation": "error",
+        "playwright/no-wait-for-selector": "error",
+        "playwright/no-wait-for-timeout": "error",
+        "playwright/prefer-hooks-in-order": "error",
+        "playwright/prefer-hooks-on-top": "error",
+        "playwright/prefer-locator": "error",
+        "playwright/prefer-to-have-count": "error",
+        "playwright/prefer-to-have-length": "error",
+        "playwright/prefer-web-first-assertions": "error",
+        "playwright/valid-describe-callback": "error",
+        "playwright/valid-expect": "error",
+        "playwright/valid-expect-in-promise": "error",
+        "playwright/valid-test-tags": "error",
+        "playwright/valid-title": "error"
       }
     },
     {
