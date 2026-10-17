@@ -223,7 +223,8 @@ export function AskForChanges({
                     ? `${message.length - MAX_REQUEST} characters over a reply's bound: resolve or shorten some`
                     : `${open} open ${open === 1 ? 'comment goes' : 'comments go'} with it`}
             </span>
-            <Button type="submit" disabled={!message || over}>
+            {/* The main action while comments are open, as the caller's own Approve steps back; outlined otherwise. */}
+            <Button type="submit" variant={open > 0 ? 'default' : 'outline'} disabled={!message || over}>
                 <Send aria-hidden />
                 {asked ? 'Ask again' : 'Ask for changes'}
             </Button>
