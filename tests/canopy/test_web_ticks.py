@@ -14,6 +14,7 @@ def test_the_ticks_list_is_the_latest_newest_first_with_how_many_decisions_each(
     latest, first = c.get("/api/ticks").json()
     assert (latest["id"], latest["status"], latest["dry_run"], latest["decisions"]) == (2, "ok", False, 5)
     assert (latest["session_id"], latest["cost_usd"], latest["summary"]) == ("ses_tick2", 0.31, "mock tick")
+    assert latest["canopy_version"] == "0.3.1"
     assert (first["id"], first["decisions"], first["summary"]) == (
         1,
         5,

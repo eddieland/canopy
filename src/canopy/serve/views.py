@@ -298,6 +298,7 @@ def tick_of(row: records.Tick, decisions: int) -> Tick:
         decisions=decisions,
         idle=row.idle,
         woken_by=row.woken_by,
+        canopy_version=row.canopy_version,
     )
 
 

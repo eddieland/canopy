@@ -386,9 +386,10 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     repo = str(root)
     conn.executemany(
         # The second read every seeded message: a reply the operator adds waits for the next tick. The loop ran both:
-        # the first as it started, the second, idle, when its wait ran out (DESIGN §6, Idle pacing).
+        # the first as it started, the second, idle, when its wait ran out (DESIGN §6, Idle pacing). A fixed release,
+        # not this build's version, so a screenshot of a tick does not change with every commit.
         "INSERT INTO ticks (id, started_at, ended_at, status, summary, message_id, session_id, cost_usd, idle, "
-        "woken_by) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?, ?, ?)",
+        "woken_by, canopy_version) VALUES (?, ?, ?, 'ok', ?, ?, ?, ?, ?, ?, '0.3.1')",
         [
             (
                 1,

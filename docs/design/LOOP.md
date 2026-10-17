@@ -17,7 +17,9 @@ in order:
 
 1. Acquire the lock. If held, log and exit 0, recording no tick.
 2. Apply pending migrations. Close any tick still `running` as `abandoned`: holding the lock proves its process is
-   gone. Record the tick; its id tags all logs. Migrations wait while any running worker, chore, or review run's own
+   gone. Record the tick, with the version of canopy running it, which its decisions name through their tick. The
+   version is read once as the process starts, so a `canopy loop` running across an upgrade records the code it runs,
+   not the code installed. Its id tags all logs. Migrations wait while any running worker, chore, or review run's own
    process is alive, since it writes the old schema; so does the error for a journal with migrations this canopy does
    not know (D068). Until then, the tick and any command that opens the journal fail saying so.
 3. **Reconcile local state.**

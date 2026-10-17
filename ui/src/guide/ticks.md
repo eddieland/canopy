@@ -20,8 +20,10 @@ A tick ends:
 
 ## A tick's page
 
-The **Tick** panel says when it started and ended, its summary, its overseer's session, what it spent, and the path of
-its output. The line under the title says what woke it: the timer, your reply, a run ending, **Tick now**, and so on.
+The **Tick** panel says when it started and ended, its summary, its overseer's session, what it spent, the version of
+canopy that ran it, and the path of its output. The version is the one to check when a decision looks like the work of
+a release you thought you'd upgraded past. The line under the title says what woke it: the timer, your reply, a run
+ending, **Tick now**, and so on.
 
 **Decisions** lists what the overseer decided, in the order it decided, each with its subject, its action, and the
 overseer's reasons in its own words. A `refused` action, in red, names the guard that held it back; an `attention`

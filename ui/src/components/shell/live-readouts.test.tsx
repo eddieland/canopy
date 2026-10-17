@@ -32,6 +32,7 @@ const TICK: Tick = {
     peak_context: 9000,
     session_id: 'ses_tick12',
     woken_by: null,
+    canopy_version: null,
 }
 
 const TIER: MemoryState['lessons'] = {

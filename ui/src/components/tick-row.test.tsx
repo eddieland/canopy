@@ -25,6 +25,7 @@ const TICK: Tick = {
     session_id: 'ses_tick12',
     summary: null,
     woken_by: null,
+    canopy_version: null,
 }
 
 function renderRow(tick: Partial<Tick> = {}) {
