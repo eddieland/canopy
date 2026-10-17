@@ -190,29 +190,45 @@ def cmd_lessons(click_ctx: click.Context, repo: str | None, *, digest: bool) -> 
         where = f" for {m.repo}" if m.repo else ""
         wrong = f"; run {m.wrong_run_id} reported it wrong at {m.wrong_at}" if m.wrong_at is not None else ""
         click.echo(
-            f"\n  {m.id}  `{m.key}`{where}; promoted at {m.approved_at} from proposal {m.promoted_from}; review at "
-            f"{m.review_at}; {_use(m)}{wrong}\n      {visible(m.body or '')}"
+            f"\n  {m.id}  `{m.key}`{where}; promoted at {m.approved_at}{_origin(ctx, m)}; review at {m.review_at}; "
+            f"{_use(m)}{wrong}\n      {visible(m.body or '')}"
         )
     return 0
 
 
 @memory_group.command("promote")
-@click.argument("proposal_id", metavar="ID", type=int)
-@click.option("--text", help="The lesson in your words, in place of the proposal's own.")
+@click.argument("memory_id", metavar="ID", type=int)
+@click.option("--text", help="The lesson in your words, in place of the proposal's or the note's own.")
+@click.option("--repo", type=REPO, help="Serve the lesson only to runs in this repository. A note's is every one's.")
 @click.pass_context
-def cmd_promote(click_ctx: click.Context, proposal_id: int, text: str | None) -> int:
-    """Make a proposal a lesson in your name, which every run reads while memory.proposals is use."""
+def cmd_promote(click_ctx: click.Context, memory_id: int, text: str | None, repo: str | None) -> int:
+    """Make a proposal, or a ticket's note, a lesson in your name, which every run reads while memory.proposals is use.
+
+    A proposal ends when promoted; a note stays its ticket's.
+    """
     try:
         conversation.check_operator()
         ctx = open_context(click_ctx)
-        promoted = manage.promote(ctx.conn, ctx.config, proposal_id, text=text)
+        if repo is not None and ctx.ws.repo(repo) is None:
+            names = ", ".join(r.name for r in ctx.ws.repos) or "none yet"
+            raise CliError(f"promote refused: {repo!r} is not a repository in this workspace ({names})")
+        promoted = manage.promote(ctx.conn, ctx.config, memory_id, text=text, repo=repo)
     except conversation.Refused as r:
         raise CliError(f"promote refused ({r.guard}): {r.reason}") from None
-    lesson = promoted.lesson
-    logs.for_tick(None).info("lesson promoted", extra={"proposal": proposal_id, "lesson": lesson.id})
-    click.echo(f"Proposal {proposal_id} is lesson {lesson.id} (`{lesson.key}`), due for review at {lesson.review_at}.")
+    lesson, source = promoted.lesson, promoted.source
+    logs.for_tick(None).info("lesson promoted", extra={"memory": memory_id, "scope": source.scope, "lesson": lesson.id})
+    where = f" for {lesson.repo}" if lesson.repo else ""
+    click.echo(
+        f"{_kind(source.scope)} {memory_id} is lesson {lesson.id} (`{lesson.key}`){where}, due for review at "
+        f"{lesson.review_at}."
+    )
     if promoted.superseded is not None:
         click.echo(f"It replaces lesson {promoted.superseded}, which was under the same key.")
+    if text is None and source.run_id is not None and _private(ctx, source.run_id):
+        click.echo(
+            "Warning: its text is from a private ticket's run, and may hold what you kept off the tracker. If it is "
+            "not fit for every worker, forget the lesson and promote it again with --text."
+        )
     if promoted.served:
         click.echo("Every run dispatched from now on reads it.")
     else:
@@ -260,6 +276,14 @@ def _provenance(ctx: Context, p: records.Memory) -> str:
     merged = "its ticket marked done" if ticket is not None and ticket.done else "its ticket not yet done"
     where = f" for {p.repo}" if p.repo else ""
     return f"  {p.id}  `{p.key}`{where}; from {p.ticket_key}{private}, {how}, {merged}; at {p.created_at}"
+
+
+def _origin(ctx: Context, lesson: records.Memory) -> str:
+    source = memory.get(ctx.conn, lesson.promoted_from) if lesson.promoted_from is not None else None
+    if source is None:
+        return ""
+    of = f" of {source.ticket_key}" if source.scope is MemoryScope.TICKET else ""
+    return f" from {_kind(source.scope).lower()} {source.id}{of}"
 
 
 def _private(ctx: Context, run_id: int) -> bool:

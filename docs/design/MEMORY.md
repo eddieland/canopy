@@ -19,8 +19,8 @@ by who can make text reach another ticket:
 - **Ticket notes**: keyed entries a ticket's runs write, read only by that ticket's later runs, as data. Their reach is
   their ticket's, as the reports in `{{PREVIOUS_RUNS}}` are.
 - **Workspace lessons**: workers only propose them. A proposal reaches no prompt. The operator promotes one into a
-  lesson, in their own words if they like, or rejects it; a lesson is the operator's text, beside the standing
-  instructions, and only the operator retires it.
+  lesson, in their own words if they like, or rejects it, and may promote a ticket's note the same way; a lesson is
+  the operator's text, beside the standing instructions, and only the operator retires it.
 
 The overseer writes no memory and reads none: it reads every ticket's text every tick, and T1 refuses it the notice for
 that reason, so a curator role would hand it the notice under another name. Nothing is added to the state block or
@@ -127,9 +127,14 @@ worker was told memory exists.
 
 - A pending proposal is rendered into no prompt, at any mode. At most 20 are pending: past it a new one is refused, so
   a flood cannot push older ones out.
-- `canopy memory promote ID [--text TEXT]` makes a pending proposal a lesson in the operator's name, with their text if
-  given, under the same bounds; a lesson in force under its key is superseded. `canopy memory reject ID` ends a
-  proposal. Both work at `record` as at `use`, so the operator can build the lessons up before any is served.
+- `canopy memory promote ID [--text TEXT] [--repo REPO]` makes a pending proposal a lesson in the operator's name,
+  with their text if given, under the same bounds, for `REPO` if given; a lesson in force under its key is superseded.
+  `canopy memory reject ID` ends a proposal. Both work at `record` as at `use`, so the operator can build the lessons up
+  before any is served.
+- `promote` takes a ticket's note too, whatever its status while it keeps its text, since what a ticket taught is
+  often clearest once it is done and its notes invalidated. The note stays its ticket's, unchanged; its lesson is for
+  every repository unless `--repo` names one, since a note names none. Promoting a note or a proposal from a private
+  ticket's run in its own words warns that its text may hold what the operator kept off the tracker.
 - At `use`, `{{WORKSPACE_LESSONS}}` is in every worker prompt that carries `{{STANDING_INSTRUCTIONS}}`, every kind but
   a split's (§8), beside them and framed as the operator's words that the prompt's obligations come before. Capped at
   2 KiB in key order, the rest counted. A lesson naming a repository renders only in runs that lease it. A plan hears
