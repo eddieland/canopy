@@ -115,16 +115,16 @@ describe('applyStreamEvent', () => {
         const client = new QueryClient()
         const paused = { since: '2026-10-08T11:50:00Z', channel: 'loop' } as const
 
-        applyStreamEvent(client, { type: 'loop.updated', paused, notice: null })
-        expect(client.getQueryData(keys.loop)).toEqual({ paused, notice: null })
+        applyStreamEvent(client, { type: 'loop.updated', paused, notice: null, memory: null })
+        expect(client.getQueryData(keys.loop)).toEqual({ paused, notice: null, memory: null })
         const notice = {
             text: 'CI is down.',
             since: '2026-10-08T11:50:00Z',
             lapses_at: '2026-10-08T15:50:00Z',
             channel: 'web',
         } as const
-        applyStreamEvent(client, { type: 'loop.updated', paused: null, notice })
-        expect(client.getQueryData(keys.loop)).toEqual({ paused: null, notice })
+        applyStreamEvent(client, { type: 'loop.updated', paused: null, notice, memory: null })
+        expect(client.getQueryData(keys.loop)).toEqual({ paused: null, notice, memory: null })
     })
 
     it('marks the ticks and the tickets stale when the latest tick changes', () => {
@@ -268,13 +268,17 @@ describe('parseStreamEvent', () => {
             type: 'loop.updated',
             paused: { since: '2026-10-08T11:50:00Z', channel: 'web' },
             notice: { text: 'CI is down.', since: '2026-10-08T11:50:00Z', lapses_at: '2026-10-08T15:50:00Z' },
+            memory: null,
         }
         expect(parseStreamEvent(JSON.stringify(paused))).toEqual(paused)
-        expect(parseStreamEvent('{"type":"loop.updated","paused":null,"notice":null}')).toEqual({
+        expect(parseStreamEvent('{"type":"loop.updated","paused":null,"notice":null,"memory":null}')).toEqual({
             type: 'loop.updated',
             paused: null,
             notice: null,
+            memory: null,
         })
+        expect(parseStreamEvent('{"type":"loop.updated","paused":null,"notice":null}')).toBeNull()
+        expect(parseStreamEvent('{"type":"loop.updated","paused":null,"notice":null,"memory":"on"}')).toBeNull()
         expect(parseStreamEvent('{"type":"loop.updated"}')).toBeNull()
         expect(parseStreamEvent('{"type":"loop.updated","paused":null}')).toBeNull()
         expect(parseStreamEvent('{"type":"loop.updated","paused":null,"notice":"CI is down."}')).toBeNull()

@@ -29,9 +29,12 @@ describe('outcomes', () => {
 
     it('say what a reload found, when the loop runs on it, and what waits for a restart', () => {
         const notice = { text: 'CI is down.', since: '2026-10-08T11:50:00Z', lapses_at: '2026-10-08T15:50:00Z' }
-        expect(noticeSetText({ already: false, loop: { paused: null, notice: { ...notice, channel: 'web' } } })).toBe(
-            'Notice set: runs dispatched from now on hear it until it lapses. The loop ticks soon.',
-        )
+        expect(
+            noticeSetText({
+                already: false,
+                loop: { paused: null, notice: { ...notice, channel: 'web' }, memory: null },
+            }),
+        ).toBe('Notice set: runs dispatched from now on hear it until it lapses. The loop ticks soon.')
         const unchanged = 'Nothing changed: the config files say what the loop already runs on.'
         expect(reloadedText({ changed: [], restart: [], after_tick: false })).toBe(unchanged)
         // A running tick delays nothing when there is nothing to apply.
