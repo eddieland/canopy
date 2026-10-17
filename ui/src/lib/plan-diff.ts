@@ -9,6 +9,8 @@ import type { Editor } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorState, Transaction } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
+import { diffArrays } from 'diff'
+import type { ArrayChange } from 'diff'
 
 import { docText, rangeOf } from '@/lib/plan-schema'
 
@@ -85,12 +87,13 @@ export function diffWords(before: string, after: string, cap = MAX_EDITS): Chang
         endA -= 1
         endB -= 1
     }
-    const ops = [
-        ...a.slice(0, start).map(() => SAME),
-        ...edits(keysA.slice(start, endA), keysB.slice(start, endB), cap),
-        ...a.slice(endA).map(() => SAME),
+    const removed = a.slice(start, endA)
+    const added = b.slice(start, endB)
+    const middle = diffArrays(removed, added, { maxEditLength: cap, comparator: (x, y) => key(x) === key(y) }) ?? [
+        part(removed, 'del'),
+        part(added, 'add'),
     ]
-    return runs(a, b, ops)
+    return runs([part(b.slice(0, start), 'same'), ...middle, part(b.slice(endB), 'same')])
 }
 
 /** The plain text of a plan's Markdown as the editor reads it, to compare with the plan open in `editor`. */
@@ -161,9 +164,6 @@ function struck(text: string): HTMLElement {
     return element
 }
 
-type Op = 'same' | 'add' | 'del'
-const SAME: Op = 'same'
-
 // A word as it is compared: without the spaces after it, but a line break is still its own.
 function key(token: string): string {
     return token.replace(/[^\S\n]+$/u, '')
@@ -176,85 +176,30 @@ function tokens(text: string): string[] {
     return text.match(/[\p{L}\p{N}_]+[^\S\n]*|[^\s\p{L}\p{N}_][^\S\n]*|\n|[^\S\n]+/gu) ?? []
 }
 
-// The shortest edits that make `b` from `a`, one op per word of either, by Myers' algorithm: each step `d` keeps how
-// far along `a` each diagonal reached, and the steps are walked back to read the edits. Each step's record keeps only
-// the diagonals it can read, -d-1 to d+1, so the memory grows with the edits rather than the plan. Past `cap` steps,
-// every word of `a` removed and every word of `b` added.
-function edits(a: readonly string[], b: readonly string[], cap: number): Op[] {
-    const n = a.length
-    const m = b.length
-    const steps = Math.min(n + m, cap)
-    const reach = new Int32Array(2 * steps + 3)
-    const zero = steps + 1
-    reach[zero + 1] = 0
-    const trace: Int32Array[] = []
-    for (let d = 0; d <= steps; d += 1) {
-        trace.push(reach.slice(zero - d - 1, zero + d + 2))
-        for (let k = -d; k <= d; k += 2) {
-            const down = k === -d || (k !== d && (reach[zero + k - 1] ?? 0) < (reach[zero + k + 1] ?? 0))
-            let x = down ? (reach[zero + k + 1] ?? 0) : (reach[zero + k - 1] ?? 0) + 1
-            let y = x - k
-            while (x < n && y < m && a[x] === b[y]) {
-                x += 1
-                y += 1
-            }
-            reach[zero + k] = x
-            if (x >= n && y >= m) {
-                return walkBack(trace, n, m)
-            }
-        }
-    }
-    return [...a.map((): Op => 'del'), ...b.map((): Op => 'add')]
+// Words as one part of a diff, as `diffArrays` writes its parts.
+function part(words: string[], kind: Change['kind']): ArrayChange<string> {
+    return { value: words, added: kind === 'add', removed: kind === 'del', count: words.length }
 }
 
-// The edits read back from Myers' steps, from the end of both texts to their start. Step `d`'s record holds diagonal
-// `k` at `k + d + 1`.
-function walkBack(trace: readonly Int32Array[], n: number, m: number): Op[] {
-    const ops: Op[] = []
-    let x = n
-    let y = m
-    for (let d = trace.length - 1; d >= 0; d -= 1) {
-        const reach = trace[d] ?? new Int32Array()
-        const zero = d + 1
-        const k = x - y
-        const down = k === -d || (k !== d && (reach[zero + k - 1] ?? 0) < (reach[zero + k + 1] ?? 0))
-        const prevK = down ? k + 1 : k - 1
-        const prevX = reach[zero + prevK] ?? 0
-        const prevY = prevX - prevK
-        while (x > prevX && y > prevY) {
-            ops.push('same')
-            x -= 1
-            y -= 1
-        }
-        if (d > 0) {
-            ops.push(x === prevX ? 'add' : 'del')
-        }
-        x = prevX
-        y = prevY
-    }
-    return ops.toReversed()
-}
-
-// The ops as runs of text, each with where it is in `b`'s text.
-function runs(a: readonly string[], b: readonly string[], ops: readonly Op[]): Change[] {
+// The parts as runs of text, each with where it is in the new text. A kept part is the new plan's words, as
+// `diffArrays` keeps them; an empty part is left out.
+function runs(parts: readonly ArrayChange<string>[]): Change[] {
     const out: Change[] = []
-    let i = 0
-    let j = 0
     let offset = 0
-    for (const op of ops) {
-        const word = op === 'del' ? a[i] : b[j]
+    for (const { value, added, removed } of parts) {
+        const kind: Change['kind'] = added ? 'add' : removed ? 'del' : 'same'
+        const text = value.join('')
+        if (text === '') {
+            continue
+        }
         const last = out.at(-1)
-        if (last?.kind === op) {
-            last.text += word ?? ''
+        if (last?.kind === kind) {
+            last.text += text
         } else {
-            out.push({ kind: op, text: word ?? '', at: offset })
+            out.push({ kind, text, at: offset })
         }
-        if (op !== 'del') {
-            offset += (b[j] ?? '').length
-            j += 1
-        }
-        if (op !== 'add') {
-            i += 1
+        if (kind !== 'del') {
+            offset += text.length
         }
     }
     return out
