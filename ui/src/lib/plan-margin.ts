@@ -3,10 +3,12 @@
 // close, the later card moves down to clear the earlier one; the card that is open, or the comment being written, sits
 // exactly at its passage, and the cards before it move up to make room. The cards stay in the column's flow: each is
 // placed by its top margin, so what follows them (comments whose passage is gone, the resolved ones, Ask for changes)
-// comes after the last. Below the width where the column sits beside the plan, the cards are a plain list again.
+// comes after the last. Below the width where the column sits beside the plan, the cards are a plain list again, and
+// the comment being written, or a thread opened from its passage, floats under its passage instead (`floatUnder`).
 import type { Editor } from '@tiptap/core'
 
 import { highlightsKey } from '@/lib/plan-highlights'
+import type { Range } from '@/lib/plan-highlights'
 
 /** The space between two cards that would otherwise touch, in pixels. */
 export const GAP = 8
@@ -41,9 +43,10 @@ export function stack(cards: Card[], anchor: number | undefined, gap = GAP): num
 /**
  * Places the cards in `list` beside their passages in `editor`, when the list sits beside the plan, and puts them back
  * in a plain list when it does not. A card to place carries `data-align`: its thread's id, or `draft` for the comment
- * being written, and they come first in the list, in the plan's order. The open one carries `data-active`.
+ * being written, and they come first in the list, in the plan's order. The open one carries `data-active`. Whether the
+ * list sits beside the plan.
  */
-export function alignComments(editor: Editor, list: HTMLElement): void {
+export function alignComments(editor: Editor, list: HTMLElement): boolean {
     const cards = [...list.children].filter(
         (child): child is HTMLElement => child instanceof HTMLElement && child.dataset['align'] !== undefined,
     )
@@ -57,7 +60,7 @@ export function alignComments(editor: Editor, list: HTMLElement): void {
     // The cards are drawn as cards of their own only while they sit apart (`.plan-margin` in src/index.css).
     list.toggleAttribute('data-aligned', beside)
     if (cards.length === 0 || !beside || highlights === undefined) {
-        return
+        return beside
     }
     const placed: Card[] = []
     for (const card of cards) {
@@ -74,4 +77,19 @@ export function alignComments(editor: Editor, list: HTMLElement): void {
         card.style.marginTop = `${top - bottom}px`
         bottom = top + (placed[i]?.height ?? 0)
     })
+    return beside
+}
+
+/**
+ * Places `card` under the passage `range` covers in `editor`, inside `container`, which it is positioned in: its top
+ * `GAP` under the passage's last line, its left at the passage's start, kept within the container's sides. For a
+ * comment shown at its passage while the comments sit under the plan, so the page need not go to them.
+ */
+export function floatUnder(editor: Editor, range: Range, card: HTMLElement, container: HTMLElement): void {
+    const box = container.getBoundingClientRect()
+    const start = editor.view.coordsAtPos(range.from)
+    const end = editor.view.coordsAtPos(range.to)
+    const widest = box.width - card.offsetWidth - GAP
+    card.style.top = `${end.bottom - box.top + GAP}px`
+    card.style.left = `${Math.max(0, Math.min(start.left - box.left, widest))}px`
 }
