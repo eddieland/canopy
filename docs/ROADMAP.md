@@ -1577,33 +1577,6 @@ loop keeps ticking and serving the web UI; `canopy daemon stop` during a tick le
 
 Status: in progress. Built 2026-10-17: the three commands and the tests above. Left: the live check, the operator's.
 
-## M52. A user guide in the web UI
-
-DESIGN §22 (The web UI), `ui/DESIGN.md` (The guide). Asked for by the operator (2026-10-17): documentation for the
-person using canopy, inside the web UI, in reach where the question comes up and true of the build that serves it. No
-REQUIREMENTS entry yet. Three stages, in order, each in its own PRs.
-
-- Stage 1, the infrastructure. Pages as Markdown in `ui/src/guide/`, bundled with the build and read by the parser
-  rich text uses, with labelled links read too: to another page or a heading on one, to a section of the app, or to
-  the web. A documentation site's layout: the pages by group on the left, the page with Previous and Next at its
-  foot, and its headings on the right; `/guide` opens the first page, and the rail's foot opens the guide. A unit
-  test fails on a file the guide leaves out, a page without a title and a lead, or a link that goes nowhere. Two pages
-  to start: the web UI's pages, and signing in.
-- Stage 2, the pages. One for each section of the app: what it shows, what its states and chips mean, what its
-  actions do and which guard can refuse them. Then the ideas those pages assume: a tick, a run's kinds, a ticket's
-  phases, the attention list's reasons, plans. Each is written from the design and the UI as built, in the UI's
-  words; the guide says what the operator sees and does, the design why.
-- Stage 3, help in place. Each page's header links to its page of the guide, and a refusal's notice to what its guard
-  means.
-
-Accept: every page passes the guide's tests, and the operator, reading the guide in a running loop, finds the page for
-a question they had without leaving the UI.
-
-Status: in progress. Stage 1 built 2026-10-17: the pages, the parser's links, the documentation site's layout (the
-operator's choice over pages in panels), the rail's link, and the tests, with the web UI's pages and signing in as its
-first two pages. Not at `/docs`, which the server already
-sends to the API's documentation.
-
 ## Deferred, with the trigger that would unblock each
 
 - Spend-paced loop (M13): when, with M39 built, overseer spend per day still runs past what the operator will pay
