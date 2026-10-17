@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
-import { ticketPlansQuery, ticketQuery } from '@/api/queries'
+import { loopQuery, ticketMemoryQuery, ticketPlansQuery, ticketQuery } from '@/api/queries'
 import type { TicketDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { Conversation } from '@/components/conversation'
@@ -11,6 +11,7 @@ import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
 import { Field, Fields } from '@/components/fields'
 import { GrantLimits } from '@/components/grant-limits'
+import { MemoryBand, MemoryDigestView, MemoryRows } from '@/components/memory'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton, ThreadScroll } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
@@ -198,7 +199,36 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 </Panel>
             </div>
             {planned && <TicketPlan ticketKey={ticket.key} plans={plans} />}
+            <TicketMemoryPanel ticketKey={ticket.key} />
         </>
+    )
+}
+
+/** The ticket's notes (DESIGN §28), under the band that says what reads them; none while ticket notes are off. */
+function TicketMemoryPanel({ ticketKey }: { ticketKey: string }) {
+    const tier = useQuery(loopQuery).data?.memory?.ticket_notes
+    const on = tier !== undefined && tier.mode !== 'off'
+    const { data } = useQuery({ ...ticketMemoryQuery(ticketKey), enabled: on })
+    if (!on) {
+        return null
+    }
+    return (
+        <Panel className="mt-6" data-testid="ticket-memory">
+            <PanelHeader label="Memory">
+                <span className="readout text-xs text-muted-foreground">{data?.notes.length ?? ''}</span>
+            </PanelHeader>
+            <MemoryBand tier={tier} name="ticket notes" />
+            {data === undefined ? (
+                <PanelSkeleton rows={1} />
+            ) : data.notes.length === 0 ? (
+                <Empty>no notes yet: its runs write them as they end</Empty>
+            ) : (
+                <PanelScroll label="Memory">
+                    <MemoryRows entries={data.notes} />
+                </PanelScroll>
+            )}
+            {data?.digest && <MemoryDigestView digest={data.digest} served="served to its next run" />}
+        </Panel>
     )
 }
 

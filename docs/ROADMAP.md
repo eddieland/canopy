@@ -1549,7 +1549,9 @@ override without `{{TICKET_MEMORY}}` refused, and TRUST_MODEL T1's ticket notes,
 Proposals and lessons (stage 2), at `record` and `use`: proposals under the bounds and the queue's 20, their expiry,
 `memory_proposal`, `promote`, `reject`, and `renew`, `{{WORKSPACE_LESSONS}}` in every prompt that carries the standing
 instructions, review dates, `lesson_review` and `lesson_wrong`, and T1's lessons, awaiting the operator's approval.
-The web API's memory routes, read only, and each tier's mode on the loop's state.
+The web API's memory routes, read only, and each tier's mode on the loop's state; the web UI's readout, memory page
+with each tier's band, a ticket's Memory panel, and a run's lists, every worker's text plain with hidden characters
+named.
 
 ## Deferred, with the trigger that would unblock each
 
