@@ -821,9 +821,9 @@ def _spawn(
     if review is not None:
         required = (*required, *prompts.REQUIRED_REVIEW)
     # `_run` writes the copy where the worker starts: its desk, or its one worktree (DESIGN §25).
-    copy = _plan_note(ctx, key, kind, (desk or first.slot_path) / plans.COPY)
-    if copy is not None:
-        values["PLAN"] = copy
+    followed = _plan_note(ctx, key, kind, (desk or first.slot_path) / plans.COPY)
+    if followed is not None:
+        values["PLAN"] = followed[1]
         required = (*required, *prompts.REQUIRED_PLAN_COPY)
     try:
         prompt = prompts.render_worker(
@@ -844,6 +844,7 @@ def _spawn(
         started=outbox.run_started(cfg, key=key, kind=kind, branch=branch, attempt=attempt, limit=limit),
         private=plan.private,
         check=functools.partial(_check_start_again, ctx, key, plan),
+        plan_id=followed[0] if followed is not None else None,
     )
     run = db.get_run(ctx.conn, run_id)
     if run is None:
@@ -861,17 +862,22 @@ def _spawn(
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
 
 
-def _plan_note(ctx: Context, key: str, kind: str, copy: Path) -> str | None:
-    """Return an `implement`'s or a `resume`'s `{{PLAN}}` when the ticket has an approved plan, which it then follows.
+def _plan_note(ctx: Context, key: str, kind: str, copy: Path) -> tuple[int, str] | None:
+    """Return the approved plan an `implement` or a `resume` follows, and its `{{PLAN}}`, if the ticket has one.
+
+    The run records the plan's id, so `_run` writes the copy of the plan this prompt names, and no other (DESIGN §25).
 
     Returns:
-        Where the run's copy of the plan will be and its outline, or None for another kind or no approved plan.
+        The plan's id, and where the run's copy will be with the plan's outline; or None for another kind, or a ticket
+        with no approved plan.
     """
     if kind not in (RunKind.IMPLEMENT, RunKind.RESUME):
         return None
     approved = plans.approved_of(ctx.conn, key)
     text = plans.approved_text(ctx.state_dir, approved) if approved is not None else None
-    return prompts.plan_note(copy, plans.outline(text)) if text is not None else None
+    if approved is None or text is None:
+        return None
+    return approved.id, prompts.plan_note(copy, plans.outline(text))
 
 
 def _check_start_again(ctx: Context, key: str, plan: Plan) -> None:

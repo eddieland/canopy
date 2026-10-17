@@ -7,8 +7,11 @@ again before the worker starts, and a pushed branch that holds the copy gets a h
 
 import json
 import sqlite3
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from canopy.cli.main import main
 from canopy.core import contract, db, plans, prompts
@@ -87,6 +90,60 @@ def test_without_an_approved_plan_the_prompt_says_none(
         run = dispatch_and_run(conn, *WORK)
     [exists, *_] = commands_run(agent_log)
     assert exists["returncode"] == 1
+    assert "## The plan\n\nNone.\n" in prompt_of(canopy_env, int(run["id"]))
+
+
+def dispatched_then(conn: sqlite3.Connection, between: Callable[[], object]) -> sqlite3.Row:
+    """Dispatch an implement of KEY, do `between`, then do its `_run`; returns the run, closed."""
+    runner = InlineRunner()
+    with worker_does(["test", "-e", plans.COPY]), in_tick(conn) as tick_id:
+        assert main(["dispatch", KEY, "--repo", "repo", *WORK], runner=runner) == 0
+        db.finish_tick(conn, tick_id, TickStatus.OK, "test")
+        between()
+        run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
+        main(["_run", str(run_id)], runner=runner)
+    run = db.get_run(conn, run_id)
+    assert run is not None
+    return run
+
+
+@pytest.mark.parametrize("change", ["a new plan", "approved again"])
+def test_a_plan_changed_between_dispatch_and_run_is_not_the_one_the_prompt_names(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection, change: str
+) -> None:
+    plan_run = approved(conn)
+    path = plans.path_for(canopy_env.state_dir, KEY, plan_run)
+
+    def between() -> None:
+        if change == "a new plan":
+            # A new plan, approved: the prompt's outline is of the one before it. It stands as a plan run's.
+            run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
+            plans.record(conn, KEY, run_id, plans.write(canopy_env.state_dir, KEY, run_id, "# Other\n"))
+        else:
+            path.write_text(TEXT + "\nAnd more.\n")
+        assert operator("plan", KEY, "--approve") == 0
+
+    workers_before = len(agent_runs(agent_log))
+    run = dispatched_then(conn, between)
+    assert run["status"] == RunStatus.CRASHED
+    note = str(contract.stored_object(run["result_json"]).get("harness"))
+    assert note == (
+        "plan 1, which the worker's prompt names, is no longer the plan approved for PROJ-1 when the run was "
+        "dispatched; the worker did not start"
+    )
+    assert len(agent_runs(agent_log)) == workers_before
+
+
+def test_a_plan_approved_after_dispatch_is_not_copied_for_a_run_its_prompt_named_none(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
+) -> None:
+    # With plans off, an implement may go ahead while a plan waits; the approval after it is for the next run.
+    with planner_does(plan=TEXT):
+        dispatch_and_run(conn, *PLAN)
+    run = dispatched_then(conn, lambda: operator("plan", KEY, "--approve"))
+    [exists] = commands_run(agent_log)
+    assert exists["returncode"] == 1
+    assert run["plan_id"] is None
     assert "## The plan\n\nNone.\n" in prompt_of(canopy_env, int(run["id"]))
 
 

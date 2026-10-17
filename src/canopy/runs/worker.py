@@ -641,22 +641,27 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
 
 
 def _plan_copy(ctx: Context, run: sqlite3.Row) -> str | None:
-    """Return the approved plan an `implement` or `resume` follows, read again from its file (DESIGN §25).
+    """Return the approved plan the run follows, the one its prompt names, read again from its file (DESIGN §25).
 
-    Dispatch checked the file against the approved hash; this checks it again, so the worker never gets a text the
-    operator did not approve.
+    Dispatch recorded the plan and checked its file against the approved hash; this checks both again, so the worker
+    never gets a text the operator did not approve, nor a plan its prompt does not name.
 
     Returns:
-        The plan's text, or None for another kind or a ticket with no approved plan.
+        The plan's text, or None for a run dispatched to follow no plan.
 
     Raises:
-        _SetupError: the approved plan's file changed, or is gone, since the dispatch.
+        _SetupError: the plan was superseded or approved again since the dispatch, or its file changed or is gone.
     """
-    if run["kind"] not in (RunKind.IMPLEMENT, RunKind.RESUME):
+    if run["plan_id"] is None:
         return None
     approved = plans.approved_of(ctx.conn, str(run["ticket_key"]))
-    if approved is None:
-        return None
+    # Approving again keeps the plan's id, but may approve another text than the one the prompt's outline is of.
+    again = approved is not None and str(approved.approved_at) > str(run["started_at"])
+    if approved is None or approved.id != run["plan_id"] or again:
+        raise _SetupError(
+            f"plan {run['plan_id']}, which the worker's prompt names, is no longer the plan approved for "
+            f"{run['ticket_key']} when the run was dispatched; the worker did not start"
+        )
     text = plans.approved_text(ctx.state_dir, approved)
     if text is None:
         path = plans.path_for(ctx.state_dir, approved.ticket_key, approved.run_id)
