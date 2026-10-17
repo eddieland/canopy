@@ -278,6 +278,18 @@ test.describe('with the comments under the plan', () => {
     })
 })
 
+test.describe('on a wide monitor', () => {
+    test.use({ viewport: { width: 1700, height: 900 } })
+
+    test("the comments stay against the plan's text, the room left over after them", async ({ page }) => {
+        const text = await plan(page).boundingBox()
+        const column = await page.locator('.plan-margin').boundingBox()
+        const gap = (column?.x ?? Infinity) - ((text?.x ?? 0) + (text?.width ?? 0))
+        // The panel's padding and the grid's gap: 1.5rem and 1.5rem, and no more.
+        expect(gap).toBeLessThanOrEqual(56)
+    })
+})
+
 // The narrowest window the UI is laid out for (e2e/narrow.spec.ts): the toolbar's header must still fit on one line
 // there, within the 48px the editor keeps clear under it (TOOLBAR_CLEARANCE in src/components/plan-editor.tsx).
 test.describe('on half a monitor', () => {
