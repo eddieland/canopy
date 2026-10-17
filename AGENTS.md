@@ -134,8 +134,10 @@ If code and the design disagree, the design doc wins until a decision entry says
 - SQLite: WAL mode, `PRAGMA foreign_keys=ON`, numbered migrations in `migrations/NNNN_name.sql` applied in order at
   startup, recorded in a `schema_migrations` table. Never edit a shipped migration; add a new one. The series was
   squashed into `0001_init.sql` once, for v0.1 (D068); that is not a precedent for editing one.
-  A new migration adds its hash to `SHIPPED` in `tests/canopy/core/test_db.py`, and a row to `SEED` for each table it
-  creates; a test there applies every migration to a journal with data in it and fails on any row lost.
+  A new migration gets a companion, `tests/canopy/core/migrations/NNNN.sql` for the same version, opening with the
+  migration's sha256 and holding a row for each table it creates; `tests/canopy/core/test_db.py` fails on an edited
+  migration, and applies every migration to a journal with data in it and fails on any row lost. Two PRs that take the
+  same version conflict on the companion: the one merged second renumbers its migration and companion both.
 - A query that returns a table's whole rows reads them as that table's row type in `core/records.py`
   (`records.fetch_all`, `records.fetch_one`), not as `sqlite3.Row`. A new table gets its row type in the PR that adds
   it, and an old one when a PR already changes its queries. `tests/canopy/core/test_records.py` holds each row type to
