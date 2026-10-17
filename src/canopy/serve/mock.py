@@ -11,6 +11,8 @@ fix-ci and two reviews, so ABC-100 is at its fix-ci limit in web and PR 88 at it
 and 40, tick 2, and chore run 2 left their sessions' events in their logs, as `--format json` prints them, for their
 transcripts (DESIGN §22), and the running runs 41 and 43 the events their workers printed so far, with the latest tool
 call on each one's row (§8).
+ABC-105 is planned (§25): its plan waits on the operator, with three comments on it, one resolved, and an earlier plan
+it superseded, each written to its file under the state directory.
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -23,7 +25,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, config, conversation, db, pools, workspace
+from canopy.core import chore_view, config, conversation, db, plans, pools, workspace
 from canopy.core.items import Item
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs, resources
@@ -248,6 +250,7 @@ def seed(directory: Path) -> Backend:
         db.migrate(ctx.conn, resources.migrations_dir())
         with db.transaction(ctx.conn):
             _fixtures(ctx.conn, root)
+            _plans(ctx.conn, ws.state_dir, root)
             mock_reviews.seed(ctx.conn, ws.state_dir, at)
     _transcripts(ws.state_dir)
     return backend
@@ -633,6 +636,124 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     _chore_fixtures(conn, root)
     _decisions(conn)
     _tools(conn)
+
+
+# ABC-105's plans (DESIGN §25): the first, superseded after the operator asked for changes, and the second, waiting on
+# them, with their comments on it, two open and one resolved. Each comment's passage is in the second plan.
+_FIRST_PLAN = """# Schedule report exports
+
+## What changes
+
+In **web**, a report gains a *Schedule* menu: daily or weekly, at an hour. A new job, `ExportJob`, runs each schedule
+and emails the CSV.
+
+## Tests
+
+- [ ] a daily schedule runs once a day
+"""
+_PLAN = """# Schedule report exports
+
+## What changes
+
+In **web**, a report gains a *Schedule* menu: daily or weekly, at an hour the operator picks. A new job,
+`ExportJob`, runs each schedule through the existing CSV export and emails a link to the file, never the file itself.
+
+In **api**, `ReportQuery` gains `owner_timezone()`, so an hour means the owner's hour.
+
+## Files
+
+| Repository | File | Why |
+| --- | --- | --- |
+| web | `app/reports/schedule.py` | the menu and its form |
+| web | `app/jobs/export_job.py` | the job |
+| api | `api/reports/query.py` | `owner_timezone()` |
+
+## Tests
+
+- [ ] a daily schedule runs once a day, at the owner's hour
+- [ ] a weekly schedule skips the other six days
+- [ ] the email links to the file and does not attach it
+
+## Out of scope
+
+- Exports to anything but CSV.
+
+## Risks
+
+> The job runner retries a failed job three times. A report that always fails would email nothing, and say nothing.
+"""
+_PLAN_THREADS = (
+    # quote, prefix, suffix, body, minutes, resolved, replies
+    (
+        "emails a link to the file, never the file itself",
+        "the existing CSV export and",
+        ".",
+        "How long does the link work? Say so in the plan.",
+        -10,
+        False,
+        ("Seven days, as the share links do.",),
+    ),
+    (
+        "A report that always fails would email nothing, and say nothing.",
+        "retries a failed job three times.",
+        "",
+        "Raise it on the attention list after the third failure.",
+        -9,
+        False,
+        (),
+    ),
+    (
+        "at an hour the operator picks",
+        "a report gains a Schedule menu: daily or weekly,",
+        ". A new job,",
+        "Good: the ticket asks for the owner's hour.",
+        -11,
+        True,
+        (),
+    ),
+)
+
+
+def _plans(conn: sqlite3.Connection, state_dir: Path, root: Path) -> None:
+    conn.execute(
+        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, title, phase) VALUES (?, ?, ?, ?, ?, ?)",
+        ("ABC-105", str(root), at(-90), at(-8), "Schedule report exports", "plan_proposed"),
+    )
+    for run_id, started, ended, summary in (
+        (35, -60, -52, "A schedule menu and a job that emails the CSV."),
+        (44, -30, -14, "A schedule menu, a job that emails a link to the CSV, and the owner's timezone."),
+    ):
+        conn.execute(
+            "INSERT INTO runs (id, tick_id, ticket_key, kind, branch, started_at, ended_at, status, result_json, "
+            "log_path, private, cost_usd) VALUES (?, 1, 'ABC-105', 'plan', '', ?, ?, 'done', ?, ?, 0, 0.64)",
+            (
+                run_id,
+                at(started),
+                at(ended),
+                json.dumps({"status": "done", "summary": summary}),
+                str(state_dir / "runs" / f"{run_id}.log"),
+            ),
+        )
+    for plan_id, run_id, text, status, created in (
+        (1, 35, _FIRST_PLAN, "superseded", -52),
+        (2, 44, _PLAN, "proposed", -14),
+    ):
+        written = plans.write(state_dir, "ABC-105", run_id, text)
+        conn.execute(
+            "INSERT INTO plans (id, ticket_key, run_id, created_at, status, sha256, size) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (plan_id, "ABC-105", run_id, at(created), status, written.sha256, written.size),
+        )
+    for quote, prefix, suffix, body, minutes, resolved, replies in _PLAN_THREADS:
+        thread_id = conn.execute(
+            "INSERT INTO plan_threads (ticket_key, quote, prefix, suffix, body, created_at, resolved_at) "
+            "VALUES ('ABC-105', ?, ?, ?, ?, ?, ?) RETURNING id",
+            (quote, prefix, suffix, body, at(minutes), at(minutes + 1) if resolved else None),
+        ).fetchone()[0]
+        for reply in replies:
+            conn.execute(
+                "INSERT INTO plan_replies (thread_id, body, created_at) VALUES (?, ?, ?)",
+                (thread_id, reply, at(minutes + 2)),
+            )
 
 
 def _chore_fixtures(conn: sqlite3.Connection, root: Path) -> None:

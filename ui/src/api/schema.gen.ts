@@ -830,7 +830,7 @@ export type paths = {
         head?: never;
         /**
          * Change a comment thread on a plan
-         * @description Edit the comment's words, or a reply's, or resolve or reopen the thread.
+         * @description Edit the comment's words or a reply's, resolve or reopen the thread, or move it to its passage's new words.
          */
         patch: operations["changeTicketPlanThread"];
         trace?: never;
@@ -2060,6 +2060,29 @@ export type components = {
             action: "approve" | "request" | "skip";
         };
         /**
+         * PlanAnchor
+         * @description A comment's passage, as its words and the text either side of them, each with its whitespace collapsed.
+         */
+        PlanAnchor: {
+            /**
+             * Prefix
+             * @description Up to 32 characters before it.
+             * @default
+             */
+            prefix: string;
+            /**
+             * Quote
+             * @description The passage.
+             */
+            quote: string;
+            /**
+             * Suffix
+             * @description Up to 32 characters after it.
+             * @default
+             */
+            suffix: string;
+        };
+        /**
          * PlanChanged
          * @description What the operator's word on a plan did.
          */
@@ -2262,6 +2285,8 @@ export type components = {
          * @description A change to a comment thread on a plan: its comment's words, a reply's, or whether it is resolved.
          */
         PlanThreadChange: {
+            /** @description The passage as it now stands, after an edit of the plan moved or changed its words; none to leave it. */
+            anchor?: components["schemas"]["PlanAnchor"] | null;
             /**
              * Body
              * @description New words for the comment, or with `reply` for that reply.
