@@ -1,9 +1,9 @@
 # canopy requirements
 
-The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 to R17
-on 2026-10-14, R18 on 2026-10-15, R19 on 2026-10-16, R20 to R22 on 2026-10-17), and where canopy stands on each. The design
-(`design/`) is how canopy meets them; this file is what it must meet. Where the two disagree, the conflict is listed under
-[Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until then
+The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 to R17 on
+2026-10-14, R18 on 2026-10-15, R19 on 2026-10-16, R20 to R22 on 2026-10-17), and where canopy stands on each. The design
+(`design/`) is how canopy meets them; this file is what it must meet. Where the two disagree, the conflict is listed
+under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until then
 (AGENTS.md).
 
 A bare § is a section of the design (`design/`). Status words:
@@ -274,8 +274,9 @@ makes the plan stale, and canopy plans again, once the PR has gone quiet rather 
 
 Gap (M55). Written down 2026-10-17. With plans on (R18, R21), an obvious change still costs a planner run and the
 operator's approval. As an option, a smaller, cheaper agent should judge a change trivial, by the operator's own words
-for what that means, and let it go ahead unplanned. When it is unsure, or fails, the work is planned as before, and a
-waived change that turns out large is called out to the operator.
+for what that means, and let it go ahead unplanned, without asking the operator first. When it is unsure, or fails,
+the work is planned as before. A waived change canopy's own reviewer judges high impact is called out to the operator;
+its size alone is not, since size says little about risk.
 
 ## Nice to have
 
@@ -306,8 +307,8 @@ waived change that turns out large is called out to the operator.
 
 ## Conflicts
 
-Each but C7 was settled by the operator, C1 to C4 on 2026-10-06 and C5 on 2026-10-08, and recorded in `DECISIONS.md`
-(C1 in DESIGN §10).
+Each was settled by the operator, C1 to C4 on 2026-10-06, C5 on 2026-10-08, and C7 on 2026-10-17, and recorded in
+`DECISIONS.md` (C1 in DESIGN §10).
 
 - **C1. Stacking vs "won't start B until A lands" (R8).** The overseer stacks B on A's open, green PR (§10), so
   B starts before A lands. Settled (DESIGN §10): stacking stays, controlled by `policy.stacking` (`"auto"` or
@@ -329,7 +330,7 @@ Each but C7 was settled by the operator, C1 to C4 on 2026-10-06 and C5 on 2026-1
   2026-10-13 (issue #293, D056): with `trust.rebase`, private and off by default, workers rebase onto their base and
   push with `--force-with-lease`, the only force their definitions allow. Without it, they merge, as before.
 - **C7. canopy's own GitHub program vs connectivity through the agent runtime (R20, D003, DESIGN §4 principle 5).**
-  Open. Showing a PR's threads and sending exactly the approved reply, deterministically, needs a program canopy ships
-  that reads and writes GitHub with the token `gh` holds, where today only agents reach GitHub. ROADMAP M36 already
-  plans to reshape D003 for reads by separate connector programs, the harness still importing no client and holding
-  no token; M53 extends that to writes. Settled by whichever of their PRs lands first, with the operator's merge.
+  Showing a PR's threads and sending exactly the approved reply, deterministically, needs a program canopy ships that
+  reads and writes GitHub with the token `gh` holds, where today only agents reach GitHub. Settled by the operator on
+  2026-10-17 (D003): canopy will ship such programs, separate from the harness, which still imports no client and
+  holds no token. M36 builds the reads and M53 the writes; until one of them lands, agents remain the only way in.
