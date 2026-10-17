@@ -23,11 +23,9 @@ from canopy.reviews import grants
 from canopy.runs import policy
 from canopy.serve import live, secret, views
 from canopy.serve.schema import LoopUpdated
-from tests.canopy.helpers import FakeTime, canopy, console, context, overseer_does, running_run
+from tests.canopy.helpers import KEY, FakeTime, canopy, console, context, overseer_does, running_run
 from tests.canopy.web_helpers import ORIGIN, refused, signed_in_client
 from tests.conftest import SHARED_TOML, CanopyEnv, user_toml
-
-KEY = "PROJ-1"
 
 
 def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journals(ctx: Context) -> None:
@@ -109,7 +107,7 @@ def test_meta_carries_the_trackers_ticket_url_when_set(canopy_env: CanopyEnv, ct
     assert c.get("/api/meta").json()["ticket_url"] is None
 
     template = "https://jira.example/browse/{key}"
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + f'ticket_url = "{template}"\n')
+    canopy_env.append_shared(f'ticket_url = "{template}"\n')
     other = context(canopy_env)
     try:
         c, _ = signed_in_client(other)
@@ -748,7 +746,7 @@ def test_serve_bind_must_be_loopback_or_private(canopy_env: CanopyEnv, bind: str
 
 
 def test_serve_is_user_only(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + '\n[serve]\nbind = "10.0.0.5"\n')
+    canopy_env.append_shared('\n[serve]\nbind = "10.0.0.5"\n')
     with pytest.raises(config.ConfigError, match="is private"):
         config.load(canopy_env.root, canopy_env.user_file)
 

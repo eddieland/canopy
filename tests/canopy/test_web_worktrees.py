@@ -10,11 +10,9 @@ from canopy.core import db, pools, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import PoolKind, TickStatus
 from canopy.serve import mock
-from tests.canopy.helpers import running_run
+from tests.canopy.helpers import KEY, running_run
 from tests.canopy.web_helpers import client, signed_in_client
 from tests.conftest import pool_state
-
-KEY = "PROJ-1"
 
 
 def slot(name: str, status: str, **more: object) -> dict[str, object]:

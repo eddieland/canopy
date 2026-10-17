@@ -7,7 +7,6 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
@@ -20,18 +19,20 @@ from canopy.runs import desks
 from canopy.runs.dispatch import DISPATCH_LOCK
 from tests.canopy.conftest import Ws, seed_pools
 from tests.canopy.helpers import (
+    BRANCH,
+    LABEL,
     InlineRunner,
     decisions,
     in_tick,
     overseer_does,
+    pool_statuses,
+    state_block,
     wait_for_run,
     waits,
     worker_does,
 )
-from tests.conftest import CanopyEnv, git
+from tests.conftest import CanopyEnv, executable, git
 
-LABEL = "agent-ready-tester"
-BRANCH = "agent/PROJ-1-work"
 PRS = {"api": "https://x.test/api/pull/1", "web": "https://x.test/web/pull/2", "docs": "https://x.test/docs/pull/3"}
 
 
@@ -53,11 +54,6 @@ def done(prs: dict[str, str]) -> str:
 
 def slots_of(conn: sqlite3.Connection, run_id: int) -> dict[str, Path]:
     return {str(s["repo"]): Path(s["slot_path"]) for s in db.run_slots(conn, run_id)}
-
-
-def pool_statuses(treehouse_state: Path) -> list[str]:
-    pools: dict[str, dict[str, list[dict[str, str]]]] = json.loads(treehouse_state.read_text())["pools"]
-    return [s["status"] for p in pools.values() for s in p["slots"]]
 
 
 def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
@@ -139,8 +135,7 @@ def test_leases_are_all_or_nothing(ws: Ws, treehouse_state: Path, capsys: pytest
 def test_a_joint_run_is_unpushed_if_any_repository_is(ws: Ws, treehouse_state: Path, agent_log: Path) -> None:
     seed_pools(ws, treehouse_state)
     hook = ws.origins["web"] / "hooks" / "pre-receive"
-    hook.write_text("#!/bin/sh\necho 'push refused by test hook' >&2\nexit 1\n")
-    hook.chmod(0o755)
+    executable(hook, "#!/bin/sh\necho 'push refused by test hook' >&2\nexit 1\n")
     conn = ws.journal()
     with in_tick(conn), worker_does(*push_in("api"), *push_in("web"), result=done({"api": PRS["api"]})):
         assert main(dispatch("PROJ-1", "--repo", "api", "--repo", "web")) == 0
@@ -246,8 +241,7 @@ def test_the_state_block_shows_each_unit(ws: Ws, treehouse_state: Path, agent_lo
         with overseer_does(*waits("PROJ-1")):
             assert main(["tick", "--dry-run"]) == 0
 
-    overseer = json.loads(agent_log.read_text().splitlines()[-1])
-    state = json.loads(overseer["argv"][3].split("```json\n", 1)[1].split("\n```", 1)[0])
+    state = state_block(agent_log)
     [ticket] = state["tickets"]
     assert (ticket["phase"], ticket["branch"], ticket["cursors"]) == (
         "running",
@@ -384,7 +378,7 @@ def test_a_killed_joint_run_is_detected_and_all_its_slots_returned(
     """M7 acceptance, against the fakes: a joint run killed mid-way is found by the next tick, every slot returned."""
     seed_pools(ws, treehouse_state)
     conn = ws.journal()
-    with worker_does(), mock.patch.dict(os.environ, {"FAKE_WORKER_SLEEP": "60"}):
+    with worker_does(sleep=60):
         with in_tick(conn) as tick_id:
             assert main(dispatch("PROJ-1", "--repo", "api", "--repo", "web")) == 0
             db.finish_tick(conn, tick_id, TickStatus.OK, "test")

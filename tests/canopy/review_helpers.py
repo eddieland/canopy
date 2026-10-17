@@ -1,16 +1,14 @@
 """Helpers the review tests share: a reviewer's reports, and a review run in this process (DESIGN §21)."""
 
-import json
-import os
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
-from unittest import mock
+from typing import Unpack
 
 from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.vocab import TickStatus
-from tests.canopy.helpers import InlineRunner, in_tick
+from tests.canopy.helpers import Behavior, InlineRunner, in_tick, reported, scripted
 from tests.conftest import GitPool, git
 
 # A PR the loop opened.
@@ -54,15 +52,10 @@ def review(*args: str, sha: str, pr: str = PR) -> list[str]:
 
 
 @contextmanager
-def reviewer_reports(report: object, *commands: list[str]) -> Iterator[None]:
-    """Until the block ends, the fake reviewer runs `commands` and then prints `report`."""
-    with mock.patch.dict(
-        os.environ,
-        {
-            "FAKE_REVIEWER_RESULT": report if isinstance(report, str) else json.dumps(report),
-            "FAKE_REVIEWER_COMMANDS": json.dumps(list(commands)),
-        },
-    ):
+def reviewer_reports(report: object, *commands: list[str], **behavior: Unpack[Behavior]) -> Iterator[None]:
+    """Until the block ends, the fake reviewer prints `report`, verbatim if it is a string, after running `commands` if
+    given."""
+    with scripted("REVIEWER", reported(report, commands), behavior):
         yield
 
 

@@ -25,7 +25,7 @@ from canopy.core import conversation, db, pause
 from canopy.core.vocab import TickStatus
 from canopy.infra import lock, procs, resources
 from canopy.loop import repeat, reread
-from tests.canopy.helpers import FakeKeys, FakeTime, canopy, console, context, overseer_does
+from tests.canopy.helpers import FakeKeys, FakeTime, canopy, console, context, overseer_does, with_events
 from tests.conftest import CanopyEnv, user_toml
 
 
@@ -138,15 +138,12 @@ def test_loop_waits_the_interval_after_each_tick_and_reports_what_changed(
 def test_each_tick_block_shows_what_its_overseer_cost(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
-    text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
-    canopy_env.write_user(text)
+    with_events(canopy_env, "canopy-overseer")
     with overseer_does(), contextlib.ExitStack() as later:
         # The second tick's overseer reports a cost that does not validate: it reports none, so there is none to show.
         time = FakeTime()
         time.on_sleep = lambda: (
-            later.enter_context(mock.patch.dict(os.environ, {"FAKE_OVERSEER_STEP_COST": '"a lot"'}))
-            if len(time.slept) == 1
-            else None
+            later.enter_context(overseer_does(step_cost='"a lot"')) if len(time.slept) == 1 else None
         )
         term, out = console()
 

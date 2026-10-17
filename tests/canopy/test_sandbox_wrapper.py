@@ -26,7 +26,7 @@ from canopy.infra import procs
 from canopy.infra.procs import SubprocessRunner
 from tests.canopy.helpers import DEAD_PID, InlineRunner, in_tick, pool, slot_of, worker_does
 from tests.canopy.review_helpers import CLEAN, PR, reviewer_reports, run_inline
-from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, git, user_toml
+from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, executable, git, user_toml
 
 # The command the install puts beside python, which is how canopy runs it: never `python -m`, which would put the
 # slot's own directory first on the import path.
@@ -269,8 +269,7 @@ def test_neither_git_nor_srt_is_pointed_elsewhere_by_the_environment(sandbox: Sa
     git("worktree", "add", "--quiet", "--detach", str(other), cwd=primary)
     planted = slot / "bin" / "srt"
     planted.parent.mkdir()
-    planted.write_text(f"#!/bin/sh\ntouch {tmp_path / 'planted-ran'}\n")
-    planted.chmod(0o755)
+    executable(planted, f"#!/bin/sh\ntouch {tmp_path / 'planted-ran'}\n")
     env = {
         "CANOPY_GIT_OBJECTS": str(objects_dir(tmp_path)),
         "GIT_DIR": str(primary / ".git" / "worktrees" / "other"),

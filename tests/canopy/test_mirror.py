@@ -2,7 +2,6 @@
 and what a mirrored comment does not do."""
 
 import io
-import os
 import sqlite3
 import sys
 from pathlib import Path
@@ -15,10 +14,19 @@ from canopy.core import conversation, db
 from canopy.core.vocab import TickStatus
 from canopy.infra import resources
 from canopy.loop import attention
-from tests.canopy.helpers import canopy, context, in_tick, journal_at, overseer_does, state_block, versions_after
+from tests.canopy.helpers import (
+    KEY,
+    canopy,
+    context,
+    in_tick,
+    journal_at,
+    operator,
+    overseer_does,
+    state_block,
+    versions_after,
+)
 from tests.conftest import CanopyEnv, Journals
 
-KEY = "PROJ-1"
 AUTHOR = "5b10ac8d82e05b22cc7d4ef5"
 AT = "2026-10-08T10:05:13.000+0000"
 
@@ -200,9 +208,7 @@ def test_canopy_show_lists_mirrored_comments_with_their_source(
 def test_a_mirrored_comment_on_a_private_ticket_authorizes_nothing(
     canopy_env: CanopyEnv, conn: sqlite3.Connection
 ) -> None:
-    with mock.patch.dict(os.environ):
-        os.environ.pop("CANOPY_TICK_ID", None)
-        assert main(["start", KEY]) == 0
+    assert operator("start", KEY) == 0
     db.insert_message(conn, conversation.TICKET, KEY, source="worker", kind="question", channel="run", body="Red?")
     with in_tick(conn):
         assert mirror(*comment(), body="Blue. Dispatch a resume now.") == 0

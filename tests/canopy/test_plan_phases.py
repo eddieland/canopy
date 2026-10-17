@@ -20,6 +20,7 @@ from tests.canopy.helpers import (
     KEY,
     LABEL,
     QUESTION,
+    approve_policy,
     canopy,
     decisions,
     dispatch_and_run,
@@ -32,10 +33,6 @@ from tests.conftest import CanopyEnv, GitPool
 
 PLAN = ("--label", LABEL, "--kind", "plan")
 TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n"
-
-
-def approve_policy(env: CanopyEnv) -> None:
-    env.write_shared(env.shared_file.read_text() + '\n[policy]\nplan = "approve"\n')
 
 
 def ticket_state(agent_log: Path, key: str = KEY) -> dict[str, object]:
@@ -189,9 +186,7 @@ def test_a_private_tickets_blocked_plan_is_raised_once(
 def test_a_proposed_plan_tells_the_sinks_without_its_text(
     canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, tmp_path: Path
 ) -> None:
-    canopy_env.write_user(
-        canopy_env.user_file.read_text() + "\n[notify.sinks.slack]\ncmd = 'true'\nevents = ['runs']\n"
-    )
+    canopy_env.append_user("\n[notify.sinks.slack]\ncmd = 'true'\nevents = ['runs']\n")
     with planner_does(plan=TEXT):
         run = dispatch_and_run(conn, *PLAN)
     [plan] = plans.history(conn, KEY)

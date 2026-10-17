@@ -1,12 +1,8 @@
 """Split tickets (DESIGN §18, ROADMAP M8): a split run reads a desk of worktrees and records the tickets it created."""
 
 import json
-import os
 import sqlite3
-from collections.abc import Iterator, Mapping
-from contextlib import contextmanager
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
@@ -16,27 +12,24 @@ from canopy.core.vocab import RunStatus
 from canopy.loop import attention
 from canopy.runs import worker
 from tests.canopy.conftest import Ws, seed_pools
-from tests.canopy.helpers import InlineRunner, decisions, in_tick, wait_for_run
+from tests.canopy.helpers import (
+    LABEL,
+    InlineRunner,
+    decisions,
+    in_tick,
+    operator,
+    overseer_does,
+    pool_statuses,
+    splitter_reports,
+    state_block,
+    wait_for_run,
+    waits,
+)
 from tests.conftest import CanopyEnv, git
-
-LABEL = "agent-ready-tester"
 
 
 def split(key: str, *args: str) -> list[str]:
     return ["dispatch", key, "--label", LABEL, "--kind", "split", *args]
-
-
-@contextmanager
-def splitter_reports(result: Mapping[str, object], *commands: list[str]) -> Iterator[None]:
-    """Until the block ends, the fake splitter runs `commands` and then prints `result`."""
-    env = {"FAKE_SPLITTER_RESULT": json.dumps(result), "FAKE_SPLITTER_COMMANDS": json.dumps(list(commands))}
-    with mock.patch.dict(os.environ, env):
-        yield
-
-
-def pool_statuses(treehouse_state: Path) -> list[str]:
-    pools: dict[str, dict[str, list[dict[str, str]]]] = json.loads(treehouse_state.read_text())["pools"]
-    return [s["status"] for p in pools.values() for s in p["slots"]]
 
 
 def children(conn: sqlite3.Connection) -> list[tuple[str, str, str, int]]:
@@ -219,7 +212,7 @@ def test_invalid_children_are_recorded_nowhere(
 ) -> None:
     seed_pools(ws, treehouse_state)
     conn = ws.journal()
-    with in_tick(conn), mock.patch.dict(os.environ, {"FAKE_SPLITTER_RESULT": json.dumps(result)}):
+    with in_tick(conn), splitter_reports(result):
         # OLD-1 is a ticket the journal has dispatched before, and SEEN-1 one the overseer has decided about: a splitter
         # must claim neither.
         db.touch_ticket(conn, "OLD-1", str(ws.root))
@@ -352,15 +345,10 @@ def test_the_state_block_shows_split_children(ws: Ws, treehouse_state: Path, age
     with in_tick(conn), splitter_reports({"status": "done", "children": {"PROJ-13": "api", "PROJ-14": "web"}}):
         assert main(split("PROJ-12", "--request", "1", "--repo", "api", "--repo", "web")) == 0
         run = wait_for_run(conn, 1)
-        wait = [["canopy", "decide", "PROJ-12", "wait", "--rationale", "split into PROJ-13 and PROJ-14"]]
-        with mock.patch.dict(
-            os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(wait), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
-        ):
-            os.environ.pop("CANOPY_TICK_ID")
-            assert main(["tick", "--dry-run"]) == 0
+        with overseer_does(*waits("PROJ-12", rationale="split into PROJ-13 and PROJ-14")):
+            assert operator("tick", "--dry-run") == 0
 
-    overseer = json.loads(agent_log.read_text().splitlines()[-1])
-    state = json.loads(overseer["argv"][3].split("```json\n", 1)[1].split("\n```", 1)[0])
+    state = state_block(agent_log)
     assert state["policy"]["max_split_attempts"] == 1
     [ticket] = state["tickets"]
     assert (ticket["key"], ticket["split_attempts"], ticket["units"]) == ("PROJ-12", 1, [])

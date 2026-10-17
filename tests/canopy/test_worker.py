@@ -28,10 +28,13 @@ from tests.canopy.helpers import (
     dispatch_and_run,
     in_tick,
     pool,
+    scripted,
     slot_of,
     tools_of,
     tools_printed,
     unit_of,
+    with_events,
+    with_rebase,
     worker_does,
 )
 from tests.conftest import CanopyEnv, GitPool, git
@@ -193,10 +196,6 @@ def commit_file(name: str) -> list[str]:
     return ["sh", "-c", f"echo {name} > {name}.txt && git add {name}.txt && git commit --quiet -m 'PROJ-1: {name}'"]
 
 
-def with_rebase(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[trust]\nrebase = true\n")
-
-
 def test_a_rebase_dropped_for_the_same_work_pushed_another_way_is_done(
     canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
 ) -> None:
@@ -345,7 +344,7 @@ def test_no_commits_is_not_unpushed(
 
 @pytest.mark.parametrize(
     ("last_line", "exit_code"),
-    [("not json", "0"), ("", "0"), ('{"status": "finished"}', "0"), ('{"summary": "no status"}', "1")],
+    [("not json", 0), ("", 0), ('{"status": "finished"}', 0), ('{"summary": "no status"}', 1)],
 )
 def test_bad_result_line_is_unknown(
     canopy_env: CanopyEnv,
@@ -353,9 +352,9 @@ def test_bad_result_line_is_unknown(
     agent_log: Path,
     conn: sqlite3.Connection,
     last_line: str,
-    exit_code: str,
+    exit_code: int,
 ) -> None:
-    with worker_does(result=last_line), mock.patch.dict(os.environ, {"FAKE_WORKER_EXIT": exit_code}):
+    with worker_does(result=last_line, exit_code=exit_code):
         run = dispatch_and_run(conn, *WORK)
     assert run["status"] == "unknown"
     assert json.loads(run["result_json"]) == {"harness": "the worker's last line was not a valid result"}
@@ -480,7 +479,7 @@ def test_sigterm_returns_the_slot(
     treehouse_state: Path,
     conn: sqlite3.Connection,
 ) -> None:
-    with worker_does(), mock.patch.dict(os.environ, {"FAKE_WORKER_SLEEP": "30"}):
+    with worker_does(sleep=30):
         # Signal this process once the worker has started; `_run` turns SIGTERM into cleanup.
         timer = threading.Timer(1.5, os.kill, (os.getpid(), signal.SIGTERM))
         timer.start()
@@ -510,9 +509,8 @@ def test_parse_result_takes_the_last_json_object_line() -> None:
 @contextmanager
 def report_events(canopy_env: CanopyEnv) -> Iterator[None]:
     """Have the worker's template ask for OpenCode's JSON events, as the default does, with session `ses_w1`."""
-    text = canopy_env.user_file.read_text().replace("--agent canopy-worker", "--agent canopy-worker --format json")
-    canopy_env.write_user(text)
-    with mock.patch.dict(os.environ, {"FAKE_WORKER_SESSION": "ses_w1"}):
+    with_events(canopy_env, "canopy-worker")
+    with scripted("WORKER", {}, {"session": "ses_w1"}):
         yield
 
 

@@ -10,7 +10,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 
 from canopy.core import prompts
 from canopy.core.config import load
@@ -37,22 +36,9 @@ VALUES = {
 }
 
 
-class MarkdownSnapshot(SingleFileSnapshotExtension):
-    """A snapshot as a Markdown file of its own, as the worker reads its prompt."""
-
-    file_extension = "md"
-    _write_mode = WriteMode.TEXT
-
-
-@pytest.fixture
-def prompt(snapshot: SnapshotAssertion) -> SnapshotAssertion:
-    """The test's prompt snapshot."""
-    return snapshot.use_extension(MarkdownSnapshot)
-
-
 @pytest.mark.parametrize(("kind", "private"), PROMPTS, ids=[f"{k}{'-private' if p else ''}" for k, p in PROMPTS])
 def test_with_memory_off_every_worker_prompt_is_as_it_was(
-    canopy_env: CanopyEnv, prompt: SnapshotAssertion, kind: str, *, private: bool
+    canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion, kind: str, *, private: bool
 ) -> None:
     cfg = load(canopy_env.root, canopy_env.user_file)
-    assert prompts.render_worker(cfg, kind, VALUES, private=private and kind != RunKind.PLAN) == prompt
+    assert prompts.render_worker(cfg, kind, VALUES, private=private and kind != RunKind.PLAN) == markdown_snapshot

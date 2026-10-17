@@ -5,12 +5,10 @@ the run before its worker starts. `paths.worktree_include` reaches every `treeho
 """
 
 import json
-import os
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
 from typing import override
-from unittest import mock
 
 import pytest
 
@@ -19,6 +17,8 @@ from canopy.core import config, db
 from canopy.infra import procs
 from tests.canopy.conftest import Ws, seed_pools
 from tests.canopy.helpers import (
+    BRANCH,
+    LABEL,
     WORK,
     InlineRunner,
     agent_runs,
@@ -26,13 +26,12 @@ from tests.canopy.helpers import (
     in_tick,
     pool,
     slot_of,
+    splitter_reports,
     wait_for_run,
     worker_does,
 )
 from tests.conftest import CanopyEnv, GitPool, git, user_toml
 
-LABEL = "agent-ready-tester"
-BRANCH = "agent/PROJ-1-work"
 # What a setup sees: the run's branch, its repository, its run, and the latest commit checked out, the branch's. It
 # leaves a file the worker then looks for, so the setup ran before the worker.
 SETUP = (
@@ -184,7 +183,7 @@ def test_a_split_runs_no_setup(ws: Ws, canopy_env: CanopyEnv, treehouse_state: P
     setup_is(canopy_env, "sh -c 'exit 1'")
     conn = ws.journal()
     result = {"status": "done", "summary": "split in two", "children": {"PROJ-13": "api", "PROJ-14": "web"}}
-    with in_tick(conn), mock.patch.dict(os.environ, {"FAKE_SPLITTER_RESULT": json.dumps(result)}):
+    with in_tick(conn), splitter_reports(result):
         split = [
             "dispatch",
             "PROJ-12",
@@ -228,7 +227,7 @@ def test_a_setup_command_is_checked_when_the_config_loads(canopy_env: CanopyEnv,
 )
 def test_setup_and_the_include_file_are_user_only(canopy_env: CanopyEnv, section: str, line: str) -> None:
     # Either would run or seed what a commit chose on the operator's machine (TRUST_MODEL T7).
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + f"\n[{section}]\n{line}\n")
+    canopy_env.append_shared(f"\n[{section}]\n{line}\n")
     with pytest.raises(config.ConfigError, match="is private"):
         config.load(canopy_env.root, canopy_env.user_file)
 
@@ -292,7 +291,7 @@ def test_sync_seeds_the_slots_it_makes_from_the_include_file(
     manifest = canopy_env.home / "worktreeinclude"
     manifest.write_text("user.bazelrc\n")
     configure(canopy_env, paths=f"worktree_include = '{manifest}'")
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[capacity]\nslots_per_repo = 2\n")
+    canopy_env.append_user("\n[capacity]\nslots_per_repo = 2\n")
     seed_pools(ws, treehouse_state)
 
     assert main(["workspace", "sync"]) == 0

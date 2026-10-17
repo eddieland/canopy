@@ -11,21 +11,23 @@ from unittest import mock
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, memory, prompts, records
+from canopy.core import db, memory, prompts
 from canopy.core.config import load
 from canopy.core.vocab import MemoryMode, MemoryStatus, RunKind
 from tests.canopy.helpers import (
+    BRANCH,
     KEY,
     PROMPT_VALUES,
     WORK,
     InlineRunner,
-    commit_and_push,
     dispatch_and_run,
     dispatch_in_tick,
     dispatch_refused,
     in_tick,
     last_run,
+    memories,
     prompt_of,
+    run_with,
     with_memory,
     worker_does,
     worker_result,
@@ -34,27 +36,16 @@ from tests.canopy.helpers import (
 if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
-BRANCH = f"agent/{KEY}-work"
 FIX_CI = ("--label", "agent-ready-tester", "--kind", "fix-ci")
 NOTE = "The lint job fails on a cold cache: run `make lint` twice before trusting it."
 CONTRACT = "That JSON object may also carry these fields"
-
-
-def stored(conn: sqlite3.Connection) -> list[records.Memory]:
-    return records.fetch_all(conn, records.Memory, "SELECT * FROM memories ORDER BY id")
-
-
-def run_with(conn: sqlite3.Connection, *args: str, **fields: object) -> sqlite3.Row:
-    """Dispatch and run KEY's next run with `args`, its worker committing, pushing, and sending `fields`."""
-    with worker_does(*commit_and_push(BRANCH), result=worker_result(**fields)):
-        return dispatch_and_run(conn, *args, runner=InlineRunner())
 
 
 @pytest.mark.usefixtures("git_pool")
 def test_with_memory_off_a_note_a_worker_sends_is_stored_nowhere(conn: sqlite3.Connection) -> None:
     run = run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}], proposals=[{"key": "x", "text": "y"}])
     assert run["status"] == "done"
-    assert stored(conn) == []
+    assert memories(conn) == []
     assert memory.run_memory(conn, int(run["id"])) is None
     assert "notes" not in str(run["result_json"])
     assert conn.execute("SELECT count(*) FROM memory_reads").fetchone()[0] == 0
@@ -64,7 +55,7 @@ def test_with_memory_off_a_note_a_worker_sends_is_stored_nowhere(conn: sqlite3.C
 def test_at_record_a_note_is_stored_and_reaches_no_prompt(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     with_memory(canopy_env, ticket_notes="record")
     first = run_with(conn, *WORK, notes=[{"key": "lint", "text": f"  {NOTE} "}])
-    [note] = stored(conn)
+    [note] = memories(conn)
     assert (note.ticket_key, note.key, note.body, note.status) == (KEY, "lint", NOTE, MemoryStatus.ACTIVE)
     assert (note.run_id, note.tick_id, note.author) == (first["id"], first["tick_id"], "worker")
     assert note.head is not None
@@ -96,9 +87,9 @@ def test_at_record_a_run_is_journaled_with_its_modes_and_no_ids(
 def test_at_record_what_only_use_asks_for_changes_nothing(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     with_memory(canopy_env, ticket_notes="record")
     run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
-    [note] = stored(conn)
+    [note] = memories(conn)
     run_with(conn, *FIX_CI, memory_used=[note.id], memory_wrong=[note.id], drop_notes=["lint"])
-    [after] = stored(conn)
+    [after] = memories(conn)
     assert after == note
 
 
@@ -107,7 +98,7 @@ def test_a_note_under_a_key_supersedes_the_one_before_it(canopy_env: CanopyEnv, 
     with_memory(canopy_env, ticket_notes="record")
     run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
     run_with(conn, *FIX_CI, notes=[{"key": "lint", "text": "The lint job is fixed on main."}])
-    old, new = stored(conn)
+    old, new = memories(conn)
     assert (old.status, old.why) == (MemoryStatus.SUPERSEDED, f"superseded by note {new.id}")
     assert old.body == NOTE
     assert (new.status, new.supersedes, new.body) == (MemoryStatus.ACTIVE, old.id, "The lint job is fixed on main.")
@@ -120,7 +111,7 @@ def test_notes_from_a_failed_run_are_kept(canopy_env: CanopyEnv, conn: sqlite3.C
     with worker_does(result=line.replace('"done"', '"failed"', 1)):
         run = dispatch_and_run(conn, *WORK, runner=InlineRunner())
     assert run["status"] == "failed"
-    assert [n.key for n in stored(conn)] == ["dead-end"]
+    assert [n.key for n in memories(conn)] == ["dead-end"]
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -129,7 +120,7 @@ def test_a_note_is_its_own_runs_tickets_whatever_the_result_names(
 ) -> None:
     with_memory(canopy_env, ticket_notes="record")
     run_with(conn, *WORK, ticket="OTHER-9", notes=[{"key": "lint", "text": NOTE, "ticket": "OTHER-9"}])
-    assert [n.ticket_key for n in stored(conn)] == [KEY]
+    assert [n.ticket_key for n in memories(conn)] == [KEY]
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -160,8 +151,8 @@ def test_entries_past_the_bounds_are_refused_alone_and_recorded(
             {"key": "sixth", "text": "Past the cap."},
         ],
     )
-    lint = stored(conn)[0]
-    assert [n.key for n in stored(conn)] == ["lint", "fourth", "fifth"]
+    lint = memories(conn)[0]
+    assert [n.key for n in memories(conn)] == ["lint", "fourth", "fifth"]
     assert refusals(conn, first) == [
         ("notes", None, "its key is not lowercase words joined by hyphens, at most 40 characters"),
         ("notes", "bidi", "its text holds U+202E (RIGHT-TO-LEFT OVERRIDE), a character that hides text"),
@@ -189,7 +180,7 @@ def test_notes_that_are_not_a_list_are_refused(canopy_env: CanopyEnv, conn: sqli
     rendered = memory.run_memory(conn, int(run["id"]))
     assert rendered is not None
     assert [(r.field, r.why) for r in memory.refused_of(rendered)] == [("notes", "`notes` is not a list")]
-    assert stored(conn) == []
+    assert memories(conn) == []
 
 
 @pytest.mark.parametrize(
@@ -252,7 +243,7 @@ def test_done_and_forget_invalidate_a_tickets_notes(canopy_env: CanopyEnv, conn:
     else:
         assert main(["forget", KEY]) == 0
         why = "forgotten work"
-    [note] = stored(conn)
+    [note] = memories(conn)
     assert (note.status, note.why, note.body) == (MemoryStatus.INVALID, why, NOTE)
     assert note.invalidated_at is not None
 
@@ -309,7 +300,7 @@ def test_memory_list_prints_the_digest_that_would_be_served(
 ) -> None:
     with_memory(canopy_env, ticket_notes="record")
     run = run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
-    [note] = stored(conn)
+    [note] = memories(conn)
     assert main(["memory", "list", KEY, "--digest"]) == 0
     out = capsys.readouterr().out
     assert f"{KEY}'s notes, would be served at use:\n\n## Notes from earlier runs\n\n" in out
@@ -346,7 +337,7 @@ def test_forget_and_purge_leave_no_text_in_the_journal_file(
     leaked = "the staging password is hunter2-but-longer"
     note_id = hand_written(conn, leaked)
     assert main(["memory", *args, *([str(note_id)] if args == ["forget"] else [])]) == 0
-    [note] = stored(conn)
+    [note] = memories(conn)
     assert (note.body, note.status) == (None, MemoryStatus.INVALID)
     files = [canopy_env.state_dir / name for name in ("canopy.db", "canopy.db-wal")]
     for path in files:

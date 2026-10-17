@@ -1,10 +1,7 @@
 """The subcommands the overseer calls during a tick, and `canopy status`."""
 
-import os
 import sqlite3
-from collections.abc import Iterable, Iterator
-from contextlib import contextmanager
-from unittest import mock
+from collections.abc import Iterable
 
 import pytest
 
@@ -12,15 +9,8 @@ from canopy.cli.main import main
 from canopy.core import agent_output, db
 from canopy.core.vocab import TickStatus
 from canopy.loop import attention
+from tests.canopy.helpers import in_tick
 from tests.conftest import CanopyEnv
-
-
-@contextmanager
-def in_tick(conn: sqlite3.Connection, *, dry_run: bool = True) -> Iterator[int]:
-    """Start a tick, a dry run by default, and act inside it: CANOPY_TICK_ID names it until the block ends."""
-    tick_id = db.start_tick(conn, dry_run=dry_run)
-    with mock.patch.dict(os.environ, {"CANOPY_TICK_ID": str(tick_id)}):
-        yield tick_id
 
 
 @pytest.mark.parametrize(
@@ -98,7 +88,7 @@ def test_attention_reason_format(canopy_env: CanopyEnv, conn: sqlite3.Connection
 
 
 def test_dry_run_dispatch_records_branch_cursors_and_context(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    with in_tick(conn) as tick_id:
+    with in_tick(conn, dry_run=True) as tick_id:
         assert (
             main(
                 [
@@ -157,7 +147,7 @@ def test_dry_run_dispatch_records_branch_cursors_and_context(canopy_env: CanopyE
 def test_dry_run_ticket_set_records_the_phase_only(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    with in_tick(conn):
+    with in_tick(conn, dry_run=True):
         assert (
             main(
                 [

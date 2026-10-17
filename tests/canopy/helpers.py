@@ -9,11 +9,11 @@ import json
 import os
 import sqlite3
 import time
-from collections.abc import Callable, Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal, NamedTuple, cast
+from typing import Any, Literal, NamedTuple, TypedDict, Unpack, cast
 from unittest import mock
 
 from rich.console import Console
@@ -26,14 +26,14 @@ from canopy.infra import logs, procs, resources
 from tests.conftest import CanopyEnv, Journals
 
 KEY = "PROJ-1"
+# The branch an `implement` of KEY with slug `work` pushes.
+BRANCH = f"agent/{KEY}-work"
 # The label the test operator's tickets carry (`user_toml`), and the arguments of an `implement` dispatch of one.
 LABEL = "agent-ready-tester"
 IMPLEMENT = ("--label", LABEL, "--kind", "implement")
 # An `implement` on the branch WORKER_DONE names.
 WORK = (*IMPLEMENT, "--slug", "work")
-WORKER_DONE = json.dumps(
-    {"status": "done", "branch": "agent/PROJ-1-work", "pr": "https://example.test/pr/1", "summary": "did it"}
-)
+WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "pr": "https://example.test/pr/1", "summary": "did it"})
 # What a blocked worker asks (`blocked_result`).
 QUESTION = "Should the button be red or blue?"
 # The last line an overseer prints when it has finished its tick.
@@ -198,6 +198,11 @@ def pool(treehouse_state: Path) -> list[dict[str, object]]:
     return slots
 
 
+def pool_statuses(treehouse_state: Path) -> list[str]:
+    """The status of every slot the fake treehouse holds, in `pool`'s order."""
+    return [str(s["status"]) for s in pool(treehouse_state)]
+
+
 # Dispatching in this process
 
 
@@ -290,6 +295,10 @@ class InlineRunner:
 
 
 # Scripting the fake agents (tests/fakes/agent)
+#
+# A `*_does` helper scripts what an agent does from start to end: its commands, none if not given, then its result
+# line. A `*_reports` helper sets the result line, and commands only if given, so it can sit inside a block that set
+# them. `Behavior` covers the rest; `scripted` is the one they all go through.
 
 
 def canopy(*args: str) -> list[str]:
@@ -297,22 +306,70 @@ def canopy(*args: str) -> list[str]:
     return ["canopy", *args]
 
 
+class Behavior(TypedDict, total=False):
+    """What a fake agent does besides run its commands and print its result line, as tests/fakes/agent reads it."""
+
+    says: str  # a line it says before the commands run
+    exit_code: int
+    sleep: float  # seconds it waits before the result line, to run into a timeout
+    session: str  # the `sessionID` on each event, with `--format json`
+    step_cost: str  # each model call's cost, verbatim JSON, so a test can make it invalid
+
+
+# The fake's name for each of Behavior's keys, after its FAKE_<ROLE>_ prefix.
+BEHAVIOR_SETTINGS = {
+    "says": "SAYS",
+    "exit_code": "EXIT",
+    "sleep": "SLEEP",
+    "session": "SESSION",
+    "step_cost": "STEP_COST",
+}
+
+
 @contextmanager
-def overseer_does(*commands: list[str], result: str = TICK_DONE, queried: str | None = None) -> Iterator[None]:
+def overseer_does(
+    *commands: list[str], result: str = TICK_DONE, queried: str | None = None, **behavior: Unpack[Behavior]
+) -> Iterator[None]:
     """Until the block ends, the fake overseer runs `commands` and then prints `result`, by default ending its tick.
 
     `queried`, if given, is what it records when the tracker query is due; see FAKE_AGENT_QUERIED in the fake.
     """
-    env = {"FAKE_OVERSEER_COMMANDS": json.dumps(commands), "FAKE_OVERSEER_RESULT": result}
+    settings = {"COMMANDS": json.dumps(commands), "RESULT": result}
     if queried is not None:
-        env["FAKE_OVERSEER_QUERIED"] = queried
-    with mock.patch.dict(os.environ, env):
+        settings["QUERIED"] = queried
+    with scripted("OVERSEER", settings, behavior):
         yield
 
 
-def waits(*keys: str) -> list[list[str]]:
+@contextmanager
+def overseer_records(*items: tuple[str, str], waiting: Iterable[str] = ()) -> Iterator[None]:
+    """Until the block ends, the fake overseer records each (key, reason) as needing attention and ends the tick.
+
+    Each key in `waiting` it decides to wait on instead, as it must for a ticket in the journal it records nothing for.
+    """
+    recorded = [canopy("attention", key, reason, "--detail", f"{key} detail") for key, reason in items]
+    with overseer_does(*recorded, *waits(*waiting)):
+        yield
+
+
+def waits(*keys: str, rationale: str = "nothing to do yet") -> list[list[str]]:
     """The commands an overseer runs to wait on each of `keys`, as it must on a ticket it has nothing to do for."""
-    return [canopy("decide", key, "wait", "--rationale", "nothing to do yet") for key in keys]
+    return [canopy("decide", key, "wait", "--rationale", rationale) for key in keys]
+
+
+def with_events(env: CanopyEnv, agent: str) -> None:
+    """Have the command that runs `agent` (`canopy-overseer`, ...) ask for OpenCode's JSON events, as defaults do."""
+    env.write_user(env.user_file.read_text().replace(f"--agent {agent} ", f"--agent {agent} --format json ", 1))
+
+
+def with_rebase(env: CanopyEnv) -> None:
+    """Let workers rebase and push with a lease, never merging a base in (`[trust] rebase`)."""
+    env.append_user("\n[trust]\nrebase = true\n")
+
+
+def approve_policy(env: CanopyEnv) -> None:
+    """Have the workspace's policy ask for a plan the operator approves before any `implement` (DESIGN §25)."""
+    env.append_shared('\n[policy]\nplan = "approve"\n')
 
 
 def with_memory(canopy_env: CanopyEnv, ticket_notes: str = "off", proposals: str = "off") -> None:
@@ -320,30 +377,60 @@ def with_memory(canopy_env: CanopyEnv, ticket_notes: str = "off", proposals: str
     canopy_env.write_private(f'[memory]\nticket_notes = "{ticket_notes}"\nproposals = "{proposals}"\n')
 
 
+def memories(conn: sqlite3.Connection) -> list[records.Memory]:
+    """Every memory in the journal, in the order they were written."""
+    return records.fetch_all(conn, records.Memory, "SELECT * FROM memories ORDER BY id")
+
+
+def run_with(conn: sqlite3.Connection, *args: str, key: str = KEY, **fields: object) -> sqlite3.Row:
+    """Dispatch and run `key`'s next run with `args`, its worker committing, pushing, and sending `fields`."""
+    branch = f"agent/{key}-work"
+    line = worker_result(**fields).replace(BRANCH, branch)
+    with worker_does(*commit_and_push(branch), result=line):
+        return dispatch_and_run(conn, *args, key=key, runner=InlineRunner())
+
+
 def worker_result(**memory: object) -> str:
     """A worker's result line: done on KEY's `work` branch in `repo`, carrying the memory fields given."""
-    return json.dumps(
-        {"status": "done", "branch": f"agent/{KEY}-work", "prs": {"repo": None}, "summary": "did it", **memory}
-    )
+    return json.dumps({"status": "done", "branch": BRANCH, "prs": {"repo": None}, "summary": "did it", **memory})
 
 
 @contextmanager
-def worker_does(*commands: list[str], result: str = WORKER_DONE) -> Iterator[None]:
+def worker_does(*commands: list[str], result: str = WORKER_DONE, **behavior: Unpack[Behavior]) -> Iterator[None]:
     """Until the block ends, the fake worker runs `commands` and then prints `result`."""
-    with mock.patch.dict(
-        os.environ, {"FAKE_WORKER_COMMANDS": json.dumps(list(commands)), "FAKE_WORKER_RESULT": result}
-    ):
+    with scripted("WORKER", {"COMMANDS": json.dumps(commands), "RESULT": result}, behavior):
         yield
 
 
 @contextmanager
 def private_worker_does(*commands: list[str], result: dict[str, object]) -> Iterator[None]:
     """Until the block ends, the fake private worker runs `commands` and then prints `result`."""
-    with mock.patch.dict(
-        os.environ,
-        {"FAKE_WORKER_PRIVATE_COMMANDS": json.dumps(list(commands)), "FAKE_WORKER_PRIVATE_RESULT": json.dumps(result)},
-    ):
+    with scripted("WORKER_PRIVATE", {"COMMANDS": json.dumps(commands), "RESULT": json.dumps(result)}):
         yield
+
+
+@contextmanager
+def splitter_reports(report: object, *commands: list[str]) -> Iterator[None]:
+    """Until the block ends, the fake splitter prints `report`, verbatim if it is a string, after running `commands` if
+    given."""
+    with scripted("SPLITTER", reported(report, commands)):
+        yield
+
+
+@contextmanager
+def chore_reports(report: object, *commands: list[str], **behavior: Unpack[Behavior]) -> Iterator[None]:
+    """Until the block ends, the fake chore prints `report`, verbatim if it is a string, after running `commands` if
+    given."""
+    with scripted("CHORE", reported(report, commands), behavior):
+        yield
+
+
+def reported(report: object, commands: Sequence[list[str]]) -> dict[str, str]:
+    """A `*_reports` helper's settings: `report` as the result line, verbatim if a string, and `commands` if any."""
+    settings = {"RESULT": report if isinstance(report, str) else json.dumps(report)}
+    if commands:
+        settings["COMMANDS"] = json.dumps(commands)
+    return settings
 
 
 @contextmanager
@@ -356,8 +443,20 @@ def planner_does(*commands: list[str], plan: str | None, result: Mapping[str, ob
     script = "import pathlib, sys; pathlib.Path(sys.argv[1]).write_text(sys.argv[2])"
     write = [["python3", "-c", script, plans.WRITTEN, plan]] if plan is not None else []
     line = json.dumps(result if result is not None else {"status": "done", "summary": "planned it"})
-    run = [*write, *commands]
-    with mock.patch.dict(os.environ, {"FAKE_PLANNER_COMMANDS": json.dumps(run), "FAKE_PLANNER_RESULT": line}):
+    with scripted("PLANNER", {"COMMANDS": json.dumps([*write, *commands]), "RESULT": line}):
+        yield
+
+
+@contextmanager
+def scripted(role: str, settings: Mapping[str, str], behavior: Behavior | None = None) -> Iterator[None]:
+    """Until the block ends, the fake agent in `role` (OVERSEER, WORKER, ...) reads `settings` and `behavior`.
+
+    `settings` are named as the fake names them without the prefix (COMMANDS, RESULT); what neither gives, the fake does
+    as it would have. The helpers above are this for one role; use it directly for a role none of them script.
+    """
+    env = {f"FAKE_{role}_{name}": value for name, value in settings.items()}
+    env |= {f"FAKE_{role}_{BEHAVIOR_SETTINGS[name]}": str(value) for name, value in (behavior or {}).items()}
+    with mock.patch.dict(os.environ, env):
         yield
 
 
@@ -365,7 +464,7 @@ def blocked_result() -> dict[str, object]:
     """A worker's result: blocked on KEY's `work` branch in `repo`, with no PR, asking QUESTION."""
     return {
         "status": "blocked",
-        "branch": f"agent/{KEY}-work",
+        "branch": BRANCH,
         "prs": {"repo": None},
         "summary": "half done",
         "question": QUESTION,
@@ -387,16 +486,29 @@ def agent_runs(agent_log: Path) -> list[dict[str, object]]:
     return [json.loads(line) for line in agent_log.read_text().splitlines()]
 
 
+def commands_run(agent_log: Path) -> list[list[dict[str, Any]]]:
+    """The commands each fake agent run ran, in order: each one's argv, exit code, stdout, and stderr."""
+    return [cast("list[dict[str, Any]]", run["commands"]) for run in agent_runs(agent_log)]
+
+
 def state_block(agent_log: Path) -> dict[str, Any]:
     """The state block the last agent to run, an overseer, was given in its prompt."""
-    overseer = json.loads(agent_log.read_text().splitlines()[-1])
-    return json_block(overseer["argv"][3])
+    *_, overseer = agent_runs(agent_log)
+    return json_block(cast("list[str]", overseer["argv"])[-1])
 
 
 def json_block(text: str) -> dict[str, Any]:
     """The first fenced JSON block in `text`, parsed."""
     block: dict[str, Any] = json.loads(text.split("```json\n", 1)[1].split("\n```", 1)[0])
     return block
+
+
+# Notifications
+
+
+def messages(out: Path) -> list[str]:
+    """Each message a `sink_script` or `notified` command was sent, in order; none if it was never run."""
+    return out.read_text().split("--\n")[:-1] if out.exists() else []
 
 
 # Chores

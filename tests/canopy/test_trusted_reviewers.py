@@ -3,10 +3,8 @@ operator's reply on a public ticket is its go-ahead, carried in the state block 
 (D093)."""
 
 import json
-import os
 import sqlite3
 from pathlib import Path
-from unittest import mock
 
 import pytest
 
@@ -14,24 +12,30 @@ from canopy.cli.main import main
 from canopy.core import conversation, db
 from canopy.core.vocab import TickStatus
 from canopy.loop.state import OverseerState, TicketState
-from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, worker_does
+from tests.canopy.helpers import (
+    KEY,
+    InlineRunner,
+    commit_and_push,
+    in_tick,
+    operator,
+    overseer_does,
+    waits,
+    worker_does,
+)
 from tests.conftest import CanopyEnv, GitPool
 
-KEY = "PROJ-1"
 GO_AHEAD = "Use your best judgement on codebot's review: take the null check, skip the renames."
 
 
 def trust(canopy_env: CanopyEnv, *reviewers: str) -> None:
     listed = ", ".join(json.dumps(r) for r in reviewers)
-    canopy_env.write_user(canopy_env.user_file.read_text() + f"\n[trust]\ntrusted_reviewers = [{listed}]\n")
+    canopy_env.append_user(f"\n[trust]\ntrusted_reviewers = [{listed}]\n")
 
 
 def reply(conn: sqlite3.Connection, text: str) -> int:
     """Reply from the operator's shell, outside any tick, and return the message's id."""
-    with mock.patch.dict(os.environ):
-        os.environ.pop("CANOPY_TICK_ID", None)
-        assert main(["reply", KEY, text]) == 0
-        return db.latest_message_id(conn)
+    assert operator("reply", KEY, text) == 0
+    return db.latest_message_id(conn)
 
 
 def overseer_state(agent_log: Path) -> OverseerState:
@@ -67,10 +71,7 @@ def test_the_overseer_reads_the_trusted_list_and_a_public_tickets_operator_messa
     db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     message = reply(conn, GO_AHEAD)
 
-    waits = [["canopy", "decide", key, "wait", "--rationale", "next tick"] for key in (KEY, "PROJ-2")]
-    with mock.patch.dict(
-        os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(waits), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
-    ):
+    with overseer_does(*waits(KEY, "PROJ-2", rationale="next tick")):
         assert main(["tick", "--dry-run"]) == 0
         state = overseer_state(agent_log)
         assert state["trust"]["trusted_reviewers"] == ["octocat", "canopy:review"]

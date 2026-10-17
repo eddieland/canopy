@@ -1,10 +1,7 @@
 """The attention list rendered to `attention.md`, and its diff piped to `notify.cmd` (DESIGN §6, §14)."""
 
-import json
 import os
 import sqlite3
-from collections.abc import Iterable, Iterator
-from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest import mock
@@ -15,6 +12,7 @@ from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.config import ConfigError, load
 from canopy.loop import attention
+from tests.canopy.helpers import messages, overseer_does, overseer_records
 from tests.conftest import CanopyEnv
 
 NOW = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
@@ -48,35 +46,6 @@ def test_render_groups_by_reason() -> None:
 
 def test_render_empty() -> None:
     assert attention.render([], NOW) == "# canopy attention\n\nNothing needs you. Updated 2026-09-24 12:00 UTC.\n"
-
-
-@contextmanager
-def overseer_records(*items: tuple[str, str], waiting: Iterable[str] = ()) -> Iterator[None]:
-    """Until the block ends, the fake overseer records each (key, reason) as needing attention and ends the tick.
-
-    Each key in `waiting` it decides to wait on instead, as it must for a ticket in the journal it records nothing for.
-    """
-    commands = [["canopy", "attention", key, reason, "--detail", f"{key} detail"] for key, reason in items]
-    commands += [["canopy", "decide", key, "wait", "--rationale", "nothing to do yet"] for key in waiting]
-    with mock.patch.dict(
-        os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(commands), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
-    ):
-        yield
-
-
-@pytest.fixture
-def notified(canopy_env: CanopyEnv, tmp_path: Path) -> Path:
-    """Set notify.cmd to a script that appends what it reads, then a separator, to the returned file."""
-    out = tmp_path / "notified.txt"
-    script = tmp_path / "notify"
-    script.write_text('#!/bin/sh\ncat >> "$1"\necho "--" >> "$1"\nexit "${NOTIFY_EXIT:-0}"\n')
-    script.chmod(0o755)
-    canopy_env.write_user(canopy_env.user_file.read_text() + f"\n[notify]\ncmd = '{script} {out}'\n")
-    return out
-
-
-def messages(out: Path) -> list[str]:
-    return out.read_text().split("--\n")[:-1] if out.exists() else []
 
 
 def test_every_tick_rewrites_attention_md(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
@@ -114,7 +83,7 @@ def test_notify_gets_new_and_resolved_items_once(
             ["canopy", "attention", "PROJ-3", "needs_reviewer", "--detail", "reworded"],
             ["canopy", "attention", "PROJ-4", "ready_to_merge", "--detail", "PROJ-4 detail"],
         ]
-        with mock.patch.dict(os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(reworded)}):
+        with overseer_does(*reworded):
             assert main(["tick"]) == 0
             assert len(messages(notified)) == 1
 
@@ -153,7 +122,7 @@ def test_a_failed_tick_leaves_the_list_and_notifies_nothing_new(
 ) -> None:
     with overseer_records(("PROJ-3", "needs_reviewer")):
         assert main(["tick"]) == 0
-        with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "gave up"}):
+        with overseer_does(result="gave up"):
             assert main(["tick"]) == 1
     assert "- PROJ-3, " in (canopy_env.state_dir / "attention.md").read_text()
     assert len(messages(notified)) == 1
@@ -170,7 +139,7 @@ def test_a_tick_wide_skip_leaves_the_list_and_notifies_nothing(
     with overseer_records(("PROJ-3", "needs_reviewer")):
         assert main(["tick", "--dry-run"]) == 0
         skip = [["canopy", "decide", "skip", "--rationale", "mcp_unavailable: github"]]
-        with mock.patch.dict(os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(skip)}):
+        with overseer_does(*skip):
             capsys.readouterr()
             assert main(["tick", "--dry-run"]) == 1
     assert capsys.readouterr().out == "tick 2: skipped: dry run; overseer skipped the tick: mcp_unavailable: github\n"
@@ -188,12 +157,12 @@ def test_a_tick_wide_skip_leaves_the_list_and_notifies_nothing(
 
 
 def test_notify_cmd_takes_no_prompt_placeholder(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[notify]\ncmd = 'notify-send {prompt}'\n")
+    canopy_env.append_user("\n[notify]\ncmd = 'notify-send {prompt}'\n")
     with pytest.raises(ConfigError, match=r"notify\.cmd: Value error, must not contain \{prompt\}"):
         load(canopy_env.root, canopy_env.user_file)
 
 
 def test_notify_cmd_must_split_into_words(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + '\n[notify]\ncmd = "notify-send \'canopy"\n')
+    canopy_env.append_user('\n[notify]\ncmd = "notify-send \'canopy"\n')
     with pytest.raises(ConfigError, match=r"notify\.cmd: Value error, No closing quotation"):
         load(canopy_env.root, canopy_env.user_file)

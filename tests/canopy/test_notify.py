@@ -3,8 +3,6 @@
 import json
 import os
 import sqlite3
-from collections.abc import Iterable, Iterator
-from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -19,49 +17,26 @@ from canopy.core.items import fingerprint
 from canopy.core.vocab import TickStatus
 from canopy.notify import journal as notify_journal
 from canopy.notify import message
-from tests.canopy.helpers import WORKER_DONE, InlineRunner, in_tick, worker_does
+from tests.canopy.helpers import (
+    LABEL,
+    WORKER_DONE,
+    InlineRunner,
+    chore_reports,
+    in_tick,
+    messages,
+    overseer_does,
+    overseer_records,
+    worker_does,
+)
 from tests.conftest import CanopyEnv, GitPool
-
-LABEL = "agent-ready-tester"
-
-
-@pytest.fixture
-def sink_script(tmp_path: Path) -> Path:
-    """A sink command: `sink OUT [EXIT_FILE]` appends what it reads on stdin, then a separator, to OUT, and exits with
-    the number in EXIT_FILE if there is one."""
-    script = tmp_path / "sink"
-    script.write_text(
-        '#!/bin/sh\ncat >> "$1"\necho "--" >> "$1"\n'
-        'if [ -n "$2" ] && [ -f "$2" ]; then echo "sink down" >&2; exit "$(cat "$2")"; fi\n'
-    )
-    script.chmod(0o755)
-    return script
 
 
 def add_sink(env: CanopyEnv, script: Path, name: str, out: Path, *, extra: str = "") -> None:
-    env.write_user(env.user_file.read_text() + f"\n[notify.sinks.{name}]\ncmd = '{script} {out} {out}.exit'\n{extra}")
-
-
-def messages(out: Path) -> list[str]:
-    return out.read_text().split("--\n")[:-1] if out.exists() else []
+    env.append_user(f"\n[notify.sinks.{name}]\ncmd = '{script} {out} {out}.exit'\n{extra}")
 
 
 def json_messages(out: Path) -> list[dict[str, Any]]:
     return [json.loads(m) for m in messages(out)]
-
-
-@contextmanager
-def overseer_records(*items: tuple[str, str], waiting: Iterable[str] = ()) -> Iterator[None]:
-    """Until the block ends, the fake overseer records each (key, reason) as needing attention and ends the tick.
-
-    Each key in `waiting` it decides to wait on instead, as it must for a ticket in the journal it records nothing for.
-    """
-    commands = [["canopy", "attention", key, reason, "--detail", f"{key} detail"] for key, reason in items]
-    commands += [["canopy", "decide", key, "wait", "--rationale", "nothing to do yet"] for key in waiting]
-    with mock.patch.dict(
-        os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(commands), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
-    ):
-        yield
 
 
 def tick(*, ok: bool = True) -> None:
@@ -83,15 +58,13 @@ def tick(*, ok: bool = True) -> None:
     ],
 )
 def test_sink_config_is_checked(canopy_env: CanopyEnv, extra: str, message: str) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n" + extra)
+    canopy_env.append_user("\n" + extra)
     with pytest.raises(ConfigError, match=message):
         load(canopy_env.root, canopy_env.user_file)
 
 
 def test_notify_cmd_is_the_default_sink(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_user(
-        canopy_env.user_file.read_text() + "\n[notify]\ncmd = 'notify-me'\n[notify.sinks.b]\ncmd = 'b'\n"
-    )
+    canopy_env.append_user("\n[notify]\ncmd = 'notify-me'\n[notify.sinks.b]\ncmd = 'b'\n")
     sinks = load(canopy_env.root, canopy_env.user_file).notify.all_sinks()
     assert list(sinks) == ["b", "default"]
     assert (sinks["default"].cmd, sinks["default"].format, sinks["default"].events) == (
@@ -107,7 +80,7 @@ def test_notify_cmd_is_the_default_sink(canopy_env: CanopyEnv) -> None:
 
 
 def test_a_repository_cannot_add_a_sink(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + "\n[notify.sinks.x]\ncmd = 'curl evil'\n")
+    canopy_env.append_shared("\n[notify.sinks.x]\ncmd = 'curl evil'\n")
     with pytest.raises(ConfigError, match=r"notify\.sinks is private"):
         load(canopy_env.root, canopy_env.user_file)
 
@@ -127,7 +100,7 @@ def test_notify_cmd_is_the_sink_named_default(
         (fingerprint("PROJ-3", "needs_reviewer"),),
     )
     out = tmp_path / "notified.txt"
-    canopy_env.write_user(canopy_env.user_file.read_text() + f"\n[notify]\ncmd = '{sink_script} {out}'\n")
+    canopy_env.append_user(f"\n[notify]\ncmd = '{sink_script} {out}'\n")
     with overseer_records(("PROJ-3", "needs_reviewer")):
         tick()
         assert messages(out) == []
@@ -153,7 +126,7 @@ def test_a_json_sink_hears_about_runs(
 ) -> None:
     out = tmp_path / "slack.txt"
     add_sink(canopy_env, sink_script, "slack", out, extra='events = ["attention", "loop", "runs"]\n')
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does():
         tick()  # the sink's first publish: from here on it hears every event
     conn = canopy_env.journal()
     question = "Should the retry be per request or per session?\nThe ticket says both."
@@ -269,12 +242,12 @@ def test_loop_failing_and_recovered_are_sent_once_each(
 ) -> None:
     out = tmp_path / "phone.txt"
     add_sink(canopy_env, sink_script, "phone", out, extra='format = "text"\nevents = ["loop"]\n')
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "gave up"}):
+    with overseer_does(result="gave up"):
         for _ in range(5):
             tick(ok=False)
     [failing] = messages(out)
     assert failing.startswith("canopy: 1 event\n! loop failing: 3 ticks in a row ended other than ok; latest tick 3 ")
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does():
         tick()
         tick()
     listing = f"Full list: {canopy_env.state_dir / 'attention.md'}\n"
@@ -292,7 +265,7 @@ def test_a_long_failing_streak_is_one_streak(
     """Pruning keeps the streak's `loop.failing`, and the recovery counts every failed tick, however many."""
     out = tmp_path / "phone.txt"
     add_sink(canopy_env, sink_script, "phone", out, extra='format = "text"\nevents = ["loop"]\n')
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "gave up"}):
+    with overseer_does(result="gave up"):
         for _ in range(3):
             tick(ok=False)
         assert len(messages(out)) == 1
@@ -305,7 +278,7 @@ def test_a_long_failing_streak_is_one_streak(
         tick(ok=False)
         tick(ok=False)
         assert len(messages(out)) == 1
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does():
         tick()
     assert "! loop recovered after 1105 failed ticks\n" in messages(out)[1]
 
@@ -319,7 +292,7 @@ def test_a_digest_arrives_on_its_interval_even_when_quiet(
 ) -> None:
     out = tmp_path / "digest.txt"
     add_sink(canopy_env, sink_script, "daily", out, extra='format = "text"\nevents = []\ndigest_every_minutes = 60\n')
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does():
         tick()
         [first] = messages(out)
         assert first.startswith("canopy digest\nDigest since ")
@@ -434,7 +407,7 @@ def test_a_batching_sink_hears_the_loop_failing_at_once_with_what_it_held(
     with overseer_records(("PROJ-9", "needs_reviewer")):
         tick()
     run_worker(canopy_env.journal(), "PROJ-1")
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "gave up"}):
+    with overseer_does(result="gave up"):
         tick(ok=False)
         tick(ok=False)
         assert len(messages(out)) == 1  # the runs are held
@@ -524,7 +497,7 @@ def test_stale_events_are_counted_not_listed_and_a_new_sink_gets_no_backlog(
     conn = canopy_env.journal()
     old = tmp_path / "old.txt"
     add_sink(canopy_env, sink_script, "old", old, extra='events = ["runs"]\n')
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does():
         tick()  # creates the sink's row at the newest event
         day_ago = db.format_time(datetime.now(UTC) - timedelta(hours=25))
         for n in range(3):
@@ -602,22 +575,19 @@ def test_chore_runs_reach_a_sink_that_takes_chores(
 ) -> None:
     prompt = canopy_env.home / "chore.md"
     prompt.write_text("Check.\n")
-    canopy_env.write_user(
-        canopy_env.user_file.read_text()
-        + f"\n[chores.check]\nprompt = '{prompt}'\nevery_minutes = 60\n"
-        + "cmd = 'agent run --agent canopy-chore {prompt}'\n"
+    canopy_env.append_user(
+        f"\n[chores.check]\nprompt = '{prompt}'\nevery_minutes = 60\n"
+        "cmd = 'agent run --agent canopy-chore {prompt}'\n"
     )
     out = tmp_path / "chores.txt"
     add_sink(canopy_env, sink_script, "s", out, extra='format = "text"\nevents = ["chores"]\n')
     wait = [["canopy", "chore", "wait", "check", "--rationale", "not needed yet"]]
-    with mock.patch.dict(
-        os.environ, {"FAKE_OVERSEER_COMMANDS": json.dumps(wait), "FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}
-    ):
+    with overseer_does(*wait):
         tick()
     conn = canopy_env.journal()
-    chore = json.dumps({"status": "ok", "summary": "all clear", "findings": []})
+    chore: dict[str, object] = {"status": "ok", "summary": "all clear", "findings": []}
     # The chore's result stays set through the next tick, as the overseer's does.
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE", "FAKE_CHORE_RESULT": chore}):
+    with overseer_does(), chore_reports(chore):
         with in_tick(conn) as tick_id:
             assert main(["chore", "run", "check"], runner=InlineRunner()) == 0
             assert main(["_chore", "1"], runner=InlineRunner()) == 0

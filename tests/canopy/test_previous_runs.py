@@ -7,6 +7,7 @@ from pathlib import Path
 from canopy.core import conversation, db
 from canopy.core.vocab import RunKind, RunStatus
 from tests.canopy.helpers import (
+    BRANCH,
     KEY,
     WORK,
     InlineRunner,
@@ -22,7 +23,6 @@ from tests.canopy.helpers import (
 from tests.conftest import CanopyEnv, GitPool
 
 LABEL = ("--label", "agent-ready-tester")
-BRANCH = f"agent/{KEY}-work"
 PR = "https://example.test/pr/1"
 NONE = "None: no earlier run of this ticket has ended."
 

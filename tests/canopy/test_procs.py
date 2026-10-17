@@ -13,6 +13,7 @@ import pytest
 
 from canopy.infra import lock, procs
 from canopy.infra.procs import CommandNotFoundError, ProcError, SubprocessRunner
+from tests.conftest import executable
 
 
 def test_captures_stdout_and_exit_code(agent_log: Path) -> None:
@@ -114,8 +115,7 @@ def _stat(pid: int) -> str:
 
 def test_stdin_is_passed(fakes_on_path: Path, tmp_path: Path) -> None:
     script = tmp_path / "echo-stdin"
-    script.write_text("#!/bin/sh\ncat\n")
-    script.chmod(0o755)
+    executable(script, "#!/bin/sh\ncat\n")
     result = SubprocessRunner().run([str(script)], stdin="the attention diff\n")
     assert result.ok
     assert result.stdout == "the attention diff\n"
@@ -260,8 +260,7 @@ def test_alive_and_kill_group(agent_log: Path, tmp_path: Path) -> None:
 def test_alive_ignores_zombies_it_cannot_reap(agent_log: Path, tmp_path: Path) -> None:
     # A zombie that is not this process's child, as a killed `_run` leaves when nothing reaps it, reads as dead.
     script = tmp_path / "orphan"
-    script.write_text("#!/bin/sh\nsleep 30 &\necho $!\nexec sleep 30\n")
-    script.chmod(0o755)
+    executable(script, "#!/bin/sh\nsleep 30 &\necho $!\nexec sleep 30\n")
     if not Path("/proc/self/stat").exists():
         pytest.skip("needs /proc")
     pid = SubprocessRunner().spawn([str(script)], cwd=tmp_path, log_path=tmp_path / "log")

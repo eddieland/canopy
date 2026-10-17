@@ -15,7 +15,7 @@ from canopy.core import chore_view as view
 from canopy.core import chore_window as window
 from canopy.core import db, workspace
 from canopy.core.config import CHORE_DAYS, Chore, load
-from tests.canopy.helpers import InlineRunner, chore_decisions, chore_toml, in_tick, state_block
+from tests.canopy.helpers import InlineRunner, chore_decisions, chore_toml, in_tick, overseer_does, state_block
 from tests.conftest import CanopyEnv
 
 NY = "America/New_York"
@@ -103,7 +103,7 @@ def closed(canopy_env: CanopyEnv) -> Path:
     prompt.parent.mkdir()
     prompt.write_text("# Build health\n")
     days = json.dumps(closed_today())
-    canopy_env.write_user(canopy_env.user_file.read_text() + chore_toml(extra=f'days = {days}\ntimezone = "UTC"\n'))
+    canopy_env.append_user(chore_toml(extra=f'days = {days}\ntimezone = "UTC"\n'))
     return prompt
 
 
@@ -115,7 +115,7 @@ def next_midnight() -> str:
 def test_outside_its_window_a_chore_is_refused_and_not_due(
     canopy_env: CanopyEnv, closed: Path, treehouse_state: Path, agent_log: Path
 ) -> None:
-    with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does():
         assert main(["tick", "--dry-run"]) == 0
         [section] = state_block(agent_log)["chores"]
         assert (section["due"], section["due_at"]) == (False, next_midnight())
