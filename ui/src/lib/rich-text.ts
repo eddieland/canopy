@@ -11,36 +11,47 @@ export interface Inline {
     text: string
 }
 
-/** One line of text, as its inline pieces. */
-export type Line = Inline[]
+/** One line of text, as its inline pieces: `Inline`'s, or another reader's (the guide's, which reads links too). */
+export type Line<I = Inline> = I[]
 
 /** One item of a list. */
-export interface Item {
+export interface Item<I = Inline> {
     /**
      * How far it is nested, 0 to 3: two spaces of indent a level. A nested list of the other kind starts a list of its
      * own at its depth.
      */
     depth: number
     /** Its text: the first line, and any it continues on. */
-    lines: Line[]
+    lines: Line<I>[]
 }
 
-/** One block of agent-written text: a paragraph, a heading, a list, or a code block's lines as written. */
-export type Block =
-    | { kind: 'paragraph'; lines: Line[] }
-    | { kind: 'heading'; line: Line }
-    | { kind: 'list'; ordered: boolean; start: number; items: Item[] }
+/**
+ * One block of agent-written text: a paragraph, a heading (`level` is its count of `#`), a list, or a code block's
+ * lines as written.
+ */
+export type Block<I = Inline> =
+    | { kind: 'paragraph'; lines: Line<I>[] }
+    | { kind: 'heading'; level: number; line: Line<I> }
+    | { kind: 'list'; ordered: boolean; start: number; items: Item<I>[] }
     | { kind: 'code'; lines: string[] }
 
 const FENCE = /^\s*(`{3,}|~{3,})/u
-const HEADING = /^#{1,6}\s+(.*)$/u
+const HEADING = /^(#{1,6})\s+(.*)$/u
 const BULLET = /^(\s*)[-*+]\s+(.*)$/u
 const NUMBERED = /^(\s*)(\d{1,9})[.)]\s+(.*)$/u
 const MAX_DEPTH = 3
 
 /** `text` as blocks: a blank line ends a paragraph or a list, and a line break inside one is kept. */
 export function parse(text: string): Block[] {
-    const blocks: Block[] = []
+    return parseWith(text, inline)
+}
+
+/**
+ * `text` as blocks, as `parse` reads them, with each line's pieces read by `read`. The guide's pages, canopy's own
+ * text and not an agent's, read their links this way (`src/lib/guide.ts`); agent text never does.
+ */
+export function parseWith<I>(text: string, read: (line: string) => Line<I>): Block<I>[] {
+    const blocks: Block<I>[] = []
     const lines = text.replaceAll(/\r\n?/gu, '\n').split('\n')
     let i = 0
     while (i < lines.length) {
@@ -64,13 +75,13 @@ export function parse(text: string): Block[] {
         }
         const heading = HEADING.exec(line)
         if (heading) {
-            blocks.push({ kind: 'heading', line: inline(heading[1] ?? '') })
+            blocks.push({ kind: 'heading', level: (heading[1] ?? '#').length, line: read(heading[2] ?? '') })
             i += 1
             continue
         }
         const marker = listMarker(line)
         if (marker) {
-            const list: Block & { kind: 'list' } = {
+            const list: Extract<Block<I>, { kind: 'list' }> = {
                 kind: 'list',
                 ordered: marker.ordered,
                 start: marker.number,
@@ -80,10 +91,10 @@ export function parse(text: string): Block[] {
                 const next = lines[i] ?? ''
                 const item = listMarker(next)
                 if (item && item.ordered === list.ordered) {
-                    list.items.push({ depth: depthOf(item.indent), lines: [inline(item.text)] })
+                    list.items.push({ depth: depthOf(item.indent), lines: [read(item.text)] })
                 } else if (!item && next.trim() !== '' && /^\s/u.test(next) && !FENCE.test(next)) {
                     // An indented line under an item continues it.
-                    list.items.at(-1)?.lines.push(inline(next.trim()))
+                    list.items.at(-1)?.lines.push(read(next.trim()))
                 } else {
                     break
                 }
@@ -92,13 +103,13 @@ export function parse(text: string): Block[] {
             blocks.push(list)
             continue
         }
-        const paragraph: Line[] = []
+        const paragraph: Line<I>[] = []
         while (i < lines.length) {
             const next = lines[i] ?? ''
             if (next.trim() === '' || FENCE.test(next) || HEADING.test(next) || listMarker(next)) {
                 break
             }
-            paragraph.push(inline(next.trim()))
+            paragraph.push(read(next.trim()))
             i += 1
         }
         blocks.push({ kind: 'paragraph', lines: paragraph })

@@ -58,7 +58,7 @@ describe('parse', () => {
 
     it('reads a heading as one line', () => {
         expect(parse('## Summary\nok')).toEqual([
-            { kind: 'heading', line: [text('Summary')] },
+            { kind: 'heading', level: 2, line: [text('Summary')] },
             { kind: 'paragraph', lines: [[text('ok')]] },
         ])
     })
