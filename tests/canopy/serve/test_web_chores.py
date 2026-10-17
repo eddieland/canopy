@@ -207,3 +207,23 @@ def test_a_finding_dismissed_from_the_web_leaves_the_attention_list_as_the_cli_d
     undone = c.post(url, json={**body, "undo": True}, headers=headers).json()
     assert undone["dismissed"] is False
     assert listed() == ["lodash-advisory"]
+
+
+def test_a_try_from_the_mock_records_a_run_with_no_tick_and_refuses_a_chore_already_running(backend: Backend) -> None:
+    c = client(None, backend, key=SECRET)
+    headers = signed_in(c)
+    assert c.post("/api/chores/deps/tries", headers={"origin": headers["origin"]}).status_code == 403
+    response = c.post("/api/chores/deps/tries", headers=headers)
+    assert response.status_code == 200, response.text
+    tried = response.json()
+    detail = c.get("/api/chores/deps").json()
+    assert detail["chore"]["running"]["id"] == tried["run_id"]
+    with backend.open() as ctx:
+        row = db.get_chore_run(ctx.conn, tried["run_id"])
+    assert row is not None
+    assert (row.tick_id, row.status) == (None, "running")
+
+    refusal = c.post("/api/chores/build-health/tries", headers=headers)
+    assert refusal.status_code == 409
+    assert refusal.json()["detail"]["guard"] == "running"
+    assert c.post("/api/chores/nope/tries", headers=headers).status_code == 404

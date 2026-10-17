@@ -1,8 +1,9 @@
 """A journal seeded from fixtures, for the UI's development server and its end-to-end tests (`--mock`).
 
 The server reads and writes it through the same code as the loop's journal: only the attention list, ending a run, a
-reload, a tick asked for, the attempt and review limits and their grants, and the pools' slots are stand-ins, since the
-first five belong to the loop, `runs`, and `reviews`, and there is no treehouse to ask (backend.py).
+reload, a tick asked for, the attempt and review limits and their grants, a chore's try, and the pools' slots are
+stand-ins, since the first six belong to the loop, `runs`, `reviews`, and `chores`, and there is no treehouse to ask
+(backend.py). A try records its run and starts nothing, so the run stays running.
 It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobile` and `web` do, `web`'s pool holds one
 slot past its declared size, and run 43 holds a slot in both. Two chores are configured (§19): `deps`, whose latest run
 found the advisory the attention list shows and which has a note from the operator, and `build-health`, running. Two
@@ -248,6 +249,7 @@ def seed(directory: Path) -> Backend:
         limits=_limits,
         review_limit=_review_limit,
         grant=_grant,
+        try_chore=_try_chore,
         mock=True,
         slots=slots,
         clock=lambda: T0,
@@ -363,6 +365,23 @@ def _grant(ctx: Context, ref: conversation.Ref, kind: str, repo: str | None) -> 
             (ref.id, repo, kind, db.format_time(T0)),
         )
     return Granted(repo=repo, runs=current.runs, limit=current.limit + 1)
+
+
+def _try_chore(ctx: Context, name: str) -> int:
+    """A try's run, recorded at T0 as `canopy chore try` records one, with its `running` guard; no process runs it.
+
+    Returns:
+        The new chore run's id. It stays running, as no `_chore` will close it.
+
+    Raises:
+        Refused: (`running`) a run of the chore is running.
+    """
+    running = next((r for r in db.running_runs(ctx.conn, "chore_runs") if r["chore"] == name), None)
+    if running is not None:
+        raise conversation.Refused("running", f"chore run {running['id']} of {name} is running")
+    run_id = db.insert_chore_run(ctx.conn, tick_id=None, chore=name, logs_dir=ctx.state_dir / "chore-runs" / name)
+    ctx.conn.execute("UPDATE chore_runs SET started_at = ? WHERE id = ?", (db.format_time(T0), run_id))
+    return run_id
 
 
 async def changes(backend: Backend, seconds: float | None) -> None:

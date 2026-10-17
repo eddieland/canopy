@@ -441,8 +441,11 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
   harness's note, its findings, and its transcript (below); a run is found only under its own chore, and a chore since
   deleted from the config keeps its runs.
 - A note and a dismissal, or taking one back, are recorded with channel `web`, as `canopy reply` and `canopy dismiss`
-  record them (§19). Nothing in the web UI runs a chore: the overseer decides when one runs (§19), and
-  `canopy chore try` stays in the CLI.
+  record them (§19).
+- Try now, in the Schedule panel's foot, is `canopy chore try NAME`, recorded (§19): the chore runs now whatever its
+  schedule, in a detached `canopy _chore`, and the run shows in its recent runs. It is disabled while a run of the
+  chore runs, which the server refuses `running`; one whose prompt, working directory, or process fails is refused
+  `not_started`. Otherwise the overseer decides when a chore runs.
 - A chore run's summary and its findings are the agent's: untrusted text, rendered as text with control characters
   dropped.
 - A note no run of the chore has started since is marked as waiting for its next run: notes wake nothing and no tick

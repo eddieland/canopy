@@ -1,9 +1,10 @@
 """The web UI for `canopy loop` (DESIGN §22, D073): the listener secret checked, the server's backend wired, started.
 
-The server is a feature (`canopy.serve`) and cannot import the loop, `runs`, or `reviews`, so this hands it the
-attention list as `canopy status` shows it, `runs.halt.end`, which `canopy stop --now` uses, for a stop with `now`, a
-way to ask the loop to read its config again, as SIGHUP does, and one to ask it for a tick now, as `t` does, and the
-attempt and review limits with the grants that `canopy grant` records (`runs.policy`, `reviews.grants`).
+The server is a feature (`canopy.serve`) and cannot import the loop, `runs`, `reviews`, or `chores`, so this hands it
+the attention list as `canopy status` shows it, `runs.halt.end`, which `canopy stop --now` uses, for a stop with `now`,
+a way to ask the loop to read its config again, as SIGHUP does, and one to ask it for a tick now, as `t` does, the
+attempt and review limits with the grants that `canopy grant` records (`runs.policy`, `reviews.grants`), and a chore's
+try (`chores.trial`).
 """
 
 from __future__ import annotations
@@ -11,7 +12,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import db
+from canopy.chores import trial
+from canopy.core import conversation, db
 from canopy.infra import logs, resources
 from canopy.loop import attention, reread, tick_now
 from canopy.reviews import grants
@@ -70,7 +72,7 @@ def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload, asked: tic
 
 
 def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow) -> Backend:
-    """The server's view of the loop's journal: the config, the attention list, `halt.end`, reload, tick now, grants.
+    """The server's view of the loop's journal: the attention list, `halt.end`, reload, tick now, grants, and tries.
 
     Returns:
         The backend the server calls into, bound to `ctx`, `reload`, and `asked`.
@@ -99,6 +101,7 @@ def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow) -> Bac
         limits=limits,
         review_limit=review_limit,
         grant=grant,
+        try_chore=try_chore,
         write_attention=lambda current: attention.write(current, logs.for_tick(None)),
     )
 
@@ -146,3 +149,22 @@ def grant(ctx: Context, ref: Ref, kind: str, repo: str | None) -> Granted:
         return Granted(repo=None, runs=reviewed.runs, limit=reviewed.limit)
     granted = policy.grant(ctx.conn, ctx.config, ref.id, kind, repo=repo, runs=1)
     return Granted(repo=granted.repo, runs=granted.runs, limit=granted.limit)
+
+
+def try_chore(ctx: Context, name: str) -> int:
+    """`canopy chore try NAME` from the web UI: recorded, and run by a `canopy _chore` of its own (DESIGN §19).
+
+    Returns:
+        The new chore run's id.
+
+    Raises:
+        Refused: `inside_run` inside one of canopy's own ticks or runs, `running` while a run of the chore is running,
+            `not_started` when its prompt, its working directory, or its process failed.
+    """
+    conversation.check_operator()
+    try:
+        return trial.detach(ctx, trial.prepare(ctx, name, None)).run_id
+    except trial.RunningError as e:
+        raise conversation.Refused("running", str(e)) from None
+    except trial.TrialError as e:
+        raise conversation.Refused("not_started", str(e)) from None

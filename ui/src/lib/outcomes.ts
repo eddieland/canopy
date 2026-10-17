@@ -1,4 +1,5 @@
 import type {
+    ChoreTried,
     ConfigReload,
     Dismissed,
     Forgot,
@@ -80,6 +81,14 @@ export function notedText(name: string, replied: Replied): string {
         return `Recorded message ${replied.message_id} on chore:${name}. Its next run reads it.`
     }
     return `Message ${replied.message_id} on chore:${name} already says this; nothing new recorded.`
+}
+
+/** What trying a chore started, as `canopy chore try` says it: a recorded run, its findings listed when it ends. */
+export function triedText(tried: ChoreTried): string {
+    return (
+        `chore try ${tried.chore}: recorded as chore run ${tried.run_id}, running now. ` +
+        'Its findings reach the attention list when it ends.'
+    )
 }
 
 /** What a dismissal did, as `canopy dismiss` says it: off the attention list until it clears, or listed again. */

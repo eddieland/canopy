@@ -1,11 +1,11 @@
 """What the server reads and writes through, handed to it by whoever runs it (DESIGN §22).
 
-`serve` is a feature: it cannot import `loop`, `runs`, or `reviews`. The attention list (`loop.attention.listed`),
-ending a stopped ticket's run (`runs.halt.end`, as `canopy stop --now` does), asking the loop to read its config again
-(`loop.reread`, as SIGHUP does) or for a tick now (`loop.tick_now`, as `t` does), and the attempt and review limits
-`canopy grant` raises (`runs.policy`, `reviews.grants`) are theirs, so `canopy loop` passes them in, and
-`python -m canopy.serve --mock` passes stand-ins over its seeded journal. Reading a pool is the pool's own `status`
-unless told otherwise: the mock has no pool to ask.
+`serve` is a feature: it cannot import `loop`, `runs`, `reviews`, or `chores`. The attention list
+(`loop.attention.listed`), ending a stopped ticket's run (`runs.halt.end`, as `canopy stop --now` does), asking the loop
+to read its config again (`loop.reread`, as SIGHUP does) or for a tick now (`loop.tick_now`, as `t` does), the attempt
+and review limits `canopy grant` raises (`runs.policy`, `reviews.grants`), and trying a chore (`chores.trial`) are
+theirs, so `canopy loop` passes them in, and `python -m canopy.serve --mock` passes stand-ins over its seeded journal.
+Reading a pool is the pool's own `status` unless told otherwise: the mock has no pool to ask.
 
 The loop's config and workspace map are read by each request as it opens, and replaced when the loop reads them again
 (`use`), so a request runs on one config throughout, the one the loop runs on.
@@ -98,6 +98,9 @@ class Backend:
     # `canopy grant REF KIND [--repo NAME]` for one more run: a ticket's unit, or with `review` a PR. Raises Refused
     # with the CLI's guards.
     grant: Callable[[Context, Ref, str, str | None], Granted]
+    # `canopy chore try NAME`, recorded, its run going on in a process of its own: the new chore run's id. Raises
+    # Refused: `running` while a run of the chore is running, `not_started` when it could not start.
+    try_chore: Callable[[Context, str], int]
     # Fixture data, shown as `mock` in the UI's header.
     mock: bool = False
     # A repository's pool's slots, for the worktrees page: its `status`. Called on a thread per pool, each with a

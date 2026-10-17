@@ -3,6 +3,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { api, unwrap } from './client'
 import { keys } from './queries'
 import type {
+    ChoreTried,
     ConfigReload,
     Dismissed,
     Forgot,
@@ -26,12 +27,12 @@ import type {
 } from './types'
 
 /**
- * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, dismissing a finding,
- * sending a review's findings to a worker, granting a run past a limit, asking for a PR to be reviewed, pausing the
- * loop, asking it for a tick now, and a notice to workers. Each goes through the same function on the server as
- * `canopy start`, `stop`, `reply`, `forget`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `pause`,
- * `resume`, and `notice`, or as `t` at the loop's terminal, with the same guards; a refusal is an ApiError naming its
- * guard.
+ * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, trying a chore, dismissing
+ * a finding, sending a review's findings to a worker, granting a run past a limit, asking for a PR to be reviewed,
+ * pausing the loop, asking it for a tick now, and a notice to workers. Each goes through the same function on the
+ * server as `canopy start`, `stop`, `reply`, `forget`, `chore try`, `dismiss`, `send`, `grant`, `start URL --review`,
+ * `stop URL`, `pause`, `resume`, and `notice`, or as `t` at the loop's terminal, with the same guards; a refusal is an
+ * ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -179,6 +180,14 @@ export async function replyChore(name: string, body: string, submission: string)
 }
 
 /**
+ * `canopy chore try NAME`: the chore runs now, recorded, whatever its schedule; its run goes on in the background.
+ * Refused `running` while a run of it is running.
+ */
+export async function tryChore(name: string): Promise<ChoreTried> {
+    return unwrap(await api.POST('/api/chores/{name}/tries', { params: { path: { name } } }))
+}
+
+/**
  * `canopy dismiss chore:NAME FINDING`: the finding is off the attention list until the chore stops reporting it. With
  * `undo`, `--undo`: it is listed again.
  */
@@ -258,7 +267,7 @@ export function showLoop(client: QueryClient, loop: LoopState): void {
     client.setQueryData(keys.loop, loop)
 }
 
-/** After a note to a chore: read it again now, rather than wait for the stream. */
+/** After a note to a chore or a try: read it again now, rather than wait for the stream. */
 export function refreshChore(client: QueryClient, name: string): Promise<void> {
     return client.invalidateQueries({ queryKey: keys.chore(name) })
 }

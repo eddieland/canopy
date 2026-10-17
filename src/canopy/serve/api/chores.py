@@ -1,7 +1,8 @@
 """The chores (DESIGN §19): what `canopy status` and `canopy show chore:NAME` print, notes, and dismissed findings.
 
-Each run is readable on its own, with its session's transcript: untrusted text, read back from its log. Nothing here
-runs a chore: the overseer decides when one runs, and `canopy chore try` is the CLI's alone.
+Each run is readable on its own, with its session's transcript: untrusted text, read back from its log. The operator
+can try a chore as `canopy chore try` does, recorded, its run going on in the background; the overseer still decides
+when one runs on its own.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from canopy.serve.schema import (
     ChoreDetail,
     ChoreRunDetail,
     ChoreSummary,
+    ChoreTried,
     Dismissed,
     DismissRequest,
     Replied,
@@ -108,6 +110,31 @@ def note(name: ChoreName, body: ReplyRequest, backend: BackendDep) -> Replied:
             raise RefusedError(r) from None
     _log.info("operator replied", extra={"subject": str(ref), "message_id": replied.message_id, "channel": WEB})
     return Replied(message_id=replied.message_id, answers=replied.answers, new=replied.new)
+
+
+@router.post(
+    "/chores/{name}/tries",
+    operation_id="tryChore",
+    summary="Try a chore now",
+    responses={**REFUSED, **not_found("chore defined for this workspace")},
+)
+def try_now(name: ChoreName, backend: BackendDep) -> ChoreTried:
+    """`canopy chore try NAME`: run the chore now, recorded as the CLI records it, in a process of its own.
+
+    No guard on time or capacity applies, as none does to the CLI's try (DESIGN §19); a chore with a run running is
+    refused `running`. The run's findings reach the attention list when it ends, and the chore's page shows it until
+    then.
+    """
+    ref = chore_ref(name, "show")
+    with backend.open() as ctx:
+        if ref.id not in chore_view.defined(ctx.config, ctx.workspace):
+            raise HTTPException(status_code=404, detail=f"no chore {ref.id!r} is defined for this workspace")
+        try:
+            run_id = backend.try_chore(ctx, ref.id)
+        except conversation.Refused as r:
+            raise RefusedError(r) from None
+    _log.info("chore tried", extra={"chore": ref.id, "chore_run_id": run_id, "channel": WEB})
+    return ChoreTried(chore=ref.id, run_id=run_id)
 
 
 @router.post(

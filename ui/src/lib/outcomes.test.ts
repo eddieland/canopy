@@ -15,6 +15,7 @@ import {
     reviewStoppedText,
     startedText,
     stoppedText,
+    triedText,
 } from './outcomes'
 
 describe('outcomes', () => {
@@ -108,6 +109,12 @@ describe('outcomes', () => {
         )
         expect(notedText('deps', { message_id: 9, answers: null, new: false })).toBe(
             'Message 9 on chore:deps already says this; nothing new recorded.',
+        )
+    })
+
+    it('say what a try started, as canopy chore try does', () => {
+        expect(triedText({ chore: 'deps', run_id: 5 })).toBe(
+            'chore try deps: recorded as chore run 5, running now. Its findings reach the attention list when it ends.',
         )
     })
 

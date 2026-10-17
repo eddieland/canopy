@@ -28,6 +28,7 @@ from tests.canopy.helpers import (
     chore_decisions,
     chore_reports,
     chore_toml,
+    context,
     in_run,
     in_tick,
     json_block,
@@ -39,6 +40,7 @@ from tests.canopy.helpers import (
     tools_of,
     with_events,
 )
+from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv
 
 FINDING = {
@@ -546,6 +548,64 @@ def test_try_refuses_an_unknown_chore_and_inside_canopy_runs(
         assert main(["chore", "try", "build-health"]) == 1
         assert "chore try refused (inside_run)" in capsys.readouterr().err
         assert canopy_env.journal().execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 0
+
+
+def test_a_try_from_the_web_is_recorded_and_done_by_a_chore_process_of_its_own(
+    canopy_env: CanopyEnv, chores: Path, agent_log: Path
+) -> None:
+    # As the CLI's try, it runs with chores off: no guard on time or capacity applies.
+    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[capacity]\nmax_chores = 0\n")
+    conn = canopy_env.journal()
+    c, headers = signed_in_client(context(canopy_env))
+    with mock.patch.object(procs.SubprocessRunner, "spawn", autospec=True, return_value=os.getpid()) as spawn:
+        response = c.post("/api/chores/build-health/tries", headers=headers)
+        assert response.status_code == 200, response.text
+        assert response.json() == {"chore": "build-health", "run_id": 1}
+        # A request cannot wait out the chore's timeout, so a `_chore` of its own does the run, as the overseer's.
+        [call] = spawn.call_args_list
+        assert call.args[1][-2:] == ["_chore", "1"]
+        row = db.get_chore_run(conn, 1)
+        assert row is not None
+        assert (row.tick_id, row.status, row.pid) == (None, "running", os.getpid())
+
+        assert refused(c.post("/api/chores/build-health/tries", headers=headers)) == (
+            "running: chore run 1 of build-health is running"
+        )
+        assert c.post("/api/chores/nope/tries", headers=headers).status_code == 404
+        assert spawn.call_count == 1
+
+    with chore_reports(OK):
+        assert main(["_chore", "1"], runner=InlineRunner()) == 0
+    row = db.get_chore_run(conn, 1)
+    assert row is not None
+    assert row.status == "ok"
+    # Its findings are the chore's, listed once `max_chores` is above 0.
+    assert [f["id"] for f in json.loads(row.result_json)["findings"]] == [FINDING["id"]]
+    assert [d["action"] for d in conn.execute("SELECT action FROM decisions")] == []
+    tried = json.loads(agent_log.read_text().splitlines()[-1])
+    assert tried["env"]["CANOPY_RUN_ID"] == "chore-1"
+    assert json_block(tried["argv"][3])["run_id"] == 1
+
+
+def test_a_try_from_the_web_that_cannot_start_is_refused_and_its_run_closed(
+    canopy_env: CanopyEnv, chores: Path
+) -> None:
+    conn = canopy_env.journal()
+    c, headers = signed_in_client(context(canopy_env))
+    failing = procs.ProcError("cannot start python: no such file")
+    with mock.patch.object(procs.SubprocessRunner, "spawn", autospec=True, side_effect=failing):
+        assert refused(c.post("/api/chores/build-health/tries", headers=headers)) == (
+            "not_started: could not start the try: cannot start python: no such file"
+        )
+    row = db.get_chore_run(conn, 1)
+    assert row is not None
+    assert row.status == "crashed"
+
+    chores.unlink()
+    assert refused(c.post("/api/chores/build-health/tries", headers=headers)).startswith(
+        f"not_started: cannot read {chores}"
+    )
+    assert conn.execute("SELECT count(*) FROM chore_runs").fetchone()[0] == 1
 
 
 def test_a_note_to_a_chore_reaches_its_next_runs(

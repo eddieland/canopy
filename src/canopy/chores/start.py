@@ -121,30 +121,47 @@ def start(ctx: Context, *, tick_id: int, name: str, context: str | None) -> Star
         except OSError as e:
             raise Refusal("bad_prompt", f"cannot read {chore.prompt}: {e.strerror}") from e
         state = next(s for s in view.states(ctx.conn, ctx.config, ctx.workspace) if s.name == name)
-        run_id = db.insert_chore_run(ctx.conn, tick_id=tick_id, chore=name, logs_dir=runs_dir(ctx, name))
-        run = db.get_chore_run(ctx.conn, run_id)
-        if run is None:
-            raise RuntimeError(f"chore run {run_id} vanished")
-        try:
-            notes = conversation.chore_notes(ctx.conn, name)
-            prompt = render(body, state, run_id, context, notes, held=notice.for_prompt(ctx.conn))
-            logs.write_private(prompt_file(Path(run.log_path)), prompt)
-            # `python -m canopy`, not `canopy` from PATH: the child is this same installation.
-            argv = [sys.executable, "-m", "canopy", "_chore", str(run_id)]
-            pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run.log_path))
-        except (OSError, procs.ProcError) as e:
-            note = json.dumps({"harness": f"could not start the chore: {e}"})
-            db.finish_run(
-                ctx.conn,
-                "chore_runs",
-                run_id,
-                ChoreRunStatus.CRASHED,
-                note,
-                event=outbox.chore_ended(ctx.config, name, run_id, ChoreRunStatus.CRASHED, note),
-            )
-            raise Refusal("spawn_failed", str(e)) from e
-        db.claim_run(ctx.conn, "chore_runs", run_id, pid)
-        return Started(run_id, pid)
+        return launch(ctx, tick_id=tick_id, state=state, body=body, context=context)
+
+
+def launch(ctx: Context, *, tick_id: int | None, state: view.ChoreState, body: str, context: str | None) -> Started:
+    """Record a run of the chore `state` is, render its prompt from `body`, and spawn `canopy _chore` for it.
+
+    The caller holds the dispatch lock and has checked whatever guards apply. `tick_id` is None for an operator's try
+    the web UI started, which `_chore` then runs as `canopy chore try` would (DESIGN §19).
+
+    Returns:
+        The new chore run's id and the pid of its `canopy _chore`.
+
+    Raises:
+        Refusal: (`spawn_failed`) the prompt could not be written or the run started; the run is closed `crashed`.
+        RuntimeError: the chore run's row was gone right after it was inserted.
+    """
+    name = state.name
+    run_id = db.insert_chore_run(ctx.conn, tick_id=tick_id, chore=name, logs_dir=runs_dir(ctx, name))
+    run = db.get_chore_run(ctx.conn, run_id)
+    if run is None:
+        raise RuntimeError(f"chore run {run_id} vanished")
+    try:
+        notes = conversation.chore_notes(ctx.conn, name)
+        prompt = render(body, state, run_id, context, notes, held=notice.for_prompt(ctx.conn))
+        logs.write_private(prompt_file(Path(run.log_path)), prompt)
+        # `python -m canopy`, not `canopy` from PATH: the child is this same installation.
+        argv = [sys.executable, "-m", "canopy", "_chore", str(run_id)]
+        pid = ctx.runner.spawn(argv, cwd=ctx.repo_root, log_path=Path(run.log_path))
+    except (OSError, procs.ProcError) as e:
+        note = json.dumps({"harness": f"could not start the chore: {e}"})
+        db.finish_run(
+            ctx.conn,
+            "chore_runs",
+            run_id,
+            ChoreRunStatus.CRASHED,
+            note,
+            event=outbox.chore_ended(ctx.config, name, run_id, ChoreRunStatus.CRASHED, note),
+        )
+        raise Refusal("spawn_failed", str(e)) from e
+    db.claim_run(ctx.conn, "chore_runs", run_id, pid)
+    return Started(run_id, pid)
 
 
 def _guard(ctx: Context, name: str, *, planned: Collection[str] | None = None) -> Chore:

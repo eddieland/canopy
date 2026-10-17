@@ -773,6 +773,15 @@ class Replied(_Model):
     """Whether it was recorded now, rather than by an earlier submission with the same id."""
 
 
+class ChoreTried(_Model):
+    """What trying a chore started: a recorded run, going on in the background (DESIGN §19)."""
+
+    chore: str
+    """The chore's name."""
+    run_id: int
+    """The chore run the try is, running until its agent ends or its timeout."""
+
+
 class DismissRequest(_Model):
     """A dismissal of one of a chore's open findings, by its id, or with `undo` the taking back of one (DESIGN §19)."""
 

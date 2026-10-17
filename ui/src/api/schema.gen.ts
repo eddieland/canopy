@@ -150,6 +150,30 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/chores/{name}/tries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Try a chore now
+         * @description `canopy chore try NAME`: run the chore now, recorded as the CLI records it, in a process of its own.
+         *
+         *     No guard on time or capacity applies, as none does to the CLI's try (DESIGN §19); a chore with a run running is
+         *     refused `running`. The run's findings reach the attention list when it ends, and the chore's page shows it until
+         *     then.
+         */
+        post: operations["tryChore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -1556,6 +1580,22 @@ export type components = {
              * @enum {string}
              */
             type: "chores.updated";
+        };
+        /**
+         * ChoreTried
+         * @description What trying a chore started: a recorded run, going on in the background (DESIGN §19).
+         */
+        ChoreTried: {
+            /**
+             * Chore
+             * @description The chore's name.
+             */
+            chore: string;
+            /**
+             * Run Id
+             * @description The chore run the try is, running until its agent ends or its timeout.
+             */
+            run_id: number;
         };
         /**
          * Comment
@@ -5272,6 +5312,101 @@ export interface operations {
                 };
             };
             /** @description No such run of this chore. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    tryChore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The chore's name, as `chore:NAME` names it. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChoreTried"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such chore defined for this workspace. */
             404: {
                 headers: {
                     [name: string]: unknown;

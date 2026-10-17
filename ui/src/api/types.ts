@@ -51,6 +51,8 @@ export type Forgot = Schemas['Forgot']
 export type Limit = Schemas['Limit']
 /** What a grant recorded: one more run allowed, every earlier one still counted. The next tick decides. */
 export type Granted = Schemas['Granted']
+/** What trying a chore started: its recorded run, going on in the background (DESIGN §19). */
+export type ChoreTried = Schemas['ChoreTried']
 /** The operator's request to review a PR the loop does not own (DESIGN §21): open, or how it ended. */
 export type ReviewRequest = Schemas['ReviewRequest']
 /** What a review request recorded: the open request, and whether it was already open or replaced another. */
