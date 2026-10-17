@@ -128,6 +128,13 @@ public ticket the planner checks the queue label first, as every worker does (§
 or says there is none on a private ticket. An override must carry `{{AUTHORIZATION}}`, `{{REPOSITORIES}}`,
 `{{OPERATOR_MESSAGES}}`, and `{{PLAN_OUT}}`. The ticket's text and the code are data (TRUST_MODEL T1).
 
+Every plan has one outline, its headings fixed by the prompt, so the operator reads each plan the same way and sees
+what one leaves out, and a worker's outline (Workers follow the plan, below) is a table of contents it can rely on. Its
+steps are numbered, so a worker reports its progress against them. The harness does not check the outline: the
+operator's edits or an override may change it. Rejected: the sections a living plan keeps, such as progress and a
+decision log the worker updates as it goes. The approved plan is pinned by its hash and the worker's copy discarded, so
+the worker's summary carries that instead.
+
 The planner writes its plan, as markdown, to `.canopy-new-plan.md` at its desk's root (`{{PLAN_OUT}}`), the one file
 its definition lets it edit, and canopy reads that file once the planner exits, before the desk is removed. It can
 write the file a section at a time and revise it as it reads; the file at exit is the plan. Rejected:
@@ -195,7 +202,7 @@ code, so a long plan costs a run what it reads of it, and a plan can be as long 
 
 A plan is model-written from ticket text: it describes the work, as the ticket does, and the prompt's obligations come
 before it, as they come before the standing instructions. The prompt has the worker leave its copy out of every commit
-and say where the work left the plan and why.
+and say which of the plan's steps it finished, by number, and where the work left the plan and why.
 
 ### Where plans live
 
