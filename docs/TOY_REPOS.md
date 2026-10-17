@@ -72,7 +72,8 @@ jobs:
   - **A failing check for `fix-ci` (S9):** `ci/branch_check.py` fails a PR whose branch matches the repository
     variable `TOY_FAIL_BRANCH`, which the reset script points at the S9 issue's branches. A worker cannot change a
     variable, so no push fixes it. An issue that cannot be done as written does not serve: on 2026-10-17 the worker
-    saw the contradiction and asked, opening no PR.
+    saw the contradiction and asked, opening no PR. The switch gets a fix-ci run, but the worker reads the check, sees
+    the failure is staged, and ends `blocked`; so the attempt limit is not reached live, and stays the fakes' to test.
   - **A staged CI outage (S37, the notice):** `fetch_check.py` fetches the URL in the repository variable
     `TOY_FETCH_URL`. Point it at an unreachable host to stage the outage, and back to end it.
 - Actions in the org require approval to run for every outside contributor, so a drive-by fork cannot run anything.
