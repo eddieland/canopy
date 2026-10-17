@@ -120,9 +120,12 @@ def change(
         The thread as it now stands, with its replies.
 
     Raises:
-        Refused: `inside_run`, `unknown` for a thread or reply the ticket does not have, `bad_body` as for a comment.
+        Refused: `inside_run`, `unknown` for a thread or reply the ticket does not have, `bad_body` as for a comment,
+            or for a reply named with no words to give it.
     """
     conversation.check_operator()
+    if reply_id is not None and body is None:
+        raise Refused("bad_body", f"name the words for reply {reply_id}, or leave out the reply")
     text = _body(body) if body is not None else None
     with db.transaction(conn):
         _thread(conn, key, thread_id)

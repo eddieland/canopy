@@ -187,6 +187,7 @@ def test_comments_are_threads_on_passages_the_tickets_own(ctx: Context) -> None:
     assert refused(c.post(base, json={**comment, "body": "  "}, headers=headers)) == "bad_body: the comment is empty"
     assert refused(c.post(base, json={**comment, "quote": "   "}, headers=headers)).startswith("bad_anchor")
     assert c.post(base, json={**comment, "prefix": "x" * 33}, headers=headers).status_code == 422
+    assert refused(c.patch(f"{base}/{thread}", json={"reply": first["id"]}, headers=headers)).startswith("bad_body")
     assert refused(c.patch(f"{base}/99", json={"resolved": True}, headers=headers)) == (
         f"unknown: {KEY} has no plan comment 99"
     )
