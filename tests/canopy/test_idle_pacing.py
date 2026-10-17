@@ -23,10 +23,9 @@ from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, Phase, ReviewRunStatus, StartStatus, TickStatus
 from canopy.infra import resources
 from canopy.loop import pacing, repeat, tick, tick_now
-from tests.canopy.helpers import FakeKeys, FakeTime, canopy, chore_toml, console, context, overseer_does
+from tests.canopy.helpers import KEY, FakeKeys, FakeTime, canopy, chore_toml, console, context, overseer_does
 from tests.conftest import CanopyEnv
 
-KEY = "PROJ-1"
 PR = "https://example.test/pr/1"
 # The journal's clock and the test's: a tick's `read_at` is put this far back, so what the test records after it is
 # after it, whatever the millisecond.
@@ -46,7 +45,7 @@ def ago(**delta: float) -> str:
 
 
 def loop_config(env: CanopyEnv, *, interval: int, cap: int) -> None:
-    env.write_user(env.user_file.read_text() + f"\n[loop]\ninterval_minutes = {interval}\nidle_max_minutes = {cap}\n")
+    env.append_user(f"\n[loop]\ninterval_minutes = {interval}\nidle_max_minutes = {cap}\n")
 
 
 def log_lines(env: CanopyEnv, msg: str) -> list[dict[str, object]]:
@@ -406,7 +405,7 @@ def test_a_gate_still_ahead_ends_the_wait_and_one_already_open_does_not(
 ) -> None:
     (canopy_env.home / "chores").mkdir()
     (canopy_env.home / "chores" / "build-health.md").write_text("# Build health\n")
-    canopy_env.write_user(canopy_env.user_file.read_text() + chore_toml())
+    canopy_env.append_user(chore_toml())
     ctx = context(canopy_env)
     db.migrate(ctx.conn, resources.migrations_dir())
     now = datetime.now(UTC)
@@ -700,7 +699,7 @@ def test_a_tick_after_a_wait_a_gate_shortened_records_the_gate(
 ) -> None:
     (canopy_env.home / "chores").mkdir()
     (canopy_env.home / "chores" / "build-health.md").write_text("# Build health\n")
-    canopy_env.write_user(canopy_env.user_file.read_text() + chore_toml())
+    canopy_env.append_user(chore_toml())
     ctx = context(canopy_env)
     db.migrate(ctx.conn, resources.migrations_dir())
     # The chore runs every 120 minutes: one that started 115 minutes ago is due in 5, before the 15-minute interval.
@@ -746,7 +745,7 @@ def test_a_gate_opening_just_after_a_tick_waits_for_the_gap(
 ) -> None:
     (canopy_env.home / "chores").mkdir()
     (canopy_env.home / "chores" / "build-health.md").write_text("# Build health\n")
-    canopy_env.write_user(canopy_env.user_file.read_text() + chore_toml())
+    canopy_env.append_user(chore_toml())
     ctx = context(canopy_env)
     db.migrate(ctx.conn, resources.migrations_dir())
     # Due 20 seconds after the tick: the gap holds the next tick to a minute after this one began.
@@ -760,7 +759,7 @@ def test_a_gate_opening_just_after_a_tick_waits_for_the_gap(
 
 
 def test_a_configured_gap_holds_an_early_wake(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[loop]\nmin_gap_minutes = 5\n")
+    canopy_env.append_user("\n[loop]\nmin_gap_minutes = 5\n")
     ctx = context(canopy_env)
     time = FakeTime()
 
@@ -780,7 +779,7 @@ def test_a_configured_gap_holds_an_early_wake(canopy_env: CanopyEnv, treehouse_s
 def test_a_gap_longer_than_the_interval_lengthens_the_wait(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[loop]\nmin_gap_minutes = 3\n")
+    canopy_env.append_user("\n[loop]\nmin_gap_minutes = 3\n")
     ctx = context(canopy_env)
     with overseer_does():
         time = FakeTime()
@@ -790,7 +789,7 @@ def test_a_gap_longer_than_the_interval_lengthens_the_wait(
 
 
 def test_the_tick_now_key_is_not_held_by_the_gap(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[loop]\nmin_gap_minutes = 5\n")
+    canopy_env.append_user("\n[loop]\nmin_gap_minutes = 5\n")
     ctx = context(canopy_env)
     keys = FakeKeys()
     time = FakeTime(on_sleep=lambda: keys.type(repeat.TICK_NOW_KEY))
@@ -814,7 +813,7 @@ def test_the_tick_now_key_is_not_held_by_the_gap(canopy_env: CanopyEnv, treehous
 def test_a_tick_asked_for_from_the_web_is_not_held_by_the_gap(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[loop]\nmin_gap_minutes = 5\n")
+    canopy_env.append_user("\n[loop]\nmin_gap_minutes = 5\n")
     ctx = context(canopy_env)
     asked = tick_now.TickNow()
     time = FakeTime(on_sleep=asked.request)

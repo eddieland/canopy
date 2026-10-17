@@ -1,10 +1,8 @@
 """Plan runs (DESIGN §25, ROADMAP M44): `canopy dispatch --kind plan`, the planner in its desk, and its plan."""
 
 import hashlib
-import json
 import sqlite3
 from pathlib import Path
-from typing import Any
 
 import pytest
 
@@ -18,6 +16,7 @@ from tests.canopy.helpers import (
     QUESTION,
     InlineRunner,
     agent_runs,
+    commands_run,
     context,
     decisions,
     dispatch_and_run,
@@ -36,11 +35,6 @@ TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button to `ui/form.tsx`, red.\n\
 
 def plan_file(env: CanopyEnv, run_id: int) -> Path:
     return env.state_dir / "plans" / KEY / f"{run_id}.md"
-
-
-def commands_run(agent_log: Path) -> list[list[dict[str, Any]]]:
-    """The commands each fake agent run ran, in order: each one's argv, exit code, stdout, and stderr."""
-    return [json.loads(line)["commands"] for line in agent_log.read_text().splitlines()]
 
 
 def test_a_plan_is_written_to_its_file_and_recorded_proposed(
@@ -248,7 +242,7 @@ def test_a_plan_needs_the_trackers_read_tools(
 def test_plan_attempts_are_the_tickets_and_limited(
     canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection
 ) -> None:
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + "\n[policy]\nmax_plan_attempts = 1\n")
+    canopy_env.append_shared("\n[policy]\nmax_plan_attempts = 1\n")
     with planner_does(plan=TEXT):
         dispatch_and_run(conn, *PLAN)
     reason = "PROJ-1 has had 1 plan runs and the limit is 1"

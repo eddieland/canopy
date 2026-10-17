@@ -92,7 +92,7 @@ def test_worker_is_told_the_configured_needs_human_label(
     treehouse_state: Path,
     conn: sqlite3.Connection,
 ) -> None:
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + 'needs_human_label = "blocked-on-team"\n')
+    canopy_env.append_shared('needs_human_label = "blocked-on-team"\n')
     with in_tick(conn):
         args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
         assert main(args, runner=InlineRunner()) == 0
@@ -107,10 +107,7 @@ def test_worker_is_told_the_configured_comment_marks(
     treehouse_state: Path,
     conn: sqlite3.Connection,
 ) -> None:
-    canopy_env.write_user(
-        canopy_env.user_file.read_text()
-        + '\n[trust]\ncomment_prefix = "[bot]"\ncomment_suffix = "Posted by canopy for alice."\n'
-    )
+    canopy_env.append_user('\n[trust]\ncomment_prefix = "[bot]"\ncomment_suffix = "Posted by canopy for alice."\n')
     with in_tick(conn):
         args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"]
         assert main(args, runner=InlineRunner()) == 0
@@ -198,7 +195,7 @@ def test_capacity_guard(
     conn: sqlite3.Connection,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[capacity]\nmax_workers = 1\n")
+    canopy_env.append_user("\n[capacity]\nmax_workers = 1\n")
     with in_tick(conn) as tick_id:
         runner = InlineRunner()
         assert (

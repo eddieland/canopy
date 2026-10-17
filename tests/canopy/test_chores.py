@@ -5,8 +5,6 @@ import os
 import signal
 import sqlite3
 import time
-from collections.abc import Iterator
-from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TextIO
@@ -27,12 +25,16 @@ from canopy.loop import attention
 from tests.canopy.helpers import (
     InlineRunner,
     chore_decisions,
+    chore_reports,
     chore_toml,
     in_tick,
     json_block,
     lifelock_left,
+    messages,
+    overseer_does,
     state_block,
     tools_of,
+    with_events,
 )
 from tests.conftest import CanopyEnv
 
@@ -51,15 +53,8 @@ def chores(canopy_env: CanopyEnv) -> Path:
     prompt = canopy_env.home / "chores" / "build-health.md"
     prompt.parent.mkdir()
     prompt.write_text("# Build health\n\nLook at the build queue.\n")
-    canopy_env.write_user(canopy_env.user_file.read_text() + chore_toml(extra='when = "Weekdays only."\n'))
+    canopy_env.append_user(chore_toml(extra='when = "Weekdays only."\n'))
     return prompt
-
-
-@contextmanager
-def chore_reports(report: object) -> Iterator[None]:
-    """Until the block ends, the fake chore prints `report` as its final line, verbatim if it is a string."""
-    with mock.patch.dict(os.environ, {"FAKE_CHORE_RESULT": report if isinstance(report, str) else json.dumps(report)}):
-        yield
 
 
 def run_inline(conn: sqlite3.Connection, report: object, *, close: bool = True) -> int:
@@ -87,7 +82,7 @@ def _stamp(seconds: float) -> str:
 def test_without_chores_nothing_about_them_reaches_the_overseer(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
-    with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does():
         assert main(["tick", "--dry-run"]) == 0
     assert "chores" not in state_block(agent_log)
 
@@ -102,8 +97,8 @@ def test_without_chores_nothing_about_them_reaches_the_overseer(
 def test_max_chores_zero_turns_every_chore_off(
     canopy_env: CanopyEnv, chores: Path, treehouse_state: Path, agent_log: Path
 ) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[capacity]\nmax_chores = 0\n")
-    with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": "CANOPY_TICK_DONE"}):
+    canopy_env.append_user("\n[capacity]\nmax_chores = 0\n")
+    with overseer_does():
         assert main(["tick", "--dry-run"]) == 0
         assert "chores" not in state_block(agent_log)
 
@@ -132,7 +127,7 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
         assert "CANOPY_TICK_ID" not in agent["env"]  # a chore cannot act as the overseer
         prompt = agent["argv"][3]
         assert prompt.startswith("# Build health\n\nLook at the build queue.\n\n## Run\n")
-        run = json.loads(prompt.split("```json\n", 1)[1].split("\n```", 1)[0])
+        run = json_block(prompt)
         assert (run["chore"], run["run_id"], run["context"]) == ("build-health", 1, "Look at build 90")
         assert run["previous_run"] is None
         assert run["open_findings"] == []
@@ -161,7 +156,7 @@ def test_the_run_object_carries_the_notice_in_force(canopy_env: CanopyEnv, chore
 
 
 def test_chore_guards(canopy_env: CanopyEnv, chores: Path) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + chore_toml("queue-age", every=30))
+    canopy_env.append_user(chore_toml("queue-age", every=30))
     (canopy_env.home / "chores" / "queue-age.md").write_text("Queue age.\n")
     conn = canopy_env.journal()
     with in_tick(conn) as tick_id:
@@ -250,18 +245,8 @@ def test_long_text_is_cut_to_its_limits() -> None:
 
 
 def tick(*, dry_run: bool = False) -> None:
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_RESULT": "CANOPY_TICK_DONE"}):
+    with overseer_does():
         assert main(["tick", *(["--dry-run"] if dry_run else [])]) == 0
-
-
-@pytest.fixture
-def notified(canopy_env: CanopyEnv, chores: Path, tmp_path: Path) -> Path:
-    out = tmp_path / "notified.txt"
-    script = tmp_path / "notify"
-    script.write_text('#!/bin/sh\ncat >> "$1"\necho "--" >> "$1"\n')
-    script.chmod(0o755)
-    canopy_env.write_user(canopy_env.user_file.read_text() + f"\n[notify]\ncmd = '{script} {out}'\n")
-    return out
 
 
 def test_findings_reach_the_attention_list_and_are_notified_once(
@@ -280,7 +265,7 @@ def test_findings_reach_the_attention_list_and_are_notified_once(
         "## chore:build-health\n\n- test_retry fails one run in five https://ci.example.test/job/checkout/90, " in page
     )
     assert page.endswith("(flaky/checkout/test_retry)\n")
-    [message] = notified.read_text().split("--\n")[:-1]
+    [message] = messages(notified)
     assert (
         "+ chore:build-health flaky/checkout/test_retry: test_retry fails one run in five "
         "https://ci.example.test/job/checkout/90\n"
@@ -299,7 +284,7 @@ def test_findings_reach_the_attention_list_and_are_notified_once(
     tick()
     items = {(i.subject, i.reason) for i in attention.current(conn)}
     assert ("chore:build-health", "chore_failed") in items
-    second = notified.read_text().split("--\n")[1]
+    second = messages(notified)[1]
     assert "+ chore:build-health chore_failed: chore run 2 ended failed: CI unreachable; log " in second
     assert "flaky/checkout/test_retry" not in second
 
@@ -307,7 +292,7 @@ def test_findings_reach_the_attention_list_and_are_notified_once(
     backdate(conn, 120)
     run_inline(conn, {"status": "ok", "summary": "all clear"})
     tick()
-    third = notified.read_text().split("--\n")[2]
+    third = messages(notified)[2]
     assert "- chore:build-health flaky/checkout/test_retry\n" in third
     assert "- chore:build-health chore_failed\n" in third
     assert "Nothing needs you." in (canopy_env.state_dir / "attention.md").read_text()
@@ -341,7 +326,7 @@ def test_a_shadowing_config_above_the_cwd_stops_the_chore(canopy_env: CanopyEnv,
     (project / ".opencode" / "agent").mkdir(parents=True)
     (project / ".opencode" / "agent" / "canopy-chore.md").write_text("---\npermission:\n  bash: allow\n---\n")
     cwd = f"cwd = {json.dumps(str(project / 'sub'))}\n"
-    canopy_env.write_user(canopy_env.user_file.read_text() + cwd)
+    canopy_env.append_user(cwd)
     conn = canopy_env.journal()
     run_id = run_inline(conn, OK)
     run = db.get_chore_run(conn, run_id)
@@ -394,7 +379,7 @@ def test_a_killed_chore_run_is_crashed_on_the_next_tick(
     canopy_env: CanopyEnv, chores: Path, treehouse_state: Path, agent_log: Path
 ) -> None:
     conn = canopy_env.journal()
-    with in_tick(conn) as tick_id, mock.patch.dict(os.environ, {"FAKE_CHORE_SLEEP": "60"}):
+    with in_tick(conn) as tick_id, chore_reports(OK, sleep=60):
         assert main(["chore", "run", "build-health"]) == 0
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     deadline = time.monotonic() + 30
@@ -527,7 +512,7 @@ def test_try_works_with_chores_off_and_reports_a_bad_result(
     agent_log: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[capacity]\nmax_chores = 0\n")
+    canopy_env.append_user("\n[capacity]\nmax_chores = 0\n")
     with chore_reports({"status": "done"}):
         assert main(["chore", "try", "build-health", "--no-record"]) == 1
         out = capsys.readouterr().out
@@ -637,7 +622,7 @@ def test_a_dismissed_finding_is_off_the_attention_list_until_the_chore_stops_rep
     assert "Nothing needs you." in page.read_text()
     tick()
     assert "Nothing needs you." in page.read_text()
-    assert f"- chore:build-health {FINDING['id']} (dismissed)\n" in notified.read_text().split("--\n")[1]
+    assert f"- chore:build-health {FINDING['id']} (dismissed)\n" in messages(notified)[1]
     assert main(["show", "chore:build-health"]) == 0
     assert f"{FINDING['id']}  " in (shown := capsys.readouterr().out)
     assert "(dismissed)" in shown
@@ -676,11 +661,9 @@ def test_a_chore_run_records_what_it_cost(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     """With OpenCode's JSON events, as the default `chore_cmd` asks for, a chore run records its session and cost."""
-    text = canopy_env.user_file.read_text()
-    canopy_env.write_user(text.replace("--agent canopy-chore {prompt}", "--agent canopy-chore --format json {prompt}"))
+    with_events(canopy_env, "canopy-chore")
     # The tries after the run report what it did.
-    env = {"FAKE_CHORE_SESSION": "ses_chore", "FAKE_CHORE_COMMANDS": json.dumps([["echo", "read it"]])}
-    with mock.patch.dict(os.environ, env), chore_reports(OK):
+    with chore_reports(OK, ["echo", "read it"], session="ses_chore"):
         conn = canopy_env.journal()
         run_id = run_inline(conn, OK)
         row = db.get_chore_run(conn, run_id)
