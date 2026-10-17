@@ -191,7 +191,9 @@ export type MemoryEntry = Schemas['MemoryEntry']
 export type MemoryProposal = Schemas['MemoryProposal']
 /** What a run would be served of one tier, as its prompt would carry it. */
 export type MemoryDigest = Schemas['MemoryDigest']
-/** Every tier's memory: the notes in force, the proposals waiting, and the lessons. */
+/** One ticket's notes in force, counted, for the memory page's list across tickets. */
+export type TicketNotes = Schemas['TicketNotes']
+/** Every tier's memory: the tickets with notes in force, the proposals waiting, and the lessons. */
 export type MemoryOverview = Schemas['MemoryOverview']
 /** One ticket's notes, and what its next run would be served. */
 export type TicketMemory = Schemas['TicketMemory']

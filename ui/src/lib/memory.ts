@@ -55,6 +55,19 @@ export function usedText(entry: Pick<MemoryEntry, 'use_count' | 'last_used_at'>)
     return `used by ${entry.use_count} run${entry.use_count === 1 ? '' : 's'}`
 }
 
+/**
+ * What a memory in force says of the digest that leaves it out (DESIGN §28): past its cap, it reaches no run's prompt
+ * now, or would reach none at `use` while its tier is recording. A run can still find it with `canopy memory search`.
+ */
+export function leftOutText(served: boolean): string {
+    return served ? 'left out of the prompt, past its cap' : 'would be left out at use, past its cap'
+}
+
+/** How runs used a ticket's notes in force: `read by no run`, or how many of them a run relied on. */
+export function ticketNotesUsedText({ count, used }: { count: number; used: number }): string {
+    return used === 0 ? 'read by no run' : `${used} of ${count} used by runs`
+}
+
 /** What a run read, when it read nothing: nothing was served while recording, which is not an empty digest. */
 export function readNothingText(served: boolean): string {
     return served ? 'none' : 'none, recording only'

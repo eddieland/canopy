@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { memorySegments, readNothingText, usedText, visibleText } from './memory'
+import { leftOutText, memorySegments, readNothingText, ticketNotesUsedText, usedText, visibleText } from './memory'
 
 describe('visibleText', () => {
     it('names every character that hides text by its code point, as canopy memory list does', () => {
@@ -40,5 +40,19 @@ describe('readNothingText', () => {
     it('tells a run that read nothing because it was recording from one whose digest was empty', () => {
         expect(readNothingText(false)).toBe('none, recording only')
         expect(readNothingText(true)).toBe('none')
+    })
+})
+
+describe('ticketNotesUsedText', () => {
+    it('says how many of a ticket’s notes in force a run relied on, or that none was read', () => {
+        expect(ticketNotesUsedText({ count: 4, used: 0 })).toBe('read by no run')
+        expect(ticketNotesUsedText({ count: 4, used: 3 })).toBe('3 of 4 used by runs')
+    })
+})
+
+describe('leftOutText', () => {
+    it('never says a recording tier’s left-out memory is left out of a prompt that is served', () => {
+        expect(leftOutText(true)).toBe('left out of the prompt, past its cap')
+        expect(leftOutText(false)).toBe('would be left out at use, past its cap')
     })
 })

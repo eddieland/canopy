@@ -190,6 +190,16 @@ export const ROW_COLUMNS = {
         ['use', '11rem', 1],
         ['age', AGE, 2],
     ],
+    /**
+     * A ticket with notes in force, on the memory page: its key, what opens its notes under it, how runs used them, and
+     * when the newest was written.
+     */
+    'memory-ticket': [
+        ['key', '6rem'],
+        ['text', FREE],
+        ['use', '11rem', 1],
+        ['age', AGE, 2],
+    ],
     /** A transcript's row: its time, its mark, and its text, under which a tool call's body opens. */
     transcript: [
         ['time', '3.5rem'],

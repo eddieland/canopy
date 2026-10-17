@@ -22,6 +22,7 @@ from canopy.serve.schema import (
     RunMemory,
     RunMemoryModes,
     TicketMemory,
+    TicketNotes,
 )
 
 if TYPE_CHECKING:
@@ -50,7 +51,9 @@ def state(settings: Memory) -> MemoryState | None:
 
 
 def overview(ctx: Context) -> MemoryOverview:
-    """Every tier's memory: the notes in force, the proposals waiting, the lessons, and what the lessons would serve.
+    """Every tier's memory: the tickets with notes in force, the proposals waiting, the lessons, and what they serve.
+
+    The notes are counted by ticket, not sent: a busy workspace holds thousands, and a ticket's own read lists them.
 
     Returns:
         The overview, with no digest of the lessons while proposals are off.
@@ -62,9 +65,9 @@ def overview(ctx: Context) -> MemoryOverview:
         digest = _digest(found, served=settings.proposals is MemoryMode.USE)
     return MemoryOverview(
         state=state(settings),
-        notes=[entry(m) for m in memory.notes(ctx.conn)],
+        tickets=[_ticket_notes(t) for t in memory.ticket_notes(ctx.conn)],
         proposals=[_proposal(ctx, p) for p in memory.pending_proposals(ctx.conn)],
-        lessons=[entry(m) for m in memory.active_lessons(ctx.conn)],
+        lessons=[entry(m) for m in sorted(memory.active_lessons(ctx.conn), key=_review_order)],
         lessons_digest=digest,
     )
 
@@ -144,6 +147,18 @@ def _mode(mode: MemoryMode) -> MemoryModeName:
 
 def _digest(found: memory.Digest, *, served: bool) -> MemoryDigest:
     return MemoryDigest(text=found.text, ids=list(found.ids), left_out=found.left_out, served=served)
+
+
+def _review_order(lesson: records.Memory) -> tuple[bool, str, str]:
+    # Reported wrong first, then by review date: what calls for the operator comes first, and the lessons longest since
+    # vouched for, which the digest leaves out first, come before those it serves.
+    return (lesson.wrong_at is None, lesson.review_at or "", lesson.key)
+
+
+def _ticket_notes(found: memory.TicketNotes) -> TicketNotes:
+    return TicketNotes(
+        ticket_key=found.ticket_key, count=found.count, used=found.used, latest_at=db.parse_time(found.latest_at)
+    )
 
 
 def _proposal(ctx: Context, p: records.Memory) -> MemoryProposal:
