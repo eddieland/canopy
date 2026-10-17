@@ -58,6 +58,7 @@ export function PlanThreads({
     active,
     draft,
     draftAt,
+    hidden,
     listRef,
     editable,
     onDraftChange,
@@ -76,6 +77,8 @@ export function PlanThreads({
     draft: Draft | undefined
     /** How many of the open threads found in the plan come before the comment being written, in the plan's order. */
     draftAt: number
+    /** A thread shown elsewhere, at its passage (`floatUnder`), so not in the list as well. */
+    hidden?: string | undefined
     /** The list of comments, for `alignComments`. */
     listRef?: Ref<HTMLDivElement>
     /** Whether the operator can comment, reply, and resolve; without it the threads are read only. */
@@ -94,31 +97,28 @@ export function PlanThreads({
     const placed = open.filter((thread) => found.has(thread.id))
     const lost = open.filter((thread) => !found.has(thread.id))
     const resolved = threads.filter((thread) => thread.resolved)
-    const card = (thread: PlanThread) => (
-        <ThreadCard
-            key={thread.id}
-            thread={thread}
-            lost={!found.has(thread.id)}
-            active={thread.id === active}
-            editable={editable}
-            {...actions}
-        />
-    )
+    const card = (thread: PlanThread) =>
+        thread.id === hidden ? undefined : (
+            <ThreadCard
+                key={thread.id}
+                thread={thread}
+                lost={!found.has(thread.id)}
+                active={thread.id === active}
+                editable={editable}
+                {...actions}
+            />
+        )
     return (
         <div ref={listRef} className="plan-margin flex flex-col">
             {placed.slice(0, draftAt).map((thread) => card(thread))}
             {draft !== undefined && (
                 <div data-align="draft" className="border-b bg-accent/14 px-3 py-2.5">
-                    <Quote text={draft.quote} />
-                    <CommentForm
-                        key={draft.opened}
-                        label="Comment"
-                        submit="Comment"
-                        value={draft.body}
-                        onValueChange={onDraftChange}
-                        onSubmit={onDraftSubmit}
-                        onCancel={onDraftCancel}
-                        onLeave={onDraftLeave}
+                    <DraftForm
+                        draft={draft}
+                        onDraftChange={onDraftChange}
+                        onDraftSubmit={onDraftSubmit}
+                        onDraftCancel={onDraftCancel}
+                        onDraftLeave={onDraftLeave}
                     />
                 </div>
             )}
@@ -212,10 +212,50 @@ export function AskForChanges({
     )
 }
 
+/** The comment being written: the passage it is on, quoted, and its form. */
+export function DraftForm({
+    draft,
+    onDraftChange,
+    onDraftSubmit,
+    onDraftCancel,
+    onDraftLeave,
+}: {
+    /** The comment being written. */
+    draft: Draft
+    /** Called with what it says, as the operator types it. */
+    onDraftChange: (body: string) => void
+    /** Adds it. */
+    onDraftSubmit: (body: string) => void
+    /** Drops it. */
+    onDraftCancel: () => void
+    /** Puts the cursor back in the plan, the comment left open with its words. */
+    onDraftLeave: () => void
+}) {
+    return (
+        <>
+            <Quote text={draft.quote} />
+            <CommentForm
+                key={draft.opened}
+                label="Comment"
+                submit="Comment"
+                value={draft.body}
+                onValueChange={onDraftChange}
+                onSubmit={onDraftSubmit}
+                onCancel={onDraftCancel}
+                onLeave={onDraftLeave}
+            />
+        </>
+    )
+}
+
 // What `ThreadCard` edits when it edits the comment rather than a reply.
 const COMMENT = 'comment'
 
-function ThreadCard({
+/**
+ * A thread's card: its passage quoted, the comment and its replies, and what can be done with it. The open one sits
+ * on the accent's tint; `lost` marks one whose passage is gone from the plan.
+ */
+export function ThreadCard({
     thread,
     lost,
     active,
@@ -227,7 +267,16 @@ function ThreadCard({
     onDelete,
     onEdit,
     onBack,
-}: ThreadActions & { thread: PlanThread; lost: boolean; active: boolean; editable: boolean }) {
+}: ThreadActions & {
+    /** The thread. */
+    thread: PlanThread
+    /** Whether its passage is gone from the plan. */
+    lost: boolean
+    /** Whether it is the thread open. */
+    active: boolean
+    /** Whether the operator can reply, edit, resolve, and delete. */
+    editable: boolean
+}) {
     const [replying, setReplying] = useState(false)
     // What is being edited: the comment, or a reply by its id.
     const [editing, setEditing] = useState<string | undefined>(undefined)
