@@ -1,5 +1,5 @@
 import { Check, MessageSquarePlus, Reply, RotateCcw, Send, Trash2 } from 'lucide-react'
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, Ref, SubmitEvent } from 'react'
 
 import { Age } from '@/components/age'
@@ -184,7 +184,6 @@ export function AskForChanges({
     /** Sends the message. */
     onAsk: (message: string) => void
 }) {
-    const id = useId()
     const [note, setNote] = useState('')
     const message = changeRequest(threads, starts, note, edited)
     const open = threads.filter((thread) => !thread.resolved).length
@@ -199,32 +198,30 @@ export function AskForChanges({
     }
 
     return (
-        <form onSubmit={send} aria-label="Ask for changes" className="flex flex-col gap-2 border-t p-3">
-            <div className="flex flex-col gap-1.5">
-                <label htmlFor={id} className="panel-label">
-                    On the whole plan
-                </label>
-                <Textarea
-                    id={id}
-                    name="note"
-                    value={note}
-                    maxLength={MAX_REQUEST}
-                    onChange={(event) => setNote(event.target.value)}
-                    placeholder="Optional. The planner reads it with every open comment and the passage it is on."
-                    className="min-h-16"
-                />
-            </div>
-            <div className="flex items-center justify-between gap-3">
-                <span className="text-xs text-muted-foreground">
-                    {over
-                        ? `${message.length - MAX_REQUEST} characters over a reply's bound: resolve or shorten some`
-                        : `${open} open ${open === 1 ? 'comment goes' : 'comments go'} with it`}
-                </span>
-                <Button type="submit" disabled={!message || over}>
-                    <Send aria-hidden />
-                    Ask for changes
-                </Button>
-            </div>
+        <form
+            onSubmit={send}
+            aria-label="Ask for changes"
+            className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2"
+        >
+            <Textarea
+                name="note"
+                aria-label="On the whole plan"
+                rows={1}
+                value={note}
+                maxLength={MAX_REQUEST}
+                onChange={(event) => setNote(event.target.value)}
+                placeholder="A note on the whole plan, optional"
+                className="field-sizing-content max-h-32 min-h-8 min-w-48 flex-1 resize-none py-1"
+            />
+            <span className="text-xs text-muted-foreground">
+                {over
+                    ? `${message.length - MAX_REQUEST} characters over a reply's bound: resolve or shorten some`
+                    : `${open} open ${open === 1 ? 'comment goes' : 'comments go'} with it`}
+            </span>
+            <Button type="submit" disabled={!message || over}>
+                <Send aria-hidden />
+                Ask for changes
+            </Button>
         </form>
     )
 }

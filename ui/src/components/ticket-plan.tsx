@@ -231,49 +231,42 @@ function NewestPlan({
     }
 
     return (
-        <>
-            <PlanEditor
-                markdown={text}
-                threads={held}
-                onThreadsChange={onThreadsChange}
-                onChange={setMarkdown}
-                editable={editable}
-                edited={newest.edited}
-                onAskForChanges={status === 'proposed' ? askForChanges : undefined}
-            />
-            {editable && (
-                <Panel>
-                    <div className="flex flex-col gap-2 p-3" data-testid="plan-actions">
-                        <div className="flex flex-wrap items-center gap-2">
-                            {approvable && (
-                                <Button onClick={() => decide('approve')} disabled={busy > 0}>
-                                    <Check />
-                                    {dirty ? 'Save and approve' : 'Approve'}
-                                </Button>
-                            )}
-                            <Button variant="outline" onClick={() => act(saveAndSay)} disabled={busy > 0 || !dirty}>
-                                <Save />
-                                Save
-                            </Button>
-                            <Button
-                                variant="ghost"
-                                className="ml-auto"
-                                onClick={() => decide('skip')}
-                                disabled={busy > 0}
-                            >
-                                <SkipForward />
-                                Skip the plan
-                            </Button>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                            Approving takes the plan as saved, your edits included, and lets its implement go ahead.
-                            {status === 'approved' && ' Saving an edit means approving it again.'}
-                        </p>
-                        <Notice error={failure}>{said}</Notice>
-                    </div>
-                </Panel>
-            )}
-        </>
+        <PlanEditor
+            markdown={text}
+            threads={held}
+            onThreadsChange={onThreadsChange}
+            onChange={setMarkdown}
+            editable={editable}
+            edited={newest.edited}
+            onAskForChanges={status === 'proposed' ? askForChanges : undefined}
+            actions={
+                <div className="flex flex-wrap items-center gap-2" data-testid="plan-actions">
+                    {approvable && (
+                        <Button onClick={() => decide('approve')} disabled={busy > 0}>
+                            <Check />
+                            {dirty ? 'Save and approve' : 'Approve'}
+                        </Button>
+                    )}
+                    <Button variant="outline" onClick={() => act(saveAndSay)} disabled={busy > 0 || !dirty}>
+                        <Save />
+                        Save
+                    </Button>
+                    <Button variant="ghost" onClick={() => decide('skip')} disabled={busy > 0}>
+                        <SkipForward />
+                        Skip the plan
+                    </Button>
+                </div>
+            }
+            actionsNote={
+                <div className="flex flex-col gap-2">
+                    <p className="text-xs text-muted-foreground">
+                        Approving takes the plan as saved, your edits included, and lets its implement go ahead.
+                        {status === 'approved' && ' Saving an edit means approving it again.'}
+                    </p>
+                    <Notice error={failure}>{said}</Notice>
+                </div>
+            }
+        />
     )
 }
 

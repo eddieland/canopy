@@ -706,22 +706,22 @@ list, an empty state, or a skeleton by hand.
   clear it. The open one, or the comment being written, sits exactly at its passage, and the cards before it move up to
   make room. A comment being written opens in its place among them, beside its passage, so opening one never scrolls the
   page away from what it is on. Each card is placed by its top margin and stays in the column's flow, so the comments
-  whose passage is gone, the resolved ones, and `Ask for changes` follow the last; the cards move with their passages as
-  the plan is edited, and with each other as one grows. Under the plan, the comments are rows split by hairlines, as
-  before. The plan is laid out as a document (`.plan-doc` in `src/index.css`): `text-sm` prose up to `max-w-3xl`,
-  headings at `text-xl`, `text-base`, and `text-sm` semibold, code as rich text sets it, a table in hairlines with its
-  header row on `surface-raised` at half, a quote muted behind a hairline. What the plan holds as characters (HTML, an
-  image) is muted monospace; a link is underlined in `muted-foreground` with its address on hover, never a link. The
-  toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by hairlines: undo and redo, the paragraph's style,
-  the marks and the blocks (each on or off, raised while on at the cursor), then `Comment`, enabled while text is
-  selected. Each control's tooltip names it and the shortcut the editor binds to it, on this keyboard (`Bold (⌘B)`,
-  `Bold (Ctrl+B)` elsewhere), and declares the same keys as `aria-keyshortcuts`. The paragraph's style is a menu, as a
-  document's is: its button names the style in force (`Heading 2 ▾`), and it lists Text and Heading 1 to 4, each set as
-  the plan sets it, with its keys at the right in muted monospace and a check in the accent on the one in force; a style
-  chosen leaves the cursor in the plan. After the blocks, a `Table` menu inserts a table where none is (a header row and
-  two rows of three columns, as a plan's Files table is), and inside one adds a row above or below or a column left or
-  right, and deletes a row, a column, or the table; what the cursor's place does not allow is disabled, and an action
-  leaves the cursor in the plan. An empty plan shows its prompt in `muted-foreground` where its first line starts:
+  whose passage is gone and the resolved ones follow the last; the cards move with their passages as the plan is edited,
+  and with each other as one grows. Under the plan, the comments are rows split by hairlines, as before. The plan is
+  laid out as a document (`.plan-doc` in `src/index.css`): `text-sm` prose up to `max-w-3xl`, headings at `text-xl`,
+  `text-base`, and `text-sm` semibold, code as rich text sets it, a table in hairlines with its header row on
+  `surface-raised` at half, a quote muted behind a hairline. What the plan holds as characters (HTML, an image) is muted
+  monospace; a link is underlined in `muted-foreground` with its address on hover, never a link. The toolbar (`Toolbar`,
+  below) is `icon-xs` toggles in groups split by hairlines: undo and redo, the paragraph's style, the marks and the
+  blocks (each on or off, raised while on at the cursor), then `Comment`, enabled while text is selected. Each control's
+  tooltip names it and the shortcut the editor binds to it, on this keyboard (`Bold (⌘B)`, `Bold (Ctrl+B)` elsewhere),
+  and declares the same keys as `aria-keyshortcuts`. The paragraph's style is a menu, as a document's is: its button
+  names the style in force (`Heading 2 ▾`), and it lists Text and Heading 1 to 4, each set as the plan sets it, with its
+  keys at the right in muted monospace and a check in the accent on the one in force; a style chosen leaves the cursor
+  in the plan. After the blocks, a `Table` menu inserts a table where none is (a header row and two rows of three
+  columns, as a plan's Files table is), and inside one adds a row above or below or a column left or right, and deletes
+  a row, a column, or the table; what the cursor's place does not allow is disabled, and an action leaves the cursor in
+  the plan. An empty plan shows its prompt in `muted-foreground` where its first line starts:
   `Write the plan here, or paste its Markdown.` The plan's header, with the toolbar, is `sticky`, and what the editor
   scrolls into view (the cursor as it types, a passage a comment shows) stops 48px below it. A selection also shows a
   `Comment` bubble over it. A commented passage sits on the accent's tint at 14%; the open one, or the one being
@@ -744,11 +744,15 @@ list, an empty state, or a skeleton by hand.
   form takes the cursor when it opens, after any words it holds; once a comment is sent, resolved, deleted, put aside,
   or cancelled, the cursor goes back to the plan after its passage, as a shared document's does, rather than to the top
   of the page. `Comment` again, on new words, moves an empty comment to them; one half written stays on its passage, and
-  the cursor goes back to it, so its words are never lost or carried to other words. The comments end in
-  `Ask for changes`: a note on the whole plan and the button (the request says the plan was edited, when it was), with
-  how many open comments go with it, or how far over a reply's bound the request is. Until plans reach a ticket's page
-  (M44), the editor is on `/plan-editor`, over a sample plan on mock data only, with what the planner would read and the
-  plan's Markdown under it.
+  the cursor goes back to it, so its words are never lost or carried to other words. Under the plan and its comments, a
+  bar of actions sticks to the bottom of the page while the plan scrolls, as a document's do, so a long plan is approved
+  or sent back from where it is read: the caller's own actions first (a ticket's `Approve`, `Save`, and
+  `Skip the plan`), then `Ask for changes`, a note on the whole plan, one line that grows as it is written, how many
+  open comments go with it, or how far over a reply's bound the request is, and the button (the request says the plan
+  was edited, when it was); what the caller's actions will do, or what one did, goes on a line under them. The editor
+  keeps what it scrolls into view clear of the bar too. Until plans reach a ticket's page (M44), the editor is on
+  `/plan-editor`, over a sample plan on mock data only, with what the planner would read and the plan's Markdown under
+  it.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then how often it may start and its window (`cadenceText`: `every 360 minutes`, as
   the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed
