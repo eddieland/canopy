@@ -104,9 +104,9 @@ cannot reach internal systems and require handing a vendor write access.
 ## 3. Non-goals
 
 - Replacing human review, approval, or merge.
-- A hosted service, a background daemon, or a workflow DSL. `canopy loop` (§6) runs in the foreground, where the
-  operator started it. A listener is allowed only on loopback or the operator's private network, behind the operator's
-  secret (TRUST_MODEL T8, D055); none is built yet.
+- A hosted service, a service installed with the OS, or a workflow DSL. `canopy loop` (§6) runs where the operator
+  started it, in the foreground or detached by `canopy daemon`, and nothing restarts it. A listener is allowed only on
+  loopback or the operator's private network, behind the operator's secret (TRUST_MODEL T8, D055); none is built yet.
 - Tracker-specific code. Any issue tracker with an MCP server works; provider differences live in config and optional
   provider skills (§17). A second VCS host is likewise a prompt and config concern, not code.
 - A sandbox the harness knows about. Sandboxing is an opt-in prefix on the command templates (§24), and the harness

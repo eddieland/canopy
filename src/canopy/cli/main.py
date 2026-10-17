@@ -27,6 +27,7 @@ COMMANDS: dict[str, tuple[str, str]] = {
     "secret": ("setup", "cmd_secret"),
     "sandbox": ("setup", "sandbox_group"),
     "loop": ("loop", "cmd_loop"),
+    "daemon": ("daemon", "daemon_group"),
     "tick": ("loop", "cmd_tick"),
     "status": ("loop", "cmd_status"),
     "decisions": ("loop", "cmd_decisions"),
