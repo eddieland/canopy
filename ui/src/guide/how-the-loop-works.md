@@ -35,7 +35,7 @@ or `unknown` (its last words weren't a result canopy could read). Every failed r
 
 Reviews and chores are runs too, of their own kinds, with their own pages: a review reads one PR at one commit and
 reports findings, and a chore is recurring work no ticket asked for. [Pull requests and reviews](pull-requests) and
-[Chores and memory](chores) cover them.
+[Chores](chores) cover them.
 
 ## Phases
 
