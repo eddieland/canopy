@@ -1738,6 +1738,41 @@ new review comment, the next tick sends one `resume`, which fixes the check and 
 
 Status: not started.
 
+## M57. Artifacts, and comments on them back to the ticket
+
+REQUIREMENTS R23, DESIGN §29, TRUST_MODEL T1, T6, and T8, D003, D069, D089. Asked for by the operator (2026-10-17):
+workers publish artifacts people comment on, to Louvre, a hosted platform that is its own program, or to a local
+store canopy ships, through the same MCP tools; the comments come back to the ticket. Needs nothing for its first
+three stages; the fourth needs M36. Five stages, in order, each in its own PRs.
+
+- Stage 1, the stores: `canopy-artifacts`, a workspace member under `packages/` serving §29's eight tools over stdio,
+  with the comment feed, anchors, and versions, artifacts under the state directory and out of the journal. Louvre
+  builds the same contract in its own repository; canopy's tests run against the local store and a fake of the feed.
+- Stage 2, publishing: a skill for the tools, `[artifacts]` in the private file (§29, canopy's part), and the
+  definitions of the roles `publish_roles` names allowing the tools by name. Never the private worker or the planner.
+  TRUST_MODEL T6, its PR saying what the change lets the loop do.
+- Stage 3, comments back through the overseer: the overseer reads `comment_feed` each tick and mirrors new comments
+  into the conversation, quoting their passages; `authorized_authors` and the comment marks decide authority, as for
+  tracker comments; an unlisted author's comment is an attention item until the operator sends it on. The overseer's
+  prompt and TRUST_MODEL T1.
+- Stage 4, comments back through a connector (needs M36): `canopy-connect-artifacts` prints the feed as observations,
+  authors are checked in code, and the overseer stops reading the feed itself.
+- Stage 5, plans as artifacts (needs M44): a plan is an artifact in the local store, and the plan editor's threads
+  are artifact threads.
+- Rendering the local store's HTML in the web UI, from a second loopback origin in a sandboxed frame: TRUST_MODEL T8,
+  in whichever stage first shows an artifact.
+- Tests with the fakes: a publish and a new version keep a thread's anchor, and a reworded passage reads
+  `passage_gone`; the feed's cursor misses no change and repeats none across pages; a page cut off before its `end`
+  line keeps the previous state; a listed author's comment reaches the conversation as authority, an unlisted one's
+  as an attention item, and one with every comment mark as neither; a private ticket's worker has no Louvre tools.
+
+Accept: written with the design, before work starts. Live, once built: a worker publishes an artifact to Louvre for a
+ticket, a listed author comments on a passage, the next tick that reads the feed puts the comment in the ticket's
+conversation, and a worker publishes a new version that answers it, replies, and resolves the thread; an unlisted
+author's comment waits on the attention list.
+
+Status: not started.
+
 ## Deferred, with the trigger that would unblock each
 
 - Spend-paced loop (M13): when, with M39 built, overseer spend per day still runs past what the operator will pay

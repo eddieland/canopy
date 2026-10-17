@@ -1,7 +1,7 @@
 # canopy requirements
 
 The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 to R17 on
-2026-10-14, R18 on 2026-10-15, R19 on 2026-10-16, R20 to R22 on 2026-10-17), and where canopy stands on each. The design
+2026-10-14, R18 on 2026-10-15, R19 on 2026-10-16, R20 to R23 on 2026-10-17), and where canopy stands on each. The design
 (`design/`) is how canopy meets them; this file is what it must meet. Where the two disagree, the conflict is listed
 under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until then
 (AGENTS.md).
@@ -277,6 +277,16 @@ operator's approval. As an option, a smaller, cheaper agent should judge a chang
 for what that means, and let it go ahead unplanned, without asking the operator first. When it is unsure, or fails,
 the work is planned as before. A waived change canopy's own reviewer judges high impact is called out to the operator;
 its size alone is not, since size says little about risk.
+
+### R23. Publish artifacts people comment on, and bring their comments back to the ticket
+
+Gap (M57, §29). Written down 2026-10-17. A worker should be able to publish what it made for people to read, such as a
+report, a design, or an HTML mock-up, to an artifact store, and anyone the operator shares it with should be able to
+comment on its passages. Those comments should come back to the ticket that produced the artifact, where they steer
+its next run as review feedback does, and the worker's revision should answer them in place. The store is Louvre, a
+hosted platform for the operator's organization that is its own program, not part of canopy; or, for the operator
+alone, a local store canopy ships that serves the same tools. canopy reaches Louvre as it reaches the tracker, through
+the agent runtime's MCP and the operator's own token, and pulls comments rather than listening for them, so H1 holds.
 
 ## Nice to have
 
