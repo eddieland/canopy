@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
 from canopy.chores import reconcile as chore_reconcile
-from canopy.core import agent_output, chore_view, conversation, db, definitions, notice, pools
+from canopy.core import agent_output, chore_view, conversation, db, definitions, notice, plans, pools
 from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.core.vocab import TickStatus
@@ -19,6 +19,9 @@ from canopy.reviews import view as review_view
 from canopy.runs import policy, reconcile
 
 if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from canopy.core import records
     from canopy.core.context import Context
 
 TICK_ID_ENV = conversation.TICK_ID_ENV
@@ -94,6 +97,7 @@ def _render(
     tickets = [t for t in db.open_tickets(ctx.conn) if t.key not in stopped]
     private = {t.key: found for t in tickets if (found := conversation.state_section(ctx.conn, t)) is not None}
     operator = {t.key: found for t in tickets if (found := conversation.operator_section(ctx.conn, t)) is not None}
+    planned = _plans(ctx, tickets)
     recently_done = db.recently_done(ctx.conn, db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS)))
     chores = chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now)
     block = state.state_block(
@@ -122,6 +126,7 @@ def _render(
         notices=notice.recent(ctx.conn, now),
         private=private,
         operator=operator,
+        planned=planned,
         mirror_delimiter=conversation.body_delimiter(),
         attention=attention.for_overseer(ctx.conn),
         query_due=query_due,
@@ -136,6 +141,20 @@ def _render(
         chores=chores,
     )
     return block, owed
+
+
+def _plans(ctx: Context, tickets: Iterable[records.Ticket]) -> dict[str, plans.PlanState]:
+    """Return each ticket's plan for the state block, by key: only the tickets plans touch (DESIGN §25)."""
+    done = policy.ticket_attempts(ctx.conn, policy.PLAN)
+    granted = policy.ticket_grants(ctx.conn, policy.PLAN)
+    base = policy.limits(ctx.config)[policy.PLAN]
+    found: dict[str, plans.PlanState] = {}
+    for t in tickets:
+        limit = base + granted.get(t.key, 0)
+        section = plans.state_section(ctx.conn, ctx.config.policy.plan, t, attempts=done.get(t.key, 0), limit=limit)
+        if section is not None:
+            found[t.key] = section
+    return found
 
 
 def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
@@ -218,8 +237,9 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
     """Record the attention items the harness raises itself, every tick their cause holds (DESIGN §14)."""
     for item in attention.from_runs(ctx.conn):
         db.record_decision(ctx.conn, tick_id, item.ticket_key, f"{attention.ACTION_PREFIX}{item.reason}", item.detail)
-    # A private ticket's question reaches the operator here: it is on no tracker (DESIGN §22).
-    for waiting in conversation.awaiting(ctx.conn):
+    # A private ticket's question reaches the operator here: it is on no tracker (DESIGN §22). So does a planner's on a
+    # public ticket, since the planner writes nothing to the ticket (DESIGN §25).
+    for waiting in [*conversation.awaiting(ctx.conn), *plans.awaiting(ctx.conn)]:
         db.record_decision(
             ctx.conn,
             tick_id,

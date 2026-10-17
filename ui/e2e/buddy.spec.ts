@@ -55,27 +55,33 @@ test.describe('turned on', () => {
         await expect(tip).toBeVisible()
     })
 
-    test('Sprig leaves its tip alone on another page offering the same one', async ({ page }) => {
-        await page.goto('tickets')
+    test('Sprig has its own tip for a list and one of its items, and keeps it for another filter', async ({ page }) => {
+        await page.goto('runs')
         await settled(page)
         const tip = page.getByTestId('buddy-tip')
         const shown = await tip.textContent()
 
-        // A ticket's page offers the same tip: the bubble stays as it was, not closed and opened again.
+        // The same view filtered another way offers the same tip: the bubble stays as it was, not closed and opened.
         await tip.evaluate((el) => {
             el.dataset.kept = ''
         })
-        await page.getByTestId('tickets').getByRole('link', { name: 'ABC-102', exact: true }).click()
-        await expect(page).toHaveURL(/tickets\/ABC-102$/u)
+        const filters = page.getByRole('navigation', { name: 'Filter by state' })
+        await filters.getByRole('link', { name: 'waiting on you' }).click()
+        await expect(page).toHaveURL(/runs\?state=blocked$/u)
         await expect(tip).toHaveText(shown ?? '')
         await expect(tip).toHaveAttribute('data-kept', '')
 
-        // Closed, it stays closed back on the list.
+        // Closed, it stays closed on the same view.
         await page.getByTestId('buddy-close').click()
-        await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Tickets' }).click()
-        await expect(page).toHaveURL(/tickets$/u)
-        await expect(page.getByTestId('tickets')).toBeVisible()
+        await filters.getByRole('link', { name: 'all' }).click()
+        await expect(page).toHaveURL(/runs$/u)
         await expect(tip).toBeHidden()
+
+        // A run's page is a view of its own, with a tip of its own.
+        await page.goto('runs/39')
+        await settled(page)
+        await expect(tip).toBeVisible()
+        await expect(tip).not.toHaveText(shown ?? '')
     })
 
     test("Don't show me tips again turns Sprig off until Settings turns it back on", async ({ page }) => {
@@ -231,10 +237,10 @@ test.describe('turned on', () => {
     test('the mock has spent too little for any hat', async ({ page }) => {
         await page.goto('settings')
         await settled(page)
-        await expect(page.getByTestId('hats-wallet')).toContainText('$9.23')
+        await expect(page.getByTestId('hats-wallet')).toContainText('$10.51')
         await page.getByTestId('hats-toggle').click()
         await expect(page.getByTestId('hat-party-buy')).toBeDisabled()
-        await expect(page.getByTestId('hat-party-buy')).toHaveAttribute('title', '$40.77 short')
+        await expect(page.getByTestId('hat-party-buy')).toHaveAttribute('title', '$39.49 short')
     })
 
     for (const theme of THEMES) {

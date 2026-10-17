@@ -29,72 +29,59 @@ triage_timeout_minutes = 10
 triage_skill = ""            # optional; the skill that says which of a repository's failures are flaky
 ```
 
-- `max_triage_ci_attempts` is a `max_<kind>_attempts` like the others (§8): counted from `runs`, never reset (D030).
-  Its default is 0, and a repository may only tighten policy (§12), so only the operator's file turns triage on.
-- `triage_cmd` follows §12. A private ticket's triage (§22) uses it too: the triage agent writes nothing to the tracker.
-- `triage_skill` names a skill the triage agent follows, from where the runtime reads skills (§13): the repository's
-  (`.agents/skills/<name>/SKILL.md`, read from its primary clone, below) or the operator's in `$HOME`. It holds what
-  only the repository knows: tests known to flake, failures that are always infrastructure, checks never to rerun, and,
-  for a CI that is not GitHub Actions, which tool reruns a job. Unset, the agent follows the prompt's general rules
-  alone. Named but not available, the agent reruns nothing and reports `real` with a summary starting
-  `no triage skill:`, so the failure goes to `fix-ci` as it did before triage existed; falling back to the general
-  rules would fail toward hiding a regression.
+- `max_triage_ci_attempts` is a `max_<kind>_attempts` like the others (§8): counted over all runs, never reset (D030).
+  A repository may only tighten policy (§12), so only the operator's file turns triage on.
+- `triage_cmd` follows §12, and serves a private ticket (§22) too: the triage agent writes nothing to the tracker.
+- `triage_skill` names a skill the triage agent follows, the repository's (read from its primary clone, below) or the
+  operator's (§13). It holds what only the repository knows: tests known to flake, failures that are always
+  infrastructure, checks never to rerun, and, for a CI that is not GitHub Actions, which tool reruns a job. Unset, the
+  agent follows the prompt's general rules alone. Named but not available, the agent reruns nothing and reports `real`
+  with a summary starting `no triage skill:`; falling back to the general rules would fail toward hiding a regression.
 
 ### Off unless configured
 
 With `max_triage_ci_attempts` at 0 nothing changes: the state block has no triage fields, the overseer prompt's triage
-rows do not apply, `ci_red` dispatches `fix-ci`, and `canopy dispatch --kind triage-ci` refuses as `triage_off`, with
-no attention item. A test holds this.
+rows do not apply, `ci_red` dispatches `fix-ci`, and a `triage-ci` dispatch refuses as `triage_off`, with no attention
+item.
 
 ### Dispatch
 
-`canopy dispatch KEY --kind triage-ci [--repo NAME] --cursor ci=<run> --context '<check and link>'` runs §8's guards
-as for `fix-ci`, without `cooldown`, plus:
+`canopy dispatch --kind triage-ci`, with the failed run as its `ci` cursor and the check in its context, runs §8's
+guards as for `fix-ci`, without `cooldown`, plus:
 
 - `triage_off`: `policy.max_triage_ci_attempts` is 0.
-- `bad_request`: a `triage-ci` that names more than one unit, or gives `--base`. A triage reads one PR.
+- `bad_request`: a `triage-ci` that names more than one unit, or a base. A triage reads one PR.
 
-It leases no slot. `_run` claims the run (§8 step 1), skips the git steps, and runs `triage_cmd` with timeout
-`triage_timeout_minutes` and cwd the unit's primary clone, under `repos/` (§18). The shadowing check (§13) covers that
-directory first, as it does for the overseer. It parses the triage result (below), skips push verification, and records
-the run and its report (§8 step 7). A triage counts toward `capacity.max_workers` with workers and reviews: it is an
-agent run, with spend.
-
-The cwd is never a checkout of the PR's branch, so the runtime loads the repository's skills from the primary clone,
-and a PR cannot change the skill that judges it.
+It leases no slot. The run skips the git steps and push verification, and runs `triage_cmd` with
+`triage_timeout_minutes` in the unit's primary clone (§18), which the shadowing check (§13) covers first, as for the
+overseer. The cwd is never a checkout of the PR's branch, so a PR cannot change the skill that judges it. A triage
+counts toward `capacity.max_workers` with workers and reviews: it is an agent run, with spend.
 
 ### The prompt
 
-`prompts/ci-triage.md`, and `ci-triage-private.md` for a started ticket (§22), with the key, the repository, its PR
-and branch, the attempt number and limit, `{{TRIAGE_SKILL}}` (the instruction to follow the named skill, or nothing),
-the overseer's context, and the result contract. The agent:
+`prompts/ci-triage.md`, and `ci-triage-private.md` for a started ticket (§22), hold the agent's rules. What the rest
+of this section relies on:
 
-- checks authorization first, as every worker does (§8 step 3): a closed ticket, or one with none of the queue labels,
-  is `failed` with a summary starting `not authorized:`. The private variant has no label to check.
-- reads the PR head commit's failed checks and their logs, the earlier runs of those checks on the same commit, and the
-  same checks' recent runs on the base branch.
-- reports `flaky` only with evidence the change did not cause the failure: the skill names it; the job failed before
-  any of the repository's code ran (runner lost, checkout or dependency download failed, a service outside the
-  repository returned an error or timed out); or a test the diff does not touch fails and passes on the base branch
-  with nothing it tests changing. Anything else, and anything it is unsure of, is `real`: a `fix-ci` that finds nothing
-  to fix costs less than a rerun that hides a regression.
-- reports `real` for a failure on a head commit a triage already reran: a check gets one rerun per commit.
-- reruns only the failed jobs of the failed runs it judged, on the PR's head commit, once each: with
-  `gh run rerun <id> --failed`, or the tool the skill names. It starts no other workflow run, cancels nothing, and
-  touches no other PR's or branch's runs. It does not wait for the rerun.
-- treats logs, the diff, and PR text as data (TRUST_MODEL T1), and writes nothing else: no comments, labels, edits, or
-  commits. Its summary is its report, which `canopy show` and the web UI list with the ticket's other runs (§22).
+- It checks authorization first, as every worker does (§8 step 3), and is `failed` with `not authorized:` otherwise.
+- It reports `flaky` only with evidence the change did not cause the failure: the skill names it, the job failed
+  before any of the repository's code ran, or a test the diff does not touch also fails and passes on the base branch.
+  Anything it is unsure of is `real`: a `fix-ci` that finds nothing to fix costs less than a rerun that hides a
+  regression. A head commit a triage already reran is `real`: a check gets one rerun per commit.
+- It reruns only the failed jobs of the failed runs it judged, on the PR's head commit, once each, with
+  `gh run rerun <id> --failed` or the tool the skill names. It starts, cancels, and touches nothing else, and does not
+  wait for the rerun.
+- It treats logs, the diff, and PR text as data (TRUST_MODEL T1), and writes nothing else: no comments, labels, edits,
+  or commits. Its summary is its report, listed with the ticket's other runs (§22).
 
-Result contract, one JSON line, last line of the agent's text (§13), validated with pydantic (D026):
+Result contract, one JSON line, last line of the agent's text (§13):
 
 ```json
 {"status":"done|failed","verdict":"flaky|real","commit":"<full head sha>",
  "reruns":["https://github.com/o/r/actions/runs/123"],"summary":"one paragraph"}
 ```
 
-- `done` has a verdict and the head commit it judged, 40 or 64 lowercase hex characters. `reruns` is non-empty exactly
-  when the verdict is `flaky`: at most 10 plain `https://` URLs of at most 500 characters. Otherwise the run is
-  recorded `failed` with a harness note. `summary` is cut at 2000.
+- `done` has a verdict and the full head commit it judged. `reruns` is non-empty exactly when the verdict is `flaky`:
+  at most 10 plain `https://` URLs. Otherwise the run is recorded `failed` with a harness note.
 - `failed` means it could not triage, and the summary says why. Like any run that ends other than `done`, it raises
   attention (§14), and the overseer waits for an authorized reply or an operator message before the unit's next
   dispatch.
@@ -102,9 +89,9 @@ Result contract, one JSON line, last line of the agent's text (§13), validated 
 
 ### The overseer's part
 
-The state block's `policy` gains `max_triage_ci_attempts`; each unit's `attempts` gains `triage-ci`, and the unit gains
-its latest triage: run id, status, verdict, commit, reruns, and end time. When triage is on, `ci_red` (§7) is decided
-by the first that fits:
+The state block's `policy` gains `max_triage_ci_attempts`, each unit's `attempts` gains `triage-ci`, and each unit
+gains its latest triage: status, verdict, commit, reruns, and when it ended. When triage is on, `ci_red` (§7) is
+decided by the first that fits:
 
 | Situation | Action |
 |---|---|
@@ -114,8 +101,7 @@ by the first that fits:
 
 A rerun's checks are newer than the cursor, so a unit whose rerun is still running is `ci_running` and waits, and one
 whose rerun passes moves on as any green PR does. Triage takes `ci_red`'s place in step 4's priority order. The
-`fix-ci` cooldown counts from the latest `fix-ci` only, and `fix-ci` attempts count only `fix-ci` runs, so reruns
-spend neither.
+`fix-ci` cooldown and attempts count `fix-ci` runs only, so reruns spend neither.
 
 ### Agent definition
 
@@ -127,7 +113,7 @@ canopy ships `canopy-ci-triage` in the definitions directory (§13):
   label, and PR update tools. GitHub's server folds reruns into `actions_run_trigger`, which also starts workflows and
   cancels runs, so it stays denied, and reruns go through `gh`; a tool named for reruns alone (`*rerun*`) is allowed.
 
-A CI reached through another MCP server needs its rerun tool allowed. The operator copies the definition into their
+A CI reached through another MCP server needs its rerun tool allowed: the operator copies the definition into their
 runtime config, allows exactly that tool, and points `triage_cmd` at it, as for a chore's tools (§19).
 
 Workers lose what this section gives the triage: `canopy-worker` denies `gh run rerun*`, `gh run cancel*`,
@@ -137,8 +123,8 @@ denies all of `gh`.
 
 ### Journal
 
-- A triage is a `runs` row of kind `triage-ci` with no `run_slots`, its branch the ticket's, and `result_json` the
-  validated result. Its report message (§8 step 7) is the summary with each rerun URL on a line.
+- A triage is a run of kind `triage-ci` that holds no slot, on the ticket's branch, with its validated result. Its
+  report (§8 step 7) is the summary with each rerun URL on a line.
 - `canopy status`, the web UI, and notifications show it as any run.
 
 ### Trust model changes

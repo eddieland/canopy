@@ -124,7 +124,9 @@ to the rest; a write goes through `canopy.core.conversation`, never SQL of its o
   `attention-dark`, `tickets-ABC-102-dark`, `runs-39-dark`, `reviews-4-dark`, and `ticks-2-dark`: rename them there too.
   The baselines are CI's Chromium and fonts, so regenerate them there: push the branch, then run the Screenshots
   workflow on it (`gh workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or an agent's GitHub tools). It
-  pushes a commit with the images that changed and starts CI on it; pull before going on. It rewrites only the images
+  runs only the spec files that call `toHaveScreenshot`, `screenshotMain`, or `screenshotWhole`, so a test that takes
+  one through another helper is missed until its file calls one of those. It pushes a commit with the images that
+  changed and starts CI on it, which runs the whole suite; pull before going on. It rewrites only the images
   that fail the comparison, so a change subtle enough to pass within the threshold (a token's small shift) leaves the
   old images in place: run it with `update` set to `all` (`-f update=all`) to rewrite every one.
   `npx playwright test --update-snapshots=changed` does the same locally, on a machine whose rendering may not match.

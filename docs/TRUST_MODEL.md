@@ -62,6 +62,11 @@ Controls:
   ticket. The independent check is the worker's: every worker prompt has it re-read the ticket's labels and stop,
   changing nothing, without one, and a worker prompt that cannot carry the labels is refused. Both checks are agent
   judgment, so they reduce the chance of unlabeled work rather than exclude it; human review of every PR remains.
+- An approved plan (DESIGN §25) is data, not an operator instruction. A planner wrote it from ticket text, which anyone
+  who can edit the ticket shapes, so the operator's approval authorizes the `implement`, not what the plan's text asks
+  for. A worker's prompt names its copy and gives its outline, never its text, and says the prompt's obligations come
+  before it, as before the standing instructions; a plan cannot widen what a worker may do. The worker reads the
+  approved text alone: `_run` checks the file against the hash the operator approved before it writes the copy.
 - Workers can push only to `trust.branch_prefix` branches, with one exception: the head branch of an open PR the
   operator authored and labeled with one of `tracker.labels` (PR-scoped work, ROADMAP M14, D056). Enforced by the
   worker prompt and by repository branch protection, which the operator must configure. canopy `init` prints the
@@ -215,7 +220,10 @@ Controls in code, not prompts:
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
 - Mirrored comments: at most 100 `canopy mirror` calls a tick, each body cut at 2000 characters (DESIGN §22).
 - Plans: a plan run holds a slot within `capacity.max_workers`, has the worker's timeout, and counts toward
-  `policy.max_plan_attempts` per ticket, never reset (DESIGN §25).
+  `policy.max_plan_attempts` per ticket, never reset, raised only by the operator, in config or per ticket with
+  `canopy grant KEY plan` (DESIGN §25). A plan waiting on the operator holds no slot. The plan gate is a guard in code:
+  an `implement` for a ticket that needs a plan and has none approved is refused (`unplanned`), whatever the overseer
+  asks for, and only the operator's channels ask for, skip, or approve a plan.
 
 ### T4. Damage to the operator's machine
 
@@ -325,7 +333,9 @@ Controls:
   are known, and a run is refused where the worktree's OpenCode config names any of that server's tools. It reads the
   worktrees linked from its desk, at their base branches. canopy reads its plan from the desk, never through a link,
   into an operator-only file under the state directory (T2), and never sends it to the tracker, public ticket or
-  private.
+  private. Residual: a worker reads the approved plan from a copy in its working directory, ignored by git, and can
+  still commit it by name, which on a private ticket publishes the plan with its branch. The prompt forbids it, and
+  push verification gives the run a harness note when a pushed branch holds the copy; nothing prevents it.
 - A private ticket's worker (DESIGN §22) runs `canopy-worker-private`, whose definition canopy renders from the user
   config: every tool of the tracker's MCP server (`tracker.mcp_server`) is denied by a wildcard, then only
   `tracker.read_tools` are allowed by name, so a write tool missing from the list fails closed; the tracker CLIs canopy
@@ -497,6 +507,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   control characters dropped, rendered as text. That adds what the transcript leaves out: the runtime's stderr,
   which may name the operator's paths and config, and every field of the overseer's events. A run's log is never
   served this way.
+- It serves a ticket's plans (DESIGN §25): each plan's file as it stands, model-written from ticket text, read
+  bounded from a regular file opened without following links, and drawn in the plan editor as text, its HTML and
+  images kept as characters (D113).
 - It serves canopy's reviews (DESIGN §21, M32): each review run's findings, and the diff of the commit it read, which
   `_review` writes beside the run's log. The diff is the PR's own text, by whoever wrote the PR, `review.query`'s
   other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened
@@ -507,12 +520,15 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   note something to a chore as `canopy reply chore:NAME` does, dismiss a chore's or a review's finding or take that
   back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, make and end a review
   request on a PR as `canopy start URL --review` and `canopy stop URL` do, pause and resume the loop as
-  `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, and ask the
-  loop
-  to read its config files again as SIGHUP does, nothing else. It cannot write config: a reload reads only the
-  operator's own files, and a `serve.*` change waits for a restart, so the listener's bind and port never change under
-  it. A forget must carry the ticket's key typed out, checked in code. A grant allows one more run a request, with
-  `canopy grant`'s guards. It cannot run a chore.
+  `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, ask for, skip,
+  or approve a ticket's plan as `canopy plan` does, and ask the loop to read its config files again as SIGHUP does.
+  Beyond the CLI's verbs it writes two things, both the operator's own words on a plan (DESIGN §25): an edit of a
+  plan's file, saved as the operator's own editor would, operator-only and never through a link, only over the
+  ticket's current plan, never while a plan run for it is running, and never over a file that changed since the
+  editor read it; and the operator's comments on a plan's passages, in the journal. Nothing else. It cannot write
+  config: a reload reads only the operator's own files, and a `serve.*` change waits for a restart, so the listener's
+  bind and port never change under it. A forget must carry the ticket's key typed out, checked in code. A grant
+  allows one more run a request, with `canopy grant`'s guards. It cannot run a chore.
 
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
 credentials. A notice set that way reaches every run's prompt, every ticket's, until it lapses, at most seven days, or

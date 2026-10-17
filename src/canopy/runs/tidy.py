@@ -15,7 +15,7 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import hostgit
+from canopy.core import hostgit, plans
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -77,7 +77,11 @@ def tidy(
     log: logs.TickAdapter,
     fields: Mapping[str, object],
 ) -> bool:
-    """Put back the slot's `.git` file and `commondir` if they changed, then move it off objects only `objects` holds.
+    """Remove a plan's copy, put back the slot's `.git` file and `commondir` if they changed, and move it off `objects`.
+
+    The slot is moved off any object only `objects` holds. The plan's copy, `.canopy-plan.md` at the worktree's root,
+    is written for one run alone (DESIGN §25); it is ignored by git, so nothing else would remove it before the next
+    lease.
 
     The slot is checked out detached at `origin/<base>`, which `_run` fetched into the shared directory before the
     worker started and a sandboxed worker cannot move. Its own refs, `ORIG_HEAD`, `FETCH_HEAD`, and its HEAD reflog,
@@ -87,6 +91,7 @@ def tidy(
         Whether the slot may be returned. treehouse runs git in a slot it takes back, so one this could not put back
         is left leased, and the object directory kept, for the operator.
     """
+    _drop_copy(slot, log, fields)
     if link is not None and hostgit.read_link(slot) != link:
         try:
             hostgit.restore_link(slot, link)
@@ -118,6 +123,15 @@ def tidy(
         return False
     log.info("slot moved off the run's own objects", extra=dict(fields))
     return True
+
+
+def _drop_copy(slot: Path, log: logs.TickAdapter, fields: Mapping[str, object]) -> None:
+    """Remove the plan's copy at the slot's root, never following a link: a link is removed, not what it names."""
+    try:
+        (slot / plans.COPY).unlink(missing_ok=True)
+    except OSError as e:
+        # A directory a worker made in its place: it holds no plan canopy wrote, and the next copy refuses it.
+        log.warning("plan copy not removed", extra={**fields, "error": str(e)})
 
 
 def remove_objects(path: Path, log: logs.TickAdapter) -> None:

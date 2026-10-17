@@ -48,6 +48,8 @@ const BASES = ['background', 'surface', 'surface-raised']
 
 // The spend chart's series: fills on a panel's surface, never text (ui/DESIGN.md, "Tokens").
 const SERIES = ['spend-overseer', 'spend-idle', 'spend-workers', 'spend-chores', 'spend-reviews', 'spend-dry-run']
+// A transcript's context chart: fills on a panel's surface, and on the raised one behind the call picked.
+const CONTEXT = ['context-carried', 'context-added']
 
 // A status word also sits on its own tint: a chip (10%) in a selected inbox row (the accent at 14%), a destructive
 // button (12%, 20% hovered), a question's bubble (12%) on a raised surface.
@@ -106,6 +108,16 @@ describe.each(Object.entries(THEMES))('%s theme', (_, colors) => {
             const ratio = contrast(token(name), token('surface'))
             return ratio < GRAPHICS ? `${name} on surface: ${ratio.toFixed(2)}:1` : null
         }).filter((line) => line !== null)
+        expect(low).toEqual([])
+    })
+
+    it("sets the context chart's fills apart from the surfaces they sit on", () => {
+        const low = CONTEXT.flatMap((name) =>
+            ['surface', 'surface-raised'].map((base) => {
+                const ratio = contrast(token(name), token(base))
+                return ratio < GRAPHICS ? `${name} on ${base}: ${ratio.toFixed(2)}:1` : null
+            }),
+        ).filter((line) => line !== null)
         expect(low).toEqual([])
     })
 

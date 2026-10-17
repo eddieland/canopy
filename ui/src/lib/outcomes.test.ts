@@ -5,6 +5,7 @@ import {
     forgotText,
     grantedText,
     notedText,
+    planText,
     noticeSetText,
     reloadedText,
     repliedText,
@@ -141,6 +142,22 @@ describe('outcomes', () => {
         )
         expect(repliedText('A-1', { message_id: 9, answers: null, new: false })).toBe(
             'Message 9 on A-1 already says this; nothing new recorded.',
+        )
+    })
+
+    it('says what a word on a plan did, as `canopy plan` does', () => {
+        expect(planText('PROJ-1', { action: 'approve', plan: 3, superseded: null, already: false })).toBe(
+            'Plan 3 of PROJ-1 is approved as its file stands now. The next tick can implement it.',
+        )
+        expect(planText('PROJ-1', { action: 'skip', plan: null, superseded: 3, already: false })).toBe(
+            "Plan 3 of PROJ-1 is superseded; its file stays. PROJ-1's plan is skipped: its implement goes ahead " +
+                'without one.',
+        )
+        expect(planText('PROJ-1', { action: 'request', plan: null, superseded: null, already: true })).toBe(
+            'PROJ-1 already waits on a plan: the next tick dispatches a planner if none is running.',
+        )
+        expect(planText('PROJ-1', { action: 'request', plan: null, superseded: null, already: false })).toContain(
+            'PROJ-1 is planned first',
         )
     })
 })

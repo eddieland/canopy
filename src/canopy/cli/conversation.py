@@ -20,8 +20,19 @@ import click
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
 from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, spent
-from canopy.core import chore_view, contract, conversation, db, notice, pause, prompts, review_requests
-from canopy.core.vocab import RunKind
+from canopy.core import (
+    chore_view,
+    contract,
+    conversation,
+    db,
+    notice,
+    pause,
+    plan_threads,
+    plans,
+    prompts,
+    review_requests,
+)
+from canopy.core.vocab import PlanStatus, RunKind
 from canopy.infra import logs
 from canopy.loop import attention
 from canopy.reviews import grants
@@ -30,6 +41,7 @@ from canopy.runs import halt, policy
 if TYPE_CHECKING:
     import sqlite3
 
+    from canopy.core import records
     from canopy.core.context import Context
     from canopy.core.conversation import Ref
 
@@ -37,6 +49,8 @@ CLI = "cli"
 # `canopy show` lists this many of a ticket's runs and messages.
 SHOW_RUNS = 5
 SHOW_MESSAGES = 100
+# How much of a commented passage `canopy show --plans` quotes, as a change request does (DESIGN §25).
+SHOW_QUOTE = 160
 
 
 def _ref(text: str, verb: str) -> Ref:
@@ -147,13 +161,17 @@ def cmd_notice(click_ctx: click.Context, text: str | None, duration: str | None,
 @click.command("start")
 @click.argument("ref", metavar="REF")
 @click.option("--review", is_flag=True, help="REF is a PR's URL: review it once, at its head.")
+@click.option("--plan", is_flag=True, help="Plan it first: its implement waits on a plan you approve.")
 @click.pass_context
-def cmd_start(click_ctx: click.Context, ref: str, *, review: bool) -> int:
+def cmd_start(click_ctx: click.Context, ref: str, *, review: bool, plan: bool) -> int:
     """Work a ticket privately, or with --review have canopy review someone else's PR.
 
     A ticket started here has no queue label, and nothing canopy writes reaches it. Its conversation, the workers'
     reports and questions and your replies, stays in canopy's journal: read it with `canopy show`, answer with
     `canopy reply`.
+
+    With --plan, a planner writes down how the work will be done first, and nothing is implemented until you approve
+    it with `canopy plan KEY --approve`, whatever `policy.plan` says.
 
     With --review, REF is a PR the loop does not own, by its URL. canopy reviews it once, at its head, in whichever of
     the workspace's repositories it is in; the review goes in the journal and nothing is posted on the PR.
@@ -161,15 +179,23 @@ def cmd_start(click_ctx: click.Context, ref: str, *, review: bool) -> int:
     _operator("start")
     subject = _ref(ref, "start")
     if review:
+        if plan:
+            raise click.UsageError("--plan is for a ticket; a PR's review has no plan")
         return _start_review(click_ctx, subject)
     ctx = open_context(click_ctx)
     try:
-        started = conversation.start(ctx.conn, ctx.config, subject, repo=ctx.repo, channel=CLI)
+        plan_lock = ctx.dispatch_lock_path if plan else None
+        started = conversation.start(ctx.conn, ctx.config, subject, repo=ctx.repo, channel=CLI, plan_lock=plan_lock)
     except conversation.Refused as r:
         raise CliError(f"start refused ({r.guard}): {r.reason}") from None
     logs.for_tick(None).info("ticket started", extra={"ticket": subject.id, "already": started.already})
     state = "was already started" if started.already else "is started"
     click.echo(f"{subject} {state}, privately: workers read it and write nothing to it; their reports stay in canopy.")
+    if plan:
+        click.echo(
+            "It is planned first: nothing is implemented until you approve its plan with "
+            f"`canopy plan {subject} --approve`."
+        )
     if started.running is not None:
         run = started.running
         kind = "private" if run["private"] else "public, dispatched before this start, so it may write to the ticket"
@@ -315,7 +341,9 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
 
 @click.command("grant")
 @click.argument("ref", metavar="REF")
-@click.argument("kind", type=click.Choice([*(str(k) for k in policy.KINDS), grants.KIND]))
+@click.argument(
+    "kind", type=click.Choice([*(str(k) for k in (*policy.KINDS, *policy.TICKET_GRANT_KINDS)), grants.KIND])
+)
 @click.option("--repo", type=REPO, help="The repository of the ticket's unit. Needed when it has had runs in several.")
 @click.option("--runs", type=click.IntRange(min=1), default=1, show_default=True, help="How many more runs to allow.")
 @click.pass_context
@@ -323,8 +351,9 @@ def cmd_grant(click_ctx: click.Context, ref: str, kind: str, repo: str | None, r
     """Allow a ticket more runs of KIND than `policy.max_<kind>_attempts`, in one repository, or a PR more reviews.
 
     For a ticket at its attempt limit that you want the loop to keep working, or, with REF a PR's URL and KIND
-    `review`, a PR past `policy.max_reviews_per_pr` that you want reviewed again. Every run still counts toward the
-    limit; this raises that unit's or PR's limit, and only from your shell. The next tick decides whether to use it.
+    `review`, a PR past `policy.max_reviews_per_pr` that you want reviewed again. A `plan` is the ticket's, in no one
+    repository, so it takes no --repo. Every run still counts toward the limit; this raises that unit's, ticket's, or
+    PR's limit, and only from your shell. The next tick decides whether to use it.
     """
     subject = _ref(ref, "grant")
     if (subject.kind == conversation.PR) != (kind == grants.KIND):
@@ -332,6 +361,8 @@ def cmd_grant(click_ctx: click.Context, ref: str, kind: str, repo: str | None, r
     ctx = open_context(click_ctx)
     if kind == grants.KIND:
         return _grant_reviews(ctx, subject, repo=repo, runs=runs)
+    if kind in policy.TICKET_GRANT_KINDS:
+        return _grant_ticket(ctx, subject, kind, repo=repo, runs=runs)
     try:
         granted = policy.grant(ctx.conn, ctx.config, subject.id, kind, repo=repo, runs=runs)
     except conversation.Refused as r:
@@ -350,6 +381,21 @@ def _grant_mismatch(subject: Ref, kind: str) -> str:
     if kind == grants.KIND:
         return f"{subject} is a ticket; `review` takes the PR's URL: `canopy grant <URL> review`"
     return f"{subject} is a PR, which takes only `review`; {kind} takes a ticket key"
+
+
+def _grant_ticket(ctx: Context, subject: Ref, kind: str, *, repo: str | None, runs: int) -> int:
+    if repo is not None:
+        raise CliError(f"grant refused (bad_repo): a {kind}'s limit is the ticket's own; leave out --repo")
+    try:
+        granted = policy.grant_ticket(ctx.conn, ctx.config, subject.id, kind, runs=runs)
+    except conversation.Refused as r:
+        raise CliError(f"grant refused ({r.guard}): {r.reason}") from None
+    logs.for_tick(None).info("attempts granted", extra={"ticket": subject.id, "kind": kind, "runs": runs})
+    click.echo(
+        f"{subject} has had {granted.runs} {kind} runs, and may now have {granted.limit}. "
+        "The next tick decides whether to dispatch it."
+    )
+    return 0
 
 
 def _grant_reviews(ctx: Context, subject: Ref, *, repo: str | None, runs: int) -> int:
@@ -454,13 +500,20 @@ def cmd_send(click_ctx: click.Context, ref: str, findings: tuple[int, ...]) -> i
 
 @click.command("show")
 @click.argument("ref", metavar="REF")
+@click.option(
+    "--plans", "every_plan", is_flag=True, help="For a ticket, every plan it has had, and your open comments."
+)
 @click.pass_context
-def cmd_show(click_ctx: click.Context, ref: str) -> int:
-    """Show a ticket's phase, PRs, recent runs, and conversation, a run (`run:ID`), a chore (`chore:NAME`), or a PR.
+def cmd_show(click_ctx: click.Context, ref: str, *, every_plan: bool) -> int:
+    """Show a ticket's phase, PRs, plan, recent runs, and conversation, a run (`run:ID`), a chore, or a PR.
 
-    A PR, by its URL, shows your review request on it, if you made one, and canopy's reviews of it.
+    A ticket's newest plan is printed as its file stands, with its status; --plans prints every plan, oldest first, and
+    the open comments on the newest. A chore is `chore:NAME`. A PR, by its URL, shows your review request on it, if
+    you made one, and canopy's reviews of it.
     """
     subject = _ref(ref, "show")
+    if every_plan and subject.kind != conversation.TICKET:
+        raise click.UsageError("--plans is for a ticket")
     ctx = open_context(click_ctx)
     if subject.kind == conversation.RUN:
         _show_run(ctx, int(subject.id))
@@ -469,7 +522,7 @@ def cmd_show(click_ctx: click.Context, ref: str) -> int:
     elif subject.kind == conversation.PR:
         _show_pr(ctx, subject.id)
     else:
-        _show_ticket(ctx, subject.id)
+        _show_ticket(ctx, subject.id, every_plan=every_plan)
     return 0
 
 
@@ -499,7 +552,7 @@ def _show_pr(ctx: Context, url: str) -> None:
         click.echo(f"\nRead one with `canopy review show {runs[0].id}`.")
 
 
-def _show_ticket(ctx: Context, key: str) -> None:
+def _show_ticket(ctx: Context, key: str, *, every_plan: bool) -> None:
     ticket = db.get_ticket(ctx.conn, key)
     record = conversation.start_of(ctx.conn, key)
     if ticket is None and record is None:
@@ -523,8 +576,68 @@ def _show_ticket(ctx: Context, key: str) -> None:
             )
         for unit in db.units(ctx.conn, key):
             click.echo(f"  {unit['repo']}  PR {unit['pr_url'] or 'none recorded'}  phase {unit['phase'] or 'unknown'}")
+        _show_plans(ctx, ticket, every=every_plan)
     _show_runs(ctx, key)
-    _show_conversation(ctx, key, waits=conversation.is_started(record))
+    _show_conversation(ctx, key, record)
+
+
+def _show_plans(ctx: Context, ticket: records.Ticket, *, every: bool) -> None:
+    """Print the ticket's newest plan as its file stands, or with `every` each of its plans and its open comments.
+
+    Nothing is printed for a ticket plans do not touch, as the state block carries nothing for one (DESIGN §25).
+    """
+    key = ticket.key
+    found = plans.history(ctx.conn, key)
+    policy_plan = ctx.config.policy.plan
+    needed = plans.needed(policy_plan, ticket.plan_setting)
+    if not found and not needed:
+        return
+    why = f"your word, `{ticket.plan_setting}`" if ticket.plan_setting is not None else f"policy.plan {policy_plan}"
+    click.echo(f"\nPlan: {'needed' if needed else 'not needed'}, by {why}")
+    if not found:
+        click.echo("  none yet: the next tick dispatches a planner")
+    for plan in found if every else found[-1:]:
+        _show_plan(ctx, plan)
+    if not every and len(found) > 1:
+        click.echo(f"\n{len(found) - 1} earlier plans: canopy show {key} --plans")
+    if every:
+        _show_plan_threads(ctx, key)
+    newest = found[-1] if found else None
+    if newest is not None and newest.status is PlanStatus.PROPOSED:
+        click.echo(f"\nApprove it with `canopy plan {key} --approve`, or ask for changes with `canopy reply {key}`.")
+
+
+def _show_plan(ctx: Context, plan: records.Plan) -> None:
+    path = plans.path_for(ctx.state_dir, plan.ticket_key, plan.run_id)
+    reading = plans.read(path)
+    click.echo(f"\n  plan:{plan.id}  {plan.status}, written {attention.age(plan.created_at)} ago by run:{plan.run_id}")
+    if plan.approved_at is not None:
+        click.echo(f"  approved {attention.age(plan.approved_at)} ago via {plan.approved_channel}")
+    state = f"its file is {reading.problem}" if reading.problem is not None else ""
+    if not state and reading.sha256 != plan.sha256:
+        state = "edited since the planner wrote it"
+    if plan.status is PlanStatus.APPROVED and reading.sha256 != plan.approved_sha256:
+        state = f"{state}; " if state else ""
+        state += "changed since it was approved: approve it again before its implement"
+    click.echo(f"  {path}" + (f": {state}" if state else ""))
+    if reading.text is not None:
+        click.echo("")
+        for line in conversation.printable(reading.text).splitlines():
+            click.echo(f"    {line}")
+
+
+def _show_plan_threads(ctx: Context, key: str) -> None:
+    open_threads = [t for t in plan_threads.threads(ctx.conn, key) if t.thread.resolved_at is None]
+    click.echo(f"\nYour open comments ({len(open_threads)}):")
+    for t in open_threads:
+        quote = one_line(t.thread.quote)
+        cut = quote if len(quote) <= SHOW_QUOTE else f"{quote[: SHOW_QUOTE - 3]}..."
+        click.echo(f'  comment {t.thread.id}, {attention.age(t.thread.created_at)} ago, on "{cut}":')
+        click.echo(f"    {one_line(t.thread.body)}")
+        for r in t.replies:
+            click.echo(f"    reply: {one_line(r.body)}")
+    if not open_threads:
+        click.echo("  none")
 
 
 def _show_runs(ctx: Context, key: str) -> None:
@@ -539,15 +652,16 @@ def _show_runs(ctx: Context, key: str) -> None:
         click.echo("  none")
 
 
-def _show_conversation(ctx: Context, key: str, *, waits: bool) -> None:
+def _show_conversation(ctx: Context, key: str, record: records.Start | None) -> None:
     messages = db.messages_of(ctx.conn, conversation.TICKET, key, SHOW_MESSAGES)
     click.echo(f"\nConversation ({len(messages)}):")
     for m in messages:
         _echo_message(m)
     if not messages:
         click.echo("  none")
-    waiting = conversation.latest_question(ctx.conn, key)
-    if waiting is not None and waits:
+    # A public ticket's questions are on the tracker, but for a planner's, which canopy holds (DESIGN §25).
+    waiting = plans.question(ctx.conn, key) if record is None else conversation.latest_question(ctx.conn, key)
+    if waiting is not None and (record is None or conversation.is_started(record)):
         click.echo(f"\nMessage {waiting['id']} waits on your answer: canopy reply {key} 'your answer'")
 
 

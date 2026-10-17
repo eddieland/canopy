@@ -1,5 +1,5 @@
 // A plan as a planner writes one (docs/design/PLANNING.md §25, The prompt), with the operator's comments on it: what
-// the plan editor's page shows over mock data (src/routes/plan-editor.tsx), until plans reach a ticket's page (M44).
+// the plan editor's page shows over mock data (src/routes/plan-editor.tsx); a ticket's own plan opens on its page.
 // Its threads are anchored as the editor anchors them, so each lands on its passage, but for one whose passage the
 // planner has since rewritten, which shows as gone, and one the operator resolved.
 import type { PlanThread } from '@/lib/plan-threads'

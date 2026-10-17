@@ -4,14 +4,14 @@ Part of the canopy design, normative like all of it: artifacts canopy's workers 
 them, and how those comments come back to a ticket. Sections are numbered across the whole design; the
 [README](README.md) has the map. Previous: [The overseer's tools](OVERSEER_TOOLS.md).
 
-## 28. Artifacts and Louvre (M50)
+## 28. Artifacts and Louvre (M51)
 
-Designed, not built (ROADMAP M50, REQUIREMENTS R20). Until it is built, a worker's output reaches people as a PR, a
+Designed, not built (ROADMAP M51, REQUIREMENTS R20). Until it is built, a worker's output reaches people as a PR, a
 ticket comment, or a plan (§25), and nothing here describes canopy as it is.
 
 An **artifact** is a page a worker publishes for people to read: a report, a design, an HTML mock-up, a plan. People
 comment on its passages, and their comments come back to the ticket that produced it, where the overseer treats them
-like review feedback. Asked for by the operator (2026-10-17).
+like review feedback.
 
 Artifacts live in one of two stores that serve the same MCP tools:
 
@@ -19,7 +19,8 @@ Artifacts live in one of two stores that serve the same MCP tools:
   deployment, sign-in, and security model. canopy does not build, ship, or run it. This section is the contract canopy
   needs of it.
 - **The local store**, `canopy-artifacts`, a uv workspace member (D041) that canopy ships: artifacts under the
-  operator-only state directory (D053), for the operator alone.
+  operator-only state directory (D053), for the operator alone. Artifacts stay out of the journal, since a worker
+  writes nothing that reaches the journal while it runs (§27).
 
 ### Principles
 
@@ -73,7 +74,7 @@ edit sets `edited_at` and puts the comment at the feed's head again.
 ### Anchors
 
 A thread anchors by the words it is on, never by a position: the W3C Web Annotation `TextQuoteSelector`, which is how
-a plan's comments anchor today (§25, `ui/src/lib/plan-anchors.ts`).
+a plan's comments anchor today (§25).
 
 ```json
 {"exact": "retries three times before giving up", "prefix": "the sink ", "suffix": ", then logs"}
@@ -202,20 +203,6 @@ Still no listener.
 **Rendering locally.** The web UI renders journal text as text (D113) and serves a CSP built on that. The local store's
 HTML is shown from a second loopback port, its own origin, in a frame sandboxed without same-origin access or network,
 behind the listener secret (T8). That is a TRUST_MODEL T8 change, with the operator's approval note.
-
-### Stages
-
-1. **The stores.** The eight tools, the feed, anchors, and scoped tokens, in Louvre and in `canopy-artifacts`.
-   Artifacts stay out of the journal: a worker writes nothing that reaches the journal while it runs (§27).
-2. **Publishing.** A skill teaches workers the tools; `publish_roles` decides which definitions allow them. TRUST_MODEL
-   T6, with the approval note.
-3. **Comments back, through the overseer.** Each tick the overseer calls `comment_feed` and mirrors new comments into
-   the conversation, as it mirrors tracker comments (§22). The overseer's prompt and TRUST_MODEL T1, each with the
-   approval note.
-4. **Comments back, through a connector.** Once M36 is built, `canopy-connect-artifacts` prints the feed as
-   observations, canopy checks authors in code, and the overseer stops reading the feed itself.
-5. **Plans as artifacts.** Once M44 and stage 1 are both in, a plan becomes an artifact in the local store, and the
-   plan editor's threads become artifact threads: one review flow for both, locally and in Louvre.
 
 ### Open
 
