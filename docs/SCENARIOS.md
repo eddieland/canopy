@@ -127,6 +127,10 @@ relying on a permission they check.
   the channel once; an attention item is posted when it opens and when it resolves. Remove the webhook file: Slack
   fails for several ticks while another sink keeps delivering and reports `loop.sink_failing`; restore it and what
   was missed arrives in one message. A digest arrives on its interval, a quiet one included.
+- **S42. Try a chore from the browser** (M23). With `canopy loop` running, press Try now on S22's chore's page. Expect
+  its run in Runs at once, running, with no tick; the page to follow it to its end through the stream; its
+  findings on the attention list; and the overseer's next run of it `not_due` counting from the try. Stop the loop
+  while the try runs: the run goes on, and ends recorded.
 
 ## The loop
 

@@ -336,15 +336,16 @@ def every_ticket(conn: sqlite3.Connection, limit: int) -> list[tuple[str, str]]:
 
 
 def every_pull_request(conn: sqlite3.Connection, limit: int, *, url: str | None = None) -> list[tuple[object, ...]]:
-    """The PRs as they were read before migration 0022: every unit and every review run, weighed."""
+    """The PRs as read before migration 0022, with their own titles: every unit and every review run, weighed."""
     rows = conn.execute(
-        "SELECT k.url, max(k.at) AS active_at, u.ticket_key, u.repo, u.branch, u.phase, t.title "
+        "SELECT k.url, max(k.at) AS active_at, u.ticket_key, u.repo, u.branch, u.phase, t.title, p.title "
         "FROM ("
         "  SELECT u.pr_url AS url, t.last_seen_at AS at FROM ticket_units u JOIN tickets t ON t.key = u.ticket_key"
         "  WHERE u.pr_url IS NOT NULL"
         "  UNION ALL SELECT pr_url, coalesce(ended_at, started_at) FROM review_runs"
         ") k "
         "LEFT JOIN ticket_units u ON u.pr_url = k.url LEFT JOIN tickets t ON t.key = u.ticket_key "
+        "LEFT JOIN pr_titles p ON p.pr_url = k.url "
         "WHERE ? IS NULL OR k.url = ? GROUP BY k.url ORDER BY active_at DESC, k.url LIMIT ?",
         (url, url, limit),
     )

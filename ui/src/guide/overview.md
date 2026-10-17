@@ -26,7 +26,8 @@ The nav on the left lists them, most used first. If you learn only one, learn At
 - [Reviews](/reviews): the PR reviews canopy kept to itself instead of posting, with their findings pinned to the diff.
 - [Runs](/runs): the workers running now, then the ones that finished most recently, each with its session's
   transcript. When you want to know what an agent was thinking, this is the receipt.
-- [Chores](/chores): the scheduled chores, their runs, and what they found.
+- [Chores](/chores): the scheduled chores, their runs, and what they found. Try now on a chore's page runs it at once,
+  whatever its schedule.
 - [Spend](/spend): what agent runs cost each day, and what idle ticks spent deciding there was nothing to do. Some of
   the priciest answers are "no".
 - [Ticks](/ticks): the overseer's latest ticks, and what each one decided.
@@ -70,8 +71,8 @@ sooner. You set one on [Settings](settings#notice-to-workers).
 The strip beside the nav, on every page. From the top: a search box over the whole journal (below), the runs working
 right now, running first and then the ones waiting on you, and what the last 24 hours and the last 30 days cost, each
 a link to the spend page. Its foot names the version canopy is serving, which links to canopy's releases on GitHub,
-and under it opens this guide and Settings. On a narrow window the rail folds to icons; **Open the rail** brings it
-back.
+and under it two buttons: **Guide**, which opens this guide, and **Settings**. On a narrow window the rail folds to
+icons; **Open the rail** brings it back.
 
 ## Search
 
@@ -86,10 +87,10 @@ usually carries its ticket's words, which covers most of what a title would have
 ## Acting from the UI
 
 Where a page shows you something, it usually lets you act on it with the CLI's own verbs: reply, start and stop,
-grant, dismiss, forget, pause and resume, send a notice to workers, and approve a plan. Each runs the same code as the
-command, so the same guards hold. The browser is a second front door, not a back door. When a guard refuses, the UI
-names it exactly as the CLI prints it, as `refused (guard): reason`, so a refusal means the same thing wherever you
-meet it. Hover over a button to see the command it stands for.
+grant, dismiss, forget, pause and resume, send a notice to workers, try a chore, and approve a plan. Each runs the
+same code as the command, so the same guards hold. The browser is a second front door, not a back door. When a guard
+refuses, the UI names it exactly as the CLI prints it, as `refused (guard): reason`, so a refusal means the same thing
+wherever you meet it. Hover over a button to see the command it stands for.
 
 The loop reads a reply at its next tick, not the moment you send it, and the conversation marks the reply as waiting
 until then. Patience is a virtue; here it's also the architecture.

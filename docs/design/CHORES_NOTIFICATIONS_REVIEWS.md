@@ -175,6 +175,11 @@ result, and exits 0 only on `ok`.
   started. Reconcile treats it as any run: killed, it is marked `crashed` at the next tick.
 - It refuses `inside_run`, like `start` and `reply` (§22), and its own agent has `CANOPY_RUN_ID` set. The overseer's
   bash allows only `canopy ...`, which cannot unset `CANOPY_TICK_ID`, so the loop cannot try a chore.
+- The web UI tries a chore too (asked for by the operator, 2026-10-15), from the chore's page (§22): a recorded try,
+  with the same `running` refusal and no guard on time or capacity. A request cannot wait out a chore's timeout, so a
+  detached `canopy _chore` does the run, as the overseer's are, rather than the server's own process. It has no
+  `--context` or `--no-record`: an unrecorded try's output has nowhere to go but a terminal, and the context is the
+  overseer's to give.
 
 ### Findings on the attention list
 
@@ -540,6 +545,7 @@ Result contract, one JSON line, last line of the reviewer's text (§13), validat
 
 ```json
 {"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","summary":"one paragraph",
+ "pr_title":"the PR's title as it stands",
  "findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line","detail":"what and why"}]}
 ```
 
@@ -548,6 +554,10 @@ Result contract, one JSON line, last line of the reviewer's text (§13), validat
 - At most 20 findings, text cut to bounds. `verdict` is `findings` exactly when `findings` is not empty, and a `done`
   review has a verdict and an impact.
 - `low` without `review.low_impact` is recorded as `normal`, with a harness note.
+- `pr_title` is the PR's title as the reviewer read it, one line cut at 256 characters. Once the run is closed it
+  replaces the PR's stored title (§8), so a PR canopy only reviews, which has no ticket, has a title to show, and the
+  newest report wins, a worker's or a review's. It is the PR author's text, which a reviewer of a `review.query` PR
+  reads from anyone: it is for display only, never read back. Optional: a result without it records none.
 - Anything else is `unknown`.
 
 ### The verdict, and automating on it

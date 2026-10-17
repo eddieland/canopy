@@ -16,17 +16,20 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     const rows = page.getByTestId('pull-requests').getByTestId('pull-request')
     await expect(rows).toHaveCount(4)
     const ours = rows.filter({ hasText: 'acme/web#88' })
-    await expect(ours).toContainText('Debounce search input')
+    // The PR's own title, as its worker reported it, rather than its ticket's.
+    await expect(ours).toContainText('ABC-099: debounce the search box by 250 ms')
     await expect(ours.getByTestId('pull-request-review')).toContainText('review:4')
     // A PR canopy only reviews has no ticket, whoever asked for the review.
     await expect(rows.filter({ hasText: 'acme/api#12' })).toContainText('none: canopy only reviews it')
+    await expect(rows.filter({ hasText: 'acme/api#12' })).toContainText('Bump the retry budget for flaky upstreams')
     // One the operator asked canopy to review is listed before its first review.
     await expect(rows.filter({ hasText: 'acme/web#95' })).toContainText('requested')
 
     await ours.getByRole('link', { name: 'acme/web#88', exact: true }).click()
     await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
-    // Its title leads with its ticket's, after the PR's name, and its description is its state.
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#88 Debounce search input')
+    // Its title leads with its own, after the PR's name, and its description is its state.
+    const heading = page.getByRole('heading', { level: 1 })
+    await expect(heading).toHaveText('acme/web#88 ABC-099: debounce the search box by 250 ms')
     await expect(page.locator('main header p')).toHaveText('ABC-099 · 2 reviews')
     await expect(nav.getByRole('link', { name: 'Pull requests' })).toHaveAttribute('data-status', 'active')
     // The run that opened it, its two reviews, and what the loop decided about it.
@@ -47,7 +50,9 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     // The URL changes before the new page replaces the old, which links to its PR too: wait for the review's title.
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:4 acme/web#88 Debounce search input')
     await page.getByRole('link', { name: 'acme/web#88', exact: true }).click()
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/web#88 Debounce search input')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+        'acme/web#88 ABC-099: debounce the search box by 250 ms',
+    )
 })
 
 test('a PR the journal does not know says so, and a decision about a PR opens its page', async ({ page }) => {
@@ -58,7 +63,9 @@ test('a PR the journal does not know says so, and a decision about a PR opens it
     await settled(page)
     await page.getByTestId('decisions').getByRole('link', { name: 'acme/api#12', exact: true }).first().click()
     await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('acme/api#12')
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(
+        'acme/api#12 Bump the retry budget for flaky upstreams',
+    )
 })
 
 test('a PR named on a run, a review, a decision, or a ticket opens its page in one click, and its icon GitHub', async ({

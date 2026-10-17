@@ -441,8 +441,11 @@ The chores pages (M23): a chore's finding reaches the attention list, and the op
   harness's note, its findings, and its transcript (below); a run is found only under its own chore, and a chore since
   deleted from the config keeps its runs.
 - A note and a dismissal, or taking one back, are recorded with channel `web`, as `canopy reply` and `canopy dismiss`
-  record them (§19). Nothing in the web UI runs a chore: the overseer decides when one runs (§19), and
-  `canopy chore try` stays in the CLI.
+  record them (§19).
+- Try now, in the Schedule panel's foot, is `canopy chore try NAME`, recorded (§19): the chore runs now whatever its
+  schedule, in a detached `canopy _chore`, and the run shows in its recent runs. It is disabled while a run of the
+  chore runs, which the server refuses `running`; one whose prompt, working directory, or process fails is refused
+  `not_started`. Otherwise the overseer decides when a chore runs.
 - A chore run's summary and its findings are the agent's: untrusted text, rendered as text with control characters
   dropped.
 - A note no run of the chore has started since is marked as waiting for its next run: notes wake nothing and no tick
@@ -483,6 +486,9 @@ a ticket's units, its runs, the reviews (§21), and the decisions, is gathered o
 - One PR is named by its URL as a query parameter, since the URL is opaque (§21) and holds slashes; only a plain
   `https://` URL of at most 300 characters is looked up, anything else is a 422. A PR only decisions name (a
   `review.query` match no review has run on yet) has a page too, so it shows why (`wait`, a refusal).
+- Each has its own title, as its worker or reviewer last reported it (§8, §21), which need not be its ticket's: a
+  PR's title says what changed. The list shows it in place of the ticket's title once one is reported, and beside
+  `none` for a PR canopy only reviews.
 - Its page: the PR's fields, the runs that pushed to it and any of its ticket's runs still working, its review runs,
   the latest 20 decisions naming it, and its total cost: a run that pushed to two PRs, one per repository, counts on
   each one's page, and once on its ticket's.

@@ -4,9 +4,9 @@ Part of the canopy design, normative like all of it: artifacts canopy's workers 
 them, and how those comments come back to a ticket. Sections are numbered across the whole design; the
 [README](README.md) has the map. Previous: [Agent memory](MEMORY.md).
 
-## 29. Artifacts and Louvre (M53)
+## 29. Artifacts and Louvre (M57)
 
-Designed, not built (ROADMAP M53, REQUIREMENTS R20). Until it is built, a worker's output reaches people as a PR, a
+Designed, not built (ROADMAP M57, REQUIREMENTS R23). Until it is built, a worker's output reaches people as a PR, a
 ticket comment, or a plan (§25), and nothing here describes canopy as it is.
 
 An **artifact** is a page a worker publishes for people to read: a report, a design, an HTML mock-up, a plan. People
@@ -202,7 +202,7 @@ Still no listener.
 
 **Rendering locally.** The web UI renders journal text as text (D113) and serves a CSP built on that. The local store's
 HTML is shown from a second loopback port, its own origin, in a frame sandboxed without same-origin access or network,
-behind the listener secret (T8). That is a TRUST_MODEL T8 change, with the operator's approval note.
+behind the listener secret (T8). That is a TRUST_MODEL T8 change.
 
 ### Open
 

@@ -1,11 +1,12 @@
-"""`canopy chore try`: a run of a chore the operator starts by hand, in the foreground (DESIGN §19).
+"""`canopy chore try`: a run of a chore the operator starts by hand, in the foreground or from the web UI (DESIGN §19).
 
 For writing a chore, and for running one now. A try is a chore run like the overseer's: it has a `chore_runs` row with
 no tick, its findings reach the attention list and notifications, and the chore's next run is due counting from it. It
-runs in this process, through `execute.execute`, as `_chore` would. Unrecorded, it writes nothing to the journal, so a
-half-written prompt cannot clear real findings. Either way it gets the prompt a run starting now would get, and only the
-`running` guard applies, to a recorded try: the operator runs it by hand, as they could run the command, so it does not
-wait for `every_minutes` or the chore's hours, and works with `max_chores` 0.
+runs in this process, through `execute.execute`, as `_chore` would; the web UI's is recorded and runs in a `_chore`
+of its own (`detach`). Unrecorded, it writes nothing to the journal, so a half-written prompt cannot clear real
+findings. Either way it gets the prompt a run starting now would get, and only the `running` guard applies, to a
+recorded try: the operator runs it by hand, as they could run the command, so it does not wait for `every_minutes` or
+the chore's hours, and works with `max_chores` 0.
 """
 
 from __future__ import annotations
@@ -128,6 +129,32 @@ def record(ctx: Context, prepared: Prepared) -> Recorded:
             procs.drop_lifelock(log_path)
             raise TrialError(error) from e
     return Recorded(run_id, held)
+
+
+def detach(ctx: Context, prepared: Prepared) -> start.Started:
+    """Record the prepared try as a chore run with no tick, and spawn `canopy _chore` to do it, as the overseer's are.
+
+    The web UI's try (DESIGN §22): a request cannot wait out the chore's timeout, so the run goes on in the background
+    and the chore's page shows it. It is a recorded try in every other way, with the same `running` guard, serialized
+    with the overseer's chore runs by the dispatch lock.
+
+    Returns:
+        The new chore run's id and the pid of its `canopy _chore`.
+
+    Raises:
+        RunningError: a run of the chore is running.
+        TrialError: the run's prompt could not be written or its process started; the new run then ends `crashed`.
+    """
+    name = prepared.name
+    with lock.hold(ctx.dispatch_lock_path, wait=True):
+        running = next((r for r in db.running_runs(ctx.conn, "chore_runs") if r["chore"] == name), None)
+        if running is not None:
+            raise RunningError(f"chore run {running['id']} of {name} is running")
+        state = view.state_of(ctx.conn, name, prepared.chore)
+        try:
+            return start.launch(ctx, tick_id=None, state=state, body=prepared.body, context=prepared.context)
+        except start.Refusal as e:
+            raise TrialError(f"could not start the try: {e.reason}") from e
 
 
 def run_recorded(ctx: Context, recorded: Recorded) -> execute.Outcome:

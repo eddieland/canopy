@@ -773,6 +773,15 @@ class Replied(_Model):
     """Whether it was recorded now, rather than by an earlier submission with the same id."""
 
 
+class ChoreTried(_Model):
+    """What trying a chore started: a recorded run, going on in the background (DESIGN §19)."""
+
+    chore: str
+    """The chore's name."""
+    run_id: int
+    """The chore run the try is, running until its agent ends or its timeout."""
+
+
 class DismissRequest(_Model):
     """A dismissal of one of a chore's open findings, by its id, or with `undo` the taking back of one (DESIGN §19)."""
 
@@ -1801,6 +1810,8 @@ class PullRequest(_Model):
     """The ticket whose unit records it, or the one a review of it named; None for a PR no ticket owns."""
     ticket_title: str | None = None
     """That ticket's title, as the overseer named it; None until it does."""
+    title: str | None = None
+    """Its own title, as the worker that opened or last updated it reported it: untrusted text; None until one does."""
     repo: str | None = None
     """The PR's repository, as the workspace names it."""
     branch: str | None = None

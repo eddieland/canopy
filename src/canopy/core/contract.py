@@ -12,6 +12,9 @@ from typing import cast
 
 from pydantic import AfterValidator, BaseModel, ValidationError
 
+# A PR's title, as a worker or a reviewer reports it: GitHub's own limit.
+MAX_PR_TITLE = 256
+
 
 def bounded(limit: int) -> AfterValidator:
     """Cut a string to at most `limit` characters, marking the cut with "...".
