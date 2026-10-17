@@ -43,6 +43,9 @@ export const Route = createFileRoute('/tickets/$key')({
 function TicketPage() {
     const { key } = Route.useParams()
     const { data, error } = useQuery(ticketQuery(key))
+    // The plans too, before the page paints: a plan waiting on the operator leads the page, which would otherwise
+    // push everything down as it arrived.
+    const plans = useQuery(ticketPlansQuery(key))
     if (error instanceof ApiError && error.status === 404) {
         return <Unknown ticketKey={key} />
     }
@@ -56,7 +59,7 @@ function TicketPage() {
             </>
         )
     }
-    if (data === undefined) {
+    if (data === undefined || plans.isPending) {
         return (
             <>
                 <PageHeader title={key} />
