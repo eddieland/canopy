@@ -15,9 +15,16 @@ command will run.
 
 ## The agents and what they are offered
 
-canopy's agents, and the `kind` each one's runs have in `spend`: the overseer (`overseer`), workers, splits, and
-plans (`workers`), chores (`chores`), and the reviewer (`reviews`). Every agent is offered every MCP server OpenCode
-has, less the tools its definition denies, and every skill OpenCode finds.
+canopy's agents, the `kind` each one's runs have in `spend`, and the OpenCode agents each kind runs as:
+
+- the overseer (`overseer`): `canopy-overseer`.
+- workers, splits, and plans (`workers`): `canopy-worker`, `canopy-worker-private`, `canopy-splitter`, and
+  `canopy-planner`.
+- chores (`chores`): `canopy-chore`, and any agent a chore's own `cmd` names, such as yours.
+- the reviewer (`reviews`): `canopy-reviewer`.
+
+Every agent is offered every MCP server OpenCode has, less the tools its definition or the operator's OpenCode config
+denies it, and every skill OpenCode finds, less those denied the same way.
 
 MCP servers, as OpenCode names them (the prefix of their tools, `github_pull_request_read`), and which agents need
 each. Keep this list current; `opencode mcp list` shows what is configured.
@@ -42,8 +49,11 @@ adds to, used or not.
 2. **Unused skills.** No `skill` call by a kind in 28 days over 10 or more of its runs, while skills are offered to it:
    a finding with id `unused/<kind>/skills`. `spend` counts skill calls, not which skill each loaded.
 3. **Heavy reads.** A tool whose `result_chars` in the week are a fifth or more of all its kind's, or whose calls
-   return over 20,000 characters each on average: a finding with id `heavy/<kind>/<tool>`. Say what calls of it return
-   so much if you can tell, and what would return less.
+   return over 20,000 characters each on average, and that you can recommend something for: a finding with id
+   `heavy/<kind>/<tool>`. A kind that does not need the tool's server is a Disable; a setting that would make the kind
+   call it less is a Tune; a Feature needs what the calls return and why the agent reads it again, from the figures,
+   such as the same PR read every tick with nothing changed. A tool a kind needs, with nothing to recommend but calling
+   it less or a lighter tool that does not exist, is no finding: name it and its share in one sentence of the summary.
 4. **Idle spend.** `idle_share` over 0.3: a finding with id `idle`. Compare `woken` and `ticks` for what wakes the
    loop when nothing changes.
 5. **Cold starts.** A kind whose latest snapshot in `first_calls` has a `cold_share` over 0.5 over 10 or more runs: a
@@ -60,9 +70,15 @@ kind in the week, report nothing on that kind and say so in the summary.
 
 Each finding's detail ends with one recommendation, and its title starts with what kind it is:
 
-- **Disable:** an MCP server or skill to turn off, and for which agents. Turned off in OpenCode's own config, a server
-  is gone for every agent, the operator's own sessions included. canopy cannot yet turn one off for one kind of agent
-  alone; when only some agents use a server, say so and recommend it as a feature.
+- **Disable:** an MCP server or skill to deny, and the OpenCode agents to deny it for, those of the kinds that do not
+  use it. The rule goes in the operator's global OpenCode config, `~/.config/opencode/opencode.json`, which OpenCode
+  merges into canopy's agent definitions: a server's tools by its prefix, a skill by its name, or every skill with
+  `*`. Give the rule whole, such as
+  `"agent": {"canopy-overseer": {"permission": {"sentry_*": "deny", "skill": {"*": "deny"}}}}`. A denied tool or skill
+  is not offered at all, so it also leaves the agent's first call. Never put the rule in a repository's
+  `opencode.json`: canopy refuses to start one of its agents where the repository's config names it. Turning a server
+  off in OpenCode's `mcp` config instead removes it for every agent, the operator's own sessions included; recommend
+  that only for `unused/all/<server>`, and say so.
 - **Tune:** a setting in canopy's config, by its key, with the value you would try and why. These are the ones that
   exist: `loop.interval_minutes`, `loop.idle_max_minutes`, `loop.min_gap_minutes`, `tracker.query_every_minutes`,
   `capacity.max_workers`, `capacity.max_chores`, `capacity.max_reviews`, `capacity.max_reviews_per_day`,
@@ -70,7 +86,7 @@ Each finding's detail ends with one recommendation, and its title starts with wh
   other key.
 - **Feature:** something canopy does not do that would cut the spend, said in a sentence a canopy developer could
   start from, with the figure it would act on: a tool whose results canopy could summarize or record instead of an
-  agent reading them again, a server canopy could deny for one kind of agent, a skill call canopy could count by name.
+  agent reading them again, or a skill call canopy could count by name.
 
 Say what the change would save, in dollars or tokens a week, when the figures let you; mark it an estimate.
 
