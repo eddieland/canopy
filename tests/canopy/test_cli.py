@@ -212,7 +212,7 @@ def test_completion_completes_chore_names_from_the_config(
         f"\n[chores.{name}]\nprompt = '~/chores/{name}.md'\ncmd = 'agent run {{prompt}}'\nevery_minutes = 60\n"
         for name in ("queue-age", "build-health")
     )
-    canopy_env.write_user(canopy_env.user_file.read_text() + chores)
+    canopy_env.append_user(chores)
     assert complete(capsys, "canopy chore run ") == ["plain,build-health", "plain,queue-age"]
     assert complete(capsys, "canopy chore try q") == ["plain,queue-age"]
 

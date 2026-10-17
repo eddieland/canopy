@@ -24,7 +24,7 @@ def test_memory_is_off_unless_the_operator_turns_a_tier_on(canopy_env: CanopyEnv
 
 
 def test_the_workspace_file_cannot_turn_memory_on(canopy_env: CanopyEnv) -> None:
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + '\n[memory]\nticket_notes = "use"\n')
+    canopy_env.append_shared('\n[memory]\nticket_notes = "use"\n')
     with pytest.raises(ConfigError, match=r"memory\.ticket_notes is private and cannot be set in the workspace file"):
         load(canopy_env.root, canopy_env.user_file)
 

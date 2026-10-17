@@ -14,9 +14,6 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from unittest import mock
 
-import pytest
-from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
-
 from canopy.core import config, conversation, db, pools, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import Phase, RunStatus, StartStatus, TickStatus
@@ -41,27 +38,14 @@ WORKSPACE = "/workspace"
 PR = "https://example.test/acme/repo/pull/7"
 
 
-class MarkdownSnapshot(SingleFileSnapshotExtension):
-    """A snapshot as a Markdown file of its own, as the overseer reads the block."""
-
-    file_extension = "md"
-    _write_mode = WriteMode.TEXT
-
-
-@pytest.fixture
-def block(snapshot: SnapshotAssertion) -> SnapshotAssertion:
-    """The test's state block snapshot."""
-    return snapshot.use_extension(MarkdownSnapshot)
-
-
-def test_the_state_block_of_a_new_workspace(canopy_env: CanopyEnv, block: SnapshotAssertion) -> None:
+def test_the_state_block_of_a_new_workspace(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion) -> None:
     ctx = context(canopy_env)
     with clock("10:00"):
         tick_id = db.start_tick(ctx.conn, dry_run=False)
-    assert rendered(canopy_env, ctx, tick_id, dry_run=False, query_due=True, running=0, leased=[]) == block
+    assert rendered(canopy_env, ctx, tick_id, dry_run=False, query_due=True, running=0, leased=[]) == markdown_snapshot
 
 
-def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, block: SnapshotAssertion) -> None:
+def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion) -> None:
     # Every section the block can have: a chore, reviews, a notice, tickets in each state the block tells apart.
     prompt = canopy_env.home / "chores" / "build-health.md"
     prompt.parent.mkdir()
@@ -192,7 +176,9 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, block: Snaps
             leased_at=stamp("09:55"),
         )
     ]
-    assert rendered(canopy_env, ctx, tick_id, dry_run=True, query_due=False, running=1, leased=leased) == block
+    assert (
+        rendered(canopy_env, ctx, tick_id, dry_run=True, query_due=False, running=1, leased=leased) == markdown_snapshot
+    )
 
 
 def context(env: CanopyEnv) -> Context:

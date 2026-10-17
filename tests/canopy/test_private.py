@@ -19,6 +19,8 @@ from canopy.infra import procs, resources
 from canopy.loop import attention, repeat
 from canopy.serve import views
 from tests.canopy.helpers import (
+    BRANCH,
+    KEY,
     QUESTION,
     FakeTime,
     InlineRunner,
@@ -39,12 +41,10 @@ from tests.canopy.helpers import (
     state_block,
     versions_after,
     wait_for_run,
+    waits,
     worker_does,
 )
 from tests.conftest import CanopyEnv, GitPool, Journals
-
-KEY = "PROJ-1"
-BRANCH = f"agent/{KEY}-work"
 
 
 def test_a_started_ticket_is_worked_privately_from_question_to_reply(  # noqa: PLR0915  (M18's acceptance, one story)
@@ -528,7 +528,7 @@ def test_run_messages_and_the_run_ended_event_carry_the_message() -> None:
 
 
 def test_run_ended_names_the_message_the_run_recorded(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text() + '\n[notify.sinks.log]\ncmd = "true"\nevents = ["runs"]\n')
+    canopy_env.append_user('\n[notify.sinks.log]\ncmd = "true"\nevents = ["runs"]\n')
     cfg = config.load(canopy_env.root)
     tick_id = db.start_tick(conn, dry_run=False)
     db.touch_ticket(conn, KEY, "/r")
@@ -555,10 +555,9 @@ def test_the_state_block_marks_a_private_ticket_with_its_new_operator_messages(
     db.touch_ticket(conn, "PROJ-2", str(canopy_env.root))
     question = db.insert_message(conn, "ticket", KEY, source="worker", kind="question", channel="run", body="A or B?")
     assert main(["reply", KEY, "B"]) == 0
-    with overseer_does(*(canopy("decide", key, "wait", "--rationale", "next tick") for key in (KEY, "PROJ-2"))):
+    with overseer_does(*waits(KEY, "PROJ-2", rationale="next tick")):
         assert main(["tick", "--dry-run"]) == 0
-        overseer = json.loads(agent_log.read_text().splitlines()[-1])
-        state = json.loads(overseer["argv"][-1].split("```json\n", 1)[1].split("\n```", 1)[0])
+        state = state_block(agent_log)
         tickets = {t["key"]: t for t in state["tickets"]}
         assert "private" not in tickets["PROJ-2"]
         private = tickets[KEY]["private"]
@@ -595,7 +594,7 @@ def test_a_stopped_ticket_is_named_in_the_state_block_by_key_alone(
         assert [t["key"] for t in stopped["tickets"]] == ["PROJ-2"]
     # Started again, it is a private ticket like any other.
     assert main(["start", KEY]) == 0
-    with overseer_does(*(canopy("decide", key, "wait", "--rationale", "next tick") for key in (KEY, "PROJ-2"))):
+    with overseer_does(*waits(KEY, "PROJ-2", rationale="next tick")):
         assert main(["tick", "--dry-run"]) == 0
         started = state_block(agent_log)
         assert started["stopped"] == []
@@ -705,6 +704,6 @@ def test_config_refuses_a_tool_name_that_could_reach_the_definition_as_more_than
     )
     with pytest.raises(config.ConfigError, match="read_tools"):
         config.load(canopy_env.root)
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + 'mcp_server = "github"\n')
+    canopy_env.append_shared('mcp_server = "github"\n')
     with pytest.raises(config.ConfigError, match="is private"):
         config.load(canopy_env.root)

@@ -15,6 +15,7 @@ from canopy.core import db, memory
 from canopy.core.vocab import RunKind, RunStatus
 from canopy.memory import search
 from tests.canopy.helpers import (
+    BRANCH,
     KEY,
     WORK,
     InlineRunner,
@@ -31,7 +32,6 @@ from tests.canopy.helpers import (
 if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
-BRANCH = f"agent/{KEY}-work"
 OTHER = "PROJ-2"
 
 

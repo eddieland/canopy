@@ -11,7 +11,6 @@ from canopy.core.config import load
 from tests.canopy.helpers import IMPLEMENT, PROMPT_VALUES, dispatch_in_tick
 from tests.conftest import CanopyEnv, GitPool, user_toml
 
-KEY = "PROJ-1"
 FIXUP = "Commit a change that corrects an earlier commit on the branch with `git commit --fixup=<sha>`."
 SECTION = "## Standing instructions from the operator\n\n"
 

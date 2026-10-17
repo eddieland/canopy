@@ -13,6 +13,7 @@ from canopy.core import config, db
 from canopy.core.vocab import TickStatus
 from canopy.runs import policy
 from tests.canopy.helpers import (
+    KEY,
     canopy,
     dispatch_and_run,
     dispatch_refused,
@@ -25,7 +26,6 @@ from tests.canopy.helpers import (
 )
 from tests.conftest import CanopyEnv, GitPool
 
-KEY = "PROJ-1"
 LABEL = ("--label", "agent-ready-tester")
 FAILED = json.dumps({"status": "failed", "summary": "could not build"})
 

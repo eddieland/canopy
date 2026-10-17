@@ -19,6 +19,7 @@ from tests.canopy.helpers import (
     KEY,
     LABEL,
     WORK,
+    approve_policy,
     context,
     dispatch_and_run,
     dispatch_in_tick,
@@ -35,10 +36,6 @@ TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n"
 # `canopy plan KEY`, asking for a plan, and its two flags.
 VERBS: tuple[tuple[str, ...], ...] = ((), ("--skip",), ("--approve",))
 UNPLANNED = "PROJ-1 needs a plan before its implement, and {}; dispatch `plan` or wait for it"
-
-
-def approve_policy(env: CanopyEnv) -> None:
-    env.write_shared(env.shared_file.read_text() + '\n[policy]\nplan = "approve"\n')
 
 
 def seen(conn: sqlite3.Connection, env: CanopyEnv, key: str = KEY) -> None:
@@ -246,7 +243,7 @@ def test_start_with_plan_refuses_while_a_plan_run_is_running(
 def test_grant_plan_raises_the_tickets_plan_limit(
     canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + "\n[policy]\nmax_plan_attempts = 1\n")
+    canopy_env.append_shared("\n[policy]\nmax_plan_attempts = 1\n")
     planned(conn)
     reason = "PROJ-1 has had 1 plan runs and the limit is 1"
     assert dispatch_refused(conn, *PLAN) == [("refused:attempt_limit", reason), ("attention:attempt_limit", reason)]

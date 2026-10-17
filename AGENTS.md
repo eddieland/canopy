@@ -160,15 +160,17 @@ If code and the design disagree, the design doc wins until a decision entry says
   it through an env var.
 - Fixtures live in `tests/conftest.py`: `fakes_on_path`, `treehouse_state` (the fake pool's state file), `agent_log`
   (what each fake agent run saw), and `canopy_env` (a workspace of one repository, `repo`, and a user config in a temp
-  directory, with HOME pointed there; commands that name a repository pass `--repo repo`). Each fake's docstring lists
-  the env vars and state keys it reads. The fake agent can run commands (`FAKE_AGENT_COMMANDS`), which is how a test
-  plays an overseer calling `canopy decide`.
+  directory, with HOME pointed there; commands that name a repository pass `--repo repo`; `append_user` and
+  `append_shared` add to its config files). Each fake's docstring lists the env vars and state keys it reads. The fake
+  agent can run commands (`FAKE_AGENT_COMMANDS`), which is how a test plays an overseer calling `canopy decide`. Beside
+  them are the plain helpers every test may need: `git`, and `executable` for a script a test puts on a path.
 - What two test modules share lives in one place, never in a test module: `tests/canopy/conftest.py` for fixtures
-  (`conn`, the workspace's journal; `ctx`; the web UI's mock `backend`; `ws`), `tests/canopy/helpers.py` for helpers
-  (`in_tick`, `decisions`, `dispatch_and_run`, and scripting the fake agents: `overseer_does(canopy(...))`,
-  `worker_does`), and `web_helpers.py` and `review_helpers.py` beside it. A test module imports from no other;
+  (`conn`, the workspace's journal; `ctx`; the web UI's mock `backend`; `ws`; `notified` and `sink_script`, notification
+  commands that record what they are sent), `tests/canopy/helpers.py` for helpers (`in_tick`, `decisions`,
+  `dispatch_and_run`, `messages`, and scripting the fake agents: `overseer_does(canopy(...))`, `worker_does(sleep=60)`,
+  `chore_reports`), and `web_helpers.py` and `review_helpers.py` beside it. A test module imports from no other;
   `tests/canopy/test_layers.py` fails otherwise. Look there before writing a helper, and move one there once a second
-  module needs it.
+  module needs it. A test scripts a fake agent through those helpers, not by patching its `FAKE_*` variables itself.
 - A test opens a journal through `canopy_env.journal()`, or the `journals` fixture for one outside a workspace, never
   `db.connect` directly: those close it when the test ends. A connection, file, or pipe left open raises a
   ResourceWarning, which fails the test like any other warning.
@@ -178,7 +180,8 @@ If code and the design disagree, the design doc wins until a decision entry says
 - One end-to-end test runs `canopy tick --dry-run` against the fakes and asserts on the `decisions` and `ticks`
   tables.
 - What canopy renders whole, such as the overseer's state block, is held by a snapshot test: a journal written by hand,
-  the output compared with syrupy's `snapshot` fixture, recorded in the test's `__snapshots__/` directory.
+  the output compared with syrupy's `snapshot` fixture, or `markdown_snapshot` for a file a person can read whole,
+  recorded in the test's `__snapshots__/` directory.
   `make snapshots` records the ones that differ, and the diff is reviewed with the change. A snapshot holds canopy's
   output, never a model's.
 - Prompts are not unit-tested. `canopy tick --dry-run` writes the overseer's plan to the `decisions` table; that table
