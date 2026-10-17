@@ -413,7 +413,7 @@ test('a comment and a reply are edited in place, and the planner reads what they
     await thread.getByRole('button', { name: 'Edit reply' }).click()
     const reply = thread.getByRole('form', { name: 'Edit reply' }).getByRole('textbox')
     await reply.fill('It buffers up to 2 MB.')
-    await page.keyboard.press('Escape')
+    await thread.getByRole('button', { name: 'Cancel' }).click()
     await expect(thread).toContainText('It buffers up to 1 MB.')
     await thread.getByRole('button', { name: 'Edit reply' }).click()
     await reply.fill('It buffers up to 2 MB.')
@@ -498,6 +498,47 @@ test('commenting again on a comment half written keeps it on its passage, with i
     const thread = comments(page).filter({ hasText: 'Why not rows()? It reads them all.' })
     const id = await thread.getAttribute('data-thread')
     await expect(page.locator(`.plan-doc [data-thread="${id}"]`)).toHaveText('iter_rows()')
+})
+
+test('Escape puts a half-written comment aside with its words, and the cursor goes back to the plan', async ({
+    page,
+}) => {
+    await select(page, 'iter_rows()')
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    await page.keyboard.type('Why not rows()?')
+    await page.keyboard.press('Escape')
+    const form = page.getByRole('form', { name: 'Comment' })
+    await expect(plan(page)).toBeFocused()
+    await expect(form.getByRole('textbox')).toHaveValue('Why not rows()?')
+    await form.getByRole('button', { name: 'Cancel' }).click()
+    await expect(form).toBeHidden()
+    await expect(plan(page)).toBeFocused()
+})
+
+test('a reply half written is kept on Escape too, and an edit with nothing changed closes on it', async ({ page }) => {
+    const thread = comments(page).filter({ hasText: 'proxy in front' })
+    await thread.getByRole('button', { name: 'Reply', exact: true }).click()
+    await page.keyboard.type('Ask ops.')
+    await page.keyboard.press('Escape')
+    await expect(plan(page)).toBeFocused()
+    await expect(thread.getByRole('form', { name: 'Reply' }).getByRole('textbox')).toHaveValue('Ask ops.')
+    const other = comments(page).filter({ hasText: 'name the ticket' })
+    await other.getByRole('button', { name: 'Edit comment' }).click()
+    await page.keyboard.press('Escape')
+    await expect(other.getByRole('form', { name: 'Edit comment' })).toBeHidden()
+    await expect(plan(page)).toBeFocused()
+})
+
+test('once a comment is sent or resolved, the cursor is back in the plan after its passage', async ({ page }) => {
+    await select(page, "Excel's own format")
+    await page.keyboard.press('ControlOrMeta+Alt+m')
+    await page.keyboard.type('Say why not.')
+    await page.getByRole('form', { name: 'Comment' }).getByRole('button', { name: 'Comment' }).click()
+    await expect(plan(page)).toBeFocused()
+    await page.keyboard.type(' (XLSX)')
+    await expect(plan(page).locator('li').filter({ hasText: "Excel's own format (XLSX), which" })).toBeVisible()
+    await comments(page).filter({ hasText: 'name the ticket' }).getByRole('button', { name: 'Resolve' }).click()
+    await expect(plan(page)).toBeFocused()
 })
 
 test('the shortcut and the bubble over a selection both open a comment on it', async ({ page }) => {

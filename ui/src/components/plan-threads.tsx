@@ -37,6 +37,8 @@ export interface ThreadActions {
     onDelete: (id: string) => void
     /** Has a thread's comment, or with `replyId` one of its replies, say `body` instead. */
     onEdit: (id: string, body: string, replyId?: string) => void
+    /** Puts the cursor back in the plan at a thread's passage, when a form on its card closes or is left. */
+    onBack: (id: string) => void
 }
 
 /**
@@ -59,6 +61,7 @@ export function PlanThreads({
     onDraftChange,
     onDraftSubmit,
     onDraftCancel,
+    onDraftLeave,
     ...actions
 }: ThreadActions & {
     /** The threads, in the plan's order. */
@@ -81,6 +84,8 @@ export function PlanThreads({
     onDraftSubmit: (body: string) => void
     /** Drops the comment being written. */
     onDraftCancel: () => void
+    /** Puts the cursor back in the plan, the comment being written left open with its words. */
+    onDraftLeave: () => void
 }) {
     const [showResolved, setShowResolved] = useState(false)
     const open = threads.filter((thread) => !thread.resolved)
@@ -111,6 +116,7 @@ export function PlanThreads({
                         onValueChange={onDraftChange}
                         onSubmit={onDraftSubmit}
                         onCancel={onDraftCancel}
+                        onLeave={onDraftLeave}
                     />
                 </div>
             )}
@@ -217,6 +223,7 @@ function ThreadCard({
     onResolve,
     onDelete,
     onEdit,
+    onBack,
 }: ThreadActions & { thread: PlanThread; lost: boolean; active: boolean; editable: boolean }) {
     const [replying, setReplying] = useState(false)
     // What is being edited: the comment, or a reply by its id.
@@ -258,7 +265,11 @@ function ThreadCard({
                         onEdit(thread.id, body)
                         setEditing(undefined)
                     }}
-                    onCancel={() => setEditing(undefined)}
+                    onCancel={() => {
+                        setEditing(undefined)
+                        onBack(thread.id)
+                    }}
+                    onLeave={() => onBack(thread.id)}
                 />
             ) : (
                 <Said
@@ -279,7 +290,11 @@ function ThreadCard({
                                 onEdit(thread.id, body, reply.id)
                                 setEditing(undefined)
                             }}
-                            onCancel={() => setEditing(undefined)}
+                            onCancel={() => {
+                                setEditing(undefined)
+                                onBack(thread.id)
+                            }}
+                            onLeave={() => onBack(thread.id)}
                         />
                     ) : (
                         <Said
@@ -299,7 +314,11 @@ function ThreadCard({
                         onReply(thread.id, body)
                         setReplying(false)
                     }}
-                    onCancel={() => setReplying(false)}
+                    onCancel={() => {
+                        setReplying(false)
+                        onBack(thread.id)
+                    }}
+                    onLeave={() => onBack(thread.id)}
                 />
             )}
             {editable && deleting && (
@@ -436,8 +455,10 @@ function Said({
     )
 }
 
-// A comment or a reply being written. It sends on the key Settings names, as a reply to a ticket does, and Escape
-// drops it. It keeps its own words, or the caller's through `value` and `onValueChange`, which outlive the form.
+// A comment or a reply being written. It sends on the key Settings names, as a reply to a ticket does. Escape drops it
+// while it holds nothing new; with words of the operator's own in it, Escape leaves it open, words and all, and goes
+// back to the plan (`onLeave`), so one key never loses what was typed: Cancel drops it. It keeps its own words, or the
+// caller's through `value` and `onValueChange`, which outlive the form.
 function CommentForm({
     label,
     submit,
@@ -446,6 +467,7 @@ function CommentForm({
     onValueChange,
     onSubmit,
     onCancel,
+    onLeave,
 }: {
     label: string
     submit: string
@@ -454,6 +476,7 @@ function CommentForm({
     onValueChange?: (body: string) => void
     onSubmit: (body: string) => void
     onCancel: () => void
+    onLeave: () => void
 }) {
     const sendKey = useSendKey()
     const field = useRef<HTMLTextAreaElement>(null)
@@ -485,7 +508,11 @@ function CommentForm({
     function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
         if (event.key === 'Escape') {
             event.preventDefault()
-            onCancel()
+            if (body.trim() === '' || body === initial) {
+                onCancel()
+            } else {
+                onLeave()
+            }
             return
         }
         const { key, shiftKey, ctrlKey, metaKey } = event
