@@ -52,6 +52,8 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - The harness imports no tracker or VCS client and holds no token. Agents reach trackers and GitHub through MCP.
 - Consequence: the harness cannot verify anything the tracker says, such as who wrote a comment.
+- Settled by the operator (2026-10-17, REQUIREMENTS C7): canopy will ship separate programs, run as commands with
+  `gh`'s token, that read GitHub and post what the operator approved word for word (ROADMAP M36, M53).
 - Revisit: if the overseer's token cost for reading state dominates; then move polling into Python.
 
 ## D004. SQLite journal plus flock, not a stateless overseer

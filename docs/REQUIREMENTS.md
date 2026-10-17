@@ -1,9 +1,9 @@
 # canopy requirements
 
-The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 to R17
-on 2026-10-14, R18 on 2026-10-15, R19 on 2026-10-16), and where canopy stands on each. The design (`design/`) is how
-canopy meets them; this file is what it must meet. Where the two disagree, the conflict is listed under
-[Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until then
+The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 to R17 on
+2026-10-14, R18 on 2026-10-15, R19 on 2026-10-16, R20 to R22 on 2026-10-17), and where canopy stands on each. The design
+(`design/`) is how canopy meets them; this file is what it must meet. Where the two disagree, the conflict is listed
+under [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until then
 (AGENTS.md).
 
 A bare § is a section of the design (`design/`). Status words:
@@ -254,6 +254,30 @@ workspace stays in a file of the operator's own, and that file is optional. The 
 committed, so it can hold none of these (TRUST_MODEL T7); each workspace's private file, `.canopy/config.toml`, does,
 and the user file is optional (§12).
 
+### R20. Read every reply to a coworker's review before it is sent, in place on the PR
+
+Gap (M53). Written down 2026-10-17. A `resume` worker answers review comments on the PR as the operator, and the
+operator first sees what it said when their coworkers do. They want the worker to plan its replies and canopy to show
+them each one on its thread, in place on the PR's diff, to edit, drop, or send. A reply the operator sends is their
+own words, so it should not start with `CANOPY:`; the marks stay for what workers post themselves (D069). Reading the
+threads and posting the replies should be deterministic, done by canopy rather than an agent, which needs canopy to
+ship a program that writes to GitHub (C7).
+
+### R21. Plan each round of PR feedback, and approve the plan rather than sort the reviewers
+
+Gap (M54). Written down 2026-10-17. Before a `resume` runs, canopy should plan it, and the operator accepts the planned
+fixes, item by item if they like, instead of first deciding whose feedback is trusted (R13). The plan covers what is new
+on the PR, from anyone, with the PR's CI state. Until the operator accepts, new feedback, a new push, or a change in CI
+makes the plan stale, and canopy plans again, once the PR has gone quiet rather than on every comment.
+
+### R22. Skip the plan for trivial work
+
+Gap (M55). Written down 2026-10-17. With plans on (R18, R21), an obvious change still costs a planner run and the
+operator's approval. As an option, a smaller, cheaper agent should judge a change trivial, by the operator's own words
+for what that means, and let it go ahead unplanned, without asking the operator first. When it is unsure, or fails,
+the work is planned as before. A waived change canopy's own reviewer judges high impact is called out to the operator;
+its size alone is not, since size says little about risk.
+
 ## Nice to have
 
 - **N1. Local web UI on localhost.** Built in M20, live acceptance pending. Allowed under TRUST_MODEL T8 (C2, D055),
@@ -283,8 +307,8 @@ and the user file is optional (§12).
 
 ## Conflicts
 
-Each was settled by the operator, C1 to C4 on 2026-10-06 and C5 on 2026-10-08, and recorded in `DECISIONS.md` (C1 in
-DESIGN §10).
+Each was settled by the operator, C1 to C4 on 2026-10-06, C5 on 2026-10-08, and C7 on 2026-10-17, and recorded in
+`DECISIONS.md` (C1 in DESIGN §10).
 
 - **C1. Stacking vs "won't start B until A lands" (R8).** The overseer stacks B on A's open, green PR (§10), so
   B starts before A lands. Settled (DESIGN §10): stacking stays, controlled by `policy.stacking` (`"auto"` or
@@ -305,3 +329,8 @@ DESIGN §10).
 - **C6. Repositories that refuse merge commits vs pushes that are never forced (R4, R9).** Settled by the operator on
   2026-10-13 (issue #293, D056): with `trust.rebase`, private and off by default, workers rebase onto their base and
   push with `--force-with-lease`, the only force their definitions allow. Without it, they merge, as before.
+- **C7. canopy's own GitHub program vs connectivity through the agent runtime (R20, D003, DESIGN §4 principle 5).**
+  Showing a PR's threads and sending exactly the approved reply, deterministically, needs a program canopy ships that
+  reads and writes GitHub with the token `gh` holds, where today only agents reach GitHub. Settled by the operator on
+  2026-10-17 (D003): canopy will ship such programs, separate from the harness, which still imports no client and
+  holds no token. M36 builds the reads and M53 the writes; until one of them lands, agents remain the only way in.
