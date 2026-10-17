@@ -1541,7 +1541,9 @@ Status: in progress. Designed 2026-10-17 (DESIGN §28). Stage 0 waived by the op
 stages 1 and 2 to be built together, each tier off until they turn it on; their checks, at `record` and then at `use`,
 are still the operator's. Built: `[memory]`, migration 0037's tables and their row types, the prompts' placeholders
 (every prompt the same bytes with memory off, held by snapshots recorded before them), and `canopy memory` and the
-status line saying which tier records.
+status line saying which tier records. Ticket notes at `record` (stage 1's first half): the contract, `_run` writing a
+run's notes under the bounds with what it refused, superseding by key, done and forget invalidating, and
+`canopy memory list`, `forget`, and `purge`.
 
 ## Deferred, with the trigger that would unblock each
 
