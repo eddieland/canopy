@@ -73,8 +73,10 @@ proposals = "off"      # off | record | use
 With both keys off:
 
 - `{{TICKET_MEMORY}}`, `{{WORKSPACE_LESSONS}}`, and `{{MEMORY_CONTRACT}}` render as the empty string, not `None.`.
-  Each sits at the end of a line in the shipped prompts and its value starts with the blank line before its heading,
-  so every prompt is the same bytes as before memory existed, and no worker is told to write anything.
+  In the shipped prompts `{{WORKSPACE_LESSONS}}` and `{{MEMORY_CONTRACT}}` end a line, and their values start with
+  the blank line before their text; `{{TICKET_MEMORY}}` starts the line of the heading after it, and its value ends
+  with the blank line after its section. So every prompt is the same bytes as before memory existed, and no worker is
+  told to write anything.
 - A prompt override without the placeholders still serves. Once a key is not off, an override without the placeholders
   its mode needs is `bad_prompt` (Prompt overrides, below), as for the standing instructions and the notice.
 - `WorkerResult` ignores unknown fields, and memory's fields are parsed apart from it (Writing, below), so `notes` or
