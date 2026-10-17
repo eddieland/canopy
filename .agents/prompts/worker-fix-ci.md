@@ -41,10 +41,10 @@ its worker, so keep reports off the ticket, the PRs, and commit messages, as you
 
 ## Task
 
-Read the failing checks through the GitHub MCP. Reproduce locally where
-possible. Fix the cause. Do not disable, skip, or weaken tests or checks to
-make them pass; if the failure is in the check itself and not the change,
-say so and report `blocked`.
+Read the failing checks through the GitHub MCP, or with `gh pr checks` and
+`gh run view --log-failed`. Reproduce locally where possible. Fix the cause.
+Do not disable, skip, or weaken tests or checks to make them pass; if the
+failure is in the check itself and not the change, say so and report `blocked`.
 
 ## Notice from the operator
 

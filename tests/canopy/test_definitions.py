@@ -255,10 +255,18 @@ def test_workers_keep_the_pr_tools_they_work_with(agent: str, tool: str) -> None
 
 
 @pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
-def test_workers_may_read_a_pr_with_gh(agent: str) -> None:
-    """A resumed worker reads the review comments it was pointed at; the private one still cannot reach the ticket."""
+def test_workers_may_read_a_pr_and_its_ci_with_gh(agent: str) -> None:
+    """A resumed worker reads the review comments it was pointed at, and a fix-ci one the failing checks; the private
+    one still cannot reach the ticket."""
     rules = _rules(agent, "bash")
-    for command in ("gh pr view", "gh pr view 12 --comments", "gh pr view agent/PROJ-1-x --json reviews"):
+    for command in (
+        "gh pr view",
+        "gh pr view 12 --comments",
+        "gh pr view agent/PROJ-1-x --json reviews",
+        "gh pr checks 12",
+        "gh pr diff 12",
+        "gh run view 123 --log-failed",
+    ):
         assert _allowed(rules, command), command
     if agent == definitions.PRIVATE_WORKER:
         for refused in ("gh", "gh issue view 12", "gh issue comment 12 --body x", "gh pr comment 12 --body x"):
