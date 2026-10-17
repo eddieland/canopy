@@ -284,7 +284,7 @@ def test_the_web_channel_sets_and_clears_the_notice_as_canopy_notice_does(ctx: C
     assert c.get("/api/loop").json() == response["loop"]
 
     cleared = c.post("/api/loop/notice/clear", headers=headers).json()
-    assert cleared == {"already": False, "loop": {"paused": None, "notice": None}}
+    assert cleared == {"already": False, "loop": {"paused": None, "notice": None, "memory": None}}
     assert notice.current(ctx.conn) is None
     assert c.post("/api/loop/notice/clear", headers=headers).json()["already"] is True
     [row] = ctx.conn.execute("SELECT ended_channel FROM notices").fetchall()

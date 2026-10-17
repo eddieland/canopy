@@ -97,7 +97,7 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             break
         }
         case 'loop.updated': {
-            client.setQueryData(keys.loop, { paused: event.paused, notice: event.notice })
+            client.setQueryData(keys.loop, { paused: event.paused, notice: event.notice, memory: event.memory })
             break
         }
     }
@@ -161,10 +161,12 @@ export function parseStreamEvent(data: string): StreamEvent | null {
         return known && (acknowledged === null || typeof acknowledged === 'number') ? (value as StreamEvent) : null
     }
     if (type === 'loop.updated') {
-        const { paused, notice } = value as { paused?: unknown; notice?: unknown }
-        // `typeof null` is 'object' too: running is `paused: null`, no notice `notice: null`, and a missing key is no
-        // event.
-        return typeof paused === 'object' && typeof notice === 'object' ? (value as StreamEvent) : null
+        const { paused, notice, memory } = value as { paused?: unknown; notice?: unknown; memory?: unknown }
+        // `typeof null` is 'object' too: running is `paused: null`, no notice `notice: null`, memory off
+        // `memory: null`, and a missing key is no event.
+        return typeof paused === 'object' && typeof notice === 'object' && typeof memory === 'object'
+            ? (value as StreamEvent)
+            : null
     }
     if (type === 'spend.updated') {
         const spend = (value as { spend?: unknown }).spend
