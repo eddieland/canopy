@@ -218,12 +218,8 @@ export function AskForChanges({
                     ? `${message.length - MAX_REQUEST} characters over a reply's bound: resolve or shorten some`
                     : `${open} open ${open === 1 ? 'comment goes' : 'comments go'} with it`}
             </span>
-            {/* The main action while there is something to send; outlined beside the caller's own otherwise. */}
-            <Button
-                type="submit"
-                variant={open > 0 || note.trim() !== '' ? 'default' : 'outline'}
-                disabled={!message || over}
-            >
+            {/* The main action while comments are open, as the caller's own Approve steps back; outlined otherwise. */}
+            <Button type="submit" variant={open > 0 ? 'default' : 'outline'} disabled={!message || over}>
                 <Send aria-hidden />
                 Ask for changes
             </Button>
