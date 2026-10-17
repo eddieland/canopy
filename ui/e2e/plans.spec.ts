@@ -24,6 +24,13 @@ test("a ticket's newest plan opens in the editor, its comments on their passages
     await expect(page.getByRole('form', { name: 'Ask for changes' })).toBeVisible()
 })
 
+test('a plan that waits on the operator leads the page, above its Work panel', async ({ page }) => {
+    const section = await page.getByTestId('ticket-plan').boundingBox()
+    const work = await page.getByTestId('ticket-actions').boundingBox()
+    expect(section?.y).toBeLessThan(work?.y ?? 0)
+    await expect(page.getByTestId('ticket-plan')).toBeInViewport()
+})
+
 test('an earlier plan opens read only', async ({ page }) => {
     const earlier = page.getByTestId('earlier-plans')
     await expect(earlier).toContainText('superseded')
