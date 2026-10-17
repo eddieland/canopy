@@ -372,6 +372,18 @@ test.describe('copying out of the plan', () => {
     })
 })
 
+test('a card carries Resolve and Delete in its header, and Reply only while it is the open one', async ({ page }) => {
+    const thread = comments(page).filter({ hasText: 'name the ticket' })
+    await expect(thread.getByRole('button', { name: 'Resolve' })).toBeVisible()
+    await expect(thread.getByRole('button', { name: 'Delete' })).toBeVisible()
+    await expect(thread.getByRole('button', { name: 'Reply', exact: true })).toHaveCount(0)
+    await thread.getByText('Keep this out').click()
+    await expect(thread.getByRole('button', { name: 'Reply', exact: true })).toBeVisible()
+    // One whose passage is gone cannot be opened from the plan, so it keeps its Reply.
+    const lost = comments(page).filter({ hasText: 'passage gone' })
+    await expect(lost.getByRole('button', { name: 'Reply', exact: true })).toBeVisible()
+})
+
 test('resolving a thread folds it away and takes its highlight off the plan', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'name the ticket' })
     await thread.getByRole('button', { name: 'Resolve' }).click()
@@ -425,10 +437,9 @@ test('a comment and a reply are edited in place, and the planner reads what they
 })
 
 test('Ask for changes sends the open comments, each on its passage, with the note', async ({ page }) => {
-    await comments(page)
-        .filter({ hasText: 'proxy in front' })
-        .getByRole('button', { name: 'Reply', exact: true })
-        .click()
+    const thread = comments(page).filter({ hasText: 'proxy in front' })
+    await thread.getByText('Does the proxy').click()
+    await thread.getByRole('button', { name: 'Reply', exact: true }).click()
     const reply = page.getByRole('form', { name: 'Reply' })
     await reply.getByRole('textbox').fill('And a test that reads the first row before the last is written.')
     await reply.getByRole('button', { name: 'Reply' }).click()
@@ -539,6 +550,7 @@ test('Escape puts a half-written comment aside with its words, and the cursor go
 
 test('a reply half written is kept on Escape too, and an edit with nothing changed closes on it', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'proxy in front' })
+    await thread.getByText('Does the proxy').click()
     await thread.getByRole('button', { name: 'Reply', exact: true }).click()
     await page.keyboard.type('Ask ops.')
     await page.keyboard.press('Escape')

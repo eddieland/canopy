@@ -714,11 +714,13 @@ list, an empty state, or a skeleton by hand.
   commented on, at 28% and underlined in the accent; the cursor in a passage, by a click or the keyboard, opens its
   thread, and so does a click anywhere on its card, or Tab into it, which leaves the plan where it is; the cursor
   leaving it, or Escape, closes it. A thread is its passage quoted (two lines, a hairline in the accent at its left, the
-  whole on hover; a button that shows it in the plan), the comment and its replies as text with their ages, and ghost
-  `xs` actions, `Reply`, `Resolve` (`Reopen`), and `Delete`. While the thread is open, the comment and each reply carry
-  an `Edit` beside their age, in `text-2xs`, which turns it into the comment form in place, holding its words, with
-  `Save`; the actions hide while it is open. `Delete` asks first, in the actions' place, since nothing brings a thread
-  back: `Delete this comment and its replies?` in muted `text-xs`, then `Keep`, which takes the focus, and `Delete` in
+  whole on hover; a button that shows it in the plan), the comment and its replies as text with their ages, and its
+  actions: `Resolve` (`Reopen`) and `Delete`, ghost `icon-xs` buttons at the right of its quote, and a ghost `xs`
+  `Reply` under the open card alone, or one whose passage is gone, so the rest stay short and near their passages, as a
+  shared document's do. While the thread is open, the comment and each reply carry an `Edit` beside their age, in
+  `text-2xs`, which turns it into the comment form in place, holding its words, with `Save`; the actions hide while it
+  is open. `Delete` asks first, in the actions' place, since nothing brings a thread back:
+  `Delete this comment and its replies?` in muted `text-xs`, then `Keep`, which takes the focus, and `Delete` in
   `destructive`; Escape keeps it too, and the focus goes back to `Delete`; the open thread sits on the accent's tint, as
   a selected row does. A thread whose passage is gone carries a `passage gone` chip and stays in the list, last.
   Resolved threads fold under a `Disclosure` (`Show 2 resolved`). A comment or reply form sends on the key Settings
