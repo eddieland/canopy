@@ -786,7 +786,9 @@ list, an empty state, or a skeleton by hand.
   was edited, when it was); what the caller's actions will do, or what one did, goes on a line under them. The editor
   keeps what it scrolls into view clear of the bar too. Until plans reach a ticket's page (M44), the editor is on
   `/plan-editor`, over a sample plan on mock data only, with what the planner would read and the plan's Markdown under
-  it.
+  it. The bar's main action is the one its comments call for: while any are open, or the note holds words,
+  `Ask for changes` is filled and a ticket's `Approve` outlined, and the line under them says approving sends none of
+  them, since the implement reads the plan alone; with none open, `Approve` is filled and `Ask for changes` outlined.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then how often it may start and its window (`cadenceText`: `every 360 minutes`, as
   the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed

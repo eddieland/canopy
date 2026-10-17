@@ -24,6 +24,13 @@ test("a ticket's newest plan opens in the editor, its comments on their passages
     await expect(page.getByRole('form', { name: 'Ask for changes' })).toBeVisible()
 })
 
+test('with comments open, the bar says Approve sends none of them', async ({ page }) => {
+    await expect(page.getByTestId('plan-bar')).toContainText(
+        '2 comments are still open: approving sends none of them, since the implement reads the plan alone. ' +
+            'Ask for changes does.',
+    )
+})
+
 test('an earlier plan opens read only', async ({ page }) => {
     const earlier = page.getByTestId('earlier-plans')
     await expect(earlier).toContainText('superseded')
