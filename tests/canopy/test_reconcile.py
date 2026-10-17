@@ -13,7 +13,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import config, db, definitions
-from canopy.core.vocab import RunStatus, TickStatus
+from canopy.core.vocab import RunStatus, StartStatus, TickStatus
 from canopy.infra import lock, procs
 from canopy.loop import attention
 from tests.canopy.helpers import (
@@ -210,6 +210,20 @@ def test_attention_clears_with_a_newer_run_or_when_done(
     add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=os.getpid())
     db.set_ticket(conn, "PROJ-2", "repo", done=True)
     assert attention.from_runs(conn) == []
+
+
+def test_a_stopped_ticket_raises_no_attention_until_started_again(
+    canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection
+) -> None:
+    add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=DEAD_PID, status="crashed")
+    with db.transaction(conn):
+        db.set_start(conn, db.SUBJECT_TICKET, "PROJ-1", status=StartStatus.STARTED, channel="cli")
+        db.set_start(conn, db.SUBJECT_TICKET, "PROJ-1", status=StartStatus.STOPPED, channel="cli")
+    # Nothing dispatches a stopped ticket, so no reply could answer the item.
+    assert attention.from_runs(conn) == []
+    with db.transaction(conn):
+        db.set_start(conn, db.SUBJECT_TICKET, "PROJ-1", status=StartStatus.STARTED, channel="cli")
+    assert [(i.ticket_key, i.reason) for i in attention.from_runs(conn)] == [("PROJ-1", "crashed")]
 
 
 def test_treehouse_return_failure_stops_the_tick(

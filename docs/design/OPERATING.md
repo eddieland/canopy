@@ -507,7 +507,9 @@ run's status maps to a reason: `crashed` to `crashed`, `unpushed` to `unpushed`,
 the run log. The cause is gone when a newer run starts for the ticket or the ticket is marked done. The overseer does
 not dispatch such a ticket again until an authorized replier comments after the run ended; that is how a human says
 "try again". An operator message after the run ended says it too (§22, D093), the only way on a private ticket.
-`blocked` and `stopped` raise nothing here.
+`blocked` and `stopped` raise nothing here. Nor does a ticket the operator stopped (§22), whatever its latest run: nothing
+dispatches it, so no reply could answer the item, and stopping it says they have seen to it. An `unpushed` run's commits
+stay where `canopy show` names them. Started again, the ticket raises its item again.
 
 The harness raises `awaiting_reply` every tick for each started ticket, not done, whose latest question has no operator
 message after it (§22), and for each public ticket, not done, whose latest plan run ended `blocked` with its question
