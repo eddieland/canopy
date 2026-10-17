@@ -233,8 +233,10 @@ export function PlanEditor({
     }
 
     function cancelComment() {
+        const range = highlightsKey.getState(editor.state)?.draft
         setDraft(undefined)
         editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'draft', range: undefined }))
+        backToPlan(range)
     }
 
     function addComment(body: string) {
@@ -249,6 +251,26 @@ export function PlanEditor({
         const id = crypto.randomUUID()
         onThreadsChange(addThread(threads, { id, anchor, body, at: new Date().toISOString() }))
         editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'add', id, range }))
+        backToPlan(range)
+    }
+
+    // Puts the cursor back in the plan after `range`, a comment's passage, as a shared document does once a comment is
+    // sent, resolved, or put aside: the keyboard carries on in the plan rather than from the top of the page, where the
+    // focus falls when the control that had it goes. With no passage, the plan takes the focus where its cursor was.
+    function backToPlan(range: Range | undefined) {
+        if (range === undefined) {
+            editor.commands.focus()
+        } else {
+            editor.commands.focus(range.to)
+        }
+    }
+
+    // What the operator did to thread `id` from its card, then the cursor back after its passage: looked up first, as
+    // a thread deleted takes its passage with it.
+    function onThread(id: string, next: PlanThread[]) {
+        const range = highlightsKey.getState(editor.state)?.ranges.get(id)
+        onThreadsChange(next)
+        backToPlan(range)
     }
 
     // Marks a thread the open one; from its card, the plan scrolls to its passage, and from its passage, the column to
@@ -313,21 +335,25 @@ export function PlanEditor({
                         onDraftChange={(body) => setDraft(draft && { ...draft, body })}
                         onDraftSubmit={addComment}
                         onDraftCancel={cancelComment}
+                        onDraftLeave={() => backToPlan(highlightsKey.getState(editor.state)?.draft)}
                         onActivate={(id) => activate(id, true)}
                         onReply={(id, body) =>
-                            onThreadsChange(
+                            onThread(
+                                id,
                                 addReply(threads, id, { id: crypto.randomUUID(), body, at: new Date().toISOString() }),
                             )
                         }
-                        onResolve={(id, resolved) => onThreadsChange(setResolved(threads, id, resolved))}
-                        onDelete={(id) => onThreadsChange(removeThread(threads, id))}
+                        onResolve={(id, resolved) => onThread(id, setResolved(threads, id, resolved))}
+                        onDelete={(id) => onThread(id, removeThread(threads, id))}
                         onEdit={(id, body, replyId) =>
-                            onThreadsChange(
+                            onThread(
+                                id,
                                 replyId === undefined
                                     ? editThread(threads, id, body)
                                     : editReply(threads, id, replyId, body),
                             )
                         }
+                        onBack={(id) => backToPlan(highlightsKey.getState(editor.state)?.ranges.get(id))}
                     />
                     {editable && onAskForChanges !== undefined && (
                         <AskForChanges threads={threads} starts={starts} onAsk={onAskForChanges} />

@@ -196,6 +196,10 @@ function next(tr: Transaction, prev: Highlights, state: EditorState): Highlights
     if (action?.kind !== 'activate' && tr.selectionSet && leaves(tr, active, ranges)) {
         active = undefined
     }
+    // A thread resolved is closed with it: its passage is drawn no more.
+    if (threads.some((thread) => thread.id === active && thread.resolved)) {
+        active = undefined
+    }
     return build(state, threads, ranges, active, draft)
 }
 
