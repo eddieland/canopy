@@ -35,6 +35,7 @@ What the survey of 2026-10-16 found. The last column is what M47 adds.
 | `runs/<id>.lock`, `runs/<id>.objects/`, desks, `reviews/<id>/` | one per run | when the run ends, or by reconcile | unchanged |
 | `runtime/<digest>/` | one per definitions change | by reconcile when no run is live (§13) | unchanged |
 | `notify_events` rows | each event | after 7 days once every sink has passed them (§20) | unchanged |
+| `memories` rows invalidated or superseded (§28) | each note a later run replaces, drops, or retires | never; `canopy memory forget` and `purge` delete a body | body deleted after `memory_days`, a tombstone kept |
 
 ### What it never removes
 
@@ -149,6 +150,7 @@ tick_files_days = 7    # a tick's log and prompt; a tick not `ok` keeps them for
 journal_days = 90      # harness attention rows, past the window the attention list reads
 log_max_mib = 50       # canopy.log is rotated past this
 log_keep = 3           # and this many rotated files are kept
+memory_days = 30       # an invalidated or superseded note's or proposal's body (§28); a lesson's row is never pruned
 ```
 
 Each is a non-negative integer, and `0` keeps that kind forever. The values are a proposal: M47's first stage

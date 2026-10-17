@@ -49,6 +49,8 @@ not go in the middle of the sequence.
   - [26. Garbage collection (M47)](GARBAGE_COLLECTION.md#26-garbage-collection-m47)
 - [The overseer's tools](OVERSEER_TOOLS.md): the MCP tools canopy serves the overseer, in place of the CLI.
   - [27. The overseer's tools (M48)](OVERSEER_TOOLS.md#27-the-overseers-tools-m48)
+- [Agent memory](MEMORY.md): what workers record of what they learn, who reads it, and who decides.
+  - [28. Agent memory (M50)](MEMORY.md#28-agent-memory-m50)
 
 ## 1. Problem
 
