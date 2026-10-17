@@ -81,6 +81,10 @@ slots_per_repo = 2
 [capacity.repo_slots]
 web = 4
 
+[memory]
+ticket_notes = "use"
+proposals = "record"
+
 [chores.deps]
 prompt = "{chores}/deps.md"
 every_minutes = 360
@@ -252,6 +256,7 @@ def seed(directory: Path) -> Backend:
         with db.transaction(ctx.conn):
             _fixtures(ctx.conn, root)
             _plans(ctx.conn, ws.state_dir, root)
+            _memory(ctx.conn)
             mock_reviews.seed(ctx.conn, ws.state_dir, at)
     _transcripts(ws.state_dir)
     return backend
@@ -757,6 +762,165 @@ def _plans(conn: sqlite3.Connection, state_dir: Path, root: Path) -> None:
                 "INSERT INTO plan_replies (thread_id, body, created_at) VALUES (?, ?, ?)",
                 (thread_id, reply, at(minutes + 2)),
             )
+
+
+def _memory(conn: sqlite3.Connection) -> None:
+    """Agent memory (DESIGN §28), with ticket notes in use and lessons recording, as the mock's config sets them.
+
+    ABC-100's runs wrote notes, one superseded, and one written to the journal by hand past the bounds, with a link and
+    a zero-width space, which every surface shows as plain text with the space named. Run 37 was rendered while notes
+    were recording, so it read nothing; run 40 read run 37's note and had a secret refused. Two proposals wait, one from
+    a private ticket's run, and one promoted earlier is a lesson, recorded and served to no run.
+    """
+    conn.executemany(
+        "INSERT INTO run_memory (run_id, ticket_notes, proposals, refused) VALUES (?, ?, ?, ?)",
+        [
+            (37, "record", "record", "[]"),
+            (39, "use", "record", "[]"),
+            (
+                40,
+                "use",
+                "record",
+                '[{"field": "notes", "key": "staging-login", "why": "its text looks like it holds a secret"}]',
+            ),
+            (42, "use", "record", "[]"),
+        ],
+    )
+    notes = (
+        # id, scope, ticket, repo, key, body, status, why, run, head, created, last used, uses, promoted from
+        (
+            1,
+            "ticket",
+            "ABC-100",
+            None,
+            "flaky-checkout",
+            "checkout.spec.ts fails about one run in five; it looks like a timing issue in the payment step.",
+            "superseded",
+            "superseded by note 2",
+            37,
+            "4f1c2a9e07b3",
+            at(-200),
+            at(-115),
+            1,
+            None,
+        ),
+        (
+            2,
+            "ticket",
+            "ABC-100",
+            None,
+            "flaky-checkout",
+            "checkout.spec.ts races the payment iframe: waiting on its load event made it pass 20 of 20 runs locally.",
+            "active",
+            None,
+            40,
+            "9b2e5d01c4a7",
+            at(-112),
+            None,
+            0,
+            None,
+        ),
+        (
+            3,
+            "ticket",
+            "ABC-100",
+            None,
+            "ci-cache",
+            (
+                "CI's cache key leaves out [package-lock.json](https://evil.example/lock)\u200b, so a bumped "
+                "lockfile installs from a stale cache."
+            ),
+            "active",
+            None,
+            40,
+            "9b2e5d01c4a7",
+            at(-112),
+            None,
+            0,
+            None,
+        ),
+        (
+            4,
+            "ticket",
+            "ABC-102",
+            None,
+            "export-encoding",
+            "The CSV writer needs utf-8-sig for Excel to read accented names; plain utf-8 shows mojibake.",
+            "active",
+            None,
+            42,
+            "c0ffee12ab34",
+            at(-30),
+            None,
+            0,
+            None,
+        ),
+        (
+            5,
+            "proposal",
+            "ABC-099",
+            "web",
+            "web-tests",
+            "Run web's tests with `npm test -- --run`: plain `npm test` watches and never exits.",
+            "pending",
+            None,
+            39,
+            "77aa21d0e9f3",
+            at(-62),
+            None,
+            0,
+            None,
+        ),
+        (
+            6,
+            "proposal",
+            "ABC-102",
+            None,
+            "export-fixtures",
+            "Report fixtures live in tests/fixtures/reports; regenerate them with `make fixtures`, never by hand.",
+            "pending",
+            None,
+            42,
+            "c0ffee12ab34",
+            at(-30),
+            None,
+            0,
+            None,
+        ),
+        (
+            7,
+            "proposal",
+            "ABC-103",
+            "web",
+            "billing-client",
+            "Billing calls go through src/billing/client.ts; never call the v1 endpoints directly.",
+            "superseded",
+            "promoted to lesson 8",
+            38,
+            "1d2c3b4a5f6e",
+            at(-126),
+            None,
+            0,
+            None,
+        ),
+    )
+    conn.executemany(
+        "INSERT INTO memories (id, scope, ticket_key, repo, key, body, status, why, author, run_id, tick_id, head, "
+        "created_at, last_used_at, use_count, promoted_from) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'worker', ?, 1, ?, ?, ?, ?, ?)",
+        notes,
+    )
+    conn.execute(
+        "INSERT INTO memories (id, scope, repo, key, body, status, author, promoted_from, created_at, approved_at, "
+        "review_at) VALUES (8, 'lesson', 'web', 'billing-client', ?, 'active', 'operator', 7, ?, ?, ?)",
+        (
+            "Billing goes through src/billing/client.ts alone; the v1 endpoints are gone.",
+            at(-100),
+            at(-100),
+            db.format_time(T0 + timedelta(days=90)),
+        ),
+    )
+    conn.execute("INSERT INTO memory_reads (run_id, memory_id) VALUES (40, 1)")
 
 
 def _chore_fixtures(conn: sqlite3.Connection, root: Path) -> None:
