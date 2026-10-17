@@ -14,6 +14,8 @@ coverage:
 comment: false
 
 # Two uploads per commit, one from each job: Codecov reports only once both arrive, not on the half that came first.
+# Each carries its own flag, python or ui. The uploader names both jobs' uploads alike (the run id and the workflow's
+# name), so without flags Codecov kept only one of the two, and a commit showed only the UI's coverage.
 codecov:
   notify:
     after_n_builds: 2
