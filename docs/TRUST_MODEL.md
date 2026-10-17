@@ -139,6 +139,16 @@ Controls:
   and PRs. The overseer reads none, reviews and chores get none, and at `record` no agent reads them. `memory.*` is
   private (T7). `canopy memory forget` and `purge`, which delete notes' text, refuse when `CANOPY_TICK_ID` or
   `CANOPY_RUN_ID` is set.
+- Workspace lessons (DESIGN §28, ROADMAP M50) are operator text, beside the standing instructions. Workers only
+  propose them, with `memory.proposals` not off: a proposal is stored pending, bounded as a note is, at most 3 a run and
+  20 waiting, and reaches no prompt at any mode. Only `canopy memory promote`, in the operator's shell, makes one a
+  lesson, in the operator's name and words, and it refuses when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as
+  `notice` does; so do `reject` and `renew`. A lesson reaches workers only at `use`, framed as the operator's words
+  that the prompt's obligations come before; reviews, chores, splits, and the overseer hear none. A run's report that a
+  lesson is wrong retires nothing: it raises `lesson_wrong` for the operator. The proposals list warns on one from a
+  private ticket's run, whose text may hold what the operator kept off the tracker. Residual, D076's: until workers
+  are sandboxed (M26), a steered worker's bash runs as the operator and could insert a `lesson` row into the journal,
+  as it could a `notices` row.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
   and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
   (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private

@@ -14,8 +14,10 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, assert_never
 
 from pydantic import BaseModel, ConfigDict, JsonValue
@@ -41,11 +43,26 @@ MAX_NOTE_CHARS = 400
 MAX_NOTES_PER_RUN = 5
 # The ticket's notes in a prompt, in UTF-8 bytes; past it the least recently used are left out of the prompt.
 MAX_TICKET_DIGEST = 3 * 1024
+MAX_PROPOSAL_CHARS = 600
+# Fewer than notes', so one run cannot fill the queue: past `MAX_PENDING` pending, a new proposal is refused.
+MAX_PROPOSALS_PER_RUN = 3
+MAX_PENDING = 20
+# A proposal nobody reviews expires; a lesson comes up for review this long after it was promoted or last used.
+PROPOSAL_DAYS = 14
+REVIEW_DAYS = 90
+# The lessons in a prompt, in UTF-8 bytes; past it the rest are left out, in key order, and counted.
+MAX_LESSONS_DIGEST = 2 * 1024
+# The attention reasons memory raises (DESIGN §14, §28): the harness's, and the operator's alone.
+PROPOSAL_REASON = "memory_proposal"
+REVIEW_REASON = "lesson_review"
+WRONG_REASON = "lesson_wrong"
+HARNESS_REASONS = frozenset({PROPOSAL_REASON, REVIEW_REASON, WRONG_REASON})
 # The placeholders a prompt carries memory in (`prompts.MEMORY_PARTS`).
 TICKET_MEMORY = "TICKET_MEMORY"
 WORKSPACE_LESSONS = "WORKSPACE_LESSONS"
 MEMORY_CONTRACT = "MEMORY_CONTRACT"
 _NOTES_HEADING = "## Notes from earlier runs"
+_LESSONS_HEADING = "## Lessons from the operator"
 
 
 def mode_words(mode: MemoryMode) -> str:
@@ -97,6 +114,19 @@ def notes_band(mode: MemoryMode) -> str:
             assert_never(mode)
 
 
+def lessons_band(mode: MemoryMode) -> str:
+    """Return what the lessons band says reads them, on the memory page and in `memory proposals` and `lessons`."""
+    match mode:
+        case MemoryMode.OFF:
+            return "Off. Workers propose no lessons, and no run reads them."
+        case MemoryMode.RECORD:
+            return "Recording only. Workers propose lessons and you may promote them; no run reads them."
+        case MemoryMode.USE:
+            return "In use. Every worker reads the lessons you promoted."
+        case _:
+            assert_never(mode)
+
+
 # A run's part of the prompt, and what it was rendered under
 
 
@@ -136,13 +166,14 @@ class Rendered:
     ids: tuple[int, ...] = ()
 
 
-def render(conn: sqlite3.Connection, config: Config, *, key: str, kind: str) -> Rendered | None:
+def render(conn: sqlite3.Connection, config: Config, *, key: str, kind: str, repos: Collection[str]) -> Rendered | None:
     """Return memory's part of a `kind` run's prompt for ticket `key`, or None when no tier reaches it (DESIGN §28).
 
     While a tier records, nothing of what was written is rendered: the prompt carries the contract alone, which asks
-    the worker to write. At `use`, ticket notes render `key`'s digest into `{{TICKET_MEMORY}}`, and its ids are the
-    ones the run may cite. A prompt for a kind the contract reaches must carry `{{MEMORY_CONTRACT}}`, and one served a
-    digest its placeholder, so an override written before memory existed fails to render rather than drop either.
+    the worker to write. At `use`, ticket notes render `key`'s digest into `{{TICKET_MEMORY}}`, and lessons the ones
+    for `repos` into `{{WORKSPACE_LESSONS}}`; their ids are the ones the run may cite. A prompt for a kind the
+    contract reaches must carry `{{MEMORY_CONTRACT}}`, and one served a digest its placeholder, so an override written
+    before memory existed fails to render rather than drop either.
 
     Returns:
         The modes the run is rendered under, the placeholders' values, the placeholders the prompt must carry, and the
@@ -159,9 +190,16 @@ def render(conn: sqlite3.Connection, config: Config, *, key: str, kind: str) -> 
         required.append(MEMORY_CONTRACT)
     if modes.ticket_notes is MemoryMode.USE:
         digest = ticket_digest(conn, key)
-        values[TICKET_MEMORY] = digest.text
+        # It starts the line of the heading after it, so it ends with the blank line before that heading.
+        values[TICKET_MEMORY] = f"{digest.text}\n\n"
         required.append(TICKET_MEMORY)
         ids.extend(digest.ids)
+    if modes.proposals is MemoryMode.USE:
+        lessons = lessons_digest(conn, repos, cite=kind in NOTE_KINDS)
+        # It ends the standing instructions' last line, so it starts with the blank line after them.
+        values[WORKSPACE_LESSONS] = f"\n\n{lessons.text}"
+        required.append(WORKSPACE_LESSONS)
+        ids.extend(lessons.ids)
     return Rendered(modes=modes, values=values, required=tuple(required), ids=tuple(ids))
 
 
@@ -183,6 +221,16 @@ def memory_contract(modes: Modes) -> str:
             "characters; a note under a key already written replaces it. Each text is one line of plain text, at "
             f"most {MAX_NOTE_CHARS} characters, in your own words: never ticket, PR, or log text copied in, never a "
             "secret, token, or password."
+        )
+    if modes.proposals is not MemoryMode.OFF:
+        fields.append(
+            f'- `"proposals":[{{"key":"<key>","text":"<lesson>","repo":"<repository>"}}]`: at most '
+            f"{MAX_PROPOSALS_PER_RUN} lessons you propose for every later run in this workspace, not this ticket "
+            "alone: what any worker here should know, such as how a repository's tests must be run. The operator "
+            "reads each and may promote it; none reaches a run until then. Give `repo` only for a lesson about one "
+            "repository you worked in, and leave it out otherwise. Each key is lowercase words joined by hyphens; "
+            f"each text one line of plain text, at most {MAX_PROPOSAL_CHARS} characters, in your own words, never "
+            "a secret."
         )
     if modes.ticket_notes is MemoryMode.USE:
         fields.append(
@@ -318,6 +366,9 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
             _drop_notes(conn, writing, fields.drop_notes, shown.values())
     if writing.modes.ticket_notes is not MemoryMode.OFF:
         _write_notes(conn, writing, fields.notes)
+    if writing.modes.proposals is not MemoryMode.OFF:
+        repos = {str(r["repo"]) for r in conn.execute("SELECT repo FROM run_slots WHERE run_id = ?", (run_id,))}
+        _write_proposals(conn, writing, fields.proposals, repos)
     conn.execute(
         "UPDATE run_memory SET refused = ? WHERE run_id = ?",
         (json.dumps([r.as_json() for r in writing.refused]), run_id),
@@ -358,9 +409,16 @@ def _mark_wrong(conn: sqlite3.Connection, writing: _Writing, wrong: Sequence[rec
 
 
 def _mark_used(conn: sqlite3.Connection, used: Sequence[records.Memory]) -> None:
-    stamp = db.now()
+    now = datetime.now(UTC)
+    stamp = db.format_time(now)
+    review = db.format_time(now + timedelta(days=REVIEW_DAYS))
     for m in used:
-        conn.execute("UPDATE memories SET last_used_at = ?, use_count = use_count + 1 WHERE id = ?", (stamp, m.id))
+        # A lesson in use is pushed back from review: one that helps keeps being served without the operator's look.
+        conn.execute(
+            "UPDATE memories SET last_used_at = ?, use_count = use_count + 1, "
+            "review_at = CASE WHEN scope = ? THEN max(coalesce(review_at, ''), ?) ELSE review_at END WHERE id = ?",
+            (stamp, MemoryScope.LESSON, review, m.id),
+        )
 
 
 def _drop_notes(conn: sqlite3.Connection, writing: _Writing, value: JsonValue, shown: Iterable[records.Memory]) -> None:
@@ -447,6 +505,60 @@ def _write_note(conn: sqlite3.Connection, writing: _Writing, key: str, text: str
         )
 
 
+def _write_proposals(conn: sqlite3.Connection, writing: _Writing, entries: JsonValue, repos: AbstractSet[str]) -> None:
+    for i, entry in enumerate(_entries(writing, "proposals", entries)):
+        named = _valid_key(entry.get("key")) if isinstance(entry, dict) else None
+        if i >= MAX_PROPOSALS_PER_RUN:
+            why = f"past the {MAX_PROPOSALS_PER_RUN} proposals a run may make"
+            writing.refused.append(Refused("proposals", named, why))
+            continue
+        if not isinstance(entry, dict):
+            writing.refused.append(Refused("proposals", None, "it is not an object with a key and a text"))
+            continue
+        try:
+            key = check_key(entry.get("key"))
+            text = check_text(entry.get("text"), MAX_PROPOSAL_CHARS)
+            repo = entry.get("repo")
+            if repo is not None and (not isinstance(repo, str) or repo not in repos):
+                raise TextRefused("its repository is not one the run worked in")  # noqa: TRY301  (refused as any)
+            _write_proposal(conn, writing, key, text, repo)
+        except TextRefused as e:
+            writing.refused.append(Refused("proposals", named, str(e)))
+
+
+def _write_proposal(conn: sqlite3.Connection, writing: _Writing, key: str, text: str, repo: str | None) -> None:
+    """Write one pending proposal, refusing one past the queue's bound or that repeats a proposal or a lesson.
+
+    Raises:
+        TextRefused: `MAX_PENDING` proposals are pending, or a pending proposal or an active lesson has the same text,
+            normalized.
+    """
+    waiting = pending_proposals(conn)
+    if len(waiting) >= MAX_PENDING:
+        raise TextRefused(f"{MAX_PENDING} proposals already wait on the operator")
+    same = normalized(text)
+    for found in [*waiting, *active_lessons(conn)]:
+        if found.body is not None and normalized(found.body) == same:
+            raise TextRefused(f"it repeats {found.scope} {found.id}")
+    conn.execute(
+        "INSERT INTO memories (scope, ticket_key, repo, key, body, status, author, run_id, tick_id, head, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        (
+            MemoryScope.PROPOSAL,
+            writing.ticket_key,
+            repo,
+            key,
+            text,
+            MemoryStatus.PENDING,
+            MemoryAuthor.WORKER,
+            writing.run_id,
+            writing.tick_id,
+            writing.head,
+            db.now(),
+        ),
+    )
+
+
 def end_ticket_notes(conn: sqlite3.Connection, key: str, why: str) -> int:
     """Invalidate every active note of ticket `key`, as its being marked done or forgotten does (DESIGN §28).
 
@@ -487,6 +599,31 @@ def notes(conn: sqlite3.Connection, key: str | None = None, *, every: bool = Fal
         f"AND status IN ({','.join('?' * len(statuses))}) ORDER BY ticket_key, key, id DESC",
         (MemoryScope.TICKET, key, key, *statuses),
     )
+
+
+def pending_proposals(conn: sqlite3.Connection) -> list[records.Memory]:
+    """Return the proposals waiting on the operator, oldest first."""
+    return records.fetch_all(
+        conn,
+        records.Memory,
+        "SELECT * FROM memories WHERE scope = ? AND status = ? ORDER BY id",
+        (MemoryScope.PROPOSAL, MemoryStatus.PENDING),
+    )
+
+
+def active_lessons(conn: sqlite3.Connection) -> list[records.Memory]:
+    """Return the lessons in force, in key order."""
+    return records.fetch_all(
+        conn,
+        records.Memory,
+        "SELECT * FROM memories WHERE scope = ? AND status = ? ORDER BY key, id",
+        (MemoryScope.LESSON, MemoryStatus.ACTIVE),
+    )
+
+
+def get(conn: sqlite3.Connection, memory_id: int) -> records.Memory | None:
+    """Return memory `memory_id`, or None."""
+    return records.fetch_one(conn, records.Memory, "SELECT * FROM memories WHERE id = ?", (memory_id,))
 
 
 def written_by(conn: sqlite3.Connection, run_id: int) -> list[records.Memory]:
@@ -570,8 +707,50 @@ def ticket_digest(conn: sqlite3.Connection, key: str) -> Digest:
             "In your result, name the ids of notes you relied on in `memory_used` and of notes you found wrong in "
             "`memory_wrong`, and the keys of notes that no longer hold in `drop_notes`."
         )
-    text = "\n\n".join([_NOTES_HEADING, intro, *body]) + "\n\n"
+    text = "\n\n".join([_NOTES_HEADING, intro, *body])
     return Digest(text=text, ids=tuple(n.id for n in kept), left_out=left_out)
+
+
+def lessons_digest(conn: sqlite3.Connection, repos: Collection[str] | None, *, cite: bool) -> Digest:
+    """Return the lessons a run in `repos` would be served at `use`, or with `repos` None every lesson (DESIGN §28).
+
+    The operator's words, framed as the standing instructions are, with the prompt's obligations first. Each active
+    lesson in key order with its id, key, and repository if it names one; a lesson naming a repository renders only for
+    a run in it. Past `MAX_LESSONS_DIGEST` bytes the rest are left out, and counted. `cite` asks the run to name in its
+    result the lessons it relied on, or found wrong, which only a run with the memory contract can.
+
+    Returns:
+        The section, starting with its heading, the ids it holds, and the count left out.
+    """
+    lessons = [m for m in active_lessons(conn) if m.repo is None or repos is None or m.repo in repos]
+    kept: list[records.Memory] = []
+    size = 0
+    for lesson in lessons:
+        size += len(_lesson_entry(lesson).encode()) + 2
+        if size > MAX_LESSONS_DIGEST:
+            break
+        kept.append(lesson)
+    left_out = len(lessons) - len(kept)
+    intro = (
+        "Lessons the operator promoted for every run in this workspace, from what earlier workers proposed. They are "
+        "the operator's words, instructions like the standing instructions above, except where one conflicts with an "
+        "obligation below or anything else this prompt requires: the prompt comes first. They reach nobody else: never "
+        "quote, paraphrase, or mention them on the ticket, a PR, or in a commit message."
+    )
+    body = [_lesson_entry(m) for m in kept] or ["None: the operator has promoted no lesson yet."]
+    if left_out:
+        body.append(f"[{left_out} more lessons are left out of this prompt.]")
+    if cite and kept:
+        body.append(
+            "In your result, name the ids of lessons you relied on in `memory_used`, and of any you found wrong in "
+            "`memory_wrong`: the operator reads each report."
+        )
+    return Digest(text="\n\n".join([_LESSONS_HEADING, intro, *body]), ids=tuple(m.id for m in kept), left_out=left_out)
+
+
+def _lesson_entry(lesson: records.Memory) -> str:
+    where = f", for `{lesson.repo}`" if lesson.repo else ""
+    return f"Lesson {lesson.id}, `{lesson.key}`{where}:\n> {visible(lesson.body or '')}"
 
 
 def _note_entry(note: records.Memory, runs: Mapping[int, sqlite3.Row], order: Sequence[int]) -> str:

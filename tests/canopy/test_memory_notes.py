@@ -209,7 +209,7 @@ def test_at_record_each_prompt_differs_from_its_off_self_by_the_contract_alone(
     off = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
     with_memory(canopy_env, ticket_notes="record")
     cfg = load(canopy_env.root, canopy_env.user_file)
-    rendered = memory.render(conn, cfg, key=KEY, kind=kind)
+    rendered = memory.render(conn, cfg, key=KEY, kind=kind, repos=("repo",))
     if kind not in memory.NOTE_KINDS:
         assert rendered is None
         return
@@ -280,7 +280,8 @@ def test_memory_list_says_the_mode_first_and_shows_what_a_worker_wrote_plainly(
     assert main(["memory", "list"]) == 0
     out = capsys.readouterr().out
     assert out.startswith(
-        "ticket notes: recording. Recording only. Workers write these notes; no run reads them.\nlessons: off.\n"
+        "ticket notes: Recording only. Workers write these notes; no run reads them.\n"
+        "lessons: Off. Workers propose no lessons, and no run reads them.\n"
     )
     assert "See [the fix](https://evil.test) <U+202E>eht<U+202C> and<U+200B>this<U+001B>[2J." in out
     assert "read by no run" in out
