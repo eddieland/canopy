@@ -60,7 +60,8 @@ test("a failed read's notice keeps the skeleton's height, so nothing moves", asy
     const pending = await page.getByTestId('panel-skeleton').boundingBox()
     release?.()
     const failed = await page.getByTestId('panel-failed').boundingBox()
-    expect(failed?.height).toBe(pending?.height)
+    // Within a pixel: layout rounds the same height to a hair either side of it.
+    expect(failed?.height).toBeCloseTo(pending?.height ?? 0, 0)
 })
 
 test('the worktrees with no pool at all say how to make them', async ({ page }) => {
