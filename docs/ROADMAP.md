@@ -1553,6 +1553,26 @@ The web API's memory routes, read only, and each tier's mode on the loop's state
 with each tier's band, a ticket's Memory panel, and a run's lists, every worker's text plain with hidden characters
 named.
 
+## M51. The loop, detached
+
+DESIGN §6 (The loop), D042. Asked for by the operator (2026-10-17), with no install step: `canopy daemon start`,
+`stop`, and `status` run `canopy loop` in its own session, so it outlives the terminal, without tmux.
+
+- `start [LOOP OPTIONS]` passes the options to `canopy loop`, refuses while the daemon runs or another loop holds
+  `loop.lock`, and fails with the loop's output when it exits before taking the lock. Output goes to
+  `.canopy/daemon.log`.
+- `stop` sends SIGTERM and waits for the loop to end as Stopping says. `status` exits 0 only while it runs.
+- `start` and `stop` refuse inside canopy's ticks and runs (`inside_run`).
+- Nothing installed with the OS, no restart on failure, no start at login.
+- Tests with the fakes: a daemon ticks against the fake overseer and stops in its wait; one that ends on its own reads
+  so in `status`; a loop option `canopy loop` refuses fails the start with its output; the lock held refuses the start;
+  both verbs refuse inside a run.
+
+Accept: the tests above pass. Live: the operator starts the daemon in their workspace, closes the terminal, and the
+loop keeps ticking and serving the web UI; `canopy daemon stop` during a tick lets it finish, then ends the loop.
+
+Status: in progress. Built 2026-10-17: the three commands and the tests above. Left: the live check, the operator's.
+
 ## Deferred, with the trigger that would unblock each
 
 - Spend-paced loop (M13): when, with M39 built, overseer spend per day still runs past what the operator will pay
