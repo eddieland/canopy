@@ -248,9 +248,11 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
     await tools.nth(1).locator('summary').click()
     await expect(tools.nth(1).locator('pre').last()).toContainText('{\n  "state": "pending",')
 
-    // A model call opens to its tokens by kind; All open opens only the tool calls.
+    // A model call's line says what it was sent and wrote, as By call does; it opens to its tokens by kind, and All
+    // open opens only the tool calls.
     const call = transcript.getByTestId('transcript-step')
     await expect(call).toHaveCount(1)
+    await expect(call.locator('summary')).toContainText('9.3k in · 1.2k out')
     const split = call.locator('dl')
     await expect(split).toBeHidden()
     await call.locator('summary').click()
