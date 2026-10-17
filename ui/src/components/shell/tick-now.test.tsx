@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { api } from '@/api/client'
 import { keys } from '@/api/queries'
 import type { Tick } from '@/api/types'
+import { StreamContext } from '@/hooks/use-loop-down'
 
 import { TickNow } from './tick-now'
 
@@ -44,6 +45,24 @@ function renderWith(status: Tick['status'] | null) {
 }
 
 describe('TickNow', () => {
+    it("waits while the loop isn't answering, and says why", async () => {
+        const client = new QueryClient()
+        client.setQueryDefaults(keys.tick, { enabled: false })
+        client.setQueryData(keys.tick, { tick: null, acknowledged: null })
+        render(
+            <QueryClientProvider client={client}>
+                <StreamContext value={{ status: 'reconnecting', downSince: Date.now() - 60_000 }}>
+                    <TickNow />
+                </StreamContext>
+            </QueryClientProvider>,
+        )
+        const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Tick now' })
+        await waitFor(() => {
+            expect(button.disabled).toBe(true)
+        })
+        expect(button.title).toBe("The loop isn't answering: start it with `canopy loop` or `canopy daemon start`.")
+    })
+
     it.each([null, 'ok'] as const)('asks the loop for a tick when the latest is %s', async (status) => {
         renderWith(status)
         const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Tick now' })

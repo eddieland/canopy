@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
 import { keys } from '@/api/queries'
 import type { LoopState } from '@/api/types'
+import { StreamContext } from '@/hooks/use-loop-down'
 
 import { LoopPause } from './loop-pause'
 
@@ -35,7 +36,7 @@ afterEach(() => {
     cleanup()
 })
 
-function renderPause(loop: LoopState | undefined) {
+function renderPause(loop: LoopState | undefined, downSince: number | null = null) {
     const client = new QueryClient()
     // Nothing is fetched: the loop's state is what the test seeds, as the stream would send it.
     client.setQueryDefaults(keys.loop, { enabled: false })
@@ -44,13 +45,24 @@ function renderPause(loop: LoopState | undefined) {
     }
     render(
         <QueryClientProvider client={client}>
-            <LoopPause />
+            <StreamContext value={{ status: downSince === null ? 'open' : 'reconnecting', downSince }}>
+                <LoopPause />
+            </StreamContext>
         </QueryClientProvider>,
     )
     return client
 }
 
 describe('LoopPause', () => {
+    it("waits while the loop isn't answering, and says why", async () => {
+        renderPause(RUNNING, Date.now() - 60_000)
+        const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Pause' })
+        await waitFor(() => {
+            expect(button.disabled).toBe(true)
+        })
+        expect(button.title).toBe("The loop isn't answering: start it with `canopy loop` or `canopy daemon start`.")
+    })
+
     it('offers neither verb before the loop state arrives', () => {
         renderPause(undefined)
         expect(screen.queryByRole('button')).toBeNull()
