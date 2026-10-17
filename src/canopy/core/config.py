@@ -450,6 +450,9 @@ class Policy(Section):
     max_plan_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
     # Review runs per PR, whatever they ended as (DESIGN §21).
     max_reviews_per_pr: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
+    # Whether a ticket waits on a plan the operator approved before its implement (DESIGN §25): a guard in code. A
+    # ticket's own setting, `canopy plan KEY` or `--skip`, overrides it.
+    plan: Annotated[Literal["off", "approve"], Scope.SHARED, Tighten.LATER] = "off"
     # Whether the overseer may stack a ticket on its blocker's open PR (DESIGN §10). Prompt policy, not a guard.
     stacking: Annotated[Literal["auto", "never"], Scope.SHARED, Tighten.LATER] = "auto"
 

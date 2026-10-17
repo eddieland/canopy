@@ -83,6 +83,9 @@ about, so the same verbs serve tickets now, PRs with M14, and what comes later (
 | `canopy forget REF` | forget its branch and PRs, so its next `implement` starts over (below); public tickets too |
 | `canopy grant REF KIND [--repo NAME] [--runs N]` | allow one unit N more runs of KIND, default 1 (below); public tickets too |
 | `canopy grant URL review [--runs N]` | allow the PR at URL N more review runs, default 1 (below, §21) |
+| `canopy grant KEY plan [--runs N]` | allow the ticket N more plan runs, default 1 (§25); no `--repo` |
+| `canopy plan KEY [--skip \| --approve]` | ask for a plan, waive it, or approve the newest as its file stands (§25) |
+| `canopy start KEY --plan` | start it privately and planned: its implement waits on a plan the operator approves (§25) |
 | `canopy start URL --review` | have canopy review a PR the loop does not own, once, at its head (§21, M42) |
 | `canopy stop URL` | end that PR's review request; a review of it already running finishes (§21) |
 | `canopy show REF` | its phase, PRs, recent runs, and conversation, oldest message first; a PR's review request and reviews |
@@ -216,7 +219,8 @@ private, from the operator's shell or the web UI's Forget (below), and:
 `canopy grant REF KIND` lets the loop keep working a ticket one of whose units is at its attempt limit (§8),
 without raising the limit for every ticket. It takes a ticket, public or private, from the operator's shell only, and:
 
-- takes `implement`, `fix-ci`, or `resume`. A split's limit is the ticket's, and only config raises it.
+- takes `implement`, `fix-ci`, or `resume`. A split's limit is the ticket's, and only config raises it. A plan's is
+  the ticket's too: `canopy grant KEY plan` takes no `--repo`, and adds a row to `ticket_grants` (§25).
 - names the unit with `--repo`, which may be left out when the ticket has had runs in one repository only. A repository
   it has had no runs in is refused `unknown_repo`, as is a ticket with no runs, and a ticket with no journal row
   `unknown`. A forgotten ticket's runs still name their repositories, so it can be granted though it has no units.

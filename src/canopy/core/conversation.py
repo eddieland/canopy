@@ -13,6 +13,7 @@ mirrors (`mirror`), which authorizes nothing.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import os
 import re
@@ -26,7 +27,7 @@ from typing import TYPE_CHECKING, TypedDict
 from canopy.core import chore_view, contract, db, outbox, review_result
 from canopy.core.chore_result import FINDING_ID_RE, MAX_ID
 from canopy.core.config import CHORE_NAME_RE, REPO_NAME_RE
-from canopy.core.vocab import ReviewRunStatus, RunStatus, StartStatus
+from canopy.core.vocab import PlanSetting, ReviewRunStatus, RunKind, RunStatus, StartStatus
 from canopy.infra import lock
 
 if TYPE_CHECKING:
@@ -79,7 +80,7 @@ REVIEW = "review"
 # review request, `core/review_requests.py`), and `show`; working one is PR-scoped work (ROADMAP M14). `mirror` is the
 # overseer's, not the operator's (DESIGN §22).
 VERBS: Mapping[str, tuple[str, ...]] = {
-    TICKET: ("start", "stop", "reply", "forget", "grant", "show", MIRROR_ACTION),
+    TICKET: ("start", "stop", "reply", "forget", "grant", "show", "plan", MIRROR_ACTION),
     PR: ("grant", "start", "stop", "show"),
     CHORE: ("reply", "dismiss", "show"),
     RUN: ("show",),
@@ -182,7 +183,7 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
             raise Refused(
                 "inside_run",
                 f"{name} is set: this runs inside one of canopy's own ticks or runs, and only the operator starts, "
-                "stops, replies, forgets, grants attempts, dismisses or sends findings, pauses, or resumes",
+                "stops, replies, forgets, grants attempts, plans, dismisses or sends findings, pauses, or resumes",
             )
 
 
@@ -211,15 +212,22 @@ class Started:
     running: sqlite3.Row | None
 
 
-def start(conn: sqlite3.Connection, config: Config, ref: Ref, *, repo: str, channel: str) -> Started:
+def start(
+    conn: sqlite3.Connection, config: Config, ref: Ref, *, repo: str, channel: str, plan_lock: Path | None = None
+) -> Started:
     """Start a ticket privately (DESIGN §22): write its start record, or mark a stopped one started again.
+
+    With `plan_lock`, the dispatch lock, the ticket's own plan setting asks for a plan, whatever `policy.plan` says, so
+    its implement waits on one the operator approved (DESIGN §25). A plan it already has, waiting or approved, stands.
+    The lock is held as the other plan verbs hold it, so a dispatch reads the setting before the start or after it.
 
     Returns:
         Whether the ticket was already started, and the run working it, if one is.
 
     Raises:
         Refused: `unsupported` for a subject that is not a ticket, `no_read_tools` when no tracker tools are known for
-            a private worker to read the ticket with.
+            a private worker to read the ticket with, and with `plan_lock`, `bad_plan` for a ticket that has a branch,
+            since a plan then would describe work already started, or while a plan run for it is running.
     """
     _check_ticket(ref, "start")
     if config.tracker.tools() is None:
@@ -228,13 +236,21 @@ def start(conn: sqlite3.Connection, config: Config, ref: Ref, *, repo: str, chan
             f"no tracker tools are known for provider {config.tracker.provider!r}: set tracker.mcp_server and "
             "tracker.read_tools in your user config, so a private worker can read the ticket and write nothing to it",
         )
-    with db.transaction(conn):
+    held = lock.hold(plan_lock, wait=True) if plan_lock is not None else contextlib.nullcontext()
+    with held, db.transaction(conn):
         record = db.get_start(conn, TICKET, ref.id)
+        ticket = db.get_ticket(conn, ref.id)
+        running = db.running_run_of(conn, ref.id)
+        if plan_lock is not None and ticket is not None and ticket.branch:
+            raise Refused("bad_plan", f"{ref} already has work on {ticket.branch}; a started ticket is not planned")
+        if plan_lock is not None and running is not None and running["kind"] == RunKind.PLAN:
+            raise Refused("bad_plan", f"plan run {running['id']} for {ref} is running; wait for it to end")
         db.touch_ticket(conn, ref.id, repo)
+        if plan_lock is not None:
+            conn.execute("UPDATE tickets SET plan_setting = ? WHERE key = ?", (PlanSetting.PLAN, ref.id))
         # A ticket the overseer marked done is worked again: the operator asked for it.
         conn.execute("UPDATE tickets SET done = 0 WHERE key = ?", (ref.id,))
         db.set_start(conn, TICKET, ref.id, status=StartStatus.STARTED, channel=channel)
-        running = db.running_run_of(conn, ref.id)
     return Started(already=is_started(record), running=running)
 
 
