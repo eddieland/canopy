@@ -137,7 +137,10 @@ export function PlanEditor({
         },
     })
     const [draft, setDraft] = useState<Draft | undefined>(undefined)
-    // Whether the plan here says other than it did when it opened.
+    // Whether the plan here says other than it did when it opened, by the editor's own Markdown for both: the planner's
+    // may be written otherwise (`*` for `-`), and an edit undone can leave an empty paragraph at the end, neither of
+    // which the operator wrote.
+    const [original] = useState(() => editor.getMarkdown().trimEnd())
     const [changed, setChanged] = useState(false)
     const seen = useEditorState({
         editor,
@@ -229,7 +232,7 @@ export function PlanEditor({
             onThreadsChange(next)
         }
         const now = editor.getMarkdown()
-        setChanged(now !== markdown)
+        setChanged(now.trimEnd() !== original)
         onChange?.(now)
     })
     const onPassageClick = useEffectEvent(({ id }: { id: string }) => activate(id, false))

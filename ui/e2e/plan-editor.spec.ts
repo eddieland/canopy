@@ -522,6 +522,15 @@ test('a plan edited before Ask for changes says so, so the planner keeps the edi
     )
 })
 
+test('a plan edited and the edit undone says nothing of it', async ({ page }) => {
+    await select(page, 'Scheduling exports.')
+    await page.keyboard.type('Scheduling exports, for now.')
+    await page.keyboard.press('ControlOrMeta+z')
+    await expect(plan(page)).toContainText('Scheduling exports.')
+    await page.getByRole('form', { name: 'Ask for changes' }).getByRole('button', { name: 'Ask for changes' }).click()
+    await expect(page.getByLabel('Change request')).not.toContainText('I edited the plan myself')
+})
+
 test('clicking a commented passage opens its thread and puts the cursor there', async ({ page }) => {
     await plan(page).locator('[data-thread=sample-2]').click()
     await expect(comments(page).filter({ hasText: 'name the ticket' })).toHaveAttribute('data-active', 'true')
