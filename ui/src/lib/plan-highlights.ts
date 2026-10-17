@@ -4,7 +4,8 @@
 // with the edits around it; one whose text is deleted whole is lost, and found again if its passage comes back, as an
 // undo brings it. The open thread closes when the cursor leaves its passage, or on Escape, as a click elsewhere in a
 // shared document closes a comment there. The plugin says what the operator does with the comments through the editor's
-// own events, so the component listens in an effect rather than handing the plugin callbacks.
+// own events, so the component listens in an effect rather than handing the plugin callbacks. The cursor in a passage,
+// put there by a click or the keyboard, opens its thread, as the cursor in commented text does in a shared document.
 import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorState, Transaction } from '@tiptap/pm/state'
@@ -149,7 +150,11 @@ export function anchorFor(state: EditorState, from: number, to: number): Anchor 
 
 function next(tr: Transaction, prev: Highlights, state: EditorState): Highlights {
     const action = tr.getMeta(highlightsKey) as HighlightAction | undefined
-    if (!tr.docChanged && action === undefined && !(tr.selectionSet && leaves(tr, prev.active, prev.ranges))) {
+    const moved = tr.selectionSet && action === undefined
+    if (!tr.docChanged && !moved && action === undefined) {
+        return prev
+    }
+    if (!tr.docChanged && moved && threadAt(prev, tr.selection.head, true) === prev.active) {
         return prev
     }
     let { threads, active, draft } = prev
@@ -193,25 +198,14 @@ function next(tr: Transaction, prev: Highlights, state: EditorState): Highlights
             action satisfies never
         }
     }
-    if (action?.kind !== 'activate' && tr.selectionSet && leaves(tr, active, ranges)) {
-        active = undefined
+    if (moved) {
+        active = threadAt({ threads, ranges }, tr.selection.head, true)
     }
     // A thread resolved is closed with it: its passage is drawn no more.
     if (threads.some((thread) => thread.id === active && thread.resolved)) {
         active = undefined
     }
     return build(state, threads, ranges, active, draft)
-}
-
-// Whether the transaction's cursor is outside the passage of thread `active`, or that passage is gone. A cursor at
-// either end of it is inside, as a click just after its last word puts it.
-function leaves(tr: Transaction, active: string | undefined, ranges: ReadonlyMap<string, Range>): boolean {
-    if (active === undefined) {
-        return false
-    }
-    const range = ranges.get(active)
-    const { head } = tr.selection
-    return range === undefined || head < range.from || head > range.to
 }
 
 // The state with every thread the ranges lack looked for again, and the decorations drawn.
@@ -255,15 +249,21 @@ function mapRange(tr: Transaction, range: Range): Range | undefined {
     return from < to ? { from, to } : undefined
 }
 
-// The thread whose passage holds `pos`, the shortest when passages overlap, so the one inside another can be reached.
-function threadAt(highlights: Highlights | undefined, pos: number): string | undefined {
+// The open thread whose passage holds `pos`, the innermost when passages overlap, so the one inside another can be
+// reached. A click is in a passage up to its last letter; a cursor, given as `cursor`, is in it at either end too, as
+// a click just after its last word puts it.
+function threadAt(
+    highlights: Pick<Highlights, 'threads' | 'ranges'> | undefined,
+    pos: number,
+    cursor = false,
+): string | undefined {
     if (highlights === undefined) {
         return undefined
     }
     const resolved = new Set(highlights.threads.filter((thread) => thread.resolved).map((thread) => thread.id))
     let best: { id: string; size: number } | undefined
     for (const [id, range] of highlights.ranges) {
-        if (!resolved.has(id) && range.from <= pos && pos < range.to) {
+        if (!resolved.has(id) && range.from <= pos && (cursor ? pos <= range.to : pos < range.to)) {
             const size = range.to - range.from
             if (best === undefined || size < best.size) {
                 best = { id, size }
