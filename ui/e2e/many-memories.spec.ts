@@ -16,7 +16,7 @@ test.beforeEach(async ({ page }) => {
     await signIn(page)
 })
 
-test('the memory page lists a row a ticket, scrolls each list in its panel, and opens notes one ticket at a time', async ({
+test('the memory page lists a row a ticket, scrolls each list, and opens notes one ticket at a time', async ({
     page,
 }) => {
     await manyMemories(page)
@@ -51,7 +51,7 @@ test('the memory page lists a row a ticket, scrolls each list in its panel, and 
     await expect(promoted.getByText('would be left out at use, past its cap')).toHaveCount(LESSONS - SERVED)
 })
 
-/** Serves the mock's memory, grown: its tickets' counts copied over hundreds of tickets, and its lesson hundreds of times. */
+/** Serves the mock's memory, grown: its ticket's counts over hundreds of tickets, and its lesson hundreds of times. */
 async function manyMemories(page: Page): Promise<void> {
     await page.route('**/api/memory', async (route) => {
         const response = await route.fetch()
