@@ -100,11 +100,13 @@ jobs:
 
       # Codecov authenticates with the run's OIDC token, so no secret is needed; the repository only has to be added
       # on codecov.io. An upload that fails warns and leaves the check green: Codecov being down never blocks a PR.
+      # Each job's upload carries its own flag (.github/codecov.yml says why).
       - name: Upload coverage to Codecov
         if: needs.changes.outputs.code != 'false'
         uses: codecov/codecov-action@v7.1.1
         with:
           files: coverage.xml
+          flags: python
           use_oidc: true
           fail_ci_if_error: false
 
@@ -152,11 +154,13 @@ jobs:
 
       # Codecov authenticates with the run's OIDC token, so no secret is needed; the repository only has to be added
       # on codecov.io. An upload that fails warns and leaves the check green: Codecov being down never blocks a PR.
+      # Each job's upload carries its own flag (.github/codecov.yml says why).
       - name: Upload coverage to Codecov
         if: needs.changes.outputs.code != 'false'
         uses: codecov/codecov-action@v7.1.1
         with:
           files: ui/coverage/lcov.info
+          flags: ui
           use_oidc: true
           fail_ci_if_error: false
 
