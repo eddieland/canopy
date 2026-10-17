@@ -108,6 +108,11 @@ function NewestPlan({
     text: string
 }) {
     const client = useQueryClient()
+    // The plan this one replaces, the newest before it, for what changed since.
+    const before = plans.plans.findLast(
+        (plan) => plan.id !== newest.plan.id && plan.created_at <= newest.plan.created_at,
+    )
+    const replaced = useQuery({ ...ticketPlanQuery(ticketKey, before?.id ?? 0), enabled: before !== undefined }).data
     const saved = fromServer(plans.threads)
     const [held, setHeld] = useState(saved)
     const [seen, setSeen] = useState(plans.threads)
@@ -238,6 +243,11 @@ function NewestPlan({
             onChange={setMarkdown}
             editable={editable}
             edited={newest.edited}
+            previous={
+                before !== undefined && typeof replaced?.text === 'string'
+                    ? { label: `plan ${before.id}`, markdown: replaced.text }
+                    : undefined
+            }
             onAskForChanges={status === 'proposed' ? askForChanges : undefined}
             actions={
                 <div className="flex flex-wrap items-center gap-2" data-testid="plan-actions">
