@@ -39,6 +39,9 @@ REQUIRED_PRIVATE = ("CONVERSATION",)
 # A public ticket's worker hears the operator's replies only from these (D093). An override written before they existed
 # still serves a ticket the operator never replied to; once there is a reply, it fails to render instead of dropping it.
 REQUIRED_OPERATOR = ("OPERATOR_MESSAGES",)
+# Placeholders an implement's or a resume's prompt must use once the ticket has an approved plan (DESIGN §25): an older
+# override would otherwise run the work without the plan the operator approved for it.
+REQUIRED_PLAN_COPY = ("PLAN",)
 _PLACEHOLDER_RE = re.compile(r"\{\{([A-Z][A-Z0-9_]*)\}\}")
 # Placeholders every worker prompt must use. `LABELS` carries the worker's own authorization check (D051); an override
 # written before it existed would silently drop that check, so it fails to render instead.
@@ -135,6 +138,26 @@ def trusted_reviewers(reviewers: Sequence[str]) -> str:
         for r in reviewers
     ]
     return ", ".join(names) if names else "none (every reviewer's feedback needs the operator's go-ahead)"
+
+
+def plan_note(copy: Path | None, outline: Sequence[str]) -> str:
+    """Return an implement's or a resume's `{{PLAN}}`: where its copy of the approved plan is, and the plan's outline.
+
+    The plan's text is never in the prompt: the worker reads the sections it needs from its copy (DESIGN §25). The
+    outline is the plan's own headings, model-written, so it is fenced as data.
+
+    Returns:
+        `None.` without a copy; else the copy's path, then the headings in a fenced block, or a line saying it has none.
+    """
+    if copy is None:
+        return "None."
+    lines = [f"`{copy}` is the plan the operator approved for this ticket, a copy written for this run alone."]
+    if outline:
+        fence = "````" if any("```" in heading for heading in outline) else "```"
+        lines += ["Its outline, the plan's own headings:", "", f"{fence}text", *outline, fence]
+    else:
+        lines.append("It has no headings: read it whole.")
+    return "\n".join(lines)
 
 
 def mark_comments(prefix: str, suffix: str) -> str:

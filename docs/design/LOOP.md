@@ -678,7 +678,9 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
    not name it), `CANOPY_RUN_ID` the run's id, `CANOPY_GIT_OBJECTS` the object directory, timeout
    `runtime.setup_timeout_minutes`, output appended to the run log. An exit other than 0, a timeout, or a command that
    cannot start fails the run as `crashed` before the worker starts, with a note naming the repository in a workspace;
-   the slots are returned as on any exit (step 6).
+   the slots are returned as on any exit (step 6). An `implement` or `resume` for a ticket with an approved plan then
+   gets its copy, `.canopy-plan.md`, checked against the approved hash, where the worker starts (§25, The worker's
+   copy); step 6's tidying removes it, and step 5 notes a pushed branch that holds it.
 3. Run `worker_cmd` (`private_worker_cmd` for a private run, §22), timeout `worker_timeout_minutes`, with
    `CANOPY_RUN_ID` set to the run's id, `CANOPY_GIT_OBJECTS` to the object directory, and cwd = the slot, or for a
    joint run the desk (§18), which
