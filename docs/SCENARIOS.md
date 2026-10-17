@@ -121,16 +121,16 @@ relying on a permission they check.
   next tick.
 - **S23. Answer a chore from the browser** (M23). Answer one of S22's findings from the web UI's attention list; expect
   the chore's next run's prompt to carry the note.
-- **S42. Try a chore from the browser** (M23). With `canopy loop` running, press Try now on S22's chore's page. Expect
-  its run in Recent runs at once, running, with no tick; the page to follow it to its end through the stream; its
-  findings on the attention list; and the overseer's next run of it `not_due` counting from the try. Stop the loop
-  while the try runs: the run goes on, and ends recorded.
 - **S24. The desktop sink** (M10). Expect one ticket's blocked question and one attention item as desktop
   notifications, once each.
 - **S25. The Slack sink** (M10). On a real channel, one ticket's dispatch, its worker's question, and its PR each reach
   the channel once; an attention item is posted when it opens and when it resolves. Remove the webhook file: Slack
   fails for several ticks while another sink keeps delivering and reports `loop.sink_failing`; restore it and what
   was missed arrives in one message. A digest arrives on its interval, a quiet one included.
+- **S42. Try a chore from the browser** (M23). With `canopy loop` running, press Try now on S22's chore's page. Expect
+  its run in Runs at once, running, with no tick; the page to follow it to its end through the stream; its
+  findings on the attention list; and the overseer's next run of it `not_due` counting from the try. Stop the loop
+  while the try runs: the run goes on, and ends recorded.
 
 ## The loop
 
