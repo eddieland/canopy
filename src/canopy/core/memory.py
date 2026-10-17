@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, assert_never
 
@@ -136,27 +136,33 @@ class Rendered:
     ids: tuple[int, ...] = ()
 
 
-def render(conn: sqlite3.Connection, config: Config, *, kind: str) -> Rendered | None:
-    """Return memory's part of a `kind` run's prompt, or None when no tier reaches it (DESIGN §28).
+def render(conn: sqlite3.Connection, config: Config, *, key: str, kind: str) -> Rendered | None:
+    """Return memory's part of a `kind` run's prompt for ticket `key`, or None when no tier reaches it (DESIGN §28).
 
     While a tier records, nothing of what was written is rendered: the prompt carries the contract alone, which asks
-    the worker to write. A prompt for a kind the contract reaches must carry `{{MEMORY_CONTRACT}}`, so an override
-    written before memory existed fails to render rather than drop it.
+    the worker to write. At `use`, ticket notes render `key`'s digest into `{{TICKET_MEMORY}}`, and its ids are the
+    ones the run may cite. A prompt for a kind the contract reaches must carry `{{MEMORY_CONTRACT}}`, and one served a
+    digest its placeholder, so an override written before memory existed fails to render rather than drop either.
 
     Returns:
         The modes the run is rendered under, the placeholders' values, the placeholders the prompt must carry, and the
         ids rendered; None for a run no tier reaches, whose prompt renders every memory placeholder empty.
     """
-    del conn  # Read once a tier serves what it holds.
     modes = modes_for(config.memory, kind)
     if not modes.on:
         return None
-    contracted = kind in NOTE_KINDS
-    return Rendered(
-        modes=modes,
-        values={MEMORY_CONTRACT: memory_contract(modes) if contracted else ""},
-        required=(MEMORY_CONTRACT,) if contracted else (),
-    )
+    values: dict[str, str] = {}
+    required: list[str] = []
+    ids: list[int] = []
+    if kind in NOTE_KINDS:
+        values[MEMORY_CONTRACT] = memory_contract(modes)
+        required.append(MEMORY_CONTRACT)
+    if modes.ticket_notes is MemoryMode.USE:
+        digest = ticket_digest(conn, key)
+        values[TICKET_MEMORY] = digest.text
+        required.append(TICKET_MEMORY)
+        ids.extend(digest.ids)
+    return Rendered(modes=modes, values=values, required=tuple(required), ids=tuple(ids))
 
 
 def memory_contract(modes: Modes) -> str:
@@ -177,6 +183,16 @@ def memory_contract(modes: Modes) -> str:
             "characters; a note under a key already written replaces it. Each text is one line of plain text, at "
             f"most {MAX_NOTE_CHARS} characters, in your own words: never ticket, PR, or log text copied in, never a "
             "secret, token, or password."
+        )
+    if modes.ticket_notes is MemoryMode.USE:
+        fields.append(
+            '- `"drop_notes":["<key>"]`: the keys of notes shown above that no longer hold, such as one about a '
+            "failure since fixed."
+        )
+    if MemoryMode.USE in (modes.ticket_notes, modes.proposals):
+        fields.append(
+            '- `"memory_used":[<id>]` and `"memory_wrong":[<id>]`: the ids of what was shown above that you relied '
+            "on, and of what you found wrong. Cite only ids shown above."
         )
     if not fields:
         return ""
@@ -289,6 +305,17 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
         head=head,
         modes=Modes(rendered.ticket_notes, rendered.proposals),
     )
+    if MemoryMode.USE in (writing.modes.ticket_notes, writing.modes.proposals):
+        # Only what was rendered into this run's prompt counts: a worker cannot renew or retire what it never saw.
+        shown = {m.id: m for m in read_by(conn, run_id)}
+        wrong = _cited(writing, "memory_wrong", fields.memory_wrong, shown)
+        _mark_wrong(conn, writing, wrong)
+        used = [
+            m for m in _cited(writing, "memory_used", fields.memory_used, shown) if m.id not in {w.id for w in wrong}
+        ]
+        _mark_used(conn, used)
+        if writing.modes.ticket_notes is MemoryMode.USE:
+            _drop_notes(conn, writing, fields.drop_notes, shown.values())
     if writing.modes.ticket_notes is not MemoryMode.OFF:
         _write_notes(conn, writing, fields.notes)
     conn.execute(
@@ -299,6 +326,54 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
     for r in writing.refused:
         log.info("memory entry refused", extra={"run_id": run_id, **r.as_json()})
     return writing.refused
+
+
+def _cited(writing: _Writing, name: str, value: JsonValue, shown: Mapping[int, records.Memory]) -> list[records.Memory]:
+    """The memories a run cites by id in `name`, of those rendered into its prompt and still in force.
+
+    Returns:
+        Each cited memory once, in the order cited; an id never rendered, or no longer in force, is passed over.
+    """
+    found: list[records.Memory] = []
+    for entry in _entries(writing, name, value):
+        cited = shown.get(entry) if isinstance(entry, int) and not isinstance(entry, bool) else None
+        if cited is not None and cited.status is MemoryStatus.ACTIVE and cited not in found:
+            found.append(cited)
+    return found
+
+
+def _mark_wrong(conn: sqlite3.Connection, writing: _Writing, wrong: Sequence[records.Memory]) -> None:
+    stamp = db.now()
+    for m in wrong:
+        if m.scope is MemoryScope.LESSON:
+            # The operator's word: a run's report raises `lesson_wrong`, and only the operator retires it.
+            conn.execute(
+                "UPDATE memories SET wrong_at = ?, wrong_run_id = ? WHERE id = ?", (stamp, writing.run_id, m.id)
+            )
+        else:
+            conn.execute(
+                "UPDATE memories SET status = ?, why = ?, invalidated_at = ? WHERE id = ?",
+                (MemoryStatus.INVALID, f"wrong, says run {writing.run_id}", stamp, m.id),
+            )
+
+
+def _mark_used(conn: sqlite3.Connection, used: Sequence[records.Memory]) -> None:
+    stamp = db.now()
+    for m in used:
+        conn.execute("UPDATE memories SET last_used_at = ?, use_count = use_count + 1 WHERE id = ?", (stamp, m.id))
+
+
+def _drop_notes(conn: sqlite3.Connection, writing: _Writing, value: JsonValue, shown: Iterable[records.Memory]) -> None:
+    rendered = {m.key: m for m in shown if m.scope is MemoryScope.TICKET}
+    stamp = db.now()
+    for entry in _entries(writing, "drop_notes", value):
+        note = rendered.get(entry) if isinstance(entry, str) else None
+        if note is None:
+            continue
+        conn.execute(
+            "UPDATE memories SET status = ?, why = ?, invalidated_at = ? WHERE id = ? AND status = ?",
+            (MemoryStatus.INVALID, f"dropped by run {writing.run_id}", stamp, note.id, MemoryStatus.ACTIVE),
+        )
 
 
 def _write_notes(conn: sqlite3.Connection, writing: _Writing, entries: JsonValue) -> None:
@@ -490,6 +565,11 @@ def ticket_digest(conn: sqlite3.Connection, key: str) -> Digest:
     body = [entries[n.id] for n in kept] or ["None: no earlier run of this ticket left a note."]
     if left_out:
         body.append(f"[{left_out} older notes are left out of this prompt.]")
+    if kept:
+        body.append(
+            "In your result, name the ids of notes you relied on in `memory_used` and of notes you found wrong in "
+            "`memory_wrong`, and the keys of notes that no longer hold in `drop_notes`."
+        )
     text = "\n\n".join([_NOTES_HEADING, intro, *body]) + "\n\n"
     return Digest(text=text, ids=tuple(n.id for n in kept), left_out=left_out)
 
