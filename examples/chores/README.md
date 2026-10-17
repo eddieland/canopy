@@ -1,7 +1,8 @@
 # Chores in practice
 
-What engineers may want to use chores for, with worked examples. `build-health.md` and `sentry-triage.md` in this
-directory are the prompts that ship; the rest are ideas to write your own from. The rules are in DESIGN §19.
+What engineers may want to use chores for, with worked examples. `build-health.md`, `sentry-triage.md`,
+`canopy-health.md`, and `canopy-efficiency.md` in this directory are the prompts that ship; the rest are ideas to write
+your own from. The rules are in DESIGN §19.
 
 ## What a chore is
 
@@ -76,6 +77,13 @@ rules. Cadence is a suggested `every_minutes` plus a `days`/`hours` window; `whe
 | --- | --- | --- | --- | --- |
 | `oncall-handoff` | Open incidents, silenced alerts, and unacknowledged pages for the service you own, before your shift | `incident/<id>` | 60 min, Fridays 14:00-18:00 | Own agent, a read-only incident CLI allowed |
 | `sentry-triage` | Fatal, escalating, regressed, or new and loud Sentry issues nobody has acted on ([sentry-triage.md](sentry-triage.md)) | `error/<project>/<short id>` | 720 min, weekdays 08:00-11:00 | Own agent, `sentry issue list *` and `sentry issue view *` allowed |
+
+### canopy itself
+
+| Chore | What it reports | Finding id | Cadence | Runs under |
+| --- | --- | --- | --- | --- |
+| `canopy-health` | Ticks and runs that keep failing, guards the overseer keeps running into, tools that error, each with a setting to tune, a fix, or a feature canopy lacks ([canopy-health.md](canopy-health.md)) | `ticks/<status>`, `runs/<kind>/<what>/<status>`, `refused/<guard>` | 720 min, weekdays 08:00-11:00 | Own agent, `canopy health --json *` and three more read-only commands allowed |
+| `canopy-efficiency` | Where the week's spend went: MCP servers and skills an agent never uses, tools that fill context, idle ticks, cold starts, cost per ticket done ([canopy-efficiency.md](canopy-efficiency.md)) | `unused/<kind>/<server>`, `heavy/<kind>/<tool>`, `idle` | Weekly, Mondays | Own agent, as `canopy-health`, with `opencode mcp list` |
 
 ## Writing a good chore
 
@@ -170,6 +178,59 @@ timeout_minutes = 15
   (`external_directory: deny`), and the bash rules refuse the commands it suggests that are not allowed.
 - **Acted on means gone.** A finding stays until someone assigns, resolves, or archives the issue in Sentry. If your
   ownership rules assign issues as they arrive, drop that condition from the prompt or nothing will be reported.
+
+### Worked example: canopy's own chores
+
+`canopy-health` and `canopy-efficiency` look at canopy itself, from the journal of the workspace they run in, and
+recommend what to change: a setting to tune, an MCP server or skill to turn off, a fix outside canopy, or a feature
+canopy lacks. They read through canopy's read-only commands (`canopy health`, `canopy spend`, `canopy decisions`,
+`canopy show`), so their `cwd` is the workspace root.
+
+```toml
+[chores.canopy-health]
+prompt = "~/.config/canopy/chores/canopy-health.md"
+cmd = 'opencode run --agent canopy-introspect --format json --title={title} {prompt}'
+cwd = "~/work/acme"       # the workspace root
+every_minutes = 720
+days = ["mon", "tue", "wed", "thu", "fri"]
+hours = "08:00-11:00"
+timeout_minutes = 15
+
+[chores.canopy-efficiency]
+prompt = "~/.config/canopy/chores/canopy-efficiency.md"
+cmd = 'opencode run --agent canopy-introspect --format json --title={title} {prompt}'
+cwd = "~/work/acme"
+every_minutes = 1440
+days = ["mon"]
+hours = "08:00-12:00"
+timeout_minutes = 15
+```
+
+- **Its own agent.** Copy `canopy-chore` to `~/.config/opencode/agent/canopy-introspect.md`, keep every other rule,
+  and replace `bash: deny` with exactly the commands the prompts use. Each one only reads; `canopy show` is allowed for
+  runs and chores only, since a ticket's page holds its conversation.
+
+  ```yaml
+  bash:
+    "*": deny
+    "canopy health --json*": allow
+    "canopy spend --json*": allow
+    "canopy decisions*": allow
+    "canopy show run:*": allow
+    "canopy show chore:*": allow
+    "opencode mcp list": allow
+  ```
+
+- **No MCP servers needed.** Neither prompt calls one. Deny your servers' tools in the definition by name
+  (`"github_*": deny`) so a steered run cannot reach them.
+- **Not sandboxed.** The sandbox wrapper hides the workspace's `.canopy/` from a run whose directory is in the
+  workspace ([SANDBOX.md](../../docs/SANDBOX.md)), and these chores read the journal in it. Leave the `canopy-sandbox`
+  prefix off their `cmd`.
+- **Fill in the lists.** `canopy-efficiency.md` names your MCP servers and which agents need each, so that a server
+  only one agent uses is not reported unused for the others. `opencode mcp list` shows what you have.
+- **A finding is a recommendation.** Its title says which kind (`Tune:`, `Disable:`, `Fix:`, `Feature:`), and its
+  detail the figures it rests on. Act on it, or answer it with `canopy reply chore:canopy-efficiency '<note>'` ("keep
+  the jira server for workers; it is for private tickets"), and the next run leaves it out.
 
 ### The loop for getting it right
 
