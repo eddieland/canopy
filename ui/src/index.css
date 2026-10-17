@@ -834,5 +834,13 @@
         & .plan-comment-active {
             @apply bg-accent/28 underline decoration-accent decoration-2 underline-offset-4;
         }
+        /* What changed since the plan this one replaces (src/lib/plan-diff.ts): the words added on the diff's added */
+        /* tint, those removed struck through on its removed tint, where they were. */
+        & ins.plan-ins {
+            @apply rounded-xs bg-diff-add/18 no-underline;
+        }
+        & del.plan-del {
+            @apply mx-0.5 rounded-xs bg-diff-del/14 text-muted-foreground line-through decoration-diff-del;
+        }
     }
 }

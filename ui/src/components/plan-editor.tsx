@@ -26,6 +26,7 @@ import { Panel, PanelHeader } from '@/components/panel'
 import { AskForChanges, DraftForm, PlanThreads, ThreadCard } from '@/components/plan-threads'
 import type { Draft, ThreadActions } from '@/components/plan-threads'
 import { Button } from '@/components/ui/button'
+import { Toggle } from '@/components/ui/toggle'
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -44,6 +45,7 @@ import {
 } from '@/components/ui/toolbar'
 import { anchorFor, anchorsOf, highlightsKey, PlanHighlights, withHighlight } from '@/lib/plan-highlights'
 import type { Range } from '@/lib/plan-highlights'
+import { changesKey, PlanChanges, textOf } from '@/lib/plan-diff'
 import { alignComments, floatUnder } from '@/lib/plan-margin'
 import { planExtensions } from '@/lib/plan-schema'
 import {
@@ -95,6 +97,7 @@ export function PlanEditor({
     onAskForChanges,
     actions,
     actionsNote,
+    previous,
 }: {
     /** The plan, as Markdown. Read when the editor opens. */
     markdown: string
@@ -114,10 +117,13 @@ export function PlanEditor({
     actions?: ReactNode
     /** What the caller says about those, under them in the bar: what they will do, or what one did. */
     actionsNote?: ReactNode
+    /** The plan this one replaces, by its name and Markdown, to show what changed since (`src/lib/plan-diff.ts`). */
+    previous?: { label: string; markdown: string } | undefined
 }) {
     const editor = useEditor({
         extensions: planExtensions([
             PlanHighlights,
+            PlanChanges,
             // An empty plan says what goes in it rather than show a blank box (`.plan-doc` in src/index.css).
             Placeholder.configure({ placeholder: 'Write the plan here, or paste its Markdown.' }),
         ]),
@@ -150,6 +156,8 @@ export function PlanEditor({
     // which the operator wrote.
     const [original] = useState(() => editor.getMarkdown().trimEnd())
     const [changed, setChanged] = useState(false)
+    // Whether the words changed since the plan this one replaces are drawn over it.
+    const [showChanges, setShowChanges] = useState(false)
     const seen = useEditorState({
         editor,
         selector: ({ editor: current }) => {
@@ -232,6 +240,13 @@ export function PlanEditor({
     useEffect(() => {
         editor.setEditable(editable)
     }, [editor, editable])
+
+    // The plan this one replaces, read as the editor reads a plan, while its changes are shown; none while not.
+    const base = showChanges && previous !== undefined ? previous.markdown : undefined
+    useEffect(() => {
+        const text = base === undefined ? undefined : textOf(editor, base)
+        editor.view.dispatch(editor.state.tr.setMeta(changesKey, { base: text }).setMeta('addToHistory', false))
+    }, [editor, base])
 
     // After an edit, the threads' passages may have moved or changed their words: save their anchors as they are now.
     const onEdit = useEffectEvent(() => {
@@ -415,7 +430,7 @@ export function PlanEditor({
                     />
                 </Panel>
             </div>
-            {editable && (actions !== undefined || onAskForChanges !== undefined) && (
+            {editable && (actions !== undefined || onAskForChanges !== undefined || previous !== undefined) && (
                 // The plan's actions stay at the bottom of the page while it scrolls, as a document's do, so a long
                 // plan is approved or sent back from where it is read rather than from under its last line.
                 <div
@@ -425,6 +440,12 @@ export function PlanEditor({
                         'bg-surface px-3 py-2',
                     )}
                 >
+                    {previous !== undefined && (
+                        // A mode, named for what it shows: the plan as it reads now, with what changed marked on it.
+                        <Toggle size="xs" pressed={showChanges} onPressedChange={setShowChanges}>
+                            Changes since {previous.label}
+                        </Toggle>
+                    )}
                     {actions}
                     {onAskForChanges !== undefined && (
                         <AskForChanges

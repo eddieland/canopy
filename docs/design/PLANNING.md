@@ -294,8 +294,10 @@ page-level detail.
   would make wrong. On a new plan, each thread is looked for again by its words. A passage that is gone is found
   nowhere, and its thread says `passage gone` rather than move to other words: a reworded passage may no longer be what
   the comment was about. A new plan rewrites what it was asked to change, so its comments lose their passages together,
-  and the operator can resolve all of those at once. An open thread's comment and replies can be edited in place;
-  nothing marks one edited.
+  and the operator can resolve all of those at once. To read what a new plan changed rather than the whole of it again,
+  the editor marks, while asked, the words it added and those it removed since the plan it replaces, word by word, as
+  each plan reads in the editor (`ui/src/lib/plan-diff.ts`), so formatting alone is no change. An open thread's comment
+  and replies can be edited in place; nothing marks one edited.
 - **Ask for changes** sends the open threads, in the plan's order, as one operator message: each passage quoted, its
   comment and replies, then the operator's note on the whole plan, if any, and, when the operator edited the plan's
   text, a line saying so: the planner keeps what it was not asked to change, but reads the plan it replaces as its own,

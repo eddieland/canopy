@@ -746,8 +746,10 @@ list, an empty state, or a skeleton by hand.
   of the page. `Comment` again, on new words, moves an empty comment to them; one half written stays on its passage, and
   the cursor goes back to it, so its words are never lost or carried to other words. Under the plan and its comments, a
   bar of actions sticks to the bottom of the page while the plan scrolls, as a document's do, so a long plan is approved
-  or sent back from where it is read: the caller's own actions first (a ticket's `Approve`, `Save`, and
-  `Skip the plan`), then `Ask for changes`, a note on the whole plan, one line that grows as it is written, how many
+  or sent back from where it is read: with the plan this one replaces, `Changes since plan 1` first, a pressed `Toggle`
+  that marks what changed since it over the plan (the words added on `diff-add` at 18%, those removed struck through on
+  `diff-del` at 14%, where they were, as `ins` and `del`), then the caller's own actions (a ticket's `Approve`, `Save`,
+  and `Skip the plan`), then `Ask for changes`, a note on the whole plan, one line that grows as it is written, how many
   open comments go with it, or how far over a reply's bound the request is, and the button (the request says the plan
   was edited, when it was); what the caller's actions will do, or what one did, goes on a line under them. The editor
   keeps what it scrolls into view clear of the bar too. Until plans reach a ticket's page (M44), the editor is on

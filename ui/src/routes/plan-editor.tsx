@@ -7,7 +7,7 @@ import { Disclosure } from '@/components/disclosure'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PlanEditor } from '@/components/plan-editor'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
-import { SAMPLE_PLAN, SAMPLE_THREADS } from '@/lib/plan-sample'
+import { SAMPLE_PLAN, SAMPLE_PREVIOUS, SAMPLE_THREADS } from '@/lib/plan-sample'
 
 /**
  * The plan editor over a sample plan, on mock data alone: where the editor is tried and tested on its own
@@ -57,6 +57,7 @@ function Sample() {
                 onThreadsChange={setThreads}
                 onChange={setMarkdown}
                 onAskForChanges={setAsked}
+                previous={{ label: 'plan 1', markdown: SAMPLE_PREVIOUS }}
             />
             <Panel>
                 <PanelHeader label="What the planner reads" />
