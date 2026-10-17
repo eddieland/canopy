@@ -29,6 +29,8 @@ export interface Draft {
 export interface ThreadActions {
     /** Shows a thread's passage in the plan and marks it the one open. */
     onActivate: (id: string) => void
+    /** Marks a thread the one open, its passage drawn so, without moving the plan: when its card takes the focus. */
+    onOpen: (id: string) => void
     /** Adds a reply to a thread. */
     onReply: (id: string, body: string) => void
     /** Resolves a thread, or reopens it. */
@@ -37,6 +39,8 @@ export interface ThreadActions {
     onDelete: (id: string) => void
     /** Has a thread's comment, or with `replyId` one of its replies, say `body` instead. */
     onEdit: (id: string, body: string, replyId?: string) => void
+    /** Puts the cursor back in the plan at a thread's passage, when a form on its card closes or is left. */
+    onBack: (id: string) => void
 }
 
 /**
@@ -54,11 +58,13 @@ export function PlanThreads({
     active,
     draft,
     draftAt,
+    hidden,
     listRef,
     editable,
     onDraftChange,
     onDraftSubmit,
     onDraftCancel,
+    onDraftLeave,
     ...actions
 }: ThreadActions & {
     /** The threads, in the plan's order. */
@@ -71,6 +77,8 @@ export function PlanThreads({
     draft: Draft | undefined
     /** How many of the open threads found in the plan come before the comment being written, in the plan's order. */
     draftAt: number
+    /** A thread shown elsewhere, at its passage (`floatUnder`), so not in the list as well. */
+    hidden?: string | undefined
     /** The list of comments, for `alignComments`. */
     listRef?: Ref<HTMLDivElement>
     /** Whether the operator can comment, reply, and resolve; without it the threads are read only. */
@@ -81,36 +89,36 @@ export function PlanThreads({
     onDraftSubmit: (body: string) => void
     /** Drops the comment being written. */
     onDraftCancel: () => void
+    /** Puts the cursor back in the plan, the comment being written left open with its words. */
+    onDraftLeave: () => void
 }) {
     const [showResolved, setShowResolved] = useState(false)
     const open = threads.filter((thread) => !thread.resolved)
     const placed = open.filter((thread) => found.has(thread.id))
     const lost = open.filter((thread) => !found.has(thread.id))
     const resolved = threads.filter((thread) => thread.resolved)
-    const card = (thread: PlanThread) => (
-        <ThreadCard
-            key={thread.id}
-            thread={thread}
-            lost={!found.has(thread.id)}
-            active={thread.id === active}
-            editable={editable}
-            {...actions}
-        />
-    )
+    const card = (thread: PlanThread) =>
+        thread.id === hidden ? undefined : (
+            <ThreadCard
+                key={thread.id}
+                thread={thread}
+                lost={!found.has(thread.id)}
+                active={thread.id === active}
+                editable={editable}
+                {...actions}
+            />
+        )
     return (
         <div ref={listRef} className="plan-margin flex flex-col">
             {placed.slice(0, draftAt).map((thread) => card(thread))}
             {draft !== undefined && (
                 <div data-align="draft" className="border-b bg-accent/14 px-3 py-2.5">
-                    <Quote text={draft.quote} />
-                    <CommentForm
-                        key={draft.opened}
-                        label="Comment"
-                        submit="Comment"
-                        value={draft.body}
-                        onValueChange={onDraftChange}
-                        onSubmit={onDraftSubmit}
-                        onCancel={onDraftCancel}
+                    <DraftForm
+                        draft={draft}
+                        onDraftChange={onDraftChange}
+                        onDraftSubmit={onDraftSubmit}
+                        onDraftCancel={onDraftCancel}
+                        onDraftLeave={onDraftLeave}
                     />
                 </div>
             )}
@@ -204,26 +212,82 @@ export function AskForChanges({
     )
 }
 
+/** The comment being written: the passage it is on, quoted, and its form. */
+export function DraftForm({
+    draft,
+    onDraftChange,
+    onDraftSubmit,
+    onDraftCancel,
+    onDraftLeave,
+}: {
+    /** The comment being written. */
+    draft: Draft
+    /** Called with what it says, as the operator types it. */
+    onDraftChange: (body: string) => void
+    /** Adds it. */
+    onDraftSubmit: (body: string) => void
+    /** Drops it. */
+    onDraftCancel: () => void
+    /** Puts the cursor back in the plan, the comment left open with its words. */
+    onDraftLeave: () => void
+}) {
+    return (
+        <>
+            <Quote text={draft.quote} />
+            <CommentForm
+                key={draft.opened}
+                label="Comment"
+                submit="Comment"
+                value={draft.body}
+                onValueChange={onDraftChange}
+                onSubmit={onDraftSubmit}
+                onCancel={onDraftCancel}
+                onLeave={onDraftLeave}
+            />
+        </>
+    )
+}
+
 // What `ThreadCard` edits when it edits the comment rather than a reply.
 const COMMENT = 'comment'
 
-function ThreadCard({
+/**
+ * A thread's card: its passage quoted, the comment and its replies, and what can be done with it. The open one sits
+ * on the accent's tint; `lost` marks one whose passage is gone from the plan.
+ */
+export function ThreadCard({
     thread,
     lost,
     active,
     editable,
     onActivate,
+    onOpen,
     onReply,
     onResolve,
     onDelete,
     onEdit,
-}: ThreadActions & { thread: PlanThread; lost: boolean; active: boolean; editable: boolean }) {
+    onBack,
+}: ThreadActions & {
+    /** The thread. */
+    thread: PlanThread
+    /** Whether its passage is gone from the plan. */
+    lost: boolean
+    /** Whether it is the thread open. */
+    active: boolean
+    /** Whether the operator can reply, edit, resolve, and delete. */
+    editable: boolean
+}) {
     const [replying, setReplying] = useState(false)
     // What is being edited: the comment, or a reply by its id.
     const [editing, setEditing] = useState<string | undefined>(undefined)
     const [deleting, setDeleting] = useState(false)
+    // Nothing in the card is open: no reply, edit, or question being answered.
+    const idle = editable && editing === undefined && !replying && !deleting
     // An open thread's words can be edited while nothing else in its card is open.
-    const startEdit = editable && !thread.resolved && editing === undefined && !replying && !deleting
+    const startEdit = idle && !thread.resolved
+    // Reply shows on the card that is open, as a shared document's does, so the rest stay short and near their
+    // passages; on one whose passage is gone too, which cannot be opened from the plan.
+    const canReply = idle && !thread.resolved && (active || lost)
     // Keep gives the focus back to Delete, which opened the question, rather than drop it to the page's top.
     const [kept, setKept] = useState(false)
     const deleteAction = useRef<HTMLButtonElement>(null)
@@ -232,14 +296,33 @@ function ThreadCard({
             deleteAction.current?.focus()
         }
     }, [kept])
+
+    function open() {
+        if (!active && !lost && !thread.resolved) {
+            onOpen(thread.id)
+        }
+    }
     return (
+        // A click anywhere on an open thread's card, or Tab into it, opens the thread, as in a shared document. The
+        // plan stays where it is, so a card below a narrow plan never pulls the page away from the reply being typed.
+        // By the click, not the focus a press gives, for a mouse: an open card moves to its passage, and moved between
+        // press and release, the release would miss the button pressed. By the focus for the keyboard, which a click
+        // does not show (`:focus-visible`). Either only marks the thread open: no interaction a keyboard lacks.
+        // oxlint-disable-next-line no-noninteractive-element-interactions, click-events-have-key-events
         <article
             data-thread={thread.id}
             data-active={active}
             data-align={lost || thread.resolved ? undefined : thread.id}
             aria-label={`Comment on “${thread.anchor.quote}”`}
+            tabIndex={-1}
+            onClick={open}
+            onFocus={(event) => {
+                if (event.target.matches(':focus-visible')) {
+                    open()
+                }
+            }}
             className={cn(
-                'flex flex-col gap-1.5 border-b px-3 py-2.5 last:border-b-0',
+                'flex flex-col gap-1.5 border-b px-3 py-2.5 outline-none last:border-b-0',
                 active && 'bg-accent/14',
                 thread.resolved && 'text-muted-foreground',
             )}
@@ -248,6 +331,32 @@ function ThreadCard({
                 <Quote text={thread.anchor.quote} onClick={lost ? undefined : () => onActivate(thread.id)} />
                 {lost && <Chip className="mt-0.5">passage gone</Chip>}
                 {thread.resolved && <Chip className="mt-0.5">resolved</Chip>}
+                {idle && (
+                    <div className="-my-0.5 -mr-1.5 flex shrink-0 items-center">
+                        <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label={thread.resolved ? 'Reopen' : 'Resolve'}
+                            title={thread.resolved ? 'Reopen' : 'Resolve'}
+                            onClick={() => onResolve(thread.id, !thread.resolved)}
+                        >
+                            {thread.resolved ? <RotateCcw aria-hidden /> : <Check aria-hidden />}
+                        </Button>
+                        <Button
+                            ref={deleteAction}
+                            variant="ghost"
+                            size="icon-xs"
+                            aria-label="Delete"
+                            title="Delete"
+                            onClick={() => {
+                                setKept(false)
+                                setDeleting(true)
+                            }}
+                        >
+                            <Trash2 aria-hidden />
+                        </Button>
+                    </div>
+                )}
             </div>
             {editing === COMMENT ? (
                 <CommentForm
@@ -258,7 +367,11 @@ function ThreadCard({
                         onEdit(thread.id, body)
                         setEditing(undefined)
                     }}
-                    onCancel={() => setEditing(undefined)}
+                    onCancel={() => {
+                        setEditing(undefined)
+                        onBack(thread.id)
+                    }}
+                    onLeave={() => onBack(thread.id)}
                 />
             ) : (
                 <Said
@@ -279,7 +392,11 @@ function ThreadCard({
                                 onEdit(thread.id, body, reply.id)
                                 setEditing(undefined)
                             }}
-                            onCancel={() => setEditing(undefined)}
+                            onCancel={() => {
+                                setEditing(undefined)
+                                onBack(thread.id)
+                            }}
+                            onLeave={() => onBack(thread.id)}
                         />
                     ) : (
                         <Said
@@ -299,7 +416,11 @@ function ThreadCard({
                         onReply(thread.id, body)
                         setReplying(false)
                     }}
-                    onCancel={() => setReplying(false)}
+                    onCancel={() => {
+                        setReplying(false)
+                        onBack(thread.id)
+                    }}
+                    onLeave={() => onBack(thread.id)}
                 />
             )}
             {editable && deleting && (
@@ -312,29 +433,11 @@ function ThreadCard({
                     }}
                 />
             )}
-            {editable && !replying && !deleting && editing === undefined && (
-                <div className="-ml-2 flex flex-wrap items-center gap-0.5">
-                    {!thread.resolved && (
-                        <Button variant="ghost" size="xs" onClick={() => setReplying(true)}>
-                            <Reply aria-hidden />
-                            Reply
-                        </Button>
-                    )}
-                    <Button variant="ghost" size="xs" onClick={() => onResolve(thread.id, !thread.resolved)}>
-                        {thread.resolved ? <RotateCcw aria-hidden /> : <Check aria-hidden />}
-                        {thread.resolved ? 'Reopen' : 'Resolve'}
-                    </Button>
-                    <Button
-                        ref={deleteAction}
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => {
-                            setKept(false)
-                            setDeleting(true)
-                        }}
-                    >
-                        <Trash2 aria-hidden />
-                        Delete
+            {canReply && (
+                <div className="-ml-2">
+                    <Button variant="ghost" size="xs" onClick={() => setReplying(true)}>
+                        <Reply aria-hidden />
+                        Reply
                     </Button>
                 </div>
             )}
@@ -436,8 +539,10 @@ function Said({
     )
 }
 
-// A comment or a reply being written. It sends on the key Settings names, as a reply to a ticket does, and Escape
-// drops it. It keeps its own words, or the caller's through `value` and `onValueChange`, which outlive the form.
+// A comment or a reply being written. It sends on the key Settings names, as a reply to a ticket does. Escape drops it
+// while it holds nothing new; with words of the operator's own in it, Escape leaves it open, words and all, and goes
+// back to the plan (`onLeave`), so one key never loses what was typed: Cancel drops it. It keeps its own words, or the
+// caller's through `value` and `onValueChange`, which outlive the form.
 function CommentForm({
     label,
     submit,
@@ -446,6 +551,7 @@ function CommentForm({
     onValueChange,
     onSubmit,
     onCancel,
+    onLeave,
 }: {
     label: string
     submit: string
@@ -454,6 +560,7 @@ function CommentForm({
     onValueChange?: (body: string) => void
     onSubmit: (body: string) => void
     onCancel: () => void
+    onLeave: () => void
 }) {
     const sendKey = useSendKey()
     const field = useRef<HTMLTextAreaElement>(null)
@@ -485,7 +592,11 @@ function CommentForm({
     function onKey(event: KeyboardEvent<HTMLTextAreaElement>) {
         if (event.key === 'Escape') {
             event.preventDefault()
-            onCancel()
+            if (body.trim() === '' || body === initial) {
+                onCancel()
+            } else {
+                onLeave()
+            }
             return
         }
         const { key, shiftKey, ctrlKey, metaKey } = event
