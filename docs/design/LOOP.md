@@ -153,8 +153,10 @@ messages and slots, a review's slot); a new kind joins that set rather than copy
    tick began, whatever ended it, which bounds how often the overseer runs: a burst of messages, runs ending one after
    another, or a gate opening just after a tick would otherwise run ticks back to back. On a terminal, pressing `t`
    ends it at once, with no floor (a keypress is deliberate, as a hand-run `canopy tick` is); keys pressed during the
-   tick are dropped, except `p` (below). While the loop is paused, the wait does not end at its deadline (Pausing,
-   below).
+   tick are dropped, except `p` (below). Tick now in the web UI (§22) does the same, but one asked for during a tick is
+   kept, and ends the wait after it at once: a click is not stray input the way a key typed at a spinner can be. Like
+   a reload, the request is for this process alone, with no journal row. While the loop is paused, the wait does not
+   end at its deadline (Pausing, below).
 6. Repeat from 3 until `--ticks N` ticks have run or the operator stops the loop.
 
 Pausing: the operator can hold the loop's ticks without stopping it, so the web UI stays up and dispatched workers keep
@@ -164,7 +166,8 @@ going.
   and `canopy resume`, and the web UI (§22), each recording its channel. It outlives the loop, lifted only by a resume.
 - Paused, the wait does not end at its deadline, on an operator message, or on a run ending, though those still move
   the deadline (step 5), so a resume past it ticks at once. A tick running when a pause comes finishes. A loop started
-  while paused holds its first tick. `t` runs one tick and the loop stays paused, as a hand-run `canopy tick` does.
+  while paused holds its first tick. `t`, or Tick now in the web UI, runs one tick and the loop stays paused, as a
+  hand-run `canopy tick` does.
 - `canopy pause` and `canopy resume` refuse inside canopy's own ticks and runs (`inside_run`), as `start` and `reply`
   do: an agent that could pause the loop could hold off every tick after its own, and one that could resume it could
   undo the operator's pause (TRUST_MODEL T1).

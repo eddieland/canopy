@@ -9,10 +9,11 @@ never past a harness gate (DESIGN §6, Idle pacing); pacing by what a tick cost 
 operator's acts since the last tick read the journal end the wait early (DESIGN §22): a message to a ticket, such as a
 `canopy reply`; a ticket started or stopped; attempts or reviews granted; a notice to workers set or cleared. With idle
 pacing on, a run ending after the tick read the journal does too. A config reload does not: it applies at the wait's
-next step and leaves its deadline as it was. Nothing but the operator pressing `TICK_NOW_KEY` on a terminal starts a
-tick sooner than `loop.min_gap_minutes` after the last one began: not a gate, not an early wake. A deferred start waits
-the same way before the first tick, from when the loop started. Each tick's row records whether it was idle and what
-ended the wait before it (`ticks.idle`, `ticks.woken_by`), so spend can be split by what it bought (ROADMAP M33).
+next step and leaves its deadline as it was. Nothing but the operator asking for a tick now, with `TICK_NOW_KEY` on a
+terminal or from the web UI (`tick_now`), starts a tick sooner than `loop.min_gap_minutes` after the last one began:
+not a gate, not an early wake. A deferred start waits the same way before the first tick, from when the loop started.
+Each tick's row records whether it was idle and what ended the wait before it (`ticks.idle`, `ticks.woken_by`), so
+spend can be split by what it bought (ROADMAP M33).
 
 While the operator has paused the loop (`core.pause`), the wait does not end at its deadline: it holds until they
 resume, then ticks at once if the deadline has passed. `PAUSE_KEY` pauses and resumes from the terminal; the web UI and
@@ -46,7 +47,7 @@ from rich.text import Text
 
 from canopy.core import config, db, notice, pause
 from canopy.infra import lock, logs, resources
-from canopy.loop import attention, duties, pacing, reread, tick
+from canopy.loop import attention, duties, pacing, reread, tick, tick_now
 
 if TYPE_CHECKING:
     from types import FrameType
@@ -84,8 +85,8 @@ _STATUS_STYLES = {
 
 
 # What ended a wait before its deadline: the operator's act (a message, a ticket started or stopped, a grant, a notice
-# set or cleared), a run ending, or the operator pressing `TICK_NOW_KEY`.
-type Woken = Literal["message", "starts", "grant", "notice", "run", "key"]
+# set or cleared), a run ending, the operator pressing `TICK_NOW_KEY`, or the operator asking from the web UI.
+type Woken = Literal["message", "starts", "grant", "notice", "run", "key", "web"]
 # What started a tick, recorded on its row (`ticks.woken_by`): the loop starting, a wait that ran its length, one a gate
 # shortened, or what ended one early.
 type WokenBy = Woken | Literal["start", "timer", "gate"]
@@ -176,6 +177,7 @@ def run(
     console: Console,
     stop: Stop,
     reload: reread.Reload | None = None,
+    asked: tick_now.TickNow | None = None,
     serve: bool = False,
     keys: Callable[[], str] | None = None,
     defer_minutes: int | None = None,
@@ -189,7 +191,8 @@ def run(
     (`infra.keys.listen`); with it, `TICK_NOW_KEY` during the wait ticks at once and `PAUSE_KEY` pauses or resumes. With
     `defer_minutes`, the first tick waits that long, as the wait between ticks does. While the loop is paused, no tick
     starts but one `TICK_NOW_KEY` asks for. A reload asked for through `reload`, by `signals` or the web UI, reads the
-    config again between ticks: the next tick, the pace, and the web UI run on it, and `--every` still holds.
+    config again between ticks: the next tick, the pace, and the web UI run on it, and `--every` still holds. A tick
+    asked for through `asked`, by the web UI, ends the wait as `TICK_NOW_KEY` does.
 
     Returns:
         How many ticks ended in each status.
@@ -199,7 +202,14 @@ def run(
     """
     log = logs.for_tick(None)
     statuses: Counter[str] = Counter()
-    settings = _Settings(ctx, _pace(ctx.config, interval_minutes), interval_minutes, reload or reread.Reload(), console)
+    settings = _Settings(
+        ctx,
+        _pace(ctx.config, interval_minutes),
+        interval_minutes,
+        reload or reread.Reload(),
+        asked or tick_now.TickNow(),
+        console,
+    )
     with lock.hold(ctx.state_dir / LOCK_FILE_NAME):
         # The loop reads the journal before its first tick, which is what would otherwise migrate it.
         db.migrate(ctx.conn, resources.migrations_dir())
@@ -221,7 +231,7 @@ def run(
             # other `canopy` command, the ones the overseer and workers run included.
             from canopy.loop import web  # noqa: PLC0415
 
-            serving = web.start(ctx, log, settings.reload)
+            serving = web.start(ctx, log, settings.reload, settings.asked)
             settings.backend = serving.backend
         try:
             _header(
@@ -277,6 +287,7 @@ class _Settings:
     pace: pacing.Pace
     every: int | None  # `--every`, which a reload keeps
     reload: reread.Reload
+    asked: tick_now.TickNow  # a tick the web UI asked for, which the next wait takes
     console: Console
     backend: Backend | None = None  # the web UI's, which serves the new config too
 
@@ -345,7 +356,16 @@ def _ticks(
     elif pause.paused(ctx.conn) is not None:
         # Paused before the loop started: hold the first tick as a wait already due holds.
         woken = _wait(
-            console, ctx, stop, clock(), sleep=sleep, clock=clock, keys=keys, log=log, each_step=settings.apply
+            console,
+            ctx,
+            stop,
+            clock(),
+            sleep=sleep,
+            clock=clock,
+            keys=keys,
+            asked=settings.asked.take,
+            log=log,
+            each_step=settings.apply,
         )
         _log_woken(log, woken, seen=0, since=None, read_at=None)
         woken_by = woken or "start"
@@ -409,6 +429,7 @@ def _ticks(
             wake=wake,
             earliest=started + _gap_seconds(ctx),
             keys=keys,
+            asked=settings.asked.take,
             log=log,
             each_step=settings.apply,
         )
@@ -465,7 +486,7 @@ def _defer(
     clock: Callable[[], float],
     log: logs.TickAdapter,
 ) -> Woken | None:
-    """Wait `seconds` before the first tick. The operator's acts or `TICK_NOW_KEY` end it early, as between ticks.
+    """Wait `seconds` before the first tick. The operator's acts or a tick asked for end it early, as between ticks.
 
     Returns:
         What ended it early, if anything did.
@@ -486,6 +507,7 @@ def _defer(
         wake=lambda: _operator_acted(settings, seen, since),
         earliest=started + _gap_seconds(ctx),
         keys=keys,
+        asked=settings.asked.take,
         log=log,
         note="first tick in ",
         each_step=settings.apply,
@@ -509,6 +531,8 @@ def _log_woken(
         log.info("a run ending ended the wait", extra={"after": read_at})
     elif woken == "key":
         log.info("the operator asked for a tick now")
+    elif woken == "web":
+        log.info("the operator asked for a tick now", extra={"channel": "web"})
 
 
 def _tick(ctx: Context, *, dry_run: bool, log: logs.TickAdapter) -> tick.Outcome:
@@ -553,6 +577,7 @@ def _wait(
     wake: Callable[[], Woken | None] = lambda: None,
     earliest: float = 0.0,
     keys: Callable[[], str] | None = None,
+    asked: Callable[[], bool] = lambda: False,
     log: logs.TickAdapter,
     note: str = "next tick in ",
     each_step: Callable[[], None] = lambda: None,
@@ -560,10 +585,10 @@ def _wait(
     """Wait until `clock()` reaches `deadline`, drawing a countdown, or less if a stop is requested.
 
     Once `wake()` names a reason, the wait ends at `earliest` instead, or at once if that has passed: an operator
-    message or a run ending runs the next tick sooner. `TICK_NOW_KEY` among `keys()` ends it at once, with no floor:
-    the operator asked for this tick, as they could with `canopy tick`. While the loop is paused, the wait does not end
-    at its deadline but holds until the pause is lifted; `PAUSE_KEY` pauses and resumes. `each_step` runs first at
-    every step, as a reload does.
+    message or a run ending runs the next tick sooner. `TICK_NOW_KEY` among `keys()`, or `asked()` saying the web UI
+    asked for a tick, ends it at once, with no floor: the operator asked for this tick, as they could with
+    `canopy tick`. While the loop is paused, the wait does not end at its deadline but holds until the pause is lifted;
+    `PAUSE_KEY` pauses and resumes. `each_step` runs first at every step, as a reload does.
 
     Returns:
         What ended the wait early, if anything did.
@@ -575,7 +600,10 @@ def _wait(
             pressed = keys() if keys is not None else ""
             _toggle_pause(ctx, pressed, log)
             if TICK_NOW_KEY in pressed.lower():
+                asked()  # one tick for both: a web request this wait would take is the same ask
                 return "key"
+            if asked():
+                return "web"
             held = pause.paused(ctx.conn)
             remaining = deadline - clock()
             if remaining <= 0 and held is None:

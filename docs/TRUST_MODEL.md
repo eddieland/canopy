@@ -543,7 +543,8 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, make and end a review
   request on a PR as `canopy start URL --review` and `canopy stop URL` do, pause and resume the loop as
   `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, ask for, skip,
-  or approve a ticket's plan as `canopy plan` does, and ask the loop to read its config files again as SIGHUP does.
+  or approve a ticket's plan as `canopy plan` does, ask the loop to read its config files again as SIGHUP does, and
+  ask it for a tick now as `t` at its terminal does.
   Beyond the CLI's verbs it writes two things, both the operator's own words on a plan (DESIGN §25): an edit of a
   plan's file, saved as the operator's own editor would, operator-only and never through a link, only over the
   ticket's current plan, never while a plan run for it is running, and never over a file that changed since the
@@ -561,6 +562,8 @@ on it, so a local service on another port that the operator's browser visits rec
 read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session
 cannot be ended alone before its 30 days: a new secret ends them all. Plain HTTP on a private address can be read on
 the network (D076), transcripts included: a secret a worker's tool printed into its log is then on the network too.
+Tick now, asked again and again, runs the overseer back to back, past `loop.min_gap_minutes`, as `t` held down at the
+loop's terminal would.
 
 ## 6. What canopy must never do
 
