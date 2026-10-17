@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import {
     createMemoryHistory,
     createRootRoute,
@@ -48,29 +48,34 @@ async function renderBuddy(at: '/attention' | '/settings') {
     return router
 }
 
-// The tip Sprig's bubble says.
-function said(tip: string) {
-    return screen.queryByText(tip)
+// The tip Sprig's bubble shows, or null while it is hidden: a hidden bubble keeps its last tip, to hold its room.
+function shown(tip: string) {
+    const bubble = screen.getByTestId('buddy-tip')
+    return bubble.classList.contains('invisible') ? null : within(bubble).queryByText(tip)
 }
 
 describe('Buddy', () => {
-    it('opens on a tip about the page shown, and offers the next on Another tip or a click on Sprig', async () => {
+    it('opens on no tip, offers one about the page shown on a click on Sprig, the next on Another tip', async () => {
         await renderBuddy('/attention')
-        expect(said(tipFor('/attention', 0, NOW))).not.toBeNull()
-
-        fireEvent.click(screen.getByRole('button', { name: 'Another tip' }))
-        expect(said(tipFor('/attention', 1, NOW))).not.toBeNull()
+        expect(shown(tipFor('/attention', 0, NOW))).toBeNull()
 
         fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
-        expect(said(tipFor('/attention', 2, NOW))).not.toBeNull()
+        expect(shown(tipFor('/attention', 1, NOW))).not.toBeNull()
+
+        fireEvent.click(screen.getByRole('button', { name: 'Another tip' }))
+        expect(shown(tipFor('/attention', 2, NOW))).not.toBeNull()
     })
 
-    it("starts a new page at that page's own first tip", async () => {
+    it('keeps a tip to the page it was offered on, and offers the next about the page turned to', async () => {
         const router = await renderBuddy('/attention')
-        fireEvent.click(screen.getByRole('button', { name: 'Another tip' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
 
         await act(() => router.navigate({ to: '/settings' }))
-        expect(said(tipFor('/settings', 0, NOW))).not.toBeNull()
+        expect(shown(tipFor('/attention', 1, NOW))).toBeNull()
+        expect(shown(tipFor('/settings', 1, NOW))).toBeNull()
+
+        fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
+        expect(shown(tipFor('/settings', 2, NOW))).not.toBeNull()
     })
 
     it('turns itself off, as Settings does, when told not to show tips again', async () => {
