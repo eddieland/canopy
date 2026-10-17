@@ -231,6 +231,18 @@ def test_start_with_plan_refuses_a_ticket_with_a_branch(
     assert conversation.start_of(conn, KEY) is None
 
 
+def test_start_with_plan_refuses_while_a_plan_run_is_running(
+    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    approve_policy(canopy_env)
+    assert dispatch_in_tick(conn, *PLAN).code == 0
+    running = last_run(conn)["id"]
+    capsys.readouterr()
+    assert operator("start", KEY, "--plan") == 1
+    assert f"start refused (bad_plan): plan run {running} for {KEY} is running" in capsys.readouterr().err
+    assert conversation.start_of(conn, KEY) is None
+
+
 def test_grant_plan_raises_the_tickets_plan_limit(
     canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
 ) -> None:
