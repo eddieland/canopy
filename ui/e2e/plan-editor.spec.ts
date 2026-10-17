@@ -266,6 +266,37 @@ test.describe('with the comments under the plan', () => {
         await expect(page.locator('.plan-margin[data-aligned]')).toHaveCount(0)
     })
 
+    test('a comment being written floats under its passage, and the page stays where it is', async ({ page }) => {
+        await select(page, 'iter_rows()')
+        const scrolled = await page.evaluate(() => globalThis.scrollY)
+        await page.keyboard.press('ControlOrMeta+Alt+m')
+        const float = page.getByTestId('plan-float')
+        const form = float.getByRole('form', { name: 'Comment' })
+        await expect(form.getByRole('textbox')).toBeFocused()
+        const passage = await plan(page).getByText('iter_rows()').first().boundingBox()
+        const box = await float.boundingBox()
+        expect(box?.y).toBeGreaterThan((passage?.y ?? 0) + (passage?.height ?? 0))
+        expect(box?.y).toBeLessThan((passage?.y ?? 0) + (passage?.height ?? 0) + 24)
+        expect(await page.evaluate(() => globalThis.scrollY)).toBe(scrolled)
+        await page.keyboard.type('Why not rows()?')
+        await form.getByRole('button', { name: 'Comment' }).click()
+        await expect(float).toBeHidden()
+        await expect(comments(page).filter({ hasText: 'Why not rows()?' })).toHaveCount(1)
+        await expect(plan(page)).toBeFocused()
+    })
+
+    test('a passage clicked opens its thread over the plan, not down in the list, and Escape closes it', async ({
+        page,
+    }) => {
+        await plan(page).locator('[data-thread=sample-2]').click()
+        const float = page.getByTestId('plan-float')
+        await expect(float.getByRole('article')).toContainText('name the ticket')
+        await expect(comments(page).filter({ hasText: 'name the ticket' })).toHaveCount(1)
+        await page.keyboard.press('Escape')
+        await expect(float).toBeHidden()
+        await expect(comments(page).filter({ hasText: 'name the ticket' })).toHaveCount(1)
+    })
+
     test('a comment shows its passage in the plan, clear of the toolbar', async ({ page }) => {
         const card = comments(page).filter({ hasText: 'proxy in front' })
         await card.scrollIntoViewIfNeeded()
