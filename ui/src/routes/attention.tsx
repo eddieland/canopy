@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
+import { FileText } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
@@ -25,6 +26,7 @@ import { Chip, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
+import { Button } from '@/components/ui/button'
 import { WorkingNow } from '@/components/working-now'
 import { answered } from '@/lib/acknowledged'
 import { bySeverity, severity } from '@/lib/attention'
@@ -243,13 +245,28 @@ function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
             {item.finding && item.chore !== null ? (
                 <FindingHead item={item} chore={item.chore} done={done} />
             ) : (
-                <Head item={item} done={done} />
+                <Head item={item} done={done} action={<OpenPlan item={item} />} />
             )}
             {item.ticket_key !== null && <Thread ticketKey={item.ticket_key} />}
             {item.chore !== null && <ChoreThread name={item.chore} />}
             {item.pr !== null && <PullRequestLimits url={item.pr} />}
             {item.ticket_key === null && item.chore === null && item.pr === null && <NothingToAnswer />}
         </Panel>
+    )
+}
+
+/** For a plan waiting on the operator, the link to its page, where it is read and decided (DESIGN §25); else none. */
+function OpenPlan({ item }: { item: AttentionItem }) {
+    if (item.reason !== 'plan_review' || item.ticket_key === null) {
+        return null
+    }
+    return (
+        <Button asChild size="sm">
+            <Link to="/tickets/$key/plan" params={{ key: item.ticket_key }}>
+                <FileText />
+                Open plan
+            </Link>
+        </Button>
     )
 }
 

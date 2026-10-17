@@ -20,7 +20,8 @@ memory, and do not upgrade in passing.
   elsewhere. A control Radix has a primitive for uses its wrapper, never hand-written ARIA state (`DESIGN.md`).
 - TanStack Router (file-based, `src/routes/`) and TanStack Query.
 - Tiptap on ProseMirror for the plan editor alone (D120): only `src/lib/plan-*.ts` and
-  `src/components/plan-editor.tsx` import it.
+  `src/components/plan-editor.tsx` import it, and only the pages that show a plan load it: a ticket's plan page and
+  the sample editor, never the ticket's page, whose plan card does not import it.
 - Shiki for a review's diff alone (D121): only `src/lib/highlight.ts` and `src/lib/languages.ts`, its grammars,
   import it, and only on demand, each grammar its own chunk.
 - jsdiff (`diff`) for a plan's word diff alone: only `src/lib/plan-diff.ts` imports it.

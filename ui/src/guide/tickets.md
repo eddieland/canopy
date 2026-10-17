@@ -36,7 +36,8 @@ and its branches. Below:
 - **Runs**: every run on the ticket, each linking to its transcript.
 - **Decisions**: what each tick decided about the ticket, and why, in the overseer's words. A `refused` decision names
   the guard that stopped it, and an `attention` decision the reason it reached your list.
-- **Plan**, when the ticket has or needs one. When a plan waits on your approval, it leads the page. See [Plans](plans).
+- **Plan**, when the ticket has or needs one: a card saying where the plan stands, with **Open plan**, which opens the
+  plan on its own page. When a plan waits on your approval, the card leads the page. See [Plans](plans).
 - **Memory**, while ticket notes are on: the notes its runs left for the runs after them. See [Memory](memory).
 
 A key canopy has never seen gets a page too, saying so, with the form to start it.
