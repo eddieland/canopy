@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
@@ -99,6 +101,24 @@ async function growToPage(page: Page): Promise<void> {
         throw new Error('the page has no viewport to grow')
     }
     await page.setViewportSize({ width: viewport.width, height: Math.max(viewport.height, Math.ceil(height)) })
+}
+
+/**
+ * Serves the guide's page `slug` with the words of `e2e/guide-specimen.md` in place of its own: placeholder Latin with
+ * every kind of block and link a page can have. The guide's screenshot is taken so, to hold its layout and not its
+ * words, which change in most UI pull requests and would otherwise rewrite the image in each, and conflict on it. A
+ * page's text is compiled into the app's script as a template literal after its slug, `` [`overview`,`...`] ``, and is
+ * swapped there as the script is served. The specimen's title, `Lorem ipsum`, shows that the swap took.
+ */
+export async function guideReadsSpecimen(page: Page, slug: string): Promise<void> {
+    const specimen = await readFile(new URL('guide-specimen.md', import.meta.url), 'utf8')
+    const text = new RegExp(`\\[\`${slug}\`,\`(?:\\\\[\\s\\S]|[^\`\\\\])*\``, 'u')
+    await page.route('**/assets/*.js', async (route) => {
+        const response = await route.fetch()
+        const script = await response.text()
+        const body = script.replace(text, () => `[\`${slug}\`,${JSON.stringify(specimen)}`)
+        await route.fulfill({ response, body })
+    })
 }
 
 /**
