@@ -23,7 +23,8 @@ The nav on the left lists them, most used first:
 ## The rail
 
 Beside the nav, on every page: a search box over the whole journal (press `/` to reach it), the runs working now, and
-what the last 24 hours and the last 30 days cost. Its foot names the version canopy serves and opens this guide.
+what the last 24 hours and the last 30 days cost. Its foot names the version canopy serves, which opens
+canopy's releases on GitHub, and opens this guide.
 
 ## Acting from the UI
 
