@@ -361,11 +361,11 @@ Controls:
 - A private ticket's worker (DESIGN §22) runs `canopy-worker-private`, whose definition canopy renders from the user
   config: every tool of the tracker's MCP server (`tracker.mcp_server`) is denied by a wildcard, then only
   `tracker.read_tools` are allowed by name, so a write tool missing from the list fails closed; the tracker CLIs canopy
-  knows (`gh`, `acli`, `jira`) are denied in its bash rules, and other MCP tools by name as for `canopy-worker`
-  (D084). A run is refused where the worktree's OpenCode config names any of that server's tools, since a repository
-  rule merged after canopy's could reopen one. Its prompt says to write nothing to the ticket, and its report and
-  question go to the journal, not the tracker. The journal holds the operator's replies and the workers' reports,
-  under the operator-only state directory (T2).
+  knows (`gh`, `acli`, `jira`) are denied in its bash rules but for `gh pr view`, which reads a PR and never the
+  ticket; and other MCP tools are denied by name as for `canopy-worker` (D084). A run is refused where the worktree's
+  OpenCode config names any of that server's tools, since a repository rule merged after canopy's could reopen one.
+  Its prompt says to write nothing to the ticket, and its report and question go to the journal, not the tracker. The
+  journal holds the operator's replies and the workers' reports, under the operator-only state directory (T2).
 - The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
   the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
   notification event carries a mirrored comment, and only a private ticket's own worker reads them, in its prompt.
