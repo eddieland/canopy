@@ -42,36 +42,28 @@ cwd = "~/src/build-tools"
 workspaces = ["acme"]     # optional; default every workspace
 ```
 
-- A chore name matches `[a-z][a-z0-9-]*`.
-- `prompt` (required) is the operator's file, absolute or starting with `~` like every `paths.*` value.
-  `examples/chores/build-health.md` is one to start from: it checks CI through the GitHub MCP server's read tools, so
-  it runs under the shipped `canopy-chore`. `examples/chores/README.md` lists more chores to write, and what not to.
+- `prompt` (required) is the operator's file. `examples/chores/` has one to start from and ideas for more.
 - `cmd` follows §12 (`{prompt}` exactly once, no shell); default `runtime.chore_cmd`. A chore using the operator's own
   tools needs its own agent definition (below), so `cmd` is usually set.
 - `every_minutes`, at least 15, is the shortest time between two run starts. A guard, not a schedule.
-- `days`, `hours`, and `timezone` (optional) say when a run may start, checked in code. `days` lists `mon` to
-  `sun`, empty for every day; `hours` is `HH:MM-HH:MM`, ending after it starts on the same day (`24:00` is the end
-  of the day); `timezone` is an IANA name, by default the machine's local time. They bound only a run's start: one
-  running when the window closes runs to its end or timeout.
-- `when` (optional) is plain language for the overseer: when a run is worth it, pointless, or urgent. Without it the
-  overseer runs a chore whenever due. Being operator-written, it is an instruction; nothing a chore reads is. Clock
-  times belong in `days` and `hours`, which cost no judgment and no `wait` decision every tick.
-- `timeout_minutes` defaults to 15. `cwd`, absolute or starting with `~`, defaults to `<state_dir>/chores/<name>/`,
-  created readable only by the operator. The shadowing check (§13) covers `cwd` and every directory above it before
-  the agent starts: OpenCode config there that defines one of canopy's agents makes the run `crashed`.
-- `workspaces` names workspaces by their map's `[workspace] name` (§18). Empty (the
-  default) means every workspace whose loop reads the file the chore is in: every workspace, for the user file, and
-  its own, for a workspace's private file (§12). A chore in two workspaces runs in each, each with its own journal.
-  `[chores]` comes whole from the last file that sets it, so a private file's chores replace the user file's.
+- `days`, `hours` (within one day), and `timezone` (default the machine's) are optional and say when a run may start,
+  checked in code. A run still going when the window closes runs to its end or timeout.
+- `when` (optional) is plain language for the overseer: when a run is worth it, pointless, or urgent; without it a
+  chore runs whenever due. Being operator-written, it is an instruction; nothing a chore reads is. Clock times belong
+  in `days` and `hours`, which cost no judgment and no `wait` decision every tick.
+- `timeout_minutes` defaults to 15. `cwd` defaults to a private directory per chore under the state directory. The
+  shadowing check (§13) covers `cwd` and every directory above it: OpenCode config there that defines one of canopy's
+  agents makes the run `crashed`.
+- `workspaces` names workspaces (§18); empty means every workspace whose loop reads the file the chore is in. A chore
+  in two workspaces runs in each, journaled in each. `[chores]` comes whole from the last file that sets it, so a
+  private file's chores replace the user file's.
 
 ### Off unless configured
 
-- No `[chores.*]` tables: the state block has no `chores` key (the overseer prompt skips its chore paragraph), no chore
-  decisions are recorded, and `canopy chore run` refuses as `unknown_chore`. Ticket handling is unchanged.
-- `capacity.max_chores = 0` turns every chore off the same way without deleting any.
-- Deleting a chore's table turns it off. Only configured chores reach the attention list, so its findings and
-  `chore_failed` item go at the next render and are notified as resolved (§14). Its `chore_runs` rows stay.
-- Chores never affect what the overseer does with tickets: they cannot cause or prevent a dispatch.
+With no `[chores.*]` tables, or `capacity.max_chores = 0`, the state block has no `chores` key, no chore decision is
+recorded, and `canopy chore run` refuses as `unknown_chore`. Deleting a chore's table turns it off: its findings and
+`chore_failed` item leave the attention list at the next render and are notified as resolved (§14). Chores never affect
+what the overseer does with tickets: they cannot cause or prevent a dispatch.
 
 ### Agent definitions and tooling
 
@@ -91,22 +83,16 @@ permission:
     "buildq *": allow        # the operator's read-only CLI for the build queue
 ```
 
-The operator installs the tools, on `PATH` (`uv tool install`) or in a checkout `cwd` points at. CI credentials belong
-to the tools or the runtime's MCP servers (§4, principle 5); canopy never sees them and knows nothing of Jenkins or any
-CI system.
+The operator installs the tools. CI credentials belong to the tools or the runtime's MCP servers (§4, principle 5);
+canopy never sees them and knows nothing of any CI system.
 
 ### Delegation
 
-- The state block's `chores` lists per configured chore: name, `every_minutes`, `when`, `due_at` (earliest time the
-  `not_due` and `outside_hours` guards allow a run: `every_minutes` after the latest start, moved to when the window
-  next opens), whether running, latest run (id, status, start, end, summary), and open findings (id, title,
-  link) from its latest `ok` run, which a later non-`ok` run does not replace.
-- Each tick the overseer decides each chore past `due_at` and not running. It runs it with
-  `canopy chore run <NAME> [--context '<text>']`, or records `canopy chore wait <NAME> --rationale "<text>"` when
-  `when` says not now. Chores not due need nothing.
-- `--context` follows §8: at most 2000 characters pointing at what to look at, never quoting untrusted text. Empty
-  renders as "None."
-- Findings inform only decisions about the chore, never about tickets (see Open).
+The state block lists each configured chore with its `when`, when it is next due, whether it is running, its latest
+run, and its open findings. Each tick the overseer decides each chore that is due and not running: `canopy chore run
+<NAME> [--context '<text>']`, or `canopy chore wait <NAME> --rationale "<text>"` when `when` says not now. `--context`
+follows §8: bounded, pointing at what to look at, never quoting untrusted text. Findings inform only decisions about
+the chore, never about tickets (see Open).
 
 `canopy chore run` requires `CANOPY_TICK_ID` like `dispatch` (D020) and refuses, recording `refused:<guard>`, on the
 first of:
@@ -117,28 +103,19 @@ first of:
 - `outside_hours`: now is outside the chore's `days` and `hours`, in its `timezone`.
 - `chore_capacity`: `capacity.max_chores` chore runs are running.
 
-A dry run checks the same guards, counting chores it already ran as running, records `dispatch:chore` with rationale
-`dry run: not dispatched` or the refusal, and starts nothing (D036). A live run's rationale is `chore run <id>` plus
-any context. `canopy chore wait` refuses an unconfigured chore and records nothing. Chore decisions (`dispatch:chore`,
-`wait`, `refused:<guard>`) are `decisions` rows with the chore in the `chore` column and no ticket key. `dispatch.lock`
-serializes chore runs with dispatches.
+A dry run checks the same guards and starts nothing (D036). `canopy chore wait` refuses an unconfigured chore. Chore
+runs start under the dispatch lock.
 
 ### Runs
 
-`canopy chore run` inserts a `chore_runs` row, renders the prompt, and spawns `python -m canopy _chore <run_id>`
-detached, like `_run` (§8 step 4). `_chore` claims the run by pid, drops `CANOPY_TICK_ID`, runs the command in `cwd`
-with the timeout, records the agent's pid, parses the result, and closes the row. Output goes to
-`<state_dir>/chore-runs/<name>/<run_id>.log`. No lease, branch, or push, so nothing to return or verify. Run files are
-kept by chore, and out of `<state_dir>/chores/<name>/`: that is the agent's working directory, which a sandbox lets it
-write (§24), and its own log and prompt are not its to read back or rewrite. A run's prompt is found beside
-the log its row names, so a run started before this layout reads its prompt where it was written.
+A chore run starts detached, as a worker does (§8 step 4), drops `CANOPY_TICK_ID`, and runs the command in `cwd` with
+the timeout. No lease, branch, or push, so nothing to return or verify. Its log and prompt are in
+`<state_dir>/chore-runs/<name>/`, not in its working directory, which a sandbox lets it write (§24): its own log and
+prompt are not its to read back or rewrite.
 
-The prompt is the operator's file plus a generated `## Run` section holding one JSON object: chore name, current time,
-run id, the overseer's context, the operator's notes (below), the operator's notice to workers in force (`notice`, null
-without one, §8), the latest ended run (id, status, end time, summary), the latest `ok` run's open findings (id, title,
-link), so ids can be reused, and the result contract. A chore hears the notice there, in the harness's section, which
-the operator's file cannot drop, so a chore needs no placeholder for it. It is written to
-`<state_dir>/chore-runs/<name>/<run_id>.prompt`, readable only by the operator.
+The prompt is the operator's file plus a `## Run` section canopy generates: the time, the overseer's context, the
+operator's notes (below) and notice to workers (§8), the latest run, the open findings so ids can be reused, and the
+result contract. The notice is in canopy's section, which the operator's file cannot drop.
 
 Result contract, one JSON line, last line of the agent's text (§13):
 
@@ -148,105 +125,70 @@ Result contract, one JSON line, last line of the agent's text (§13):
 ```
 
 - `ok`: the check ran; no findings means nothing needs a human. `failed`: it could not check, and the summary says why.
-- A finding's `id` is stable across runs for the same problem, matches `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, at most 200
-  characters, unique within a run. `title` is one line cut at 200, `detail` cut at 2000, `link` absent or a plain
-  `https://` URL of at most 500. `summary` is cut at 2000. At most 20 findings.
+- A finding's `id` is stable across runs for the same problem and unique within a run. Text is cut to bounds, `link`
+  is absent or a plain `https://` URL, and at most 20 findings are kept.
 - Validated with pydantic (D026). Anything else is `unknown`, with no findings recorded.
 
-`chore_runs` status is `running`, `ok`, `failed`, `unknown`, `timeout`, or `crashed`. Reconcile (§6 step 3) treats
-them like worker runs: a dead `_chore` pid gets the agent's process group killed and the run `crashed`. Chore runs do
-not count against `max_workers`.
+Reconcile (§6 step 3) treats chore runs like worker runs: one whose process is gone has its agent killed and ends
+`crashed`. Chore runs do not count against `max_workers`.
 
 ### Notes from the operator
 
-`canopy reply chore:<NAME> '<text>'`, or the note form on the chore's page in the web UI (§22), records a note to a
-chore: a message on its subject (§22), from the operator, refused `unknown` for a chore not defined for this workspace
-It is how the operator answers a finding without editing the prompt file: "leave out flaky/checkout/test_retry until
-2026-10-15, the fix is merging".
+`canopy reply chore:<NAME> '<text>'`, or the web UI (§22), records a note to a chore: how the operator answers a
+finding without editing the prompt file ("leave out flaky/checkout/test_retry until 2026-10-15, the fix is merging").
 
-- Every later run's `## Run` section, a try's included, carries the latest 10 notes as `operator_notes` (id, time,
-  text), oldest first. The prompt tells the agent to follow them as it follows the operator's file, a later note
-  winning over an earlier one. They are the operator's words, so they are instructions; the overseer's context is not.
-- Nothing clears a note, since one meant "until" a date must outlast a run; it falls out after 10 newer ones. A note
-  saying "until" a date is the agent's to compare
-  against the run's `now`. To take one back, write a newer note.
-- Notes reach neither the overseer's state block nor the attention list, and do not wake the loop.
-- `canopy show chore:<NAME>` lists them after the open findings, and the web UI's chore page beside them.
+- Every later run, a try's included, carries the latest 10, oldest first, a later one winning. They are the
+  operator's words, so they are instructions; the overseer's context is not.
+- Nothing clears a note, since one meant "until" a date must outlast a run; the agent compares the date. It falls out
+  after 10 newer ones. To take one back, write a newer note.
+- Notes reach neither the overseer nor the attention list, and do not wake the loop.
 
 ### Dismissing a finding
 
-`canopy dismiss chore:<NAME> <ID>`, or Dismiss on the finding in the web UI (§22), keeps one open finding off the
-attention list while the chore goes on reporting it (asked for by the operator, 2026-10-13: a note changes what later
-runs are told, not what the latest run reported, so a finding stayed listed until a run left it out).
+`canopy dismiss chore:<NAME> <ID>`, or the web UI (§22), keeps one open finding off the attention list while the chore
+goes on reporting it. A note changes what later runs are told, not what the latest run reported.
 
-- A dismissal covers the finding's unbroken sequence of `ok` runs (its age, below): it holds while later runs report
-  the id, and is spent once an `ok` run leaves it out, so a finding that clears and comes back is listed and notified
-  again. Nothing has to be cleaned up, and a dismissal never hides a recurrence the operator has not seen.
-- It changes what the operator is shown, nothing else: the chore's prompt still carries the finding so its id is
-  reused, the overseer's state block still lists it, and `canopy show chore:<NAME>` and the chore's page list it marked
-  dismissed. Leaving the list, it is notified as resolved and marked so: `- chore:<name> <id> (dismissed)`, and
-  `dismissed: true` in the `json` format (§20). To have the chore stop reporting it, write a note.
-- `attention.md` is rewritten at once, from the CLI and the web UI alike, rather than at the next tick; notifications
-  still go at the next tick, with the tick's. `canopy status` counts each chore's dismissed findings on its line.
-- `--undo`, or List again on the chore's page, takes it back. Dismissing it again records the time anew.
-- Refused `unknown` for a chore not defined for this workspace or a finding it does not have open (with `--undo`, one
-  not dismissed), `bad_finding` for an id no finding can have, and `inside_run` as `reply` is: the overseer and
-  agents cannot hide a finding from the operator. A row in `finding_dismissals` per chore and finding id, with its
-  time and channel.
+- A dismissal holds while later `ok` runs report the id and is spent once one leaves it out, so a finding that clears
+  and comes back is listed and notified again. Nothing needs cleaning up, and a dismissal never hides a recurrence the
+  operator has not seen.
+- It changes only what the operator is shown: the chore's prompt and the overseer's state block still carry it, and
+  `canopy show` and the web UI list it marked. Leaving the list, it is notified as resolved, marked dismissed (§20).
+  To have the chore stop reporting it, write a note. `--undo` takes it back.
+- `attention.md` is rewritten at once; notifications go at the next tick.
+- Refused `unknown` for a finding the chore does not have open, `bad_finding` for an id no finding can have, and
+  `inside_run` as `reply` is: the overseer and agents cannot hide a finding from the operator.
 
 ### Trying a chore
 
 `canopy chore try <NAME> [--context '<text>'] [--no-record]` is the operator's, for writing a chore and for running one
-now. It runs the chore in the foreground, in the `canopy chore try` process itself, through the same code as `_chore`:
-its command in its `cwd` with its timeout and the shadowing check, its result line validated. It prints the agent's
-text, its stderr and exit code, the validated result, what it cost when the runtime reported it, and the status, and
-exits 0 only on `ok`.
+now. It runs the chore in the foreground through the same code as a delegated run, prints what the agent said and the
+result, and exits 0 only on `ok`.
 
-- It is a real run. It inserts a `chore_runs` row with no tick (`tick_id` NULL), writes its prompt and log files, and
-  closes the row as `_chore` does, so its findings become the open findings, a failure raises `chore_failed`, sinks
-  get its `chore.ended`, its cost counts, and the chore's next run is `not_due` counting from it. It records no
-  decision, as there is no tick.
-- `--no-record` writes nothing: no `chore_runs` row, no prompt file, no notification, no cost. The prompt has `run_id`
-  null, and the next tick sees no change. It is for drafting a prompt of a chore with open findings, which a recorded
-  try of a half-written prompt would clear.
-- Operators expected a run they started by hand to show up where the loop's runs do; one that vanished read as lost.
-  So recording is the default, and leaving the journal alone is what the operator asks for.
-- No guard on time or capacity applies, so a chore being written does not wait out `every_minutes` or its hours, and
-  it works with `capacity.max_chores = 0`, so a chore can be written before the loop runs any; its findings reach the
-  attention list once `max_chores` is above 0 (Off unless configured, above). It still needs a chore defined for this
-  workspace.
-- A recorded try refuses `running` while a run of the chore is running, and takes `dispatch.lock` to insert its row,
-  so it never overlaps one the overseer started. `--no-record` does not refuse. Reconcile treats a try's row as any:
-  the `canopy chore try` process holds the run's lifelock, as `_chore` does (§6), so a try killed with SIGKILL is
-  marked `crashed` at the next tick.
-- It refuses `inside_run`, like `start` and `reply` (§22), and the agent sees `CANOPY_RUN_ID=chore-<run id>`, or
-  `chore-try` unrecorded. The overseer's bash allows only `canopy ...`, which cannot unset `CANOPY_TICK_ID`, so the
-  loop cannot try a chore.
+- It is a real run, recorded with no tick and no decision: its findings become the open findings, a failure raises
+  `chore_failed`, sinks hear of it, its cost counts, and the chore's next run is `not_due` counting from it. Recording
+  is the default because a run started by hand that did not show up where the loop's runs do read as lost.
+- `--no-record` writes nothing, so the next tick sees no change. It is for drafting the prompt of a chore with open
+  findings, which a recorded try of a half-written prompt would clear.
+- No time or capacity guard applies, so it works before `every_minutes` is up, outside hours, and with
+  `max_chores = 0` (its findings are listed once that is above 0). The chore must be defined for this workspace.
+- A recorded try refuses `running`, and records its run under the dispatch lock, so it never overlaps one the overseer
+  started. Reconcile treats it as any run: killed, it is marked `crashed` at the next tick.
+- It refuses `inside_run`, like `start` and `reply` (§22), and its own agent has `CANOPY_RUN_ID` set. The overseer's
+  bash allows only `canopy ...`, which cannot unset `CANOPY_TICK_ID`, so the loop cannot try a chore.
 
 ### Findings on the attention list
 
 - Open findings are those of the chore's latest `ok` run; one disappears when a later `ok` run omits its id (§14). A
-  non-`ok` run leaves them standing. One the operator dismissed (above) is not listed.
-- A latest run ended `failed`, `unknown`, `timeout`, or `crashed` also raises a `chore_failed` item, after reconcile
-  as for worker runs (§14), cleared by a later `ok` run.
-- `attention.md` gets a section per chore after the ticket items, headed `chore:<name>`, one line per finding: title,
-  link, age, id. Age runs from the first of the unbroken sequence of `ok` runs reporting the id. `canopy status` lists
-  them the same way plus a line per configured chore: running, or latest run and next due time.
-- Notification follows §14, keyed by chore and finding id. Line: `+ chore:<name> <id>: <title> <link>`. Its
-  `notifications` row holds `chore:<name>` in `ticket_key` (no ticket key has a colon, §17) and the id in `reason`. A
-  `chore_failed` row also holds `chore:<name>`; its line is `+ chore:<name> chore_failed: <detail>`.
+  non-`ok` run leaves them standing. A dismissed one is not listed.
+- A latest run ended `failed`, `unknown`, `timeout`, or `crashed` also raises `chore_failed`, after reconcile, cleared
+  by a later `ok` run.
+- `attention.md` and `canopy status` list them per chore, `chore:<name>`, after the ticket items, each finding aged
+  from the first of the unbroken `ok` runs reporting it. Notification follows §14, keyed by chore and finding id.
 
 ### Journal
 
-- `chore_runs`: id, tick id (NULL for a run `canopy chore try` recorded), chore name, pid of `_chore` (or of the
-  try), pid of the agent, started and ended times, status, `result_json` (validated result, text cut to limits), log
-  path, and what the runtime reported (§13): `session_id`,
-  `cost_usd`, and tokens by kind, as `runs` has them, NULL when it reported nothing. Separate from `runs`, whose
-  ticket, slot, lease, and branch columns do not apply. `canopy show chore:<NAME>` shows the latest run's session and
-  cost, the web UI's spend counts chore runs, and its chores pages show each chore's spend over the last day and 30
-  days (§22).
-- `decisions.chore`: nullable; a row carries a ticket key or a chore name, never both.
-- `finding_dismissals`: chore, finding id, when dismissed, and channel; at most one row per chore and finding.
+Each chore run (its tick, if any, its status, validated result, and cost, §13), kept apart from worker runs, which
+have a ticket, slot, and branch; decisions, each naming a ticket or a chore, never both; and dismissals.
 
 ### Trust model changes
 
@@ -270,12 +212,10 @@ Approved with M9:
   candidate, and opt-in per chore.
 - Whether a repository should offer chores operators opt into by name, as it offers its tracker query.
 - Whether a chore should get checkouts of the workspace's repositories, for a tool that reads files rather than
-  GitHub (today the operator keeps a checkout current and points `cwd` at it). The parts exist: a review's detached
-  checkout, linked from a private directory so no repository config loads (§21), and a desk for several (§18). Likely
-  first: the chore's table names the repositories, never the overseer, who still decides only when. The cost is
-  slots: a chore holding one in each repository it reads can block a dispatch, so it would count toward `capacity`
-  as a review does, and chores would then affect tickets, which they do not now. Also open: a chore in a workspace
-  whose map lacks one of its repositories.
+  GitHub (today the operator keeps a checkout current and points `cwd` at it). A review's private linked checkout
+  (§21) and a desk (§18) are the parts. Likely first: the chore's table names the repositories, never the overseer.
+  The cost is slots: a chore holding one could block a dispatch, so it would count toward `capacity` as a review does,
+  and chores would then affect tickets. Also open: a chore in a workspace whose map lacks one of its repositories.
 
 ## 20. Notifications
 
@@ -299,21 +239,18 @@ format = "text"
 ```
 
 - Sinks are private (§12), like every `notify.*` key (TRUST_MODEL T7).
-- A sink name matches `[a-z][a-z0-9-]*`. At most 5 sinks, since each can hold the tick lock for its timeout.
-- `cmd` follows `notify.cmd`'s rules (§12): split into argv, no shell, no `{prompt}`. It runs in the workspace root
-  with the message on stdin and a 60-second timeout. Exit 0 means delivered; anything else, timeout included, means
-  retry next tick. Stdout is ignored; the tail of stderr is logged.
+- At most 5 sinks, since each can hold the tick lock for its timeout.
+- `cmd` follows `notify.cmd`'s rules (§12): argv, no shell, no `{prompt}`. It gets the message on stdin and 60
+  seconds. Exit 0 means delivered; anything else, timeout included, means retry next tick.
 - `format` is `json` (the default) or `text`.
 - `events` lists the groups the sink receives: `attention`, `loop`, `runs`, `chores`, `reviews`. Default
   `["attention", "loop"]`.
-- `digest_every_minutes` is optional and at least 60 (Digest, below).
-- `batch_minutes` is optional, from 1 to 1440 (Batching, below).
+- `digest_every_minutes` (at least 60) and `batch_minutes` (1 to 1440) are optional (below).
 - `notify.cmd = "X"` is shorthand for a sink named `default` with `cmd = "X"`, `format = "text"`,
-  `events = ["attention"]`, no digest, and no batching. Setting both `notify.cmd` and `[notify.sinks.default]` is a
-  config error.
+  `events = ["attention"]`, no digest, and no batching, so switching between the two re-notifies nothing. Setting both
+  is a config error.
 
-An event is recorded only when some sink takes its group; with no `notify.cmd` and no sinks, publishing is §14
-without the notification.
+With no sink, publishing is §14 without the notification.
 
 ### Events
 
@@ -332,82 +269,54 @@ A closed set, written by the harness from the journal. Text fields are cut to th
 | `loop` | `loop.recovered` | the first `ok` tick after `loop.failing` | how many ticks failed |
 | `loop` | `loop.sink_failing` | a sink has failed 3 deliveries in a row | sink, the tail of its stderr |
 
-`summary` and `question` are cut at 300 characters, each PR URL at 500. `pr` is the run's first PR, `prs` every PR a
-joint run reported. In the `json` format a run's kind is `run_kind` (`kind` is the event's). `question` is set only for
-a `blocked` run; the needs-human label is not an attention item, so `run.ended` is how a sink hears of the question.
-`message` is the journal id of the message the run recorded (§22): its question for a `blocked` run, its report
-otherwise, so a channel can say what a reply answers.
+`summary` and `question` are cut at 300 characters, each PR URL at 500. `question` is set only for a `blocked` run;
+the needs-human label is not an attention item, so `run.ended` is how a sink hears of the question. `message` is the
+journal id of the message the run recorded (§22), so a channel can say what a reply answers.
 
-Attention is a diff of state per sink (§14): `notifications` has a `sink` column, so each sink hears of each open
-item once, and a sink that was down gets the net change. The other kinds are point events in an outbox table,
-`notify_events`, written in the transaction that records the fact: dispatch inserting the run; whatever closes a run's
-row (`_run`, or reconcile marking it `crashed`) or a chore run's (`_chore`, its reconcile); the publish step for
-`loop.*`. Ids never repeat (`AUTOINCREMENT`), so pruning cannot reuse an id a cursor passed. Each sink's cursor in
-`notify_sinks` is the last event id it delivered. `loop.failing` and `loop.sink_failing` are recorded once per
-streak.
-
-Because `notify.cmd` is the sink `default`, switching between the two re-notifies nothing. Without a `default` sink,
-its rows go at the first publish like any removed sink's, and each named sink hears of every open item once.
+Attention is a diff of state per sink (§14): each sink hears of each open item once, and a sink that was down gets the
+net change. The other kinds are point events in an outbox, written in the same transaction as the fact they report,
+and each sink keeps a cursor in it. `loop.failing` and `loop.sink_failing` are recorded once per streak.
 
 ### Delivery
 
-§6 step 7, after `attention.md` is written, for each sink in name order:
+§6 step 7, after `attention.md` is written, for each sink in turn:
 
-1. Gather the sink's attention diff if it takes `attention`, its events after its cursor in the groups it takes, and a
-   digest if one is due. If there is nothing, skip the sink, moving its cursor past events of groups it does not take.
-   If the sink is batching and nothing gathered is urgent, hold it: change nothing, and go to the next sink.
+1. Gather the sink's attention diff, its new events in the groups it takes, and a digest if one is due. If there is
+   nothing, or the sink is batching and nothing is urgent, go to the next sink.
 2. Render one message in the sink's format and run the command.
-3. On exit 0, record the diff in `notifications` for this sink, move the cursor to the newest event gathered, set the
-   digest time, and reset the failure count. Otherwise change nothing else, log `notify command failed` with the
-   sink's name, and count the failure; the third in a row records `loop.sink_failing` once, in the same transaction.
-   A sink that takes `loop` hears of its own failing when it recovers.
+3. On exit 0, record what the sink was told and move its cursor. Otherwise change nothing and count the failure; the
+   third in a row records `loop.sink_failing`, which the sink, if it takes `loop`, hears when it recovers.
 
-Bounds:
-
-- At most 20 attention lines and 20 events per message. The rest are counted in a closing line pointing at
-  `attention.md` and `canopy status`, and count as delivered.
-- Events over 24 hours old when a sink next succeeds are counted, not listed.
-- A new sink's cursor starts at the newest event (no backlog); its first delivery lists every open attention item.
-- A removed sink loses its `notify_sinks` and `notifications` rows at the next publish. Events every sink has passed
-  are deleted after 7 days, except the newest `loop.failing` or `loop.recovered`, kept to tell a week-long streak from
-  a new one. `loop.recovered` counts every failed tick of the streak.
-- Sinks run in turn under the tick lock: each hung sink delays the next tick by up to 60 seconds.
+Bounds: at most 20 attention lines and 20 events per message, the rest counted in a closing line pointing at
+`attention.md` and `canopy status`; events over 24 hours old when a sink next succeeds are counted, not listed. A new
+sink starts with no backlog, and its first delivery lists every open attention item. Delivered events are pruned
+after 7 days, but for what tells a long failing streak from a new one. Sinks run in turn under the tick lock, so each
+hung sink delays the next tick by up to 60 seconds.
 
 ### Batching
 
-A busy loop ticks often: a run ending wakes it `loop.min_gap_minutes` after the tick began (§6, default 1), so a burst
-of runs is a message every few minutes. A sink with `batch_minutes` sends at most one message per window, unless
-something needs the operator now:
+A busy loop ticks often (§6), so a burst of runs is a message every few minutes. A sink with `batch_minutes` sends at
+most one message per window, unless something needs the operator now:
 
-- After a delivery, the sink is batching for `batch_minutes`. What it gathers meanwhile is held: its cursor and the
-  attention it was told of stay where they were, so the first tick after the window gathers it all again, with what
-  happened since, and sends one message. A sink that has never delivered, or whose last delivery is older than the
-  window, sends at once, so the first message after a quiet spell is not late.
-- Urgent goes at once, with everything held: a new attention item, a `run.ended` whose status is `blocked` (its
-  question), a `plan.proposed`, which holds its ticket until the operator answers, `loop.failing`, and
-  `loop.sink_failing`. A resolved item, a run started or ended otherwise, a chore or
-  review ended, `loop.recovered`, and a digest wait.
-- A held message waits for a tick: it goes at the first one after its window, up to `loop.interval_minutes` later,
-  or longer once idle pacing stretches the wait (§6). Holding does not wake the loop, since a tick runs the overseer.
-- A failed delivery starts no window, and what was urgent stays urgent, so a retry is never held.
+- After a delivery, what the sink gathers is held until the window ends, then sent as one message. A sink with no
+  delivery inside the window sends at once, so the first message after a quiet spell is not late.
+- Urgent goes at once, with everything held: a new attention item, a `blocked` run's question, a `plan.proposed`,
+  `loop.failing`, and `loop.sink_failing`. Everything else waits.
+- A held message goes at the first tick after its window; holding does not wake the loop, since a tick runs the
+  overseer.
+- A failed delivery starts no window, so a retry is never held.
 
 ### Digest
 
-- A sink with `digest_every_minutes` gets a digest at its first delivery, then at the first delivery that long after
-  the previous one.
-- It covers the time since the previous digest (the first, one interval back), from the journal only:
-  ticks by status; runs started, by kind; runs ended, by status, with each `done` run's ticket and PR and each `blocked`
-  run's ticket; the open attention list, counted by reason, with the oldest item's age; the workers running now.
-- It is sent even when nothing happened ("24 ticks ok, nothing ran, nothing needs you"): a missing digest shows ticks
-  stopped, which canopy cannot report itself.
-- No model writes it. A report needing judgment is a chore (§19), reaching sinks as `chore.ended` (`chores` group).
+A sink with `digest_every_minutes` gets a digest at its first delivery and then every interval: since the previous
+one, ticks by status, runs started and ended (each `done` run's ticket and PR, each `blocked` run's ticket), the open
+attention list by reason, and the workers running now. It is sent even when nothing happened ("24 ticks ok, nothing
+ran, nothing needs you"): a missing digest shows ticks stopped, which canopy cannot report itself. No model writes
+it; a report needing judgment is a chore (§19).
 
 ### Formats
 
-`text` is lines for a person. Attention alone is exactly §14's message, so `notify.cmd` output is unchanged. Event
-lines, then digest lines, follow the attention lines, then the closing path line. Without attention changes a message
-starts `canopy: N events`, or `canopy digest` for a digest alone. Event lines start `>` for a run started, `<` for a
-run or chore run ended, `?` for a plan waiting on the operator, `!` for the loop's own events, `*` for a test.
+`text` is lines for a person. Attention alone is exactly §14's message, so `notify.cmd` output is unchanged.
 
 `json` is one object:
 
@@ -425,26 +334,20 @@ run or chore run ended, `?` for a plan waiting on the operator, `!` for the loop
  "text": "the same message in the text format"}
 ```
 
-`attention` is null for a sink that does not take it; `added` and `resolved` items also carry their `repo`, and a
-`resolved` item `dismissed`, true for a chore finding the operator dismissed rather than one whose cause is gone
-(§19). Each event carries its fields and `line` (its text-format line); the digest its counts and `lines`. Every
-ticket key, in `added` and `resolved`, an event's `ticket`, and the digest's `done` and `blocked`, has a `title` beside
-it: the
-ticket's title as it is at delivery (§13), or null before the overseer names it. It is for display, so a reader knows
-a ticket without looking its key up; `text` and `line` show the key alone, keeping §14's message as it was.
-`omitted` counts what the bounds left out. `version` changes only on an incompatible change; sinks ignore unknown
-fields. `text` serves a sink that only forwards a string.
+A `resolved` item says whether it was a chore finding the operator dismissed (§19). Every ticket key has the ticket's
+title beside it (§13), for display; the text format shows the key alone, keeping §14's message as it was. Each event
+and the digest carry their text lines too. `version` changes only on an incompatible change; sinks ignore unknown
+fields.
 
 Presentation is the sink's. The fields are the contract, and a sink that can show more than lines builds its own
-message from them in its channel's native form, as the Slack sink does with Block Kit; `line`, `lines`, and `text`
-are canopy's one rendering, for sinks that only forward a string and as a fallback. So the harness never learns a
-channel's markup, and a new event kind needs fields a sink can present, not only a line. A sink shows a kind it does
-not know by its `line`.
+message from them in its channel's native form, as the Slack sink does with Block Kit; the text lines are canopy's one
+rendering, for sinks that only forward a string and as a fallback. So the harness never learns a channel's markup, and
+a new event kind needs fields a sink can present, not only a line.
 
 ### The desktop sink
 
-`canopy-notify-desktop` is a script in canopy's own install (`canopy.notify.desktop`), stdlib only (D035). It runs only
-as a configured sink command, never inside the harness.
+`canopy-notify-desktop` ships with canopy, stdlib only (D035), and runs only as a configured sink, never inside the
+harness.
 
 ```toml
 [notify.sinks.desktop]
@@ -452,64 +355,41 @@ cmd = "canopy-notify-desktop"
 events = ["attention", "loop", "runs"]   # runs: a blocked worker's question arrives as run.ended
 ```
 
-- It reads a `json` message's `text` field, or a `text` message as is. Body: the lines without the closing path line,
-  at most 12 lines and 1000 characters. Title: `canopy`, or `canopy: <repository directory name>` from `json`.
-- Linux: `notify-send --app-name=canopy -- TITLE BODY`. macOS: `osascript` with a fixed script reading title and body
-  from its arguments. Neither is built into a shell command or script, so agent or org-member text runs nothing.
-- Exit 0 when the tool succeeded, 1 when it failed, 2 when it is not installed or stdin is empty.
+It shows the message's text, bounded, through `notify-send` on Linux or a fixed `osascript` script on macOS, passing
+title and body as arguments, never as a shell command or script, so agent or org-member text runs nothing.
 
 ### The Slack sink
 
-`canopy-notify-slack` is its own distribution, a uv workspace member (D041): `packages/canopy-notify-slack/`, module
-`canopy_notify_slack`, stdlib only (`urllib.request`, `json`), importing nothing from `canopy`. `canopy` depends on it
-and lists the `canopy-notify-slack` script in its `[project.scripts]`, so installing `canopy` puts it on `PATH`.
+`canopy-notify-slack` is its own program (§5), stdlib only, importing nothing from canopy, and installed with it. It
+posts one message per delivery, as Block Kit built from the `json` fields with the text as fallback.
 
-- It reads `json` on stdin, posts one message to a Slack incoming webhook, and exits 0 on 2xx, else 1 with Slack's
-  reply on stderr. A rate-limited post is retried next tick like any failure.
-- The webhook URL comes from a file: `--webhook-file PATH`, default `$XDG_CONFIG_HOME/canopy/slack-webhook`
-  (`~/.config/canopy/slack-webhook`). The file must be a regular file (checked before it is opened), belong to the
-  operator, be unreadable by group and others, and hold one `https://hooks.slack.com/` URL whose parsed host is that
-  host; otherwise the sink exits 2 saying which. The URL is never in canopy's config, argv, journal, or logs.
-- With `--channel ID` it posts with a token instead, for a workspace that disallows incoming webhooks or an app
-  serving several channels: `chat.postMessage` to `https://slack.com/api/`, the token
-  as a bearer header, `{"channel": ..., "text": ...}` as the body. The token comes from `--token-file PATH`, default
-  `$XDG_CONFIG_HOME/canopy/slack-token`, under the webhook file's checks, and must be one `xoxb-` bot token (a user
-  token acts as the operator with all its scopes). The channel must be an id or a name, `#?[A-Za-z0-9._-]{1,80}`.
-  Success is a 2xx reply whose JSON has `"ok": true`, since the Web API answers 200 to a refused post
-  (`not_in_channel`). The whole reply is parsed; only what a failure prints is cut, to 500 characters. `--token-file`
-  without `--channel`, or `--channel` with `--webhook-file`, is a usage error, exit 2. The token is never in canopy's
-  config, argv, journal, logs, or the sink's own messages; the channel is in argv, which is the sink's `cmd`.
-- With `--channel`, `--username NAME` and `--icon-emoji :CODE:` post under that name and emoji instead of the app's
-  (`username` and `icon_emoji` in the body), which needs the app's `chat:write.customize` scope. The name must be
-  printable, not blank, and at most 80 characters; the emoji one code, optionally with a skin tone
-  (`:wave::skin-tone-3:`). Either without `--channel` is a usage error, exit 2: an app's webhook ignores both.
-- Message: Block Kit built from the fields (Formats, above): a header with the repository directory name, a line of
-  counts, a section per attention item (ticket, reason, detail, and since when, as a Slack date in the reader's time
-  zone), the resolved items together, a section per event led by an emoji for its status (ticket, kind, run, its PRs,
-  summary, a blocked run's question quoted), and the digest as fields with its done and blocked runs. A ticket shows
-  as its key in bold, then its title when canopy sent one. At most Slack's
-  50 blocks, the last counting what was left out. The `text` the post also carries is the message as at most 45 lines,
-  which Slack shows in notifications and where blocks cannot be shown.
+- It posts to an incoming webhook whose URL is read from a file (default `~/.config/canopy/slack-webhook`). The file
+  must be a regular file of the operator's, unreadable by group and others, holding one `https://hooks.slack.com/`
+  URL; otherwise the sink refuses. The URL is never in canopy's config, argv, journal, or logs.
+- With `--channel` it posts with a bot token instead (`chat.postMessage`), for a workspace that disallows incoming
+  webhooks or an app serving several channels. The token file (default `~/.config/canopy/slack-token`) passes the
+  same checks and must hold an `xoxb-` bot token: a user token acts as the operator with all its scopes. A post counts
+  as delivered only when Slack's reply says `ok`, since the Web API answers 200 to a refused post. Like the URL, the
+  token is never in canopy's config, argv, journal, or logs, nor in the sink's own messages.
+- `--username` and `--icon-emoji`, with `--channel` only, post under a name and emoji of the operator's choosing
+  (scope `chat:write.customize`).
 - Journal text is escaped for Slack markup (`&`, `<`, `>`) and every text object is `verbatim`, so Slack parses no
-  `@here`, `@channel`, person, or channel name in it, and nothing can disguise a link. Each URL in it is made a link
-  that shows the URL itself; one holding `|`, which would take a label, stays text.
-- Setup: create a Slack app with an incoming webhook for one channel, write its URL to the file with mode 600, add the
-  `[notify.sinks.slack]` table, and run `canopy notify test slack`. With a token: give the app the `chat:write` bot
-  scope, install it, invite the bot to the channel, write its `xoxb-` token to the token file with mode 600, and set
-  `cmd = "canopy-notify-slack --channel C0123ABCD"`. For a name and icon of its own, add the `chat:write.customize`
-  scope and `--username canopy --icon-emoji :evergreen_tree:` to `cmd`.
+  `@here`, `@channel`, person, or channel name in it, and nothing can disguise a link. A URL is shown as itself; one
+  holding `|`, which would take a label, stays text.
+- Setup: a Slack app with an incoming webhook for one channel, its URL in the file with mode 600, the
+  `[notify.sinks.slack]` table, and `canopy notify test slack`. With a token: the `chat:write` bot scope, the bot
+  invited to the channel, its token in the token file with mode 600, and
+  `cmd = "canopy-notify-slack --channel C0123ABCD"`.
 
-Two checks keep the network out of the harness (as D015 keeps processes in `canopy.infra.procs`): ruff's banned-api
-rule (`TID251`) bans `urllib.request`, `http.client`, and `socket` everywhere in `src/canopy`, no exceptions, and
-`tests/canopy/test_layers.py` fails on any import of `canopy_notify_slack` from `src/canopy`. The harness runs the
-Slack sink only as a configured command.
+Lint keeps the network out of the harness, as D015 keeps processes in one module: `urllib.request`, `http.client`, and
+`socket` are banned everywhere in `src/canopy`, no exceptions, and so is any import of the Slack sink. The harness runs
+the Slack sink only as a configured command.
 
 ### Commands
 
-- `canopy notify test [SINK]` sends a `test` message to every sink, or one, now, outside any tick, and prints each
-  result. It changes no cursor or table, and refuses when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, so neither the
-  overseer nor a worker, review, or chore can page.
-- `canopy status` shows a line per sink: last delivery, consecutive failures and last error, events waiting.
+- `canopy notify test [SINK]` sends a test message now, outside any tick, and changes no delivery state. It refuses
+  when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, so neither the overseer nor a worker, review, or chore can page.
+- `canopy status` shows each sink's health.
 
 ### Two-way, later
 
@@ -556,17 +436,16 @@ A review is an adversarial read of one PR at one commit by a fresh agent run, wi
 told to assume the change is wrong until the code shows otherwise. It reports a verdict and its findings to canopy's
 journal, and posts nothing: no comment on the PR or the ticket, no GitHub review (D114). It never approves, requests
 changes, pushes, or merges. Human review stays the gate (§3). The operator reads reviews with `canopy review show`
-until the web UI shows them as a PR review of canopy's own (ROADMAP M32).
+and in the web UI.
 
 Three kinds of PR get reviews, and none needs a ticket:
 
 - **The loop's own PRs.** With `review.agent_prs` on, a ticket's PR is reviewed once its checks pass, before the
-  overseer asks a human for review. Findings go back to a worker through `resume`, which carries them in its prompt.
+  overseer asks a human for review. Findings go back to a worker through `resume`.
 - **PRs the operator names with `review.query`.** Reviewed and nothing else: the loop never pushes to them, fixes
   them, or opens a ticket for them. The review in the journal is the whole output, for the operator alone.
-- **PRs the operator asks for one at a time** (ROADMAP M42): `canopy start URL --review`, or the web UI's pull
-  requests page, for one review of a coworker's PR at its head, without writing a search into `review.query`
-  (Review requests, below). Reviewed as a `review.query` match is, and nothing else.
+- **PRs the operator asks for one at a time** (ROADMAP M42): one review of a coworker's PR at its head, without
+  writing a search into `review.query` (Review requests, below). Reviewed as a `review.query` match is.
 
 Why nothing is posted: a review on the PR speaks for the operator, in their name, to everyone who reads the PR, and
 an adversarial reader is wrong often enough that the operator wants to see its findings before anyone else does. Kept
@@ -580,7 +459,7 @@ Every review key is private (§12), except the per-PR limit, a shared policy the
 
 ```toml
 [review]
-agent_prs = true
+agent_prs = true           # default false
 query = 'repo:acme/api is:pr is:open author:@me -is:draft'
 low_impact = """Only docs, comments, or tests change; or one dependency moves by a patch version."""
 
@@ -598,44 +477,39 @@ max_reviews_per_day = 20   # review runs started in any 24 hours
 max_reviews_per_pr = 3     # shared; the repository may only lower it
 ```
 
-- `agent_prs` defaults to false. `query` is the VCS host's PR search syntax, empty by default. Reviews are on when
-  `max_reviews` is above 0 and either is set.
+- `query` is the VCS host's PR search syntax. Reviews are on when `max_reviews` is above 0 and `agent_prs` or `query`
+  is set.
 - `review.query` authorizes, unlike `tracker.query` (§17). Without an author filter it reviews other people's PRs in
   the operator's name; allowed, and the operator's choice (TRUST_MODEL §7). A review request authorizes the same way,
   for one PR.
 - `low_impact` is plain language for the reviewer, like a chore's `when`: which changes it may call `low`. Without it,
   the reviewer never reports `low`.
-- `review_cmd` follows the command template rules (§12). A different model from `worker_cmd` is recommended. To
-  sandbox it, prefix it with `canopy-sandbox review` (§24, docs/SANDBOX.md): that policy reads the
-  checkout through the run directory's link and writes none of it.
+- `review_cmd` follows §12. A different model from `worker_cmd` is recommended. To sandbox it, prefix it with
+  `canopy-sandbox review` (§24): that policy reads the checkout through the run directory's link and writes none of it.
 
 ### Off unless configured
 
-With no `[review]` table, neither `agent_prs` nor `query` set, and no open review request, or with
-`capacity.max_reviews = 0`, nothing about reviews reaches the overseer: no `reviews` key in the state block, §7's
-phase table unchanged, and every `canopy review run` refuses as `reviews_off`. A test holds this. An open request
-turns reviews on by itself, and once the last one ends they are off again (`core/review_requests.py`'s
-`reviews_on`). With `agent_prs` off the phase table is also unchanged, and a loop PR
-that `query` matches is reviewed like any other match: a review in the journal, no `resume`.
+With neither `agent_prs` nor `query` set and no open review request, or with `capacity.max_reviews = 0`, nothing about
+reviews reaches the overseer: no `reviews` in the state block, §7's phase table unchanged, and every
+`canopy review run` refuses as `reviews_off`. An open request turns reviews on until the last one ends. With
+`agent_prs` off, a loop PR that `query` matches is reviewed like any other match: a review in the journal, no `resume`.
 
 ### Running a review
 
 `canopy review run --pr URL --sha SHA [--ticket KEY] [--repo NAME] [--context '<text>']` requires `CANOPY_TICK_ID` like
-`dispatch` (D020). `URL` is the PR's `https://` URL, an opaque string the harness never parses. `SHA` is the full head
-commit the overseer read. `--ticket` links an agent PR to its ticket. The run records its purpose: `own` with
-`--ticket`, one of the loop's own PRs; `request` without, for a PR with the operator's open review request; and
-`query` otherwise, a `review.query` match. The harness cannot tell that a PR without a ticket matched the query, since
-the overseer runs the query; `query` means a review of a PR the loop does not own and the operator did not ask for by
-name. Only an `own` review's findings can go to a worker. Under the dispatch lock, it refuses, recording
-`refused:<guard>`, on the first of:
+`dispatch` (D020). `URL` is the PR's `https://` URL, an opaque string the harness never parses; `SHA` is the head
+commit the overseer read; `--ticket` links an agent PR to its ticket. The run records its purpose: `own` with
+`--ticket`; `request` for a PR with the operator's open review request; `query` otherwise. The harness cannot tell
+that a PR matched the query, since the overseer runs it; `query` means a PR the loop does not own and the operator did
+not ask for by name. Only an `own` review's findings can go to a worker. Under the dispatch lock, it refuses,
+recording `refused:<guard>`, on the first of:
 
 - `reviews_off`: see above.
 - `bad_pr`: `URL` is not a plain `https://` URL of at most 300 characters, `SHA` is not 40 or 64 lowercase hex
   characters, or `--ticket` is not a valid key (§17).
 - `unknown_repo`: no `--repo`, or one not in the map or with no clone. The slot comes from that repository's pool.
-- `not_ours`: `--ticket` names a ticket whose unit in that repository did not open `URL` (`ticket_units.pr_url`,
-  recorded from the worker that opened it). The overseer's ticket link is a claim, checked once here, so an `own`
-  review is of a PR the loop opened.
+- `not_ours`: `--ticket` names a ticket whose unit in that repository did not open `URL`. The overseer's ticket link
+  is a claim, checked here, so an `own` review is of a PR the loop opened.
 - `running`: a review of this PR is running, or, with `--ticket`, a worker run for that ticket is.
 - `reviewed`: a review of this PR at this commit ended `done`. The refusal names its verdict and impact.
 - `review_limit`: this PR has had `policy.max_reviews_per_pr` review runs, plus any the operator granted it with
@@ -644,40 +518,25 @@ name. Only an `own` review's findings can go to a worker. Under the dispatch loc
 - `review_capacity`: `capacity.max_reviews` review runs are running.
 - `capacity`: `max_workers` runs and review runs, together, are running.
 
-A dry run checks the same guards, counting reviews recorded in this tick as running, records `dispatch:review` with
-rationale `dry run: not dispatched; would review <SHA>`, and starts nothing (D036). Worker dispatches also count a
-running review toward `capacity` (§8).
+A dry run checks the same guards and starts nothing (D036). Worker dispatches also count a running review toward
+`capacity` (§8). Past the guards, a slot that cannot be leased refuses as `no_slot`, and a prompt that does not render
+as `bad_prompt`. The review then starts detached, as a worker does (§8 step 4), and:
 
-Once the guards pass, the command inserts a `review_runs` row, leases a slot with holder `canopy:review:<run_id>` (a
-failed lease deletes the row and refuses as `no_slot`), renders the prompt (`bad_prompt` if it does not), and spawns
-`python -m canopy _review <run_id>` detached, as dispatch spawns `_run` (§8 step 4). `_review`:
+1. Drops `CANOPY_TICK_ID`, as a worker run does.
+2. Checks out `SHA` detached in the slot and verifies `HEAD` is `SHA`, or ends `failed` (a PR in another repository
+   fails here). No branch is created. It deletes every symlink the commit tracks that resolves outside the checkout,
+   and keeps the commit's diff (The diff, below).
+3. Runs `review_cmd` in a private directory of canopy's, **not the checkout**, so the runtime loads no configuration
+   from the PR. The directory holds one link, `checkout`, to the slot, as a desk's links do (§18), and the shadowing
+   check (§13) covers it and the workspace root. Timeout `review_timeout_minutes`.
+4. Parses the result, then always removes its directory, never following the link, and returns the slot, on a signal
+   too (§8 step 6). Reconcile treats a dead review as a dead worker run: it kills the reviewer, removes the directory,
+   returns the slot, and marks the run `crashed`. A running review's lease is never returned as stale.
 
-1. Claims the run by pid and drops `CANOPY_TICK_ID`, as `_run` does.
-2. In the slot: `git fetch origin <SHA>`, `git checkout --detach <SHA>`, and checks that `HEAD` is `SHA`. A failure is
-   `failed` with a harness note (a PR in another repository fails here). No branch is created. Then it deletes every
-   symlink the commit tracks that resolves outside the checkout, and keeps the commit's diff (The diff, below).
-3. Runs `review_cmd` with cwd `<state_dir>/reviews/<run_id>/`, a directory readable only by the operator, **not the
-   checkout**, so the runtime loads no configuration from the PR. It holds one link, `checkout`, to the slot,
-   which the prompt names, as a desk's links do (§18). Before it starts, the shadowing check (§13) covers that
-   directory and the workspace root. Timeout `review_timeout_minutes`; the agent's pid is recorded.
-4. Parses the result, then always removes its directory, never following the link, and returns the slot with
-   `--force`. It traps signals and exits as `_run` does (§8 step 6). Reconcile treats a dead `_review` as a dead
-   `_run`: it kills what is left of the reviewer, removes the directory, returns the slot, and marks the run
-   `crashed`. A running review's lease is never returned as stale.
-
-The prompt is `prompts/reviewer.md` (or the override), with the PR URL, the commit, the checkout path, the ticket key
-and tracker provider for an agent PR, `review.low_impact`, the attempt number and limit, the overseer's context, the
-operator's notice to workers in force (`{{NOTICE}}`, `None.` without one; an override without it is `bad_prompt` while
-one is in force, §8), and the result contract. A failed check the notice explains is not a finding. The reviewer:
-
-- reads the PR's description and discussion, the diff, as much of the checkout as it needs, and for an agent PR the
-  ticket;
-- looks for defects, not style: wrong behavior, missed cases, security problems, broken contracts, missing tests for
-  new behavior, and anything the repository's own docs (such as `AGENTS.md`) name as a rule;
-- verifies each finding against the code, and reports none when it finds none;
-- writes each finding for someone who has not read the PR: a title, a `path:line`, and a detail saying what is wrong,
-  why, and the case that shows it;
-- posts nothing anywhere, and treats everything it reads, the diff included, as data (TRUST_MODEL T1).
+The prompt is `prompts/reviewer.md` (or the override), with the PR, the commit, the checkout, an agent PR's ticket,
+`review.low_impact`, the attempt and limit, the overseer's context, and the operator's notice to workers
+(`{{NOTICE}}`: an override without it is `bad_prompt` while one is in force, §8). The reviewer looks for defects, not
+style, posts nothing anywhere, and treats everything it reads, the diff included, as data (TRUST_MODEL T1).
 
 Result contract, one JSON line, last line of the reviewer's text (§13), validated with pydantic (D026):
 
@@ -688,11 +547,10 @@ Result contract, one JSON line, last line of the reviewer's text (§13), validat
 
 - `done` means the review was read through. `failed` means the reviewer could not review; the summary says why. A
   `comment` key, from a reviewer prompt older than D114, is ignored.
-- At most 20 findings. `title` and `location` are one line, cut at 200 and 300 characters; `detail` is cut at 1000,
-  and `summary` at 2000.
-  `verdict` is `findings` exactly when `findings` is not empty, and a `done` review has a verdict and an impact.
+- At most 20 findings, text cut to bounds. `verdict` is `findings` exactly when `findings` is not empty, and a `done`
+  review has a verdict and an impact.
 - `low` without `review.low_impact` is recorded as `normal`, with a harness note.
-- Anything else is `unknown`. `review_runs` status is `running`, `done`, `failed`, `unknown`, `timeout`, or `crashed`.
+- Anything else is `unknown`.
 
 ### The verdict, and automating on it
 
@@ -703,13 +561,9 @@ reviewer. A repository that wants that needs a verdict it can trust, which waits
 
 ### The overseer's part
 
-The state block gains `reviews`: whether `agent_prs` is on, whether a query is set, the limits, running review runs,
-and for each PR reviewed in the last 14 days (at most 50, newest first) its URL, linked ticket, review runs so far, the
-review runs the operator granted it past the policy's limit if any (`granted`, §22), and latest run: id, commit, status,
-verdict, impact, the titles of the findings the operator has not dismissed and how many were (`dismissed_findings`,
-Dismissing a finding below), start and end, and `reviewed_at`, its end in the `review` cursor's form (§7). It also
-has `requests`, each open review request: the PR's URL, when it was made, its review runs
-so far, any `granted`, and its latest run as above, or none before the first (Review requests, below).
+The state block's `reviews` carries the settings and limits, the running review runs, each recently reviewed PR with
+its ticket, its runs so far and any granted (§22), and its latest run's outcome with the titles of its findings the
+operator has not dismissed, and each open review request (below).
 
 For the loop's own PRs, the phase table (§7) gains two rows between `ci_red` and `green_unreviewed`, used only when
 `agent_prs` is on. Findings are `review_findings` only when `trust.trusted_reviewers` lists `canopy:review`; otherwise
@@ -724,69 +578,48 @@ A clean review, or a PR at its review limit, moves on to `green_unreviewed`, who
 latest review run. A `resume` pushes a new commit, which is reviewed again, up to the per-PR limit. The overseer knows a
 review only from the state block. Nothing on the PR is one, and a review never counts toward `changes_requested`.
 
-`canopy dispatch KEY --kind resume --review-run ID` hands the worker review run `ID`'s findings. The dispatch refuses as
+`canopy dispatch KEY --kind resume --review-run ID` hands the worker review run `ID`'s findings. It refuses as
 `bad_review` unless the kind is `resume` and the run is this ticket's, of a repository the dispatch names, `done`, and
-has findings. The worker's prompt carries them under `## canopy's review` as `{{REVIEW_FINDINGS}}`, each finding's
-title, location, and detail made printable, and `None.` on any other resume. A prompt override without that
-placeholder fails to render for a `--review-run` dispatch, so the findings are never dropped silently. The worker
-treats them as a trusted reviewer's comments when `canopy:review` is trusted, and never posts them; there is no comment
-to reply to. The `review` cursor's time for a review run is its `reviewed_at`.
+has findings. The worker's prompt carries them as `{{REVIEW_FINDINGS}}`; an override without that placeholder fails
+to render, so the findings are never dropped silently. The worker treats them as a trusted reviewer's comments when
+`canopy:review` is trusted, and never posts them. The `review` cursor (§7) covers review runs by when each ended.
 
-For PRs from `review.query`, the overseer runs the query each tick and keeps only PRs of this repository (the one whose
-PRs it reads for tickets); `_review` could not fetch another repository's commit from `origin`. The prompt says so; a
-`repo:` qualifier saves the reads. For each open match whose head commit has no `done` review, it runs a review or
-records `canopy review wait --pr URL --rationale "<text>"` (say, checks still running, or a draft). Nothing else is
-decided about these PRs. `review wait` and `attention --pr` take only a plain https:// URL of at most 300 characters,
-and refuse anything else as misuse, exit 2, recording nothing; `review run` records a malformed one as `refused:bad_pr`.
-
-Review decisions are `decisions` rows with the PR's URL in the `pr` column: `dispatch:review`, `wait`, `review:end`,
-`refused:<guard>`, and `attention:<reason>`. An agent PR's rows also carry its ticket key.
+For `review.query`, the overseer runs the query each tick and keeps only PRs of this repository, since a review could
+not fetch another repository's commit from `origin`. For each open match whose head has no `done` review, it runs a
+review or records `canopy review wait --pr URL --rationale "<text>"` (checks still running, a draft). Nothing else is
+decided about these PRs. `review wait` and `attention --pr` refuse a URL `review run` would call `bad_pr` as misuse,
+recording nothing.
 
 ### Review requests
 
-Asked for by the operator (2026-10-14, ROADMAP M42): hand canopy a coworker's PR to review without writing a search into
-`review.query`, which lives in the operator's own config and reads one repository's PRs. A request asks for one review,
-at the PR's head. Watching a PR, reviewing it again at each new commit until it merges, was in M42's sketch and is
-deferred: the operator judged it more than MVP needs (2026-10-16), and asking again after a push reviews the new head.
+A request hands canopy a coworker's PR to review without writing a search into `review.query`, which reads one
+repository's PRs. It asks for one review, at the PR's head; asking again after a push reviews the new head. Watching a
+PR, reviewing each new commit until it merges, is deferred as more than MVP needs.
 
-- A request is a journal fact, like a start record (§22): the PR's URL, when and through which channel it was made,
-  and when and why it ended. At most one is open per PR; asking again records nothing. It names no repository: the
-  overseer finds the PR's when it runs the review (below), as it does for `review.query`'s matches. It ends `reviewed`
-  when a review of the PR ends `done`, in the same transaction that closes the review run (`db.finish_run`), or
-  when `canopy review run` refuses `reviewed` for it: its head already had a `done` review when the request was made,
-  and that review answers it (the overseer runs one at a reviewed head for a request still open). It ends `merged`,
-  `closed`, or `unknown_repo` when the overseer reads that the PR merged or closed before a review of it, or is in none
-  of the workspace's cloned repositories, and `stopped` when the operator ends it.
-- `canopy start URL --review` makes one, D075's verb on a PR reference; `canopy stop URL` ends it, a review already
-  running finishing; `canopy show URL` shows the latest with the PR's reviews, and `canopy status` lists the open
-  ones. `start` on a PR without `--review` stays M14's, refused `unsupported`, so a missing flag never turns a review
-  into work on someone else's branch.
-- Like `start`, `reply`, and `grant`, both refuse as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set: a
+- A request is a journal fact, like a start record (§22), at most one open per PR; asking again records nothing. It
+  ends `reviewed` when a review of the PR ends `done`, or when `canopy review run` refuses `reviewed` for it (an
+  existing review answers it); `merged`, `closed`, or `unknown_repo` when the overseer finds the PR merged, closed, or
+  in none of the workspace's cloned repositories before a review; and `stopped` when the operator ends it.
+- `canopy start URL --review`, or the web UI's pull requests page, makes one; `canopy stop URL` ends it, a review
+  already running finishing. `start` on a PR without `--review` is refused `unsupported`, so a missing flag never turns
+  a review into work on someone else's branch.
+- Both refuse as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `start`, `reply`, and `grant` do: a
   request authorizes a review as `review.query` does, so an agent steered by a PR's text could otherwise point the
-  reviewer, and the operator's spend, at any PR. `start` also refuses, recording nothing: `reviews_off` when
-  `capacity.max_reviews` is 0, `bad_pr` for anything but a PR's plain `https://` URL (`REPO#N` too, since a review run
-  is keyed by the URL), and `loop_pr` for a PR a ticket's unit records, which `review.agent_prs` covers. `stop` refuses
-  `not_requested` for a PR with no open request.
-- The overseer reads each requested PR through MCP each tick, as it reads `review.query`'s matches, and finds its
-  repository the same way: the one whose map `url`, which the state block's `repositories` carries, names the same host,
-  owner, and repository as the PR's URL. The harness never parses the URL (principle 5); `canopy review run` still
-  refuses a repository missing from the map or not cloned (`unknown_repo`), and a wrong one fails that review when its
-  commit cannot be fetched. For an open PR whose head commit has no `done` review, it runs `canopy review run --pr URL
-  --sha SHA --repo NAME`, or records `canopy review wait` (checks still running, a draft). For a PR that merged or
-  closed first, or is in none of the workspace's cloned repositories, it records `canopy review end --pr URL --reason
-  merged|closed|unknown_repo`, which needs `CANOPY_TICK_ID`, records `review:end`, and refuses `not_requested` for a PR
-  with no open request; otherwise the request would stay open, and be read, every tick. A dry run checks the same and
-  ends nothing. A steered overseer could end one early; that costs a review, never adds one, and the PR's page shows who
-  ended it and why.
-- A review that ends other than `done` leaves the request open, so a later tick retries within the per-PR limit, as
-  `review_failed` says. Every guard of `canopy review run` holds unchanged: one `done` review per commit,
-  `policy.max_reviews_per_pr` (`review_limit` names `canopy grant URL review`), the daily limit, and capacity.
+  reviewer, and the operator's spend, at any PR. `start` also refuses `reviews_off` when `capacity.max_reviews` is 0,
+  `bad_pr` for anything but a PR's plain `https://` URL (a review run is keyed by it), and `loop_pr` for one of the
+  loop's own PRs, which `review.agent_prs` covers. `stop` refuses `not_requested` without an open request.
+- The overseer reads each requested PR through MCP each tick and names its repository, the one whose map `url` matches
+  the PR's host, owner, and name; the harness never parses the URL (principle 5). `canopy review run` still refuses
+  `unknown_repo`, and a wrong repository fails that review when its commit cannot be fetched. It runs a review or
+  waits, as for a `review.query` match, or records `canopy review end --pr URL --reason merged|closed|unknown_repo`,
+  which needs `CANOPY_TICK_ID` and an open request; otherwise the request would stay open, and be read, every tick. A
+  steered overseer could end one early; that costs a review, never adds one, and the PR's page shows who ended it and
+  why.
+- A review that ends other than `done` leaves the request open for a retry within the per-PR limit. Every guard of
+  `canopy review run` holds unchanged.
 - What follows is what follows a `review.query` review: findings in the journal, posted nowhere (D114), no worker, no
-  ticket, and `review.ended` (§20) to the operator's sinks. A PR from a fork is reviewed like any other; `_review`
-  fetches its commit from the repository's `origin` and pushes nothing.
-- The web UI's pull requests page takes a PR's URL, with `Review`, and a PR's page shows its request, with `Stop`
-  (§22). `POST /pull-request/start` and `POST /pull-request/stop` go through the same code as the CLI, so
-  with the same refusals.
+  ticket, and `review.ended` (§20). A PR from a fork is reviewed like any other: its commit is fetched from the
+  repository's `origin`, and nothing is pushed.
 - Not settled: `REPO#N`, which needs a PR's URL from the repository's map (M14's references); whether a requested PR's
   review waits for its checks to pass, left to the overseer's `wait` for now.
 
@@ -795,109 +628,75 @@ deferred: the operator judged it more than MVP needs (2026-10-16), and asking ag
 - `review_failed`: a PR's latest review run ended `failed`, `unknown`, `timeout`, or `crashed`. Recorded every tick
   that the PR is still a candidate and nothing newer has run; `canopy review run` may retry within the per-PR limit.
 - `review_limit`: recorded by the refusal, and by the overseer every tick that a candidate PR's head is unreviewed and
-  it is at its limit. However it is recorded, `canopy attention` ends its detail with the command that lifts that
-  PR's limit, `canopy grant URL review` (§22), so raising `max_reviews_per_pr` for every PR is not the only way.
+  it is at its limit. Its detail ends with `canopy grant URL review` (§22), so raising `max_reviews_per_pr` for every
+  PR is not the only way.
 - Findings are not attention items. For an agent PR they lead to a `resume`, or the existing `needs_author` or
   `needs_reviewer` items.
 
-`canopy attention` takes `--pr URL`, in place of a ticket key for a PR with no ticket, or beside one for an agent PR.
-An item with only a PR is shown as `pr:<URL>`, and its `notifications` row holds that in `ticket_key`, which no ticket
-key can equal (§17). The `reviews` event group (§20) carries `review.ended`: PR, ticket, run, status, verdict, impact,
-and how many findings, never their text.
+`canopy attention --pr URL` names a PR with no ticket, or beside one for an agent PR. An item with only a PR is shown
+and notified as `pr:<URL>`, which no ticket key can equal (§17).
 
 ### Reading reviews
 
-`canopy review show` lists the review runs of the last 14 days, newest first: id, start, status, verdict, how many
-findings, impact, PR, and commit. `canopy review show ID` prints one in full: the summary and each finding with its
-detail, a dismissed one marked so. Text the reviewer wrote is made printable, as any message shown on a terminal is
-(§22). It reads the journal only, and runs outside a tick.
+`canopy review show` lists recent review runs, and `canopy review show ID` prints one in full, a dismissed finding
+marked so, its text made printable (§22). It reads the journal only.
 
 ### Dismissing a finding
 
-`canopy dismiss review:<ID> <N>`, or `dismiss` on a finding's card in the web UI (§22), dismisses finding `N` (its
-number in the review, from 1) of review run `ID` (asked for by the operator, 2026-10-13, with ROADMAP M32: a reviewer
-is wrong often enough that the operator wants to rule a finding out before a worker spends a run on it).
+`canopy dismiss review:<ID> <N>`, or the web UI (§22), dismisses finding `N` of review run `ID`: a reviewer is wrong
+often enough that the operator wants to rule a finding out before a worker spends a run on it.
 
-- A dismissed finding stays on the review's page and in `canopy review show`, marked. It is left out of what a
-  `resume --review-run` hands the worker, which keeps the rest's numbers, and of the state block's finding titles,
-  which count it in `dismissed_findings`. A `resume` for a review whose findings are all dismissed refuses as
-  `bad_review`, and the PR, having none left to classify, moves on as a clean review would.
-- It is one run's finding. A finding has no id that lasts from one commit's review to the next, so a new commit's
-  review starts fresh (Open, below). `--undo`, or `undo` on its card, takes it back.
-- Refused `unknown` for a review run that does not exist, did not end `done` with findings, or has no finding `N` (with
-  `--undo`, one not dismissed), `bad_finding` for a number that is not 1 to 20, and `inside_run` as `reply` is: the
-  overseer and agents cannot hold a finding back from a worker. A row in `review_dismissals` per run and number, with
-  its time and channel. A `review:ID` reference takes `dismiss` and `send` (below); `canopy review show ID` shows one.
+- A dismissed finding stays listed, marked. It is left out of what `resume --review-run` hands the worker, which keeps
+  the rest's numbers, and out of the state block's titles. A `resume` for a review whose findings are all dismissed
+  refuses as `bad_review`, and the PR moves on as after a clean review.
+- It is one run's finding: a finding has no id across commits, so a new commit's review starts fresh (Open, below).
+  `--undo` takes it back.
+- Refused `unknown` for a run or finding that does not exist or did not end `done` with findings, `bad_finding` for a
+  number that is not 1 to 20, and `inside_run` as `reply` is: the overseer and agents cannot hold a finding back from
+  a worker.
 
 ### Sending findings to a worker
 
-`canopy send review:<ID> <N>...`, or ticking findings in a review's findings list in the web UI and `send to a worker`
-(§22), is the operator's go-ahead on those findings of review run `ID` (asked for by the operator, 2026-10-13, with
-ROADMAP M32). Only for a review whose purpose is `own` (Running a review, above), and whose ticket's unit still has
-the PR it reviewed: `canopy forget` clears a unit's PR, and the ticket's next one is another PR. A review of any other
-PR, such as one `review.query` matched, offers no send: no worker may push to it, and what the operator may do with
-such a review instead, publish it on the PR after iterating on it, is ROADMAP M43. It is a reply, not a new channel: it
-records an operator message on the review's ticket, as `canopy reply KEY` would, in the operator's words:
+`canopy send review:<ID> <N>...`, or the web UI (§22), is the operator's go-ahead on those findings of review run
+`ID`. Only for an `own` review whose ticket's unit still has the PR it reviewed (`canopy forget` clears it). A review
+of any other PR offers no send: no worker may push to it; publishing such a review on the PR is ROADMAP M43. It is a
+reply, not a new channel: an operator message on the review's ticket, as `canopy reply KEY` would record:
 
 ```text
 Address findings 1 and 3 of canopy's review run 12, of commit 9b2f4c6e1a7d. Leave its finding 2 alone.
 ```
 
-- The next tick reads it as any operator message about review feedback (§7, D089): the ticket is `human_replied`, and
-  the overseer dispatches `resume --review-run ID`, which hands the worker the run's findings that are not dismissed.
-  The worker addresses the ones the message names, as an operator message says, and leaves the rest. So it works
-  whether or not `trust.trusted_reviewers` lists `canopy:review`: untrusted, it is the go-ahead the findings wait for;
-  trusted, it narrows what the worker addresses. A `resume` carries one review run's findings, so when the operator
-  sends from two runs before a tick, the overseer dispatches for the older message first, with the `message` cursor
-  at it, and the newer one is still new on the next tick.
+- The next tick reads it as any operator message about review feedback (§7, D089): the overseer dispatches
+  `resume --review-run ID`, and the worker addresses the findings the message names and leaves the rest. So it works
+  whether or not `canopy:review` is trusted: untrusted, it is the go-ahead the findings wait for; trusted, it narrows
+  what the worker addresses. A `resume` carries one review run's findings, so sends from two runs before a tick are
+  dispatched one per tick, older first.
 - The message names findings by number and never quotes them. A finding is the reviewer's text, which is data (T1);
   the message is the operator's, an instruction, so the reviewer's words never reach a prompt as the operator's.
-- Refused `bad_finding` for no number or one that is not 1 to 20, `unknown` as `dismiss` is for a run or finding that
-  does not exist, `dismissed` for a finding the operator dismissed (undo that first), `not_ours` for a review of a
-  PR that is not one of the loop's own (above), and `inside_run` as `reply` is: an agent that could send
-  findings could start work in the operator's name. The web form draws a submission id, as the reply form does (§22),
-  drawn anew when the ticked findings change, so a retry records nothing new; the same command again in the shell
-  records nothing new either.
-- Not settled, as for a dismissal: a finding has no id that lasts from one commit's review to the next, so what was
-  sent from one review is not carried to the next commit's.
+- Refused `bad_finding` and `unknown` as `dismiss` is, `dismissed` for a dismissed finding, `not_ours` for a review of
+  a PR that is not the loop's own, and `inside_run` as `reply` is: an agent that could send findings could start work
+  in the operator's name. Sending the same again, from a retried form or the shell, records nothing new.
+- Not settled, as for a dismissal: what was sent from one commit's review is not carried to the next commit's.
 
 ### The diff
 
-For the web UI's review page (ROADMAP M32), which shows each finding on the diff at the line it names, `_review` keeps
-the reviewed commit's diff. `GET /reviews` lists the latest review runs, and `GET /reviews/{id}` serves one with its
-findings anchored on its diff and the diff itself (§22); both read only. The Reviews pages show them: the list, and
-a review's page with each finding's card under the line it names, under its file's header when the diff does not
-show the line, or in a panel of its own. They write two things: a finding's dismissal, and findings sent to a worker
-(above).
+The web UI's review page shows each finding on the reviewed commit's diff, so the review keeps that diff. The web UI
+reads reviews and writes only a finding's dismissal and findings sent to a worker (above).
 
-A review is also listed on its PR's page, in the web UI's pull requests pages (§22), which open it here; a review's
-page links back to its PR's.
-
-- **Taking it.** After the checkout, `_review` fetches the pool's base branch, the slot's lease's `base_branch`, which
-  `review_runs.base_branch` records, as `refs/heads/<base>`, and writes `git diff` from the commit's merge base with it
-  to the commit beside the run's log, `<id>.diff`, readable only by the operator. Diff drivers and textconv are off
-  (`--no-ext-diff --no-textconv`), since a commit's `.gitattributes` can name them, and git runs as the harness always
-  runs it (D107). It is cut at 4 MiB. It is best effort: a base branch origin does not have, or any other failed step,
-  is logged, the review goes on, and its page has no diff. A PR stacked on another branch shows that branch's commits
-  too, since the pool's base is not the PR's; the PR's own base is not something the harness can read (principle 5).
+- **Taking it.** After the checkout, the review writes the diff from the commit's merge base with the pool's base
+  branch, beside the run's log, readable only by the operator. Diff drivers and textconv are off, since a commit's
+  `.gitattributes` can name them, and git runs as the harness always runs it (D107). It is size-bounded and best
+  effort: a failure is logged, the review goes on, and its page has no diff. A PR stacked on another branch shows that
+  branch's commits too, since the PR's own base is not something the harness can read (principle 5).
 - **Why the harness keeps it.** The page cannot ask GitHub (principle 5), and the slot is gone once the review ends.
   The review's own checkout is the one moment the harness has the commit, so the diff is taken then, of exactly the
   commit the reviewer read.
-- **Reading it** (`core/review_diff.py`) on each request: only a regular file opened without following links or
-  blocking, at most 4 MiB to its last whole line, at most 500 files and 30,000 lines, each line cut at 1000 characters,
-  control characters but tabs made spaces. A cut says so. It is the PR's own text, rendered as text; the page colors its
-  code by the file's language, in the browser, from the same text (ui/DESIGN.md, "A review"). `GET /reviews/{id}` sends
-  it gzipped to a browser that takes gzip, since a diff at the bounds is megabytes of JSON read again on every tick
-  while its page is open. It is the one route that compresses: the event stream must never be, as gzip buffers it, and
-  this body holds the PR's text and the reviewer's, never a secret beside them that a compressed size could give away.
-- **Anchoring.** A finding's `location`, `path:line` (also `path:L12` or `path:12-14`, taking the first line), falls on
-  a file whose new or old path is that path, or whose path ends in `/<path>` when only one does, and on the line with
-  that number on the new side, when the diff shows it. A finding on a file the diff shows, but not on a line it shows,
-  sits under the file's header; one on no file in the diff, or with no diff, in a panel of its own.
-- **Showing it.** The page draws a diff of up to 2,000 lines whole. A longer one folds, since a diff at the reading
-  bounds drawn whole is too much for a browser to keep responsive: the lines around each finding's line come first,
-  then whole files in order while they fit, then the first lines of the rest, and every other run of lines is a fold
-  that draws 500 more of them a click. Every finding's card is drawn, so the findings list reaches each one.
+- **Reading it**: only a regular file opened without following links or blocking, bounded, control characters made
+  spaces, a cut saying so. It is the PR's own text, rendered as text, never served as a file. It is the one response
+  sent compressed: the event stream must never be, as gzip buffers it, and this body holds no secret beside the PR's
+  and the reviewer's text that a compressed size could give away.
+- **Anchoring.** A finding sits at the line its `location` names when the diff shows it, else under its file, else
+  apart (ui/DESIGN.md).
 
 ### Agent definition
 
@@ -914,21 +713,9 @@ those commands, as a chore does (§19). That runs the PR's code on the operator'
 
 ### Journal
 
-- `review_runs`: id, tick id, PR URL, commit, ticket key (nullable), its purpose (`own`, `request`, or `query`, 0023;
-  runs from before are `own` where their ticket's unit in their repository had their PR), slot, lease id and holder,
-  the base
-  branch it was leased on (nullable, 0016), pid of `_review`, pid of
-  the agent, started and ended times, status, `result_json` (validated, text cut to its limits), log path, and what
-  the runtime reported (§13): `session_id`, `cost_usd`, and tokens by kind, as `runs` has them, NULL when it reported
-  nothing. A timed-out reviewer records what its finished calls cost. Separate from `runs`, which is keyed by ticket
-  and branch. The web UI's spend counts review runs.
-- `decisions.pr`: nullable.
-- `review_dismissals`: review run, finding number, when dismissed, and channel; at most one row per run and number.
-- `review_requests` (0029): id, PR URL, when it was made and through which channel, when it ended and why
-  (`reviewed`, `merged`, `closed`, `unknown_repo`, or `stopped`); at most one open row per
-  URL, kept once ended.
-- The `review` cursor (§7) also covers review runs: a `resume` for a review's findings passes
-  `--cursor review=` with the run's `reviewed_at`.
+Each review run (its PR, commit, ticket if any, purpose, slot, base branch, status, validated result, and cost, a
+timed-out reviewer's included, §13), kept apart from worker runs, which are keyed by ticket and branch; decisions that
+name a PR; finding dismissals; and review requests, kept once ended.
 
 ### Trust model changes
 
@@ -939,16 +726,14 @@ and the reviewer's working directory is outside it), T6 (the reviewer has no wri
 through the journal and a resumed worker's prompt), T7 (every review key private except
 `policy.max_reviews_per_pr`), §6 (never submit a PR review; never push to or edit a PR the loop is only reviewing),
 and §7 (a reviewer definition that runs commands runs the PR's code). D114 removed the review comment and its T5
-marker, with the operator's approval. M42 adds, with its approval note: T1 (a review request authorizes a
-review as `review.query` does, made only through the operator's channels and refused inside a run), T8 (making and
-ending one are among the web channel's writes), and §7 (`review.query`'s note on other people's PRs covers requests
-too).
+marker. M42 adds: T1 (a review request authorizes a review as `review.query` does, made only through the operator's
+channels and refused inside a run), T8 (making and ending one are among the web channel's writes), and §7
+(`review.query`'s note on other people's PRs covers requests too).
 
 ### Open
 
 - How a finding is followed from one commit's review to the next, so a dismissal, or findings sent to a worker,
   could outlast its run.
 - A repository-offered review rubric, such as its own `low_impact`, that an operator opts into by name.
-- Whether OpenCode confines the reviewer to its `checkout` link. The opt-in reviewer canary
-  (`tests/canopy/test_opencode_canary.py`) settles it. If not, the reviewer runs without a checkout and reads the PR
-  only through MCP.
+- Whether OpenCode confines the reviewer to its `checkout` link. The opt-in reviewer canary settles it. If not, the
+  reviewer runs without a checkout and reads the PR only through MCP.
