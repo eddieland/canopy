@@ -22,9 +22,7 @@ test("a ticket's newest plan opens in the editor, its comments on their passages
     await expect(page.getByTestId('plan-actions').getByRole('button', { name: 'Approve' })).toBeVisible()
     await expect(page.getByTestId('plan-actions').getByRole('button', { name: 'Save' })).toBeDisabled()
     await expect(page.getByRole('form', { name: 'Ask for changes' })).toBeVisible()
-})
-
-test('a waiting plan that replaced one opens with its changes marked, and counted', async ({ page }) => {
+    // It replaced plan 1, so it opens with what changed since marked, and counted.
     const bar = page.getByTestId('plan-bar')
     await expect(bar.getByRole('button', { name: 'Changes since plan 1' })).toHaveAttribute('aria-pressed', 'true')
     await expect(bar.getByText(/^\d+ changes$/u)).toBeVisible()

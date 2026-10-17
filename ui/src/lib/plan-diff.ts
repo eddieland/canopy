@@ -65,25 +65,29 @@ export const PlanChanges = Extension.create({
 
 /**
  * The runs of words that make `after` from `before`, in `after`'s order, a removed run before the run that replaced
- * it. Each word is compared whole, with the spaces after it. Past `cap` edits, the part that differs is one removed
- * run and one added.
+ * it. Each word is compared whole, without the spaces after it, and carries them in its run. Past `cap` edits, the
+ * part that differs is one removed run and one added.
  */
 export function diffWords(before: string, after: string, cap = MAX_EDITS): Change[] {
     const a = tokens(before)
     const b = tokens(after)
+    // Each word is compared without the spaces after it, so a word that ends a sentence in one plan and goes on in the
+    // other (`hour.`, `hour the`) is the same word; what is kept is the new plan's, spaces and all.
+    const keysA = a.map((token) => key(token))
+    const keysB = b.map((token) => key(token))
     let start = 0
-    while (start < a.length && start < b.length && a[start] === b[start]) {
+    while (start < a.length && start < b.length && keysA[start] === keysB[start]) {
         start += 1
     }
     let endA = a.length
     let endB = b.length
-    while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) {
+    while (endA > start && endB > start && keysA[endA - 1] === keysB[endB - 1]) {
         endA -= 1
         endB -= 1
     }
     const ops = [
         ...a.slice(0, start).map(() => SAME),
-        ...edits(a.slice(start, endA), b.slice(start, endB), cap),
+        ...edits(keysA.slice(start, endA), keysB.slice(start, endB), cap),
         ...a.slice(endA).map(() => SAME),
     ]
     return runs(a, b, ops)
@@ -160,6 +164,11 @@ function struck(text: string): HTMLElement {
 type Op = 'same' | 'add' | 'del'
 const SAME: Op = 'same'
 
+// A word as it is compared: without the spaces after it, but a line break is still its own.
+function key(token: string): string {
+    return token.replace(/[^\S\n]+$/u, '')
+}
+
 // A text's words and each other character, in order, each with the spaces after it, so words replaced side by side
 // read as one change rather than several split by the spaces they share; each line break, between the plan's
 // blocks, is its own, so the blocks hold the comparison in place.
@@ -233,7 +242,7 @@ function runs(a: readonly string[], b: readonly string[], ops: readonly Op[]): C
     let j = 0
     let offset = 0
     for (const op of ops) {
-        const word = op === 'add' ? b[j] : a[i]
+        const word = op === 'del' ? a[i] : b[j]
         const last = out.at(-1)
         if (last?.kind === op) {
             last.text += word ?? ''

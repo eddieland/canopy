@@ -42,6 +42,15 @@ describe('diffWords', () => {
         ])
     })
 
+    it('takes a word that ended a sentence and now goes on as the same word, not removed and added again', () => {
+        const now = 'Daily, at an hour the operator picks.'
+        const changes = diffWords('Daily, at an hour.', now)
+        expect(changes.filter((change) => change.kind !== 'same')).toEqual([
+            { kind: 'add', text: 'the operator picks', at: now.indexOf('the') },
+        ])
+        expect(after(changes)).toBe(now)
+    })
+
     it('past its cap, shows the part that differs as removed and added whole', () => {
         const changes = diffWords('a b c d', 'w x y z', 2)
         expect(changes.map((change) => change.kind)).toEqual(['del', 'add'])
