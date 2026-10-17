@@ -46,6 +46,10 @@ test('the rail shows the spend of the last day and the last 30, and the version 
     await expect(page.getByTestId('rail-spend-24h')).toHaveText(`$${spend.day.cost_usd.toFixed(2)}`)
     await expect(page.getByTestId('rail-spend-30d')).toHaveText(/^\$\d+\.\d\d$/u)
     await expect(page.getByTestId('rail-footer')).toContainText(/canopy \S+/u)
+    await expect(page.getByTestId('rail-version')).toHaveAttribute(
+        'href',
+        'https://github.com/eddieland/canopy/releases',
+    )
 })
 
 test('the version stays at the window foot on a page longer than the window', async ({ page }) => {
