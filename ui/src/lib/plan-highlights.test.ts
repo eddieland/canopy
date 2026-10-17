@@ -139,6 +139,14 @@ describe('PlanHighlights', () => {
         expect(highlightsKey.getState(editor.state)?.active).toBeUndefined()
     })
 
+    it('closes the open thread when it is resolved', () => {
+        const editor = open(PLAN)
+        sync(editor, [placed('a', 'the rows')])
+        editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id: 'a' }))
+        sync(editor, [placed('a', 'the rows', true)])
+        expect(highlightsKey.getState(editor.state)?.active).toBeUndefined()
+    })
+
     it('draws the passage being commented on as the open one, in place of the thread that was', () => {
         const editor = open(PLAN)
         sync(editor, [placed('a', 'the rows')])

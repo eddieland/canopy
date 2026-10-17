@@ -721,12 +721,15 @@ list, an empty state, or a skeleton by hand.
   `destructive`; Escape keeps it too, and the focus goes back to `Delete`; the open thread sits on the accent's tint, as
   a selected row does. A thread whose passage is gone carries a `passage gone` chip and stays in the list, last.
   Resolved threads fold under a `Disclosure` (`Show 2 resolved`). A comment or reply form sends on the key Settings
-  names, as a reply does, and Escape drops it. A form takes the cursor when it opens, after any words it holds.
-  `Comment` again, on new words, moves an empty comment to them; one half written stays on its passage, and the cursor
-  goes back to it, so its words are never lost or carried to other words. The comments end in `Ask for changes`: a note
-  on the whole plan and the button, with how many open comments go with it, or how far over a reply's bound the request
-  is. Until plans reach a ticket's page (M44), the editor is on `/plan-editor`, over a sample plan on mock data only,
-  with what the planner would read and the plan's Markdown under it.
+  names, as a reply does; Escape drops one that holds nothing new, and puts one with the operator's words aside, open
+  with them, so one key never loses what was typed (`Cancel` drops it). A form takes the cursor when it opens, after any
+  words it holds; once a comment is sent, resolved, deleted, put aside, or cancelled, the cursor goes back to the plan
+  after its passage, as a shared document's does, rather than to the top of the page. `Comment` again, on new words,
+  moves an empty comment to them; one half written stays on its passage, and the cursor goes back to it, so its words
+  are never lost or carried to other words. The comments end in `Ask for changes`: a note on the whole plan and the
+  button, with how many open comments go with it, or how far over a reply's bound the request is. Until plans reach a
+  ticket's page (M44), the editor is on `/plan-editor`, over a sample plan on mock data only, with what the planner
+  would read and the plan's Markdown under it.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then how often it may start and its window (`cadenceText`: `every 360 minutes`, as
   the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed
