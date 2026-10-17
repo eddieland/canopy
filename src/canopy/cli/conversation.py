@@ -184,7 +184,8 @@ def cmd_start(click_ctx: click.Context, ref: str, *, review: bool, plan: bool) -
         return _start_review(click_ctx, subject)
     ctx = open_context(click_ctx)
     try:
-        started = conversation.start(ctx.conn, ctx.config, subject, repo=ctx.repo, channel=CLI, plan=plan)
+        plan_lock = ctx.dispatch_lock_path if plan else None
+        started = conversation.start(ctx.conn, ctx.config, subject, repo=ctx.repo, channel=CLI, plan_lock=plan_lock)
     except conversation.Refused as r:
         raise CliError(f"start refused ({r.guard}): {r.reason}") from None
     logs.for_tick(None).info("ticket started", extra={"ticket": subject.id, "already": started.already})

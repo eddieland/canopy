@@ -78,12 +78,12 @@ carries one.
 Each refuses `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, so no agent run can ask for, skip, or approve
 a plan, and `unknown` for a ticket canopy has no record of, as `canopy reply` does: the setting is a column of the
 ticket's row. Each holds the dispatch lock (§8) while it reads and writes, so a dispatch's guards read a ticket's plans
-from before the verb or after it, never between. Asking for a plan and `--skip` refuse `bad_plan` while a plan run for
-the ticket is running: its plan would land after the request. The operator asks again once it ends. Asking for a plan
-also refuses `bad_plan` once the ticket has a branch. Dispatch records the branch when it inserts the ticket's first
-`implement` (§8 step 2), so this covers an `implement` that is running too: a plan now would describe work already
-started (Open, below). `--skip` does not: on a ticket with a branch it drops the plan from the ticket's later runs,
-which is the way out when an approved plan's file is gone (`plan_changed`, below).
+from before the verb or after it, never between. Asking for a plan, `--skip`, and `start --plan` refuse `bad_plan`
+while a plan run for the ticket is running: its plan would land after the request. The operator asks again once it
+ends. Asking for a plan also refuses `bad_plan` once the ticket has a branch. Dispatch records the branch when it
+inserts the ticket's first `implement` (§8 step 2), so this covers an `implement` that is running too: a plan now
+would describe work already started (Open, below). `--skip` does not: on a ticket with a branch it drops the plan from
+the ticket's later runs, which is the way out when an approved plan's file is gone (`plan_changed`, below).
 
 ### Approving a plan
 
@@ -262,14 +262,17 @@ approved (Journal, below), never its text.
 
 ### The worker's copy
 
-A run reads a copy of the approved plan. `_run` reads the plan's file, checks it against the approved hash (above),
-and writes it to `.canopy-plan.md` in the worker's cwd, after branch setup and the operator's setup command (§8 `_run`
-step 2) and before the worker starts:
+A run reads a copy of the approved plan. Dispatch records on the run the plan its prompt's `{{PLAN}}` names
+(`runs.plan_id`), and `_run` copies that plan alone: one superseded or approved again since the dispatch, whose text
+may differ from the outline the prompt gave, fails the run `crashed` before the worker starts, as a changed file does,
+and a plan approved after a dispatch whose prompt named none is not copied for it. `_run` reads the plan's file, checks
+it against the approved hash (above), and writes it to `.canopy-plan.md` in the worker's cwd, after branch setup and
+the operator's setup command (§8 `_run` step 2) and before the worker starts:
 
 - in a joint run, at the desk's root, beside the worktree links (§18). The desk is in no repository.
 - in a one-repository run, at the worktree's root. Before writing it, `_run` makes sure the repository's exclude file,
   `info/exclude` in the git directory every slot shares, has the line `/.canopy-plan.md`, adding it once, so the file
-  is ignored and `git add -A` leaves it out.
+  is ignored and `git add -A` leaves it out. Two runs starting at once may each add it; a repeated line is harmless.
 
 The copy is written fresh for each run, so a worker that edits it changes only its own run, never the plan's file.
 `_run` removes it before the slot is returned, on every exit path, and a slot's leftover copy, from a run whose `_run`
@@ -373,6 +376,8 @@ ticket's page.
 - `tickets` gains the ticket's own plan setting, `plan_setting`: NULL for unset, `plan`, or `skip`.
 - `ticket_grants` holds `canopy grant KEY plan`: the ticket, the kind, the runs, and when, only added to. A plan's
   limit is the ticket's, and `attempt_grants` holds units' (§22, Granting attempts).
+- `runs` gains `plan_id`: the approved plan an `implement` or `resume` was dispatched to follow (The worker's copy,
+  above), NULL for any other run.
 - A plan run is a `runs` row of kind `plan` with its `run_slots`, no branch, and `result_json` the validated result.
   Its report message (§8 step 7) is its summary.
 - `canopy forget` (§22) supersedes a waiting or approved plan, so a forgotten ticket under `"approve"` is planned again.
@@ -405,6 +410,8 @@ Proposed, for the operator's approval note in M44's PR, with the overseer prompt
 - Whether `canopy forget` keeps the ticket's own plan setting, as it keeps the start record.
 - Whether a committed copy of the plan should raise an attention item, not only a note on the run.
 - Whether canopy should prune old plan files, as issue #424 asks of M36's per-tick tables.
+- Whether a repository that tracks a `.canopy-plan.md` of its own at its root needs another name for the copy: the copy
+  would write over it in the worktree, and push verification would report it as the worker's.
 - Whether `fix-ci` runs should get the plan's copy too. They fix a failure, not the plan's work, so for now they do not.
 - Whether the planner should answer each thread in its result, by thread id, rather than only through the new plan.
 - Whether a reworded passage should be found again by its nearest match, rather than shown as gone.
