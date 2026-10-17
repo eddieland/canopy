@@ -13,7 +13,7 @@ from rich.console import Console
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
 from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, spent
-from canopy.core import chore_view, contract, conversation, db, notice, pause, review_requests
+from canopy.core import chore_view, contract, conversation, db, memory, notice, pause, review_requests
 from canopy.infra import hangup, keys, lock
 from canopy.loop import attention, repeat, reread, tick
 from canopy.notify import deliver
@@ -121,6 +121,9 @@ def cmd_status(click_ctx: click.Context) -> int:
     told = notice.current(ctx.conn)
     if told is not None:
         click.echo(notice.describe(told, datetime.now(UTC)))
+    readout = memory.readout(ctx.config.memory)
+    if readout is not None:
+        click.echo(f"{readout} ({memory.tiers(ctx.config.memory)})")
 
     _print_attention(attention.listed(ctx))
     _print_started(ctx)

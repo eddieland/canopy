@@ -43,6 +43,8 @@ What it records, and why:
 - **`pause`**: present while the operator has paused the loop (§6); a resume deletes it.
 - **`notices`**: each notice to workers (§8). At most one is in force; rows are never deleted.
 - **Plan threads**: the operator's comments on a plan, written only by the web channel (§25).
+- **Agent memory**: each ticket note, proposal, and lesson, and for each run rendered while a tier was on, the modes it
+  was rendered under and what was rendered into it (§28). Empty while memory is off.
 
 Rules: the journal never stores credentials or raw CI logs (token counts are usage, not credentials). A run's result
 is a summary.
@@ -139,6 +141,7 @@ overrides default to `prompts/` there too.
 | `chores.*` | private | a chore runs a command and a prompt, and spends money (§19) |
 | `review.*` | private | `review.query` authorizes reading other people's PRs, and runs an agent on them (§21) |
 | `serve.*` | private | a listener on the operator's machine, and where (§22, TRUST_MODEL T8) |
+| `memory.*` | private | what workers may write into later runs' prompts (§28, TRUST_MODEL T7) |
 
 Whoever controls a shared workspace file (anyone who can push to the repository holding it) must not run commands,
 choose prompts, spend money, or authorize anyone; those keys are private (TRUST_MODEL T7).
@@ -230,6 +233,10 @@ enabled = true
 bind = "127.0.0.1"      # loopback, or a private address; never a wildcard or public one
 port = 8765
 base_path = ""          # a path prefix such as "/canopy", for a proxy
+
+[memory]                # agent memory (§28); each tier off, record, or use
+ticket_notes = "off"    # notes a ticket's runs write for its later runs
+proposals = "off"       # lessons workers propose, which reach runs once you promote them
 ```
 
 Built-in defaults are the values shown, except: `tracker.provider`, `tracker.query`, and `tracker.labels` have no

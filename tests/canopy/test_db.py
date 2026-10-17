@@ -56,6 +56,7 @@ SHIPPED = {
     34: "18b330ab2f43affbbe58dfefd346b2602638d37758a20a29dd682ba7681718b0",
     35: "6419d0559893c443f8f74df7bd184f98ce3fc058aa925c6eeb44db13a388dbe0",
     36: "bd963d5fa78e9ce18716c7c9c9094773283f68d172fc9ae89cea4d88e2d85da7",
+    37: "3c0ed312175a51a89e4ea452d2c725eafc521fae3582d73ad7462cccd83930cd",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -134,6 +135,13 @@ SEED: Mapping[str, str] = {
         "VALUES ('OLD-1', 'the route', 'Add ', ' to it', 'Why here?', 'x', NULL)"
     ),
     "plan_replies": "INSERT INTO plan_replies (thread_id, body, created_at) VALUES (1, 'Because.', 'y')",
+    "memories": (
+        "INSERT INTO memories (scope, ticket_key, key, body, status, author, run_id, tick_id, head, created_at) "
+        "VALUES ('ticket', 'OLD-1', 'ci-flake', 'The lint job fails on a cold cache.', 'active', 'worker', 1, 1, "
+        "'abc1234', 'x')"
+    ),
+    "run_memory": "INSERT INTO run_memory (run_id, ticket_notes, proposals) VALUES (1, 'use', 'off')",
+    "memory_reads": "INSERT INTO memory_reads (run_id, memory_id) VALUES (1, 1)",
 }
 
 
