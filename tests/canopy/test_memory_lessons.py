@@ -22,6 +22,7 @@ from canopy.memory import manage
 from canopy.memory import reconcile as memory_reconcile
 from tests.canopy.helpers import (
     KEY,
+    LABEL,
     PROMPT_VALUES,
     WORK,
     InlineRunner,
@@ -31,6 +32,7 @@ from tests.canopy.helpers import (
     in_tick,
     last_run,
     overseer_does,
+    planner_does,
     prompt_of,
     state_block,
     with_memory,
@@ -66,17 +68,19 @@ def run_with(conn: sqlite3.Connection, *args: str, **fields: object) -> sqlite3.
         return dispatch_and_run(conn, *args, runner=InlineRunner())
 
 
-def proposed(conn: sqlite3.Connection, text: str = LESSON, *, key: str = "api-tests", repo: str | None = None) -> int:
-    """A pending proposal from a run of KEY, written to the journal as `_run` would."""
+def proposed(
+    conn: sqlite3.Connection, text: str = LESSON, *, key: str = "api-tests", repo: str | None = None, ticket: str = KEY
+) -> int:
+    """A pending proposal from a run of `ticket`, written to the journal as `_run` would."""
     with in_tick(conn) as tick_id:
-        db.touch_ticket(conn, KEY, "repo")
+        db.touch_ticket(conn, ticket, "repo")
         run_id = db.insert_run(
-            conn, tick_id=tick_id, key=KEY, kind=RunKind.IMPLEMENT, branch=BRANCH, slots=(), runs_dir=Path("/runs")
+            conn, tick_id=tick_id, key=ticket, kind=RunKind.IMPLEMENT, branch=BRANCH, slots=(), runs_dir=Path("/runs")
         )
         cur = conn.execute(
             "INSERT INTO memories (scope, ticket_key, repo, key, body, status, author, run_id, tick_id, created_at) "
             "VALUES ('proposal', ?, ?, ?, ?, 'pending', 'worker', ?, ?, ?)",
-            (KEY, repo, key, text, run_id, tick_id, db.now()),
+            (ticket, repo, key, text, run_id, tick_id, db.now()),
         )
         conn.execute("UPDATE runs SET status = 'done', ended_at = ? WHERE id = ?", (db.now(), run_id))
     return int(cur.lastrowid or 0)
@@ -89,10 +93,11 @@ def promoted(
     *,
     key: str = "api-tests",
     repo: str | None = None,
+    ticket: str = KEY,
 ) -> records.Memory:
-    """Promote a fresh proposal of `text`, as the operator does."""
+    """Promote a fresh proposal of `text`, from a run of `ticket`, as the operator does."""
     cfg = load(canopy_env.root, canopy_env.user_file)
-    return manage.promote(conn, cfg, proposed(conn, text, key=key, repo=repo)).lesson
+    return manage.promote(conn, cfg, proposed(conn, text, key=key, repo=repo, ticket=ticket)).lesson
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -193,6 +198,22 @@ def test_with_notes_in_use_and_lessons_recording_a_cited_lesson_changes_nothing(
     assert '`"memory_used":[<id>]`' in text
     assert HEADING not in text
     assert memory.get(conn, lesson.id) == lesson
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_plan_hears_lessons_but_what_it_sends_of_memory_changes_nothing(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection
+) -> None:
+    with_memory(canopy_env, ticket_notes="use", proposals="use")
+    # From another ticket's run: a started ticket is not planned.
+    lesson = promoted(conn, canopy_env, ticket="PROJ-2")
+    sent = {"memory_used": [lesson.id], "memory_wrong": [lesson.id], "proposals": [{"key": "more", "text": "More."}]}
+    with planner_does(plan="# Plan\n\nDo it.\n", result={"status": "done", "summary": "planned it", **sent}):
+        run = dispatch_and_run(conn, "--label", LABEL, "--kind", "plan")
+    assert HEADING in prompt_of(canopy_env, int(run["id"]))
+    # Its prompt carries no contract, so it cites and proposes nothing (DESIGN §28, Proposals and lessons).
+    assert memory.get(conn, lesson.id) == lesson
+    assert [m.id for m in stored(conn) if m.status is MemoryStatus.PENDING] == []
 
 
 @pytest.mark.usefixtures("git_pool")
