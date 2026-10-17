@@ -132,7 +132,7 @@ canopy (harness, Python)
     chores.py      chore run, chore wait, chore try, _chore
     notify.py      notify test
     reviews.py     review run, review wait, review end, review show, _review
-    memory.py      memory list, forget, purge: agent memory's tiers and what they hold (§28)
+    memory.py      memory list, proposals, lessons, promote, reject, renew, forget, purge: agent memory (§28)
 
   loop/            the tick (§6), which drives the features below
     tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
@@ -177,7 +177,10 @@ canopy (harness, Python)
     reconcile.py   review runs whose _review is gone: reviewer killed, slot returned, marked crashed
 
   memory/          agent memory's feature (§28)
-    manage.py      the operator's verbs: forget one memory, purge many, each a secure delete leaving a tombstone
+    manage.py      the operator's verbs: forget one memory, purge many, each a secure delete leaving a tombstone;
+                   promote a proposal to a lesson, reject one, renew a lesson
+    reconcile.py   the tick's reconcile step: pending proposals nobody reviewed expire
+    attention.py   memory_proposal, lesson_review, and lesson_wrong, raised by the harness for the operator alone
 
   serve/           the web UI's server (§22, D079); the only package that imports fastapi, starlette, uvicorn, or anyio
     app.py         create_app(): the guard, the API under {base}/api, the single-page app under {base}/

@@ -153,7 +153,7 @@ def test_memory_list_says_the_digest_is_served_and_what_a_run_read(
     capsys.readouterr()
     assert main(["memory", "list", KEY, "--digest"]) == 0
     out = capsys.readouterr().out
-    assert out.startswith("ticket notes: in use. In use. A ticket's later runs read its notes.\n")
+    assert out.startswith("ticket notes: In use. A ticket's later runs read its notes.\n")
     assert f"{KEY}'s notes, served to its next run:" in out
     assert main(["memory", "list", "--run", str(second["id"])]) == 0
     out = capsys.readouterr().out

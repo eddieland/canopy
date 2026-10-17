@@ -34,6 +34,7 @@ in order:
    - Each `review_runs` row with `status='running'` whose `_review` is gone: kill what is left of its
      reviewer, remove its directory, return its slot, and mark it `crashed` (§21). This runs before the worker runs'
      reconcile, and a running review's lease is never returned as stale.
+   - Each pending memory proposal written more than 14 days ago expires, in every mode (§28).
    - `capacity = max_workers - count(runs and review runs where status='running')`: a review holds a slot.
    - If `treehouse status` or a return fails, close the tick as `reconcile_failed` and stop; the overseer does not run.
    - Record on the tick the newest message in the journal and the time: every message up to it, and every run,

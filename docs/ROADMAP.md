@@ -1546,6 +1546,9 @@ run's notes under the bounds with what it refused, superseding by key, done and 
 `canopy memory list`, `forget`, and `purge`. Ticket notes at `use` (its second half): each implement, fix-ci, and
 resume prompt served its ticket's digest, `memory_used`, `memory_wrong`, and `drop_notes` on what it was shown, an
 override without `{{TICKET_MEMORY}}` refused, and TRUST_MODEL T1's ticket notes, awaiting the operator's approval.
+Proposals and lessons (stage 2), at `record` and `use`: proposals under the bounds and the queue's 20, their expiry,
+`memory_proposal`, `promote`, `reject`, and `renew`, `{{WORKSPACE_LESSONS}}` in every prompt that carries the standing
+instructions, review dates, `lesson_review` and `lesson_wrong`, and T1's lessons, awaiting the operator's approval.
 
 ## Deferred, with the trigger that would unblock each
 
