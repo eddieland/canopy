@@ -20,7 +20,7 @@ import click
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import REPO
 from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, spent
-from canopy.core import chore_view, contract, conversation, db, notice, pause, prompts, review_requests
+from canopy.core import chore_view, contract, conversation, db, notice, pause, plans, prompts, review_requests
 from canopy.core.vocab import RunKind
 from canopy.infra import logs
 from canopy.loop import attention
@@ -30,6 +30,7 @@ from canopy.runs import halt, policy
 if TYPE_CHECKING:
     import sqlite3
 
+    from canopy.core import records
     from canopy.core.context import Context
     from canopy.core.conversation import Ref
 
@@ -556,7 +557,7 @@ def _show_ticket(ctx: Context, key: str) -> None:
         for unit in db.units(ctx.conn, key):
             click.echo(f"  {unit['repo']}  PR {unit['pr_url'] or 'none recorded'}  phase {unit['phase'] or 'unknown'}")
     _show_runs(ctx, key)
-    _show_conversation(ctx, key, waits=conversation.is_started(record))
+    _show_conversation(ctx, key, record)
 
 
 def _show_runs(ctx: Context, key: str) -> None:
@@ -571,15 +572,16 @@ def _show_runs(ctx: Context, key: str) -> None:
         click.echo("  none")
 
 
-def _show_conversation(ctx: Context, key: str, *, waits: bool) -> None:
+def _show_conversation(ctx: Context, key: str, record: records.Start | None) -> None:
     messages = db.messages_of(ctx.conn, conversation.TICKET, key, SHOW_MESSAGES)
     click.echo(f"\nConversation ({len(messages)}):")
     for m in messages:
         _echo_message(m)
     if not messages:
         click.echo("  none")
-    waiting = conversation.latest_question(ctx.conn, key)
-    if waiting is not None and waits:
+    # A public ticket's questions are on the tracker, but for a planner's, which canopy holds (DESIGN §25).
+    waiting = plans.question(ctx.conn, key) if record is None else conversation.latest_question(ctx.conn, key)
+    if waiting is not None and (record is None or conversation.is_started(record)):
         click.echo(f"\nMessage {waiting['id']} waits on your answer: canopy reply {key} 'your answer'")
 
 

@@ -621,7 +621,8 @@ with control characters dropped and cut at 160 characters; and its session id, i
 when the runtime reported them (§13), and its run log.
 
 Reasons are exactly the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
-`attempt_limit`, a private ticket's `awaiting_reply` (§22), `canopy_unavailable` (§6 step 5), and in a workspace
+`attempt_limit`, a private ticket's `awaiting_reply` (§22) and a planner's (§25), the overseer's `plan_review` and
+`plan_changed` (§25), `canopy_unavailable` (§6 step 5), and in a workspace
 `repo_missing` and the overseer's `multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18). Chores add
 `chore_failed` and their findings, listed by chore after the ticket items (§19). Reviews add `review_failed` and
 `review_limit`, about a PR (§21). A notice to workers adds the overseer's `notice_rerun`: a check failed while a notice
@@ -638,8 +639,10 @@ on a private ticket.
 `blocked` and `stopped` raise nothing here.
 
 The harness raises `awaiting_reply` every tick for each started ticket, not done, whose latest question has no operator
-message after it (§22). Its detail is the question's message id and text, one line, and how to answer it. Its cause is
-gone once the operator replies, and the item with it at the next `ok` tick; until then the web UI marks it answered.
+message after it (§22), and for each public ticket, not done, whose latest plan run ended `blocked` with its question
+unanswered: the planner writes nothing to the ticket, so its question is canopy's to raise (§25). Its detail is the
+question's message id and text, one line, and how to answer it. Its cause is gone once the operator replies, and the
+item with it at the next `ok` tick; until then the web UI marks it answered.
 
 The harness also raises `repo_missing` every tick for each repository in the workspace map with no clone at
 `repos/<name>`. It has no ticket key, carries the repository's name, and is shown under that name. Its cause is gone

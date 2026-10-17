@@ -24,7 +24,7 @@ import os
 import secrets
 import stat
 from dataclasses import dataclass
-from typing import IO, TYPE_CHECKING, Literal
+from typing import IO, TYPE_CHECKING, Literal, TypedDict
 
 from canopy.core import conversation, db, records
 from canopy.core.conversation import KEY_RE, MAX_KEY, Refused
@@ -33,6 +33,7 @@ from canopy.infra import lock
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Callable
     from pathlib import Path
 
 # What a planner can write in one message and an operator can read before approving (DESIGN §25, The prompt).
@@ -172,6 +173,114 @@ def _not_planning(conn: sqlite3.Connection, key: str) -> None:
         )
 
 
+class NewestPlan(TypedDict):
+    """A ticket's newest plan as the overseer's state block carries it: never its text (DESIGN §25)."""
+
+    id: int
+    status: str
+    created_at: str
+
+
+class PlanState(TypedDict):
+    """A ticket's `plan` key in the overseer's state block (DESIGN §25, Phases and the overseer's part).
+
+    `changes_asked` is an operator message newer than the newest plan and than the latest plan run's start: a reply the
+    planner has not read. `blocked` is the latest plan run ending `blocked` with no operator message since.
+    """
+
+    needed: bool
+    attempts: int
+    limit: int
+    newest: NewestPlan | None
+    changes_asked: bool
+    blocked: bool
+
+
+def state_section(
+    conn: sqlite3.Connection, policy: str, ticket: records.Ticket, *, attempts: int, limit: int
+) -> PlanState | None:
+    """Return a ticket's plan for the overseer's state block, or None when plans do not touch it.
+
+    A ticket that needs no plan, has none, and had no plan run has no `plan` key, so with `policy.plan` off the block
+    is as it was before plans (DESIGN §25, Off unless configured).
+    """
+    key = ticket.key
+    needed_now = needed(policy, ticket.plan_setting)
+    newest = records.fetch_one(
+        conn, records.Plan, "SELECT * FROM plans WHERE ticket_key = ? ORDER BY id DESC LIMIT 1", (key,)
+    )
+    run = conn.execute(
+        "SELECT * FROM runs WHERE ticket_key = ? AND kind = ? AND id > ? ORDER BY id DESC LIMIT 1",
+        (key, RunKind.PLAN, ticket.forgotten_run_id or 0),
+    ).fetchone()
+    if not needed_now and newest is None and run is None and attempts == 0:
+        return None
+    replied = conn.execute(
+        "SELECT max(at) FROM messages WHERE subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ?",
+        (conversation.TICKET, key, ticket.forgotten_message_id or 0),
+    ).fetchone()[0]
+    since = max(
+        newest.created_at if newest is not None and newest.status is not PlanStatus.SUPERSEDED else "",
+        str(run["started_at"]) if run is not None else "",
+    )
+    blocked = (
+        run is not None
+        and run["status"] == "blocked"
+        and (replied is None or run["ended_at"] is None or replied <= str(run["ended_at"]))
+    )
+    return {
+        "needed": needed_now,
+        "attempts": attempts,
+        "limit": limit,
+        "newest": None
+        if newest is None
+        else {"id": newest.id, "status": newest.status, "created_at": newest.created_at},
+        "changes_asked": replied is not None and bool(since) and replied > since,
+        "blocked": blocked,
+    }
+
+
+def awaiting(conn: sqlite3.Connection) -> list[conversation.Awaiting]:
+    """Return every public, open ticket whose latest plan run ended `blocked` and whose question waits on a reply.
+
+    The planner cannot comment on the ticket or label it, so its question is a worker message on a public ticket too,
+    and the harness raises it as a started ticket's (DESIGN §25). A started ticket's are `conversation.awaiting`'s.
+
+    Returns:
+        Each ticket's question, by key.
+    """
+    found: list[conversation.Awaiting] = []
+    rows = conn.execute(
+        "SELECT r.ticket_key, r.id FROM runs r JOIN tickets t ON t.key = r.ticket_key "
+        "WHERE t.done = 0 AND r.id > coalesce(t.forgotten_run_id, 0) AND r.status = 'blocked' "
+        "AND r.id = (SELECT max(id) FROM runs WHERE ticket_key = r.ticket_key AND kind = ?) "
+        "AND NOT EXISTS (SELECT 1 FROM starts s WHERE s.subject_kind = ? AND s.subject_id = r.ticket_key) "
+        "ORDER BY r.ticket_key",
+        (RunKind.PLAN, conversation.TICKET),
+    ).fetchall()
+    for row in rows:
+        key = str(row[0])
+        asked = question(conn, key)
+        if asked is not None and asked["run_id"] == row[1]:
+            found.append(conversation.Awaiting(key, int(asked["id"]), str(asked["body"])))
+    return found
+
+
+def question(conn: sqlite3.Connection, key: str) -> sqlite3.Row | None:
+    """Return a ticket's latest question when a plan run asked it and no operator message came after it.
+
+    On a public ticket this is the one question canopy holds rather than the tracker (DESIGN §25).
+
+    Returns:
+        The question's message, or None.
+    """
+    found = conversation.latest_question(conn, key)
+    if found is None or found["run_id"] is None:
+        return None
+    run = db.get_run(conn, int(found["run_id"]))
+    return found if run is not None and run["kind"] == RunKind.PLAN else None
+
+
 def path_for(state_dir: Path, key: str, run_id: int) -> Path:
     """Where the plan the run `run_id` wrote for `key` is kept. Built from the key and the id, never read from a row.
 
@@ -248,8 +357,17 @@ def read(path: Path) -> Reading:
     return Reading(text if problem is None else None, digest, size, problem)
 
 
-def record(conn: sqlite3.Connection, key: str, run_id: int, written: Written) -> records.Plan:
+def record(
+    conn: sqlite3.Connection,
+    key: str,
+    run_id: int,
+    written: Written,
+    *,
+    event: Callable[[int], db.Event | None] | None = None,
+) -> records.Plan:
     """Record the plan the run `run_id` wrote for `key`, after its file, as `proposed`. It supersedes the current one.
+
+    `event` builds the `plan.proposed` event from the plan's id, recorded in the same transaction (DESIGN §20).
 
     Returns:
         The plan's row.
@@ -263,6 +381,9 @@ def record(conn: sqlite3.Connection, key: str, run_id: int, written: Written) ->
             "RETURNING *",
             (key, run_id, db.now(), PlanStatus.PROPOSED, written.sha256, written.size),
         )
+        built = event(plan.id) if event is not None else None
+        if built is not None:
+            db.record_event(conn, built)
     return plan
 
 

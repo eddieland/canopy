@@ -106,6 +106,8 @@ class Phase(StrEnum):
     NEEDS_HUMAN = "needs_human"
     HUMAN_REPLIED = "human_replied"
     SPLIT = "split"
+    # The newest plan waits on the operator (DESIGN §25): no run, and the slot is free while they read it.
+    PLAN_PROPOSED = "plan_proposed"
 
 
 # The phases about a PR, `pushed_no_pr` to `merged` in the phase table, are a unit's (DESIGN §7, §18); the others are
