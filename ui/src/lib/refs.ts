@@ -16,6 +16,11 @@ export function tickRef(id: number | string): string {
     return `tick:${id}`
 }
 
+/** A note, proposal, or lesson, in the same grammar: `memory:3`, though `canopy memory` takes the bare id. */
+export function memoryRef(id: number | string): string {
+    return `memory:${id}`
+}
+
 /** A chore, as `canopy show` reads it: `chore:deps`. */
 export function choreRef(name: string): string {
     return `chore:${name}`

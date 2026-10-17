@@ -12,9 +12,9 @@ import { None } from '@/components/none'
 import { NO_TICKET } from '@/lib/words'
 
 /**
- * Review runs, one row each, opening the review's page with its findings on its diff: its verdict, its ticket and PR,
- * the commit it read, its impact, cost, and when. On a PR's own page (`pr={false}`) the ticket and the PR are left
- * out, as `RunsTable` leaves out a ticket on the ticket's page.
+ * Review runs, one row each, opening the review's page with its findings on its diff: its verdict, its id, its ticket,
+ * its impact, its PR and the commit it read, cost, and when. On a PR's own page (`pr={false}`) the ticket and the PR
+ * are left out, as `RunsTable` leaves out a ticket on the ticket's page.
  */
 export function ReviewsTable({ reviews, pr = true }: { reviews: ReviewSummary[]; pr?: boolean }) {
     return (
@@ -39,7 +39,6 @@ function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
             className="text-sm"
             data-testid={pr ? `review-${review.id}` : `pull-request-review-${review.id}`}
         >
-            <ReviewLink id={review.id} />
             {/* The dot is how its run ended; the verdict's color, its worst finding. */}
             <span className={cn('flex min-w-0 items-center gap-1.5 font-mono text-xs', verdictTone(review))}>
                 <RunDot state={review.state} />
@@ -47,26 +46,25 @@ function ReviewRow({ review, pr }: { review: ReviewSummary; pr: boolean }) {
                     {verdictText(review)}
                 </span>
             </span>
+            <ReviewLink id={review.id} />
+            {pr && (
+                <span className="truncate">
+                    {review.ticket_key === null ? (
+                        <None reason={NO_TICKET} brief className="font-mono text-xs" />
+                    ) : (
+                        <TicketLink ticketKey={review.ticket_key} />
+                    )}
+                </span>
+            )}
+            <span className="flex">{review.impact !== null && <Chip word={`${review.impact} impact`} />}</span>
             {pr ? (
-                <>
-                    <span className="truncate">
-                        {review.ticket_key === null ? (
-                            <None reason={NO_TICKET} brief className="font-mono text-xs" />
-                        ) : (
-                            <TicketLink ticketKey={review.ticket_key} />
-                        )}
-                    </span>
-                    <span className="flex min-w-0 items-center gap-3">
-                        <PullRequestLink url={review.pr_url} />
-                        {sha}
-                    </span>
-                </>
+                <span className="flex min-w-0 items-center gap-3">
+                    <PullRequestLink url={review.pr_url} />
+                    {sha}
+                </span>
             ) : (
                 sha
             )}
-            <span className="flex justify-end">
-                {review.impact !== null && <Chip word={`${review.impact} impact`} />}
-            </span>
             <Cost usd={review.cost_usd} className="text-right text-xs text-muted-foreground" />
             <Age variant="span" started={review.started_at} ended={review.ended_at} className="text-right" />
         </ListRow>

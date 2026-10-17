@@ -8,13 +8,13 @@
 /*
  * The classes a list's row picks its columns with by its list's width, built at run time from its kind's columns
  * (`rowLayout` in src/lib/rows.ts), so Tailwind finds them here: a template per tier, and a cell hidden by its place.
- * The tiers are `ROW_TIERS`; seven places are the most columns a kind has.
+ * The tiers are `ROW_TIERS`; eight places are the most columns a kind has.
  */
 @source inline('grid-cols-(--row) @sm:grid-cols-(--row-sm) @md:grid-cols-(--row-md) @lg:grid-cols-(--row-lg)');
 @source inline('@xl:grid-cols-(--row-xl) @2xl:grid-cols-(--row-2xl)');
 @source inline('@3xl:grid-cols-(--row-3xl) @4xl:grid-cols-(--row-4xl)');
-@source inline('{@max-sm,@max-md,@max-lg,@max-xl}:[&>:nth-child({1,2,3,4,5,6,7})]:hidden');
-@source inline('{@max-2xl,@max-3xl,@max-4xl}:[&>:nth-child({1,2,3,4,5,6,7})]:hidden');
+@source inline('{@max-sm,@max-md,@max-lg,@max-xl}:[&>:nth-child({1,2,3,4,5,6,7,8})]:hidden');
+@source inline('{@max-2xl,@max-3xl,@max-4xl}:[&>:nth-child({1,2,3,4,5,6,7,8})]:hidden');
 
 /* Defined so shadcn output compiles; `npm run lint` refuses it in our code. Themes change tokens, not components. */
 @custom-variant dark (&:where(.dark, .dark *));
