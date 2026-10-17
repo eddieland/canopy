@@ -432,6 +432,16 @@ test('a card carries Resolve and Delete in its header, and Reply only while it i
     await expect(lost.getByRole('button', { name: 'Reply', exact: true })).toBeVisible()
 })
 
+test('comments whose passages are gone are resolved together, once there is more than one', async ({ page }) => {
+    await expect(page.getByRole('button', { name: /^Resolve all/u })).toHaveCount(0)
+    await select(page, 'Scheduling exports.')
+    await page.keyboard.press('Backspace')
+    await expect(comments(page).filter({ hasText: 'passage gone' })).toHaveCount(2)
+    await page.getByRole('button', { name: 'Resolve all 2' }).click()
+    await expect(comments(page)).toHaveCount(1)
+    await expect(page.getByRole('button', { name: 'Show 3 resolved' })).toBeVisible()
+})
+
 test('resolving a thread folds it away and takes its highlight off the plan', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'name the ticket' })
     await thread.getByRole('button', { name: 'Resolve' }).click()

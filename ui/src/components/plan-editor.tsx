@@ -386,6 +386,13 @@ export function PlanEditor({
                         onDraftSubmit={addComment}
                         onDraftCancel={cancelComment}
                         onDraftLeave={onDraftLeave}
+                        onResolveGone={() =>
+                            onThreadsChange(
+                                threads.map((thread) =>
+                                    thread.resolved || starts.has(thread.id) ? thread : { ...thread, resolved: true },
+                                ),
+                            )
+                        }
                         {...actions}
                     />
                     {editable && onAskForChanges !== undefined && (
