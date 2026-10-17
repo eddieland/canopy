@@ -13,6 +13,7 @@ from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, assert_never
 
@@ -30,6 +31,10 @@ BUSY_SECONDS = 10.0
 _MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
 # The rationale the overseer gives a `done` decision for a ticket the tracker reports closed (DESIGN §7).
 CLOSED_RATIONALE = "closed"
+# The version of canopy this process runs, recorded on each tick it starts (DESIGN §6). Read once, at import: an upgrade
+# while `canopy loop` runs replaces the installed package's metadata, not the code this process loaded, so a read per
+# tick would name the new release on ticks the old code ran.
+CANOPY_VERSION = version("canopy")
 
 # `canopy ticket set --cursor NAME=ID` names, and the column each one updates. The comment cursor is the ticket's; the
 # review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a private
@@ -252,12 +257,15 @@ def _rowid(cur: sqlite3.Cursor) -> int:
 
 
 def start_tick(conn: sqlite3.Connection, *, dry_run: bool) -> int:
-    """Insert a `running` tick row and return its id.
+    """Insert a `running` tick row, with the version of canopy running it, and return its id.
 
     Returns:
         The new tick's id.
     """
-    cur = conn.execute("INSERT INTO ticks (started_at, dry_run) VALUES (?, ?)", (now(), int(dry_run)))
+    cur = conn.execute(
+        "INSERT INTO ticks (started_at, dry_run, canopy_version) VALUES (?, ?, ?)",
+        (now(), int(dry_run), CANOPY_VERSION),
+    )
     return _rowid(cur)
 
 

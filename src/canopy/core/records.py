@@ -88,6 +88,8 @@ class Tick(Row):
     tokens_first_call: int | None
     tokens_first_cache_write: int | None
     definitions_digest: str | None
+    # The version of canopy that ran the tick; None on a tick from before that was recorded.
+    canopy_version: str | None
 
 
 @dataclass(frozen=True)

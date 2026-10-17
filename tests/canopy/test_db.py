@@ -5,6 +5,7 @@ import sqlite3
 import typing
 from collections import Counter
 from collections.abc import Iterable, Mapping
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -59,6 +60,7 @@ SHIPPED = {
     37: "3c0ed312175a51a89e4ea452d2c725eafc521fae3582d73ad7462cccd83930cd",
     38: "8abccaf065f80d842420331da89c8b0594deb34c5a5ae8749f1137c7099137b2",
     39: "ab9090b6e76e771b4b0f68365c75dad1cff0d9a15003e0fd13f4b07fa619e985",
+    40: "4a60acd554d93b87cb91645fc394b1f59c0eae63d7d8a19a6ff869dc2f928352",
 }
 
 # A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
@@ -411,6 +413,7 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     assert (decision.ticket_key, decision.action) == ("PROJ-1", "wait")
     last = present(db.last_tick(conn))
     assert (last.id, last.status, last.dry_run) == (tick, TickStatus.OK, True)
+    assert last.canopy_version == version("canopy")
 
 
 def test_a_tickets_decisions_are_found_by_index(tmp_path: Path, journals: Journals) -> None:
