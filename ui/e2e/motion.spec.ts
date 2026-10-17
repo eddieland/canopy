@@ -106,7 +106,9 @@ test('the ticker steps out of a header with no room to read a headline in, and b
     // Its room stays, so the readouts keep their place at the header's end.
     const header = await page.getByTestId('app-header').boundingBox()
     const readouts = await page.getByTestId('live-readouts').boundingBox()
-    expect(readouts === null || header === null ? 0 : readouts.x).toBeGreaterThan((header?.width ?? 0) / 2)
+    // Measured by their end, not their start: how wide they are depends on what they show, memory's readout among them.
+    const end = readouts === null ? 0 : readouts.x + readouts.width
+    expect(end).toBeGreaterThan((header?.width ?? 0) * 0.85)
 
     await page.setViewportSize({ width: 1280, height: 800 })
     await expect(ticker).toBeVisible()

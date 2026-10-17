@@ -157,6 +157,17 @@ export const ROW_COLUMNS = {
         ['text', FREE],
         ['age', '5rem', 1],
     ],
+    /**
+     * A note, proposal, or lesson (DESIGN §28): its id, its key, where it stands, how runs used it, and when it was
+     * written. What it says goes under its key.
+     */
+    memory: [
+        ['id', '4rem'],
+        ['key', FREE],
+        ['state', '9rem', 2],
+        ['use', '11rem', 1],
+        ['age', '6rem', 3],
+    ],
     /** A transcript's row: its time, its mark, and its text, under which a tool call's body opens. */
     transcript: [
         ['time', '3.5rem'],
@@ -299,6 +310,7 @@ const FROM: Record<RowColumn, string> = {
     time: 'col-[time/end]',
     title: 'col-[title/end]',
     tokens: 'col-[tokens/end]',
+    use: 'col-[use/end]',
     verdict: 'col-[verdict/end]',
 }
 
