@@ -507,6 +507,22 @@ test('Ask for changes stays at the bottom of the page while the plan is read, an
     expect(bar?.y).toBeGreaterThan((doc?.y ?? 0) + (doc?.height ?? 0))
 })
 
+test('Changes marks what the plan changed since the one it replaces, and off, marks nothing', async ({ page }) => {
+    const changes = page.getByRole('button', { name: 'Changes since plan 1' })
+    await expect(changes).toHaveAttribute('aria-pressed', 'false')
+    await expect(plan(page).locator('ins, del')).toHaveCount(0)
+    await changes.click()
+    await expect(changes).toHaveAttribute('aria-pressed', 'true')
+    await expect(plan(page).locator('ins').filter({ hasText: 'three lines' })).toBeVisible()
+    await expect(plan(page).locator('del').filter({ hasText: 'a row per line' })).toBeVisible()
+    await expect(plan(page).locator('ins').filter({ hasText: 'Scheduling exports' })).toBeVisible()
+    // What it marks is no part of the plan: its Markdown is as it was.
+    await page.getByRole('button', { name: 'Show Markdown' }).click()
+    await expect(page.getByLabel('Plan Markdown')).not.toContainText('a row per line')
+    await changes.click()
+    await expect(plan(page).locator('ins, del')).toHaveCount(0)
+})
+
 test('Ask for changes sends the open comments, each on its passage, with the note', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'proxy in front' })
     await thread.getByText('Does the proxy').click()
