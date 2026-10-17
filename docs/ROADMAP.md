@@ -1147,62 +1147,15 @@ the operator's tick logs remains.
 
 ## M49. Config per workspace
 
-REQUIREMENTS R19, DESIGN §12 and §18, TRUST_MODEL T7, D016, D053, D066. Asked for by the operator (2026-10-16): most
-settings live with the workspace they serve, not in one user file every workspace shares. Needs nothing; taken before
-M41, so that the settings page writes the file this milestone adds.
+REQUIREMENTS R19, DESIGN §12 and §18, TRUST_MODEL T7, D016, D053, D066. Each workspace has a private file,
+`.canopy/config.toml`, layered last over the workspace file and the user file; private keys may be set only there or in
+the user file, `canopy init` writes it, and the user file is optional.
 
-- Why: the user file serves every workspace, but most of its keys belong to one. The queue labels; the authorized
-  repliers and trusted reviewers, each in its tracker's identity format; `review.query`; `runtime.setup_cmd` and
-  `runtime.pr_skill`; `tracker.mcp_server`; chores; the loop's pacing; and capacity, which each workspace's journal
-  already counts on its own. Two `canopy loop`s in two workspaces take `serve.port` from the one file and collide.
-- The file: `<state_dir>/config.toml`, the workspace's **private file**, the operator's alone. Layered last: defaults,
-  the workspace file, the user file, then the private file, key by key; `[chores]` comes whole from the last file that
-  sets it, as today. User-only keys become **private** keys: set in the user file or the private file, never in the
-  shared workspace file. §12's table renames the scope and changes no key's.
-- The user file becomes optional, for what serves every workspace: the runtime templates, the comment marks, the
-  commit trailer, notification sinks. Without it canopy reads the private file alone; without either, the error names
-  the private file and `canopy init`. An existing user file keeps working unchanged, so nothing migrates.
-- What stays in the user config directory, as files rather than keys: the secrets (`listener-secret`, `slack-webhook`,
-  `slack-token`) and the sandbox templates (`sandbox/<role>.json`), which every workspace's runs share.
-  `paths.prompt_overrides` still defaults to `prompts/` there.
-- No key is held to the user file, the commit trailer and the comment marks included (the operator, 2026-10-16): a
-  workspace whose team marks agent work its own way sets its own.
-- A `paths.*` value in the private file may be relative, and resolves against the state directory:
-  `worker_instructions = "worker-instructions.md"` names `<state_dir>/worker-instructions.md`, private and under the
-  provenance check below. Not against the workspace root, which may be a shared checkout, where a file anyone who can
-  push may change would choose a prompt (T7). In the user file a `paths.*` value stays absolute or starts with `~`.
-- Provenance: D053 checks permissions, not provenance, so a `.canopy/` checked out of a shared workspace repository
-  under umask 077 passes it. Today that plants a journal; with the private file it would run commands
-  (`runtime.worker_cmd`). So canopy refuses a state directory any of whose paths git tracks: one `git ls-files` at the
-  workspace root through `core/hostgit.py` whenever config is loaded, none tracked when the root is in no repository,
-  and a refusal when git fails otherwise. That closes the journal's half of the residual too. The private file itself
-  is opened without following a symlink and must be a regular file of the operator's, not group or world writable.
-- `canopy init` writes the private file instead of the user file, with the labels and the empty trust lists to fill
-  in when no user file sets them, and still no key whose default serves. It never overwrites either file.
-- Errors name the file: a private key in the workspace file says to set it in the private file, and a validation
-  error names the files a key may come from. `loop.reread` reads the private file like any `canopy` command.
-- Sandbox: no new path. The private file is under `.canopy/`, which the templates already deny (§24); the canary adds
-  it to what a sandboxed run can neither read nor write. An unsandboxed run can write it, as it can the user file
-  today: TRUST_MODEL's residual for unsandboxed runs is unchanged.
-- Docs, in the PR that builds it, with the operator's approval note: TRUST_MODEL T7 (private keys from the user file
-  or the private file, and the provenance control); DESIGN §12 (layers, scopes, the file, the `paths.*` rule) and
-  §18 (pool sizes in either file); `README.md` and `docs/GETTING_STARTED.md`, where `canopy init` writes; D016 edited
-  in place, and D066 to "Pool sizes are private config".
-- Tests with the fakes: a key in the private file wins over the same key in the user file and the workspace file; a
-  private key in the workspace file is refused, naming the private file; a private file and no user file runs; with
-  neither, the error names `canopy init`; a tracked `.canopy/config.toml`, and a tracked journal, refused in a
-  workspace that is a git repository; a symlinked, foreign, or group-writable private file refused; `canopy init`
-  writes the private file, not the user file; a reload takes up a change to the private file; two workspaces' private
-  files set different `serve.port`s and each loads its own; a relative `paths.*` value in the private file resolves
-  under the state directory, and one in the user file is still refused.
-
-Accept: the tests above pass, and `make install-check`, with `canopy init` writing the private file. Live: the
-operator moves the keys that belong to one workspace into its private file, leaving the rest in the user file; the
-loop there runs as before, and a second workspace with its own private file reads its own labels and port.
-
-Status: in progress. Built 2026-10-16: the private file layered last, private keys in it or the user file, the
-provenance check and the private file's own, `canopy init` writing it, and the tests above; `make install-check` passes
-with init writing the private file. Left: the live check, the operator's.
+Status: done 2026-10-17.
+Learned: closed by the operator with half the live check run. The toy workspace (TOY_REPOS), a second workspace beside
+the operator's, read its own queue label and `serve.port` from its private file, and its loop served on that port. The
+operator's move of their own workspace's keys into its private file was not run; they accepted that it may break their
+user file as it stands.
 
 ## M50. Agent memory, opt-in
 
