@@ -15,8 +15,17 @@ from canopy.core import config, db, definitions
 from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import lock, procs
 from canopy.loop import attention, tick
-from tests.canopy.helpers import agent_runs, canopy, in_tick, overseer_does, state_block, tools_of, tools_printed
-from tests.conftest import CanopyEnv
+from tests.canopy.helpers import (
+    agent_runs,
+    canopy,
+    in_tick,
+    overseer_does,
+    state_block,
+    tools_of,
+    tools_printed,
+    with_events,
+)
+from tests.conftest import CanopyEnv, executable
 
 
 def test_dry_run_tick_records_the_overseer_plan(
@@ -95,7 +104,7 @@ def test_dry_run_tick_records_the_overseer_plan(
 def test_overseer_state_names_the_configured_needs_human_label(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
-    canopy_env.write_shared(canopy_env.shared_file.read_text() + 'needs_human_label = "blocked-on-team"\n')
+    canopy_env.append_shared('needs_human_label = "blocked-on-team"\n')
     with overseer_does():
         assert main(["tick", "--dry-run"]) == 0
         [run] = agent_runs(agent_log)
@@ -106,7 +115,7 @@ def test_overseer_state_names_the_configured_needs_human_label(
 
 def test_overseer_state_names_the_comment_marks(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
     # The overseer recognizes workers' comments by these, since workers post as the operator (D069).
-    canopy_env.write_user(canopy_env.user_file.read_text() + '\n[trust]\ncomment_suffix = "(canopy)"\n')
+    canopy_env.append_user('\n[trust]\ncomment_suffix = "(canopy)"\n')
     with overseer_does():
         assert main(["tick", "--dry-run"]) == 0
         [run] = agent_runs(agent_log)
@@ -214,7 +223,7 @@ def test_only_a_live_ok_tick_counts_as_having_run_the_query(
     with overseer_does():
         assert main(["tick", "--dry-run"]) == 0
         due.append(state_block(agent_log)["query_due"])
-        with mock.patch.dict(os.environ, {"FAKE_AGENT_EXIT": "3"}):
+        with overseer_does(exit_code=3):
             assert main(["tick"]) == 1
         due.append(state_block(agent_log)["query_due"])
         for _ in range(2):
@@ -239,19 +248,19 @@ def test_a_tick_from_before_the_spacing_was_recorded_ran_the_query(
 @pytest.mark.parametrize(
     "case",
     [
-        ("3", "CANOPY_TICK_DONE", "overseer exited 3"),
-        ("0", "I got distracted", "final message has no CANOPY_TICK_DONE line"),
-        ("0", "", "final message has no CANOPY_TICK_DONE line"),
+        (3, "CANOPY_TICK_DONE", "overseer exited 3"),
+        (0, "I got distracted", "final message has no CANOPY_TICK_DONE line"),
+        (0, "", "final message has no CANOPY_TICK_DONE line"),
     ],
 )
 def test_overseer_failure_closes_the_tick(
     canopy_env: CanopyEnv,
     treehouse_state: Path,
     agent_log: Path,
-    case: tuple[str, str, str],
+    case: tuple[int, str, str],
 ) -> None:
     exit_code, last_line, summary = case
-    with overseer_does(result=last_line), mock.patch.dict(os.environ, {"FAKE_AGENT_EXIT": exit_code}):
+    with overseer_does(result=last_line, exit_code=exit_code):
         assert main(["tick", "--dry-run"]) == 1
         tick = canopy_env.journal(migrate=False).execute("SELECT * FROM ticks").fetchone()
         assert tick["status"] == "overseer_failed"
@@ -276,8 +285,7 @@ def test_the_done_token_is_a_line_anywhere_in_the_final_message(
     final: str,
     status: str,
 ) -> None:
-    text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
-    canopy_env.write_user(text)
+    with_events(canopy_env, "canopy-overseer")
     with overseer_does(result=final):
         main(["tick", "--dry-run"])
         assert canopy_env.journal(migrate=False).execute("SELECT status FROM ticks").fetchone()[0] == status
@@ -289,12 +297,8 @@ def test_the_done_token_in_an_earlier_message_fails_the_tick(
     agent_log: Path,
 ) -> None:
     """A run that named the token, then stopped before the procedure's end, did not finish it."""
-    text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
-    canopy_env.write_user(text)
-    with (
-        mock.patch.dict(os.environ, {"FAKE_AGENT_SAYS": "CANOPY_TICK_DONE"}),
-        overseer_does(result="Now reading the next ticket."),
-    ):
+    with_events(canopy_env, "canopy-overseer")
+    with overseer_does(result="Now reading the next ticket.", says="CANOPY_TICK_DONE"):
         main(["tick", "--dry-run"])
         tick = canopy_env.journal(migrate=False).execute("SELECT status, summary FROM ticks").fetchone()
         assert (tick["status"], tick["summary"]) == (
@@ -312,8 +316,7 @@ def test_an_overseer_printing_json_events_is_read_by_their_text(
     status: str,
 ) -> None:
     """With OpenCode's `--format json`, its last line of stdout is an event; the done line is in the events' text."""
-    text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
-    canopy_env.write_user(text)
+    with_events(canopy_env, "canopy-overseer")
     with overseer_does(result=last_line):
         main(["tick", "--dry-run"])
         assert canopy_env.journal(migrate=False).execute("SELECT status FROM ticks").fetchone()[0] == status
@@ -328,10 +331,9 @@ def test_a_tick_records_and_prints_what_its_overseer_cost(
     last_line: str,
 ) -> None:
     """With events, the tick keeps the overseer's session and summed cost, whether or not the overseer succeeded."""
-    text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
-    canopy_env.write_user(text)
+    with_events(canopy_env, "canopy-overseer")
     read = ["echo", "read it"]
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_SESSION": "ses_o1"}), overseer_does(read, result=last_line):
+    with overseer_does(read, result=last_line, session="ses_o1"):
         main(["tick", "--dry-run"])
 
         conn = canopy_env.journal(migrate=False)
@@ -353,9 +355,8 @@ def test_a_running_tick_shows_its_overseer_session(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
     """The session is on the tick from the overseer's first event, so a page or `canopy decisions` shows it mid-tick."""
-    text = canopy_env.user_file.read_text().replace("--agent canopy-overseer", "--agent canopy-overseer --format json")
-    canopy_env.write_user(text)
-    with mock.patch.dict(os.environ, {"FAKE_OVERSEER_SESSION": "ses_o1"}), overseer_does(canopy("decisions")):
+    with_events(canopy_env, "canopy-overseer")
+    with overseer_does(canopy("decisions"), session="ses_o1"):
         assert main(["tick", "--dry-run"]) == 0
 
         [run] = agent_runs(agent_log)
@@ -451,8 +452,7 @@ def broken_canopy(tmp_path: Path, script: str) -> Iterator[None]:
     bin_dir = tmp_path / "broken-bin"
     bin_dir.mkdir()
     launcher = bin_dir / "canopy"
-    launcher.write_text(script)
-    launcher.chmod(0o755)
+    executable(launcher, script)
     others = [d for d in os.environ["PATH"].split(os.pathsep) if d and not (Path(d) / "canopy").exists()]
     with mock.patch.dict(os.environ, {"PATH": os.pathsep.join([str(bin_dir), *others])}):
         yield

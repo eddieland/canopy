@@ -727,8 +727,10 @@ list, an empty state, or a skeleton by hand.
   page, `(/runs)` to a section, and `(https://...)` to the web in a new tab. A link to anything else stays characters,
   and `guide.test.ts` fails on it. A page opens with `# Title` and then a lead of a sentence or two, says what the
   operator sees and does in the UI's own words (`waiting on you`, not `blocked`), and leaves how the code does it to
-  the code and why to the design. A new page is a file there and a line in its group in `SOURCES`; the rail's foot,
-  beside the version, opens the guide.
+  the code and why to the design. It talks to the operator as `you`, in plain, direct sentences, as good developer
+  docs do, with the odd dry aside from a staff engineer who has seen a few incidents: an aside rides on a fact, never
+  stands in for one, and they stay rare enough to land. A new page is a file there and a line in its group in
+  `SOURCES`; the rail's foot, beside the version, opens the guide.
 - **A question before losing work** (`AlertDialog`, `src/components/ui/alert-dialog.tsx`): a page that holds the
   operator's work not yet saved or sent asks before it is left, in a dialog centred over the canvas at 70%, on
   `surface` with a hairline border: its question as the title (`Leave this page?`), what leaving loses under it, then

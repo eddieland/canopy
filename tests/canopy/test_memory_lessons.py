@@ -21,29 +21,27 @@ from canopy.memory import attention as memory_attention
 from canopy.memory import manage
 from canopy.memory import reconcile as memory_reconcile
 from tests.canopy.helpers import (
+    BRANCH,
     KEY,
     LABEL,
     PROMPT_VALUES,
     WORK,
-    InlineRunner,
-    commit_and_push,
     context,
     dispatch_and_run,
     in_tick,
     last_run,
+    memories,
     overseer_does,
     planner_does,
     prompt_of,
+    run_with,
     state_block,
     with_memory,
-    worker_does,
-    worker_result,
 )
 
 if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
-BRANCH = f"agent/{KEY}-work"
 FIX_CI = ("--label", "agent-ready-tester", "--kind", "fix-ci")
 LESSON = "Run the API's tests with `make test-api`; plain `pytest` misses its fixtures."
 HEADING = "## Lessons from the operator"
@@ -56,16 +54,6 @@ VALUES = {
     "CONVERSATION": "No messages yet.",
 }
 PROMPTS = [(str(k), False) for k in prompts.WORKER] + [(str(k), True) for k in prompts.WORKER_PRIVATE]
-
-
-def stored(conn: sqlite3.Connection) -> list[records.Memory]:
-    return records.fetch_all(conn, records.Memory, "SELECT * FROM memories ORDER BY id")
-
-
-def run_with(conn: sqlite3.Connection, *args: str, **fields: object) -> sqlite3.Row:
-    """Dispatch and run KEY's next run with `args`, its worker committing, pushing, and sending `fields`."""
-    with worker_does(*commit_and_push(BRANCH), result=worker_result(**fields)):
-        return dispatch_and_run(conn, *args, runner=InlineRunner())
 
 
 def proposed(
@@ -104,7 +92,7 @@ def promoted(
 def test_with_proposals_off_a_proposal_is_stored_nowhere(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     with_memory(canopy_env, ticket_notes="record")
     run = run_with(conn, *WORK, proposals=[{"key": "api-tests", "text": LESSON}])
-    assert stored(conn) == []
+    assert memories(conn) == []
     assert '`"proposals":' not in prompt_of(canopy_env, int(run["id"]))
 
 
@@ -114,7 +102,7 @@ def test_at_record_a_proposal_waits_and_a_promoted_lesson_reaches_no_prompt(
 ) -> None:
     with_memory(canopy_env, proposals="record")
     first = run_with(conn, *WORK, proposals=[{"key": "api-tests", "text": LESSON, "repo": "repo"}])
-    [proposal] = stored(conn)
+    [proposal] = memories(conn)
     assert (proposal.scope, proposal.status, proposal.repo, proposal.run_id) == (
         "proposal",
         MemoryStatus.PENDING,
@@ -125,14 +113,14 @@ def test_at_record_a_proposal_waits_and_a_promoted_lesson_reaches_no_prompt(
     capsys.readouterr()
     assert main(["memory", "promote", str(proposal.id)]) == 0
     assert "It is recorded, not served: memory.proposals is record" in capsys.readouterr().out
-    lesson = stored(conn)[-1]
+    lesson = memories(conn)[-1]
     assert (lesson.scope, lesson.author, lesson.promoted_from, lesson.body) == (
         "lesson",
         "operator",
         proposal.id,
         LESSON,
     )
-    assert stored(conn)[0].status is MemoryStatus.SUPERSEDED
+    assert memories(conn)[0].status is MemoryStatus.SUPERSEDED
     run_with(conn, *FIX_CI)
     text = prompt_of(canopy_env, int(last_run(conn)["id"]))
     assert LESSON not in text
@@ -214,7 +202,7 @@ def test_a_plan_hears_lessons_but_what_it_sends_of_memory_changes_nothing(
     assert HEADING in prompt_of(canopy_env, int(run["id"]))
     # Its prompt carries no contract, so it cites and proposes nothing (DESIGN §28, Proposals and lessons).
     assert memory.get(conn, lesson.id) == lesson
-    assert [m.id for m in stored(conn) if m.status is MemoryStatus.PENDING] == []
+    assert [m.id for m in memories(conn) if m.status is MemoryStatus.PENDING] == []
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -273,7 +261,7 @@ def test_promote_reject_and_renew_refuse_inside_a_run(
     proposed(conn)
     with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "7"}):
         assert main(["memory", *args]) == 1
-    assert stored(conn)[0].status is MemoryStatus.PENDING
+    assert memories(conn)[0].status is MemoryStatus.PENDING
 
 
 def test_promote_refuses_while_proposals_are_off(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
@@ -302,7 +290,7 @@ def test_reject_ends_a_proposal(canopy_env: CanopyEnv, conn: sqlite3.Connection)
     with_memory(canopy_env, proposals="record")
     proposal = proposed(conn)
     assert main(["memory", "reject", str(proposal)]) == 0
-    assert (stored(conn)[0].status, stored(conn)[0].why) == (MemoryStatus.INVALID, "rejected")
+    assert (memories(conn)[0].status, memories(conn)[0].why) == (MemoryStatus.INVALID, "rejected")
     assert main(["memory", "promote", str(proposal)]) == 1
 
 
@@ -325,7 +313,7 @@ def test_proposals_past_the_bounds_are_refused(canopy_env: CanopyEnv, conn: sqli
     assert rendered is not None
     assert [(r.key, r.why) for r in memory.refused_of(rendered)] == [
         ("elsewhere", "its repository is not one the run worked in"),
-        ("repeat", f"it repeats lesson {stored(conn)[1].id}"),
+        ("repeat", f"it repeats lesson {memories(conn)[1].id}"),
         ("fourth", "past the 3 proposals a run may make"),
     ]
 
@@ -351,7 +339,7 @@ def test_a_proposal_nobody_reviews_expires_after_fourteen_days(canopy_env: Canop
     ctx = context(canopy_env)
     with in_tick(conn) as tick_id:
         assert memory_reconcile.run(ctx, logs.for_tick(tick_id)) == 1
-    by_id = {m.id: m for m in stored(conn)}
+    by_id = {m.id: m for m in memories(conn)}
     assert (by_id[old].status, by_id[old].why) == (MemoryStatus.INVALID, "expired")
     assert by_id[new].status is MemoryStatus.PENDING
 

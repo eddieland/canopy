@@ -7,6 +7,7 @@ import pytest
 
 from canopy.core import pools, treehouse
 from canopy.infra.procs import SubprocessRunner
+from tests.conftest import executable
 
 runner = SubprocessRunner()
 
@@ -83,8 +84,7 @@ def test_missing_treehouse_is_an_error(tmp_path: Path) -> None:
 @pytest.mark.parametrize("output", ["not json", "{}", '[{"name": "1"}]', '[{"name": 1, "path": "/p", "status": "x"}]'])
 def test_unexpected_status_output_is_an_error(tmp_path: Path, output: str) -> None:
     fake = tmp_path / "treehouse"
-    fake.write_text(f"#!/bin/sh\nprintf '%s\\n' '{output}'\n")
-    fake.chmod(0o755)
+    executable(fake, f"#!/bin/sh\nprintf '%s\\n' '{output}'\n")
     with (
         mock.patch.dict(os.environ, {"PATH": str(tmp_path)}),
         pytest.raises(treehouse.TreehouseError, match="unexpected output"),
@@ -95,8 +95,7 @@ def test_unexpected_status_output_is_an_error(tmp_path: Path, output: str) -> No
 def test_status_tolerates_null_and_extra_fields(tmp_path: Path) -> None:
     fake = tmp_path / "treehouse"
     row = '{"name": "1", "path": "/p", "status": "available", "lease_id": null, "leased_at": "", "future": 1}'
-    fake.write_text(f"#!/bin/sh\necho '[{row}]'\n")
-    fake.chmod(0o755)
+    executable(fake, f"#!/bin/sh\necho '[{row}]'\n")
     with mock.patch.dict(os.environ, {"PATH": str(tmp_path)}):
         [slot] = treehouse.status(runner)
         assert (slot.lease_id, slot.lease_holder, slot.leased_at, slot.canopy_key) == ("", "", None, None)

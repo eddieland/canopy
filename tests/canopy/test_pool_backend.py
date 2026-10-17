@@ -15,13 +15,10 @@ from canopy.core.vocab import PoolKind, RunStatus, TickStatus
 from canopy.infra import logs, procs, resources
 from canopy.runs import reconcile
 from tests.canopy.conftest import Ws, seed_pools
-from tests.canopy.helpers import InlineRunner, commit_and_push, in_tick, running_run, worker_does
+from tests.canopy.helpers import BRANCH, LABEL, InlineRunner, commit_and_push, in_tick, running_run, worker_does
 from tests.canopy.helpers import context as loop_context
 from tests.canopy.web_helpers import signed_in_client
 from tests.conftest import CanopyEnv, git, user_toml
-
-LABEL = "agent-ready-tester"
-BRANCH = "agent/PROJ-1-work"
 
 
 def use(canopy_env: CanopyEnv, backend: str) -> None:

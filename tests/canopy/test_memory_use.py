@@ -8,45 +8,29 @@ from typing import TYPE_CHECKING
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import memory, records
+from canopy.core import memory
 from canopy.core.vocab import MemoryStatus
 from tests.canopy.helpers import (
     KEY,
     WORK,
-    InlineRunner,
-    commit_and_push,
-    dispatch_and_run,
     dispatch_in_tick,
     dispatch_refused,
     last_run,
+    memories,
     prompt_of,
+    run_with,
     with_memory,
-    worker_does,
-    worker_result,
 )
 
 if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
-BRANCH = f"agent/{KEY}-work"
 FIX_CI = ("--label", "agent-ready-tester", "--kind", "fix-ci")
 NOTE = "The lint job fails on a cold cache: run `make lint` twice before trusting it."
 HEADING = "## Notes from earlier runs\n\n"
 OTHER = "PROJ-2"
 
 pytestmark = pytest.mark.usefixtures("git_pool")
-
-
-def stored(conn: sqlite3.Connection) -> list[records.Memory]:
-    return records.fetch_all(conn, records.Memory, "SELECT * FROM memories ORDER BY id")
-
-
-def run_with(conn: sqlite3.Connection, *args: str, key: str = KEY, **fields: object) -> sqlite3.Row:
-    """Dispatch and run `key`'s next run with `args`, its worker committing, pushing, and sending `fields`."""
-    branch = f"agent/{key}-work"
-    line = worker_result(**fields).replace(BRANCH, branch)
-    with worker_does(*commit_and_push(branch), result=line):
-        return dispatch_and_run(conn, *args, key=key, runner=InlineRunner())
 
 
 def test_a_note_reaches_its_tickets_next_run_and_no_other_tickets(
@@ -56,7 +40,7 @@ def test_a_note_reaches_its_tickets_next_run_and_no_other_tickets(
     first = run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
     assert f"{HEADING}Notes this ticket's earlier runs wrote" in prompt_of(canopy_env, int(first["id"]))
     assert "None: no earlier run of this ticket left a note." in prompt_of(canopy_env, int(first["id"]))
-    [note] = stored(conn)
+    [note] = memories(conn)
 
     assert dispatch_in_tick(conn, *FIX_CI).code == 0
     run_id = int(last_run(conn)["id"])
@@ -97,7 +81,7 @@ def test_a_run_renews_drops_and_retires_only_what_it_was_shown(canopy_env: Canop
             {"key": "cause", "text": "The cache key leaves out the lockfile."},
         ],
     )
-    theirs, lint, stale, cause = stored(conn)
+    theirs, lint, stale, cause = memories(conn)
     run_with(
         conn,
         *FIX_CI,
@@ -105,7 +89,7 @@ def test_a_run_renews_drops_and_retires_only_what_it_was_shown(canopy_env: Canop
         memory_wrong=[cause.id, theirs.id, 99_999],
         drop_notes=["stale", "theirs", "never-shown"],
     )
-    by_id = {m.id: m for m in stored(conn)}
+    by_id = {m.id: m for m in memories(conn)}
     assert (by_id[lint.id].use_count, by_id[lint.id].status) == (1, MemoryStatus.ACTIVE)
     assert by_id[lint.id].last_used_at is not None
     assert (by_id[stale.id].status, by_id[stale.id].why) == (
@@ -123,7 +107,7 @@ def test_a_note_written_at_use_supersedes_by_key(canopy_env: CanopyEnv, conn: sq
     with_memory(canopy_env, ticket_notes="use")
     run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
     run_with(conn, *FIX_CI, notes=[{"key": "lint", "text": "Fixed on main; lint is reliable again."}])
-    old, new = stored(conn)
+    old, new = memories(conn)
     assert (old.status, new.status, new.supersedes) == (MemoryStatus.SUPERSEDED, MemoryStatus.ACTIVE, old.id)
     assert dispatch_in_tick(conn, *WORK).code == 0
     text = prompt_of(canopy_env, int(last_run(conn)["id"]))
@@ -149,7 +133,7 @@ def test_memory_list_says_the_digest_is_served_and_what_a_run_read(
 ) -> None:
     with_memory(canopy_env, ticket_notes="use")
     run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
-    second = run_with(conn, *FIX_CI, memory_used=[stored(conn)[0].id])
+    second = run_with(conn, *FIX_CI, memory_used=[memories(conn)[0].id])
     capsys.readouterr()
     assert main(["memory", "list", KEY, "--digest"]) == 0
     out = capsys.readouterr().out

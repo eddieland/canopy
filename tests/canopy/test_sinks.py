@@ -15,6 +15,7 @@ import pytest
 
 from canopy.infra.procs import SubprocessRunner
 from canopy.notify import desktop
+from tests.conftest import executable
 
 MESSAGE: dict[str, Any] = {
     "version": 1,
@@ -69,10 +70,8 @@ def tools(tmp_path: Path) -> Iterator[Path]:
     bin_dir.mkdir()
     for name in ("notify-send", "osascript"):
         tool = bin_dir / name
-        tool.write_text(
-            f"#!/usr/bin/env python3\nimport json, sys\nopen({str(calls)!r}, 'a').write(json.dumps(sys.argv) + '\\n')\n"
-        )
-        tool.chmod(0o755)
+        record = f"open({str(calls)!r}, 'a').write(json.dumps(sys.argv) + '\\n')"
+        executable(tool, f"#!/usr/bin/env python3\nimport json, sys\n{record}\n")
     with mock.patch.dict(os.environ, {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}):
         yield calls
 

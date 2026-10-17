@@ -27,6 +27,10 @@ FAKES_DIR = Path(__file__).parent / "fakes"
 SCRIPTS_DIR = Path(sys.executable).parent
 # The prefixes tests/fakes/agent records in its log's `env`. Keep in sync with it.
 RECORDED_ENV_PREFIXES = ("CANOPY_", "OPENCODE_")
+# What tests/fakes/agent reads its behavior from, for each role it plays. Keep in sync with it.
+FAKE_AGENT_PREFIXES = tuple(
+    f"FAKE_{role}_" for role in ("AGENT", "OVERSEER", "WORKER", "SPLITTER", "PLANNER", "CHORE", "REVIEWER")
+)
 
 # Commits made under test have a fixed author, and git reads no config of the operator's or the machine's. Nor does it
 # start automatic maintenance: newer git (2.55 on CI) runs it in the background after a commit or a fetch, where it
@@ -83,14 +87,14 @@ def treehouse_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
 def agent_log(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
     """Fake agent on PATH with default behavior. Yields the file each run appends its argv and cwd to.
 
-    Tests change behavior with `mock.patch.dict(os.environ, ...)` on the FAKE_AGENT_* variables, or FAKE_OVERSEER_*
-    and FAKE_WORKER_* for one role only; see tests/fakes/agent.
+    Tests script it through the helpers in tests/canopy/helpers.py (`overseer_does`, `worker_does`, ...), which set its
+    FAKE_<ROLE>_* variables for the length of a block; see tests/fakes/agent for what each one does.
     """
     log = tmp_path / "agent.jsonl"
-    with mock.patch.dict(os.environ, {"FAKE_AGENT_LOG": str(log)}):
-        for role in ("AGENT", "OVERSEER", "WORKER", "WORKER_PRIVATE", "SPLITTER", "CHORE", "REVIEWER"):
-            for name in ("RESULT", "EXIT", "SLEEP", "COMMANDS"):
-                os.environ.pop(f"FAKE_{role}_{name}", None)
+    with mock.patch.dict(os.environ):
+        for name in [k for k in os.environ if k.startswith(FAKE_AGENT_PREFIXES)]:
+            del os.environ[name]
+        os.environ["FAKE_AGENT_LOG"] = str(log)
         yield log
 
 
@@ -158,6 +162,14 @@ class CanopyEnv:
 
     def write_shared(self, text: str) -> None:
         self.shared_file.write_text(text)
+
+    def append_user(self, text: str) -> None:
+        """Add `text` to the end of the user file, as a test adds a table or a key to the config it starts with."""
+        self.write_user(self.user_file.read_text() + text)
+
+    def append_shared(self, text: str) -> None:
+        """Add `text` to the end of the workspace file, after its `[tracker]` table."""
+        self.write_shared(self.shared_file.read_text() + text)
 
     @property
     def private_file(self) -> Path:
@@ -248,6 +260,13 @@ def git(*args: str, cwd: Path) -> str:
     return result.stdout.strip()
 
 
+def executable(path: Path, text: str) -> Path:
+    """Write `text` to `path` as a script anyone may run, and return `path`."""
+    path.write_text(text)
+    path.chmod(0o755)
+    return path
+
+
 @dataclass(frozen=True)
 class GitPool:
     """A bare `origin` with one commit on `main`, and treehouse slots that are clones of it."""
@@ -263,8 +282,7 @@ class GitPool:
     def reject_pushes(self) -> None:
         """Make origin refuse every push, the way a protected branch or a lost network does."""
         hook = self.origin / "hooks" / "pre-receive"
-        hook.write_text("#!/bin/sh\necho 'push refused by test hook' >&2\nexit 1\n")
-        hook.chmod(0o755)
+        executable(hook, "#!/bin/sh\necho 'push refused by test hook' >&2\nexit 1\n")
 
 
 @pytest.fixture

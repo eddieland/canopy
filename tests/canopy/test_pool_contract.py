@@ -34,6 +34,7 @@ import pytest
 from canopy.core import hostgit, pools, treehouse
 from canopy.core import pool as canopy_pool
 from canopy.infra import procs
+from tests.canopy.helpers import KEY
 from tests.conftest import HERMETIC_GIT, Journals, git
 
 # Found before any fixture puts the fake first on PATH.
@@ -41,7 +42,6 @@ REAL_TREEHOUSE = shutil.which("treehouse")
 # Set by `make pool-contract`: real treehouse must run, so a missing one fails the run instead of skipping it.
 REQUIRED = os.environ.get("CANOPY_POOL_CONTRACT") == "1"
 REPO = "repo"
-KEY = "PROJ-1"
 
 
 class Impl(StrEnum):

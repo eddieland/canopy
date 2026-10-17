@@ -409,6 +409,8 @@ templates also leave writable and the overseer also reads, are another way out i
 Tracing it found that the data directory is: a `wellknown` entry in `auth.json`, the active account in `opencode.db`,
 and a planted snapshot git directory each make the overseer's OpenCode, or the operator's, run what a worker chose;
 the state directory is not (DESIGN §24, Open).
+CI dropped its macOS canary job 2026-10-17, at the operator's request: macOS is left to the live check on the
+operator's machine.
 Next: data of the sandbox's own, once the operator settles how sandboxed runs get their credentials; then the canary on
 the operator's Linux and macOS machines.
 
@@ -914,7 +916,7 @@ What treehouse does that canopy relies on or works around, from its source at th
 - `tests/canopy/test_pool_contract.py`: a case for each guarantee above and each one `core/treehouse.py`'s callers
   depend on (reconcile, dispatch, reviews, sync, the worktrees page). It runs against the fake on every `make check`,
   and against real treehouse when `treehouse` is on `PATH` (`make pool-contract`).
-- A CI job, Linux and macOS, that builds treehouse at the pinned commit with `make treehouse` and runs the suite. Go
+- A CI job, on Linux, that builds treehouse at the pinned commit with `make treehouse` and runs the suite. Go
   is a CI-only dependency, like Node for the sandbox canary. Where the fake and real treehouse disagree, the fake is
   fixed.
 - DESIGN §18 gains "What a pool guarantees", the list the suite checks, each line naming its case.
@@ -967,7 +969,8 @@ Accept: each stage's check, in order. Then `make install-check` and `make binary
 and a fresh install from README on a machine with no Go runs a day of `canopy loop`.
 
 Status: in progress. Stage 1 passed its check 2026-10-16: the contract suite passes against the fake, and against real
-treehouse at the pinned commit in CI on Linux and macOS. Stage 2 is built: canopy's pool passes every contract case, and
+treehouse at the pinned commit in CI on Linux and macOS; CI has run it on Linux only since 2026-10-17, at the
+operator's request. Stage 2 is built: canopy's pool passes every contract case, and
 reconcile's shadow logs `pool_shadow_mismatch`; its check, a week of `canopy loop` with the shadow on, is the
 operator's. Stage 3's choice is built too, ahead of stage 2's check at the operator's request (2026-10-16):
 `pools.backend` picks the pool, each lease goes back to the pool the journal says made it, and sync moves idle slots
