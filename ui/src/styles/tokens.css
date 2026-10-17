@@ -43,6 +43,7 @@
     --section-chores: oklch(0.535 0.14 50);
     --section-ticks: oklch(0.51 0.145 135);
     --section-spend: oklch(0.51 0.1 212);
+    --section-memory: oklch(0.52 0.12 115);
     --section-settings: oklch(0.52 0.13 275);
 
     /* A diff's added and removed lines: a line's change, never a run's state. Used as tints and as the +/- marks. */
@@ -128,6 +129,7 @@
     --section-chores: oklch(0.8 0.14 55);
     --section-ticks: oklch(0.84 0.16 130);
     --section-spend: oklch(0.8 0.11 212);
+    --section-memory: oklch(0.86 0.15 115);
     --section-settings: oklch(0.76 0.1 275);
 
     --diff-add: oklch(0.78 0.15 150);
@@ -197,6 +199,7 @@
     --color-section-chores: var(--section-chores);
     --color-section-ticks: var(--section-ticks);
     --color-section-spend: var(--section-spend);
+    --color-section-memory: var(--section-memory);
     --color-section-settings: var(--section-settings);
 
     --color-diff-add: var(--diff-add);

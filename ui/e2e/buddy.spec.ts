@@ -76,7 +76,7 @@ test.describe('turned on', () => {
         await expect(page.getByTestId('buddy-sprig')).toBeVisible()
 
         // A new page offers no tip of its own, and the next comes on Sprig's time, about the page on screen.
-        await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings' }).click()
+        await page.getByTestId('rail-settings').click()
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Settings')
         await expect(tip).toBeHidden()
         await waitForTip(page, tip)
@@ -91,7 +91,7 @@ test.describe('turned on', () => {
         await page.getByTestId('buddy-sprig').click()
         await expect(tip).toBeVisible()
 
-        await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings' }).click()
+        await page.getByTestId('rail-settings').click()
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Settings')
         await expect(tip).toBeHidden()
         await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Attention' }).click()

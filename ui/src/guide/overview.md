@@ -20,13 +20,16 @@ The nav on the left lists them, most used first. If you learn only one, learn At
   the priciest answers are "no".
 - [Ticks](/ticks): the overseer's latest ticks, and what each one decided.
 - [Worktrees](/worktrees): each repository's pool, its slots, and what's holding them.
-- [Settings](/settings): the theme, the send key, the fun, and your session.
+- [Memory](/memory): what workers remember, the ticket notes and the lessons, and which runs read them. The header's
+  `memory:` readout opens it too.
+
+[Settings](/settings), for the theme, the send key, the fun, and your session, lives at the rail's foot.
 
 ## The rail
 
 The strip beside the nav, on every page. From the top: a search box over the whole journal (press `/` to jump to
 it), the runs working right now, and what the last 24 hours and the last 30 days cost. Its foot names the version
-canopy is serving, which links to canopy's releases on GitHub, and opens this guide.
+canopy is serving, which links to canopy's releases on GitHub, and under it opens this guide and Settings.
 
 ## Acting from the UI
 

@@ -1,4 +1,11 @@
-/* Applied to every screenshot (playwright.config.ts): what changes with the build, not the page, is hidden. */
+/* Applied to every screenshot (playwright.config.ts): what changes with the build, not the page, is replaced. The
+ * version names the commit, so a placeholder stands in for it, as long as a dev build's, so the images show the room
+ * a real one takes. */
 [data-testid='rail-version'] {
-    visibility: hidden;
+    font-size: 0;
+}
+
+[data-testid='rail-version']::after {
+    content: 'canopy 0.1.0.dev52+abc1234';
+    font-size: var(--text-2xs);
 }

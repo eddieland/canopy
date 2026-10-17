@@ -51,6 +51,7 @@ describe('Nav', () => {
         ['a chore', '/chores/deps', 'Chores'],
         ['a tick', '/ticks/12', 'Ticks'],
         ['the runs list', '/runs', 'Runs'],
+        ['the memory page', '/memory', 'Memory'],
     ] as const)("keeps its section current on %s's page", async (_, at, section) => {
         await renderNav({ at, items: [] })
         expect(current()).toEqual([section])
@@ -58,6 +59,12 @@ describe('Nav', () => {
 
     it('marks no section on a page in none', async () => {
         await renderNav({ at: '/no-such-page', items: [] })
+        expect(current()).toEqual([])
+    })
+
+    it("lists no Settings, which the rail's foot opens, so marks nothing on its page", async () => {
+        await renderNav({ at: '/settings', items: [] })
+        expect(screen.queryByRole('link', { name: 'Settings' })).toBeNull()
         expect(current()).toEqual([])
     })
 
@@ -91,8 +98,8 @@ describe('Nav', () => {
         expect(current()).toEqual(['Tickets'])
         expect(screen.getByRole('link', { name: 'Attention 1 broken, 1 waiting on you, 1 other' })).toBeDefined()
         expect(screen.getAllByText(/^\d$/u).map((count) => count.textContent)).toEqual(['3'])
-        expect(screen.getByRole('link', { name: 'Settings' }).title).toBe(
-            'Settings: The theme, the send key, the fun, and the session',
+        expect(screen.getByRole('link', { name: 'Memory' }).title).toBe(
+            'Memory: What workers remember: the ticket notes and lessons, and which runs read them',
         )
     })
 })

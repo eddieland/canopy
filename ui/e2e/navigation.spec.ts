@@ -62,7 +62,12 @@ test('the nav moves between pages without reloading the shell', async ({ page })
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('chore:deps')
     await expect(nav.getByRole('link', { name: 'Chores' })).toHaveAttribute('data-status', 'active')
 
-    await nav.getByRole('link', { name: 'Settings' }).click()
+    await nav.getByRole('link', { name: 'Memory' }).click()
+    await expect(page).toHaveURL(/\/memory$/u)
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Memory')
+    await expect(nav.getByRole('link', { name: 'Memory' })).toHaveAttribute('data-status', 'active')
+
+    await page.getByTestId('rail-settings').click()
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Settings')
     await expect(page.getByTestId('app-header')).toHaveAttribute('data-marker', 'kept')
 })

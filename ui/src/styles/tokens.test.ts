@@ -36,6 +36,7 @@ const TEXT = [
     'section-chores',
     'section-ticks',
     'section-spend',
+    'section-memory',
     'section-settings',
     'diff-add',
     'diff-del',
