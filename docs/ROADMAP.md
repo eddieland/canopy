@@ -1546,9 +1546,8 @@ wait, and GitHub Enterprise is supported.
   `COMMENT` review and never approving; a PR on an Enterprise host posted to that host; a newer draft superseding an
   older; the sent ids in the state block, a snapshot; `post`'s prompts unchanged, a snapshot; Vitest for the draft
   card, Playwright for sending from the PR's page.
-- Open: who adds the `needs_human` label for a question still waiting as a draft (the worker as today, so the ticket
-  says it waits before the question is there, or the post command when it is sent, which it cannot do on a tracker
-  without one).
+- A blocked worker adds the `needs_human` label as today, whether or not its question waits as a draft: labels are
+  not speech, and the operator left it to the simplest rule (2026-10-17).
 
 Accept: written with the design, before work starts. Live, once built: on one of the loop's PRs with a coworker's
 review comments, a `resume` under `approve` pushes its changes and posts nothing; the operator reads its drafts on their
@@ -1616,10 +1615,10 @@ state reaches the PR before they accept. Sketch only; the design comes first, in
   `post` it needs approval as any plan does, since its replies would go out unseen.
 - Settled by the operator (2026-10-17): the quiet period is 10 minutes by default, six feedback plans a unit, and the
   setting private.
-- Open: once the operator approves a plan, the `resume` that follows writes its own drafts (M53) from what it did,
-  which may differ from the replies the plan proposed. Whether its drafts should start from the plan's proposed
-  replies, so the operator rereads only where the run departed from the plan, or be written fresh, which is more
-  reading but always matches the code.
+- **Drafts start from the plan.** The `resume` that follows an approved plan starts each draft (M53) from the reply
+  the plan proposed for its item, changing it only where the work departed from the plan, and the threads view marks
+  what changed from the approved proposal, as the plan page marks what changed between plans (`plan-diff.ts`). The
+  operator rereads only the departures (left to judgment by the operator, 2026-10-17).
 
 Accept: written with the design, before work starts. Live, once built: on one of the loop's PRs, a coworker and a bot
 each leave review comments; one feedback plan covers both; a new comment and a red check before the operator approves
@@ -1680,9 +1679,8 @@ first, in §25.
 - **No model per run.** Triage chooses no model for the work. With plans on, the operator runs a cheaper `worker_cmd`
   (2026-10-17), since every worker then has an approved plan or a ticket judged trivial: a setting of theirs, not a
   choice an agent makes.
-- Open: when the triage run itself breaks (it crashes, times out, or prints a result that does not parse), whether
-  canopy runs triage once more or plans the ticket at once, as written. Planning at once is simpler, but each broken
-  triage then costs the planner run it was meant to save.
+- **No retry.** A triage run that crashes, times out, or prints a result that does not parse is not run again: the
+  ticket is planned at once (the operator, 2026-10-17).
 
 Accept: written with the design, before work starts. Live, once built: over a week with plans and triage on, the
 spend page shows triage runs' cost against the planner runs they saved; every waived ticket's PR is one the operator
@@ -1704,21 +1702,24 @@ prompt, cooldown, and attempt limit, and each pushing to the same branch. Sketch
 - **One prompt.** `worker-resume.md` and its private variant gain fix-ci's section on reading a failed check and its
   log, under the context's reason for the run; `worker-fix-ci.md` and its private variant go. A prompt override of
   either fix-ci file is refused with a message saying what to merge into the resume override.
-- **Limits and the cooldown.** Attempts stay counted per unit and per reason, so a PR that keeps going red cannot spend
-  the attempts its reviewers need, and the other way round: `policy.max_fix_ci_attempts` and
-  `fix_ci_cooldown_minutes` keep their names and count `resume` runs dispatched for a failed check, an old `fix-ci`
-  run among them (D030: derived from `runs`, no reset). A run for both counts against both. `canopy grant KEY
-  fix-ci` keeps working.
+- **One limit, higher.** `policy.max_resume_attempts` bounds every `resume` of a unit, whatever it was for, an old
+  `fix-ci` run counted among them (D030: derived from `runs`, no reset), with its default raised to 6, more than
+  today's two limits together (2 and 3), since one run now does what two did. The operator chose one simpler limit
+  (2026-10-17), accepting that a PR that keeps going red can spend the attempts its reviewers would have had.
+  `policy.max_fix_ci_attempts` becomes a removed key, whose error says to raise `max_resume_attempts`, and
+  `canopy grant KEY fix-ci` is refused naming `resume`. The cooldown stays, renamed `policy.ci_cooldown_minutes`
+  (`fix_ci_cooldown_minutes` a removed key naming it): it holds a `resume` whose only reason is a failed check, so a
+  red build still waits between attempts.
 - **What else changes.** M25's `triage-ci`, once built, comes before a `resume` for a failed check as it would have
   before `fix-ci`; M35's notice holds that `resume` as it held `fix-ci`; M38 moves `ci_red`'s `dispatch resume` into
   code under its own evidence rule; the overseer prompt's phase table and the web UI's kind chips and guide pages say
   `resume`. Spend (M33) shows old `fix-ci` runs under their kind.
-- TRUST_MODEL T3: the limits are unchanged in effect; the text names them by reason rather than by kind.
+- TRUST_MODEL T3: one `resume` limit per unit in place of two, and the cooldown on CI-only runs.
 - Tests with the fakes: a red check dispatches `resume` with the checks named; a red check and a review comment in one
-  tick make one run; `--kind fix-ci` refused; the CI attempt limit and cooldown counting old `fix-ci` runs and new
-  `resume` runs for a check; a run for both counting against both; the overseer's state block, a snapshot.
-- Open: whether the two limits should become one, simpler but letting a red build spend the reviewers' attempts; the
-  name of a run's reasons in the journal (`ci`, `review`, `reply`, `conflict`, `no_pr`).
+  tick make one run; `--kind fix-ci` refused; the one limit counting old `fix-ci` runs and every `resume`; the removed
+  keys' errors; the cooldown holding a CI-only `resume` and not one with review feedback; the overseer's state block,
+  a snapshot.
+- Open: the names of a run's reasons in the journal (`ci`, `review`, `reply`, `conflict`, `no_pr`).
 
 Accept: written with the design, before work starts. Live, once built: on one of the loop's PRs with a red check and a
 new review comment, the next tick sends one `resume`, which fixes the check and addresses the comment in one push.
