@@ -281,6 +281,36 @@ class TicketGrant(Row):
 
 
 @dataclass(frozen=True)
+class PlanThread(Row):
+    """One of the operator's comments on a ticket's plan, anchored by its passage's words (DESIGN §25)."""
+
+    TABLE: ClassVar[str] = "plan_threads"
+
+    id: int
+    ticket_key: str
+    # The passage, and up to 32 characters either side of it, each with its whitespace collapsed.
+    quote: str
+    prefix: str
+    suffix: str
+    body: str
+    created_at: str
+    # When the operator resolved it; None while it is open.
+    resolved_at: str | None
+
+
+@dataclass(frozen=True)
+class PlanReply(Row):
+    """A reply in a plan's comment thread (DESIGN §25)."""
+
+    TABLE: ClassVar[str] = "plan_replies"
+
+    id: int
+    thread_id: int
+    body: str
+    created_at: str
+
+
+@dataclass(frozen=True)
 class RunTool(Row):
     """What one tool's calls in an agent run put into its context (DESIGN §13): the run, by its table and id."""
 

@@ -456,6 +456,52 @@ def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str
     return approved
 
 
+def save(
+    conn: sqlite3.Connection,
+    state_dir: Path,
+    key: str,
+    plan_id: int,
+    text: str,
+    *,
+    read_sha256: str,
+    dispatch_lock: Path,
+) -> Written:
+    """Write the operator's edit of the ticket's current plan over its file, as the operator's own editor would.
+
+    The web UI's plan editor saves through this (DESIGN §25, Commenting on a plan): under a temporary name renamed into
+    place, so a reader never sees half a file, readable only by the operator, refusing a file that is not regular. An
+    approved plan whose file is saved needs approving again (`plan_changed`).
+
+    Returns:
+        The file's hash and size as saved.
+
+    Raises:
+        Refused: `inside_run` inside one of canopy's own runs; `bad_plan` while a plan run for the ticket is running,
+            when `plan_id` is not its current plan, when the file is missing or not a regular file, when it changed
+            since the editor read it, by `read_sha256`, or when `text` is not a plan: empty or over `MAX_CHARS`.
+    """
+    conversation.check_operator()
+    if not text.strip() or len(text) > MAX_CHARS:
+        raise Refused("bad_plan", f"a plan is 1 to {MAX_CHARS:,} characters, not all whitespace")
+    with lock.hold(dispatch_lock, wait=True), db.transaction(conn):
+        _not_planning(conn, key)
+        plan = current(conn, key)
+        if plan is None or plan.id != plan_id:
+            raise Refused("bad_plan", f"plan {plan_id} is not {key}'s current plan, so it is not edited")
+        path = path_for(state_dir, key, plan.run_id)
+        reading = read(path)
+        if reading.problem in ("missing", "not a regular file", "unreadable"):
+            raise Refused("bad_plan", f"plan {plan.id}'s file {path} is {reading.problem}, so it is not saved over")
+        if reading.sha256 != read_sha256:
+            raise Refused(
+                "bad_plan", f"plan {plan.id}'s file {path} changed since it was read; read it again before saving"
+            )
+        try:
+            return _replace(state_dir, key, path.name, text)
+        except PlanFileError as e:
+            raise Refused("bad_plan", str(e)) from None
+
+
 def approved_text(state_dir: Path, plan: records.Plan) -> str | None:
     """The text of an approved plan, if its file still has the hash the operator approved.
 
@@ -563,6 +609,39 @@ def _link_new(dir_fd: int, name: str, data: bytes) -> None:
         raise PlanFileError(f"a plan named {name} is already there, so canopy leaves it as it is") from None
     finally:
         os.unlink(temporary, dir_fd=dir_fd)
+
+
+def _replace(state_dir: Path, key: str, name: str, text: str) -> Written:
+    """Write `text` over the plan file `name` in the ticket's directory: a temporary file, then renamed into place.
+
+    Returns:
+        The file's hash and size as written.
+
+    Raises:
+        PlanFileError: `plans/` or the ticket's directory is not the operator's own, or the file could not be written.
+    """
+    data = text.encode("utf-8")
+    plans_fd = _private_dir(None, state_dir / DIR_NAME)
+    try:
+        ticket_fd = _private_dir(plans_fd, key)
+    finally:
+        os.close(plans_fd)
+    temporary = f".{name}.{secrets.token_hex(8)}.tmp"
+    try:
+        fd = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=ticket_fd)
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        # A rename replaces the name itself, never what a link there names.
+        os.rename(temporary, name, src_dir_fd=ticket_fd, dst_dir_fd=ticket_fd)
+    except OSError as e:
+        with contextlib.suppress(FileNotFoundError):
+            os.unlink(temporary, dir_fd=ticket_fd)
+        raise PlanFileError(f"the plan was not saved: {e.strerror}") from None
+    finally:
+        os.close(ticket_fd)
+    return Written(sha256=hashlib.sha256(data).hexdigest(), size=len(data))
 
 
 def _hashed(f: IO[bytes]) -> tuple[bytes, str, int]:

@@ -14,8 +14,9 @@ grant KEY plan`, and the `unplanned` and `plan_changed` guards (Which tickets ar
 Dispatch, below), and the overseer's part: the phases, the state block's plan, `plan_review`, a blocked planner's
 `awaiting_reply`, and `plan.proposed` (Phases and the overseer's part, and Reading plans, below), and the worker's
 copy: `{{PLAN}}`, `.canopy-plan.md` where the worker starts, and the harness note on a pushed copy (Workers follow the
-plan, and The worker's copy, below). Until M44 lands, §22 describes the ticket page as it is, and `canopy show` prints
-no plan. This section says what changes in each.
+plan, and The worker's copy, below), and the plan's reading and editing for every channel but the page: `canopy show`
+and `--plans`, the plan routes, a save of an edit, and the threads' tables (Reading plans, and Commenting on a plan,
+below). Until M44 lands, §22 describes the ticket page as it is. This section says what changes in it.
 
 Today the `implement` worker plans inside its own session, and nothing of that plan survives but the run's summary. A
 **plan** is a run of its own that reads the ticket and the code and writes down how the work will be done, before any
@@ -299,8 +300,9 @@ canopy ships `canopy-planner` in the definitions directory (§13):
 
 ### Reading plans
 
-- `canopy show KEY` prints the newest plan, its status, and when it was approved; `canopy show KEY --plans` prints every
-  plan, oldest first.
+- `canopy show KEY` prints the newest plan as its file stands, its status, and when it was approved, and says when the
+  file was edited since the planner wrote it, changed since it was approved, or is not a plan any more; `canopy show
+  KEY --plans` prints every plan, oldest first, and the open comments. A ticket plans do not touch shows no plan.
 - The web UI's ticket page (§22) shows the newest plan in the plan editor (Commenting on a plan, below), with
   `Approve`, `Ask for changes`, and `Skip`, and lists earlier plans. They call `POST /tickets/{key}/plan` with
   `approve`, `request`, or `skip`, through the same code as the CLI, so with the same refusals.
@@ -352,7 +354,8 @@ ticket's page.
   name renamed into place, so a reader never sees half a file. It saves only a `proposed` plan's file, or an approved
   one's, which then needs approving again (`plan_changed`); it refuses `bad_plan` while a plan run for the ticket is
   running, and when the file changed since the editor read it, by its hash, so an edit made elsewhere is never
-  overwritten unseen. `--approve` then takes the file as it stands, as it would after any edit.
+  overwritten unseen. `--approve` then takes the file as it stands, as it would after any edit. The largest body the
+  web channel takes is this save, a plan's 100,000 characters, so its body limit is 1,280 KiB (§22).
 - **In the journal** (M44): a thread belongs to the ticket, not to one plan, so it carries from plan to plan and is
   anchored again on each. A `plan_threads` table (id, ticket key, quote, prefix, suffix, body, created at, resolved at)
   and `plan_replies` (id, thread id, body, created at), written only by the web channel, behind its token (T8). A
