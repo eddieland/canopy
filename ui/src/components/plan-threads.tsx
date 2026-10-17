@@ -65,6 +65,7 @@ export function PlanThreads({
     onDraftSubmit,
     onDraftCancel,
     onDraftLeave,
+    onResolveGone,
     ...actions
 }: ThreadActions & {
     /** The threads, in the plan's order. */
@@ -91,6 +92,8 @@ export function PlanThreads({
     onDraftCancel: () => void
     /** Puts the cursor back in the plan, the comment being written left open with its words. */
     onDraftLeave: () => void
+    /** Resolves every open thread whose passage is gone from the plan, at once. */
+    onResolveGone: () => void
 }) {
     const [showResolved, setShowResolved] = useState(false)
     const open = threads.filter((thread) => !thread.resolved)
@@ -128,6 +131,17 @@ export function PlanThreads({
                 </Empty>
             )}
             {placed.slice(draftAt).map((thread) => card(thread))}
+            {editable && lost.length > 1 && (
+                // A new plan rewrites what it was asked to change, so the comments on it lose their passages
+                // together: once read, they are resolved together, rather than one by one.
+                <div className="flex items-center justify-between gap-2 border-t px-3 py-1.5">
+                    <span className="text-xs text-muted-foreground">{lost.length} on passages gone from the plan</span>
+                    <Button variant="ghost" size="xs" onClick={onResolveGone}>
+                        <Check aria-hidden />
+                        Resolve all {lost.length}
+                    </Button>
+                </div>
+            )}
             {lost.map((thread) => card(thread))}
             {resolved.length > 0 && (
                 <Collapsible open={showResolved} onOpenChange={setShowResolved} className="border-t px-1 py-1">
