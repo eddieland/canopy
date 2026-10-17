@@ -611,7 +611,7 @@ not be the ticket's: a worker names its PR for the change it made, and a resume 
 without it still records its PRs, untitled. A title is one line of at most 256 characters, GitHub's own limit, and is
 for display only: the harness never reads it back, and the overseer and later workers read the PR itself. It is kept
 by the PR's URL rather than on the unit, so `canopy forget`, which drops the unit, leaves it, as it leaves the PR's
-reviews.
+reviews; a reviewer reports it too (§21), and the newest report wins.
 
 Worker obligations, stated in every worker prompt:
 

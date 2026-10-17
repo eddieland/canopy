@@ -44,6 +44,9 @@ class ReviewResult(BaseModel):
     verdict: Literal["clean", "findings"] | None = None
     impact: Literal["low", "normal", "high"] | None = None
     summary: Annotated[StrictStr, bounded(MAX_SUMMARY)] = ""
+    # The PR's title as the reviewer read it, for display: it need not be its ticket's, and a PR canopy only reviews has
+    # no other (DESIGN §21).
+    pr_title: Annotated[StrictStr, one_line, bounded(contract.MAX_PR_TITLE)] | None = None
     findings: Annotated[list[Finding], Field(max_length=MAX_FINDINGS)] = []
 
     @model_validator(mode="after")
@@ -75,6 +78,7 @@ def stored(result_json: object) -> ReviewResult | None:
 
 CONTRACT = (
     '{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","summary":"one paragraph",'
+    '"pr_title":"the PR\'s title as it stands",'
     '"findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line",'
     '"detail":"what is wrong and why"}]}'
 )

@@ -545,6 +545,7 @@ Result contract, one JSON line, last line of the reviewer's text (§13), validat
 
 ```json
 {"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","summary":"one paragraph",
+ "pr_title":"the PR's title as it stands",
  "findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line","detail":"what and why"}]}
 ```
 
@@ -553,6 +554,10 @@ Result contract, one JSON line, last line of the reviewer's text (§13), validat
 - At most 20 findings, text cut to bounds. `verdict` is `findings` exactly when `findings` is not empty, and a `done`
   review has a verdict and an impact.
 - `low` without `review.low_impact` is recorded as `normal`, with a harness note.
+- `pr_title` is the PR's title as the reviewer read it, one line cut at 256 characters. Once the run is closed it
+  replaces the PR's stored title (§8), so a PR canopy only reviews, which has no ticket, has a title to show, and the
+  newest report wins, a worker's or a review's. It is the PR author's text, which a reviewer of a `review.query` PR
+  reads from anyone: it is for display only, never read back. Optional: a result without it records none.
 - Anything else is `unknown`.
 
 ### The verdict, and automating on it

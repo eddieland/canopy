@@ -367,6 +367,17 @@ def test_a_plugin_notice_after_the_result_does_not_hide_it(
         assert json.loads(row.result_json)["verdict"] == "findings"
 
 
+def test_a_review_records_the_prs_own_title(reviews: CanopyEnv, git_pool: GitPool, agent_log: Path) -> None:
+    """A PR canopy only reviews has no ticket's title to show, so the reviewer reports the PR's own (DESIGN §21)."""
+    conn = reviews.journal()
+    with reviewer_reports({**FINDINGS, "pr_title": "Retry the\n  queue"}):
+        run_inline(conn, sha=head(git_pool))
+    with reviewer_reports(CLEAN):  # a result without one, as an older override prints, records none
+        run_inline(conn, sha=head(git_pool), pr=f"{PR}0")
+    titles = {str(r["url"]): r["pr_title"] for r in db.pull_requests(conn, 10)}
+    assert titles == {PR: "Retry the queue", f"{PR}0": None}  # on one line
+
+
 def test_links_out_of_the_checkout_are_removed_before_the_reviewer_reads_it(
     reviews: CanopyEnv, git_pool: GitPool, agent_log: Path, tmp_path: Path
 ) -> None:
