@@ -12,7 +12,7 @@ The guide comes in three parts, in the order you'll need them.
 - **Your work**: the pages where the loop waits on you. [Attention](attention) first, then [Tickets](tickets),
   [Plans](plans), and [Pull requests and reviews](pull-requests).
 - **The loop**: the pages where you watch it work. [Runs and worktrees](runs), [Ticks and spend](ticks),
-  [Chores and memory](chores), and [Settings](settings).
+  [Chores](chores), [Memory](memory), and [Settings](settings).
 
 ## The pages
 
