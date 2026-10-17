@@ -295,6 +295,11 @@ test.describe('with the comments under the plan', () => {
         await page.keyboard.press('Escape')
         await expect(float).toBeHidden()
         await expect(comments(page).filter({ hasText: 'name the ticket' })).toHaveCount(1)
+
+        // The caret back in the passage opens its thread in the list: only a click floats it.
+        await page.keyboard.press('ArrowRight')
+        await expect(comments(page).filter({ hasText: 'name the ticket' })).toHaveAttribute('data-active', 'true')
+        await expect(float).toBeHidden()
     })
 
     test('a comment shows its passage in the plan, clear of the toolbar', async ({ page }) => {

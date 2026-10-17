@@ -160,10 +160,14 @@ export function PlanEditor({
     const [beside, setBeside] = useState(true)
     // The thread opened from its passage, which floats there while the comments sit under the plan.
     const [clicked, setClicked] = useState<string | undefined>(undefined)
+    if (clicked !== undefined && clicked !== seen.active) {
+        // Closed, or another thread opened: the caret coming back to that passage opens it in the list, not afloat.
+        setClicked(undefined)
+    }
     // Under the plan, the comment being written, and a thread opened from its passage while it stays open, float
     // under their passage (`floatUnder`), so the page need not go down to the list and back.
     const draftFloats = !beside && draft !== undefined
-    const floating = beside || clicked !== seen.active ? undefined : threads.find((thread) => thread.id === clicked)
+    const floating = beside || clicked === undefined ? undefined : threads.find((thread) => thread.id === clicked)
     const frame = useRef<HTMLDivElement>(null)
     const float = useRef<HTMLDivElement>(null)
 
