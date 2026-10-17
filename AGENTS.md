@@ -166,8 +166,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   them are the plain helpers every test may need: `git`, and `executable` for a script a test puts on a path.
 - What two test modules share lives in one place, never in a test module: `tests/canopy/conftest.py` for fixtures
   (`conn`, the workspace's journal; `ctx`; the web UI's mock `backend`; `ws`; `notified` and `sink_script`, notification
-  commands that record what they are sent), `tests/canopy/helpers.py` for helpers (`in_tick`, `decisions`,
-  `dispatch_and_run`, `messages`, and scripting the fake agents: `overseer_does(canopy(...))`, `worker_does(sleep=60)`,
+  commands that record what they are sent), `tests/canopy/helpers.py` for helpers (`in_tick`, with `ends_ok=True` for a
+  tick that ends as the block does; `in_run`; `decisions`, `last_tick`, `dispatch_and_run`, `messages`; `present`, for a
+  row the test knows is there; and scripting the fake agents: `overseer_does(canopy(...))`, `worker_does(sleep=60)`,
   `chore_reports`), and `web_helpers.py` and `review_helpers.py` beside it. A test module imports from no other;
   `tests/canopy/test_layers.py` fails otherwise. Look there before writing a helper, and move one there once a second
   module needs it. A test that plays an overseer, a worker, or another agent scripts it through those helpers, not by

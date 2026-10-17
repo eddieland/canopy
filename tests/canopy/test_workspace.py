@@ -16,12 +16,14 @@ from tests.canopy.conftest import Ws, bare_origin, map_text, seed_pools, th
 from tests.canopy.helpers import (
     LABEL,
     InlineRunner,
+    agent_runs,
     canopy,
     commit_and_push,
     decisions,
     in_tick,
     json_block,
     overseer_does,
+    present,
     wait_for_run,
     worker_does,
 )
@@ -181,7 +183,7 @@ def test_a_dry_run_tick_reads_every_pool_and_lists_repositories(ws: Ws, treehous
     with overseer_does(canopy(*dispatch("PROJ-1", "--repo", "api")), canopy(*dispatch("PROJ-2"))):
         assert main(["tick", "--dry-run"]) == 0
 
-    [run] = [json.loads(line) for line in agent_log.read_text().splitlines()]
+    [run] = agent_runs(agent_log)
     assert run["cwd"] == str(ws.root)
     prompt = run["argv"][3]
     state = json_block(prompt)
@@ -256,8 +258,7 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
         assert main(dispatch("PROJ-1", "--repo", "api", "--slug", "login"), runner=runner) == 0
         assert "dispatch refused (unknown_repo)" in capsys.readouterr().err
 
-        run = db.get_run(conn, 1)
-        assert run is not None
+        run = present(db.get_run(conn, 1))
         [slot] = db.run_slots(conn, 1)
         assert (slot["repo"], run["branch"]) == ("api", "agent/PROJ-1-login")
         assert Path(slot["slot_path"]) == ws.root / ".treehouse" / "api-fake" / "1" / "api"
@@ -318,7 +319,7 @@ def test_two_tickets_in_two_repositories_end_to_end(ws: Ws, treehouse_state: Pat
     assert ws.remote_head("web", "agent/PROJ-1-work") is None
     pools = json.loads(treehouse_state.read_text())["pools"]
     assert [s["status"] for p in pools.values() for s in p["slots"]] == ["available", "available"]
-    workers = [json.loads(line) for line in agent_log.read_text().splitlines()]
+    workers = agent_runs(agent_log)
     assert [w["cwd"] for w in workers] == [s["slot_path"] for s in slots]
 
 
@@ -338,8 +339,7 @@ def test_reconcile_returns_leases_in_each_pool(ws: Ws, treehouse_state: Path, ag
     with overseer_does(canopy("decide", "PROJ-1", "wait", "--rationale", "its run crashed")):
         assert main(["tick", "--dry-run"]) == 0
 
-    run = db.get_run(conn, 1)
-    assert run is not None
+    run = present(db.get_run(conn, 1))
     assert run["status"] == "crashed"
     state = json.loads(treehouse_state.read_text())
     assert [s["status"] for p in state["pools"].values() for s in p["slots"]] == ["available", "available"]

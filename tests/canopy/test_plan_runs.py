@@ -23,18 +23,16 @@ from tests.canopy.helpers import (
     dispatch_refused,
     in_tick,
     operator,
+    plan_file,
     planner_does,
     pool,
+    present,
     prompt_of,
 )
 from tests.conftest import CanopyEnv, GitPool
 
 PLAN = ("--label", LABEL, "--kind", "plan")
 TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button to `ui/form.tsx`, red.\n\n## Tests\n\nA test of the colour.\n"
-
-
-def plan_file(env: CanopyEnv, run_id: int) -> Path:
-    return env.state_dir / "plans" / KEY / f"{run_id}.md"
 
 
 def test_a_plan_is_written_to_its_file_and_recorded_proposed(
@@ -57,8 +55,7 @@ def test_a_plan_is_written_to_its_file_and_recorded_proposed(
     assert not desk.exists()
     assert [s["status"] for s in pool(treehouse_state)] == ["available", "available"]
     assert run["branch"] == ""
-    ticket = db.get_ticket(conn, KEY)
-    assert ticket is not None
+    ticket = present(db.get_ticket(conn, KEY))
     assert ticket.branch is None
     assert db.units(conn, KEY) == []
     assert git_pool.remote_head(f"agent/{KEY}-work") is None

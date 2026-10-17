@@ -15,6 +15,7 @@ from canopy.cli import launcher
 from canopy.cli import main as cli_main
 from canopy.cli.main import main
 from canopy.infra import procs, resources
+from tests.canopy.helpers import present
 from tests.conftest import CanopyEnv
 
 
@@ -105,8 +106,7 @@ def test_every_command_in_a_command_module_is_registered_under_its_own_name() ->
     top_level = {where for where, c in defined.items() if id(c) not in subcommands}
     assert set(cli_main.COMMANDS.values()) == top_level
     for name in cli_main.COMMANDS:
-        command = cli_main.cli.get_command(click.Context(cli_main.cli), name)
-        assert command is not None
+        command = present(cli_main.cli.get_command(click.Context(cli_main.cli), name))
         assert command.name == name
 
 

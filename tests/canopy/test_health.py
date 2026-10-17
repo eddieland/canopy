@@ -8,14 +8,11 @@ from pathlib import Path
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, health
+from canopy.core import health
+from tests.canopy.helpers import earlier
 from tests.conftest import CanopyEnv, Journals
 
 NOW = datetime(2026, 10, 8, 12, tzinfo=UTC)
-
-
-def at(now: datetime, days: float, hours: float = 0) -> str:
-    return db.format_time(now - timedelta(days=days, hours=hours))
 
 
 def tick(
@@ -37,29 +34,39 @@ def tick(
 
 def journal_of_failures(conn: sqlite3.Connection, now: datetime) -> None:
     """A week of ticks and runs, some failed, one of each before the window, and refusals."""
-    before = tick(conn, at(now, 9), "overseer_failed", summary="before the window")
-    tick(conn, at(now, 2), "ok", cost=1.0)
-    tick(conn, at(now, 2, 1), "ok", cost=0.5)
-    failed = tick(conn, at(now, 1), "overseer_failed", summary="overseer exited 1:\n no done line", cost=0.25)
-    tick(conn, at(now, 1, 1), "ok", dry=True, cost=0.1)
-    tick(conn, at(now, 0), "running")
+    before = tick(conn, earlier(now, 9), "overseer_failed", summary="before the window")
+    tick(conn, earlier(now, 2), "ok", cost=1.0)
+    tick(conn, earlier(now, 2, 1), "ok", cost=0.5)
+    failed = tick(conn, earlier(now, 1), "overseer_failed", summary="overseer exited 1:\n no done line", cost=0.25)
+    tick(conn, earlier(now, 1, 1), "ok", dry=True, cost=0.1)
+    tick(conn, earlier(now, 0), "running")
     conn.execute(
-        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at) VALUES ('PROJ-1', 'ws', ?, ?)", (at(now, 9),) * 2
+        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at) VALUES ('PROJ-1', 'ws', ?, ?)",
+        (earlier(now, 9),) * 2,
     )
     for started, kind, status, result, cost in (
-        (at(now, 9), "implement", "crashed", None, 9.0),  # before the window
-        (at(now, 2), "implement", "done", '{"status": "done", "summary": "did it"}', 2.0),
-        (at(now, 1), "implement", "timeout", None, 3.0),
-        (at(now, 0, 1), "fix-ci", "unpushed", '{"status": "done", "summary": "s", "harness": "nothing pushed"}', 1.0),
-        (at(now, 0, 2), "implement", "blocked", '{"status": "blocked", "summary": "asked"}', 0.5),
-        (at(now, 0), "resume", "running", None, None),
+        (earlier(now, 9), "implement", "crashed", None, 9.0),  # before the window
+        (earlier(now, 2), "implement", "done", '{"status": "done", "summary": "did it"}', 2.0),
+        (earlier(now, 1), "implement", "timeout", None, 3.0),
+        (
+            earlier(now, 0, 1),
+            "fix-ci",
+            "unpushed",
+            '{"status": "done", "summary": "s", "harness": "nothing pushed"}',
+            1.0,
+        ),
+        (earlier(now, 0, 2), "implement", "blocked", '{"status": "blocked", "summary": "asked"}', 0.5),
+        (earlier(now, 0), "resume", "running", None, None),
     ):
         conn.execute(
             "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, status, result_json, log_path, cost_usd) "
             "VALUES (?, 'PROJ-1', ?, 'agent/PROJ-1', ?, ?, ?, 'l', ?)",
             (before, kind, started, status, result, cost),
         )
-    for started, status, result in ((at(now, 1, 2), "ok", '{"status": "ok"}'), (at(now, 0, 3), "failed", "x" * 5)):
+    for started, status, result in (
+        (earlier(now, 1, 2), "ok", '{"status": "ok"}'),
+        (earlier(now, 0, 3), "failed", "x" * 5),
+    ):
         conn.execute(
             "INSERT INTO chore_runs (tick_id, chore, started_at, status, result_json, log_path) "
             "VALUES (NULL, 'deps', ?, ?, ?, 'l')",
@@ -68,15 +75,15 @@ def journal_of_failures(conn: sqlite3.Connection, now: datetime) -> None:
     conn.execute(
         "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, status, result_json, log_path) "
         "VALUES (?, 'https://e.test/pr/7', 'abc', ?, 'crashed', ?, 'l')",
-        (before, at(now, 0, 4), json.dumps({"summary": "y " * 400})),
+        (before, earlier(now, 0, 4), json.dumps({"summary": "y " * 400})),
     )
     for tick_id, action, created in (
-        (failed, "refused:capacity", at(now, 1)),
-        (failed, "refused:capacity", at(now, 1)),
-        (failed + 1, "refused:capacity", at(now, 1, 1)),
-        (failed, "refused:cooldown", at(now, 1)),
-        (before, "refused:cooldown", at(now, 9)),  # before the window
-        (failed, "dispatch:implement", at(now, 1)),
+        (failed, "refused:capacity", earlier(now, 1)),
+        (failed, "refused:capacity", earlier(now, 1)),
+        (failed + 1, "refused:capacity", earlier(now, 1, 1)),
+        (failed, "refused:cooldown", earlier(now, 1)),
+        (before, "refused:cooldown", earlier(now, 9)),  # before the window
+        (failed, "dispatch:implement", earlier(now, 1)),
     ):
         conn.execute(
             "INSERT INTO decisions (tick_id, ticket_key, action, rationale, created_at) "
@@ -129,10 +136,10 @@ def test_failures_are_the_newest_first_with_a_note_on_one_line(tmp_path: Path, j
 def test_failures_are_at_most_the_newest_few(tmp_path: Path, journals: Journals) -> None:
     conn = journals.open(tmp_path / "canopy.db")
     for n in range(health.FAILURES + 5):
-        tick(conn, at(NOW, 0, n / 10), "abandoned")
+        tick(conn, earlier(NOW, 0, n / 10), "abandoned")
     found = health.report(conn, NOW, 1)
     assert len(found.failures) == health.FAILURES
-    assert found.failures[0].started_at == at(NOW, 0)
+    assert found.failures[0].started_at == earlier(NOW, 0)
 
 
 def test_refusals_are_by_guard_the_most_first(tmp_path: Path, journals: Journals) -> None:

@@ -3,12 +3,10 @@ its pages read what `canopy show` and `canopy status` print, and `canopy loop` s
 
 import dataclasses
 import json
-import os
 import socket  # noqa: TID251  (a test asks the OS for a free port; canopy itself opens no socket)
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from unittest import mock
 
 import httpx2
 import pytest
@@ -23,7 +21,7 @@ from canopy.reviews import grants
 from canopy.runs import policy
 from canopy.serve import live, secret, views
 from canopy.serve.schema import LoopUpdated
-from tests.canopy.helpers import KEY, FakeTime, canopy, console, context, overseer_does, running_run
+from tests.canopy.helpers import KEY, FakeTime, canopy, console, context, in_run, overseer_does, present, running_run
 from tests.canopy.web_helpers import ORIGIN, refused, signed_in_client
 from tests.conftest import SHARED_TOML, CanopyEnv, user_toml
 
@@ -46,8 +44,7 @@ def test_a_path_shown_from_the_workspace_root_joins_metas_root_back_to_the_journ
         private=False,
     )
     db.finish_tick(ctx.conn, tick_id, TickStatus.OK, "test")
-    stored = db.get_run(ctx.conn, run_id)
-    assert stored is not None
+    stored = present(db.get_run(ctx.conn, run_id))
 
     c, _ = signed_in_client(ctx)
     root = Path(c.get("/api/meta").json()["workspace_root"])
@@ -128,8 +125,7 @@ def test_the_web_channel_starts_stops_and_replies_through_the_cli_guards(ctx: Co
 
     started = c.post(f"/api/tickets/{KEY}/start", headers=headers)
     assert started.json() == {"already": False, "running_run": None, "running_private": None}
-    record = conversation.start_of(ctx.conn, KEY)
-    assert record is not None
+    record = present(conversation.start_of(ctx.conn, KEY))
     assert (record.status, record.channel) == (StartStatus.STARTED, "web")
     assert c.post(f"/api/tickets/{KEY}/start", headers=headers).json()["already"] is True
 
@@ -154,8 +150,7 @@ def test_the_web_channel_starts_stops_and_replies_through_the_cli_guards(ctx: Co
 
     stopped = c.post(f"/api/tickets/{KEY}/stop", json={"now": False}, headers=headers).json()
     assert stopped == {"already": False, "running_run": None, "ended": False}
-    record = conversation.start_of(ctx.conn, KEY)
-    assert record is not None
+    record = present(conversation.start_of(ctx.conn, KEY))
     assert (record.status, record.channel) == (StartStatus.STOPPED, "web")
 
 
@@ -166,14 +161,12 @@ def test_stop_now_from_the_web_ends_the_run_as_canopy_stop_now_does(ctx: Context
 
     graceful = c.post(f"/api/tickets/{KEY}/stop", json={"now": False}, headers=headers).json()
     assert graceful == {"already": False, "running_run": run_id, "ended": False}
-    run = db.get_run(ctx.conn, run_id)
-    assert run is not None
+    run = present(db.get_run(ctx.conn, run_id))
     assert run["status"] == "running"
 
     now = c.post(f"/api/tickets/{KEY}/stop", json={"now": True}, headers=headers).json()
     assert now == {"already": True, "running_run": run_id, "ended": True}
-    run = db.get_run(ctx.conn, run_id)
-    assert run is not None
+    run = present(db.get_run(ctx.conn, run_id))
     assert run["status"] == "stopped"
     assert "canopy stop --now" in str(run["result_json"])
 
@@ -200,8 +193,7 @@ def test_forget_from_the_web_needs_the_key_typed_and_then_forgets_as_canopy_forg
     ctx.conn.commit()
     forgot = c.post(f"/api/tickets/{KEY}/forget", json={"confirm": KEY}, headers=headers)
     assert forgot.json() == {"branch": f"agent/{KEY}-work", "prs": [pr]}
-    ticket = db.get_ticket(ctx.conn, KEY)
-    assert ticket is not None
+    ticket = present(db.get_ticket(ctx.conn, KEY))
     assert (ticket.branch, ticket.phase, ticket.forgotten_run_id) == (None, None, run_id)
     assert db.units(ctx.conn, KEY) == []
     assert db.get_run(ctx.conn, run_id) is not None
@@ -311,8 +303,7 @@ def test_the_web_channel_pauses_and_resumes_the_loop_as_canopy_pause_and_resume_
     paused = c.post("/api/loop/pause", headers=headers).json()
     assert paused["already"] is False
     assert paused["loop"]["paused"]["channel"] == "web"
-    held = pause.paused(ctx.conn)
-    assert held is not None
+    held = present(pause.paused(ctx.conn))
     assert held.channel == "web"
     again = c.post("/api/loop/pause", headers=headers).json()
     assert again == {**paused, "already": True}
@@ -412,8 +403,7 @@ def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:
     assert c.post(f"/api/tickets/{KEY}/start", headers=headers).status_code == 200
     run_id = running_run(ctx, KEY)
     db.set_ticket(ctx.conn, KEY, ctx.repo, title="Pick a color")
-    run = db.get_run(ctx.conn, run_id)
-    assert run is not None
+    run = present(db.get_run(ctx.conn, run_id))
     result = {"status": "blocked", "summary": "half done\x1b[2J", "question": "Red <b>or</b> blue?"}
     assert conversation.close_run(ctx.conn, ctx.config, run, RunStatus.BLOCKED, json.dumps(result))
     tick_id = db.start_tick(ctx.conn, dry_run=False)
@@ -450,8 +440,7 @@ def test_the_pages_read_what_canopy_show_and_status_print(ctx: Context) -> None:
 def test_summaries_and_rationales_keep_their_line_breaks(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
     assert c.post(f"/api/tickets/{KEY}/start", headers=headers).status_code == 200
-    run = db.get_run(ctx.conn, running_run(ctx, KEY))
-    assert run is not None
+    run = present(db.get_run(ctx.conn, running_run(ctx, KEY)))
     result = {"status": "done", "summary": "Done:\r\n- one\x1b  \n- two\n\n"}
     assert conversation.close_run(ctx.conn, ctx.config, run, RunStatus.DONE, json.dumps(result))
     tick_id = db.start_tick(ctx.conn, dry_run=False)
@@ -733,7 +722,7 @@ def test_canopy_secret_makes_one_prints_it_and_rotates_only_when_asked(
     assert capsys.readouterr().out.strip() == value
     assert main(["secret", "--rotate"]) == 0
     assert capsys.readouterr().out.strip() != value
-    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": "3"}):
+    with in_run(3):
         assert main(["secret"]) == 1
     assert "inside_run" in capsys.readouterr().err
 

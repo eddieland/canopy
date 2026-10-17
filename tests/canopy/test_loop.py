@@ -25,7 +25,7 @@ from canopy.core import conversation, db, pause
 from canopy.core.vocab import TickStatus
 from canopy.infra import lock, procs, resources
 from canopy.loop import repeat, reread
-from tests.canopy.helpers import FakeKeys, FakeTime, canopy, console, context, overseer_does, with_events
+from tests.canopy.helpers import FakeKeys, FakeTime, canopy, console, context, overseer_does, present, with_events
 from tests.conftest import CanopyEnv, user_toml
 
 
@@ -730,8 +730,7 @@ def test_the_tick_now_key_ticks_once_while_paused_and_the_loop_stays_paused(
         )
         assert statuses == {"ok": 1}
         assert time.slept == [0.5, 0.5]
-        held = paused(canopy_env)
-        assert held is not None
+        held = present(paused(canopy_env))
         assert held.channel == "cli"
         assert woken_by(canopy_env) == ["key"]
 

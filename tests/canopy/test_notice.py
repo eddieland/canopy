@@ -24,6 +24,7 @@ from tests.canopy.helpers import (
     dispatch_in_tick,
     in_tick,
     overseer_does,
+    present,
     state_block,
 )
 from tests.canopy.web_helpers import refused, signed_in_client
@@ -274,8 +275,7 @@ def test_the_web_channel_sets_and_clears_the_notice_as_canopy_notice_does(ctx: C
     assert notice.current(ctx.conn) is None
 
     response = c.post("/api/loop/notice", json={"text": OUTAGE, "minutes": 90}, headers=headers).json()
-    held = notice.current(ctx.conn)
-    assert held is not None
+    held = present(notice.current(ctx.conn))
     assert (held.text, held.channel) == (OUTAGE, "web")
     assert db.parse_time(held.lapses_at) - db.parse_time(held.set_at) == timedelta(minutes=90)
     assert response["already"] is False
