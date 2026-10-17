@@ -410,6 +410,8 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
 }) => {
     await page.goto('tickets/ABC-105')
     const actions = page.getByTestId('plan-actions')
+    // What an action did shows under it, in the bar at the foot of the plan.
+    const said = page.getByTestId('plan-bar').getByRole('status')
     await expect(plan(page).getByRole('heading', { level: 1 })).toHaveText('Schedule report exports')
 
     // A comment is saved as it is made: it is there when the page is read again.
@@ -426,7 +428,7 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     // Ask for changes is a reply: it lands in the conversation.
     const ask = page.getByRole('form', { name: 'Ask for changes' })
     await ask.getByRole('button', { name: /Ask for changes/u }).click()
-    await expect(actions.getByRole('status')).toContainText('the next tick asks the planner for a new plan')
+    await expect(said).toContainText('the next tick asks the planner for a new plan')
     await expect(page.getByTestId('conversation')).toContainText('Which timezone when the owner has none set?')
 
     // An edit, saved and approved in one: the approval takes the file as saved.
@@ -434,7 +436,7 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     await page.keyboard.press('End')
     await page.keyboard.type(', weekly too')
     await actions.getByRole('button', { name: 'Save and approve' }).click()
-    await expect(actions.getByRole('status')).toContainText('Plan 2 of ABC-105 is approved as its file stands now.')
+    await expect(said).toContainText('Plan 2 of ABC-105 is approved as its file stands now.')
     await expect(page.getByTestId('plan-status')).toContainText('approved')
     await expect(page.getByTestId('plan-status')).toContainText('edited since the planner wrote it')
 
