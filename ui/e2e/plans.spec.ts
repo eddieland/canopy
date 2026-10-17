@@ -12,6 +12,13 @@ test.beforeEach(async ({ page }) => {
     await settled(page)
 })
 
+test('with comments open, the bar says Approve sends none of them', async ({ page }) => {
+    await expect(page.getByTestId('plan-bar')).toContainText(
+        '2 comments are still open: approving sends none of them, since the implement reads the plan alone. ' +
+            'Ask for changes does.',
+    )
+})
+
 test("a ticket's newest plan opens in the editor, its comments on their passages", async ({ page }) => {
     const section = page.getByTestId('ticket-plan')
     await expect(section.getByTestId('plan-status')).toContainText('Plan not needed, by policy.plan off.')
@@ -22,13 +29,6 @@ test("a ticket's newest plan opens in the editor, its comments on their passages
     await expect(page.getByTestId('plan-actions').getByRole('button', { name: 'Approve' })).toBeVisible()
     await expect(page.getByTestId('plan-actions').getByRole('button', { name: 'Save' })).toBeDisabled()
     await expect(page.getByRole('form', { name: 'Ask for changes' })).toBeVisible()
-})
-
-test('with comments open, the bar says Approve sends none of them', async ({ page }) => {
-    await expect(page.getByTestId('plan-bar')).toContainText(
-        '2 comments are still open: approving sends none of them, since the implement reads the plan alone. ' +
-            'Ask for changes does.',
-    )
 })
 
 test('an earlier plan opens read only', async ({ page }) => {
