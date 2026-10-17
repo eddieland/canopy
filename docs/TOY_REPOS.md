@@ -116,8 +116,8 @@ A GitHub App owned by the org is the answer if a scenario ever needs two distinc
 ## The issue catalog
 
 `kit/issues/<repo>/NN-slug.md`, each with front matter: the title, the scenario it serves, whether the queue label is
-applied at seed time (`autolabel`, off by default), whether its PRs fail CI (`fail_ci`), and the catalog slugs it is blocked by. Each is small enough for a
-worker to finish in a few minutes.
+applied at seed time (`autolabel`, off by default), whether its PRs fail CI (`fail_ci`), and the catalog slugs it is
+blocked by. Each is small enough for a worker to finish in a few minutes.
 
 | Scenario | Issue, and repository |
 | --- | --- |
