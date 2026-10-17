@@ -825,7 +825,7 @@ def _spawn(
     if followed is not None:
         values["PLAN"] = followed[1]
         required = (*required, *prompts.REQUIRED_PLAN_COPY)
-    prompt, remembered = _render(ctx, kind, values, required, private=plan.private)
+    prompt, remembered = _render(ctx, key, kind, values, required, private=plan.private)
 
     run_id = db.insert_run(
         ctx.conn,
@@ -861,7 +861,7 @@ def _spawn(
 
 
 def _render(
-    ctx: Context, kind: str, values: Mapping[str, str], required: Sequence[str], *, private: bool
+    ctx: Context, key: str, kind: str, values: Mapping[str, str], required: Sequence[str], *, private: bool
 ) -> tuple[str, memory.Rendered | None]:
     """Render the worker prompt, with agent memory's part: what the run's modes ask it to write and serve it (§28).
 
@@ -871,7 +871,7 @@ def _render(
     Raises:
         Refusal: `bad_prompt`, when the prompt file cannot be read or does not render.
     """
-    remembered = memory.render(ctx.conn, ctx.config, kind=kind)
+    remembered = memory.render(ctx.conn, ctx.config, key=key, kind=kind)
     if remembered is not None:
         values = {**values, **remembered.values}
         required = (*required, *remembered.required)
