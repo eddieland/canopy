@@ -181,7 +181,7 @@ Rejected:
 
 ### Trust model changes
 
-Proposed, for the operator's approval note in the PRs that build each tier's `use`:
+Approved by the operator (2026-10-17), in the PRs that build each tier's `use`:
 
 - T1, ticket notes: a worker may write notes its own ticket's later runs read as data, the same exposure as its reports
   in `{{PREVIOUS_RUNS}}`, with one new property: a note outlives the tracker comment that steered it, bounded by the

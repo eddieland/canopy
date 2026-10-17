@@ -1545,7 +1545,7 @@ status line saying which tier records. Ticket notes at `record` (stage 1's first
 run's notes under the bounds with what it refused, superseding by key, done and forget invalidating, and
 `canopy memory list`, `forget`, and `purge`. Ticket notes at `use` (its second half): each implement, fix-ci, and
 resume prompt served its ticket's digest, `memory_used`, `memory_wrong`, and `drop_notes` on what it was shown, an
-override without `{{TICKET_MEMORY}}` refused, and TRUST_MODEL T1's ticket notes, awaiting the operator's approval.
+override without `{{TICKET_MEMORY}}` refused, and TRUST_MODEL T1's ticket notes, approved by the operator (2026-10-17).
 
 ## Deferred, with the trigger that would unblock each
 
