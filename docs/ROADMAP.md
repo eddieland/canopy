@@ -1402,9 +1402,12 @@ DESIGN §22 and §28, TRUST_MODEL T8. Needs M50. Asked for by the operator (2026
 ticket's note to a lesson, reject a proposal, renew a lesson, and forget a memory from the page that shows it, without
 a shell. Today the web UI reads memory and writes none, and T8's list of web writes leaves memory out.
 
-- Each write is the function its `canopy memory` verb calls (`promote`, `reject`, `renew`, `forget`), with its guards,
-  through `canopy.core.conversation`; a refusal names its guard as the CLI does, and an outcome says what the CLI says:
-  a lesson promoted while proposals are at `record` is recorded and served to no run. Logged with channel `web`.
+- Each write is the function its `canopy memory` verb calls (`promote`, `reject`, `renew`, `forget`), with its guards;
+  a refusal names its guard as the CLI does, and an outcome says what the CLI says: a lesson promoted while proposals
+  are at `record` is recorded and served to no run. Logged with channel `web`.
+- Those functions are in `canopy.memory.manage`, a feature `serve` may not import (DESIGN §5). The build moves
+  `manage` down into `core`, as the verbs both channels call already are (`core/notice.py`, `core/plans.py`); it
+  imports only `core` now, so nothing else moves. DESIGN §5's line for `memory/` drops the operator's verbs.
 - Promote takes the CLI's options: the lesson's text, starting as the source's own and held to the same bound, and its
   repository, the proposal's or every one for a note. Before the save the form says which lesson in force under the key
   it would supersede, and, while the text is still a private ticket's run's own words, the warning `promote` gives.
