@@ -600,6 +600,7 @@ def _wait(
             pressed = keys() if keys is not None else ""
             _toggle_pause(ctx, pressed, log)
             if TICK_NOW_KEY in pressed.lower():
+                asked()  # one tick for both: a web request this wait would take is the same ask
                 return "key"
             if asked():
                 return "web"

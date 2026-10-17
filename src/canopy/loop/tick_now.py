@@ -26,5 +26,9 @@ class TickNow:
         Returns:
             Whether a tick was asked for since the last call.
         """
-        asked, self.requested = self.requested, False
-        return asked
+        # Read, then cleared only when set: a request from the web UI's thread between the two is then the one taken,
+        # never a lost one, with no lock.
+        if not self.requested:
+            return False
+        self.requested = False
+        return True

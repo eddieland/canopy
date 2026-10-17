@@ -3,8 +3,7 @@
 The server is a feature (`canopy.serve`) and cannot import the loop, `runs`, or `reviews`, so this hands it the
 attention list as `canopy status` shows it, `runs.halt.end`, which `canopy stop --now` uses, for a stop with `now`, a
 way to ask the loop to read its config again, as SIGHUP does, and one to ask it for a tick now, as `t` does, and the
-attempt and review limits with the grants that
-`canopy grant` records (`runs.policy`, `reviews.grants`).
+attempt and review limits with the grants that `canopy grant` records (`runs.policy`, `reviews.grants`).
 """
 
 from __future__ import annotations

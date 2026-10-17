@@ -842,6 +842,33 @@ def test_a_tick_asked_for_during_a_tick_ends_the_wait_after_it(
     assert [w for _, w in recorded(canopy_env)] == ["start", "web"]
 
 
+def test_the_tick_now_key_takes_a_web_request_with_it(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    ctx = context(canopy_env)
+    asked, stop = tick_now.TickNow(), repeat.Stop()
+    asked.request()  # kept through the first tick
+    typed = iter(["", repeat.TICK_NOW_KEY])  # dropped after the tick, then pressed at the wait's first step
+    time = FakeTime(on_sleep=lambda: setattr(stop, "requested", True))
+    term, _ = console()
+    with overseer_does():
+        repeat.run(
+            ctx,
+            dry_run=True,
+            interval_minutes=15,
+            max_ticks=3,
+            console=term,
+            stop=stop,
+            asked=asked,
+            keys=lambda: next(typed, ""),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+    # One tick for the key and the web request together: the wait after it runs until the stop.
+    assert [w for _, w in recorded(canopy_env)] == ["start", "key"]
+    assert time.slept == [0.5]
+
+
 def test_a_tick_run_by_hand_records_nothing_of_the_loop(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
