@@ -18,7 +18,7 @@ import { NO_TICKET } from '@/lib/words'
  */
 export function ReviewsTable({ reviews, pr = true }: { reviews: ReviewSummary[]; pr?: boolean }) {
     return (
-        <ul className="stagger divide-y" data-testid="reviews">
+        <ul className="divide-y" data-testid="reviews">
             {reviews.map((review) => (
                 <ReviewRow key={review.id} review={review} pr={pr} />
             ))}

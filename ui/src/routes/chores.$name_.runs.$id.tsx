@@ -7,8 +7,10 @@ import type { ChoreRunDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreFindingRow } from '@/components/chore-finding'
 import { ChoreLink } from '@/components/chore-link'
+import { CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
+import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { RunDot, Word } from '@/components/status'
@@ -52,11 +54,21 @@ function Loaded({ name, id }: { name: string; id: number }) {
     // Read beside the run, not after it: the page waits on the slower of the two, not on both in turn.
     const { data: transcript } = useQuery(choreRunTranscriptQuery(name, id))
     const title = choreRunRef(name, id)
-    if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
+    if (error instanceof ApiError && error.status === 404) {
         return (
             <NoRun name={name} title={title}>
                 {error.message}
             </NoRun>
+        )
+    }
+    if (error instanceof ApiError && error.status === 409) {
+        return (
+            <>
+                <PageHeader parents={<ChoreCrumb name={name} />} title={title} />
+                <Panel>
+                    <Notice error={error} className="p-3" />
+                </Panel>
+            </>
         )
     }
     if (data === undefined) {
@@ -143,7 +155,9 @@ function RunPanel({ detail }: { detail: ChoreRunDetail }) {
                     <span title={RUN_TOKENS_TITLE}>{runTokens(run.new_tokens, run.peak_context)}</span>
                 </Field>
                 <Field label="log" mono>
-                    <span title="the chore's stdout and stderr: yours alone">{run.log_path}</span>
+                    <CopyablePath path={run.log_path} label="log path">
+                        <span title="the chore's stdout and stderr: yours alone">{run.log_path}</span>
+                    </CopyablePath>
                 </Field>
             </Fields>
         </Panel>

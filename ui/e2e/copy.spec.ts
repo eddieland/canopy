@@ -102,6 +102,25 @@ test("a chore run's session id copies from its row", async ({ page }) => {
     expect(await clipboard(page)).toBe('ses_chore2')
 })
 
+test("a chore run's log path copies whole, from its page and from its row", async ({ page }) => {
+    await page.goto('chores/deps/runs/2')
+    const root = await workspaceRoot(page)
+    await page.getByRole('button', { name: 'Copy log path' }).click()
+    expect(await clipboard(page)).toBe(`${root}/.canopy/chore-runs/deps/2.log`)
+    await page.goto('chores/deps')
+    await settled(page)
+    const row = page.getByTestId('chore-run-2')
+    await row.hover()
+    await row.getByRole('button', { name: 'Copy log path' }).click()
+    expect(await clipboard(page)).toBe(`${root}/.canopy/chore-runs/deps/2.log`)
+})
+
+test("a tick's output path copies whole, though the page shows it from the workspace root", async ({ page }) => {
+    await page.goto('ticks/2')
+    await page.getByRole('button', { name: 'Copy output path' }).click()
+    expect(await clipboard(page)).toBe(`${await workspaceRoot(page)}/.canopy/ticks/2.log`)
+})
+
 /** The workspace root the server's meta gives, which a path shown from it is joined to when copied. */
 async function workspaceRoot(page: Page): Promise<string> {
     const meta = (await (await page.request.get('api/meta')).json()) as { workspace_root: string }

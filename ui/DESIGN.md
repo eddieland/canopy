@@ -354,8 +354,8 @@ and utilities are in `src/index.css`.
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
   new one is ready, because navigations run inside React transitions.
 - A page's blocks rise in one after another (`stagger` on the page column), and so do the attention list's rows, the
-  Working rows, and a conversation's bubbles. A row or bubble the stream adds later rises in on its own. A bubble pops
-  (`[--enter:pop]`) from the corner nearest its side.
+  Working rows, and a conversation's bubbles. Any other list's rows arrive with their panel, as one block. A row or
+  bubble the stream adds later rises in on its own. A bubble pops (`[--enter:pop]`) from the corner nearest its side.
 - Counter values are odometers (`RollingNumber`): each digit rolls to its new value, the units first, and rolls up from
   zero when the counter first shows. The value is in the text once, for screen readers and tests; the digits are
   drawn by CSS.
@@ -431,7 +431,8 @@ list, an empty state, or a skeleton by hand.
   the row's end (`from="title"`), never a hand-computed indent: no `pl-[…]` in `src/routes` or `src/components`. A
   summary starts under the row's name: a ticket's title on the runs page, the run's id under its subject, a tick's
   status, a decision's action. What sits under a row outside it, a tool call's body, is a **`RowGrid`** of the same
-  kind with a `RowLine` in it. A new list is a new kind in `ROW_COLUMNS`, its columns written out there.
+  kind with a `RowLine` in it. A new list is a new kind in `ROW_COLUMNS`, its columns written out there. An age column
+  is `6rem` and a cost column `4rem` in every kind (`AGE`, `COST`), so they line up from one list to the next.
 - **`Fields`** and **`Field`** (`src/components/fields.tsx`): a detail page's field list, an `8rem` label column and
   the values beside it, the label in `panel-label` type and the value in prose or, with `mono`, in monospace data.
   The rows sit on their first baseline, so a label stays level with the first line of a value that wraps (a summary,
@@ -442,10 +443,12 @@ list, an empty state, or a skeleton by hand.
   `ownPr` leaves that PR out of them, as it does from `Decisions`.
 - **`Empty`** (`src/components/panel.tsx`): what a list or page says when it has nothing to show, in muted text, in two
   sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
-  around it. Its words are `no X yet` and one clause on why or what to do (`no runs yet: the overseer starts one when
-  it is due`); `now` for what comes and goes rather than `yet` (`no open findings now`). A search that finds nothing
-  says so; a page whose subject is missing says why. An error is never an `Empty`, and never a red sentence in a
-  panel: it is a `Notice`, which names a refusal's guard.
+  around it, as one sentence whatever links or commands it holds. Its words are `no X yet` and one clause on why or
+  what to do (`no runs yet: the overseer starts one when it is due`); `now` for what comes and goes rather than `yet`
+  (`no open findings now`). A search that finds nothing says so; a page whose subject is missing (a 404) says why. An
+  error is never an `Empty`, and never a red sentence in a panel: it is a `Notice`, which names a refusal's guard and
+  sets its `code` spans as code, as an attention item's detail is. A page whose read was refused (a 409) shows its
+  `Notice` in its main panel.
 - **`None`** (`src/components/none.tsx`): what a field or a cell holds when it has no value, `none` in muted text in
   its place's own type, never a sentence of its own. With a reason, the reason follows a colon; in a column too narrow
   for it (`brief`), the reason is on hover. One phrase per concept: a summary, a branch, a PR, a session, or a tick's
@@ -458,8 +461,12 @@ list, an empty state, or a skeleton by hand.
   what sits there empty (the rail's keycap). Its two sizes are the rail's and a list filter's (`h-8`, `text-sm`) and a
   panel's own line of data (`sm`, `h-7`, `text-xs`). No page builds a field by hand.
 - **`PanelSkeleton`** (`src/components/panel.tsx`): what a panel shows while its data has not arrived at all, `rows`
-  shimmering bars, each shorter than the last. It takes the minimum height its content will (`min-h-72` for a page's
-  main panel), so nothing moves when the data lands.
+  shimmering bars, each shorter than the last. It takes the minimum height its content will, so nothing moves when
+  the data lands: `min-h-72` for a page's main panel or a list that runs long (tickets, runs, ticks), `min-h-40` for
+  a list that holds a few (the attention list, the chores, a pool's slots).
+- **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel: its column heads in
+  `panel-label` type, its row heads in plain text, its figures right-aligned readouts. Its panel's header repeats none
+  of its rows.
 
 ## Patterns
 
@@ -801,17 +808,17 @@ list, an empty state, or a skeleton by hand.
   its phase; those lines scroll inside the panel past `15rem` (`PanelScroll`), so its total cost, its actions, and the
   reply stay in reach. A worktree's branch links the same way, its name in the accent with its `LinkOutIcon`, when its
   repository has a branch link.
-- **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch on a ticket's, run's,
-  or PR's page, a run's worktrees and log path, a session id wherever one shows (a tick's page, a transcript's header,
-  a run's row, a chore run's row), and a review's commit, whole though the page shows its first 7 characters. A path
-  copies whole though the page shows it from the workspace root (`CopyablePath`), joined to `/meta`'s root; until that
-  is read there is no button, so a copy is never the short path. The button is a ghost `icon-xs` with the
-  `Copy` icon, muted until hovered; a click shows `Check` in the accent, or `X` in `status-failed` when the browser
-  refuses, for 1.5 seconds, and names what happened (`Copied branch`), and a toast says the same with the text it
-  copied, on one line. In a dense list (a worktree slot's path and branch, a run's or chore run's session id) it shows
-  only while its row (`group/copy`) is hovered or it has the focus, keeping its space so nothing moves, and always on
-  a touch screen. The clipboard needs a secure context (https or localhost), so elsewhere there is no button and the
-  text stays selectable.
+- **Text to paste elsewhere** has a copy button after it (`Copyable`, `CopyButton`): a branch on a ticket's, run's, or
+  PR's page, a run's worktrees and log path, a chore run's log path (on its page and its row), a tick's output path, a
+  session id wherever one shows (a tick's page, a transcript's header, a run's row, a chore run's row), and a review's
+  commit, whole though the page shows its first 7 characters. A path copies whole though the page shows it from the
+  workspace root (`CopyablePath`), joined to `/meta`'s root; until that is read there is no button, so a copy is never
+  the short path. The button is a ghost `icon-xs` with the `Copy` icon, muted until hovered; a click shows `Check` in
+  the accent, or `X` in `status-failed` when the browser refuses, for 1.5 seconds, and names what happened
+  (`Copied branch`), and a toast says the same with the text it copied, on one line. In a dense list (a worktree slot's
+  path and branch, a run's or chore run's session id, a chore run's log) it shows only while its row (`group/copy`) is
+  hovered or it has the focus, keeping its space so nothing moves, and always on a touch screen. The clipboard needs a
+  secure context (https or localhost), so elsewhere there is no button and the text stays selectable.
 - **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was
   done shows too little of it: a copy names what it copied. It sits at the bottom center of the window on `surface`
   with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title in `text-sm`, and a line under it

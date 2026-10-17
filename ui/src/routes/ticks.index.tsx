@@ -37,7 +37,7 @@ function TicksPage() {
                         <code className="font-mono text-xs">canopy loop</code> one after another
                     </Empty>
                 ) : (
-                    <ul className="stagger divide-y" data-testid="ticks">
+                    <ul className="divide-y" data-testid="ticks">
                         {ordered('ticks', order, data).map((tick) => (
                             <TickRow key={tick.id} tick={tick} />
                         ))}

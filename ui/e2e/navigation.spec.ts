@@ -194,6 +194,10 @@ test('an unknown route renders the not-found page inside the shell', async ({ pa
     await page.goto('nowhere')
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Nothing here')
     await expect(page.getByRole('navigation', { name: 'Main' })).toBeVisible()
+    // One sentence on one line, its link beside its words rather than a row of its own.
+    const sentence = await page.getByText('no page at this address:').boundingBox()
+    const link = await page.getByRole('link', { name: 'go to the attention list' }).boundingBox()
+    expect(sentence?.height).toBeLessThan(2 * (link?.height ?? 0))
 })
 
 test('a ticket the journal does not know offers to start it', async ({ page }) => {
@@ -321,7 +325,9 @@ test('a chore not defined for this workspace says so', async ({ page }) => {
 test('the worktrees page shows each pool of the workspace and what holds each slot', async ({ page }) => {
     await page.goto('worktrees')
     await settled(page)
-    await expect(page.getByTestId('pool-api')).toContainText('no clone; run `canopy workspace sync`')
+    // Its command set as code, as an attention item's detail sets it.
+    await expect(page.getByTestId('pool-api')).toContainText('no clone; run canopy workspace sync')
+    await expect(page.getByTestId('pool-api').getByRole('code')).toHaveText('canopy workspace sync')
 
     const web = page.getByTestId('pool-web')
     await expect(web.getByTestId('worktrees').locator('li')).toHaveCount(5)

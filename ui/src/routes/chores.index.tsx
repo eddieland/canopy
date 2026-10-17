@@ -37,7 +37,7 @@ function ChoresPage() {
                         no chores yet: define [chores.NAME] in your user config, with capacity.max_chores above 0
                     </Empty>
                 ) : (
-                    <ul className="stagger divide-y" data-testid="chores">
+                    <ul className="divide-y" data-testid="chores">
                         {data.map((chore) => (
                             <Row key={chore.name} chore={chore} />
                         ))}

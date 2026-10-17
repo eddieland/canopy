@@ -13,13 +13,21 @@ describe('rowTemplate', () => {
 
     it('lends a column it leaves out its name to the next one shown, or to the end', () => {
         expect(rowTemplate('chore')).toBe(`[name] 10rem [state] ${FREE} [findings end]`)
-        expect(rowTemplate('ticket', 'lg')).toBe(`[key] 6rem [title] ${FREE} [access phase run] 8rem [age] 4rem [end]`)
+        expect(rowTemplate('ticket', 'lg')).toBe(`[key] 6rem [title] ${FREE} [access phase run] 8rem [age] 6rem [end]`)
     })
 
     it('gives every kind exactly one free column, so its fixed ones line up row to row', () => {
         for (const columns of Object.values(ROW_COLUMNS)) {
             expect(columns.filter(([, width]) => width === FREE)).toHaveLength(1)
         }
+    })
+
+    it('gives the age and the cost one width in every kind, so they line up from list to list', () => {
+        const kinds: (readonly (readonly [string, string, number?])[])[] = Object.values(ROW_COLUMNS)
+        const widths = (name: string) =>
+            new Set(kinds.flatMap((columns) => columns.filter(([n]) => n === name).map(([, width]) => width)))
+        expect(widths('age')).toEqual(new Set(['6rem']))
+        expect(widths('cost')).toEqual(new Set(['4rem']))
     })
 
     it('names no column twice in a kind', () => {

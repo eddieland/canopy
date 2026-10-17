@@ -12,6 +12,7 @@ import { Decisions } from '@/components/decisions'
 import { Field, Fields } from '@/components/fields'
 import { GrantLimits } from '@/components/grant-limits'
 import { MemoryBand, MemoryDigestView, MemoryRows } from '@/components/memory'
+import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton, ThreadScroll } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
@@ -49,7 +50,7 @@ function TicketPage() {
             <>
                 <PageHeader title={key} />
                 <Panel>
-                    <Empty size="panel">{error.message}</Empty>
+                    <Notice error={error} className="p-3" />
                 </Panel>
             </>
         )

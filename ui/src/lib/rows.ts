@@ -23,6 +23,12 @@ export const ROW_TIERS = [
 /** A container size a column shows from. */
 export type RowTier = (typeof ROW_TIERS)[number][0]
 
+/** Every list's age column: room for the longest an age reads, `ended 12h ago`, so ages line up from list to list. */
+const AGE = '6rem'
+
+/** Every list's cost column: room for `$12.34`, so costs line up from list to list. */
+const COST = '4rem'
+
 /** The room a column needs, in rem, to show at any width, under the first tier as well. */
 const BASE_REM = 22
 
@@ -45,15 +51,15 @@ export const ROW_COLUMNS = {
         ['key', '6rem'],
         ['title', FREE],
         ['facts', '14rem', 3],
-        ['cost', '4rem', 1],
-        ['age', '6rem', 2],
+        ['cost', COST, 1],
+        ['age', AGE, 2],
     ],
     /** A run under its subject (a ticket's, a PR's, a chore's): the state, then the run's id and chips. */
     'own-run': [
         ['state', '5rem'],
         ['facts', FREE],
-        ['cost', '4rem', 1],
-        ['age', '6rem', 2],
+        ['cost', COST, 1],
+        ['age', AGE, 2],
     ],
     /**
      * A tick: its id, its status, how many decisions, its overseer's cost, tokens, and peak context, and when. The
@@ -63,10 +69,10 @@ export const ROW_COLUMNS = {
         ['id', '5rem'],
         ['state', FREE],
         ['decisions', '6rem', 4],
-        ['cost', '4rem', 3],
+        ['cost', COST, 3],
         ['tokens', '6rem', 1],
         ['peak', '5rem', 2],
-        ['age', '6rem', 5],
+        ['age', AGE, 5],
     ],
     /**
      * A chore: its name, its line in `canopy status`'s words, and its open findings, whose column holds
@@ -85,8 +91,8 @@ export const ROW_COLUMNS = {
         ['key', '6rem', 3],
         ['pr', FREE],
         ['impact', '7rem', 2],
-        ['cost', '3.5rem', 1],
-        ['age', '6rem', 4],
+        ['cost', COST, 1],
+        ['age', AGE, 4],
     ],
     /** A review run on its PR's page: as on the reviews page, without the ticket and the PR. */
     'own-review': [
@@ -94,8 +100,8 @@ export const ROW_COLUMNS = {
         ['verdict', '12rem', 4],
         ['commit', FREE],
         ['impact', '7rem', 2],
-        ['cost', '3.5rem', 1],
-        ['age', '6rem', 3],
+        ['cost', COST, 1],
+        ['age', AGE, 3],
     ],
     /** A PR: the PR, its ticket and title and phase, the run working it, its latest review, and its age. */
     'pull-request': [
@@ -104,7 +110,7 @@ export const ROW_COLUMNS = {
         ['run', '5rem', 1],
         // `review:4 3 findings, 1 blocking` on one line, with its dot.
         ['review', '16rem', 3],
-        ['age', '5rem', 2],
+        ['age', AGE, 2],
     ],
     /** A ticket: its key, its title, public or private, its phase, its run or `waiting on you`, and its age. */
     ticket: [
@@ -113,7 +119,7 @@ export const ROW_COLUMNS = {
         ['access', '9rem', 2],
         ['phase', '10rem', 1],
         ['run', '8rem', 4],
-        ['age', '4rem', 3],
+        ['age', AGE, 3],
     ],
     /** A worktree slot: its state, its number, what holds it, its branch and processes, and for how long. */
     worktree: [
@@ -121,7 +127,7 @@ export const ROW_COLUMNS = {
         ['slot', '3.5rem'],
         ['holder', '13rem', 2],
         ['branch', FREE],
-        ['age', '5rem', 1],
+        ['age', AGE, 1],
     ],
     /** A decision in a tick: its subject, then its action and PR. */
     decision: [
@@ -132,7 +138,7 @@ export const ROW_COLUMNS = {
     'own-decision': [
         ['id', '4rem'],
         ['action', FREE],
-        ['age', '4rem'],
+        ['age', AGE],
     ],
     /**
      * A chore's finding: its id, its title, and what it says of itself at the end. Ids differ in length: a short one
@@ -155,7 +161,7 @@ export const ROW_COLUMNS = {
         ['subject', '9rem'],
         ['label', '8rem', 2],
         ['text', FREE],
-        ['age', '5rem', 1],
+        ['age', AGE, 1],
     ],
     /**
      * A note, proposal, or lesson (DESIGN §28): its id, its key, where it stands, how runs used it, and when it was
@@ -166,7 +172,7 @@ export const ROW_COLUMNS = {
         ['key', FREE],
         ['state', '9rem', 2],
         ['use', '11rem', 1],
-        ['age', '6rem', 3],
+        ['age', AGE, 3],
     ],
     /** A transcript's row: its time, its mark, and its text, under which a tool call's body opens. */
     transcript: [

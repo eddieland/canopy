@@ -50,6 +50,7 @@ export function CopyablePath({
     path,
     label,
     children,
+    reveal = false,
 }: {
     /** The path as the server sent it: from the workspace root when under it, else whole. */
     path: string
@@ -57,13 +58,15 @@ export function CopyablePath({
     label: string
     /** What shows in place of `path`, when that is not the path itself. */
     children?: ReactNode
+    /** Show the button only while its row is hovered, as `CopyButton`'s `reveal` does. */
+    reveal?: boolean
 }) {
     const whole = useWholePath()
     if (whole === undefined) {
         return <span className="min-w-0 break-all">{children ?? path}</span>
     }
     return (
-        <Copyable text={whole(path)} label={label}>
+        <Copyable text={whole(path)} label={label} reveal={reveal}>
             {children ?? path}
         </Copyable>
     )

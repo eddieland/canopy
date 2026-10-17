@@ -8,9 +8,10 @@ import { Age } from '@/components/age'
 import { ChoreFindingRow } from '@/components/chore-finding'
 import { ChoreRunLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
-import { Copyable } from '@/components/copy-button'
+import { Copyable, CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
+import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
@@ -43,7 +44,12 @@ function ChorePage() {
             <>
                 <PageHeader title={choreRef(name)} />
                 <Panel>
-                    <Empty size="panel">{error.message}</Empty>
+                    {/* A chore this workspace does not define is missing, and says why; a refusal is a Notice. */}
+                    {error.status === 404 ? (
+                        <Empty size="panel">{error.message}</Empty>
+                    ) : (
+                        <Notice error={error} className="p-3" />
+                    )}
                 </Panel>
             </>
         )
@@ -135,11 +141,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                     )}
                 </Panel>
                 <Panel className="2xl:col-start-1 2xl:row-start-4" data-testid="chore-spend">
-                    <PanelHeader label="Spend">
-                        <span className="readout text-xs text-muted-foreground">
-                            {costText(chore.spend.month.cost_usd)} in 30 days
-                        </span>
-                    </PanelHeader>
+                    <PanelHeader label="Spend" />
                     <SpendTable spend={chore.spend} />
                 </Panel>
             </div>
@@ -175,7 +177,9 @@ function RunRow({ name, run }: { name: string; run: ChoreRun }) {
                         <span title="open its transcript with the runtime's tools">session {run.session_id}</span>
                     </Copyable>
                 )}
-                <span title="the run's output">log {run.log_path}</span>
+                <CopyablePath path={run.log_path} label="log path" reveal>
+                    <span title="the run's output">log {run.log_path}</span>
+                </CopyablePath>
             </RowLine>
         </ListRow>
     )
@@ -192,30 +196,30 @@ function SpendTable({ spend }: { spend: ChoreSpend }) {
     ]
     return (
         <div className="overflow-x-auto p-3">
-            <table className="border-collapse text-sm" data-testid="chore-spend-table">
+            <table className="w-full border-collapse text-sm" data-testid="chore-spend-table">
                 <thead>
                     <tr className="text-right">
-                        <th className="panel-label w-32 pb-1.5 text-left font-normal">window</th>
-                        <th className="panel-label w-24 pb-1.5 font-normal">runs</th>
-                        <th className="panel-label w-24 pb-1.5 font-normal">total</th>
-                        <th className="panel-label w-24 pb-1.5 font-normal">average</th>
-                        <th className="panel-label w-24 pb-1.5 font-normal" title="99th percentile of a run's cost">
+                        <th className="panel-label pb-1.5 text-left font-normal">window</th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal">runs</th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal">total</th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal">average</th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal" title="99th percentile of a run's cost">
                             p99
                         </th>
-                        <th className="panel-label w-24 pb-1.5 font-normal">max</th>
+                        <th className="panel-label pb-1.5 pl-3 font-normal">max</th>
                     </tr>
                 </thead>
-                <tbody className="font-mono text-xs">
+                <tbody className="text-xs">
                     {windows.map(([label, window]) => (
                         <tr key={label} className="text-right" data-testid={`chore-spend-${window.hours}h`}>
-                            <th scope="row" className="panel-label py-0.5 text-left font-normal">
+                            <th scope="row" className="w-full py-0.5 text-left font-normal">
                                 {label}
                             </th>
-                            <td className="readout">{runsText(window)}</td>
-                            <td className="readout">{costText(window.cost_usd)}</td>
-                            <td className="readout">{costText(window.mean_usd)}</td>
-                            <td className="readout">{costText(window.p99_usd)}</td>
-                            <td className="readout">{costText(window.max_usd)}</td>
+                            <td className="readout pl-3 whitespace-nowrap">{runsText(window)}</td>
+                            <td className="readout pl-3">{costText(window.cost_usd)}</td>
+                            <td className="readout pl-3">{costText(window.mean_usd)}</td>
+                            <td className="readout pl-3">{costText(window.p99_usd)}</td>
+                            <td className="readout pl-3">{costText(window.max_usd)}</td>
                         </tr>
                     ))}
                 </tbody>

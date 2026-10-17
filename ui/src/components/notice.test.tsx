@@ -17,6 +17,13 @@ describe('Notice', () => {
         expect(screen.queryByText('ignored')).toBeNull()
     })
 
+    it("sets a refusal's code spans as code, as an attention item's detail is", () => {
+        const refusal = new ApiError(409, { guard: 'bad_ref', reason: 'not a chore: try `canopy chores`' })
+        render(<Notice error={refusal} />)
+        expect(screen.getByRole('alert').textContent).toBe('refused (bad_ref): not a chore: try canopy chores')
+        expect(screen.getByRole('code').textContent).toBe('canopy chores')
+    })
+
     it('says any other failure in its own words, or that the request failed', () => {
         const { rerender } = render(<Notice error={new ApiError(503, 'the journal is busy')} />)
         expect(screen.getByRole('alert').textContent).toBe('the journal is busy')
