@@ -5,9 +5,9 @@ everything about it at once: its phase, its PRs, its runs, its conversation, and
 
 ## The list
 
-The newest activity is at the top; the toggle above the list turns it around. Each row shows a running run or a
-question waiting on you, the ticket's key, its phase (with `done` once the loop marked it so), whether it's public or
-private, and its title.
+The newest activity is at the top; the toggle above the list turns it around. Each row leads with where the ticket
+stands: the run working it, a question waiting on you, or else `done` or `open`, so a quiet ticket says so instead of
+leaving a hole. Then its key, its phase, whether it's public or private, and its title.
 
 The chips narrow it: `open`, `working` (a run is on it), `waiting on you` (a worker asked something), `blocked`, and
 `done`. `blocked` is the phase: another ticket holds this one up. A question for you is `waiting on you`, never

@@ -550,10 +550,9 @@ list, an empty state, or a skeleton by hand.
   the `public` or `private, started` chip, the title in the free column, and the age. Where it stands is the running
   run or `waiting on you`, each with its run's dot, else `done` or `open` with the dot of a run that ended so, so every
   row has a dot and the column is never blank. Narrow, the chip goes first, then the phase, then the age; where it
-  stands, which says when the ticket waits on the operator, goes last. A run's list lets its
-  cost go first, then its chips, then its age, then its id; a review's its cost, its impact, its ticket, its age, then
-  its verdict; a tick's its tokens, its peak, its cost, its decisions, then its age; a PR's its phase, its age, then
-  where it stands. Money and tokens go before what names a row. Each kind's order is in `ROW_COLUMNS`.
+  stands, which says when the ticket waits on the operator, goes last. A run's list lets its cost go first, then its
+  chips, then its age, then its id; a review's its cost, its impact, its ticket, its age, then its verdict; a tick's
+  its tokens, its peak, its cost, its decisions, then its age; a PR's its phase, its age, then where it stands. Money and tokens go before what names a row. Each kind's order is in `ROW_COLUMNS`.
 - **The tickets filters** narrow the list two ways at once (`src/lib/ticket-filter.ts`). Where a ticket stands is the
   runs page's chips, in the Tickets panel's header (`?show=`): `open` (not done), `working` (a run on it now) and
   `waiting on you` (a question waiting), each with its run's dot, `blocked` (the overseer's phase for a ticket an
