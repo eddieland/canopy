@@ -4,7 +4,7 @@ Each deletes bodies, never rows: a forgotten memory is a tombstone that keeps wh
 with `PRAGMA secure_delete` on, the search index is merged after it so it keeps no word of the text, and the
 write-ahead log is checkpointed, so a purged poison or a leaked secret does not survive in free pages or the log. Only
 the operator's shell runs these: they refuse inside canopy's ticks and runs. A lesson is made only here, from a
-proposal the operator promotes: no agent writes one.
+proposal or a ticket's note the operator promotes: no agent writes one.
 """
 
 from __future__ import annotations
@@ -102,37 +102,42 @@ def _scrub(conn: sqlite3.Connection, where: str, params: tuple[object, ...], *, 
 
 @dataclass(frozen=True)
 class Promoted:
-    """A lesson the operator promoted: its id, the lesson it superseded under the key, and whether runs read it now."""
+    """A lesson the operator promoted: what it came from, the lesson it superseded, and whether runs read it now."""
 
     lesson: records.Memory
+    source: records.Memory
     superseded: int | None
     served: bool
 
 
-def promote(conn: sqlite3.Connection, config: Config, proposal_id: int, *, text: str | None = None) -> Promoted:
-    """Copy a pending proposal into a new lesson the operator authored, with `text` in place of its own if given.
+def promote(
+    conn: sqlite3.Connection, config: Config, memory_id: int, *, text: str | None = None, repo: str | None = None
+) -> Promoted:
+    """Copy a pending proposal, or a ticket's note, into a new lesson the operator authored.
 
-    The lesson keeps the proposal's key and repository, supersedes an active lesson under the key, and is due for review
-    `REVIEW_DAYS` on. The proposal is `superseded`. At `record` the lesson is recorded and served to no run.
+    The lesson takes `text` in place of the source's own if given, and `repo` in place of a proposal's repository; a
+    note names none, so its lesson is for every repository unless `repo` is given. It keeps the source's key,
+    supersedes an active lesson under the key, and is due for review `REVIEW_DAYS` on. A proposal is `superseded`; a
+    note stays as it was, its ticket's. At `record` the lesson is recorded and served to no run.
 
     Returns:
-        The lesson, the lesson it superseded, and whether runs are served lessons now.
+        The lesson, the memory it came from, the lesson it superseded, and whether runs are served lessons now.
 
     Raises:
         Refused: (`inside_run`) inside one of canopy's ticks or runs; (`off`) proposals are off; (`unknown`) no
-            proposal has the id; (`not_pending`) it is not waiting on the operator; (`bad_text`) the text is outside
-            the bounds.
+            proposal or note has the id; (`not_pending`) a proposal is not waiting on the operator; (`forgotten`) a
+            note's text is gone; (`bad_text`) the text is outside the bounds.
         RuntimeError: The lesson it wrote cannot be read back.
     """
-    proposal = _pending(conn, config, proposal_id)
+    source = _promotable(conn, config, memory_id)
     try:
-        body = check_text(text if text is not None else proposal.body, memory.MAX_PROPOSAL_CHARS)
+        body = check_text(text if text is not None else source.body, memory.MAX_PROPOSAL_CHARS)
     except TextRefused as e:
         raise conversation.Refused("bad_text", f"the lesson's {e}") from None
     now = datetime.now(UTC)
     stamp = db.format_time(now)
     with db.transaction(conn):
-        old = next((m for m in memory.active_lessons(conn) if m.key == proposal.key), None)
+        old = next((m for m in memory.active_lessons(conn) if m.key == source.key), None)
         if old is not None:
             conn.execute("UPDATE memories SET status = ? WHERE id = ?", (MemoryStatus.SUPERSEDED, old.id))
         cur = conn.execute(
@@ -140,13 +145,13 @@ def promote(conn: sqlite3.Connection, config: Config, proposal_id: int, *, text:
             "approved_at, review_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 MemoryScope.LESSON,
-                proposal.repo,
-                proposal.key,
+                repo if repo is not None else source.repo,
+                source.key,
                 body,
                 MemoryStatus.ACTIVE,
                 MemoryAuthor.OPERATOR,
                 old.id if old is not None else None,
-                proposal.id,
+                source.id,
                 stamp,
                 stamp,
                 db.format_time(now + timedelta(days=memory.REVIEW_DAYS)),
@@ -158,15 +163,17 @@ def promote(conn: sqlite3.Connection, config: Config, proposal_id: int, *, text:
                 "UPDATE memories SET why = ?, invalidated_at = ? WHERE id = ?",
                 (f"superseded by lesson {lesson_id}", stamp, old.id),
             )
-        conn.execute(
-            "UPDATE memories SET status = ?, why = ?, invalidated_at = ? WHERE id = ?",
-            (MemoryStatus.SUPERSEDED, f"promoted to lesson {lesson_id}", stamp, proposal.id),
-        )
+        if source.scope is MemoryScope.PROPOSAL:
+            conn.execute(
+                "UPDATE memories SET status = ?, why = ?, invalidated_at = ? WHERE id = ?",
+                (MemoryStatus.SUPERSEDED, f"promoted to lesson {lesson_id}", stamp, source.id),
+            )
     lesson = memory.get(conn, lesson_id)
     if lesson is None:
         raise RuntimeError(f"lesson {lesson_id} vanished")
     served = config.memory.proposals is MemoryMode.USE
-    return Promoted(lesson=lesson, superseded=old.id if old is not None else None, served=served)
+    superseded = old.id if old is not None else None
+    return Promoted(lesson=lesson, source=source, superseded=superseded, served=served)
 
 
 def reject(conn: sqlite3.Connection, config: Config, proposal_id: int) -> records.Memory:
@@ -206,6 +213,20 @@ def renew(conn: sqlite3.Connection, config: Config, lesson_id: int) -> str:
         "UPDATE memories SET review_at = ?, wrong_at = NULL, wrong_run_id = NULL WHERE id = ?", (due, lesson_id)
     )
     return due
+
+
+def _promotable(conn: sqlite3.Connection, config: Config, memory_id: int) -> records.Memory:
+    # A note is promotable whatever its status: one its ticket's being done invalidated may hold what the work taught.
+    conversation.check_operator()
+    _check_on(config)
+    found = memory.get(conn, memory_id)
+    if found is None or found.scope is MemoryScope.LESSON:
+        raise conversation.Refused("unknown", f"no proposal or note has id {memory_id}")
+    if found.scope is MemoryScope.PROPOSAL and found.status is not MemoryStatus.PENDING:
+        raise conversation.Refused("not_pending", f"proposal {memory_id} is {found.status}: {found.why}")
+    if found.body is None:
+        raise conversation.Refused("forgotten", f"note {memory_id}'s text is gone: {found.why}")
+    return found
 
 
 def _pending(conn: sqlite3.Connection, config: Config, proposal_id: int) -> records.Memory:

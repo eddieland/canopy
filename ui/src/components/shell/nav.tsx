@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
     Activity,
+    Brain,
     CalendarClock,
     Coins,
     FileSearch,
@@ -10,7 +11,6 @@ import {
     History,
     Inbox,
     MessagesSquare,
-    SlidersHorizontal,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -29,7 +29,8 @@ const TONE: Record<BreakdownPart['kind'], string> = {
     other: 'text-muted-foreground',
 }
 
-// In `SECTIONS` order. Each item's hint is its tooltip: what the page holds, for an operator who does not know it yet.
+// In `SECTIONS` order, but for Settings, which the rail's foot opens. Each item's hint is its tooltip: what the page
+// holds, for an operator who does not know it yet.
 const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
     { to: '/attention', icon: Inbox, hint: 'What needs you, most severe first' },
     {
@@ -57,9 +58,9 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
         hint: "Each repository's pool: its slots and what holds them",
     },
     {
-        to: '/settings',
-        icon: SlidersHorizontal,
-        hint: 'The theme, the send key, the fun, and the session',
+        to: '/memory',
+        icon: Brain,
+        hint: 'What workers remember: the ticket notes and lessons, and which runs read them',
     },
 ]
 

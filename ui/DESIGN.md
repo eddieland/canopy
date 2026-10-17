@@ -73,11 +73,12 @@ Rules:
   pulse; the run it names does, on the runs page), `held` is `status-stopped`, `dirty` is `status-blocked`, `broken`
   is `status-failed`. An `idle` slot is a hollow ring in `muted-foreground`: nothing holds it, so no status color
   claims it.
-- **Section colors**, one per nav item: Attention rose, Tickets sky, Pull requests gold, Reviews fuchsia, Runs violet,
-  Chores orange, Spend azure, Ticks lime, Worktrees teal, Settings lavender (`src/lib/sections.ts`; the current one
-  from `useSection`). They go on the nav's icons and highlight, the first step of the page header's trail, and the
-  header's aurora, and nowhere in a page's data: there a color is a state's. A page in no section (the 404) takes the
-  accent.
+- **Section colors**, one per section: Attention rose, Tickets sky, Pull requests gold, Reviews fuchsia, Runs violet,
+  Chores orange, Spend azure, Ticks lime, Worktrees teal, Memory chartreuse, Settings lavender (`src/lib/sections.ts`;
+  the current one from `useSection`). Memory's hue sits between gold and lime, the one gap wide enough that no status
+  color is near it. Settings, in the rail's footer rather than the nav, wears its color on its trail alone. They go on
+  the nav's icons and highlight, the first step of the page header's trail, and the header's aurora, and nowhere in a
+  page's data: there a color is a state's. A page in no section (the 404) takes the accent.
 - **Spend series** (`src/lib/spend.ts`) color a kind of agent run in the spend page's chart and its legend, and
   nowhere else: they are fills, never text, so the legend's words are `muted-foreground` beside a swatch. Idle overseer
   spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both themes, WCAG's
@@ -126,26 +127,27 @@ Rules:
   screenshot test does the same by growing the window to the page (`growToPage` in `e2e/helpers.ts`).
 - **The rail** holds, top to bottom: the search box, the nav, the runs working now, the spend, and a footer
   (`src/components/shell/rail.tsx`). The nav lists the sections by how often the operator opens them (`SECTIONS` in
-  `src/lib/sections.ts`): what they work in first (Attention, Tickets, Pull requests, Reviews), then what they check
-  now and then, with Settings last. Each nav item says on hover what its page holds, and each spend window what it
-  covers, as a native `title`; a spend window opens the spend page over its week or month. Each block under the nav
-  is a hairline and a `panel-label` over its content. The working runs are those running first, then those waiting
-  on the operator's answer, each oldest first, a ticket's latest run alone: a dot in its state's color, the ticket's
-  key, how long it has run (or `waiting on you` in `status-blocked`), and the ticket's title under it, opening the
-  run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window.
-  The spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it
-  is shown nowhere else, but for the lifetime total Sprig's hats are bought with (Fun, below). The footer (the
-  version, a link out to canopy's releases on GitHub, and the guide) sits at the foot of the sticky column, so at the
-  window's foot however long the page; in a window too short for the rest, the part above it scrolls on its own. The
-  room left between the blocks and the footer is Sprig's (Fun, below).
+  `src/lib/sections.ts`): what they work in first (Attention, Tickets, Pull requests, Reviews), then what they check now
+  and then, down to Memory. Settings, opened least, is in the footer beside the guide instead: each nav item is height
+  the sticky part has none to spare of in an 800px window. Each nav item says on hover what its page holds, and each
+  spend window what it covers, as a native `title`; a spend window opens the spend page over its week or month. Each
+  block under the nav is a hairline and a `panel-label` over its content. The working runs are those running first, then
+  those waiting on the operator's answer, each oldest first, a ticket's latest run alone: a dot in its state's color,
+  the ticket's key, how long it has run (or `waiting on you` in `status-blocked`), and the ticket's title under it,
+  opening the run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window. The
+  spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it is shown
+  nowhere else, but for the lifetime total Sprig's hats are bought with (Fun, below). The footer is two lines, the
+  version, a link out to canopy's releases on GitHub, with the width to itself, then the guide and Settings; it sits at
+  the foot of the sticky column, so at the window's foot however long the page; in a window too short for the rest, the
+  part above it scrolls on its own. The room left between the blocks and the footer is Sprig's (Fun, below).
 - **Narrower than `lg`, the rail is a strip** (`useRailMode`), since half of a second monitor is under it and a whole
-  rail there left a list too little room: 3.5rem of the nav's icons (the nav's `compact`), each named on hover and to
-  a screen reader, Attention's count one number on its icon's corner in its most severe item's color. A button atop
-  the strip opens the whole rail, the same column, as a sheet over the page (`Sheet`, a Radix dialog: Escape or a click
-  outside closes it, and the focus goes back to the button). It opens in its search box, so `/` opens it too. A link
-  followed or a search sent from it closes it, since the page it covered is leaving. The breakpoint is the viewport's,
-  as the rail's place is the window's; what a list shows is its own width's (Primitives, `ListRow`). Half a monitor,
-  about 820px, is the narrowest window the UI is made for; a phone's is not.
+  rail there left a list too little room: 3.5rem of the nav's icons (the nav's `compact`), each named on hover and to a
+  screen reader, Attention's count one number on its icon's corner in its most severe item's color. A button atop the
+  strip opens the whole rail, footer included, the same column, as a sheet over the page (`Sheet`, a Radix dialog:
+  Escape or a click outside closes it, and the focus goes back to the button). It opens in its search box, so `/` opens
+  it too. A link followed or a search sent from it closes it, since the page it covered is leaving. The breakpoint is
+  the viewport's, as the rail's place is the window's; what a list shows is its own width's (Primitives, `ListRow`).
+  Half a monitor, about 820px, is the narrowest window the UI is made for; a phone's is not.
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
@@ -805,7 +807,10 @@ list, an empty state, or a skeleton by hand.
   bar of actions sticks to the bottom of the page while the plan scrolls, as a document's do, so a long plan is approved
   or sent back from where it is read: with the plan this one replaces, `Changes since plan 1` first, a pressed `Toggle`
   that marks what changed since it over the plan (the words added on `diff-add` at 18%, those removed struck through on
-  `diff-del` at 14%, where they were, as `ins` and `del`), then the caller's own actions (a ticket's `Approve`, `Save`,
+  `diff-del` at 14%, where they were, as `ins` and `del`), pressed as a waiting plan opens, since that is when it is
+  read for what changed; while pressed, how many changes it marks (`12 changes`, a removal and what replaced it one)
+  and ghost `icon-xs` buttons that step the cursor to the change before or after it, round to the other end, the plan
+  scrolling to it; then the caller's own actions (a ticket's `Approve`, `Save`,
   and `Skip the plan`), then `Ask for changes`, a note on the whole plan, one line that grows as it is written, how many
   open comments go with it, or how far over a reply's bound the request is, and the button (the request says the plan
   was edited, when it was); what the caller's actions will do, or what one did, goes on a line under them. The editor

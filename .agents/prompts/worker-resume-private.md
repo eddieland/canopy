@@ -107,7 +107,8 @@ transition the ticket directly or through closing keywords. {{COMMIT_ATTRIBUTION
 The tracker is {{TRACKER_PROVIDER}}; if a skill named
 `tracker-{{TRACKER_PROVIDER}}` is available, load it before reading the ticket, and skip any of its steps that write to
 it. If a repository you changed has no PR yet, open one against its base branch listed above, with the ticket key in
-the title. {{OPEN_PR}} Reply on the PR to each review comment you addressed, briefly, and post nothing else.
+the title. {{OPEN_PR}} Reply on the PR to each review comment you addressed, briefly, and post nothing else
+but the edit to a PR's body below, when one is needed.
 {{MARK_COMMENTS}} You post as the operator, so that is how canopy knows the reply is yours and never reads it back as
 review feedback. Time limit {{TIMEOUT_MINUTES}} minutes.
 
@@ -115,6 +116,13 @@ If a review comment asks for a change you believe is wrong, make the case in a P
 report `blocked` with the disagreement as the question so the operator can settle it.
 
 If you are blocked again, report `blocked` with your question in `question`. Do not post it anywhere.
+
+Last, once your pushes are done, read the body of each PR this run pushed to or retargeted, and edit it only if you
+must: where it now says something untrue of the PR, such as a change this run undid or a behavior it changed, or
+leaves out a change to behavior this run made that a reviewer must know of. Otherwise leave it alone: never edit it to
+restyle it, summarize this run, or list what you addressed. When you must, change only the sentences that are wrong or
+missing, keep the title, and add no closing keywords or tracker commands. A PR you opened in this run already has the
+body you wrote.
 
 ## Result
 

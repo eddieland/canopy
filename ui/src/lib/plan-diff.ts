@@ -22,10 +22,14 @@ export interface Change {
     at: number
 }
 
-/** The diff's state: the old plan's text, while changes are shown, and what the editor draws. */
-interface Changes {
+/** The diff's state: the old plan's text, while changes are shown, what the editor draws, and where each change is. */
+export interface Changes {
+    /** The old plan's text as the editor reads it, while changes are shown. */
     base: string | undefined
+    /** The added words and the removed ones, as the editor draws them. */
     decorations: DecorationSet
+    /** Where each change starts in the plan, in its order, a removal and the words that replaced it one change. */
+    starts: number[]
 }
 
 /** How many words may differ before the plans are shown as all changed: past it, the comparison costs too much. */
@@ -48,7 +52,7 @@ export const PlanChanges = Extension.create({
             new Plugin<Changes>({
                 key: changesKey,
                 state: {
-                    init: () => ({ base: undefined, decorations: DecorationSet.empty }),
+                    init: () => ({ base: undefined, decorations: DecorationSet.empty, starts: [] }),
                     apply: (tr, prev, _, state) => next(tr, prev, state),
                 },
                 props: {
@@ -61,25 +65,29 @@ export const PlanChanges = Extension.create({
 
 /**
  * The runs of words that make `after` from `before`, in `after`'s order, a removed run before the run that replaced
- * it. Each word is compared whole, with the spaces after it. Past `cap` edits, the part that differs is one removed
- * run and one added.
+ * it. Each word is compared whole, without the spaces after it, and carries them in its run. Past `cap` edits, the
+ * part that differs is one removed run and one added.
  */
 export function diffWords(before: string, after: string, cap = MAX_EDITS): Change[] {
     const a = tokens(before)
     const b = tokens(after)
+    // Each word is compared without the spaces after it, so a word that ends a sentence in one plan and goes on in the
+    // other (`hour.`, `hour the`) is the same word; what is kept is the new plan's, spaces and all.
+    const keysA = a.map((token) => key(token))
+    const keysB = b.map((token) => key(token))
     let start = 0
-    while (start < a.length && start < b.length && a[start] === b[start]) {
+    while (start < a.length && start < b.length && keysA[start] === keysB[start]) {
         start += 1
     }
     let endA = a.length
     let endB = b.length
-    while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) {
+    while (endA > start && endB > start && keysA[endA - 1] === keysB[endB - 1]) {
         endA -= 1
         endB -= 1
     }
     const ops = [
         ...a.slice(0, start).map(() => SAME),
-        ...edits(a.slice(start, endA), b.slice(start, endB), cap),
+        ...edits(keysA.slice(start, endA), keysB.slice(start, endB), cap),
         ...a.slice(endA).map(() => SAME),
     ]
     return runs(a, b, ops)
@@ -97,12 +105,13 @@ function next(tr: Transaction, prev: Changes, state: EditorState): Changes {
         return prev
     }
     const base = action === undefined ? prev.base : action.base
-    return { base, decorations: base === undefined ? DecorationSet.empty : draw(state, base) }
+    return base === undefined ? { base, decorations: DecorationSet.empty, starts: [] } : { base, ...draw(state, base) }
 }
 
-function draw(state: EditorState, base: string): DecorationSet {
+function draw(state: EditorState, base: string): Pick<Changes, 'decorations' | 'starts'> {
     const { text, positions } = docText(state.doc)
     const decorations: Decoration[] = []
+    const starts = new Set<number>()
     for (const change of diffWords(base, text)) {
         if (change.kind === 'same' || change.text.trim() === '') {
             continue
@@ -111,13 +120,19 @@ function draw(state: EditorState, base: string): DecorationSet {
             const range = rangeOf(positions, change.at, change.at + change.text.trimEnd().length)
             if (range !== undefined) {
                 decorations.push(Decoration.inline(range.from, range.to, { nodeName: 'ins', class: 'plan-ins' }))
+                starts.add(range.from)
             }
         } else {
             const removed = change.text.replaceAll(/\s+/gu, ' ').trim()
-            decorations.push(Decoration.widget(at(positions, change.at), () => struck(removed), { side: -1 }))
+            const where = at(positions, change.at)
+            decorations.push(Decoration.widget(where, () => struck(removed), { side: -1 }))
+            starts.add(where)
         }
     }
-    return DecorationSet.create(state.doc, decorations)
+    return {
+        decorations: DecorationSet.create(state.doc, decorations),
+        starts: [...starts].toSorted((a, b) => a - b),
+    }
 }
 
 // Where the text's offset `offset` falls in the document: just after the character before it, so words removed at the
@@ -148,6 +163,11 @@ function struck(text: string): HTMLElement {
 
 type Op = 'same' | 'add' | 'del'
 const SAME: Op = 'same'
+
+// A word as it is compared: without the spaces after it, but a line break is still its own.
+function key(token: string): string {
+    return token.replace(/[^\S\n]+$/u, '')
+}
 
 // A text's words and each other character, in order, each with the spaces after it, so words replaced side by side
 // read as one change rather than several split by the spaces they share; each line break, between the plan's
@@ -222,7 +242,7 @@ function runs(a: readonly string[], b: readonly string[], ops: readonly Op[]): C
     let j = 0
     let offset = 0
     for (const op of ops) {
-        const word = op === 'add' ? b[j] : a[i]
+        const word = op === 'del' ? a[i] : b[j]
         const last = out.at(-1)
         if (last?.kind === op) {
             last.text += word ?? ''

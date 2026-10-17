@@ -31,7 +31,7 @@ function MemoryPage() {
     const { data } = useQuery(memoryQuery)
     return (
         <>
-            <PageHeader root="Memory" title="Memory">
+            <PageHeader title="Memory">
                 What workers recorded of what they learn, and the lessons you promoted. Promote, reject, renew, and
                 forget them with <code className="font-mono text-xs">canopy memory</code>.
             </PageHeader>

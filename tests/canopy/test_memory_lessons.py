@@ -12,7 +12,7 @@ import pytest
 from canopy.cli.main import main
 from canopy.core import db, memory, prompts, records
 from canopy.core.config import load
-from canopy.core.vocab import MemoryStatus, RunKind
+from canopy.core.vocab import MemoryScope, MemoryStatus, RunKind
 from canopy.infra import logs, resources
 from canopy.loop import attention
 from canopy.memory import attention as memory_attention
@@ -71,6 +71,24 @@ def proposed(
             (ticket, repo, key, text, run_id, tick_id, db.now()),
         )
         conn.execute("UPDATE runs SET status = 'done', ended_at = ? WHERE id = ?", (db.now(), run_id))
+    return int(cur.lastrowid or 0)
+
+
+def noted(conn: sqlite3.Connection, text: str = LESSON, *, status: str = "active", private: bool = False) -> int:
+    """A ticket note of KEY's, `lint`, from an ended run, written to the journal as `_run` would."""
+    with in_tick(conn) as tick_id:
+        db.touch_ticket(conn, KEY, "repo")
+        run_id = db.insert_run(
+            conn, tick_id=tick_id, key=KEY, kind=RunKind.IMPLEMENT, branch=BRANCH, slots=(), runs_dir=Path("/runs")
+        )
+        cur = conn.execute(
+            "INSERT INTO memories (scope, ticket_key, key, body, status, author, run_id, tick_id, created_at) "
+            "VALUES ('ticket', ?, 'lint', ?, ?, 'worker', ?, ?, ?)",
+            (KEY, text, status, run_id, tick_id, db.now()),
+        )
+        conn.execute(
+            "UPDATE runs SET status = 'done', ended_at = ?, private = ? WHERE id = ?", (db.now(), private, run_id)
+        )
     return int(cur.lastrowid or 0)
 
 
@@ -293,6 +311,64 @@ def test_promote_takes_the_operators_words_and_supersedes_the_lesson_under_its_k
     assert (old.status, old.why) == (MemoryStatus.SUPERSEDED, f"superseded by lesson {again.lesson.id}")
     with pytest.raises(Exception, match="hides text"):
         manage.promote(conn, cfg, proposed(conn, "Third."), text="bad\u202etext")
+
+
+def test_promote_makes_a_note_a_lesson_and_leaves_the_note_its_tickets(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with_memory(canopy_env, proposals="record")
+    # Its ticket marked done invalidated it, and what it taught may still be worth keeping.
+    note = noted(conn, status="invalid")
+    assert main(["memory", "promote", str(note), "--repo", "repo"]) == 0
+    lesson = memories(conn)[-1]
+    assert capsys.readouterr().out.startswith(
+        f"Note {note} is lesson {lesson.id} (`lint`) for repo, due for review at {lesson.review_at}.\n"
+    )
+    assert (lesson.scope, lesson.author, lesson.promoted_from, lesson.repo, lesson.ticket_key, lesson.body) == (
+        "lesson",
+        "operator",
+        note,
+        "repo",
+        None,
+        LESSON,
+    )
+    assert (memories(conn)[0].status, memories(conn)[0].why) == (MemoryStatus.INVALID, None)
+    assert main(["memory", "lessons"]) == 0
+    assert f"from note {note} of {KEY};" in capsys.readouterr().out
+    # Without --repo, a note's lesson is every repository's.
+    again = manage.promote(conn, load(canopy_env.root, canopy_env.user_file), noted(conn, "Run `make lint` twice."))
+    assert (again.lesson.repo, again.superseded) == (None, lesson.id)
+
+
+def test_promote_refuses_a_lesson_a_forgotten_note_and_a_repository_not_in_the_map(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with_memory(canopy_env, proposals="record")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    lesson = promoted(conn, canopy_env)
+    with pytest.raises(Exception, match=f"no proposal or note has id {lesson.id}"):
+        manage.promote(conn, cfg, lesson.id)
+    note = noted(conn, "Run `make lint` twice.")
+    capsys.readouterr()
+    assert main(["memory", "promote", str(note), "--repo", "nowhere"]) == 1
+    assert "'nowhere' is not a repository in this workspace (repo)" in capsys.readouterr().err
+    manage.forget(conn, note)
+    with pytest.raises(Exception, match=f"note {note}'s text is gone: forgotten"):
+        manage.promote(conn, cfg, note)
+    assert [m.scope for m in memories(conn)].count(MemoryScope.LESSON) == 1
+
+
+def test_promoting_a_private_tickets_note_in_its_own_words_warns(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with_memory(canopy_env, proposals="use")
+    note = noted(conn, private=True)
+    assert main(["memory", "promote", str(note)]) == 0
+    out = capsys.readouterr().out
+    assert "Warning: its text is from a private ticket's run" in out
+    assert "Every run dispatched from now on reads it." in out
+    assert main(["memory", "promote", str(note), "--text", "Run `make lint` twice."]) == 0
+    assert "Warning" not in capsys.readouterr().out
 
 
 def test_reject_ends_a_proposal(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
