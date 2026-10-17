@@ -337,6 +337,7 @@ export function PlanEditor({
                         onDraftCancel={cancelComment}
                         onDraftLeave={() => backToPlan(highlightsKey.getState(editor.state)?.draft)}
                         onActivate={(id) => activate(id, true)}
+                        onOpen={(id) => editor.view.dispatch(withHighlight(editor.state.tr, { kind: 'activate', id }))}
                         onReply={(id, body) =>
                             onThread(
                                 id,

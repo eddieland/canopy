@@ -452,6 +452,28 @@ test('clicking a commented passage opens its thread and puts the cursor there', 
     await expect(menu).toHaveAccessibleName('Text style: Text')
 })
 
+test('the cursor moved into a commented passage by the keyboard opens its thread, and out of it closes it', async ({
+    page,
+}) => {
+    const card = comments(page).filter({ hasText: 'name the ticket' })
+    await plan(page).locator('li').filter({ hasText: "Excel's own format" }).click()
+    await expect(card).toHaveAttribute('data-active', 'false')
+    await page.keyboard.press('ArrowDown')
+    await expect(card).toHaveAttribute('data-active', 'true')
+    await expect(plan(page).locator('[data-thread=sample-2]')).toHaveClass(/plan-comment-active/u)
+    await page.keyboard.press('ArrowDown')
+    await expect(card).toHaveAttribute('data-active', 'false')
+})
+
+test("a click anywhere on a thread's card opens it, and the plan stays where it is", async ({ page }) => {
+    const card = comments(page).filter({ hasText: 'name the ticket' })
+    const scrolled = await page.evaluate(() => globalThis.scrollY)
+    await card.getByText('Keep this out').click()
+    await expect(card).toHaveAttribute('data-active', 'true')
+    await expect(plan(page).locator('[data-thread=sample-2]')).toHaveClass(/plan-comment-active/u)
+    expect(await page.evaluate(() => globalThis.scrollY)).toBe(scrolled)
+})
+
 test('a click elsewhere in the plan, or Escape, closes the open thread', async ({ page }) => {
     const passage = plan(page).locator('[data-thread=sample-2]')
     const thread = comments(page).filter({ hasText: 'name the ticket' })

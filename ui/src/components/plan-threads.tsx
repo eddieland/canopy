@@ -29,6 +29,8 @@ export interface Draft {
 export interface ThreadActions {
     /** Shows a thread's passage in the plan and marks it the one open. */
     onActivate: (id: string) => void
+    /** Marks a thread the one open, its passage drawn so, without moving the plan: when its card takes the focus. */
+    onOpen: (id: string) => void
     /** Adds a reply to a thread. */
     onReply: (id: string, body: string) => void
     /** Resolves a thread, or reopens it. */
@@ -219,6 +221,7 @@ function ThreadCard({
     active,
     editable,
     onActivate,
+    onOpen,
     onReply,
     onResolve,
     onDelete,
@@ -239,14 +242,33 @@ function ThreadCard({
             deleteAction.current?.focus()
         }
     }, [kept])
+
+    function open() {
+        if (!active && !lost && !thread.resolved) {
+            onOpen(thread.id)
+        }
+    }
     return (
+        // A click anywhere on an open thread's card, or Tab into it, opens the thread, as in a shared document. The
+        // plan stays where it is, so a card below a narrow plan never pulls the page away from the reply being typed.
+        // By the click, not the focus a press gives, for a mouse: an open card moves to its passage, and moved between
+        // press and release, the release would miss the button pressed. By the focus for the keyboard, which a click
+        // does not show (`:focus-visible`). Either only marks the thread open: no interaction a keyboard lacks.
+        // oxlint-disable-next-line no-noninteractive-element-interactions, click-events-have-key-events
         <article
             data-thread={thread.id}
             data-active={active}
             data-align={lost || thread.resolved ? undefined : thread.id}
             aria-label={`Comment on “${thread.anchor.quote}”`}
+            tabIndex={-1}
+            onClick={open}
+            onFocus={(event) => {
+                if (event.target.matches(':focus-visible')) {
+                    open()
+                }
+            }}
             className={cn(
-                'flex flex-col gap-1.5 border-b px-3 py-2.5 last:border-b-0',
+                'flex flex-col gap-1.5 border-b px-3 py-2.5 outline-none last:border-b-0',
                 active && 'bg-accent/14',
                 thread.resolved && 'text-muted-foreground',
             )}

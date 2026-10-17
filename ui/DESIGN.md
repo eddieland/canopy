@@ -711,13 +711,14 @@ list, an empty state, or a skeleton by hand.
   starts: `Write the plan here, or paste its Markdown.` The plan's header, with the toolbar, is `sticky`, and what the
   editor scrolls into view (the cursor as it types, a passage a comment shows) stops 48px below it. A selection also
   shows a `Comment` bubble over it. A commented passage sits on the accent's tint at 14%; the open one, or the one being
-  commented on, at 28% and underlined in the accent; clicking a passage opens its thread, and the cursor leaving it, or
-  Escape, closes it. A thread is its passage quoted (two lines, a hairline in the accent at its left, the whole on
-  hover; a button that shows it in the plan), the comment and its replies as text with their ages, and ghost `xs`
-  actions, `Reply`, `Resolve` (`Reopen`), and `Delete`. While the thread is open, the comment and each reply carry an
-  `Edit` beside their age, in `text-2xs`, which turns it into the comment form in place, holding its words, with `Save`;
-  the actions hide while it is open. `Delete` asks first, in the actions' place, since nothing brings a thread back:
-  `Delete this comment and its replies?` in muted `text-xs`, then `Keep`, which takes the focus, and `Delete` in
+  commented on, at 28% and underlined in the accent; the cursor in a passage, by a click or the keyboard, opens its
+  thread, and so does a click anywhere on its card, or Tab into it, which leaves the plan where it is; the cursor
+  leaving it, or Escape, closes it. A thread is its passage quoted (two lines, a hairline in the accent at its left, the
+  whole on hover; a button that shows it in the plan), the comment and its replies as text with their ages, and ghost
+  `xs` actions, `Reply`, `Resolve` (`Reopen`), and `Delete`. While the thread is open, the comment and each reply carry
+  an `Edit` beside their age, in `text-2xs`, which turns it into the comment form in place, holding its words, with
+  `Save`; the actions hide while it is open. `Delete` asks first, in the actions' place, since nothing brings a thread
+  back: `Delete this comment and its replies?` in muted `text-xs`, then `Keep`, which takes the focus, and `Delete` in
   `destructive`; Escape keeps it too, and the focus goes back to `Delete`; the open thread sits on the accent's tint, as
   a selected row does. A thread whose passage is gone carries a `passage gone` chip and stays in the list, last.
   Resolved threads fold under a `Disclosure` (`Show 2 resolved`). A comment or reply form sends on the key Settings
