@@ -24,9 +24,9 @@ import { cn } from '@/lib/utils'
 const WORKTREES_SHOWN = 3
 
 /**
- * Runs, one row each: state, the ticket and its title, the run's id (opening its page) and kind, cost, when, and what
- * it said, or while it runs, its latest tool call. `ticket` leaves out the ticket and its title, for a ticket's own
- * page; `ownPr` leaves out the PR whose page it is, among those a run pushed to.
+ * Runs, one row each: state, the run's id (opening its page), the ticket, the run's kind, the ticket's title, cost,
+ * when, and what it said, or while it runs, its latest tool call. `ticket` leaves out the ticket and its title, for a
+ * ticket's own page; `ownPr` leaves out the PR whose page it is, among those a run pushed to.
  */
 export function RunsTable({ runs, ticket = true, ownPr }: { runs: Run[]; ticket?: boolean; ownPr?: string }) {
     return (
@@ -95,20 +95,19 @@ function TicketRow({ group }: { group: TicketRuns }) {
 }
 
 /**
- * One of a ticket's earlier runs, on one line in the columns of the row it sits in: its state, the first line of what
- * it said where the title is, its id and chips, cost, and when. The rest is on the run's page.
+ * One of a ticket's earlier runs, on one line in the columns of the row it sits in: its state, its id, its chips, the
+ * first line of what it said where the title is, cost, and when. The rest is on the run's page.
  */
 function EarlierRow({ run }: { run: Run }) {
     const said = run.summary?.split('\n', 1)[0] ?? ''
     return (
         <ListRow kind="run" className="p-0" data-testid={`run-${run.id}`}>
             <RunStatus run={run} />
+            <RunLink id={run.id} />
             <span />
+            <RunChips run={run} />
             <span className="truncate text-sm text-muted-foreground" title={said || undefined}>
                 <LinkedText text={said} />
-            </span>
-            <span className="flex items-center gap-3">
-                <RunFacts run={run} />
             </span>
             <RunReadouts run={run} />
         </ListRow>
@@ -123,15 +122,20 @@ function RunBody({ run, ticket, ownPr }: { run: Run; ticket: boolean; ownPr?: st
     return (
         <>
             <RunStatus run={run} />
-            {ticket && (
+            {ticket ? (
                 <>
+                    <RunLink id={run.id} />
                     <TicketLink ticketKey={run.ticket_key} className="truncate" />
+                    <RunChips run={run} />
                     <TicketTitle title={run.ticket_title} />
                 </>
+            ) : (
+                // On its subject's page the id leads the free column at a fixed width, so the chips still line up.
+                <span className="flex items-center gap-3">
+                    <RunLink id={run.id} className="w-14" />
+                    <RunChips run={run} />
+                </span>
             )}
-            <span className="flex items-center gap-3">
-                <RunFacts run={run} />
-            </span>
             <RunReadouts run={run} />
             {run.summary && <RichText text={run.summary} lines={SUMMARY_LINES} className={rowLineFrom(under)} />}
             {run.activity && (
@@ -184,13 +188,13 @@ function RunWorktrees({ paths }: { paths: string[] }) {
     )
 }
 
-function RunFacts({ run }: { run: Run }) {
+/** A run's chips: its kind, and `private` for a private ticket's. */
+function RunChips({ run }: { run: Run }) {
     return (
-        <>
-            <RunLink id={run.id} className="w-14" />
-            <Chip word={run.kind} />
+        <span className="flex min-w-0 items-center gap-3">
+            <Chip word={run.kind} className="min-w-0 shrink" />
             {run.private && <Chip>private</Chip>}
-        </>
+        </span>
     )
 }
 

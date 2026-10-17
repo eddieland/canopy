@@ -8,6 +8,7 @@ import { Chip, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Timestamp } from '@/components/timestamp'
 import { memorySegments, usedText } from '@/lib/memory'
+import { memoryRef } from '@/lib/refs'
 import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -51,7 +52,7 @@ export function MemoryBand({ tier, name }: { tier: MemoryTier; name: string }) {
 }
 
 /**
- * Memories, one row each: id, key, where it stands, how runs used it, and when it was written; then what it says,
+ * Memories, one row each: where it stands, id, key, how runs used it, and when it was written; then what it says,
  * plain, and where it came from. `ticket` names each note's ticket, for a list across tickets; `below` adds what goes
  * under a row, by its id, such as a proposal's provenance; `ownRun` leaves out the run whose page it is.
  */
@@ -70,14 +71,14 @@ export function MemoryRows({
         <ul className="divide-y" data-testid="memory-rows">
             {entries.map((entry) => (
                 <ListRow key={entry.id} kind="memory" data-testid={`memory-${entry.id}`}>
-                    <span className="readout text-xs text-muted-foreground">{entry.id}</span>
+                    <span className="truncate text-xs" title={entry.why ?? undefined}>
+                        <Word word={entry.status} />
+                    </span>
+                    <span className="readout text-xs text-muted-foreground">{memoryRef(entry.id)}</span>
                     <span className="flex min-w-0 items-center gap-2">
                         <span className="truncate font-mono text-xs">{entry.key}</span>
                         {ticket && entry.ticket_key !== null && <TicketLink ticketKey={entry.ticket_key} />}
                         {entry.repo !== null && <Chip>{entry.repo}</Chip>}
-                    </span>
-                    <span className="truncate text-xs" title={entry.why ?? undefined}>
-                        <Word word={entry.status} />
                     </span>
                     <span
                         className="truncate text-xs text-muted-foreground"
