@@ -129,6 +129,16 @@ Controls:
   prompt's obligations come before it, as they do before the standing instructions. The overseer reads it as the
   operator's word about the world, to hold a failed check the notice explains: that changes when `fix-ci` runs, never
   what a worker may do.
+- Ticket notes (DESIGN §28, ROADMAP M50), with `memory.ticket_notes` at `use`: a worker may write notes its own
+  ticket's later `implement`, `fix-ci`, and `resume` runs read as data, the same exposure as its reports in
+  `{{PREVIOUS_RUNS}}`, with one new property: a note outlives the tracker comment that steered it, bounded by the
+  ticket's life (marking it done invalidates its notes) and by `canopy forget`. `_run` writes only the notes of the
+  run's own ticket, read from its row, never from the result; a run renews, drops, or retires only notes rendered into
+  its own prompt; and the bounds, in code, refuse hidden characters (zero-width, bidi, tag, and control) and what looks
+  like a secret. A prompt frames the notes as data to check against the branch and PR, and keeps them off the tracker
+  and PRs. The overseer reads none, reviews and chores get none, and at `record` no agent reads them. `memory.*` is
+  private (T7). `canopy memory forget` and `purge`, which delete notes' text, refuse when `CANOPY_TICK_ID` or
+  `CANOPY_RUN_ID` is set.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
   and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
   (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
@@ -170,7 +180,9 @@ branch. That is what human review is for, and it is not weaker than the same
 risk with an interactive agent. canopy acts as the operator, so the tracker can say when a split child's label was added
 but not who added it, and the label-time check is the overseer's judgment: a steered overseer that ignores it can
 dispatch a self-labeled child, as it could dispatch an unlabeled ticket. That child's work is still a PR a human
-reviews. Under the PR exception, a steered overseer and worker that both skip their checks can
+reviews. With ticket notes in use, a steered worker can write a note that misleads its own ticket's later runs until
+one of them reports it wrong, drops it, or the ticket ends; those runs are told to check it against the branch, and the
+PR's review remains. Under the PR exception, a steered overseer and worker that both skip their checks can
 push non-forced commits, as the operator, to someone else's unprotected PR branch; that PR's own review is the
 backstop, as it is for a coworker pushing there by hand. With `trust.rebase` set, a steered worker can replace its own
 branch's history, or one of those branches', with whatever it pushes: the lease stops it overwriting a push it has not
@@ -397,8 +409,8 @@ workspace's private file, `.canopy/config.toml` under its root. A workspace may 
 shares with a team, so anyone who can push there can change that file, and a checkout of an unreviewed branch of it
 carries their version. Unlike build scripts a worker runs (T4), this file is read by the harness itself, outside any
 worktree and before any agent starts. If it could set the runtime commands, `notify.cmd`, chores, the review query,
-prompt paths, capacity, queue labels, or authorized repliers, one commit would be enough to run commands on operators'
-machines, raise their spend, or pick who steers their workers.
+prompt paths, capacity, queue labels, authorized repliers, or agent memory's tiers, one commit would be enough to run
+commands on operators' machines, raise their spend, or pick who steers their workers.
 
 The workspace file also holds the map: repository names, one-line summaries, and clone URLs. Names and summaries are
 data, like ticket text. URLs are read only by `canopy workspace sync`, a command the operator runs, which prints each

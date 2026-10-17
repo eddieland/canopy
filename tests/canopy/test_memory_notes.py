@@ -209,7 +209,7 @@ def test_at_record_each_prompt_differs_from_its_off_self_by_the_contract_alone(
     off = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values, private=private)
     with_memory(canopy_env, ticket_notes="record")
     cfg = load(canopy_env.root, canopy_env.user_file)
-    rendered = memory.render(conn, cfg, kind=kind)
+    rendered = memory.render(conn, cfg, key=KEY, kind=kind)
     if kind not in memory.NOTE_KINDS:
         assert rendered is None
         return
