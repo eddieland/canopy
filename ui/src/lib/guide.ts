@@ -31,6 +31,8 @@ export interface GuideHeading {
 export interface GuidePage {
     /** Its address under `/guide/`: the file's name without `.md`. */
     slug: string
+    /** The group the sidebar lists it under, such as `Getting started`. */
+    group: string
     /** Its `#` heading, the file's first line: the page's name in its header and in the guide's lists. */
     title: string
     /** The paragraph after the title: one or two sentences on what the page covers, under its header and in lists. */
@@ -41,23 +43,48 @@ export interface GuidePage {
     headings: GuideHeading[]
 }
 
-// The guide's files, in the order its lists show them: the web UI first, then what a page of it needs on the way.
+/** A group of the guide's pages, as its sidebar lists them under a heading. */
+export interface GuideGroup {
+    /** The group's heading. */
+    title: string
+    /** Its pages, in order. */
+    pages: GuidePage[]
+}
+
+// The guide's files by group, in the order its sidebar lists them, which is also the order Previous and Next walk.
 // Every file in src/guide/ is here; a test fails on one left out.
-const SOURCES: readonly (readonly [string, string])[] = [
-    ['overview', overview],
-    ['signing-in', signingIn],
+const SOURCES: readonly { title: string; pages: readonly (readonly [string, string])[] }[] = [
+    {
+        title: 'Getting started',
+        pages: [
+            ['overview', overview],
+            ['signing-in', signingIn],
+        ],
+    },
 ]
 
-const SLUGS: ReadonlySet<string> = new Set(SOURCES.map(([slug]) => slug))
+const SLUGS: ReadonlySet<string> = new Set(SOURCES.flatMap(({ pages }) => pages.map(([slug]) => slug)))
 const PAGE_REF = /^([a-z0-9-]*)(?:#([a-z0-9-]+))?$/u
 const WEB = /^https?:\/\/\S+$/u
 
-/** Every page of the guide, in its order. */
-export const GUIDE: readonly GuidePage[] = SOURCES.map(([slug, text]) => readPage(slug, text))
+/** The guide's groups, each with its pages, in the sidebar's order. */
+export const GUIDE_GROUPS: readonly GuideGroup[] = SOURCES.map(({ title, pages }) => ({
+    title,
+    pages: pages.map(([slug, text]) => readPage(slug, title, text)),
+}))
+
+/** Every page of the guide, in the sidebar's order: the first is where `/guide` opens. */
+export const GUIDE: readonly GuidePage[] = GUIDE_GROUPS.flatMap((group) => group.pages)
 
 /** The page at `slug`, or undefined when the guide has none. */
 export function guidePage(slug: string): GuidePage | undefined {
     return GUIDE.find((page) => page.slug === slug)
+}
+
+/** The pages before and after `slug` in the guide's order, across groups: what its Previous and Next open. */
+export function guideNeighbours(slug: string): { previous: GuidePage | undefined; next: GuidePage | undefined } {
+    const at = GUIDE.findIndex((page) => page.slug === slug)
+    return { previous: at > 0 ? GUIDE[at - 1] : undefined, next: at === -1 ? undefined : GUIDE[at + 1] }
 }
 
 /**
@@ -98,7 +125,7 @@ export function plainText(line: Line<GuidePiece>): string {
     return line.map((piece) => piece.text).join('')
 }
 
-function readPage(slug: string, text: string): GuidePage {
+function readPage(slug: string, group: string, text: string): GuidePage {
     const blocks = parseWith(text, (line) => guideLine(line, slug))
     const [first, second, ...rest] = blocks
     const title = first?.kind === 'heading' && first.level === 1 ? plainText(first.line) : slug
@@ -109,7 +136,7 @@ function readPage(slug: string, text: string): GuidePage {
             ? [{ id: anchor(plainText(block.line)), text: plainText(block.line) }]
             : [],
     )
-    return { slug, title, lead, body, headings }
+    return { slug, group, title, lead, body, headings }
 }
 
 /** A line of a guide page on `slug`: `code`, **strong**, and `[text](href)`; a link going nowhere stays as written. */

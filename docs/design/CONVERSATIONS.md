@@ -343,11 +343,11 @@ Served by `canopy loop` from a thread (D073):
   working now and the recent spend, and the loop's pause and any notice to workers. Actions: the CLI's verbs above,
   where their subject is shown. OpenCode's session attach (M15) is not in the UI: a run's page shows its session id
   and its transcript as it goes, and attach joins once M15 runs workers against OpenCode's server.
-- The guide (M52): the operator's documentation, a page each, at `/guide` and opened from the rail's foot. Its pages
-  are Markdown in `ui/src/guide/`, bundled with the build, so the guide describes the canopy that serves it, and needs
-  no route of the server's. It is canopy's own text, not the journal's, so the parser below reads its labelled links
-  too, to another page, a section of the app, or the web, still into React elements. Not at `/docs`, which the server
-  sends to the API's documentation.
+- The guide (M52): the operator's documentation, a page each, laid out as a documentation site at `/guide` and
+  opened from the rail's foot. Its pages are Markdown in `ui/src/guide/`, bundled with the build, so the guide
+  describes the canopy that serves it, and needs no route of the server's. It is canopy's own text, not the journal's,
+  so the parser below reads its labelled links too, to another page, a section of the app, or the web, still into
+  React elements. Not at `/docs`, which the server sends to the API's documentation.
 - FastAPI on uvicorn (D074), serving a single-page app built from `ui/` (D079) and the JSON and SSE API it reads. The
   server installs no signal handlers (the loop's own handle Ctrl-C, §6) and logs nothing to the terminal. Request
   bodies and path parameters are validated with pydantic models and the reference parser, as everything else parsed

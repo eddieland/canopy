@@ -76,11 +76,13 @@ export function Buddy() {
 }
 
 /**
- * The view a route is: every route but the root, which only redirects. Returning the route as a view is what holds
- * `TIPS` to the routes, so a new route fails the type check until it has tips of its own.
+ * The view a route is: every route but those that only redirect, the root and the guide's. Returning the route as a
+ * view is what holds `TIPS` to the routes, so a new route fails the type check until it has tips of its own.
  */
 function viewOf(routeId: keyof FileRoutesById | undefined): View | undefined {
-    return routeId === undefined || routeId === '__root__' || routeId === '/' ? undefined : routeId
+    return routeId === undefined || routeId === '__root__' || routeId === '/' || routeId === '/guide/'
+        ? undefined
+        : routeId
 }
 
 /**

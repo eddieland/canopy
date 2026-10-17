@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { anchor, GUIDE, guidePage, guideTarget, plainText } from './guide'
+import { anchor, GUIDE, GUIDE_GROUPS, guideNeighbours, guidePage, guideTarget, plainText } from './guide'
 import type { GuidePage, GuidePiece } from './guide'
 import type { Block, Line } from './rich-text'
 
@@ -22,6 +22,19 @@ describe('the guide', () => {
 
     it('has no link that goes nowhere: each is read as a link, and every heading it names is there', () => {
         expect(GUIDE.flatMap((page) => linkProblems(page))).toEqual([])
+    })
+})
+
+describe('guideNeighbours', () => {
+    it("walks the pages in the sidebar's order, across groups, with none before the first or after the last", () => {
+        const order = GUIDE_GROUPS.flatMap((group) => group.pages.map((page) => page.slug))
+        expect(GUIDE.map((page) => page.slug)).toEqual(order)
+        const walked = GUIDE.map((page) => {
+            const { previous, next } = guideNeighbours(page.slug)
+            return [previous?.slug, next?.slug]
+        })
+        expect(walked).toEqual(order.map((_, i) => [order[i - 1], order[i + 1]]))
+        expect(guideNeighbours('no-such-page')).toEqual({ previous: undefined, next: undefined })
     })
 })
 

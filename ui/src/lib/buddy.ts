@@ -24,10 +24,10 @@ export function parseBuddy(raw: string | null): BuddySetting {
 }
 
 /**
- * Sprig's tips for each view, by its route id: every route but the root, which only redirects. A section's list and
- * one of its items are views of their own (`/tickets/` and `/tickets/$key`). The routes are not imported here, which
- * would bring them all into the unit tests' types: src/components/shell/buddy.tsx holds them to these keys, so a new
- * route fails the type check until it has its own tips.
+ * Sprig's tips for each view, by its route id: every route but those that only redirect, the root and the guide's. A
+ * section's list and one of its items are views of their own (`/tickets/` and `/tickets/$key`). The routes are not
+ * imported here, which would bring them all into the unit tests' types: src/components/shell/buddy.tsx holds them to
+ * these keys, so a new route fails the type check until it has its own tips.
  */
 export const TIPS = {
     '/attention': [
@@ -189,13 +189,6 @@ export const TIPS = {
         'Dear diary, a worker proposed a lesson today. I proposed a hat. Only one of us got promoted.',
         'Fun fact: recording is not using. I record everything and use none of it.',
         'Hot take: a note that says "it works on my machine" is a note about the machine.',
-    ],
-    '/guide/': [
-        "It looks like you're reading the manual. Bold move. Nobody reads the manual.",
-        'Unhelpful tip: the guide ships with this build, so it is never out of date. I am, constantly.',
-        'Fun fact: I am not in the guide. I am the guide to the guide.',
-        'Haiku: a page for each page / the guide explains canopy / who explains the guide',
-        'Riddle: what has pages but no paper? The guide. Also my diary, which is mostly hats.',
     ],
     '/guide/$page': [
         "It looks like you're reading documentation. Would you like me to skim it for you, badly?",

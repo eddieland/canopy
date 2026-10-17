@@ -29,7 +29,6 @@ export const ROUTES = [
     'search?q=web',
     'plan-editor',
     'memory',
-    'guide',
     'guide/overview',
 ] as const
 /** A page in ROUTES. */

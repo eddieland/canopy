@@ -11,15 +11,15 @@ const DEPTH: Record<number, string> = { 0: '', 1: 'ml-4', 2: 'ml-8', 3: 'ml-12' 
 const LINK = 'text-accent underline underline-offset-4 hover:decoration-2'
 
 /**
- * A page of the guide laid out (`src/lib/guide.ts`): headings, each with its anchor as its id, paragraphs, lists, code,
- * and links. Its lines wrap as prose does, so a paragraph written across lines reads as one. Every piece is a React
- * element, never HTML.
+ * A page of the guide laid out as a documentation site's article (`src/lib/guide.ts`): headings, each with its anchor
+ * as its id and a `#` link to itself on hover, paragraphs, lists, code, and links. Its lines wrap as prose does, so a
+ * paragraph written across lines reads as one. Every piece is a React element, never HTML.
  */
-export function GuideText({ blocks }: { blocks: Block<GuidePiece>[] }) {
+export function GuideText({ blocks, page }: { blocks: Block<GuidePiece>[]; page: string }) {
     return (
-        <div className="flex max-w-3xl min-w-0 flex-col gap-3 text-sm/6 wrap-break-word">
+        <div className="flex min-w-0 flex-col gap-4 text-base/7 wrap-break-word">
             {blocks.map((block, i) => (
-                <BlockView key={i} block={block} />
+                <BlockView key={i} block={block} page={page} />
             ))}
         </div>
     )
@@ -35,7 +35,7 @@ export function GuideLines({ lines }: { lines: Line<GuidePiece>[] }) {
     ))
 }
 
-function BlockView({ block }: { block: Block<GuidePiece> }) {
+function BlockView({ block, page }: { block: Block<GuidePiece>; page: string }) {
     switch (block.kind) {
         case 'paragraph': {
             return (
@@ -46,14 +46,36 @@ function BlockView({ block }: { block: Block<GuidePiece> }) {
         }
         case 'heading': {
             const id = anchor(plainText(block.line))
-            // A page's own title is its header's h1, so its body starts at h2.
+            const self = (
+                <Link
+                    to="/guide/$page"
+                    params={{ page }}
+                    hash={id}
+                    aria-label={`Link to ${plainText(block.line)}`}
+                    className={cn(
+                        'ml-2 text-muted-foreground no-underline opacity-0',
+                        'group-hover:opacity-100 focus:opacity-100',
+                    )}
+                >
+                    #
+                </Link>
+            )
+            // A page's own title is its header's h1, so its body starts at h2: a section, under a rule.
             return block.level <= 2 ? (
-                <h2 id={id} className="mt-3 scroll-mt-6 text-base font-semibold tracking-tight first:mt-0">
+                <h2
+                    id={id}
+                    className={cn(
+                        'group mt-4 scroll-mt-6 border-t pt-6 text-lg font-semibold tracking-tight',
+                        'first:mt-0 first:border-t-0 first:pt-0',
+                    )}
+                >
                     <LineView line={block.line} />
+                    {self}
                 </h2>
             ) : (
-                <h3 id={id} className="mt-1 scroll-mt-6 font-medium">
+                <h3 id={id} className="group mt-2 scroll-mt-6 text-base font-semibold">
                     <LineView line={block.line} />
+                    {self}
                 </h3>
             )
         }
@@ -63,7 +85,7 @@ function BlockView({ block }: { block: Block<GuidePiece> }) {
                     <GuideLines lines={item.lines} />
                 </li>
             ))
-            const list = 'flex flex-col gap-1 pl-5 marker:text-muted-foreground'
+            const list = 'flex flex-col gap-1.5 pl-6 marker:text-muted-foreground'
             return block.ordered ? (
                 <ol start={block.start} className={cn(list, 'list-decimal')}>
                     {items}
@@ -74,7 +96,7 @@ function BlockView({ block }: { block: Block<GuidePiece> }) {
         }
         case 'code': {
             return (
-                <pre className="overflow-x-auto rounded-sm border bg-surface-raised px-3 py-2 font-mono text-xs">
+                <pre className="overflow-x-auto rounded-md border bg-surface-raised px-4 py-3 font-mono text-sm/6">
                     {block.lines.join('\n')}
                 </pre>
             )
@@ -95,7 +117,9 @@ function PieceView({ piece }: { piece: GuidePiece }) {
             return <strong className="font-semibold">{piece.text}</strong>
         }
         case 'code': {
-            return <code className="rounded-sm bg-surface-raised px-1 py-px font-mono text-xs">{piece.text}</code>
+            return (
+                <code className="rounded-sm bg-surface-raised px-1 py-px font-mono text-[0.875em]">{piece.text}</code>
+            )
         }
         case 'link': {
             return <GuideLink piece={piece} />
