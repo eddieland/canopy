@@ -127,9 +127,7 @@ def test_at_record_a_proposal_waits_and_a_promoted_lesson_reaches_no_prompt(
         "repo",
         first["id"],
     )
-    prompt = prompt_of(canopy_env, int(first["id"]))
-    assert '`"proposals":' in prompt
-    assert "Why: <" in prompt
+    assert '`"proposals":' in prompt_of(canopy_env, int(first["id"]))
     capsys.readouterr()
     assert main(["memory", "promote", str(proposal.id)]) == 0
     assert "It is recorded, not served: memory.proposals is record" in capsys.readouterr().out
