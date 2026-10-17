@@ -1,9 +1,32 @@
 import { expect, test } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { NOW, screenshotWhole, settled, signIn, spentInAll, storeTheme, THEMES } from './helpers.ts'
 
 // Tall enough that the rail has room for Sprig and its bubble under the mock's three working runs.
 test.use({ viewport: { width: 1280, height: 1200 } })
+
+/** The longest Sprig waits before offering a tip unasked, in seconds (`WAIT_SECONDS` in buddy.tsx). */
+const LONGEST_WAIT = 360
+
+/**
+ * Runs the page's installed clock in steps until Sprig offers a tip on its own, at a random time no later than
+ * `LONGEST_WAIT`. The steps are shorter than a tip stays up, so one offered between two is still up after the second.
+ */
+async function waitForTip(page: Page, tip: Locator): Promise<void> {
+    for (let seconds = 0; seconds < LONGEST_WAIT && !(await tip.isVisible()); seconds += 5) {
+        await page.clock.runFor(5000)
+    }
+    await expect(tip).toBeVisible()
+}
+
+/** Asks Sprig for a tip from the keyboard, then lets go of the focus: no pointer moves its eyes, no ring shows. */
+async function askSprig(page: Page): Promise<void> {
+    const sprig = page.getByTestId('buddy-sprig')
+    await sprig.press('Enter')
+    await sprig.blur()
+    await expect(page.getByTestId('buddy-tip')).toBeVisible()
+}
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -16,7 +39,7 @@ test('Sprig is off until Settings turns it on', async ({ page }) => {
     await expect(page.getByTestId('fun-sprig')).not.toBeChecked()
 
     await page.getByTestId('fun-sprig').click()
-    await expect(page.getByTestId('buddy-tip')).toBeVisible()
+    await expect(page.getByTestId('buddy-sprig')).toBeVisible()
     await page.reload()
     await settled(page)
     await expect(page.getByTestId('buddy')).toBeVisible()
@@ -32,11 +55,14 @@ test.describe('turned on', () => {
         })
     })
 
-    test('Sprig offers a tip on every page, another on a click, and closes when told', async ({ page }) => {
+    test('Sprig offers a tip now and then, another on a click, and closes when told', async ({ page }) => {
+        await page.clock.install()
         await page.goto('attention')
         await settled(page)
         const tip = page.getByTestId('buddy-tip')
-        await expect(tip).toBeVisible()
+        // A page arrives with no tip up: the first comes on Sprig's own time.
+        await expect(tip).toBeHidden()
+        await waitForTip(page, tip)
         const first = await tip.textContent()
 
         await page.getByTestId('buddy-another').click()
@@ -49,16 +75,37 @@ test.describe('turned on', () => {
         await expect(tip).toBeHidden()
         await expect(page.getByTestId('buddy-sprig')).toBeVisible()
 
-        // A new page, a new tip.
+        // A new page offers no tip of its own, and the next comes on Sprig's time, about the page on screen.
         await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings' }).click()
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Settings')
+        await expect(tip).toBeHidden()
+        await waitForTip(page, tip)
+        await expect(tip).not.toHaveText(second ?? '')
+    })
+
+    test('a tip is shown only on the view it was offered on, and closes on time', async ({ page }) => {
+        await page.clock.install()
+        await page.goto('attention')
+        await settled(page)
+        const tip = page.getByTestId('buddy-tip')
+        await page.getByTestId('buddy-sprig').click()
         await expect(tip).toBeVisible()
+
+        await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Settings' }).click()
+        await expect(page.getByRole('heading', { level: 1 })).toHaveText('Settings')
+        await expect(tip).toBeHidden()
+        await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Attention' }).click()
+        await expect(tip).toBeVisible()
+        await page.clock.runFor(21_000)
+        await expect(tip).toBeHidden()
     })
 
     test('Sprig has its own tip for a list and one of its items, and keeps it for another filter', async ({ page }) => {
         await page.goto('runs')
         await settled(page)
         const tip = page.getByTestId('buddy-tip')
+        await page.getByTestId('buddy-sprig').click()
+        await expect(tip).toBeVisible()
         const shown = await tip.textContent()
 
         // The same view filtered another way offers the same tip: the bubble stays as it was, not closed and opened.
@@ -80,6 +127,7 @@ test.describe('turned on', () => {
         // A run's page is a view of its own, with a tip of its own.
         await page.goto('runs/39')
         await settled(page)
+        await page.getByTestId('buddy-sprig').click()
         await expect(tip).toBeVisible()
         await expect(tip).not.toHaveText(shown ?? '')
     })
@@ -90,6 +138,7 @@ test.describe('turned on', () => {
         const buddy = page.getByTestId('buddy')
         await expect(page.getByTestId('fun-sprig')).toBeChecked()
 
+        await page.getByTestId('buddy-sprig').click()
         await page.getByTestId('buddy-dismiss').click()
         await expect(buddy).toHaveCount(0)
         await expect(page.getByTestId('fun-sprig')).not.toBeChecked()
@@ -99,7 +148,7 @@ test.describe('turned on', () => {
 
         await page.getByTestId('fun-sprig').click()
         await expect(buddy).toBeVisible()
-        await expect(page.getByTestId('buddy-tip')).toBeVisible()
+        await expect(page.getByTestId('buddy-sprig')).toBeVisible()
     })
 
     test("Sprig's eyes follow the pointer", async ({ page }) => {
@@ -151,7 +200,7 @@ test.describe('turned on', () => {
 
         await page.setViewportSize({ width: 1280, height: 1200 })
         await expect(buddy).toHaveAttribute('data-room', 'roomy')
-        await expect(page.getByTestId('buddy-tip')).toBeVisible()
+        await askSprig(page)
         const sprig = await buddy.boundingBox()
         const spend = await page.getByTestId('rail-spend').boundingBox()
         if (sprig === null || spend === null) {
@@ -185,18 +234,19 @@ test.describe('turned on', () => {
         await expect(tip).toBeHidden()
     })
 
-    test('a tip waiting unseen in a tight rail still shows its full time once the rail has room', async ({ page }) => {
+    test('a tight rail lets the tips Sprig would offer unasked pass, and a roomy one shows them', async ({ page }) => {
         await page.clock.install()
         await page.setViewportSize({ width: 1280, height: 854 })
         await page.goto('attention')
         await settled(page)
         const tip = page.getByTestId('buddy-tip')
         await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'tight')
-        await page.clock.runFor(30_000)
+        await page.clock.runFor(LONGEST_WAIT * 2 * 1000)
+        await expect(tip).toBeHidden()
 
         await page.setViewportSize({ width: 1280, height: 1200 })
         await expect(page.getByTestId('buddy')).toHaveAttribute('data-room', 'roomy')
-        await expect(tip).toBeVisible()
+        await waitForTip(page, tip)
         await page.clock.runFor(21_000)
         await expect(tip).toBeHidden()
     })
@@ -252,6 +302,7 @@ test.describe('turned on', () => {
             await storeTheme(page, theme)
             await page.goto('attention')
             await settled(page)
+            await askSprig(page)
             await expect(page.getByTestId('buddy')).toHaveScreenshot(`buddy-hat-${theme}.png`)
         })
 
@@ -260,6 +311,7 @@ test.describe('turned on', () => {
             await storeTheme(page, theme)
             await page.goto('attention')
             await settled(page)
+            await askSprig(page)
             await expect(page.getByTestId('buddy')).toHaveScreenshot(`buddy-${theme}.png`)
         })
     }
@@ -269,7 +321,7 @@ test.describe('turned on', () => {
         await storeTheme(page, 'dark')
         await page.goto('attention')
         await settled(page)
-        await expect(page.getByTestId('buddy')).toBeVisible()
+        await askSprig(page)
         await screenshotWhole(page, 'attention-sprig-dark.png')
     })
 })
