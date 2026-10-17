@@ -90,7 +90,7 @@ function AttentionPage() {
                                 <span className="readout text-xs text-muted-foreground">{items?.length}</span>
                             </PanelHeader>
                             {items === undefined ? (
-                                <PanelSkeleton />
+                                <PanelSkeleton className="min-h-40" />
                             ) : (
                                 <ul className="stagger flex flex-col gap-0.5 p-1.5">
                                     {rows.map(({ item, leaving }) =>
