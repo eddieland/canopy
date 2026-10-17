@@ -360,7 +360,7 @@ Harness attention items for runs (§14) stay per ticket, their detail naming the
 - Before a joint run's worker starts, the shadowing check (§13) covers each worktree, `desks/`, and the workspace root,
   since OpenCode may read config above the desk.
 - The result contract's `"pr"` becomes `"prs"`, an object from repository name to PR URL or null; each URL is recorded
-  as its unit's PR.
+  as its unit's PR. `"pr_titles"` maps the same names to each PR's title, recorded by its URL (§8).
 - Worker obligations add: each PR's body links its sibling PRs and says which to merge first; the ticket comment lists
   every PR. Workers still never merge.
 

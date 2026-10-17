@@ -92,7 +92,8 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
         <>
             <PageHeader
                 title={title}
-                subject={pr.ticket_title}
+                // Its own title, as its worker reported it, else its ticket's: the ticket's still shows below.
+                subject={pr.title ?? pr.ticket_title}
                 help={HELP}
                 chips={pr.phase ? <Chip word={pr.phase} /> : undefined}
                 // The PR on its host, as a ticket's page shows its links out: the title names it, so this says where it

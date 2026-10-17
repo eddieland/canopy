@@ -1801,6 +1801,8 @@ class PullRequest(_Model):
     """The ticket whose unit records it, or the one a review of it named; None for a PR no ticket owns."""
     ticket_title: str | None = None
     """That ticket's title, as the overseer named it; None until it does."""
+    title: str | None = None
+    """Its own title, as the worker that opened or last updated it reported it: untrusted text; None until one does."""
     repo: str | None = None
     """The PR's repository, as the workspace names it."""
     branch: str | None = None

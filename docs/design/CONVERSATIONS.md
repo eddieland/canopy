@@ -483,6 +483,8 @@ a ticket's units, its runs, the reviews (§21), and the decisions, is gathered o
 - One PR is named by its URL as a query parameter, since the URL is opaque (§21) and holds slashes; only a plain
   `https://` URL of at most 300 characters is looked up, anything else is a 422. A PR only decisions name (a
   `review.query` match no review has run on yet) has a page too, so it shows why (`wait`, a refusal).
+- Each has its own title, as its worker last reported it (§8), which need not be its ticket's: a PR's title says what
+  changed. The list shows it in place of the ticket's title once a worker reports one.
 - Its page: the PR's fields, the runs that pushed to it and any of its ticket's runs still working, its review runs,
   the latest 20 decisions naming it, and its total cost: a run that pushed to two PRs, one per repository, counts on
   each one's page, and once on its ticket's.

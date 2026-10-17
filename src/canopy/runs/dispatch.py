@@ -775,6 +775,7 @@ def _spawn(
         if split or planning
         else repositories_note(ctx, branch, slots, prs, desk),
         "PRS": json.dumps({s.repo: "<url or null>" for s in slots}, separators=(",", ":")),
+        "PR_TITLES": json.dumps({s.repo: "<its title or null>" for s in slots}, separators=(",", ":")),
         "TRACKER_PROVIDER": cfg.tracker.provider,
         "NEEDS_HUMAN_LABEL": cfg.tracker.needs_human_label,
         "TIMEOUT_MINUTES": str(cfg.runtime.worker_timeout_minutes),
