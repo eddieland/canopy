@@ -223,7 +223,7 @@ default. Never look for a label by its default name.
 `[bot]` approvals do not count as approval: a green PR approved only by bots is `green_unreviewed`, not `approved`.
 
 A unit's action is the one the table gives for the phase you derived for it, and its attention items follow from the
-same phase. A `resume` needs a phase whose action is `resume` (`pushed_no_pr`, `conflicted`, `changes_requested`,
+same phase. A `resume` needs a phase whose action is `resume` (`pushed_no_pr`, `conflicted`, `changes_requested` or
 `review_findings` you classified for a worker, `human_replied`), and its `--context` names what that phase found. A
 `ci_running` unit gets `wait`, never a `resume` with nothing new to address, and a unit whose checks are pending or
 failed is not `green_unreviewed`, so it gets no `needs_reviewer`.
