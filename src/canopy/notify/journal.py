@@ -5,6 +5,7 @@ Each sink's cursor and failures, the attention items it was told about, and the 
 
 from __future__ import annotations
 
+import operator
 import sqlite3
 from collections.abc import Collection, Iterable, Sequence
 from dataclasses import dataclass, field
@@ -145,7 +146,7 @@ def diff(conn: sqlite3.Connection, sink_name: str, items: Sequence[Item], dismis
     added = [i for i in items if item_fingerprint(i) not in told]
     gone = sorted(
         ((subject(key, repo), reason, fp, (key, reason, repo)) for fp, (key, reason, repo) in told.items()),
-        key=lambda g: (g[0], g[1]),
+        key=operator.itemgetter(0, 1),
     )
     gone = [g for g in gone if g[2] not in now_open]
     return Diff(

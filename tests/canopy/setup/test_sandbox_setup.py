@@ -63,8 +63,8 @@ class Machine:
 
     bin: Path
     log: Path
-    geteuid: mock.MagicMock
-    uname: mock.MagicMock
+    geteuid: mock.NonCallableMock
+    uname: mock.NonCallableMock
 
     def install(self, *names: str) -> None:
         for name in names:
