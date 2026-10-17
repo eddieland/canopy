@@ -4,7 +4,7 @@ import re
 import sqlite3
 import typing
 from collections import Counter
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from importlib.metadata import version
 from pathlib import Path
 
@@ -17,136 +17,16 @@ from canopy.infra import resources
 from tests.canopy.helpers import DEAD_PID, journal_at, present, shipped_through, versions_after
 from tests.conftest import Journals
 
-# Each shipped migration's sha256, over LF line endings. A journal applies a migration once, so an edit to a shipped
-# one reaches only fresh journals and the two drift apart: a change to the schema is a new migration (AGENTS.md). A
-# new migration adds its line here.
-SHIPPED = {
-    1: "29a6d9dc889e6665b59c3275c33cef6b110c91e5e91012bbeb54128ee247dfcc",
-    2: "57a7f7c2c1c4a5ba3f1b2a6758fcfdc436300022f8d42ea9dcf448c0f28ac230",
-    3: "2c6304b3bbd58ae42d99a556d89ce45f92a918a5928938eae6f0e03d4d82d077",
-    4: "de8cac71aaac4d1b1519936ad84bee2c09892b64284f7b574d7adefb2d68884a",
-    5: "dbfef8c285bc0ee62593db11e8ab5c6d2cff51ed4890244858a401f28772c8fd",
-    6: "fe189eed7922fdf0e190d704d291171bfd5eb520ae06b77ff5f602b4bb0d5706",
-    7: "7411e79251a21c3b9b0c27ec5b6760a12a99d6dae115a07e98c4b5e6fe504090",
-    8: "d111db1b5b24bd675ec5f85155e070bcc0622347c35c8467b486d7fecf2bbb56",
-    9: "a1ffa27d0c8256f924f9010f501f512bca480197c5797dd8afa105421367bbd1",
-    10: "cf297c7f2eb5a217a1b326da730a56fb71b246241191fb6009592fc867c713e1",
-    11: "b5f91649b20c6783e4f915816ba930c0ff986cee619acce6f03c313d398ce941",
-    12: "04410ef0faf97f97e28ffdfb7c8a6c0f86ec7878222ef10336fad518f89196f7",
-    13: "995116e0a3010b31af0f183154266a6774a5241972aac2a48ae62be9bf80a49a",
-    14: "764761a8223991f778163245e702688715f2d9144de5573244c4fee8c74f533e",
-    15: "91667c9b816fde738ca9809286ad3d2b49dce1db8f6fdc9dc2cb1cac46d200ee",
-    16: "d8c8ca63da12108ce7fbca6f9e2baf36c8e6ba028db7598783fda0894d7167c6",
-    17: "51c8d5942669378ea5984b9dde80851f26684e7bdefae6a384aaabc2985ed1c1",
-    18: "8da85c12a7f48e16cc76fd4be19beafeecfbd7f79b5418d2e86b608abfb4baae",
-    19: "df22e157b9cd5981c11536a7787e7ada6e0cd4d5d9715c261d4a3c45b3cf4927",
-    20: "00382891c078ea709d9987a62de8d5cfc493e6985abdf8ccc7884b778366bd46",
-    21: "58c9215c4a5ebe34410cc620a9feeb8f7b8fb60a9cb23fdced184000ee5b6fdc",
-    22: "089e023a4a03edec3e74abb101b22e5b1e54461350e31d5122323a23db227398",
-    23: "321b5eeb0950f7a6dc158d2ec0a3e3f0a0e11bf143eb432936ec9f8bd6f2c8e8",
-    24: "a59b144fa265e361eddef9a9366dc48552d723a9f03c640823297446ef3a12a0",
-    25: "ed074227c70399b039f9560b50ae9ec4e6adbc43cce5c909552f728019da73ff",
-    26: "77d395b0529f9fb1bf83d67f0d7518dec52429d972b41001ac29b08fe08ad3db",
-    27: "724265400f40f3aaeaa8afbe35981bd529a60687d194924ce4c7d3bb3b008cbc",
-    28: "3c266ae47f52ea5fffd544c191f393dfced6137ec43815d42ea3ceac1080045c",
-    29: "7b9d9b97ca0437fcda64f39906fdf2349afab356539fbeff85b7c4b4a7cc4105",
-    30: "b5c91635acb0fcc0acbfdce96241ff5cac50440c7a85d5ed621df57745fdcef5",
-    31: "429563f0913dd074cb33951d58303b4e65af768bfd43b0a02ec6ce71771cdaec",
-    32: "a69f227a77b632c3bddf0be6c71852ad3cf2747fcdec099ec10ef1cf566d7f9d",
-    33: "f3f99cdfe08e5a7b05d7d8a8c6c7cc8832484e13b36ed561486617870e558174",
-    34: "18b330ab2f43affbbe58dfefd346b2602638d37758a20a29dd682ba7681718b0",
-    35: "6419d0559893c443f8f74df7bd184f98ce3fc058aa925c6eeb44db13a388dbe0",
-    36: "bd963d5fa78e9ce18716c7c9c9094773283f68d172fc9ae89cea4d88e2d85da7",
-    37: "3c0ed312175a51a89e4ea452d2c725eafc521fae3582d73ad7462cccd83930cd",
-    38: "8abccaf065f80d842420331da89c8b0594deb34c5a5ae8749f1137c7099137b2",
-    39: "ab9090b6e76e771b4b0f68365c75dad1cff0d9a15003e0fd13f4b07fa619e985",
-    40: "4a60acd554d93b87cb91645fc394b1f59c0eae63d7d8a19a6ff869dc2f928352",
-}
+# Each migration has a companion here, named by its version alone, that opens with the migration's sha256 over LF line
+# endings and holds a row for each table the migration creates, in an order the foreign keys allow. A file each, not a
+# list in this module, so PRs that add migrations never meet in it; two that take the same version still collide, on
+# the companion's name, which is the one conflict worth having.
+COMPANIONS = Path(__file__).parent / "migrations"
+HASH = re.compile(r"-- sha256 of (\S+): ([0-9a-f]{64})\n")
 
-# A row for every table, inserted once the migration that creates the table is applied, so each later migration runs
-# against a journal with something in it: a rebuilt table or a new constraint fails on rows, not on an empty journal.
-# A migration that creates a table adds its row here, in an order the foreign keys allow.
-SEED: Mapping[str, str] = {
-    "ticks": "INSERT INTO ticks (id, started_at, ended_at, status) VALUES (1, 'x', 'y', 'ok')",
-    "tickets": (
-        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, phase) VALUES ('OLD-1', '/r', 'x', 'y', 'ci_red')"
-    ),
-    "runs": (
-        "INSERT INTO runs (id, tick_id, ticket_key, kind, branch, started_at, ended_at, log_path, status, result_json) "
-        """VALUES (1, 1, 'OLD-1', 'implement', 'agent/OLD-1-a', 'x', 'y', 'l', 'done', '{"summary": "did it"}')"""
-    ),
-    "decisions": "INSERT INTO decisions (tick_id, ticket_key, action, rationale) VALUES (1, 'OLD-1', 'wait', 'r')",
-    "notifications": (
-        "INSERT INTO notifications (sink, fingerprint, ticket_key, reason, sent_at) "
-        "VALUES ('log', 'f', 'OLD-1', 'r', 'x')"
-    ),
-    "ticket_units": "INSERT INTO ticket_units (ticket_key, repo, branch, phase) VALUES ('OLD-1', 'api', 'b', 'ci_red')",
-    "run_slots": (
-        "INSERT INTO run_slots (run_id, repo, slot_path, lease_id, lease_holder) VALUES (1, 'api', '/s', 'l', 'h')"
-    ),
-    "split_children": (
-        "INSERT INTO split_children (child_key, parent_key, repo, run_id) VALUES ('OLD-2', 'OLD-1', 'api', 1)"
-    ),
-    "chore_runs": (
-        "INSERT INTO chore_runs (tick_id, chore, started_at, status, log_path) VALUES (1, 'nightly', 'x', 'ok', 'l')"
-    ),
-    "notify_events": "INSERT INTO notify_events (grp, kind, at, fields) VALUES ('runs', 'run.ended', 'x', '{}')",
-    "notify_sinks": "INSERT INTO notify_sinks (name, cursor, created_at) VALUES ('log', 1, 'x')",
-    "review_runs": (
-        "INSERT INTO review_runs (tick_id, pr_url, sha, started_at, status, log_path) "
-        "VALUES (1, 'https://e.test/pr/7', 'abc', 'x', 'done', 'l')"
-    ),
-    "messages": (
-        "INSERT INTO messages (subject_kind, subject_id, at, source, kind, channel, body) "
-        "VALUES ('ticket', 'OLD-1', 'x', 'operator', 'reply', 'cli', 'Blue.')"
-    ),
-    "starts": (
-        "INSERT INTO starts (subject_kind, subject_id, status, started_at, channel) "
-        "VALUES ('ticket', 'OLD-1', 'started', 'x', 'cli')"
-    ),
-    "pause": "INSERT INTO pause (id, paused_at, channel) VALUES (1, 'x', 'cli')",
-    "attempt_grants": (
-        "INSERT INTO attempt_grants (ticket_key, repo, kind, runs, granted_at) "
-        "VALUES ('OLD-1', 'api', 'resume', 1, 'x')"
-    ),
-    "finding_dismissals": (
-        "INSERT INTO finding_dismissals (chore, finding_id, dismissed_at, channel) "
-        "VALUES ('nightly', 'f/1', 'x', 'cli')"
-    ),
-    "review_dismissals": (
-        "INSERT INTO review_dismissals (review_run_id, finding, dismissed_at, channel) VALUES (1, 1, 'x', 'cli')"
-    ),
-    "review_grants": "INSERT INTO review_grants (pr_url, runs, granted_at) VALUES ('https://e.test/pr/7', 1, 'x')",
-    "notices": (
-        "INSERT INTO notices (body, set_at, channel, lapses_at, ended_at, ended_channel) "
-        "VALUES ('CI is down.', 'x', 'cli', 'y', 'z', 'web')"
-    ),
-    "review_requests": (
-        "INSERT INTO review_requests (pr_url, created_at, channel) VALUES ('https://e.test/pr/7', 'x', 'cli')"
-    ),
-    "slots": "INSERT INTO slots (repo, name, path) VALUES ('api', '1', '/w/pools/api/1/api')",
-    "run_tools": (
-        "INSERT INTO run_tools (run_table, run_id, tool, calls, errors, result_chars) "
-        "VALUES ('runs', 1, 'bash', 2, 0, 9)"
-    ),
-    "plans": (
-        "INSERT INTO plans (ticket_key, run_id, created_at, status, sha256, size, approved_sha256, approved_at, "
-        "approved_channel) VALUES ('OLD-1', 1, 'x', 'approved', 'a', 9, 'b', 'y', 'cli')"
-    ),
-    "ticket_grants": "INSERT INTO ticket_grants (ticket_key, kind, runs, granted_at) VALUES ('OLD-1', 'plan', 1, 'x')",
-    "plan_threads": (
-        "INSERT INTO plan_threads (ticket_key, quote, prefix, suffix, body, created_at, resolved_at) "
-        "VALUES ('OLD-1', 'the route', 'Add ', ' to it', 'Why here?', 'x', NULL)"
-    ),
-    "plan_replies": "INSERT INTO plan_replies (thread_id, body, created_at) VALUES (1, 'Because.', 'y')",
-    "memories": (
-        "INSERT INTO memories (scope, ticket_key, key, body, status, author, run_id, tick_id, head, created_at) "
-        "VALUES ('ticket', 'OLD-1', 'ci-flake', 'The lint job fails on a cold cache.', 'active', 'worker', 1, 1, "
-        "'abc1234', 'x')"
-    ),
-    "run_memory": "INSERT INTO run_memory (run_id, ticket_notes, proposals) VALUES (1, 'use', 'off')",
-    "memory_reads": "INSERT INTO memory_reads (run_id, memory_id) VALUES (1, 1)",
-}
+
+def companion(number: int) -> str:
+    return (COMPANIONS / f"{number:04d}.sql").read_text()
 
 
 def fresh(journals: Journals, tmp_path: Path) -> sqlite3.Connection:
@@ -181,9 +61,19 @@ def contents(conn: sqlite3.Connection) -> dict[str, tuple[list[str], Counter[tup
 
 
 def test_shipped_migrations_are_never_edited() -> None:
+    """Each migration matches the hash its companion recorded, and each companion has its migration.
+
+    A journal applies a migration once, so an edit to a shipped one reaches only fresh journals and the two drift
+    apart: a change to the schema is a new migration (AGENTS.md).
+    """
     shipped = db.discover(resources.migrations_dir())
-    found = {m.version: hashlib.sha256(m.path.read_bytes().replace(b"\r\n", b"\n")).hexdigest() for m in shipped}
-    assert found == SHIPPED
+    companions = sorted(p.name for p in COMPANIONS.iterdir())
+    assert companions == [f"{m.version:04d}.sql" for m in shipped], "a migration with no companion, or the reverse"
+    for m in shipped:
+        recorded = HASH.match(companion(m.version))
+        assert recorded is not None, f"{m.version:04d}.sql does not open with the sha256 of its migration"
+        found = hashlib.sha256(m.path.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
+        assert recorded.groups() == (m.path.name, found), f"{m.path.name} was edited, or its companion names another"
 
 
 def test_migrate_applies_once_and_records(tmp_path: Path, journals: Journals) -> None:
@@ -201,7 +91,9 @@ def test_each_migration_keeps_every_row_and_value_it_finds(tmp_path: Path, journ
     """Applied one at a time to a journal with a row in every table, no migration loses a row, a column, or a value.
 
     A migration may add rows, as 0003's backfill does, and columns. One that means to drop or rewrite what it finds
-    says so here.
+    says so here. Each table is seeded from the companion of the migration that creates it, so each later migration
+    runs against a journal with something in it: a rebuilt table or a new constraint fails on rows, not on an empty
+    journal.
     """
     migrations = tmp_path / "migrations"
     migrations.mkdir()
@@ -219,11 +111,10 @@ def test_each_migration_keeps_every_row_and_value_it_finds(tmp_path: Path, journ
             assert rows - kept == Counter(), f"{m.path.name} lost or changed rows of {table}"
         assert conn.execute("PRAGMA foreign_key_check").fetchall() == []
         assert conn.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
-        unseeded = [t for t in tables(conn) if t not in SEED]
-        assert unseeded == [], f"{m.path.name} created tables with no row in SEED"
-        for table, insert in SEED.items():
-            if table in after and conn.execute(f"SELECT count(*) FROM {table}").fetchone()[0] == 0:  # noqa: S608
-                conn.execute(insert)
+        conn.executescript(companion(m.version))
+        # The table name comes from sqlite_master, never from input.
+        empty = [t for t in tables(conn) if conn.execute(f"SELECT count(*) FROM {t}").fetchone()[0] == 0]  # noqa: S608
+        assert empty == [], f"{m.path.name} created tables its companion seeds no row in"
 
 
 def test_new_migration_is_applied_and_recorded(tmp_path: Path, journals: Journals) -> None:
