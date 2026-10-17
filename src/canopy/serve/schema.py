@@ -930,8 +930,8 @@ class Tick(_Model):
     """Whether `canopy loop` found it idle (DESIGN §6, Idle pacing); None on a tick no loop ran, and until the loop
     records it, just after the tick ends. Its change is sent on the stream, which marks the spend page stale."""
     woken_by: str | None = None
-    """What ended the loop's wait before it: start | timer | gate | message | starts | grant | run | key. None when
-    `idle` is."""
+    """What ended the loop's wait before it: start | timer | gate | message | starts | grant | notice | run | key |
+    web. None when `idle` is."""
 
 
 class TickDetail(_Model):
@@ -1365,6 +1365,13 @@ class ConfigReload(_Model):
     """The changed keys that take effect only when the loop restarts: the web UI's listener."""
     after_tick: bool
     """A tick is running: it finishes on the config it started with, and the reload follows when it ends."""
+
+
+class TickAsked(_Model):
+    """What asking the loop for a tick now found (DESIGN §6): it starts at once, or when a running tick ends."""
+
+    after_tick: bool
+    """A tick is running: the one asked for starts when it ends."""
 
 
 class SpendWindow(_Model):

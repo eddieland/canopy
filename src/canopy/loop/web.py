@@ -2,7 +2,8 @@
 
 The server is a feature (`canopy.serve`) and cannot import the loop, `runs`, or `reviews`, so this hands it the
 attention list as `canopy status` shows it, `runs.halt.end`, which `canopy stop --now` uses, for a stop with `now`, a
-way to ask the loop to read its config again, as SIGHUP does, and the attempt and review limits with the grants that
+way to ask the loop to read its config again, as SIGHUP does, and one to ask it for a tick now, as `t` does, and the
+attempt and review limits with the grants that
 `canopy grant` records (`runs.policy`, `reviews.grants`).
 """
 
@@ -13,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import db
 from canopy.infra import logs, resources
-from canopy.loop import attention, reread
+from canopy.loop import attention, reread, tick_now
 from canopy.reviews import grants
 from canopy.runs import halt, policy
 from canopy.serve import secret
@@ -40,10 +41,10 @@ class Serving:
     backend: Backend | None = None
 
 
-def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload) -> Serving:
+def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload, asked: tick_now.TickNow) -> Serving:
     """Start the web UI's server for the loop, or say why it serves nothing. Never raises: the loop goes on.
 
-    The UI's reload asks through `reload`, as SIGHUP does.
+    The UI's reload asks through `reload`, as SIGHUP does, and its Tick now through `asked`, as `t` does.
 
     Returns:
         The note for the loop's header, with the URL, server, and backend when the server started.
@@ -60,7 +61,7 @@ def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload) -> Serving
         return Serving(f"not served: cannot read the listener secret: {e}")
 
     sessions = Sessions(key, port=options.port, base_path=options.base_path, hosts=options.hosts)
-    served = backend(ctx, reload)
+    served = backend(ctx, reload, asked)
     server = WebServer(create_app(options, served, sessions), options, log)
     server.start()
     url = options.url()
@@ -69,11 +70,11 @@ def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload) -> Serving
     return Serving(f"{url}  sign in with the secret `canopy secret` prints{built}", url, server, served)
 
 
-def backend(ctx: Context, reload: reread.Reload) -> Backend:
-    """The server's view of the loop's journal: the config, the attention list, `halt.end`, reload, and grants.
+def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow) -> Backend:
+    """The server's view of the loop's journal: the config, the attention list, `halt.end`, reload, tick now, grants.
 
     Returns:
-        The backend the server calls into, bound to `ctx` and `reload`.
+        The backend the server calls into, bound to `ctx`, `reload`, and `asked`.
     """
 
     def end_run(run_ctx: Context, run: sqlite3.Row) -> bool:
@@ -84,12 +85,18 @@ def backend(ctx: Context, reload: reread.Reload) -> Backend:
         found = reread.load(current)
         return Reloading(changed=found.changed, restart=found.restart, after_tick=reload.request())
 
+    def ask_tick() -> bool:
+        asked.request()
+        # The loop says a tick is running on the reload's flag; the tick asked for follows it.
+        return reload.ticking
+
     return Backend(
         config=ctx.config,
         workspace=ctx.ws,
         attention=attention.listed,
         end_run=end_run,
         reload=reload_config,
+        tick_now=ask_tick,
         limits=limits,
         review_limit=review_limit,
         grant=grant,

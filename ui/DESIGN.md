@@ -155,9 +155,10 @@ Rules:
   places the thread in a second column (`2xl:col-start-2 2xl:row-span-N`), over rows whose last is `1fr`, so a long
   thread leaves no gaps between the panels beside it.
 - Between the header's name and its readouts, the ticker crawls joke headlines (Fun, below).
-- The header carries the loop's pause (`LoopPause`), the latest tick (`tick:12 · 3m ago`, its status when not `ok`, in
-  `status-failed` when it failed or was abandoned, its summary on hover, linking to its page), the stream's state (and
-  `mock`), and the theme toggle, in three groups with a hairline rule between each: the pause, the readouts, the theme.
+- The header carries Tick now (`TickNow`) and the loop's pause (`LoopPause`), the latest tick (`tick:12 · 3m ago`,
+  its status when not `ok`, in `status-failed` when it failed or was abandoned, its summary on hover, linking to its
+  page), the stream's state (and `mock`), and the theme toggle, in three groups with a hairline rule between each: the
+  actions, the readouts, the theme.
   The readouts hug their text, inset as far as a ghost button's label, so each rule sits midway. The counters are the
   attention page's, and the nav's Attention item shows how many items it lists, on every page, split by severity as the
   Attention counter splits them: broken in `status-failed`, waiting on the operator's answer in `status-blocked`, the
@@ -170,6 +171,9 @@ Rules:
   from where on hover) and a Resume button. The button keeps one width in both states. It has no `Notice`: what it
   did is the state it shows, which the stream also sends when the loop's terminal or the CLI pauses. A failure colors
   the button `status-failed`, with the reason on hover and in an `sr-only` alert.
+- **Tick now** stands before the pause, a ghost button, `t` at the loop's terminal: the loop's wait ends at once,
+  paused or not. It is disabled while the latest tick runs, since the readout beside it shows that tick. Like the
+  pause it has no `Notice`, since the tick it asked for shows in the readouts, and a failure looks the same.
 - **The notice to workers** (`NoticeBanner`, `canopy notice`) heads the content column, above every page, only while
   one is in force: a band on a `status-blocked` tint with its border, since every run waits on what the operator said,
   the notice's words through `LinkedText`, until when runs hear it (when and from where on hover), and a ghost Clear.

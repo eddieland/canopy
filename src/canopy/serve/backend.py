@@ -2,10 +2,10 @@
 
 `serve` is a feature: it cannot import `loop`, `runs`, or `reviews`. The attention list (`loop.attention.listed`),
 ending a stopped ticket's run (`runs.halt.end`, as `canopy stop --now` does), asking the loop to read its config again
-(`loop.reread`, as SIGHUP does), and the attempt and review limits `canopy grant` raises (`runs.policy`,
-`reviews.grants`) are theirs, so `canopy loop` passes them in, and `python -m canopy.serve --mock` passes stand-ins over
-its seeded journal. Reading a pool is the pool's own `status` unless told otherwise: the mock has no
-pool to ask.
+(`loop.reread`, as SIGHUP does) or for a tick now (`loop.tick_now`, as `t` does), and the attempt and review limits
+`canopy grant` raises (`runs.policy`, `reviews.grants`) are theirs, so `canopy loop` passes them in, and
+`python -m canopy.serve --mock` passes stand-ins over its seeded journal. Reading a pool is the pool's own `status`
+unless told otherwise: the mock has no pool to ask.
 
 The loop's config and workspace map are read by each request as it opens, and replaced when the loop reads them again
 (`use`), so a request runs on one config throughout, the one the loop runs on.
@@ -88,6 +88,9 @@ class Backend:
     end_run: Callable[[Context, sqlite3.Row], bool]
     # Ask the loop to read its config again, as SIGHUP does. Raises ConfigError, naming the file, when it does not load.
     reload: Callable[[Context], Reloading]
+    # Ask the loop for a tick now, as `t` at its terminal does. Returns whether a tick is running, which the one asked
+    # for follows.
+    tick_now: Callable[[], bool]
     # The ticket's units' attempt limits, each kind of each unit it has had runs in, as `canopy grant` raises them.
     limits: Callable[[Context, str], list[Limit]]
     # The PR's review limit, or None for a PR canopy has never reviewed.
