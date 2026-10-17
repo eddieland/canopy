@@ -1472,10 +1472,13 @@ wait, and GitHub Enterprise is supported.
 - **The threads, read in code.** canopy reads review threads itself, not through the worker: after the worker ends,
   `_run` runs canopy's GitHub reader (below) for each PR the run pushed to, and records each review thread, its path,
   line, and side, whether it is outdated or resolved, and each comment's id, author login, time, and bounded body. A
-  draft naming a thread the reader did not return is refused, with a harness note on the run. The page shows the
-  thread as the reader saw it, never the worker's copy of it. The rows are M36's `observed_reviews`, which this
-  milestone creates and M36 fills for every watched PR. PR review comments thus join the journal (DESIGN §22, Open),
-  read only, authorizing nothing.
+  draft naming a thread a whole read did not return is refused, with a harness note on the run. A read that fails, times
+  out, or ends without its `end` line refuses nothing: the run's drafts are kept unchecked, with a harness note,
+  `drafts_waiting` says the threads could not be read, each tick reads the PR again until one read is whole, and no
+  unchecked draft can be sent, so an outage delays the replies and never drops them. The page shows the thread as the
+  reader saw it, never the worker's copy of it. The rows are M36's `observed_reviews`, which this milestone creates and
+  M36 fills for every watched PR. PR review comments thus join the journal (DESIGN §22, Open), read only, authorizing
+  nothing.
 - **canopy's GitHub program.** A uv workspace member, `packages/canopy-github`, stdlib only and importing nothing from
   canopy, as the Slack sink is. It reads the token `gh` holds when it runs, so the harness never holds one (T2). Two
   commands: `canopy-connect-github`, the reader, which here answers one request, a PR's review threads, in M36's
@@ -1540,12 +1543,12 @@ wait, and GitHub Enterprise is supported.
   AGENTS.md's "No GitHub client" line is scoped to the harness package, as M36 plans. D069 notes that a comment the
   operator sent through canopy is known by id.
 - Tests with the fakes: a fake reader and post command that record what they are sent, as the `notified` sink does; a
-  `resume` under `approve` posts nothing and records its drafts; a draft naming an unread thread refused; a send posts
-  the text verbatim and records the id; an edit after the page read refused `stale`; a thread with a new comment
-  refused `thread_changed`; a second send posts nothing; `inside_run` refused; drafts sent together posted as one
-  `COMMENT` review and never approving; a PR on an Enterprise host posted to that host; a newer draft superseding an
-  older; the sent ids in the state block, a snapshot; `post`'s prompts unchanged, a snapshot; Vitest for the draft
-  card, Playwright for sending from the PR's page.
+  `resume` under `approve` posts nothing and records its drafts; a draft naming an unread thread refused; a failed read
+  keeping the drafts unchecked and unsendable until a later read; a send posts the text verbatim and records the id; an
+  edit after the page read refused `stale`; a thread with a new comment refused `thread_changed`; a second send posts
+  nothing; `inside_run` refused; drafts sent together posted as one `COMMENT` review and never approving; a PR on an
+  Enterprise host posted to that host; a newer draft superseding an older; the sent ids in the state block, a snapshot;
+  `post`'s prompts unchanged, a snapshot; Vitest for the draft card, Playwright for sending from the PR's page.
 - A blocked worker adds the `needs_human` label as today, whether or not its question waits as a draft: labels are
   not speech, and the operator left it to the simplest rule (2026-10-17).
 
@@ -1644,9 +1647,10 @@ first, in §25.
   `start --plan`) is planned whatever triage would say, since that is the operator's word for that ticket. Before the
   first `plan` of such a ticket the overseer dispatches a `triage-plan` run, once per ticket; under M54, before a
   feedback plan too, once per round of feedback.
-- **The run.** A read-only run with a verdict, as M25's `triage-ci` is: it holds no slot and leases nothing, reads the
-  ticket through the tracker's read tools and the repository's primary clone, writes nothing anywhere, and counts
-  toward `capacity.max_workers`. Its definition is the planner's with nothing to edit (T6). Result line:
+- **The run.** A read-only run with a verdict, as M25's `triage-ci` is (DESIGN §23): it leases no slot, reads the ticket
+  through the tracker's read tools and the repository's primary clone, and writes nothing anywhere. It still counts
+  toward `capacity.max_workers` with workers and reviews, since it is an agent run with spend: a slot bounds worktrees,
+  the cap bounds runs. Its definition is the planner's with nothing to edit (T6). Result line:
   `{"status":"done|failed","verdict":"trivial|plan","reason":"one sentence"}`. Its prompt says: when unsure, `plan`.
 - **Fails closed.** Only a `done` run with the verdict `trivial` waives the plan. A `plan` verdict, a failure, a
   timeout, or a result that does not validate leaves the ticket needing its plan, and the next tick dispatches `plan`
