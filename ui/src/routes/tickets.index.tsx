@@ -13,10 +13,10 @@ import { ListRow } from '@/components/rows'
 import { StartTicket } from '@/components/start-ticket'
 import { Chip, RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { TicketState } from '@/components/ticket-state'
 import { TicketTitle } from '@/components/ticket-title'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { phaseLabel, phaseWord } from '@/lib/phase'
-import { runRef } from '@/lib/refs'
 import {
     TICKET_QUERY_MAX,
     TICKET_SHOW_LABEL,
@@ -178,31 +178,17 @@ function TextFilter() {
 }
 
 /**
- * A ticket: where its run stands (working, or waiting on you), its key, its phase, public or private, its title, and
- * its age.
+ * A ticket: where it stands (its run, waiting on you, done, or open), its key, its phase, public or private, its
+ * title, and its age.
  */
 function Row({ ticket }: { ticket: TicketSummary }) {
-    const done = ticket.done ? ', done' : ''
     return (
         <ListRow kind="ticket" data-testid={`ticket-${ticket.key}`}>
-            <span className="flex flex-col gap-0.5 whitespace-nowrap">
-                {ticket.running_run !== null && (
-                    <span className="flex items-center gap-1.5 font-mono text-xs text-status-running">
-                        <RunDot state="running" />
-                        {runRef(ticket.running_run)}
-                    </span>
-                )}
-                {ticket.awaiting !== null && (
-                    <span className="flex items-center gap-1.5 font-mono text-xs text-status-blocked">
-                        <RunDot state="blocked" />
-                        waiting on you
-                    </span>
-                )}
-            </span>
+            <TicketState ticket={ticket} />
             <TicketLink ticketKey={ticket.key} className="truncate" />
             {/* Cut to fit, the whole on hover in the CLI's spelling. */}
-            <span className="truncate font-mono text-xs text-muted-foreground" title={phaseWord(ticket) + done}>
-                {phaseLabel(ticket) + done}
+            <span className="truncate font-mono text-xs text-muted-foreground" title={phaseWord(ticket)}>
+                {phaseLabel(ticket)}
             </span>
             <span className="flex">
                 <Chip>{ticket.private ? `private, ${ticket.start ?? ''}` : 'public'}</Chip>

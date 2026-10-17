@@ -128,7 +128,10 @@ export const ROW_COLUMNS = {
         ['title', FREE],
         ['age', AGE, 2],
     ],
-    /** A ticket: its run or `waiting on you`, its key, its phase, public or private, its title, and its age. */
+    /**
+     * A ticket: where it stands (its run, `waiting on you`, `done`, or `open`), its key, its phase, public or private,
+     * its title, and its age.
+     */
     ticket: [
         ['run', '8rem', 4],
         ['key', '6rem'],
