@@ -218,10 +218,37 @@ export function plan(page: Page): Locator {
     return page.getByRole('textbox', { name: 'Plan', exact: true })
 }
 
-/** What `select` reads of the plan's ProseMirror view, which Tiptap keeps on the element it draws in as `editor`. */
+/**
+ * What `select` and `clickIn` read of the plan's ProseMirror view, which Tiptap keeps on the element it draws in as
+ * `editor`.
+ */
 interface PlanView {
-    state: { selection: { from: number; to: number } }
+    state: { selection: { from: number; to: number; head: number } }
     posAtDOM: (node: Node, offset: number) => number
+    domAtPos: (pos: number) => { node: Node }
+}
+
+/**
+ * Clicks `target`, an element in the plan, as the operator would, and waits for the editor to hold its cursor there: a
+ * key pressed next moves on from it. A click that moves the focus into the plan races ProseMirror as `select` says, and
+ * a loaded machine can lose it, the cursor put back where the editor had it; this clicks again until the editor holds
+ * it.
+ */
+export async function clickIn(target: Locator): Promise<void> {
+    await expect(async () => {
+        await target.click()
+        await expect.poll(() => target.evaluate(holdsCursor), { timeout: 250 }).toBe(true)
+    }).toPass({ timeout: 5000 })
+}
+
+// Whether the plan's editor holds its cursor inside `element`.
+function holdsCursor(element: Element): boolean {
+    const root = element.closest('[contenteditable]') as (Element & { editor: { view: PlanView } }) | null
+    if (root === null) {
+        return false
+    }
+    const { view } = root.editor
+    return element.contains(view.domAtPos(view.state.selection.head).node)
 }
 
 /**

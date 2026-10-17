@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { plan, select, settled, signIn } from './helpers.ts'
+import { clickIn, plan, select, settled, signIn } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -588,7 +588,7 @@ test('the cursor moved into a commented passage by the keyboard opens its thread
     page,
 }) => {
     const card = comments(page).filter({ hasText: 'name the ticket' })
-    await plan(page).locator('li').filter({ hasText: "Excel's own format" }).click()
+    await clickIn(plan(page).locator('li').filter({ hasText: "Excel's own format" }))
     await expect(card).toHaveAttribute('data-active', 'false')
     await page.keyboard.press('ArrowDown')
     await expect(card).toHaveAttribute('data-active', 'true')
