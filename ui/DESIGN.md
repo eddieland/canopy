@@ -543,9 +543,11 @@ list, an empty state, or a skeleton by hand.
 - **A total cost** (`CostTotalRow`) is the last row of a ticket's Work panel and a PR's Pull request panel: the total
   as a `readout` (`costText`, a dash when nothing reported one), then, muted, what it counted
   (`over 3 runs and 1 review, 1 unpriced`; `countedText`), since the page lists only the recent ones.
-- **The tickets list**: the running run or `waiting on you`, the key, the phase (cut to fit, the whole on hover), the
-  `public` or `private, started` chip, the title in the free column, and the age. Narrow, the chip goes first, then
-  the phase, then the age; the run, which says when the ticket waits on the operator, goes last. A run's list lets its
+- **The tickets list**: where the ticket stands (`TicketState`), the key, the phase (cut to fit, the whole on hover),
+  the `public` or `private, started` chip, the title in the free column, and the age. Where it stands is the running
+  run or `waiting on you`, each with its run's dot, else `done` or `open` with the dot of a run that ended so, so every
+  row has a dot and the column is never blank. Narrow, the chip goes first, then the phase, then the age; where it
+  stands, which says when the ticket waits on the operator, goes last. A run's list lets its
   cost go first, then its chips, then its age, then its id; a review's its cost, its impact, its ticket, its age, then
   its verdict; a tick's its tokens, its peak, its cost, its decisions, then its age; a PR's its phase, its age, then
   where it stands. Money and tokens go before what names a row. Each kind's order is in `ROW_COLUMNS`.
