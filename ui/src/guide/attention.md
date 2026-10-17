@@ -18,7 +18,7 @@ The items come in four groups, in this order, and within a group the one open lo
 2. **Waiting on you**, in amber: a worker's question (`awaiting reply`), a review from someone the loop doesn't trust
    (`untrusted review`), and a plan to approve (`plan review`).
 3. **Other**: things worth knowing that aren't on fire, such as a PR that `needs reviewer` or is `ready to merge`, or
-   a lesson a worker proposed for memory.
+   a lesson a worker proposed for [memory](memory).
 4. **Findings**: what your chores found.
 
 The counters above the list say how many runs are going and how many wait on you, how long the oldest question has
@@ -69,5 +69,5 @@ An item about a chore shows the chore's notes, with a box to add one: your next 
 deploy check is red on purpose until Friday". A note doesn't wake the loop; the chore's next run reads it.
 
 A chore's finding has a **dismiss** button. It keeps the finding off the list until the chore stops reporting it, so a
-finding that clears and comes back is listed again. Undo a dismissal on the chore's page. [Chores and memory](chores)
+finding that clears and comes back is listed again. Undo a dismissal on the chore's page. [Chores](chores)
 has the rest.
