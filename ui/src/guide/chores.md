@@ -11,8 +11,8 @@ due chore runs, each tick, within the hours you allowed it. The schedule is a fl
 every 120 minutes" means no sooner, not on the dot.
 
 [Chores](/chores) lists each chore: whether it's running, when it last ran ok, when it's due, its open findings, its
-schedule, and what its runs cost over the last day and month. There's no button to run one now; `canopy chore try NAME`
-does that from your shell.
+schedule, and what its runs cost over the last day and month. To run one now instead of waiting for the overseer, use
+**Try now** on its page, below.
 
 ## A chore's page
 
@@ -25,6 +25,17 @@ does that from your shell.
 - **Spend**: its runs' cost over the last 24 hours and 30 days, average and worst included.
 
 A chore run that doesn't end ok reaches the attention list as `chore failed`.
+
+## Trying a chore
+
+**Try now**, at the foot of **Schedule**, runs the chore at once, as `canopy chore try NAME` does: a real run, recorded
+like the overseer's, whatever its schedule, its hours, or `max_chores`. The run shows in **Runs** straight away, its
+findings reach the attention list when it ends, and the next scheduled run counts from it. While a run of the chore is
+going, the button waits. Each try costs what a run costs, so it's for when you want an answer now, not for asking
+until you like the answer.
+
+To try a prompt you're still writing without touching its open findings, run `canopy chore try NAME --no-record` from
+your shell: it prints what the run found and records nothing.
 
 ## Dismissing a finding
 

@@ -150,6 +150,15 @@ test("a chore's finding takes a note its next run reads, and is dismissed and li
 
     await page.goto('attention')
     await expect(list.getByRole('link').filter({ hasText: 'lodash-advisory' })).toHaveCount(1)
+
+    // Tried last, since its run then starts after the note, which no longer waits for one. The mock starts no
+    // process, so the run stays running, and the chore cannot be tried again until it ends.
+    await page.goto('chores/deps')
+    const actions = page.getByTestId('chore-actions')
+    await actions.getByTestId('try-chore').click()
+    await expect(actions.getByRole('status')).toContainText(/chore try deps: recorded as chore run \d+, running now\./u)
+    await expect(page.getByTestId('chore-runs').locator('li').first()).toContainText('running')
+    await expect(actions.getByTestId('try-chore')).toBeDisabled()
 })
 
 test('the settings page asks the loop to read its config again and says what it found', async ({ page }) => {
