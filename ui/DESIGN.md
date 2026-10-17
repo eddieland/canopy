@@ -154,11 +154,12 @@ Rules:
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
-- **Wide screens use the width** from `2xl`: the attention list widens, and a detail page with a thread (below) puts
-  it beside the rest, a ticket's conversation beside its work, runs, and decisions, a chore's notes beside its
-  schedule, findings, runs, and spend. The source keeps the narrow order, which is the reading order; the grid only
-  places the thread in a second column (`2xl:col-start-2 2xl:row-span-N`), over rows whose last is `1fr`, so a long
-  thread leaves no gaps between the panels beside it.
+- **Wide screens use the width** from `2xl`: the attention list widens, and a detail page puts its thread or main
+  content (below) beside the rest, a ticket's conversation beside its work, runs, and decisions, a chore's open
+  findings and runs beside its schedule, notes, and spend. The source keeps the narrow order, which is the reading
+  order; the grid only places that content in a second column (`2xl:col-start-2 2xl:row-span-N`), over rows whose
+  last is `1fr`, so a long thread or list leaves no gaps between the panels beside it. Content of two panels is one
+  column element spanning those rows, so the first panel's length never stretches a row beside it.
 - Between the header's name and its readouts, the ticker crawls joke headlines (Fun, below).
 - The header carries the loop's pause (`LoopPause`) and Tick now (`TickNow`), the latest tick (`tick:12 · 3m ago`,
   its status when not `ok`, in `status-failed` when it failed or was abandoned, its summary on hover, linking to its
@@ -234,9 +235,10 @@ Rules:
 - **A detail page has one skeleton**: what it is, then its thread or main content, then the lists that support it.
   First the identity panel, its subject's fields (a ticket's Work, a run's Run, a PR's Pull request, a chore's
   Schedule); its actions sit in that panel's foot, under a hairline, never in a panel of their own above the content.
-  Then the thread the operator came to answer, with its form: a ticket's conversation and the reply, a chore's notes
-  and the note form. A page with no thread has its main content there instead: a run's transcript, a chore run's
-  findings and transcript, a tick's decisions, a review's findings and diff, a PR's reviews. Then the supporting
+  Then the thread the operator came to answer, with its form: a ticket's conversation and the reply. A page with no
+  thread has its main content there instead: a run's transcript, a chore's open findings and runs, a chore run's
+  findings and transcript, a tick's decisions, a review's findings and diff, a PR's reviews. A chore's notes are a
+  thread nothing waits on, written now and then, so they follow its main content, with its spend. Then the supporting
   lists: runs, decisions, spend. So on a half-width second monitor a ticket's reply is reached before its runs and
   decisions, and the attention detail, the other place a ticket is answered, reads in the same order: the item, the
   ticket's actions and any limit it is stuck at, then its conversation and the reply. An action over a whole list
@@ -660,9 +662,9 @@ list, an empty state, or a skeleton by hand.
   new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below), and so is a GitHub
   PR's address in a conversation's bubble or a chore's finding, its detail or its link, as in the harness's lines
   (`InlineCode`).
-- **A chore's notes** are a conversation of the operator's words alone, between the chore's schedule and its findings
-  and runs, with a note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the
-  next run` in `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
+- **A chore's notes** are a conversation of the operator's words alone, after the chore's findings and runs and before
+  its spend, with a note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the next
+  run` in `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
 - **Decisions** are rows (`Decisions`): the subject, a ticket or chore as a link, a unit as its ticket and repository
   (on its subject's page, the tick instead, with its age), the action as a chip, a PR as a link, and the rationale
   under them as rich text, from the action's column. A `refused:` action's chip is in `status-failed` and an
