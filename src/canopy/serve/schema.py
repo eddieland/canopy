@@ -729,6 +729,17 @@ class PlanReplyRequest(_Model):
     """What it says. Bounded again in code at 4000 characters, after stripping."""
 
 
+class PlanAnchor(_Model):
+    """A comment's passage, as its words and the text either side of them, each with its whitespace collapsed."""
+
+    quote: Annotated[str, Field(min_length=1, max_length=4000)]
+    """The passage."""
+    prefix: Annotated[str, Field(max_length=32)] = ""
+    """Up to 32 characters before it."""
+    suffix: Annotated[str, Field(max_length=32)] = ""
+    """Up to 32 characters after it."""
+
+
 class PlanThreadChange(_Model):
     """A change to a comment thread on a plan: its comment's words, a reply's, or whether it is resolved."""
 
@@ -738,6 +749,8 @@ class PlanThreadChange(_Model):
     """The reply `body` is for; none for the comment itself."""
     resolved: bool | None = None
     """Resolve the thread, or reopen it; none to leave it."""
+    anchor: PlanAnchor | None = None
+    """The passage as it now stands, after an edit of the plan moved or changed its words; none to leave it."""
 
 
 class PlanThreadDeleted(_Model):

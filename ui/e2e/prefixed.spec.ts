@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+import { plan, select } from './helpers.ts'
+
 // Served under /canopy, signing nobody in, with the mock journal changing every 250 ms (playwright.config.ts). The
 // writes happen here, not on the root server, whose screenshots need its journal as seeded.
 
@@ -401,4 +403,44 @@ test("a coworker's PR is requested from the pull requests page and stopped from 
     await expect(request.getByRole('status')).toHaveText(`${pr}'s review request is stopped; nothing reviews it now.`)
     await expect(request).toContainText('Your review request ended')
     await expect(request.getByTestId('review-request-stop')).toHaveCount(0)
+})
+
+test("a plan's comment is kept, its edit saved and approved, and then the plan skipped, as canopy plan does", async ({
+    page,
+}) => {
+    await page.goto('tickets/ABC-105')
+    const actions = page.getByTestId('plan-actions')
+    await expect(plan(page).getByRole('heading', { level: 1 })).toHaveText('Schedule report exports')
+
+    // A comment is saved as it is made: it is there when the page is read again.
+    await select(page, 'owner_timezone()')
+    await page.getByRole('toolbar', { name: 'Format' }).getByRole('button', { name: 'Comment' }).click()
+    const form = page.getByRole('form', { name: 'Comment' })
+    await form.getByRole('textbox').fill('Which timezone when the owner has none set?')
+    await form.getByRole('button', { name: 'Comment' }).click()
+    await expect(page.getByRole('article').filter({ hasText: 'owner has none set' })).toBeVisible()
+    await expect(actions.getByRole('button', { name: 'Approve' })).toBeEnabled()
+    await page.reload()
+    await expect(page.getByRole('article').filter({ hasText: 'owner has none set' })).toBeVisible()
+
+    // Ask for changes is a reply: it lands in the conversation.
+    const ask = page.getByRole('form', { name: 'Ask for changes' })
+    await ask.getByRole('button', { name: /Ask for changes/u }).click()
+    await expect(actions.getByRole('status')).toContainText('the next tick asks the planner for a new plan')
+    await expect(page.getByTestId('conversation')).toContainText('Which timezone when the owner has none set?')
+
+    // An edit, saved and approved in one: the approval takes the file as saved.
+    await plan(page).getByRole('heading', { level: 1 }).click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(', weekly too')
+    await actions.getByRole('button', { name: 'Save and approve' }).click()
+    await expect(actions.getByRole('status')).toContainText('Plan 2 of ABC-105 is approved as its file stands now.')
+    await expect(page.getByTestId('plan-status')).toContainText('approved')
+    await expect(page.getByTestId('plan-status')).toContainText('edited since the planner wrote it')
+
+    // Skip supersedes it: no plan waits, and the ticket's own word now says so.
+    await actions.getByRole('button', { name: 'Skip the plan' }).click()
+    await expect(page.getByTestId('plan-status')).toContainText('Plan not needed, by your word, skip.')
+    await expect(page.getByTestId('plan-status')).toContainText('superseded')
+    await expect(page.getByTestId('plan-actions')).toHaveCount(0)
 })

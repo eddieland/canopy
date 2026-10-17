@@ -8,9 +8,12 @@ import {
     changeRequest,
     editReply,
     editThread,
+    fromServer,
     inPlanOrder,
+    movedAnchors,
     removeThread,
     setResolved,
+    threadChanges,
     withAnchors,
 } from '@/lib/plan-threads'
 import type { PlanThread } from '@/lib/plan-threads'
@@ -106,5 +109,57 @@ describe('changeRequest', () => {
         const request = changeRequest(threads, new Map([['a', 0]]))
         expect(request).toContain('…"')
         expect(request.length).toBeLessThan(long.length)
+    })
+})
+
+describe('the journal', () => {
+    it("reads the journal's threads with its ids as text", () => {
+        const [thread] = fromServer([
+            {
+                id: 7,
+                quote: 'streams rows',
+                prefix: 'It ',
+                suffix: '.',
+                body: 'Page instead?',
+                at: AT,
+                resolved: true,
+                replies: [{ id: 9, body: 'Or both.', at: AT }],
+            },
+        ])
+        expect(thread).toEqual({
+            id: '7',
+            anchor: { quote: 'streams rows', prefix: 'It ', suffix: '.' },
+            body: 'Page instead?',
+            at: AT,
+            resolved: true,
+            replies: [{ id: '9', body: 'Or both.', at: AT }],
+        })
+    })
+
+    it('names the writes from one list to the next, new threads first and deletions last', () => {
+        const before = two()
+        let after = removeThread(before, 'b')
+        after = editThread(after, 'a', 'Page it.')
+        after = setResolved(after, 'a', true)
+        after = addReply(after, 'a', { id: 'r1', body: 'Or both.', at: AT })
+        after = addThread(after, { id: 'c', anchor: anchor('the route'), body: 'Which?', at: AT })
+        expect(threadChanges(before, after)).toEqual([
+            { kind: 'edit', id: 'a', body: 'Page it.' },
+            { kind: 'resolve', id: 'a', resolved: true },
+            { kind: 'reply', id: 'a', body: 'Or both.' },
+            { kind: 'add', thread: after[1] },
+            { kind: 'delete', id: 'b' },
+        ])
+        expect(threadChanges(after, editReply(after, 'a', 'r1', 'Both.'))).toEqual([
+            { kind: 'edit-reply', id: 'a', replyId: 'r1', body: 'Both.' },
+        ])
+    })
+
+    it('leaves a moved passage to the save, and names it there', () => {
+        const before = two()
+        const moved = withAnchors(before, new Map([['a', anchor('streams the rows')]]))
+        expect(threadChanges(before, moved)).toEqual([])
+        expect(movedAnchors(before, moved).map((thread) => thread.id)).toEqual(['a'])
+        expect(movedAnchors(before, before)).toEqual([])
     })
 })
