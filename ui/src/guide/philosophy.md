@@ -3,6 +3,21 @@
 The few convictions canopy is built on, and what each one means for you. When the loop does something you didn't
 expect, or pointedly doesn't do something you did, the reason is usually on this page.
 
+## Stop herding monkeys
+
+canopy started as an answer to a particular kind of day. Three agents going, each on its own branch. You switch your
+IDE to one to check its work, stash what you were doing to look at another, restart a worker that wandered off, and
+remember, mostly, which terminal belonged to which ticket. Each chore takes a minute. Together they take the day, and
+the monkeys never get tired.
+
+So canopy reconciles your work in the background. You label a ticket; the loop notices, gives its worker a worktree of
+its own, comes back when CI fails or a review lands, and tells you when something needs you. Your checkout stays on
+whatever you're doing. No branch moves under your editor, and no terminal is yours to babysit.
+
+Background doesn't mean slow when you're in a hurry. When something needs doing now, push it: **Tick now** in the
+header, or `t` at the loop's terminal, starts a tick at once; [starting a ticket](tickets#starting-a-ticket) brings it
+in without its label; and a reply ends the loop's wait. The loop keeps its own pace until you give it yours.
+
 ## Your machine, your credentials
 
 canopy runs where you are, as you. Workers act under your tracker and GitHub accounts, through the MCP servers your
