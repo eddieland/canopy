@@ -83,14 +83,14 @@ jobs:
 
       - name: Set up uv and Python 3.12
         if: needs.changes.outputs.code != 'false'
-        uses: astral-sh/setup-uv@v10.2.0
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           python-version: "3.12"
           enable-cache: true
 
       - name: Set up Node
         if: needs.changes.outputs.code != 'false'
-        uses: actions/setup-node@v7.0.0
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: "22"
           cache: npm
@@ -138,14 +138,14 @@ jobs:
 
       - name: Set up uv and Python 3.12
         if: needs.changes.outputs.code != 'false'
-        uses: astral-sh/setup-uv@v10.2.0
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           python-version: "3.12"
           enable-cache: true
 
       - name: Set up Node
         if: needs.changes.outputs.code != 'false'
-        uses: actions/setup-node@v7.0.0
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: "22"
 
@@ -200,7 +200,7 @@ jobs:
 
       - name: Set up uv and Python 3.12
         if: needs.changes.outputs.code != 'false'
-        uses: astral-sh/setup-uv@v10.2.0
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           python-version: "3.12"
           enable-cache: true
@@ -243,14 +243,14 @@ jobs:
 
       - name: Set up uv and Python 3.12
         if: needs.changes.outputs.code != 'false'
-        uses: astral-sh/setup-uv@v10.2.0
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           python-version: "3.12"
           enable-cache: true
 
       - name: Set up Node
         if: needs.changes.outputs.code != 'false'
-        uses: actions/setup-node@v7.0.0
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: "22"
           cache: npm
@@ -302,7 +302,7 @@ jobs:
       # No cache: the check installs into an empty one of its own, so setup-uv would find nothing to save and fail.
       - name: Set up uv and Python 3.12
         if: needs.changes.outputs.code != 'false'
-        uses: astral-sh/setup-uv@v10.2.0
+        uses: astral-sh/setup-uv@v10.3.0
         with:
           python-version: "3.12"
           enable-cache: false
@@ -310,7 +310,7 @@ jobs:
       # The wheel's build hook builds the UI with npm, and fails without it.
       - name: Set up Node
         if: needs.changes.outputs.code != 'false'
-        uses: actions/setup-node@v7.0.0
+        uses: actions/setup-node@v7.1.0
         with:
           node-version: "22"
 
