@@ -132,8 +132,10 @@ worker was told memory exists.
   proposal. Both work at `record` as at `use`, so the operator can build the lessons up before any is served.
 - At `use`, `{{WORKSPACE_LESSONS}}` is in every worker prompt that carries `{{STANDING_INSTRUCTIONS}}`, every kind but
   a split's (§8), beside them and framed as the operator's words that the prompt's obligations come before. Capped at
-  2 KiB in key order, the rest counted. A lesson naming a repository renders only in runs that lease it. A plan hears
-  lessons but carries no contract, so it cites none.
+  2 KiB: past it the lessons longest since promoted, renewed, or used are left out and counted, and the rest render in
+  key order, so with many lessons the ones the operator or a run last vouched for are served, not the first by name. A
+  lesson naming a repository renders only in runs that lease it. A plan hears lessons but carries no contract, so it
+  cites none.
 - A lesson comes up for review 90 days after it was promoted or last used: the operator renews it
   (`canopy memory renew ID`), graduates it into a repository's AGENTS.md or a skill through a ticket and a PR they
   merge, or forgets it.
@@ -145,10 +147,11 @@ leaves them out and no tick spends a decision on them. None arises while `memory
 
 - `memory_proposal`, about a ticket marked done whose runs' proposals wait, so the operator reviews lessons whose work a
   merge has checked.
-- At `use` only, one `lesson_review` naming every lesson due, and one `lesson_wrong` naming every lesson a run reported
-  wrong since its last renewal. No run reads a lesson at `record`, so none is raised there; once the key is `use`, every
-  lesson past its date comes up together at the first tick, in one item, the review the operator wants before an old
-  lesson is served.
+- At `use` only, one `lesson_review` naming the lessons due, longest overdue first, and one `lesson_wrong` naming the
+  lessons a run reported wrong since their last renewal. No run reads a lesson at `record`, so none is raised there;
+  once the key is `use`, every lesson past its date comes up together at the first tick, in one item, the review the
+  operator wants before an old lesson is served. An item names ten at most and counts the rest, so hundreds of lessons
+  due still make one line.
 
 ### Search
 
@@ -194,6 +197,12 @@ mode is said in words, never by color alone, and the two modes never share a lab
 any memory is in use while a tier is on; its memory page, a ticket's page, and a run's page say for each tier what reads
 it, what a run wrote and read, and what it would be served. The web UI reads memory and writes none: every write is the
 CLI's, in the operator's shell. How it looks is `ui/DESIGN.md`'s.
+
+A busy workspace holds thousands of notes and hundreds of lessons, so the memory page lists the tickets with notes in
+force, one row each with its count, and reads a ticket's notes only when the operator opens its row; the lessons come
+reported wrong first, then by review date, so what calls for the operator heads the list. Wherever a list shows a
+memory in force that its digest's cap leaves out, its row says so, as left out of the prompt at `use` and as what would
+be left out while recording.
 
 What a worker wrote is shown as plain text, never Markdown or a link, unlike other journal text (D113): a link in a note
 would be a worker's link the operator reads as canopy's. Every character the bounds refuse is shown by its code point,

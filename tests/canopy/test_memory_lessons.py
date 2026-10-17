@@ -166,12 +166,22 @@ def test_a_lesson_for_one_repository_stays_out_of_anothers_runs(
     assert memory.lessons_digest(conn, ("web",), cite=True).ids == (every.id,)
 
 
-def test_the_lessons_digest_is_capped_in_key_order(conn: sqlite3.Connection, canopy_env: CanopyEnv) -> None:
+def test_the_lessons_digest_keeps_those_last_vouched_for_in_key_order(
+    conn: sqlite3.Connection, canopy_env: CanopyEnv
+) -> None:
     with_memory(canopy_env, proposals="use")
     ids = [promoted(conn, canopy_env, f"lesson {i} " + "z" * 500, key=f"k{i}").id for i in range(6)]
+    # Promoted, renewed, or used: the review date says which was last. k1 was last, then k3, k5, and so on down.
+    soon = datetime.now(UTC) + timedelta(days=90)
+    order = [ids[1], ids[3], ids[5], ids[0], ids[2], ids[4]]
+    conn.executemany(
+        "UPDATE memories SET review_at = ? WHERE id = ?",
+        [(db.format_time(soon - timedelta(days=n)), i) for n, i in enumerate(order)],
+    )
     digest = memory.lessons_digest(conn, None, cite=False)
-    assert digest.ids == tuple(ids[: len(digest.ids)])
-    assert digest.left_out == 6 - len(digest.ids) > 0
+    assert 0 < len(digest.ids) < 6
+    assert digest.ids == tuple(sorted(order[: len(digest.ids)]))
+    assert digest.left_out == 6 - len(digest.ids)
     left_out = f"[{digest.left_out} more lessons are left out of this prompt; `{memory.SEARCH_COMMAND}` finds them.]"
     assert left_out in digest.text
 
@@ -387,3 +397,19 @@ def test_with_proposals_at_use_the_cli_says_lessons_are_served(
     out = capsys.readouterr().out
     assert "The lessons, served to every run:" in out
     assert f"Lesson {lesson.id}, `api-tests`:\n> {LESSON}" in out
+
+
+def test_many_lessons_due_raise_one_short_item_naming_the_longest_overdue(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection
+) -> None:
+    with_memory(canopy_env, proposals="use")
+    ids = [promoted(conn, canopy_env, f"Lesson number {i}.", key=f"lesson-{i}").id for i in range(25)]
+    # The later a lesson was promoted here, the longer it has been due.
+    now = datetime.now(UTC)
+    conn.executemany(
+        "UPDATE memories SET review_at = ? WHERE id = ?",
+        [(db.format_time(now - timedelta(days=n + 1)), i) for n, i in enumerate(ids)],
+    )
+    [item] = memory_attention.items(conn, load(canopy_env.root, canopy_env.user_file))
+    named = ", ".join(map(str, ids[::-1][: memory_attention.MAX_NAMED]))
+    assert item.detail.startswith(f"lessons {named}, and 15 more are due for review")
