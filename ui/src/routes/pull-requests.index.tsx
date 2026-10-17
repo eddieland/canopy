@@ -35,7 +35,7 @@ function PullRequestsPage() {
                 activity first. A PR&apos;s page has its ticket, the runs that pushed to it, canopy&apos;s reviews of
                 it, and what the loop decided.
             </PageHeader>
-            <Panel className="mb-6">
+            <Panel>
                 <PanelHeader label="Review a PR" />
                 <ReviewRequestForm />
             </Panel>
