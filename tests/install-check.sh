@@ -57,6 +57,8 @@ echo "$sandbox" | grep -q "npm is not on PATH, so srt [0-9.]* is not installed" 
 # Output is captured before grep, so a command that fails after printing the expected text still fails the check.
 skill=$(canopy skill)
 echo "$skill" | grep -qx 'name: canopy' || fail "canopy skill did not print the operator skill"
+canopy skill --install >/dev/null || fail "canopy skill --install failed"
+[ "$(cat "$HOME/.agents/skills/canopy/SKILL.md")" = "$skill" ] || fail "canopy skill --install did not save the skill"
 
 # The journal's memory index needs SQLite built with FTS5 (DESIGN §28): every journal's migrations create it.
 "$UV_TOOL_DIR/canopy/bin/python" -c '
