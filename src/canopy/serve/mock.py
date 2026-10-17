@@ -365,10 +365,15 @@ async def changes(backend: Backend, seconds: float | None) -> None:
         return
     while True:
         await asyncio.sleep(seconds)
-        with backend.open() as ctx:
-            ctx.conn.execute(
-                "UPDATE runs SET cost_usd = round(cost_usd + 0.01, 2) WHERE id = ? AND status = 'running'", (LIVE_RUN,)
-            )
+        # On a thread, as the routes keep journal work: a write that waits on another's lock would stall every request.
+        await asyncio.to_thread(_add_a_cent, backend)
+
+
+def _add_a_cent(backend: Backend) -> None:
+    with backend.open() as ctx:
+        ctx.conn.execute(
+            "UPDATE runs SET cost_usd = round(cost_usd + 0.01, 2) WHERE id = ? AND status = 'running'", (LIVE_RUN,)
+        )
 
 
 def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
