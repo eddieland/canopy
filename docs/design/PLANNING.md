@@ -311,7 +311,9 @@ page-level detail.
   text, a line saying so: the planner keeps what it was not asked to change, but reads the plan it replaces as its own,
   and the line says which words are the operator's, to keep. It is a reply, within `canopy reply`'s bound (§22), so the
   re-plan works as Approving a plan, above, says. A request over the bound is not sent; the operator resolves or
-  shortens some. Resolved threads ask for nothing.
+  shortens some. Resolved threads ask for nothing. Until a planner reads the request, the page says it was asked, and
+  when (`changes_asked`, as the overseer reads it), and the button reads `Ask again`, so a second request is never
+  sent unawares.
 - **Editing** in the web UI edits the plan's file, as the operator's own editor would: through the web channel behind
   its token (T8), with the same care as the planner's write (operator-only, refusing a symlink or a file that is not
   regular), replaced whole so a reader never sees half a file. It saves only a `proposed` or approved plan's file, an

@@ -232,10 +232,6 @@ def state_section(
         "SELECT max(at) FROM messages WHERE subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ?",
         (conversation.TICKET, key, ticket.forgotten_message_id or 0),
     ).fetchone()[0]
-    since = max(
-        newest.created_at if newest is not None and newest.status is not PlanStatus.SUPERSEDED else "",
-        str(run["started_at"]) if run is not None else "",
-    )
     blocked = (
         run is not None
         and run["status"] == "blocked"
@@ -248,9 +244,37 @@ def state_section(
         "newest": None
         if newest is None
         else {"id": newest.id, "status": newest.status, "created_at": newest.created_at},
-        "changes_asked": replied is not None and bool(since) and replied > since,
+        "changes_asked": changes_asked(conn, ticket) is not None,
         "blocked": blocked,
     }
+
+
+def changes_asked(conn: sqlite3.Connection, ticket: records.Ticket) -> str | None:
+    """Return when the operator asked for changes no planner has read, or None if they have not.
+
+    That is their latest message on the ticket when it is newer than its current plan and than its latest plan run's
+    start, as the overseer's state block reads it (`state_section`), so the web UI says what the overseer will act on.
+
+    Returns:
+        The message's time as the journal holds it, or None.
+    """
+    key = ticket.key
+    newest = records.fetch_one(
+        conn, records.Plan, "SELECT * FROM plans WHERE ticket_key = ? ORDER BY id DESC LIMIT 1", (key,)
+    )
+    started = conn.execute(
+        "SELECT max(started_at) FROM runs WHERE ticket_key = ? AND kind = ? AND id > ?",
+        (key, RunKind.PLAN, ticket.forgotten_run_id or 0),
+    ).fetchone()[0]
+    replied = conn.execute(
+        "SELECT max(at) FROM messages WHERE subject_kind = ? AND subject_id = ? AND source = 'operator' AND id > ?",
+        (conversation.TICKET, key, ticket.forgotten_message_id or 0),
+    ).fetchone()[0]
+    since = max(
+        newest.created_at if newest is not None and newest.status is not PlanStatus.SUPERSEDED else "",
+        str(started) if started is not None else "",
+    )
+    return replied if replied is not None and since and replied > since else None
 
 
 def awaiting(conn: sqlite3.Connection) -> list[conversation.Awaiting]:

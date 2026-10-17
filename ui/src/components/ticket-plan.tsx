@@ -123,6 +123,12 @@ function PlanStatus({ plans }: { plans: TicketPlans }) {
                 <span>None yet: the next tick dispatches a planner.</span>
             )}
             {plans.planning !== null && <span>Run {plans.planning} is writing a new plan.</span>}
+            {plans.planning === null && plans.changes_asked !== null && (
+                <span>
+                    You asked for changes <Age at={plans.changes_asked} variant="ago" />: the next tick asks the planner
+                    for a new plan.
+                </span>
+            )}
         </p>
     )
 }
@@ -302,6 +308,7 @@ function NewestPlan({
                     : undefined
             }
             onAskForChanges={status === 'proposed' ? askForChanges : undefined}
+            asked={plans.changes_asked !== null}
             actions={
                 <div className="flex flex-wrap items-center gap-2" data-testid="plan-actions">
                     {approvable && (

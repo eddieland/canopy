@@ -95,6 +95,7 @@ export function PlanEditor({
     editable = true,
     edited = false,
     onAskForChanges,
+    asked = false,
     actions,
     actionsNote,
     previous,
@@ -113,6 +114,8 @@ export function PlanEditor({
     edited?: boolean
     /** Sends the open comments, and a note on the whole plan, to the planner as one message. */
     onAskForChanges?: (message: string) => void
+    /** Whether the operator asked for changes no planner has read yet, so that asking again is said as such. */
+    asked?: boolean
     /** The caller's own word on the plan, such as Approve, at the start of the bar under it. */
     actions?: ReactNode
     /** What the caller says about those, under them in the bar: what they will do, or what one did. */
@@ -452,6 +455,7 @@ export function PlanEditor({
                             threads={threads}
                             starts={starts}
                             edited={edited || changed}
+                            asked={asked}
                             onAsk={onAskForChanges}
                         />
                     )}

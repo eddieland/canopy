@@ -4122,6 +4122,11 @@ export type components = {
          */
         TicketPlans: {
             /**
+             * Changes Asked
+             * @description When the operator asked for changes no planner has read yet, as the overseer reads it; none if they have not.
+             */
+            changes_asked: string | null;
+            /**
              * Needed
              * @description Whether its implement waits on an approved plan, by its own setting or `policy.plan`.
              */

@@ -439,6 +439,9 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     await ask.getByRole('button', { name: /Ask for changes/u }).click()
     await expect(said).toContainText('the next tick asks the planner for a new plan')
     await expect(page.getByTestId('conversation')).toContainText('Which timezone when the owner has none set?')
+    // The page says so until a planner reads it, and another request is asking again.
+    await expect(page.getByTestId('plan-status')).toContainText('You asked for changes')
+    await expect(ask.getByRole('button', { name: 'Ask again' })).toBeVisible()
 
     // An edit, saved and approved in one: the approval takes the file as saved.
     await plan(page).getByRole('heading', { level: 1 }).click()

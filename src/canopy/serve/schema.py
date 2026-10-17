@@ -439,6 +439,8 @@ class TicketPlans(_Model):
     """`policy.plan`."""
     planning: int | None = None
     """The plan run writing a plan for it now, if one is: the plan verbs and a save refuse until it ends."""
+    changes_asked: datetime | None = None
+    """When the operator asked for changes no planner has read yet, as the overseer reads it; none if they have not."""
     newest: PlanFile | None = None
     """The newest plan, as its file stands; none if it has had none."""
     plans: list[PlanSummary]
