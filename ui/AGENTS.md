@@ -26,10 +26,8 @@ memory, and do not upgrade in passing.
 - oxlint (with the React Compiler's rules and eslint-plugin-jsdoc's, and type-aware rules through oxlint-tsgolint)
   and oxfmt, Vitest, Playwright.
 
-Add a library when it is clearly better than the code we would write instead, and pin it exactly like the rest. One
-that only a few files need is held to them, as Tiptap and Shiki are. It needs a `docs/DECISIONS.md` entry only when it
-renders text from outside canopy, or is big enough that someone would otherwise propose replacing it (D120, D121);
-most need none.
+Add a library as the repository's `AGENTS.md` says, when it clearly beats the code we would write instead, and pin it
+exactly like the rest. One that only a few files need is held to them, as Tiptap (D120) and Shiki (D121) are.
 
 ## Commands
 

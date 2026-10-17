@@ -30,17 +30,17 @@ If code and the design disagree, the design doc wins until a decision entry says
   design saying otherwise is incomplete. The design says what canopy does and why, not how the code does it; what
   belongs there, and where the rest goes, is at the top of `docs/design/README.md`. Most PRs add a sentence there, or
   change one, or none.
-- Every new runtime dependency of the Python package gets a `docs/DECISIONS.md` entry saying why stdlib was
-  insufficient. A dev-only tool (a linter, a checker, a test plugin) gets none; a comment where it is configured says
-  what it is for. The web UI's libraries are a judgment call, not an entry each (`ui/AGENTS.md`).
+- Add a dependency judiciously: when it clearly beats the code we would write instead, and its PR says why. It gets a
+  `docs/DECISIONS.md` entry only when it passes that file's bar: code across canopy is shaped around it, it handles
+  untrusted input, or it would otherwise be proposed again. Most need none. A dev-only tool (a linter, a checker, a
+  test plugin) gets a comment where it is configured saying what it is for.
 - Most PRs add no decision entry. `docs/DECISIONS.md` holds only what every future agent must know, whatever part of
-  the code it works on: a constraint that spans the codebase, a rule the trust boundary relies on, a runtime
-  dependency of the Python package, or a direction the operator settled. The test: could an agent working on an
-  unrelated part of canopy break it, or reopen it, without knowing? If not, it is not a decision entry. Why a feature
-  behaves as it does, and what was rejected for it, goes in the design next to the behavior; why a line of code is so
-  goes in a comment there; the story of a change goes in its PR; progress goes on the milestone's lines in
-  `docs/ROADMAP.md`. A new feature, command, config key, or default is not a decision by itself. When in doubt, leave
-  it out.
+  the code it works on: a constraint that spans the codebase, a rule the trust boundary relies on, or a direction the
+  operator settled. The test: could an agent working on an unrelated part of canopy break it, or reopen it, without
+  knowing? If not, it is not a decision entry. Why a feature behaves as it does, and what was rejected for it, goes in
+  the design next to the behavior; why a line of code is so goes in a comment there; the story of a change goes in its
+  PR; progress goes on the milestone's lines in `docs/ROADMAP.md`. A new feature, command, config key, default, or
+  dependency is not a decision by itself. When in doubt, leave it out.
 - An entry that passes is short: a title that states the decision and two to four one-line bullets. The bar and the
   format are at the top of `docs/DECISIONS.md`.
 - `docs/TRUST_MODEL.md`, `.agents/prompts/overseer.md`, and everything under `.agents/agents/` define what the loop is
@@ -67,9 +67,9 @@ If code and the design disagree, the design doc wins until a decision entry says
 - `make install-check` installs canopy with `uv tool install` into an empty HOME and runs a dry tick against the
   fakes (D046). CI runs it too; run it when you change packaging, bundled files, or the install steps.
 - Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only when
-  stdlib makes the code materially worse, and record why. Adopted so far: `click` for the CLI (D025), `pydantic` for
-  validating config and anything parsed from another program's output (D026), `hypothesis` for property tests of input
-  validators (dev only), `pytest-xdist` to run the tests in parallel (dev only), `rich` for terminal output
+  stdlib makes the code materially worse, and say why in its PR. Adopted so far: `click` for the CLI (D025),
+  `pydantic` for validating config and anything parsed from another program's output (D026), `hypothesis` for property
+  tests of input validators (dev only), `pytest-xdist` to run the tests in parallel (dev only), `rich` for terminal output
   (D043), `fastapi` and `uvicorn` for the web UI's server (D074, only in `canopy.serve`), and `httpx2` for its test
   client (D079, dev only), and `syrupy` for snapshot tests (dev only).
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
