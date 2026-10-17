@@ -294,24 +294,29 @@ The ticker:
 Sprig:
 
 - Sprig (`Buddy`, `src/components/shell/buddy.tsx`) is a bent wire with a sprig on top and googly eyes, behind a
-  keyboard it vibe codes on (`Keyboard`), at the foot of the side rail, under a speech bubble offering a tip about
-  the page. The keyboard stands in front of the wire's foot, inside the figure's own box, so Sprig takes no more room
-  for it. It is off until Settings turns it on. Its tips are by view (`TIPS` in `src/lib/buddy.ts`), by the route's
-  id: several of its own for every route, a section's list and one of its items apart (`/tickets/` and
-  `/tickets/$key`), so the same joke never shows on two views; then ones for anywhere. A new route is a type error
-  there until it has its own. Every one is a joke, and none opens with "Tip:",
-  which on the ticker names something real; a joke dressed as a tip opens with "Unhelpful tip:". The jokes come in
-  several voices (the paperclip's "It looks like you're...", a false "Fun fact:", a "Hot take:", a diary entry, a
-  haiku, a riddle), mixed in each list so that no voice follows itself. Clicking Sprig, or the bubble's Another tip,
-  offers the next; the bubble closes with its button or after 20 seconds, and "Don't show me tips again" turns Sprig
-  off.
-- Its place is the rail's column, between the blocks and the footer: the room left there is its slot, and it stands
-  at the slot's foot. A slot with room for Sprig and its bubble (with the mock's three working runs, a window about
-  1100px tall) covers nothing. A laptop's window never leaves that much, and the operator would rather see Sprig
-  standing over the spend a little than not at all: so a shorter slot, down to one that leaves Sprig over the foot of
-  the spend by 40px, still shows it, the one exception to Fun's first rule. There the bubble would cover the runs
-  working now, so a tip shows only when asked for, by a click on Sprig, and closes as any other. A slot shorter
-  still leaves Sprig out. The bubble keeps its room once closed, so closing it never moves Sprig.
+  keyboard it vibe codes on (`Keyboard`), at the foot of the side rail, under a speech bubble offering, now and then, a
+  tip about the page. The keyboard stands in front of the wire's foot, inside the figure's own box, so Sprig takes no
+  more room for it. It is off until Settings turns it on. Its tips are by view (`TIPS` in `src/lib/buddy.ts`), by the
+  route's id: several of its own for every route, a section's list and one of its items apart (`/tickets/` and
+  `/tickets/$key`), so the same joke never shows on two views; then ones for anywhere. A new route is a type error there
+  until it has its own. Every one is a joke, and none opens with "Tip:", which on the ticker names something real; a
+  joke dressed as a tip opens with "Unhelpful tip:". The jokes come in several voices (the paperclip's "It looks like
+  you're...", a false "Fun fact:", a "Hot take:", a diary entry, a haiku, a riddle), mixed in each list so that no voice
+  follows itself. Sprig keeps its own time, not the pages': a page loads with no tip up, and the first comes at random,
+  two to six minutes on, about whatever view is on screen then; each later one comes as long again after the last
+  closes, in a tab in sight. Turning a page neither offers a tip nor puts the next off, which a tip on every page did
+  once, too often to be funny: the operator asked for the timer. A tip is about the view it was offered on, so another
+  view hides it, a list filtered another way does not, and it closes on time all the same. Clicking Sprig, or the
+  bubble's Another tip, offers the next at once; the bubble closes with its button or 20 seconds after it opened, and
+  "Don't show me tips again" turns Sprig off.
+- Its place is the rail's column, between the blocks and the footer: the room left there is its slot, and it stands at
+  the slot's foot. A slot with room for Sprig and its bubble (with the mock's three working runs, a window about 1100px
+  tall) covers nothing. A laptop's window never leaves that much, and the operator would rather see Sprig standing over
+  the spend a little than not at all: so a shorter slot, down to one that leaves Sprig over the foot of the spend by
+  40px, still shows it, the one exception to Fun's first rule. There the bubble would cover the runs working now, so a
+  tip shows only when asked for, by a click on Sprig, and closes as any other; one Sprig would offer on its own it lets
+  pass, and waits again. A slot shorter still leaves Sprig out. The bubble keeps its room once closed, so closing it
+  never moves Sprig.
 - **Sprig's hats** are bought at the foot of Settings' Fun panel (`HatShop` in `src/routes/settings.tsx`, the shop in
   `src/lib/hats.ts`, the drawings in `src/components/hat.tsx`). The wallet is `total_usd` from `GET /api/spend`,
   everything canopy has ever spent, less the price of each hat bought, so it fills as canopy works; nothing real is
@@ -381,7 +386,7 @@ and utilities are in `src/index.css`.
   animation that fills forwards: the row is let go once it has played.
 - The lightswitch rave flicks the lights off and on every 0.6 seconds in steps, the switch's lever flicking with them,
   while its beams turn once every 8 seconds (Fun, above).
-- Sprig's tip pops in a moment after a page arrives, its brows rise once with each new tip, its eyes blink now and
+- Sprig's tip pops in a moment after it is offered, its brows rise once with each new tip, its eyes blink now and
   then and look toward the pointer, and every 5 seconds it types a burst on its keyboard, each key it presses sinking
   and lighting in the accent for a moment.
 - A toast rises in from below and fades out.
