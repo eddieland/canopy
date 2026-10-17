@@ -934,6 +934,8 @@ class Tick(_Model):
     woken_by: str | None = None
     """What ended the loop's wait before it: start | timer | gate | message | starts | grant | notice | run | key |
     web. None when `idle` is."""
+    canopy_version: str | None = None
+    """The version of canopy that ran it, and so recorded its decisions; None on a tick from before that was kept."""
 
 
 class TickDetail(_Model):

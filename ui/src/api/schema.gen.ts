@@ -3947,6 +3947,11 @@ export type components = {
          */
         Tick: {
             /**
+             * Canopy Version
+             * @description The version of canopy that ran it, and so recorded its decisions; None on a tick from before that was kept.
+             */
+            canopy_version: string | null;
+            /**
              * Cost Usd
              * @description What the overseer cost, in US dollars, when the runtime reported it (§13).
              */

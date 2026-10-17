@@ -123,6 +123,13 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                             <Cost usd={tick.cost_usd} />
                             <span title={RUN_TOKENS_TITLE}>{runTokens(tick.new_tokens, tick.peak_context)}</span>
                         </Field>
+                        <Field
+                            label="canopy"
+                            mono
+                            title="the version of canopy that ran this tick and recorded its decisions"
+                        >
+                            {tick.canopy_version ?? <None />}
+                        </Field>
                         <Field label="output" mono title="the overseer's stdout and stderr: yours alone">
                             {output === null ? <None /> : <CopyablePath path={output} label="output path" />}
                         </Field>
