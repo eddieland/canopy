@@ -119,6 +119,22 @@ describe('MemoryRows', () => {
         expect(screen.getByText(/^review at/u).textContent).toMatch(/^review at \S/u)
     })
 
+    it('says which memories in force the digest’s cap leaves out, telling served from recording', async () => {
+        const digest = { ids: [12], left_out: 1, served: true, text: '' }
+        const rows = [NOTE, { ...NOTE, id: 13 }, { ...NOTE, id: 14, status: 'superseded' as const }]
+        await renderRows(<MemoryRows entries={rows} digest={digest} />)
+        const [kept, left, replaced] = screen.getAllByRole('listitem')
+        expect(kept && within(kept).queryByText(/past its cap/u)).toBeNull()
+        expect(left && within(left).getByText('left out of the prompt, past its cap')).toBeDefined()
+        // Not in force, so no digest could serve it: nothing to say.
+        expect(replaced && within(replaced).queryByText(/past its cap/u)).toBeNull()
+
+        cleanup()
+        await renderRows(<MemoryRows entries={rows} digest={{ ...digest, served: false }} />)
+        expect(screen.getByText('would be left out at use, past its cap')).toBeDefined()
+        expect(screen.queryByText('left out of the prompt, past its cap')).toBeNull()
+    })
+
     it('adds what goes under a row by its id, and under no other', async () => {
         const below = new Map([[13, <p key="13">from notes 4 and 5</p>]])
         await renderRows(<MemoryRows entries={[NOTE, { ...NOTE, id: 13 }]} below={below} />)

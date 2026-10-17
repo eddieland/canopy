@@ -320,6 +320,24 @@ def test_the_digest_keeps_the_most_recently_used_within_its_cap(conn: sqlite3.Co
     assert len(digest.text.encode()) < memory.MAX_TICKET_DIGEST + 1024
 
 
+def test_ticket_notes_counts_each_tickets_notes_in_force_the_newest_first(conn: sqlite3.Connection) -> None:
+    used, _, replaced = (hand_written(conn, f"note {i}", key=f"k{i}") for i in range(3))
+    conn.execute("UPDATE memories SET use_count = 2 WHERE id = ?", (used,))
+    conn.execute("UPDATE memories SET status = 'superseded' WHERE id = ?", (replaced,))
+    # Another ticket's, written after: its row comes first.
+    conn.execute("INSERT INTO tickets (key, repo, first_seen_at, last_seen_at) VALUES ('PROJ-2', 'repo', 'x', 'x')")
+    conn.execute(
+        "INSERT INTO memories (scope, ticket_key, key, body, status, author, run_id, created_at) "
+        "SELECT 'ticket', 'PROJ-2', 'later', 'A later note.', 'active', 'worker', run_id, 'y' "
+        "FROM memories WHERE id = ?",
+        (used,),
+    )
+    assert memory.ticket_notes(conn) == [
+        memory.TicketNotes("PROJ-2", count=1, used=0, latest_at="y"),
+        memory.TicketNotes(KEY, count=2, used=1, latest_at="x"),
+    ]
+
+
 @pytest.mark.parametrize("args", [["forget", "1"], ["purge", "--all"]])
 def test_forget_and_purge_refuse_inside_a_run(canopy_env: CanopyEnv, args: list[str]) -> None:
     with_memory(canopy_env, ticket_notes="record")
