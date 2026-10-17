@@ -42,6 +42,16 @@ for (const theme of THEMES) {
         await expect(call).toHaveScreenshot(`runs-39-tool-call-${theme}.png`)
     })
 
+    // A transcript's context chart, its fills tokens of their own in each theme.
+    test(`a transcript's context chart in ${theme}`, async ({ page }) => {
+        await page.clock.setFixedTime(NOW)
+        await storeTheme(page, theme)
+        await signIn(page)
+        await page.goto('runs/39')
+        await settled(page)
+        await expect(page.getByTestId('transcript-context')).toHaveScreenshot(`runs-39-context-${theme}.png`)
+    })
+
     test(`a tick's output pretty in ${theme}`, async ({ page }) => {
         await page.clock.setFixedTime(NOW)
         await storeTheme(page, theme)

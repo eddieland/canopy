@@ -41,6 +41,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
 | `spend-overseer`, `-idle`, `-workers`, `-chores`, `-reviews`, `-dry-run` | The spend chart's series, as fills only. |
+| `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; diff code. |
 | `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
 | `buddy-eye`, `buddy-pupil` | Sprig's googly eyes: the white and the pupil, and its rim. |
@@ -81,6 +82,10 @@ Rules:
   nowhere else: they are fills, never text, so the legend's words are `muted-foreground` beside a swatch. Idle overseer
   spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both themes, WCAG's
   bar for a graphic, which `tokens.test.ts` measures.
+- **Context fills** (`context-carried`, `context-added`) draw a transcript's context chart and nothing else: a neutral
+  with the canvas's indigo in it for what a model call carried, a cyan for what it added. Fills, never text, so the
+  legend's words are `muted-foreground` beside a swatch; each reaches 3:1 on `surface` and on `surface-raised`, the
+  picked call's, which `tokens.test.ts` measures.
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check
   it on both themes' surfaces before using it.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
@@ -643,6 +648,23 @@ list, an empty state, or a skeleton by hand.
   body is built only when opened, and All open opens the calls. A run's id in a list (`run:N`) opens its page, which is
   the run's fields over its transcript, and a chore run's id (`chore:NAME#N`) its page, whose findings sit between the
   two; a tick's page has the overseer's under its decisions.
+- **A transcript's context** (`ContextChart`, `contextShape` in `src/lib/transcript.ts`) sits between the counts and
+  the rows, in either view, once a model call has its tokens. Its line: a `context` label, the peak (`peak 30.2k at
+  call 3`), the largest single addition as a button in the accent (the tool and its summary, or `text` and its start)
+  with its tokens and the call it grew, and the legend. Under it a bar per call, as tall as what it was sent (input,
+  cache read, and cache write), 24px at most, from one baseline, the peak's at 80% with its size over it: what the
+  call carried from the call before in `context-carried`, what it added on top in `context-added`, 2px apart, the top
+  segment's corners rounded. The first call's is the runtime's own overhead and canopy's prompt, the prompt's tokens
+  its characters over four; a call the runtime counted none of has no bar. The bars are a `ToggleGroup`'s items, each
+  named for its call, size, and step on hover and to a screen reader; the axis under them names each call, every
+  fifth back from the last past twelve. The call picked, at first the one the largest addition grew, sits raised, and
+  a line under the chart says what grew it: the step on the call before, then what that call printed (its text, and
+  its tool calls, each input and output), largest first, each its share of the step by its characters (`≈4.2k`, the
+  characters on hover), at most five and then how many more. The first call's line splits it into the prompt and the
+  runtime's own; a call smaller than the one before says so and names nothing. Each entry named is a button that shows
+  its row: it turns By call and the search off, opens the row if it is a tool call, scrolls it to the window's middle,
+  focuses it, and sets it on the accent's tint at 14%. A session of one call has the line alone: one bar says nothing
+  the line does not. By call, each call's line has its step after its input, `30.2k in (+4.3k) · 1.8k out`.
 - **A tick's output** (`TickOutputPanel`) is the overseer's file as written, under the tick's transcript: one muted line
   naming the file until `Show output`, a `Disclosure` in the header, opens it. Open, it is one monospace block, its
   lines wrapped anywhere (JSON events have no spaces to break at), scrolling inside the panel (`PanelScroll`) and opened

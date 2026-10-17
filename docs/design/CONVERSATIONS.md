@@ -750,6 +750,20 @@ it cost.
 - Rejected: `opencode export` on request, again. Beside what the log and the prompt hold, it would add only a running
   session's calls before its run ends, for a runtime process behind the listener.
 
+Context by call (taken on request, 2026-10-17): to see where a session's context went without reading every call and
+doing the subtraction, which tool result made one call cost far more than the one before it, and how much of the first
+was fixed overhead.
+
+- The UI draws it from the transcript it already reads, so the server sends nothing new: each call's context is its
+  input, cache read, and cache write, and a step up between two calls is what the earlier call printed, its text and
+  its tool calls, each with what it returned (ui/DESIGN.md).
+- The runtime counts a call's tokens whole, never per entry, so an entry's part of a step is its share of the step's
+  characters: an estimate, marked `≈`, that sums to the step. The prompt's part of the first call is its characters
+  over four, since nothing counts it apart, and never more than that call was sent; the rest is the runtime's own.
+- Rejected: counting each entry with a tokenizer, in the server or the page. The tokenizer is the model's, which
+  canopy does not know and the runtime does not report, and a step's sum is already exact; a closer split of it is not
+  worth a dependency per provider.
+
 The tick's output (taken on request, 2026-10-13): the transcript keeps only the overseer's session, so what the
 runtime printed on stderr, and any line that is not one of its events, sent the operator back to the file, most of all
 for a tick whose overseer failed.
