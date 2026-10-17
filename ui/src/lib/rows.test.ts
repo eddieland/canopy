@@ -13,7 +13,7 @@ describe('rowTemplate', () => {
 
     it('lends a column it leaves out its name to the next one shown, or to the end', () => {
         expect(rowTemplate('chore')).toBe(`[name] 10rem [state] ${FREE} [findings end]`)
-        expect(rowTemplate('ticket', 'lg')).toBe(`[key] 6rem [title] ${FREE} [access phase run] 8rem [age] 6rem [end]`)
+        expect(rowTemplate('ticket', 'lg')).toBe(`[run] 8rem [key] 6rem [phase access title] ${FREE} [age] 6rem [end]`)
     })
 
     it('gives every kind exactly one free column, so its fixed ones line up row to row', () => {
@@ -30,6 +30,21 @@ describe('rowTemplate', () => {
         expect(widths('cost')).toEqual(new Set(['4rem']))
     })
 
+    it('leads with the state wherever a row has one, then its own id', () => {
+        const kinds: Partial<Record<RowKind, string[]>> = {
+            run: ['state', 'run'],
+            tick: ['state', 'id'],
+            review: ['verdict', 'id'],
+            'own-review': ['verdict', 'id'],
+            ticket: ['run', 'key'],
+            'pull-request': ['state', 'pr'],
+            memory: ['state', 'id'],
+        }
+        for (const [kind, lead] of Object.entries(kinds)) {
+            expect(ROW_COLUMNS[kind as RowKind].slice(0, 2).map(([name]) => name)).toEqual(lead)
+        }
+    })
+
     it('names no column twice in a kind', () => {
         for (const columns of Object.values(ROW_COLUMNS)) {
             const names = columns.map(([name]) => name)
@@ -39,11 +54,20 @@ describe('rowTemplate', () => {
 })
 
 describe('rowTiers', () => {
-    it('lets the phase go first on a ticket, then the chip, and keeps the title', () => {
+    it('lets the chip go first on a ticket, then the phase, and keeps the title', () => {
         const tiers = rowTiers('ticket')
-        expect(tiers.get('phase')).toBe('4xl')
-        expect(tiers.get('access')).toBe('2xl')
+        expect(tiers.get('access')).toBe('4xl')
+        expect(tiers.get('phase')).toBe('3xl')
         expect(tiers.has('title')).toBe(false)
+    })
+
+    it('lets money and tokens go before what names a row', () => {
+        const run = rowTiers('run')
+        expect(run.get('cost')).toBe('4xl')
+        expect(run.get('run')).toBe('md')
+        const tick = rowTiers('tick')
+        expect(tick.get('tokens')).toBe('4xl')
+        expect(tick.has('id')).toBe(false)
     })
 
     it('fits every column a list shows at a tier in that tier, the free one at its floor', () => {
@@ -86,7 +110,7 @@ describe('rowLayout', () => {
 
     it('needs no more places than index.css lists for Tailwind', () => {
         for (const columns of Object.values(ROW_COLUMNS)) {
-            expect(columns.length).toBeLessThanOrEqual(7)
+            expect(columns.length).toBeLessThanOrEqual(8)
         }
     })
 })
