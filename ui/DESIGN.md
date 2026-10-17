@@ -189,7 +189,10 @@ Rules:
   a link in a note would be a worker's link read as canopy's, with each character that hides text named
   (`<U+200B>`) on a `status-failed` tint, so it is seen. A digest is the prompt's own text in monospace, labelled
   `would be served at use` while recording. A run's page lists what it wrote and read, and reads `none, recording
-  only` for a run that read nothing because its tier was recording. The UI reads memory and writes none.
+  only` for a run that read nothing because its tier was recording. The memory page lists the tickets with notes in
+  force, a row each opening to its notes, which it reads only then; each list scrolls in its panel, and a row in force
+  that its digest's cap leaves out says so in its second line, in the same words for served and recording that the
+  digest's label keeps apart. The UI reads memory and writes none.
 - **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
   (`NewerBuild`): an accent button, the action to take, saying on hover why and that unsent text is lost. It never
   reloads on its own, since the operator may be typing. The page knows its build from the `canopy-build` meta tag the
