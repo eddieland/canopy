@@ -26,7 +26,7 @@ export function SearchBox() {
         }
     }
     const input = useRef<HTMLInputElement>(null)
-    const timer = useRef<number | undefined>(undefined)
+    const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
     useEffect(() => {
         function onKey(event: KeyboardEvent) {
