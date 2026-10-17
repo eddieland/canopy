@@ -55,7 +55,7 @@ permission:
   # transitions, creating tickets, writing files or branches through the API instead of git, deleting, forking, and
   # starting other agents or workflow runs. GitHub's `issue_write` creates and closes issues as well as labelling them,
   # and its PR update tool can close the PR; neither has a narrower name to deny, so the prompt keeps them to labels
-  # and the PR's title and body. tests/canopy/test_definitions.py checks these rules against real tool names.
+  # and the PR's title and body. tests/canopy/core/test_definitions.py checks these rules against real tool names.
   "*merge*": deny
   "*review_write*": deny
   "*pending_review*": deny

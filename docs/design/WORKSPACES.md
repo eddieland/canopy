@@ -199,9 +199,9 @@ api = 4                 # by repository name; wins over slots_per_repo
 ### What a pool guarantees
 
 What canopy takes from a pool, whichever implements it, is this list. Each guarantee is held by a case of the pool
-contract suite (`tests/canopy/test_pool_contract.py`), run against canopy's own pool, the fake, and real treehouse. A
-behavior with no case is not a guarantee, and a caller may rely only on what is listed here. The fake does not model
-git, so the guarantees about what is in a slot hold only for a pool of real worktrees.
+contract suite (`tests/canopy/core/test_pool_contract.py`), run against canopy's own pool, the fake, and real
+treehouse. A behavior with no case is not a guarantee, and a caller may rely only on what is listed here. The fake
+does not model git, so the guarantees about what is in a slot hold only for a pool of real worktrees.
 
 Leasing:
 

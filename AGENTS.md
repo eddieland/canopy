@@ -134,12 +134,12 @@ If code and the design disagree, the design doc wins until a decision entry says
 - SQLite: WAL mode, `PRAGMA foreign_keys=ON`, numbered migrations in `migrations/NNNN_name.sql` applied in order at
   startup, recorded in a `schema_migrations` table. Never edit a shipped migration; add a new one. The series was
   squashed into `0001_init.sql` once, for v0.1 (D068); that is not a precedent for editing one.
-  A new migration adds its hash to `SHIPPED` in `tests/canopy/test_db.py`, and a row to `SEED` for each table it
+  A new migration adds its hash to `SHIPPED` in `tests/canopy/core/test_db.py`, and a row to `SEED` for each table it
   creates; a test there applies every migration to a journal with data in it and fails on any row lost.
 - A query that returns a table's whole rows reads them as that table's row type in `core/records.py`
   (`records.fetch_all`, `records.fetch_one`), not as `sqlite3.Row`. A new table gets its row type in the PR that adds
-  it, and an old one when a PR already changes its queries. `tests/canopy/test_records.py` holds each row type to its
-  table, so a migration that adds a column to a typed table adds the field too. A status, kind, or phase column is a
+  it, and an old one when a PR already changes its queries. `tests/canopy/core/test_records.py` holds each row type to
+  its table, so a migration that adds a column to a typed table adds the field too. A status, kind, or phase column is a
   field of its `core/vocab.py` enum, so the row carries the member and refuses a value the vocabulary does not hold. A
   helper that reads the same columns from several tables, some still untyped, reads them through `records.columns`.
 - A run's and a tick's status, a run's kind, and a ticket's phase are closed vocabularies in `core/vocab.py`, each a
@@ -147,7 +147,7 @@ If code and the design disagree, the design doc wins until a decision entry says
   journal where it branches on it. A branch over one is a `match` ending in `case _: assert_never(...)`, so a new value
   fails the type check until every branch handles it. click matches an enum choice by its name, so a `click.Choice` over
   one takes its values. A table made from M36 on constrains each `status`, `kind`, and `phase` column with
-  `CHECK (column IN (...))`; `tests/canopy/test_db.py` fails on one that does not.
+  `CHECK (column IN (...))`; `tests/canopy/core/test_db.py` fails on one that does not.
 - Hard guards live in code, judgment lives in prompts. Capacity limits, attempt limits, cooldowns, "never merge", and
   "one worker per ticket" are enforced by the harness regardless of what the overseer asks for.
 - Log with `logging`, JSON lines to `.canopy/canopy.log` in the workspace. Every tick has an id that appears in every
@@ -193,6 +193,11 @@ If code and the design disagree, the design doc wins until a decision entry says
 - Every test directory has an `__init__.py`, `tests/` included (D019). ruff's `INP001` fails the lint on one that does
   not. The root one matters most: without it, `tests/canopy/` is imported as a package named `canopy` and shadows
   `src/canopy`.
+- A test module sits parallel to the package it tests: `tests/canopy/runs/` holds the tests of `canopy.runs`, and
+  `tests/canopy_sandbox/` those of the workspace member `canopy_sandbox`. A feature's tests go with the package that
+  owns it, even when they drive it through the CLI; only tests of canopy as a whole (its layers, its models, its
+  property tests, the OpenCode canary) sit in `tests/canopy/` itself. `tests/canopy/test_layers.py` fails on a test
+  module anywhere else.
 - One end-to-end test runs `canopy tick --dry-run` against the fakes and asserts on the `decisions` and `ticks`
   tables.
 - What canopy renders whole, such as the overseer's state block, is held by a snapshot test: a journal written by hand,

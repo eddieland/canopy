@@ -1,11 +1,13 @@
 """The package layers of DESIGN §5 (D041), checked on every import in `src/canopy`, `TYPE_CHECKING` ones included;
-and the tests' one rule of the same kind: a test module imports from no other."""
+and the tests' two rules of the same kind: a test module imports from no other, and sits parallel to what it tests."""
 
 import ast
 from pathlib import Path
 
 PACKAGE = Path(__file__).resolve().parents[2] / "src" / "canopy"
 TESTS = Path(__file__).resolve().parents[1]
+# The workspace members' packages (D041), each `packages/NAME/src/PACKAGE`.
+MEMBERS = Path(__file__).resolve().parents[2] / "packages"
 
 # Top to bottom. A module may import from its own package and from any package in a lower layer. It may not import
 # from a higher layer or from another package in its own layer: features stay independent of each other, and shared
@@ -138,3 +140,18 @@ from tests.canopy import test_web
         "imports tests.canopy.test_loop, a test module",
         "imports tests.canopy.test_web, a test module",
     ]
+
+
+def test_the_tests_mirror_the_packages() -> None:
+    """A test module sits in the directory parallel to the package it tests: `tests/canopy/runs/` for `canopy.runs`,
+    and `tests/canopy_sandbox/` for the workspace member `canopy_sandbox`. Tests of canopy as a whole, such as this
+    one, sit in `tests/canopy/`, and tests of the fakes in `tests/`."""
+    packages = [PACKAGE, *(p.parent for p in PACKAGE.rglob("*/__init__.py"))]
+    allowed = {TESTS, *(TESTS / "canopy" / p.relative_to(PACKAGE) for p in packages)}
+    allowed |= {TESTS / p.parent.name for p in MEMBERS.glob("*/src/*/__init__.py")}
+    found = [
+        f"{path.relative_to(TESTS.parent)}: in no directory parallel to a package"
+        for path in sorted(TESTS.rglob("test_*.py"))
+        if path.parent not in allowed
+    ]
+    assert not found, "\n".join(found)

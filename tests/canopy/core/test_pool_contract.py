@@ -206,7 +206,7 @@ def pool(request: pytest.FixtureRequest, tmp_path: Path, journals: Journals) -> 
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     state = tmp_path / "treehouse.json"
-    fakes = Path(__file__).resolve().parents[1] / "fakes"
+    fakes = Path(__file__).resolve().parents[2] / "fakes"
     if impl is Impl.FAKE:
         (bin_dir / "treehouse").symlink_to(fakes / "treehouse")
     elif impl is Impl.TREEHOUSE:

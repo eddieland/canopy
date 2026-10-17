@@ -344,8 +344,8 @@ canopy, not built after an incident.
   prefixes for `worker_cmd`, `private_worker_cmd`, `split_cmd`, `setup_cmd`, and chore `cmd`, the allowlist, HTTPS
   remotes, and Ubuntu 24.04's restriction on unprivileged user namespaces. `canopy init` prints the suggested
   `worker_cmd` and writes nothing.
-- The canary (HOST_ISOLATION §6), `tests/canopy/test_sandbox_canary.py`, opt-in with `CANOPY_SANDBOX_CANARY=1`: a
-  plain script run through the real `worker_cmd` prefix and the shipped wrapper, every denial and every positive
+- The canary (HOST_ISOLATION §6), `tests/canopy_sandbox/test_sandbox_canary.py`, opt-in with `CANOPY_SANDBOX_CANARY=1`:
+  a plain script run through the real `worker_cmd` prefix and the shipped wrapper, every denial and every positive
   control §6 lists, the prompt property test included. A Linux CI job runs it with bubblewrap and `srt`.
 - Settled before Accept, each in HOST_ISOLATION §7 or a decision: what treehouse's `return` runs in a slot; caches that
   tools keep as git repositories under the per-run object directory; OpenCode's local MCP servers inside the sandbox.
@@ -361,39 +361,39 @@ macOS machines, then a day of `canopy loop` with sandboxed workers pushes and op
 tries to read `~/.ssh` or write `~/.config/canopy` is refused.
 
 Status: in progress. The per-run object directory and the `run_slots` link are in: `_run` and reconcile tidy each slot
-before it is returned, and `tests/canopy/test_run_objects.py` holds the fakes-based tests above. Checking them found
-that the tidy step must also drop the slot's own refs, and that `_run`'s own push must put origin's remote-tracking ref
-back (HOST_ISOLATION §4.2). The wrapper and a policy template for each role are in `packages/canopy-sandbox`, tested
-against a fake `srt` in `tests/canopy/test_sandbox_wrapper.py`, `_run` with the wrapper as `worker_cmd`'s prefix
-included. Trying them under `srt` 0.0.79 and bubblewrap found that `srt` binds an `allowRead` path over an
-`allowWrite` path beneath it, so the wrapper names the common git directory entry by entry, and that a write under a
-denied directory lands in a `tmpfs` and is dropped, so the canary must check writes on the host (HOST_ISOLATION §4.2,
-§6). `docs/SANDBOX.md` is the operator's guide, and `canopy init` prints the suggested `worker_cmd`. Running the
-guide's check under `srt` 0.0.79 and bubblewrap 0.9 found that a check run through the wrapper outside canopy must use
-a worktree of its own, since nothing tidies a slot it commits in, and that a process started with `setsid` inside the
-sandbox ends with it. `canopy sandbox setup` installs the wrapper's pinned `srt` in `~/.local/share/canopy/`; trying it
-found that `srt`'s seccomp helper runs inside the sandbox, so under the `$HOME` a template denies it is not found
-unless the wrapper re-allows reading `srt`'s `vendor/` directory, which it now does wherever `srt` is installed. The
-canary is `tests/canopy/test_sandbox_canary.py` (`make sandbox-canary`), and CI's `sandbox-canary` job runs it on Linux
-and macOS after `canopy sandbox setup`. Running it under `srt` 0.0.79 and bubblewrap 0.9 found that `srt` makes its
-network sockets in the run's temp directory, so a long system temp directory fails every run; the wrapper now refuses
-one on Linux with a message that says so. macOS's deep per-user temp directory, which `srt`'s source suggested was too
-long, is not: the macOS job runs a case under it (HOST_ISOLATION §7). Run against a fake `srt` that sandboxes nothing,
-the canary fails every case but its positive controls. It passes in CI on Ubuntu 24.04, with the AppArmor restriction
-lifted as docs/SANDBOX.md says, and on macOS, both with `srt` 0.0.79. What treehouse's `return` runs in a slot is
-settled from its source (HOST_ISOLATION §7): plain git, which reads only what a sandboxed worker cannot write. Tracing
-it found that the slot's own `commondir` and `gitdir` were writable, and a worker that rewrote `commondir` had every
-git on the host in its slot, canopy's included, read a config it wrote; the wrapper now denies writing both, the
-canary checks it, and `_run` and reconcile check `commondir` as they do the `.git` link. Caches that tools keep as git
-repositories are settled too: git's variables, set for the whole run, sent the objects of Go's module sources and of
-OpenCode's snapshots, which persist under its data directory, to the run's directory, so the wrapper now puts a `git`
-of its own first on `PATH` that sets them in the run's worktrees only; pre-commit was never affected. OpenCode's MCP
-servers are settled from its source: a local one is OpenCode's child and runs under the worker's policy, and one
-started with `docker run` cannot work, since the sandbox refuses Unix sockets, which the canary now checks.
-`review_cmd`, HOST_ISOLATION §7's last open wrapping question, is settled as a role of its own, `review`, with a
-template that reads the checkout through the review directory's link and writes none of it, no object directory, and
-no `github.com`; the canary runs its HOME and state attempts as `review` too, and checks that a review writes nothing
-in the checkout. Run against the fake `srt`, every review denial fails and its positive control passes.
+before it is returned, and `tests/canopy/runs/test_run_objects.py` holds the fakes-based tests above. Checking them
+found that the tidy step must also drop the slot's own refs, and that `_run`'s own push must put origin's
+remote-tracking ref back (HOST_ISOLATION §4.2). The wrapper and a policy template for each role are in
+`packages/canopy-sandbox`, tested against a fake `srt` in `tests/canopy_sandbox/test_sandbox_wrapper.py`, `_run` with
+the wrapper as `worker_cmd`'s prefix included. Trying them under `srt` 0.0.79 and bubblewrap found that `srt` binds an
+`allowRead` path over an `allowWrite` path beneath it, so the wrapper names the common git directory entry by entry, and
+that a write under a denied directory lands in a `tmpfs` and is dropped, so the canary must check writes on the host
+(HOST_ISOLATION §4.2, §6). `docs/SANDBOX.md` is the operator's guide, and `canopy init` prints the suggested
+`worker_cmd`. Running the guide's check under `srt` 0.0.79 and bubblewrap 0.9 found that a check run through the wrapper
+outside canopy must use a worktree of its own, since nothing tidies a slot it commits in, and that a process started
+with `setsid` inside the sandbox ends with it. `canopy sandbox setup` installs the wrapper's pinned `srt` in
+`~/.local/share/canopy/`; trying it found that `srt`'s seccomp helper runs inside the sandbox, so under the `$HOME` a
+template denies it is not found unless the wrapper re-allows reading `srt`'s `vendor/` directory, which it now does
+wherever `srt` is installed. The canary is `tests/canopy_sandbox/test_sandbox_canary.py` (`make sandbox-canary`), and
+CI's `sandbox-canary` job runs it on Linux and macOS after `canopy sandbox setup`. Running it under `srt` 0.0.79 and
+bubblewrap 0.9 found that `srt` makes its network sockets in the run's temp directory, so a long system temp directory
+fails every run; the wrapper now refuses one on Linux with a message that says so. macOS's deep per-user temp directory,
+which `srt`'s source suggested was too long, is not: the macOS job runs a case under it (HOST_ISOLATION §7). Run against
+a fake `srt` that sandboxes nothing, the canary fails every case but its positive controls. It passes in CI on Ubuntu
+24.04, with the AppArmor restriction lifted as docs/SANDBOX.md says, and on macOS, both with `srt` 0.0.79. What
+treehouse's `return` runs in a slot is settled from its source (HOST_ISOLATION §7): plain git, which reads only what a
+sandboxed worker cannot write. Tracing it found that the slot's own `commondir` and `gitdir` were writable, and a worker
+that rewrote `commondir` had every git on the host in its slot, canopy's included, read a config it wrote; the wrapper
+now denies writing both, the canary checks it, and `_run` and reconcile check `commondir` as they do the `.git` link.
+Caches that tools keep as git repositories are settled too: git's variables, set for the whole run, sent the objects of
+Go's module sources and of OpenCode's snapshots, which persist under its data directory, to the run's directory, so the
+wrapper now puts a `git` of its own first on `PATH` that sets them in the run's worktrees only; pre-commit was never
+affected. OpenCode's MCP servers are settled from its source: a local one is OpenCode's child and runs under the
+worker's policy, and one started with `docker run` cannot work, since the sandbox refuses Unix sockets, which the canary
+now checks. `review_cmd`, HOST_ISOLATION §7's last open wrapping question, is settled as a role of its own, `review`,
+with a template that reads the checkout through the review directory's link and writes none of it, no object directory,
+and no `github.com`; the canary runs its HOME and state attempts as `review` too, and checks that a review writes
+nothing in the checkout. Run against the fake `srt`, every review denial fails and its positive control passes.
 TRUST_MODEL T4 and T6 name the sandbox as an opt-in control, with its residuals: the shared kernel, the unwrapped
 overseer and harness calls, `/tmp/claude`, and exfiltration through an allowed host with the credentials a run holds
 (D118).
@@ -913,7 +913,7 @@ What treehouse does that canopy relies on or works around, from its source at th
 
 **Stage 1, the contract.** No behavior changes.
 
-- `tests/canopy/test_pool_contract.py`: a case for each guarantee above and each one `core/treehouse.py`'s callers
+- `tests/canopy/core/test_pool_contract.py`: a case for each guarantee above and each one `core/treehouse.py`'s callers
   depend on (reconcile, dispatch, reviews, sync, the worktrees page). It runs against the fake on every `make check`,
   and against real treehouse when `treehouse` is on `PATH` (`make pool-contract`).
 - A CI job, on Linux, that builds treehouse at the pinned commit with `make treehouse` and runs the suite. Go
@@ -1258,7 +1258,7 @@ each check recorded on the `Status:` line as it passes.
   count, review date, and invalidated. One active row per scope, ticket, and key. It adds too what each worker run
   was rendered under: each tier's mode and the ids rendered. Their row types in `core/records.py`, their vocabularies
   (the modes among them) in `core/vocab.py`, `CHECK` constraints, and their hashes and seed rows in
-  `tests/canopy/test_db.py`. Built whole in this stage, so stage 2 adds no migration.
+  `tests/canopy/core/test_db.py`. Built whole in this stage, so stage 2 adds no migration.
 - A worker's result gains `notes` (`{key, text}`, text at most 400 characters) and `drop_notes` (keys). `_run`
   validates them and writes them for the run's own ticket, read from its journal row, never from the result, so no run
   writes another ticket's notes. A note under an active key supersedes it; nothing is edited in place. A body equal,

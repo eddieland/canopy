@@ -295,6 +295,21 @@ def git_pool(canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path) -> It
         yield seed_git_pool(canopy_env, treehouse_state, tmp_path)
 
 
+@pytest.fixture
+def worktree_pool(
+    canopy_env: CanopyEnv, git_pool: GitPool, treehouse_state: Path, tmp_path: Path
+) -> tuple[Path, list[Path]]:
+    """The primary clone and two worktree slots of it, which the fake treehouse leases instead of `git_pool`'s."""
+    primary = tmp_path / "primary"
+    git("clone", "--quiet", str(git_pool.origin), str(primary), cwd=tmp_path)
+    slots = [tmp_path / "wpool" / name / "repo" for name in ("1", "2")]
+    for slot in slots:
+        git("worktree", "add", "--quiet", "--detach", str(slot), cwd=primary)
+    state = [{"name": str(i), "path": str(p), "status": "available"} for i, p in enumerate(slots, 1)]
+    treehouse_state.write_text(pool_state(canopy_env.repo, state, max_trees=len(slots)))
+    return primary, slots
+
+
 def seed_git_pool(canopy_env: CanopyEnv, treehouse_state: Path, tmp_path: Path) -> GitPool:
     origin = tmp_path / "origin.git"
     origin.mkdir()
