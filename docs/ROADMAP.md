@@ -538,7 +538,8 @@ The shape the four share:
   with the source (principle 1, §22): an observation says what the connector saw and when, never what is true now.
 - The harness still imports no tracker or VCS client and holds no token (D003). A connector is a separate program
   with credentials of its own, as the Slack sink is (`packages/`, stdlib only, nothing from canopy). canopy ships
-  `canopy-connect-github` (GitHub Issues and PRs, with the token `gh` holds) and `canopy-connect-jira` (Jira Cloud's
+  `canopy-connect-github` (GitHub Issues and PRs, with the token `gh` holds; M53 builds its first slice, a PR's review
+  threads into `observed_reviews`, in the workspace member that also posts) and `canopy-connect-jira` (Jira Cloud's
   REST API, an email and API token from an operator-only file); another tracker is the operator's program speaking
   the same contract, the only thing the harness knows of any of them. In the same PR, AGENTS.md's "no tracker code"
   line (Toolchain) is scoped to the harness package, its "a tracker adapter interface" line (Do not build) is
@@ -827,8 +828,8 @@ applies to these reviews first.
 
 ## M43. Publishing a review on someone else's PR
 
-REQUIREMENTS N1, DESIGN §21, D114. Needs M32, and M42 for the PRs it applies to most. Sketch only; the design comes
-first. Asked for by the operator (2026-10-15): on a review of a PR the loop does not own, where M32's `send to a
+REQUIREMENTS N1, DESIGN §21, D114. Needs M32 and M53, and M42 for the PRs it applies to most. Sketch only; the design
+comes first. Asked for by the operator (2026-10-15): on a review of a PR the loop does not own, where M32's `send to a
 worker` does not apply, iterate on the review in canopy, by hand or with an agent, and then send it to GitHub as a
 review on the PR. This is D114's revisit trigger, "the operator wants the web UI's shadow review published": D114
 changes, with the operator's approval, from "posts nothing" to "posts nothing the operator has not approved, word for
@@ -837,7 +838,8 @@ word".
 - Only for reviews of PRs that are not the loop's own (`review.query` matches, M42's requests): the loop's own PRs
   keep M32's send to a worker, and their reviews stay in the journal.
 - A draft is a journal fact, versioned, made from a review run: its summary and findings, each finding's text the
-  operator may edit, drop (M32's dismissal), or add to. Iterating with an agent is a run of its own that reads the PR
+  operator may edit, drop (M32's dismissal), or add to. These are M53's drafts, with a review run as their source, on
+  M53's diff with cards on its lines. Iterating with an agent is a run of its own that reads the PR
   and the draft, writes nothing anywhere, and reports a new version as a result line, as the reviewer does; the
   operator's notes to it are a reply on the draft. The draft's text is untrusted until the operator approves a
   version, since the reviewer and the reviser wrote it from the PR's text (T1).
@@ -845,11 +847,12 @@ word".
   is, and at most once per version. What reaches GitHub is that version verbatim: findings anchored on the diff as
   inline comments at their `path:line`, the rest in the review's body. A comment review only: canopy never approves or
   requests changes (TRUST_MODEL §6). The journal records what was posted, when, and where.
-- canopy imports no GitHub client: the post goes through the agent runtime's MCP server or a command template, the
-  harness checking afterwards that what was posted is the approved text. Open which, and whether canopy should only
-  create a pending review for the operator to submit on GitHub themselves, so that submitting stays a human's click.
-- TRUST_MODEL §6 (never submit a PR review, unless this changes it), T1, T5 (what a posted review says it is, with no
-  bot identity, so it speaks in the operator's name), T6, and T8 (publishing from the web channel), and D114.
+- canopy imports no GitHub client: the post goes through M53's `canopy-post-github`, a separate program canopy ships,
+  which posts the approved text verbatim and returns what it made, so no agent writes the review. Open: whether canopy
+  should only create a pending review for the operator to submit on GitHub themselves, so that submitting stays a
+  human's click.
+- TRUST_MODEL §6 (a comment review of approved text only, as M53 changes it), T1, T5 (what a posted review says it is,
+  with no bot identity, so it speaks in the operator's name), T6, and T8 (publishing from the web channel), and D114.
 - Open: whether a published review is followed on the next commit (M32's open question of a finding's identity across
   commits); whether the loop's own PRs ever get it, for a coworker's benefit; a bound on what one review may post.
 
@@ -1436,6 +1439,302 @@ a shell. Today the web UI reads memory and writes none, and T8's list of web wri
 Accept: the tests above pass. Live: with proposals at `record`, the operator promotes a done ticket's note in their own
 words from its page and rejects a proposal from the attention list; `canopy memory lessons` shows the lesson, named as
 from that note, and `canopy memory proposals` no longer lists the rejected one.
+
+Status: not started.
+
+## M53. Review replies the operator sends
+
+REQUIREMENTS R20, DESIGN §8, §21, and §22, TRUST_MODEL T1, T2, T5, T6, and T8, D003, D069. Needs M32. Asked for by
+the operator (2026-10-17): a `resume` worker answers coworkers' review comments in the operator's name before the
+operator has seen what it says, and every answer starts with `CANOPY:`. The operator wants to read each planned reply
+in place, on its thread on the PR's diff, edit or drop it, and send the ones they approve, as their own words and
+without the mark. Sketch only; the design comes first, as a new design file (§29). The operator settled its open
+questions on 2026-10-17: canopy ships its own GitHub program (C7, D003), `approve` is the default, nothing is resolved,
+every comment a worker would post is drafted, a newer draft supersedes, a send is one comment review, the push does not
+wait, and GitHub Enterprise is supported.
+
+- **The setting.** `trust.review_replies`, private (T7, since a shared file must not decide what is said in the
+  operator's name): `"approve"`, the default, where the operator sends every comment a worker would have posted, or
+  `"post"`, where workers post as today. The default changes what workers do on upgrade, so the release notes and
+  `canopy status` say so.
+- **The worker drafts and posts no comment.** Under `approve`, a worker, public or private, pushes its changes as today
+  (a push never waits: M54 is how the operator approves work before it is pushed) and comments nowhere. Its result line
+  gains `drafts`: one per review thread it answers (the thread's id, the reply's text, and whether it made the change,
+  declined it, or answered a question), at most one top-level comment on the PR, and its question on the ticket when it
+  is blocked. A worker's own PR body and title are not drafts: they describe the change, not the operator's words. A
+  decline it would have argued on the PR is a draft too, and the run still reports `blocked` with the disagreement. At
+  most 30 a run, each bounded and refused with hidden characters, as memory's notes are (DESIGN §28). The prompts'
+  "Reply on the PR to each comment you addressed", their ticket comments, and their comment marks move behind the
+  setting; under `post` each prompt is the same bytes as today, held by a snapshot.
+- **The marks change use, not meaning.** The rule that a comment carrying the marks is never authority stays, on both
+  settings (D069). Under `approve` the marks go on what still posts without the operator: a question on a tracker with
+  no post command (Jira today, until a Jira post command exists beside M36's Jira connector), and every comment under
+  `post`. What the operator sent carries none.
+- **The threads, read in code.** canopy reads review threads itself, not through the worker: after the worker ends,
+  `_run` runs canopy's GitHub reader (below) for each PR the run pushed to, and records each review thread, its path,
+  line, and side, whether it is outdated or resolved, and each comment's id, author login, time, and bounded body. A
+  draft naming a thread a whole read did not return is refused, with a harness note on the run. A read that fails, times
+  out, or ends without its `end` line refuses nothing: the run's drafts are kept unchecked, with a harness note,
+  `drafts_waiting` says the threads could not be read, each tick reads the PR again until one read is whole, and no
+  unchecked draft can be sent, so an outage delays the replies and never drops them. The page shows the thread as the
+  reader saw it, never the worker's copy of it. The rows are M36's `observed_reviews`, which this milestone creates and
+  M36 fills for every watched PR. PR review comments thus join the journal (DESIGN §22, Open), read only, authorizing
+  nothing.
+- **canopy's GitHub program.** A uv workspace member, `packages/canopy-github`, stdlib only and importing nothing from
+  canopy, as the Slack sink is. It reads the token `gh` holds when it runs, so the harness never holds one (T2). Two
+  commands: `canopy-connect-github`, the reader, which here answers one request, a PR's review threads, in M36's
+  `review` line shape, and which M36 grows into the whole connector; and `canopy-post-github`, the first program canopy
+  ships that writes to GitHub, which takes on stdin one PR's approved drafts and posts them verbatim as one comment
+  review (a pending review, each reply added to its thread, a top-level comment as the review's body, submitted as a
+  `COMMENT`), or a ticket's question as an issue comment, and prints each new comment's id and URL. It never approves,
+  requests changes, or resolves a thread. The host is the PR's own, read from its URL by the program, never by the
+  harness, with `gh`'s token for that host, so GitHub Enterprise works as github.com does. Configured as M36's
+  connectors are (argv, no shell, a timeout, private), this milestone defining the `vcs` source's table and the post
+  command beside it.
+- **Sending is the operator's act.** Drafts are a journal fact per run, numbered as a review's findings are. From the
+  PR's page or the CLI the operator edits a draft's text, drops it, or sends it. Sending carries the hash of the text
+  as the operator last saw it, and is refused `stale` when the draft changed since, as M41's config write is; it
+  re-reads the thread first and is refused `thread_changed` when a comment arrived after the draft was made, the page
+  showing the new comment, and sending again after that posts. It is refused `inside_run` as `send` is, and posts a
+  draft at most once. What reaches GitHub is that text, verbatim, with no comment marks: the operator approved it word
+  for word, so it is their comment. The drafts the operator sends together go as one review, so a reviewer gets one
+  notification, and each sent draft's journal record holds the comment's id, URL, and time, which run drafted it, and
+  whether the operator edited it. A newer run's draft for the same thread supersedes an unsent one, shown struck, and
+  the page warns when the one superseded carried the operator's edits. Nothing canopy sends resolves a thread: that
+  stays the reviewer's.
+- **Read back by id, not by mark.** A sent reply carries no mark, so canopy knows it by the comment id the post
+  returned. The state block lists, per PR, the comments the operator sent through canopy; the overseer's and the
+  `resume` worker's prompts say those are neither review feedback nor a go-ahead, and the `review` cursor passes them.
+  M37 moves that check into code. Everything a worker posts itself keeps the marks (D069): its ticket comments, and
+  its replies under `post`.
+- **Waiting drafts.** A run with unsent drafts raises `drafts_waiting`, an operator item on the attention list, open
+  until each draft is sent or dropped or the PR merges or closes. A question drafted for the ticket shows on the
+  ticket's page, its sending answering nothing until an authorized replier does. It holds nothing else: the push already
+  happened, and the cursor passed the comments the run was given.
+- **In place on the PR.** The PR's page gains its threads on the diff: the diff at the run's pushed head, which `_run`
+  keeps as `_review` keeps the reviewed commit's (§21, The diff), each thread at its line, an outdated one under its
+  file as a finding outside the diff is, its comments as text by their authors, and under it the draft, editable as
+  plain text, with Send and Drop. A thread no draft answers shows as it is. The attention item opens this view.
+- **Code shared, built once.** The review UI is becoming the operator's main surface for PRs, so the build extracts
+  what M32, M43, M44, and this milestone each need, rather than copying it:
+  - The diff with cards on its lines. `ReviewDiffPanels`, `review-folds`, and `findingAnchor` (M32) take any item
+    anchored at `path:line`, a finding, a thread, or M43's draft comment, with the page saying how each card draws; the
+    fold budget keeps the context around every placed line. M32's page keeps its look, held by its Playwright shots.
+  - Keeping and serving a diff. `_review`'s diff code moves from `reviews` down to `core`, since `runs` may not import
+    a feature (§5), and the server reads both kinds through its one bounded reader.
+  - Drafts. A draft, its versions, and sending one exactly as approved live in `core`, called by the CLI and the
+    server alike, as `core/plans.py` and M52's memory verbs are. M44's approval by hash, which `_run` checks before it
+    copies a plan, is the pattern. M43's review drafts are the same records with a review run as their source.
+  - Threads. A PR's thread cards and a plan's comment threads (`plan-threads.ts`, M44) share the card: comments with
+    their authors and times, then the operator's reply box. Their models stay apart: a plan's threads are the
+    operator's own text, a PR's are other people's (T1).
+  - The GitHub program. One workspace member for M36's connector, this milestone's thread reads and replies, and M43's
+    review post, so there is one token read, one GraphQL client, and one fake.
+  - The threads view and its ids. M54's feedback plans show their proposals on the same threads, by the same ids.
+- **TRUST_MODEL**, in the PR that builds it, which the operator approves by merging: T1 (a draft is untrusted text,
+  written from coworkers' comments, until the operator sends it, and rendered as text); T2 (a second program canopy
+  ships makes outbound calls, with `gh`'s token, never the harness's); T5 (a sent reply speaks as the operator,
+  unmarked, word for word as approved, and the journal says which run drafted it; the marks stay on what workers post
+  themselves); T6 (under `approve` a worker's reply leaves the machine only as the operator sent it; the worker's
+  definition denies the GitHub server's reply and review-comment tools by name, as defense in depth); T8 (the web
+  channel gains editing, dropping, and sending drafts; its residual gains that a stolen session can post text of its
+  choosing, as the operator, on a PR or ticket of the loop's own a run drafted for); §6 ("never submit a PR review of
+  any kind" becomes never one that approves or requests changes: a comment review only, of text the operator sent word
+  for word, the change M43 also needs). D003 already records the direction (C7); its building PR states it as built.
+  AGENTS.md's "No GitHub client" line is scoped to the harness package, as M36 plans. D069 notes that a comment the
+  operator sent through canopy is known by id.
+- Tests with the fakes: a fake reader and post command that record what they are sent, as the `notified` sink does; a
+  `resume` under `approve` posts nothing and records its drafts; a draft naming an unread thread refused; a failed read
+  keeping the drafts unchecked and unsendable until a later read; a send posts the text verbatim and records the id; an
+  edit after the page read refused `stale`; a thread with a new comment refused `thread_changed`; a second send posts
+  nothing; `inside_run` refused; drafts sent together posted as one `COMMENT` review and never approving; a PR on an
+  Enterprise host posted to that host; a newer draft superseding an older; the sent ids in the state block, a snapshot;
+  `post`'s prompts unchanged, a snapshot; Vitest for the draft card, Playwright for sending from the PR's page.
+- A blocked worker adds the `needs_human` label as today, whether or not its question waits as a draft: labels are
+  not speech, and the operator left it to the simplest rule (2026-10-17).
+
+Accept: written with the design, before work starts. Live, once built: on one of the loop's PRs with a coworker's
+review comments, a `resume` under `approve` pushes its changes and posts nothing; the operator reads its drafts on their
+threads on the PR's page, edits one, drops one, and sends the rest; GitHub shows exactly the sent text under the
+operator's name with no mark; the next tick dispatches nothing for the sent replies.
+
+Status: not started.
+
+## M54. Plans before feedback runs
+
+REQUIREMENTS R21, DESIGN §7, §21, and §25, TRUST_MODEL T1, T3, T7, and T8, D089. Needs M44, M53, and M56. Asked for by
+the operator (2026-10-17): plan each `resume` before it runs, so that the operator accepts planned fixes rather than
+first sorting the feedback into trusted and untrusted reviewers' (D089), and plan again as new feedback or a new CI
+state reaches the PR before they accept. Sketch only; the design comes first, in §25 beside M44's plans.
+
+- **The setting.** `policy.feedback_plan`, `"off"` or `"approve"`. Private, unlike `policy.plan`: it is stricter for a
+  trusted reviewer's feedback, which waits for the operator, and looser for anyone else's, which starts a read-only
+  plan run without their go-ahead, so a shared file must not choose it (T7). `"off"` is canopy as today.
+- **What a feedback plan covers.** Under `approve`, every `resume` but `pushed_no_pr`'s waits on one. Feedback no longer
+  splits by reviewer before a plan: each new item on the unit's PR (a review comment from anyone, canopy's review
+  findings, a failed check, a conflict with the base, an authorized reply on the ticket) goes to the planner, with the
+  PR's checks at its head. A failed check is an item because M56 makes fixing CI part of `resume`, so one plan, and one
+  run, covers a round's comments and its red CI together. A round that is only red CI waits on its plan too, as the
+  operator asked; M55's triage can waive a trivial one. A worker's own comments and the replies the operator sent
+  through canopy (M53) are not items. The plan shows each item's author, and whether they are trusted, so the operator
+  weighs it; trust no longer decides what runs.
+- **The planner.** M44's planner, definition, desk, prompt shape, and file, with the PR and its items in place of a
+  ticket's first plan; it posts nothing and pushes nothing. Its plan is a markdown file the operator reads, edits, and
+  comments on as M44's are, with one section per item, and its result line lists each item it covers by M53's thread or
+  comment id with what it proposes: `change`, `decline`, `ask`, or `leave`, and for a change or a decline the reply it
+  would draft. An id the reader did not return is refused, with a harness note on the run. A run kind of its own,
+  with `policy.max_feedback_plan_attempts` per unit (default 6), raised with `canopy grant`, never reset (D030).
+- **Approving is the go-ahead.** The operator approves the plan whole, or ticks the items to address, from the PR's
+  page or `canopy plan`. Approval records the file's hash, as M44's does, and an operator message on the ticket naming
+  the plan and the items to address and to leave, by number, never quoting them, as M32's `send` does: the plan's text
+  stays data (T1), and the message is the instruction. The next tick dispatches the `resume` with the approved plan as
+  `{{PLAN}}` and its items, refused `plan_changed` as M44's is. `untrusted_review` is not raised for an item a feedback
+  plan covers; `plan_review` is, naming the PR. The cursor passes every item the approval named.
+- **Re-planning.** A feedback plan records what it was written against: the PR's head, the newest item it covers, and
+  each check's conclusion at that head, from M53's reader, which this milestone extends with M36's `check` line for
+  one PR. While a plan waits, the reader reads its PR each tick, and the harness marks the plan `stale`, in code, when
+  the head moved, an item arrived, or a check's conclusion changed. A stale plan is planned again once the PR has had
+  no new item for `policy.feedback_quiet_minutes` (default 10), so a reviewer's ten comments in five minutes make one
+  plan, not ten. The new plan carries the old one, the operator's edits and comments on it, and what changed; it
+  supersedes the old one, and a plan run already running is not stopped. Approving a stale plan is refused `stale` the
+  first time, naming what changed, and approving again after that approves it; feedback after an approval waits for
+  the next plan.
+- **In place on the PR.** The plan shows on M53's threads view: each thread carries the plan's proposal and its section,
+  the checks the plan read sit above the diff, and a stale plan says what changed since. Once the `resume` runs, the
+  same thread shows its draft reply (M53) under the proposal it carried out.
+- **Code shared.** Nothing new to build twice: M44's planner, gate, approval by hash, plan editor, and margin comments;
+  M53's reader, threads view, and diff with cards on its lines; M32's `send`, whose message is the approval's. Item
+  ids are M53's, so a plan's items, a draft's thread, and an observed review comment are one id.
+- **TRUST_MODEL**, in the PR that builds it: T1 (under `approve`, any reviewer's feedback starts a read-only plan run
+  without the operator's go-ahead, and a worker acts only on items the operator approved; D089's gate becomes the
+  approval on PRs a feedback plan covers); T3 (feedback plan attempts per unit, and the quiet period, in code, so a
+  stream of comments from a bot spends a bounded number of plan runs); T7 (`policy.feedback_plan` is private); T8
+  (approving a feedback plan, whole or by item, is among the web channel's writes, as `canopy plan --approve` is).
+  D089 gains the revisit it implies: with feedback plans on, trust labels inform the operator rather than gate a run.
+- Tests with the fakes: a trusted reviewer's comment under `approve` dispatches a feedback plan and no `resume`; an
+  untrusted one does the same and raises no `untrusted_review`; an approval by item sends a `resume` with exactly those
+  items; a new comment, a new head, and a changed check each mark a waiting plan `stale`; the quiet period holds a
+  re-plan; approving a stale plan refused once; the attempt limit; `"off"` leaves every snapshot unchanged.
+- **A plan that changes nothing.** A plan whose items are all `leave`, `decline`, or `ask` changes no code, so under
+  M53's `approve` it needs no approval: its `resume` only drafts the replies, which wait on the operator anyway. Under
+  `post` it needs approval as any plan does, since its replies would go out unseen.
+- Settled by the operator (2026-10-17): the quiet period is 10 minutes by default, six feedback plans a unit, and the
+  setting private.
+- **Drafts start from the plan.** The `resume` that follows an approved plan starts each draft (M53) from the reply
+  the plan proposed for its item, changing it only where the work departed from the plan, and the threads view marks
+  what changed from the approved proposal, as the plan page marks what changed between plans (`plan-diff.ts`). The
+  operator rereads only the departures (left to judgment by the operator, 2026-10-17).
+
+Accept: written with the design, before work starts. Live, once built: on one of the loop's PRs, a coworker and a bot
+each leave review comments; one feedback plan covers both; a new comment and a red check before the operator approves
+make one new plan after the quiet period; the operator approves it with one item unticked; the `resume` that follows
+addresses exactly the ticked items.
+
+Status: not started.
+
+## M55. Trivial work skips its plan
+
+REQUIREMENTS R22, DESIGN §25, TRUST_MODEL T1, T3, T6, and T7. Needs M44; its feedback half needs M54. Asked for by
+the operator (2026-10-17): with plans on, a typo fix or a one-line config change costs a planner run and the operator's
+approval for a plan nobody needed. A smaller, cheaper agent should be able to judge such a change trivial, so that it
+goes ahead unplanned. An option, to save tokens and the operator's time on obvious work. Sketch only; the design comes
+first, in §25.
+
+- **The setting.** `policy.plan_triage`, `"off"` (default) or `"on"`, and `policy.trivial`, plain language for the
+  triage agent saying what counts as trivial, as `review.low_impact` does for the reviewer (§21): without it nothing is
+  trivial. Both private: unlike `policy.plan`, which a shared file may only tighten, triage loosens the operator's
+  plan gate, so only the operator turns it on (T7). `runtime.plan_triage_cmd` names the model, a cheaper one than
+  `plan_cmd`'s recommended, with a short timeout of its own.
+- **When it runs.** Only for a plan the policy asks for: a ticket whose own setting says `plan` (`canopy plan KEY`, or
+  `start --plan`) is planned whatever triage would say, since that is the operator's word for that ticket. Before the
+  first `plan` of such a ticket the overseer dispatches a `triage-plan` run, once per ticket; under M54, before a
+  feedback plan too, once per round of feedback.
+- **The run.** A read-only run with a verdict, as M25's `triage-ci` is (DESIGN §23): it leases no slot, reads the ticket
+  through the tracker's read tools and the repository's primary clone, and writes nothing anywhere. It still counts
+  toward `capacity.max_workers` with workers and reviews, since it is an agent run with spend: a slot bounds worktrees,
+  the cap bounds runs. Its definition is the planner's with nothing to edit (T6). Result line:
+  `{"status":"done|failed","verdict":"trivial|plan","reason":"one sentence"}`. Its prompt says: when unsure, `plan`.
+- **Fails closed.** Only a `done` run with the verdict `trivial` waives the plan. A `plan` verdict, a failure, a
+  timeout, or a result that does not validate leaves the ticket needing its plan, and the next tick dispatches `plan`
+  as today. The waiver is a journal fact naming the run and its reason, distinct from the operator's `--skip`, shown on
+  the ticket's page and by `canopy show`. The operator undoes it with `canopy plan KEY` until the `implement` starts.
+- **Feedback stays gated.** Under M54, a `trivial` verdict on a round of feedback returns it to today's rules rather
+  than letting it through: a trusted reviewer's items dispatch `resume`, and anyone else's wait for the operator's
+  go-ahead (D089). So triage never lets an untrusted reviewer's text start a worker.
+- **A second opinion after.** Size says little about risk: a long PR repeating one change can be trivial, and a
+  one-line change can break everything, so no line count is checked (the operator, 2026-10-17). Where
+  `review.agent_prs` is on, canopy's reviewer (§21) already judges each of the loop's PRs `low`, `normal`, or `high`
+  impact against `review.low_impact`; a waived ticket's PR it judges `high` raises `not_trivial` on the attention list,
+  naming the triage run's reason. It stops nothing: the PR's review is still the gate. It tells the operator, and the
+  `decisions` corpus, how often triage was wrong. With reviews off there is no second opinion but the PR's review.
+- **No glance first.** A waiver goes ahead without the operator: a ticket its author calls trivial usually is, and
+  waiting on the operator would give back the time triage saves (the operator, 2026-10-17).
+- **Code shared.** M25's `triage-ci` shape (a slotless read-only run with a verdict, never built yet, so whichever is
+  built first builds it for both), M44's planner definition and read tools, §21's plain-language criteria, and the
+  spend page (M33), which shows triage runs as a kind of their own.
+- **TRUST_MODEL**, in the PR that builds it: T1 (a triage verdict, an agent's judgment that ticket text can steer, may
+  lift the plan gate, but only where the operator turned triage on and only for a plan the policy asked for; the
+  operator's own `plan` setting and D089's gate on feedback stay; the reviewer's impact and the PR's review are the
+  backstop; the operator accepts that a ticket's text can talk triage into `trivial`); T3 (one triage per ticket and per
+  feedback round, its timeout, and capacity); T6 (the triage run writes nothing); T7 (both keys private).
+- Tests with the fakes: `trivial` waives the plan and `implement` follows unplanned; `plan`, `failed`, a timeout, and a
+  bad result each leave the plan needed; a ticket set to `plan` by the operator is never triaged; one triage per
+  ticket; `canopy plan KEY` undoes a waiver; a `high` review of a waived ticket's PR raises `not_trivial`, a `normal`
+  one does not; a trivial feedback round
+  with an untrusted item waits for the go-ahead; `"off"` leaves every snapshot unchanged.
+- **No model per run.** Triage chooses no model for the work. With plans on, the operator runs a cheaper `worker_cmd`
+  (2026-10-17), since every worker then has an approved plan or a ticket judged trivial: a setting of theirs, not a
+  choice an agent makes.
+- **No retry.** A triage run that crashes, times out, or prints a result that does not parse is not run again: the
+  ticket is planned at once (the operator, 2026-10-17).
+
+Accept: written with the design, before work starts. Live, once built: over a week with plans and triage on, the
+spend page shows triage runs' cost against the planner runs they saved; every waived ticket's PR is one the operator
+agrees needed no plan, or that its review judged `high` and raised `not_trivial`.
+
+Status: not started.
+
+## M56. Fixing CI is part of resume
+
+REQUIREMENTS R4, DESIGN §7 and §8, TRUST_MODEL T3, D030. Needs M3. Asked for by the operator (2026-10-17): `fix-ci`
+should be a part of `resume`, one kind of worker for everything that comes back to a PR, so that a round of feedback is
+one run and, with M54, one plan. Today a PR with a red check and a new review comment takes two runs, each with its own
+prompt, cooldown, and attempt limit, and each pushing to the same branch. Sketch only; the design comes first.
+
+- **One kind.** `ci_red` dispatches `resume`, with the failed checks named in its context as fix-ci's are today. When
+  the same tick sees review feedback or a conflict on the unit, one `resume` takes all of it, so the run fixes the
+  build and answers the reviewers on one checkout and one push. `canopy dispatch --kind fix-ci` is refused with a
+  message naming `resume`, and the `fix-ci` value stays in `core/vocab.py` only to read old runs.
+- **One prompt.** `worker-resume.md` and its private variant gain fix-ci's section on reading a failed check and its
+  log, under the context's reason for the run; `worker-fix-ci.md` and its private variant go. A prompt override of
+  either fix-ci file is refused with a message saying what to merge into the resume override.
+- **One limit, higher.** `policy.max_resume_attempts` bounds every `resume` of a unit, whatever it was for, an old
+  `fix-ci` run counted among them (D030: derived from `runs`, no reset), with its default raised to 6, more than today's
+  two limits together (2 and 3), since one run now does what two did. The operator chose one simpler limit (2026-10-17),
+  accepting that a PR that keeps going red can spend the attempts its reviewers would have had. Nothing is migrated:
+  every run counts, and a unit's `fix-ci` grants count toward the new limit as its `resume` grants do, so a unit within
+  the old defaults (at most 2 and 3, 5 together) is within 6 on upgrade, and one past them had grants that carry over.
+  `policy.max_fix_ci_attempts` becomes a removed key, whose error says to raise `max_resume_attempts`, and `canopy grant
+  KEY fix-ci` is refused naming `resume`. The cooldown stays, renamed `policy.ci_cooldown_minutes`
+  (`fix_ci_cooldown_minutes` a removed key naming it): it holds a `resume` whose only reason is a failed check, so a red
+  build still waits between attempts.
+- **Under M54.** With `policy.feedback_plan = "approve"`, a `resume` for a failed check alone waits on an approved plan
+  like any other, so a CI fix that ran unattended as `fix-ci` now waits for the operator. That is intended: the
+  operator asked for CI rounds to be planned too (2026-10-17). M55's triage, where it is on, can waive the plan for a
+  trivial one. With feedback plans off, a red check sends its `resume` unattended, as `fix-ci` did.
+- **What else changes.** M25's `triage-ci`, once built, comes before a `resume` for a failed check as it would have
+  before `fix-ci`; M35's notice holds that `resume` as it held `fix-ci`; M38 moves `ci_red`'s `dispatch resume` into
+  code under its own evidence rule; the overseer prompt's phase table and the web UI's kind chips and guide pages say
+  `resume`. Spend (M33) shows old `fix-ci` runs under their kind.
+- TRUST_MODEL T3: one `resume` limit per unit in place of two, and the cooldown on CI-only runs.
+- Tests with the fakes: a red check dispatches `resume` with the checks named; a red check and a review comment in one
+  tick make one run; `--kind fix-ci` refused; the one limit counting old `fix-ci` runs and every `resume`; the removed
+  keys' errors; the cooldown holding a CI-only `resume` and not one with review feedback; the overseer's state block,
+  a snapshot.
+- Open: the names of a run's reasons in the journal (`ci`, `review`, `reply`, `conflict`, `no_pr`).
+
+Accept: written with the design, before work starts. Live, once built: on one of the loop's PRs with a red check and a
+new review comment, the next tick sends one `resume`, which fixes the check and addresses the comment in one push.
 
 Status: not started.
 
