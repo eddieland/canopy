@@ -19,8 +19,8 @@ by who can make text reach another ticket:
 - **Ticket notes**: keyed entries a ticket's runs write, read only by that ticket's later runs, as data. Their reach is
   their ticket's, as the reports in `{{PREVIOUS_RUNS}}` are.
 - **Workspace lessons**: workers only propose them. A proposal reaches no prompt. The operator promotes one into a
-  lesson, in their own words if they like, or rejects it; a lesson is the operator's text, beside the standing
-  instructions, and only the operator retires it.
+  lesson, in their own words if they like, or rejects it, and may promote a ticket's note the same way; a lesson is
+  the operator's text, beside the standing instructions, and only the operator retires it.
 
 The overseer writes no memory and reads none: it reads every ticket's text every tick, and T1 refuses it the notice for
 that reason, so a curator role would hand it the notice under another name. Nothing is added to the state block or
@@ -71,6 +71,15 @@ the tier that owns it allows it, so tiers at different modes need no rule of the
 - `proposals` while proposals are not off.
 - `memory_used` and `memory_wrong` while either tier is at `use`, citing only ids rendered into that run's prompt. A
   worker shown no memory has no key to drop and no id to cite.
+
+The contract gives each entry a shape, so notes and proposals read the same from run to run, for the next worker and
+for the operator who judges them. A note's key starts with its kind (`cause-`, `dead-end-`, `cmd-`, `env-`), so a later
+run that learns more about the same thing reuses the key and supersedes the note, rather than writing a second one
+beside it. Its text says what holds, the evidence a later run can check it by, and what to do next. The contract asks
+for nothing the summary, the branch, or its commits already say, since those reach the next run anyway. A proposal
+says what any worker should do, why, and when it applies, and only what the run itself showed and the repository's own
+docs do not say. The harness checks none of this shape: a text that departs from it is held to the bounds alone.
+Rejected: evidence and next step as fields of their own, each needing bounds, for what one line carries.
 
 Every field is optional. A field the run's modes did not ask for changes nothing. Once a key is not off, a prompt
 override without the placeholders its mode needs is `bad_prompt`, as for the standing instructions and the notice:
@@ -127,13 +136,20 @@ worker was told memory exists.
 
 - A pending proposal is rendered into no prompt, at any mode. At most 20 are pending: past it a new one is refused, so
   a flood cannot push older ones out.
-- `canopy memory promote ID [--text TEXT]` makes a pending proposal a lesson in the operator's name, with their text if
-  given, under the same bounds; a lesson in force under its key is superseded. `canopy memory reject ID` ends a
-  proposal. Both work at `record` as at `use`, so the operator can build the lessons up before any is served.
+- `canopy memory promote ID [--text TEXT] [--repo REPO]` makes a pending proposal a lesson in the operator's name,
+  with their text if given, under the same bounds, for `REPO` if given; a lesson in force under its key is superseded.
+  `canopy memory reject ID` ends a proposal. Both work at `record` as at `use`, so the operator can build the lessons up
+  before any is served.
+- `promote` takes a ticket's note too, whatever its status while it keeps its text, since what a ticket taught is
+  often clearest once it is done and its notes invalidated. The note stays its ticket's, unchanged; its lesson is for
+  every repository unless `--repo` names one, since a note names none. Promoting a note or a proposal from a private
+  ticket's run in its own words warns that its text may hold what the operator kept off the tracker.
 - At `use`, `{{WORKSPACE_LESSONS}}` is in every worker prompt that carries `{{STANDING_INSTRUCTIONS}}`, every kind but
   a split's (§8), beside them and framed as the operator's words that the prompt's obligations come before. Capped at
-  2 KiB in key order, the rest counted. A lesson naming a repository renders only in runs that lease it. A plan hears
-  lessons but carries no contract, so it cites none.
+  2 KiB: past it the lessons longest since promoted, renewed, or used are left out and counted, and the rest render in
+  key order, so with many lessons the ones the operator or a run last vouched for are served, not the first by name. A
+  lesson naming a repository renders only in runs that lease it. A plan hears lessons but carries no contract, so it
+  cites none.
 - A lesson comes up for review 90 days after it was promoted or last used: the operator renews it
   (`canopy memory renew ID`), graduates it into a repository's AGENTS.md or a skill through a ticket and a PR they
   merge, or forgets it.
@@ -145,10 +161,11 @@ leaves them out and no tick spends a decision on them. None arises while `memory
 
 - `memory_proposal`, about a ticket marked done whose runs' proposals wait, so the operator reviews lessons whose work a
   merge has checked.
-- At `use` only, one `lesson_review` naming every lesson due, and one `lesson_wrong` naming every lesson a run reported
-  wrong since its last renewal. No run reads a lesson at `record`, so none is raised there; once the key is `use`, every
-  lesson past its date comes up together at the first tick, in one item, the review the operator wants before an old
-  lesson is served.
+- At `use` only, one `lesson_review` naming the lessons due, longest overdue first, and one `lesson_wrong` naming the
+  lessons a run reported wrong since their last renewal. No run reads a lesson at `record`, so none is raised there;
+  once the key is `use`, every lesson past its date comes up together at the first tick, in one item, the review the
+  operator wants before an old lesson is served. An item names ten at most and counts the rest, so hundreds of lessons
+  due still make one line.
 
 ### Search
 
@@ -194,6 +211,12 @@ mode is said in words, never by color alone, and the two modes never share a lab
 any memory is in use while a tier is on; its memory page, a ticket's page, and a run's page say for each tier what reads
 it, what a run wrote and read, and what it would be served. The web UI reads memory and writes none: every write is the
 CLI's, in the operator's shell. How it looks is `ui/DESIGN.md`'s.
+
+A busy workspace holds thousands of notes and hundreds of lessons, so the memory page lists the tickets with notes in
+force, one row each with its count, and reads a ticket's notes only when the operator opens its row; the lessons come
+reported wrong first, then by review date, so what calls for the operator heads the list. Wherever a list shows a
+memory in force that its digest's cap leaves out, its row says so, as left out of the prompt at `use` and as what would
+be left out while recording.
 
 What a worker wrote is shown as plain text, never Markdown or a link, unlike other journal text (D113): a link in a note
 would be a worker's link the operator reads as canopy's. Every character the bounds refuse is shown by its code point,

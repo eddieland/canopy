@@ -2,8 +2,8 @@
 
 A query that returns a table's whole rows builds them through `fetch_all` or `fetch_one` with that table's row type,
 so a misspelled column is a type error where it is read, and a query whose columns no longer match its row type fails
-where it runs, not in a caller far from it. `tests/canopy/test_records.py` checks every row type against its table after
-every migration: the same columns, in order, each with the type and nullability its column has.
+where it runs, not in a caller far from it. `tests/canopy/core/test_records.py` checks every row type against its
+table after every migration: the same columns, in order, each with the type and nullability its column has.
 
 A column holding one of `vocab`'s closed vocabularies is a field of that `StrEnum`, so the row carries the member and a
 value the vocabulary does not hold is refused where the row is read, not where something later branches on it.
@@ -88,6 +88,8 @@ class Tick(Row):
     tokens_first_call: int | None
     tokens_first_cache_write: int | None
     definitions_digest: str | None
+    # The version of canopy that ran the tick; None on a tick from before that was recorded.
+    canopy_version: str | None
 
 
 @dataclass(frozen=True)

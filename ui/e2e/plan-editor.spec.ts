@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
-import { plan, select, settled, signIn } from './helpers.ts'
+import { clickIn, plan, select, settled, signIn } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -523,6 +523,21 @@ test('Changes marks what the plan changed since the one it replaces, and off, ma
     await expect(plan(page).locator('ins, del')).toHaveCount(0)
 })
 
+test('the changes are counted, and Next and Previous step the cursor to each, round to the other end', async ({
+    page,
+}) => {
+    await page.getByRole('button', { name: 'Changes since plan 1' }).click()
+    const bar = page.getByTestId('plan-bar')
+    await expect(bar.getByText(/^\d+ changes$/u)).toBeVisible()
+    // From the top, the one before is the last.
+    await bar.getByRole('button', { name: 'Previous change' }).click()
+    await expect(plan(page)).toBeFocused()
+    await expect(plan(page).locator('ins, del').last()).toBeInViewport()
+    // And the one after the last is the first.
+    await bar.getByRole('button', { name: 'Next change' }).click()
+    await expect(plan(page).locator('ins, del').first()).toBeInViewport()
+})
+
 test('Ask for changes sends the open comments, each on its passage, with the note', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'proxy in front' })
     await thread.getByText('Does the proxy').click()
@@ -573,7 +588,7 @@ test('the cursor moved into a commented passage by the keyboard opens its thread
     page,
 }) => {
     const card = comments(page).filter({ hasText: 'name the ticket' })
-    await plan(page).locator('li').filter({ hasText: "Excel's own format" }).click()
+    await clickIn(plan(page).locator('li').filter({ hasText: "Excel's own format" }))
     await expect(card).toHaveAttribute('data-active', 'false')
     await page.keyboard.press('ArrowDown')
     await expect(card).toHaveAttribute('data-active', 'true')

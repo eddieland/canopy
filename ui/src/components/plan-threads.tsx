@@ -10,6 +10,7 @@ import { Chip } from '@/components/status'
 import { Disclosure } from '@/components/disclosure'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import { usePending } from '@/hooks/use-pending'
 import { changeRequest, MAX_COMMENT, MAX_REQUEST } from '@/lib/plan-threads'
 import type { PlanThread } from '@/lib/plan-threads'
 import { sends, useSendKey } from '@/lib/send-key'
@@ -173,6 +174,7 @@ export function AskForChanges({
     threads,
     starts,
     edited,
+    asked = false,
     onAsk,
 }: {
     /** The plan's threads. */
@@ -181,10 +183,13 @@ export function AskForChanges({
     starts: ReadonlyMap<string, number>
     /** Whether the operator edited the plan's text, which the message then says. */
     edited: boolean
+    /** Whether they asked already and no planner has read it, so another request is asking again. */
+    asked?: boolean
     /** Sends the message. */
     onAsk: (message: string) => void
 }) {
     const [note, setNote] = useState('')
+    usePending(note.trim() !== '')
     const message = changeRequest(threads, starts, note, edited)
     const open = threads.filter((thread) => !thread.resolved).length
     const over = message.length > MAX_REQUEST
@@ -218,9 +223,10 @@ export function AskForChanges({
                     ? `${message.length - MAX_REQUEST} characters over a reply's bound: resolve or shorten some`
                     : `${open} open ${open === 1 ? 'comment goes' : 'comments go'} with it`}
             </span>
-            <Button type="submit" disabled={!message || over}>
+            {/* The main action while comments are open, as the caller's own Approve steps back; outlined otherwise. */}
+            <Button type="submit" variant={open > 0 ? 'default' : 'outline'} disabled={!message || over}>
                 <Send aria-hidden />
-                Ask for changes
+                {asked ? 'Ask again' : 'Ask for changes'}
             </Button>
         </form>
     )
@@ -581,6 +587,7 @@ function CommentForm({
     const [own, setOwn] = useState(initial)
     const body = value ?? own
     const setBody = onValueChange ?? setOwn
+    usePending(body.trim() !== '' && body !== initial)
 
     // The form opens on a click that asks for it, so the field takes the focus as it opens, once, after any words it
     // holds already; the page scrolls to it a frame on, once the comments are placed beside the plan. Only then: a

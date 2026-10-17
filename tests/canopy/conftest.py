@@ -1,5 +1,5 @@
-"""Fixtures for the tests of canopy: the workspace's journal and context, the web UI's mock backend, workspaces of
-several repositories (DESIGN §18), and a pool of worktrees."""
+"""Fixtures for the tests of canopy: the workspace's journal and context, the web UI's mock backend, notification
+commands that record what they are sent, Markdown snapshots, workspaces of several repositories (DESIGN §18)."""
 
 import contextlib
 import json
@@ -11,6 +11,8 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+from syrupy.assertion import SnapshotAssertion
+from syrupy.extensions.single_file import SingleFileSnapshotExtension, WriteMode
 
 from canopy.core import config, db
 from canopy.core.context import Context
@@ -18,7 +20,7 @@ from canopy.infra import resources
 from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
 from tests.canopy.helpers import context
-from tests.conftest import HERMETIC_GIT, CanopyEnv, GitPool, Journals, git, pool_state
+from tests.conftest import HERMETIC_GIT, CanopyEnv, Journals, executable, git
 
 
 @pytest.fixture
@@ -39,6 +41,40 @@ def ctx(canopy_env: CanopyEnv) -> Context:
 def backend(tmp_path: Path) -> Backend:
     """The web UI's mock journal, as `canopy serve --mock` serves it."""
     return serve_mock.seed(tmp_path / "mock")
+
+
+@pytest.fixture
+def sink_script(tmp_path: Path) -> Path:
+    """A sink command: `sink OUT [EXIT_FILE]` appends what it reads on stdin, then a separator, to OUT, and exits with
+    the number in EXIT_FILE if there is one. `messages(OUT)` reads back what it was sent."""
+    return executable(
+        tmp_path / "sink",
+        '#!/bin/sh\ncat >> "$1"\necho "--" >> "$1"\n'
+        'if [ -n "$2" ] && [ -f "$2" ]; then echo "sink down" >&2; exit "$(cat "$2")"; fi\n',
+    )
+
+
+@pytest.fixture
+def notified(canopy_env: CanopyEnv, tmp_path: Path) -> Path:
+    """Set notify.cmd to a script that appends what it reads, then a separator, to the returned file; `messages` reads
+    it back. The script exits with $NOTIFY_EXIT, 0 if unset."""
+    out = tmp_path / "notified.txt"
+    script = executable(tmp_path / "notify", '#!/bin/sh\ncat >> "$1"\necho "--" >> "$1"\nexit "${NOTIFY_EXIT:-0}"\n')
+    canopy_env.append_user(f"\n[notify]\ncmd = '{script} {out}'\n")
+    return out
+
+
+class MarkdownSnapshot(SingleFileSnapshotExtension):
+    """A snapshot as a Markdown file of its own, as an agent reads what canopy renders for it."""
+
+    file_extension = "md"
+    _write_mode = WriteMode.TEXT
+
+
+@pytest.fixture
+def markdown_snapshot(snapshot: SnapshotAssertion) -> SnapshotAssertion:
+    """The test's snapshot, recorded as a Markdown file in its `__snapshots__/` directory."""
+    return snapshot.use_extension(MarkdownSnapshot)
 
 
 def map_text(*repos: tuple[str, str], extra: str = "") -> str:
@@ -114,18 +150,3 @@ def seed_pools(ws: Ws, treehouse_state: Path) -> None:
 def th(treehouse_state: Path) -> dict[str, list[object]]:
     state: dict[str, list[object]] = json.loads(treehouse_state.read_text())
     return state
-
-
-@pytest.fixture
-def worktree_pool(
-    canopy_env: CanopyEnv, git_pool: GitPool, treehouse_state: Path, tmp_path: Path
-) -> tuple[Path, list[Path]]:
-    """The primary clone and two worktree slots of it, which the fake treehouse leases instead of `git_pool`'s."""
-    primary = tmp_path / "primary"
-    git("clone", "--quiet", str(git_pool.origin), str(primary), cwd=tmp_path)
-    slots = [tmp_path / "wpool" / name / "repo" for name in ("1", "2")]
-    for slot in slots:
-        git("worktree", "add", "--quiet", "--detach", str(slot), cwd=primary)
-    state = [{"name": str(i), "path": str(p), "status": "available"} for i, p in enumerate(slots, 1)]
-    treehouse_state.write_text(pool_state(canopy_env.repo, state, max_trees=len(slots)))
-    return primary, slots

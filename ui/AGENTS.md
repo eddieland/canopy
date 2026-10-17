@@ -23,8 +23,12 @@ memory, and do not upgrade in passing.
   `src/components/plan-editor.tsx` import it.
 - Shiki for a review's diff alone (D121): only `src/lib/highlight.ts` and `src/lib/languages.ts`, its grammars,
   import it, and only on demand, each grammar its own chunk.
+- jsdiff (`diff`) for a plan's word diff alone: only `src/lib/plan-diff.ts` imports it.
 - oxlint (with the React Compiler's rules and eslint-plugin-jsdoc's, and type-aware rules through oxlint-tsgolint)
   and oxfmt, Vitest, Playwright.
+
+Add a library as the repository's `AGENTS.md` says, when it clearly beats the code we would write instead, and pin it
+exactly like the rest. One that only a few files need is held to them, as Tiptap (D120) and Shiki (D121) are.
 
 ## Commands
 
@@ -97,16 +101,21 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
 - **The guide says what the pages do.** The operator's documentation is Markdown in `src/guide/` (`DESIGN.md`, "The
   guide"). A change to what a page shows or does updates the guide's page about it in the same PR, as a change to a
   behavior updates the design. Its links are checked by `src/lib/guide.test.ts`.
+- **The guide has a voice.** World-class developer docs, with the undertone of a funny, sage staff engineer. Talk to
+  the operator as `you`, in plain, direct sentences: lead with what a thing does and how to use it. The humor is dry
+  and earned, an aside from someone who has seen a few incidents, never a pun for its own sake: it rides on a fact,
+  never stands in for one, and stays rare enough to land (a few to a page, not one a line). Use dashes sparingly.
+  `src/guide/overview.md` sets the bar; this voice is the guide's alone, not the CLI's, the design's, or a page's.
 - **API docs.** The server serves Swagger UI at `/api/docs`, over the schema at `/api/openapi.json`, from the copy
   `vite.config.ts` puts in the build's `api-docs/`: through the dev server too, once `npm run build` has run.
 
 ## Python side
 
 Keep it to serving and wiring, in `src/canopy/serve/` (DESIGN §5, §22). The SPA fallback, caching, CSP,
-Host and Origin checks, sign-in, and base path are there and tested in `tests/canopy/test_serve.py`; the API over a
-real journal and `canopy loop` serving it in `tests/canopy/test_web.py`. A new route under `/api` goes in its
-resource's module in `api/`, or in a new one listed on the signed-in router in `api/__init__.py`, and needs no change
-to the rest; a write goes through `canopy.core.conversation`, never SQL of its own.
+Host and Origin checks, sign-in, and base path are there and tested in `tests/canopy/serve/test_serve.py`; the API
+over a real journal and `canopy loop` serving it in `tests/canopy/serve/test_web.py`. A new route under `/api` goes in
+its resource's module in `api/`, or in a new one listed on the signed-in router in `api/__init__.py`, and needs no
+change to the rest; a write goes through `canopy.core.conversation`, never SQL of its own.
 
 ## Tests
 
@@ -122,8 +131,9 @@ to the rest; a write goes through `canopy.core.conversation`, never SQL of its o
   both themes draw from the same tokens, so more would double the images git keeps for every visual change without
   catching more. Add a page to either only for what the others cannot show. A visual change updates the baselines
   deliberately and the PR says why; look at each new image before it merges. The Screenshots workflow never deletes an
-  image: a PR that stops taking one deletes its baseline. Every screenshot applies `e2e/screenshot.css`, which hides
-  what changes with the build rather than the page (the rail's version, which names the commit). `README.md` shows
+  image: a PR that stops taking one deletes its baseline. Every screenshot applies `e2e/screenshot.css`, which
+  replaces what changes with the build rather than the page (the rail's version, which names the commit, shows a
+  placeholder as long as a dev build's). `README.md` shows
   `attention-dark`, `tickets-ABC-102-dark`, `runs-39-dark`, `reviews-4-dark`, and `ticks-2-dark`: rename them there too.
   The baselines are CI's Chromium and fonts, so regenerate them there: push the branch, then run the Screenshots
   workflow on it (`gh workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or an agent's GitHub tools). It

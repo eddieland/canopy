@@ -119,7 +119,7 @@ runtime config, allows exactly that tool, and points `triage_cmd` at it, as for 
 Workers lose what this section gives the triage: `canopy-worker` denies `gh run rerun*`, `gh run cancel*`,
 `gh run delete*`, and `gh workflow*` (today its bash allows them; only the MCP names are denied), so a triage is the
 only run that reruns CI. `gh run view` stays: reading a failure is `fix-ci`'s job. `canopy-worker-private` already
-denies all of `gh`.
+denies all of `gh` but its reads of a PR and its CI, `gh run view` among them.
 
 ### Journal
 
@@ -129,7 +129,7 @@ denies all of `gh`.
 
 ### Trust model changes
 
-Proposed, for the operator's approval note in M25's PR:
+Proposed, for M25's PR:
 
 - T1: the triage agent reads CI logs, among the easiest text to shape, and its verdict starts a write. A steered
   verdict can rerun failed jobs, at most `max_triage_ci_attempts` times per unit, or say `real`, which is today's

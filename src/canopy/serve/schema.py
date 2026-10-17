@@ -439,6 +439,8 @@ class TicketPlans(_Model):
     """`policy.plan`."""
     planning: int | None = None
     """The plan run writing a plan for it now, if one is: the plan verbs and a save refuse until it ends."""
+    changes_asked: datetime | None = None
+    """When the operator asked for changes no planner has read yet, as the overseer reads it; none if they have not."""
     newest: PlanFile | None = None
     """The newest plan, as its file stands; none if it has had none."""
     plans: list[PlanSummary]
@@ -932,6 +934,8 @@ class Tick(_Model):
     woken_by: str | None = None
     """What ended the loop's wait before it: start | timer | gate | message | starts | grant | notice | run | key |
     web. None when `idle` is."""
+    canopy_version: str | None = None
+    """The version of canopy that ran it, and so recorded its decisions; None on a tick from before that was kept."""
 
 
 class TickDetail(_Model):
@@ -1269,17 +1273,30 @@ class MemoryDigest(_Model):
     """True while its tier is at `use`: the next run gets it. False while recording: what `use` would serve."""
 
 
+class TicketNotes(_Model):
+    """One ticket's notes in force, counted, for the list across tickets; its page lists them (DESIGN §28)."""
+
+    ticket_key: str
+    """The ticket."""
+    count: int
+    """How many of its notes are in force."""
+    used: int
+    """How many of those a run said it relied on."""
+    latest_at: datetime
+    """When the newest of them was written."""
+
+
 class MemoryOverview(_Model):
-    """Every tier's memory (DESIGN §28): the ticket notes in force, the proposals waiting, and the lessons."""
+    """Every tier's memory (DESIGN §28): the tickets with notes in force, the proposals waiting, and the lessons."""
 
     state: MemoryState | None
     """The tiers; None while both are off."""
-    notes: list[MemoryEntry]
-    """Every ticket's notes in force, by ticket and key."""
+    tickets: list[TicketNotes]
+    """Every ticket with notes in force, counted, the one with the newest note first."""
     proposals: list[MemoryProposal]
     """The proposals waiting on the operator, oldest first."""
     lessons: list[MemoryEntry]
-    """The lessons in force, in key order."""
+    """The lessons in force: any a run reported wrong first, then by review date, the one due first."""
     lessons_digest: MemoryDigest | None
     """What every run would be served of the lessons; None while proposals are off."""
 

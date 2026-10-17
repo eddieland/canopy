@@ -1,6 +1,6 @@
 # canopy trust model
 
-Normative. Changes require explicit human approval in the PR. The purpose of
+Normative. Changes require human approval: the operator's merge of the PR. The purpose of
 this document is to be handed to a security reviewer as-is.
 
 ## 1. Summary
@@ -141,14 +141,14 @@ Controls:
   `CANOPY_RUN_ID` is set.
 - Workspace lessons (DESIGN §28, ROADMAP M50) are operator text, beside the standing instructions. Workers only
   propose them, with `memory.proposals` not off: a proposal is stored pending, bounded as a note is, at most 3 a run and
-  20 waiting, and reaches no prompt at any mode. Only `canopy memory promote`, in the operator's shell, makes one a
-  lesson, in the operator's name and words, and it refuses when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as
-  `notice` does; so do `reject` and `renew`. A lesson reaches workers only at `use`, framed as the operator's words
-  that the prompt's obligations come before; reviews, chores, splits, and the overseer hear none. A run's report that a
-  lesson is wrong retires nothing: it raises `lesson_wrong` for the operator. The proposals list warns on one from a
-  private ticket's run, whose text may hold what the operator kept off the tracker. Residual, D076's: until workers
-  are sandboxed (M26), a steered worker's bash runs as the operator and could insert a `lesson` row into the journal,
-  as it could a `notices` row.
+  20 waiting, and reaches no prompt at any mode. Only `canopy memory promote`, in the operator's shell, makes one, or
+  a ticket's note, a lesson, in the operator's name and words, and it refuses when `CANOPY_TICK_ID` or
+  `CANOPY_RUN_ID` is set, as `notice` does; so do `reject` and `renew`. A lesson reaches workers only at `use`, framed
+  as the operator's words that the prompt's obligations come before; reviews, chores, splits, and the overseer hear
+  none. A run's report that a lesson is wrong retires nothing: it raises `lesson_wrong` for the operator. The proposals
+  list, and `promote` of a proposal or a note in its own words, warn on one from a private ticket's run, whose text
+  may hold what the operator kept off the tracker. Residual, D076's: until workers are sandboxed (M26), a steered
+  worker's bash runs as the operator and could insert a `lesson` row into the journal, as it could a `notices` row.
 - Mirrored tracker comments (DESIGN §22, M19) are the overseer's copy for the operator to read, a claim like `--label`,
   and authorize nothing. They are recorded with source `tracker`, or `worker` when the harness finds the workers' marks
   (D069), never `operator`, and phases, `awaiting_reply`, and the loop's wake read operator messages only. A private
@@ -298,9 +298,9 @@ Controls now:
   wrote objects is checked out detached at `origin/<base>`, without the run's own refs or reflog, before the run's
   object directory is deleted and the slot returned, by `_run` or, for a `_run` that was killed, by reconcile (DESIGN
   §8, §15).
-- The sandbox canary (`tests/canopy/test_sandbox_canary.py`, HOST_ISOLATION §6) runs a plain script, no model, through
-  the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
-  so that a sandbox that refuses everything fails. CI runs it on Linux and macOS.
+- The sandbox canary (`tests/canopy_sandbox/test_sandbox_canary.py`, HOST_ISOLATION §6) runs a plain script, no model,
+  through the real prefix and the shipped templates, and checks every sandbox denial above on the host, with positive controls
+  so that a sandbox that refuses everything fails. CI runs it on Linux.
 
 Residual: an unsandboxed run has a filesystem-wide shell as the operator, and the sandbox is opt-in. A sandboxed one
 shares the kernel, so code written to escape it is not contained. The overseer, `notify.cmd`, and the harness's own
@@ -361,11 +361,12 @@ Controls:
 - A private ticket's worker (DESIGN §22) runs `canopy-worker-private`, whose definition canopy renders from the user
   config: every tool of the tracker's MCP server (`tracker.mcp_server`) is denied by a wildcard, then only
   `tracker.read_tools` are allowed by name, so a write tool missing from the list fails closed; the tracker CLIs canopy
-  knows (`gh`, `acli`, `jira`) are denied in its bash rules, and other MCP tools by name as for `canopy-worker`
-  (D084). A run is refused where the worktree's OpenCode config names any of that server's tools, since a repository
-  rule merged after canopy's could reopen one. Its prompt says to write nothing to the ticket, and its report and
-  question go to the journal, not the tracker. The journal holds the operator's replies and the workers' reports,
-  under the operator-only state directory (T2).
+  knows (`gh`, `acli`, `jira`) are denied in its bash rules but for `gh pr view`, `gh pr checks`, `gh pr diff`, and
+  `gh run view`, which read a PR and its CI and never the ticket; and other MCP tools are denied by name as for
+  `canopy-worker` (D084). A run is refused where the worktree's OpenCode config names any of that server's tools,
+  since a repository rule merged after canopy's could reopen one. Its prompt says to write nothing to the ticket, and
+  its report and question go to the journal, not the tracker. The journal holds the operator's replies and the
+  workers' reports, under the operator-only state directory (T2).
 - The journal also holds the tracker comments the overseer mirrors (DESIGN §22, M19), each cut at 2000 characters, in
   the same operator-only state directory, for public and private tickets alike. Nothing sends them anywhere: no
   notification event carries a mirrored comment, and only a private ticket's own worker reads them, in its prompt.

@@ -2095,21 +2095,16 @@ export type components = {
         MemoryModeName: "off" | "record" | "use";
         /**
          * MemoryOverview
-         * @description Every tier's memory (DESIGN §28): the ticket notes in force, the proposals waiting, and the lessons.
+         * @description Every tier's memory (DESIGN §28): the tickets with notes in force, the proposals waiting, and the lessons.
          */
         MemoryOverview: {
             /**
              * Lessons
-             * @description The lessons in force, in key order.
+             * @description The lessons in force: any a run reported wrong first, then by review date, the one due first.
              */
             lessons: components["schemas"]["MemoryEntry"][];
             /** @description What every run would be served of the lessons; None while proposals are off. */
             lessons_digest: components["schemas"]["MemoryDigest"] | null;
-            /**
-             * Notes
-             * @description Every ticket's notes in force, by ticket and key.
-             */
-            notes: components["schemas"]["MemoryEntry"][];
             /**
              * Proposals
              * @description The proposals waiting on the operator, oldest first.
@@ -2117,6 +2112,11 @@ export type components = {
             proposals: components["schemas"]["MemoryProposal"][];
             /** @description The tiers; None while both are off. */
             state: components["schemas"]["MemoryState"] | null;
+            /**
+             * Tickets
+             * @description Every ticket with notes in force, counted, the one with the newest note first.
+             */
+            tickets: components["schemas"]["TicketNotes"][];
         };
         /**
          * MemoryProposal
@@ -3947,6 +3947,11 @@ export type components = {
          */
         Tick: {
             /**
+             * Canopy Version
+             * @description The version of canopy that ran it, and so recorded its decisions; None on a tick from before that was kept.
+             */
+            canopy_version: string | null;
+            /**
              * Cost Usd
              * @description What the overseer cost, in US dollars, when the runtime reported it (§13).
              */
@@ -4117,10 +4122,42 @@ export type components = {
             state: components["schemas"]["MemoryState"] | null;
         };
         /**
+         * TicketNotes
+         * @description One ticket's notes in force, counted, for the list across tickets; its page lists them (DESIGN §28).
+         */
+        TicketNotes: {
+            /**
+             * Count
+             * @description How many of its notes are in force.
+             */
+            count: number;
+            /**
+             * Latest At
+             * Format: date-time
+             * @description When the newest of them was written.
+             */
+            latest_at: string;
+            /**
+             * Ticket Key
+             * @description The ticket.
+             */
+            ticket_key: string;
+            /**
+             * Used
+             * @description How many of those a run said it relied on.
+             */
+            used: number;
+        };
+        /**
          * TicketPlans
          * @description A ticket's plans: whether it needs one, the newest as its file stands, the earlier ones, and the comments.
          */
         TicketPlans: {
+            /**
+             * Changes Asked
+             * @description When the operator asked for changes no planner has read yet, as the overseer reads it; none if they have not.
+             */
+            changes_asked: string | null;
             /**
              * Needed
              * @description Whether its implement waits on an approved plan, by its own setting or `policy.plan`.

@@ -30,7 +30,7 @@ decision that matters.
   what you need: find tickets, read a ticket (body, labels, open or closed), read its comments with author account ids
   and timestamps, read its blockers. When the tracker is GitHub Issues, the tracker MCP and the GitHub MCP are the same
   server.
-- GitHub MCP: find the PR for a branch, read checks, reviews, review comments,
+- GitHub MCP: find the PR for a branch, read checks (check runs; see "Phase table"), reviews, review comments,
   merge state.
 - `bash`, restricted to:
   - `canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume|split|plan --repo NAME [--repo NAME ...]
@@ -50,7 +50,8 @@ decision that matters.
     - `--cursor` advances the ticket's cursors only if the worker actually starts (see "Cursors").
     - `--base` stacks the ticket on its blocker's branch (see "Blockers and stacking"). Without it the worker starts
       from, and targets its PR at, the repository's base branch.
-  - `canopy decide <KEY> <action> --rationale "<text>"`
+  - `canopy decide <KEY> <action> --rationale "<text>"`, and `canopy decide skip --rationale "<reason>: <what>"`
+    with no key for the tick-wide skip only (see "Procedure").
   - `canopy queried [KEY ...]`, naming each open ticket the configured query returned, or none (see "Procedure", step
     1). Record a long result in several calls.
   - `canopy attention <KEY> <reason> [--repo NAME] --detail "<text>"`
@@ -75,7 +76,7 @@ decision that matters.
     A call that is refused can end your run, and with it every command it held, so one call must risk one decision,
     not all of them. A mirror's heredoc is part of its one command.
 - You have no other write capability. If you want to do something not on this
-  list, record a `decide` with action `skip` and say what you wanted.
+  list, record `canopy decide <KEY> skip` for the ticket it was for and say what you wanted.
 
 ## Procedure
 
@@ -137,10 +138,12 @@ decision that matters.
    with a line containing only `CANOPY_TICK_DONE`, and exit. You may summarize before it. The harness reads only your
    final message: without that line there, the tick fails and its attention items are lost.
 
-If the tracker or GitHub MCP is unavailable or returns errors, record one `decide` with action `skip` and rationale
-`mcp_unavailable: <which>`, and end as step 6 says. Do not decide on partial data. If the tracker works but cannot do
-something you need (find tickets, read labels, read comment authors), record `skip` with rationale
-`tracker_unsupported: <what>` and end as step 6 says.
+If the tracker or GitHub MCP is unavailable or returns errors, record the tick-wide skip, `canopy decide skip
+--rationale "mcp_unavailable: <which>"` with no key, and end as step 6 says. Do not decide on partial data. If the
+tracker works but cannot do something you need (find tickets, read labels, read comment authors), record `canopy decide
+skip --rationale "tracker_unsupported: <what>"`, with no key, and end as step 6 says. These two are the only skips
+without a key, and the only ones with these reasons; the CLI refuses any other. On any other tick, record neither:
+decide each ticket under its own key.
 
 ## Every tick, without exception
 
@@ -219,12 +222,24 @@ default. Never look for a label by its default name.
 
 `[bot]` approvals do not count as approval: a green PR approved only by bots is `green_unreviewed`, not `approved`.
 
+A unit's action is the one the table gives for the phase you derived for it, and its attention items follow from the
+same phase. A `resume` needs a phase whose action is `resume` (`pushed_no_pr`, `conflicted`, `changes_requested` or
+`review_findings` you classified for a worker, `human_replied`), and its `--context` names what that phase found. A
+`ci_running` unit gets `wait`, never a `resume` with nothing new to address, and a unit whose checks are pending or
+failed is not `green_unreviewed`, so it gets no `needs_reviewer`.
+
 If the tracker cannot say when a label was added, use the worker's question comment as the reference point for
 `needs_human` and `human_replied`.
 
 A `ci_red` ticket whose failure is not newer than the `ci` cursor was already handed to a fix-ci worker. If that
 worker's run ended `done` and checks are still failing on the same run, the fix did not reach CI yet or did not help:
 record `wait` until a newer check run exists. If it ended `blocked`, the ticket is `needs_human`.
+
+Read a PR's checks as its head commit's check runs (on GitHub's server, `pull_request_read` with method
+`get_check_runs`): GitHub Actions writes only those. Its commit statuses (`get_status`) hold only what CI writes as a
+status: read them too for a repository whose CI does, never instead. An empty `pending` from `get_status`
+(`total_count` 0) means nothing wrote a status, not that checks are running: it makes a unit neither `ci_running` nor
+anything else.
 
 A PR that conflicts with its base gets no new checks: GitHub runs none on a PR it cannot merge, so its checks look
 pending with nothing running, or show an earlier head's results. Read the PR's mergeability before its checks. When

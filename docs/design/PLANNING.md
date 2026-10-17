@@ -128,6 +128,13 @@ public ticket the planner checks the queue label first, as every worker does (§
 or says there is none on a private ticket. An override must carry `{{AUTHORIZATION}}`, `{{REPOSITORIES}}`,
 `{{OPERATOR_MESSAGES}}`, and `{{PLAN_OUT}}`. The ticket's text and the code are data (TRUST_MODEL T1).
 
+Every plan has one outline, its headings fixed by the prompt, so the operator reads each plan the same way and sees
+what one leaves out, and a worker's outline (Workers follow the plan, below) is a table of contents it can rely on. Its
+steps are numbered, so a worker reports its progress against them. The harness does not check the outline: the
+operator's edits or an override may change it. Rejected: the sections a living plan keeps, such as progress and a
+decision log the worker updates as it goes. The approved plan is pinned by its hash and the worker's copy discarded, so
+the worker's summary carries that instead.
+
 The planner writes its plan, as markdown, to `.canopy-new-plan.md` at its desk's root (`{{PLAN_OUT}}`), the one file
 its definition lets it edit, and canopy reads that file once the planner exits, before the desk is removed. It can
 write the file a section at a time and revise it as it reads; the file at exit is the plan. Rejected:
@@ -195,7 +202,7 @@ code, so a long plan costs a run what it reads of it, and a plan can be as long 
 
 A plan is model-written from ticket text: it describes the work, as the ticket does, and the prompt's obligations come
 before it, as they come before the standing instructions. The prompt has the worker leave its copy out of every commit
-and say where the work left the plan and why.
+and say which of the plan's steps it finished, by number, and where the work left the plan and why.
 
 ### Where plans live
 
@@ -273,7 +280,8 @@ canopy ships `canopy-planner` in the definitions directory (§13):
   `Skip`, and earlier plans read only. A waiting or approved plan is editable while no plan run for the ticket is
   running, and `Approve` or `Ask for changes` saves an unsaved edit first, so the approval takes what the operator sees
   and the planner reads it. `Approve`, `Skip`, and asking for a plan go through the same code as `canopy plan`, with
-  the same refusals; `Ask for changes` is a reply.
+  the same refusals; `Ask for changes` is a reply. Leaving the page, by a link or by closing the tab, while an edit is
+  not saved or a comment or the note holds words not yet sent, asks first, so nothing typed is lost unseen.
 - A `plan.proposed` event (§20) tells the operator's sinks a plan is waiting: the ticket and its title, the run, and the
   plan's id. It carries no plan text, so nothing of the plan leaves the machine through a Slack sink. It is in the
   `runs` group and urgent to a batching sink; a sink that takes only attention hears of the plan from `plan_review`.
@@ -295,15 +303,18 @@ page-level detail.
   nowhere, and its thread says `passage gone` rather than move to other words: a reworded passage may no longer be what
   the comment was about. A new plan rewrites what it was asked to change, so its comments lose their passages together,
   and the operator can resolve all of those at once. To read what a new plan changed rather than the whole of it again,
-  the editor marks, while asked, the words it added and those it removed since the plan it replaces, word by word, as
-  each plan reads in the editor (`ui/src/lib/plan-diff.ts`), so formatting alone is no change. An open thread's comment
+  the editor marks the words it added and those it removed since the plan it replaces, word by word, as each plan
+  reads in the editor (`ui/src/lib/plan-diff.ts`), so formatting alone is no change: while asked, and from the start
+  on a waiting plan that replaced one, with a step from each change to the next. An open thread's comment
   and replies can be edited in place; nothing marks one edited.
 - **Ask for changes** sends the open threads, in the plan's order, as one operator message: each passage quoted, its
   comment and replies, then the operator's note on the whole plan, if any, and, when the operator edited the plan's
   text, a line saying so: the planner keeps what it was not asked to change, but reads the plan it replaces as its own,
   and the line says which words are the operator's, to keep. It is a reply, within `canopy reply`'s bound (§22), so the
   re-plan works as Approving a plan, above, says. A request over the bound is not sent; the operator resolves or
-  shortens some. Resolved threads ask for nothing.
+  shortens some. Resolved threads ask for nothing. Until a planner reads the request, the page says it was asked, and
+  when (`changes_asked`, as the overseer reads it), and the button reads `Ask again`, so a second request is never
+  sent unawares.
 - **Editing** in the web UI edits the plan's file, as the operator's own editor would: through the web channel behind
   its token (T8), with the same care as the planner's write (operator-only, refusing a symlink or a file that is not
   regular), replaced whole so a reader never sees half a file. It saves only a `proposed` or approved plan's file, an

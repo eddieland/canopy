@@ -83,7 +83,7 @@ not go in the middle of the sequence.
 - [Agent memory](MEMORY.md): what workers record of what they learn, who reads it, and who decides.
   - [28. Agent memory (M50)](MEMORY.md#28-agent-memory-m50)
 - [Artifacts](ARTIFACTS.md): pages workers publish, the comments people leave on them, and how those come back.
-  - [29. Artifacts and Louvre (M52)](ARTIFACTS.md#29-artifacts-and-louvre-m52)
+  - [29. Artifacts and Louvre (M53)](ARTIFACTS.md#29-artifacts-and-louvre-m53)
 
 ## 1. Problem
 

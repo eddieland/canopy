@@ -35,7 +35,7 @@ function PullRequestsPage() {
                 activity first. A PR&apos;s page has its ticket, the runs that pushed to it, canopy&apos;s reviews of
                 it, and what the loop decided.
             </PageHeader>
-            <Panel className="mb-6">
+            <Panel>
                 <PanelHeader label="Review a PR" />
                 <ReviewRequestForm />
             </Panel>
@@ -65,56 +65,62 @@ function PullRequestsPage() {
 }
 
 /**
- * A PR: the PR (`org/repo#123` for GitHub's), its ticket and title (or `none`, for any PR canopy only reviews),
- * its unit's phase, the run working it now, its latest review's verdict and whether the operator's review request on
- * it is open, and its age.
+ * A PR: where it stands, the PR (`org/repo#123` for GitHub's), its unit's phase, its ticket and title (or `none`, for
+ * any PR canopy only reviews), and its age. Where it stands is the run working it, while one does, then its latest
+ * review's verdict and whether the operator's review request on it is open.
  */
 function Row({ pr }: { pr: PullRequest }) {
-    const review = pr.latest_review
     return (
         <ListRow kind="pull-request" data-testid="pull-request">
+            <State pr={pr} />
             <PullRequestLink url={pr.url} />
-            <span className="flex min-w-0 items-center gap-3">
-                {pr.ticket_key === null ? (
-                    <None reason={NO_TICKET} className="truncate font-mono text-xs" />
-                ) : (
-                    <span className="flex min-w-0 items-center gap-2">
-                        <TicketLink ticketKey={pr.ticket_key} className="shrink-0" />
-                        <TicketTitle title={pr.ticket_title} />
-                    </span>
-                )}
-                {pr.phase && <Chip word={pr.phase} className="min-w-0 shrink" />}
-            </span>
-            <span className="flex items-center gap-1.5 font-mono text-xs" data-testid="pull-request-run">
-                {pr.running_run !== null && (
-                    <>
-                        <RunDot state="running" />
-                        <RunLink id={pr.running_run} />
-                    </>
-                )}
-            </span>
-            {/* The dot is how the review's run ended; the verdict's color, its worst finding. */}
-            <span
-                className={cn(
-                    'flex min-w-0 items-center gap-1.5 font-mono text-xs whitespace-nowrap',
-                    review ? verdictTone(review) : 'text-muted-foreground',
-                )}
-                data-testid="pull-request-review"
-            >
-                {review ? (
-                    <>
-                        <RunDot state={review.state} />
-                        <ReviewLink id={review.id} />
-                        <span className="truncate" title={verdictText(review)}>
-                            {verdictText(review)}
-                        </span>
-                    </>
-                ) : (
-                    'not reviewed'
-                )}
-                {pr.review_request !== null && pr.review_request.ended_at === null && <Chip>requested</Chip>}
-            </span>
+            <span className="flex">{pr.phase && <Chip word={pr.phase} className="min-w-0 shrink" />}</span>
+            {pr.ticket_key === null ? (
+                <None reason={NO_TICKET} className="truncate font-mono text-xs" />
+            ) : (
+                <span className="flex min-w-0 items-center gap-2">
+                    <TicketLink ticketKey={pr.ticket_key} className="shrink-0" />
+                    <TicketTitle title={pr.ticket_title} />
+                </span>
+            )}
             <Age at={pr.active_at} variant="ago" className="text-right" />
         </ListRow>
+    )
+}
+
+/**
+ * Where a PR stands, leading its row as a run's state does: while a run works it, the running dot and that run, then
+ * its latest review and that review's verdict (the dot how the review's run ended, the verdict's color its worst
+ * finding), or `not reviewed`, and `requested` while the operator's review request on it is open.
+ */
+function State({ pr }: { pr: PullRequest }) {
+    const review = pr.latest_review
+    return (
+        <span
+            className={cn(
+                'flex min-w-0 items-center gap-1.5 font-mono text-xs whitespace-nowrap',
+                review ? verdictTone(review) : 'text-muted-foreground',
+            )}
+            data-testid="pull-request-review"
+        >
+            {pr.running_run !== null && (
+                <span className="flex items-center gap-1.5 pr-1.5" data-testid="pull-request-run">
+                    <RunDot state="running" />
+                    <RunLink id={pr.running_run} />
+                </span>
+            )}
+            {review ? (
+                <>
+                    {pr.running_run === null && <RunDot state={review.state} />}
+                    <ReviewLink id={review.id} />
+                    <span className="truncate" title={verdictText(review)}>
+                        {verdictText(review)}
+                    </span>
+                </>
+            ) : (
+                'not reviewed'
+            )}
+            {pr.review_request !== null && pr.review_request.ended_at === null && <Chip>requested</Chip>}
+        </span>
     )
 }

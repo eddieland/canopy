@@ -135,9 +135,24 @@ select = ["ALL"]
 # value, Yields when it yields, Raises for each exception it raises itself, and none it does not have. These rules
 # are preview-only, so `preview` is on and `explicit-preview-rules` keeps every other preview rule off. DOC502 (a
 # documented exception the body does not raise) is not here: a Raises section rightly names what a callee raises.
+# The other preview rules here were chosen one by one; a preview rule not named stays off.
 preview = true
 explicit-preview-rules = true
-extend-select = ["DOC102", "DOC201", "DOC202", "DOC402", "DOC403", "DOC501"]
+extend-select = [
+    # Docstring sections (D018).
+    "DOC102", "DOC201", "DOC202", "DOC402", "DOC403", "DOC501", "D420",
+    # Likely bugs.
+    "B901", "B909", "PLE1141", "PLE4703", "PLW0244", "RUF045", "RUF056", "RUF065", "RUF066", "RUF071", "RUF072",
+    "RUF074", "RUF077",
+    # Complexity, beside the stable PLR09xx limits.
+    "PLR0904", "PLR0916", "PLR1702",
+    # Simpler spellings.
+    "B903", "FURB101", "FURB103", "FURB113", "FURB118", "FURB140", "FURB142", "FURB145", "FURB148", "FURB189",
+    "PLC2701", "PLC2801", "PLR6104", "PT029", "RUF031", "RUF038", "RUF039", "RUF047", "RUF050", "RUF052", "RUF055",
+    "RUF070", "TC008", "UP048", "UP051",
+    # Pickle and the stdlib XML parsers, unsafe on untrusted input; canopy reads other programs' output (TRUST_MODEL).
+    "S403", "S405", "S406", "S407", "S408", "S409", "S411",
+]
 ignore = [
     "COM812",  # Conflicts with `ruff format`, which owns trailing commas.
     "CPY001",  # No per-file copyright headers.
@@ -159,12 +174,21 @@ ban-relative-imports = "all"
 "subprocess".msg = "Run external processes through canopy.infra.procs."
 "os.system".msg = "Run external processes through canopy.infra.procs."
 "os.popen".msg = "Run external processes through canopy.infra.procs."
+"asyncio.create_subprocess_exec".msg = "Run external processes through canopy.infra.procs."
+"asyncio.create_subprocess_shell".msg = "Run external processes through canopy.infra.procs."
 # The harness makes no network call except through configured commands (TRUST_MODEL T2, DESIGN §20).
+"asyncio.open_connection".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
+"asyncio.open_unix_connection".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
+"ftplib".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
+"smtplib".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
 "urllib.request".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
 "http.client".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
 "socket".msg = "canopy makes no network calls; a sink command does (DESIGN §20)."
 # Tests patch with unittest.mock, as context managers (AGENTS.md, Testing).
 "pytest.MonkeyPatch".msg = "Patch with `mock.patch`, `mock.patch.object`, or `mock.patch.dict` in a `with` block."
+# A mock is specced, so a call the real thing would refuse fails the test (AGENTS.md, Testing).
+"unittest.mock.Mock".msg = "Spec it: `mock.patch.object(..., autospec=True)` or `mock.create_autospec(...)`."
+"unittest.mock.MagicMock".msg = "Spec it: `mock.patch.object(..., autospec=True)` or `mock.create_autospec(...)`."
 
 # `from unittest import mock`, then `mock.patch`, `mock.create_autospec` (AGENTS.md, Testing).
 [tool.ruff.lint.flake8-import-conventions]

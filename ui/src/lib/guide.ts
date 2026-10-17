@@ -3,8 +3,18 @@
 // `GuideText` renders as React elements, never HTML. It is canopy's own text, not the journal's, so unlike agent text
 // it reads labelled links too: to another page of the guide, to a section of the app, or to the web.
 
+import attention from '@/guide/attention.md?raw'
+import chores from '@/guide/chores.md?raw'
+import howTheLoopWorks from '@/guide/how-the-loop-works.md?raw'
+import memory from '@/guide/memory.md?raw'
 import overview from '@/guide/overview.md?raw'
+import plans from '@/guide/plans.md?raw'
+import pullRequests from '@/guide/pull-requests.md?raw'
+import runs from '@/guide/runs.md?raw'
+import settings from '@/guide/settings.md?raw'
 import signingIn from '@/guide/signing-in.md?raw'
+import tickets from '@/guide/tickets.md?raw'
+import ticks from '@/guide/ticks.md?raw'
 import { parseWith } from '@/lib/rich-text'
 import type { Block, Inline, Line } from '@/lib/rich-text'
 import { SECTIONS } from '@/lib/sections'
@@ -59,6 +69,26 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
         pages: [
             ['overview', overview],
             ['signing-in', signingIn],
+            ['how-the-loop-works', howTheLoopWorks],
+        ],
+    },
+    {
+        title: 'Your work',
+        pages: [
+            ['attention', attention],
+            ['tickets', tickets],
+            ['plans', plans],
+            ['pull-requests', pullRequests],
+        ],
+    },
+    {
+        title: 'The loop',
+        pages: [
+            ['runs', runs],
+            ['ticks', ticks],
+            ['chores', chores],
+            ['memory', memory],
+            ['settings', settings],
         ],
     },
 ]

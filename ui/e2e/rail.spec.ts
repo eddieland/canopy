@@ -22,7 +22,9 @@ test('the rail lists the runs working now, the running ones first, on every page
     await expect(page.getByTestId('rail-run-41')).toBeVisible()
 })
 
-test('the nav lists the sections by how often the operator opens them, Settings last', async ({ page }) => {
+test('the nav lists the sections by how often the operator opens them, and the foot opens Settings', async ({
+    page,
+}) => {
     await page.goto('attention')
     await settled(page)
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link')).toHaveText([
@@ -35,8 +37,13 @@ test('the nav lists the sections by how often the operator opens them, Settings 
         'Spend',
         'Ticks',
         'Worktrees',
-        'Settings',
+        'Memory',
     ])
+
+    await page.getByTestId('rail-settings').click()
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('Settings')
+    // Out of the nav, Settings is no item for its highlight to land on.
+    await expect(page.getByTestId('nav-highlight')).toHaveClass(/\bopacity-0\b/u)
 })
 
 test('the rail shows the spend of the last day and the last 30, and the version at its foot', async ({ page }) => {
@@ -46,6 +53,10 @@ test('the rail shows the spend of the last day and the last 30, and the version 
     await expect(page.getByTestId('rail-spend-24h')).toHaveText(`$${spend.day.cost_usd.toFixed(2)}`)
     await expect(page.getByTestId('rail-spend-30d')).toHaveText(/^\$\d+\.\d\d$/u)
     await expect(page.getByTestId('rail-footer')).toContainText(/canopy \S+/u)
+    await expect(page.getByTestId('rail-version')).toHaveAttribute(
+        'href',
+        'https://github.com/eddieland/canopy/releases',
+    )
 })
 
 test('the version stays at the window foot on a page longer than the window', async ({ page }) => {

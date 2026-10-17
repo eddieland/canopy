@@ -6,6 +6,7 @@ import { BubbleMenu } from '@tiptap/react/menus'
 import {
     Bold,
     ChevronDown,
+    ChevronUp,
     Code,
     Italic,
     List,
@@ -95,6 +96,7 @@ export function PlanEditor({
     editable = true,
     edited = false,
     onAskForChanges,
+    asked = false,
     actions,
     actionsNote,
     previous,
@@ -113,12 +115,17 @@ export function PlanEditor({
     edited?: boolean
     /** Sends the open comments, and a note on the whole plan, to the planner as one message. */
     onAskForChanges?: (message: string) => void
+    /** Whether the operator asked for changes no planner has read yet, so that asking again is said as such. */
+    asked?: boolean
     /** The caller's own word on the plan, such as Approve, at the start of the bar under it. */
     actions?: ReactNode
     /** What the caller says about those, under them in the bar: what they will do, or what one did. */
     actionsNote?: ReactNode
-    /** The plan this one replaces, by its name and Markdown, to show what changed since (`src/lib/plan-diff.ts`). */
-    previous?: { label: string; markdown: string } | undefined
+    /**
+     * The plan this one replaces, by its name and Markdown, to show what changed since (`src/lib/plan-diff.ts`); with
+     * `shown`, the changes show as the editor opens, until the operator turns them off.
+     */
+    previous?: { label: string; markdown: string; shown?: boolean } | undefined
 }) {
     const editor = useEditor({
         extensions: planExtensions([
@@ -156,8 +163,10 @@ export function PlanEditor({
     // which the operator wrote.
     const [original] = useState(() => editor.getMarkdown().trimEnd())
     const [changed, setChanged] = useState(false)
-    // Whether the words changed since the plan this one replaces are drawn over it.
-    const [showChanges, setShowChanges] = useState(false)
+    // Whether the words changed since the plan this one replaces are drawn over it: as the caller says until the
+    // operator says otherwise.
+    const [showChoice, setShowChoice] = useState<boolean | undefined>(undefined)
+    const showChanges = showChoice ?? previous?.shown === true
     const seen = useEditorState({
         editor,
         selector: ({ editor: current }) => {
@@ -169,6 +178,8 @@ export function PlanEditor({
                 // Where the comment being written starts, which places it among the threads.
                 draftFrom: highlights?.draft?.from,
                 selected: !current.state.selection.empty,
+                // How many changes since the plan this one replaces are drawn, while they are.
+                changes: changesKey.getState(current.state)?.starts.length ?? 0,
             }
         },
     })
@@ -354,6 +365,20 @@ export function PlanEditor({
         }
     }
 
+    // Puts the cursor at the next change after it, or the one before, round to the other end, as a document's compare
+    // steps through its changes; the plan scrolls to it, clear of the toolbar and the bar.
+    function goToChange(step: 1 | -1) {
+        const changeStarts = changesKey.getState(editor.state)?.starts ?? []
+        const head = editor.state.selection.head
+        const target =
+            step === 1
+                ? (changeStarts.find((pos) => pos > head) ?? changeStarts[0])
+                : (changeStarts.findLast((pos) => pos < head) ?? changeStarts.at(-1))
+        if (target !== undefined) {
+            editor.commands.focus(target)
+        }
+    }
+
     const open = threads.filter((thread) => !thread.resolved).length
     const threadActions: ThreadActions = {
         onActivate: (id) => activate(id, true),
@@ -442,16 +467,18 @@ export function PlanEditor({
                 >
                     {previous !== undefined && (
                         // A mode, named for what it shows: the plan as it reads now, with what changed marked on it.
-                        <Toggle size="xs" pressed={showChanges} onPressedChange={setShowChanges}>
+                        <Toggle size="xs" pressed={showChanges} onPressedChange={setShowChoice}>
                             Changes since {previous.label}
                         </Toggle>
                     )}
+                    {previous !== undefined && showChanges && <ChangeSteps count={seen.changes} onStep={goToChange} />}
                     {actions}
                     {onAskForChanges !== undefined && (
                         <AskForChanges
                             threads={threads}
                             starts={starts}
                             edited={edited || changed}
+                            asked={asked}
                             onAsk={onAskForChanges}
                         />
                     )}
@@ -475,6 +502,37 @@ export function PlanEditor({
                 </div>
             )}
         </div>
+    )
+}
+
+// How many changes are marked, and buttons that step the cursor to the one before or after it.
+function ChangeSteps({ count, onStep }: { count: number; onStep: (step: 1 | -1) => void }) {
+    return (
+        <span className="flex items-center gap-0.5">
+            <span className="readout mr-1 text-xs text-muted-foreground">
+                {count} {count === 1 ? 'change' : 'changes'}
+            </span>
+            <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Previous change"
+                title="Previous change"
+                disabled={count === 0}
+                onClick={() => onStep(-1)}
+            >
+                <ChevronUp aria-hidden />
+            </Button>
+            <Button
+                variant="ghost"
+                size="icon-xs"
+                aria-label="Next change"
+                title="Next change"
+                disabled={count === 0}
+                onClick={() => onStep(1)}
+            >
+                <ChevronDown aria-hidden />
+            </Button>
+        </span>
     )
 }
 

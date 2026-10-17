@@ -9,6 +9,8 @@ import type { Editor } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { EditorState, Transaction } from '@tiptap/pm/state'
 import { Decoration, DecorationSet } from '@tiptap/pm/view'
+import { diffArrays } from 'diff'
+import type { ArrayChange } from 'diff'
 
 import { docText, rangeOf } from '@/lib/plan-schema'
 
@@ -22,10 +24,14 @@ export interface Change {
     at: number
 }
 
-/** The diff's state: the old plan's text, while changes are shown, and what the editor draws. */
-interface Changes {
+/** The diff's state: the old plan's text, while changes are shown, what the editor draws, and where each change is. */
+export interface Changes {
+    /** The old plan's text as the editor reads it, while changes are shown. */
     base: string | undefined
+    /** The added words and the removed ones, as the editor draws them. */
     decorations: DecorationSet
+    /** Where each change starts in the plan, in its order, a removal and the words that replaced it one change. */
+    starts: number[]
 }
 
 /** How many words may differ before the plans are shown as all changed: past it, the comparison costs too much. */
@@ -48,7 +54,7 @@ export const PlanChanges = Extension.create({
             new Plugin<Changes>({
                 key: changesKey,
                 state: {
-                    init: () => ({ base: undefined, decorations: DecorationSet.empty }),
+                    init: () => ({ base: undefined, decorations: DecorationSet.empty, starts: [] }),
                     apply: (tr, prev, _, state) => next(tr, prev, state),
                 },
                 props: {
@@ -61,28 +67,33 @@ export const PlanChanges = Extension.create({
 
 /**
  * The runs of words that make `after` from `before`, in `after`'s order, a removed run before the run that replaced
- * it. Each word is compared whole, with the spaces after it. Past `cap` edits, the part that differs is one removed
- * run and one added.
+ * it. Each word is compared whole, without the spaces after it, and carries them in its run. Past `cap` edits, the
+ * part that differs is one removed run and one added.
  */
 export function diffWords(before: string, after: string, cap = MAX_EDITS): Change[] {
     const a = tokens(before)
     const b = tokens(after)
+    // Each word is compared without the spaces after it, so a word that ends a sentence in one plan and goes on in the
+    // other (`hour.`, `hour the`) is the same word; what is kept is the new plan's, spaces and all.
+    const keysA = a.map((token) => key(token))
+    const keysB = b.map((token) => key(token))
     let start = 0
-    while (start < a.length && start < b.length && a[start] === b[start]) {
+    while (start < a.length && start < b.length && keysA[start] === keysB[start]) {
         start += 1
     }
     let endA = a.length
     let endB = b.length
-    while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) {
+    while (endA > start && endB > start && keysA[endA - 1] === keysB[endB - 1]) {
         endA -= 1
         endB -= 1
     }
-    const ops = [
-        ...a.slice(0, start).map(() => SAME),
-        ...edits(a.slice(start, endA), b.slice(start, endB), cap),
-        ...a.slice(endA).map(() => SAME),
+    const removed = a.slice(start, endA)
+    const added = b.slice(start, endB)
+    const middle = diffArrays(removed, added, { maxEditLength: cap, comparator: (x, y) => key(x) === key(y) }) ?? [
+        part(removed, 'del'),
+        part(added, 'add'),
     ]
-    return runs(a, b, ops)
+    return runs([part(b.slice(0, start), 'same'), ...middle, part(b.slice(endB), 'same')])
 }
 
 /** The plain text of a plan's Markdown as the editor reads it, to compare with the plan open in `editor`. */
@@ -97,12 +108,13 @@ function next(tr: Transaction, prev: Changes, state: EditorState): Changes {
         return prev
     }
     const base = action === undefined ? prev.base : action.base
-    return { base, decorations: base === undefined ? DecorationSet.empty : draw(state, base) }
+    return base === undefined ? { base, decorations: DecorationSet.empty, starts: [] } : { base, ...draw(state, base) }
 }
 
-function draw(state: EditorState, base: string): DecorationSet {
+function draw(state: EditorState, base: string): Pick<Changes, 'decorations' | 'starts'> {
     const { text, positions } = docText(state.doc)
     const decorations: Decoration[] = []
+    const starts = new Set<number>()
     for (const change of diffWords(base, text)) {
         if (change.kind === 'same' || change.text.trim() === '') {
             continue
@@ -111,13 +123,19 @@ function draw(state: EditorState, base: string): DecorationSet {
             const range = rangeOf(positions, change.at, change.at + change.text.trimEnd().length)
             if (range !== undefined) {
                 decorations.push(Decoration.inline(range.from, range.to, { nodeName: 'ins', class: 'plan-ins' }))
+                starts.add(range.from)
             }
         } else {
             const removed = change.text.replaceAll(/\s+/gu, ' ').trim()
-            decorations.push(Decoration.widget(at(positions, change.at), () => struck(removed), { side: -1 }))
+            const where = at(positions, change.at)
+            decorations.push(Decoration.widget(where, () => struck(removed), { side: -1 }))
+            starts.add(where)
         }
     }
-    return DecorationSet.create(state.doc, decorations)
+    return {
+        decorations: DecorationSet.create(state.doc, decorations),
+        starts: [...starts].toSorted((a, b) => a - b),
+    }
 }
 
 // Where the text's offset `offset` falls in the document: just after the character before it, so words removed at the
@@ -146,8 +164,10 @@ function struck(text: string): HTMLElement {
     return element
 }
 
-type Op = 'same' | 'add' | 'del'
-const SAME: Op = 'same'
+// A word as it is compared: without the spaces after it, but a line break is still its own.
+function key(token: string): string {
+    return token.replace(/[^\S\n]+$/u, '')
+}
 
 // A text's words and each other character, in order, each with the spaces after it, so words replaced side by side
 // read as one change rather than several split by the spaces they share; each line break, between the plan's
@@ -156,85 +176,30 @@ function tokens(text: string): string[] {
     return text.match(/[\p{L}\p{N}_]+[^\S\n]*|[^\s\p{L}\p{N}_][^\S\n]*|\n|[^\S\n]+/gu) ?? []
 }
 
-// The shortest edits that make `b` from `a`, one op per word of either, by Myers' algorithm: each step `d` keeps how
-// far along `a` each diagonal reached, and the steps are walked back to read the edits. Each step's record keeps only
-// the diagonals it can read, -d-1 to d+1, so the memory grows with the edits rather than the plan. Past `cap` steps,
-// every word of `a` removed and every word of `b` added.
-function edits(a: readonly string[], b: readonly string[], cap: number): Op[] {
-    const n = a.length
-    const m = b.length
-    const steps = Math.min(n + m, cap)
-    const reach = new Int32Array(2 * steps + 3)
-    const zero = steps + 1
-    reach[zero + 1] = 0
-    const trace: Int32Array[] = []
-    for (let d = 0; d <= steps; d += 1) {
-        trace.push(reach.slice(zero - d - 1, zero + d + 2))
-        for (let k = -d; k <= d; k += 2) {
-            const down = k === -d || (k !== d && (reach[zero + k - 1] ?? 0) < (reach[zero + k + 1] ?? 0))
-            let x = down ? (reach[zero + k + 1] ?? 0) : (reach[zero + k - 1] ?? 0) + 1
-            let y = x - k
-            while (x < n && y < m && a[x] === b[y]) {
-                x += 1
-                y += 1
-            }
-            reach[zero + k] = x
-            if (x >= n && y >= m) {
-                return walkBack(trace, n, m)
-            }
-        }
-    }
-    return [...a.map((): Op => 'del'), ...b.map((): Op => 'add')]
+// Words as one part of a diff, as `diffArrays` writes its parts.
+function part(words: string[], kind: Change['kind']): ArrayChange<string> {
+    return { value: words, added: kind === 'add', removed: kind === 'del', count: words.length }
 }
 
-// The edits read back from Myers' steps, from the end of both texts to their start. Step `d`'s record holds diagonal
-// `k` at `k + d + 1`.
-function walkBack(trace: readonly Int32Array[], n: number, m: number): Op[] {
-    const ops: Op[] = []
-    let x = n
-    let y = m
-    for (let d = trace.length - 1; d >= 0; d -= 1) {
-        const reach = trace[d] ?? new Int32Array()
-        const zero = d + 1
-        const k = x - y
-        const down = k === -d || (k !== d && (reach[zero + k - 1] ?? 0) < (reach[zero + k + 1] ?? 0))
-        const prevK = down ? k + 1 : k - 1
-        const prevX = reach[zero + prevK] ?? 0
-        const prevY = prevX - prevK
-        while (x > prevX && y > prevY) {
-            ops.push('same')
-            x -= 1
-            y -= 1
-        }
-        if (d > 0) {
-            ops.push(x === prevX ? 'add' : 'del')
-        }
-        x = prevX
-        y = prevY
-    }
-    return ops.toReversed()
-}
-
-// The ops as runs of text, each with where it is in `b`'s text.
-function runs(a: readonly string[], b: readonly string[], ops: readonly Op[]): Change[] {
+// The parts as runs of text, each with where it is in the new text. A kept part is the new plan's words, as
+// `diffArrays` keeps them; an empty part is left out.
+function runs(parts: readonly ArrayChange<string>[]): Change[] {
     const out: Change[] = []
-    let i = 0
-    let j = 0
     let offset = 0
-    for (const op of ops) {
-        const word = op === 'add' ? b[j] : a[i]
+    for (const { value, added, removed } of parts) {
+        const kind: Change['kind'] = added ? 'add' : removed ? 'del' : 'same'
+        const text = value.join('')
+        if (text === '') {
+            continue
+        }
         const last = out.at(-1)
-        if (last?.kind === op) {
-            last.text += word ?? ''
+        if (last?.kind === kind) {
+            last.text += text
         } else {
-            out.push({ kind: op, text: word ?? '', at: offset })
+            out.push({ kind, text, at: offset })
         }
-        if (op !== 'del') {
-            offset += (b[j] ?? '').length
-            j += 1
-        }
-        if (op !== 'add') {
-            i += 1
+        if (kind !== 'del') {
+            offset += text.length
         }
     }
     return out

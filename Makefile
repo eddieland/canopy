@@ -79,13 +79,13 @@ install-check: ## Install canopy into an empty HOME and run it against the fakes
 # Not part of check: it needs what `canopy sandbox setup` installs and checks, and runs as you, not root. CI runs it as
 # its own job, on Linux (DESIGN §24, The canary, docs/SANDBOX.md).
 sandbox-canary: ## Check that the sandbox holds: the shipped wrapper and templates under the real srt
-	CANOPY_SANDBOX_CANARY=1 uv run pytest -q -n auto tests/canopy/test_sandbox_canary.py
+	CANOPY_SANDBOX_CANARY=1 uv run pytest -q -n auto tests/canopy_sandbox/test_sandbox_canary.py
 
 # Not part of check: it needs real treehouse on PATH (`make treehouse`). `make test` runs the same suite against the
 # fake, and against real treehouse too when it is on PATH; this fails where that skips. CI runs it as its own job, on
-# Linux and macOS (ROADMAP M45, DESIGN §18 What a pool guarantees).
+# Linux (ROADMAP M45, DESIGN §18 What a pool guarantees).
 pool-contract: ## Check that real treehouse keeps every guarantee canopy takes from a pool
-	CANOPY_POOL_CONTRACT=1 uv run pytest -q -n auto tests/canopy/test_pool_contract.py
+	CANOPY_POOL_CONTRACT=1 uv run pytest -q -n auto tests/canopy/core/test_pool_contract.py
 
 ##@ Setup
 

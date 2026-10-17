@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
+import { useState } from 'react'
 
 import { ApiError } from '@/api/client'
 import { loopQuery, ticketMemoryQuery, ticketPlansQuery, ticketQuery } from '@/api/queries'
@@ -42,6 +43,9 @@ export const Route = createFileRoute('/tickets/$key')({
 function TicketPage() {
     const { key } = Route.useParams()
     const { data, error } = useQuery(ticketQuery(key))
+    // The plans too, before the page paints: a plan waiting on the operator leads the page, which would otherwise
+    // push everything down as it arrived.
+    const plans = useQuery(ticketPlansQuery(key))
     if (error instanceof ApiError && error.status === 404) {
         return <Unknown ticketKey={key} />
     }
@@ -55,7 +59,7 @@ function TicketPage() {
             </>
         )
     }
-    if (data === undefined) {
+    if (data === undefined || plans.isPending) {
         return (
             <>
                 <PageHeader title={key} />
@@ -65,7 +69,8 @@ function TicketPage() {
             </>
         )
     }
-    return <Ticket detail={data} />
+    // Each ticket its own page, so what one settled (where its plan sits) is never another's.
+    return <Ticket key={data.ticket.key} detail={data} />
 }
 
 function Ticket({ detail }: { detail: TicketDetail }) {
@@ -82,6 +87,12 @@ function Ticket({ detail }: { detail: TicketDetail }) {
     const conversationOrder = useListOrder('conversation')
     const plans = useQuery(ticketPlansQuery(ticket.key)).data
     const planned = plans !== undefined && (plans.needed || plans.plans.length > 0)
+    // A plan waiting on the operator is what they came to answer, so it leads the page. Where it sits is settled once,
+    // as the plans arrive: a plan approved here stays where it was read, rather than move and lose what it said.
+    const [planLeads, setPlanLeads] = useState<boolean | undefined>(undefined)
+    if (planLeads === undefined && plans !== undefined) {
+        setPlanLeads(plans.newest?.plan.status === 'proposed' && plans.planning === null)
+    }
     const how = ticket.private
         ? `Private, ${ticket.start ?? 'started'}. Its conversation stays in canopy; nothing reaches the ticket.`
         : 'Public: its queue label authorizes it. Its conversation is on the ticket, and copied here.'
@@ -95,6 +106,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
             >
                 {how}
             </PageHeader>
+            {planned && planLeads === true && <TicketPlan ticketKey={ticket.key} plans={plans} />}
             {/* The detail skeleton (DESIGN.md): what it is and its actions, its conversation, then its lists. */}
             {/* Wide, the conversation moves beside the rest, as in the inbox; the source keeps the reading order. */}
             <div
@@ -199,7 +211,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     )}
                 </Panel>
             </div>
-            {planned && <TicketPlan ticketKey={ticket.key} plans={plans} />}
+            {planned && planLeads === false && <TicketPlan ticketKey={ticket.key} plans={plans} />}
             <TicketMemoryPanel ticketKey={ticket.key} />
         </>
     )
@@ -225,7 +237,7 @@ function TicketMemoryPanel({ ticketKey }: { ticketKey: string }) {
                 <Empty>no notes yet: its runs write them as they end</Empty>
             ) : (
                 <PanelScroll label="Memory">
-                    <MemoryRows entries={data.notes} />
+                    <MemoryRows entries={data.notes} digest={data.digest} />
                 </PanelScroll>
             )}
             {data?.digest && <MemoryDigestView digest={data.digest} served="served to its next run" />}

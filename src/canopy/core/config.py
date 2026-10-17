@@ -123,7 +123,9 @@ def _comment_mark(value: str) -> str:
     # What workers start or end every comment with; a comment that carries it is never feedback or an instruction
     # (DESIGN §8, D069). Empty means not used. Prompts quote it in backticks, and one without a letter or digit (`-`,
     # `>`) would match ordinary list items and quotes.
-    if value and (
+    if not value:
+        return value
+    if (
         len(value) > MAX_COMMENT_MARK
         or value != value.strip()
         or not value.isprintable()

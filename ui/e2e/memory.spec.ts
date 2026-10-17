@@ -27,8 +27,15 @@ test('the memory page heads each tier with what reads it, and shows what a worke
     await expect(notes.getByTestId('memory-band')).toHaveText(
         "ticket notes: in useIn use. A ticket's later runs read its notes.",
     )
+    // One row a ticket, the newest note's first, each opening to its notes in force.
+    await expect(notes.getByTestId(/^memory-ticket-/u)).toHaveCount(2)
+    await expect(notes.getByTestId('memory-notes-count')).toHaveText('3')
+    const ticket = notes.getByTestId('memory-ticket-ABC-100')
+    await expect(ticket).toContainText('read by no run')
+    await expect(ticket.getByTestId('memory-3')).toHaveCount(0)
+    await ticket.getByRole('button', { name: 'Show 2 notes' }).click()
     // Written to the journal by hand, past the bounds: its link is text, and its zero-width space is named.
-    const cache = notes.getByTestId('memory-3')
+    const cache = ticket.getByTestId('memory-3')
     await expect(cache).toContainText('[package-lock.json](https://evil.example/lock)<U+200B>, so a bumped')
     await expect(cache.getByRole('link', { name: /evil/u })).toHaveCount(0)
     await expect(cache).toContainText('read by no run')

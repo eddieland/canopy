@@ -41,7 +41,8 @@ DECIDE_ACTIONS = ("wait", "skip", "done")
 def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationale: str) -> int:
     """Record a decision (overseer only).
 
-    ACTION is wait, skip, or done. KEY may be omitted only for a tick-wide skip.
+    ACTION is wait, skip, or done. KEY may be omitted only for a tick-wide skip, whose rationale starts
+    `mcp_unavailable:` or `tracker_unsupported:`; a skip with KEY may not give either.
     """
     if len(words) > 2:  # noqa: PLR2004
         raise click.UsageError(f"expected [KEY] ACTION, got {len(words)} arguments", click_ctx)
@@ -52,6 +53,22 @@ def cmd_decide(click_ctx: click.Context, words: tuple[str, ...], rationale: str)
         raise click.UsageError(f"invalid ticket key {key!r}: must match {KEY_RE.pattern}", click_ctx)
     if key is None and action != "skip":
         raise click.UsageError(f"{action!r} needs a ticket key; only a tick-wide 'skip' may omit it", click_ctx)
+    # A skip's form is checked, not left to the overseer's guess: a tick-wide reason under a made-up key skips nothing
+    # and leaves the tick going on, and a ticket's skip without its key would close the whole tick `skipped`.
+    reasons = " or ".join(f"'{reason}: ...'" for reason in duties.TICK_WIDE_SKIPS)
+    if key is None and not duties.tick_wide(rationale):
+        raise click.UsageError(
+            f"a skip with no key skips the whole tick, so its rationale is {reasons}; "
+            "a skip about one ticket names its key",
+            click_ctx,
+        )
+    if key is not None and action == "skip" and duties.tick_wide(rationale):
+        raise click.UsageError(
+            f"{rationale.split(':', 1)[0].strip()!r} skips the whole tick and names no key: "
+            "`canopy decide skip --rationale '...'`, only when the tick cannot go on; "
+            "otherwise decide each ticket under its own key",
+            click_ctx,
+        )
     ctx = open_context(click_ctx)
     current = require_tick(ctx)
     if key is not None:

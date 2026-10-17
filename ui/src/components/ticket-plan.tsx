@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useBlocker } from '@tanstack/react-router'
 import { Check, Save, SkipForward } from 'lucide-react'
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
 
@@ -20,8 +21,18 @@ import { Notice } from '@/components/notice'
 import { Empty, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PlanEditor } from '@/components/plan-editor'
 import { Chip } from '@/components/status'
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import { PendingWork, usePending, usePendingWork } from '@/hooks/use-pending'
 import { planText } from '@/lib/outcomes'
 import { fromServer, movedAnchors, threadChanges } from '@/lib/plan-threads'
 import type { PlanThread, ThreadChange } from '@/lib/plan-threads'
@@ -42,17 +53,29 @@ const SAVE_KEYS = 'Mod-s'
 export function TicketPlan({ ticketKey, plans }: { ticketKey: string; plans: TicketPlans }) {
     const newest = plans.newest
     const earlier = plans.plans.filter((plan) => plan.id !== newest?.plan.id).toReversed()
+    // What leaving the page would lose, which it asks about first: an edit not yet saved, or words not yet sent.
+    const [pending, reportPending] = usePendingWork()
+    const held = new Set(pending.values())
+    const leaving = useBlocker({
+        // A move within the page, such as a list flipped, loses nothing.
+        shouldBlockFn: ({ current, next }) => current.pathname !== next.pathname,
+        enableBeforeUnload: true,
+        disabled: pending.size === 0,
+        withResolver: true,
+    })
     return (
         <section aria-label="Plan" className="flex flex-col gap-3" data-testid="ticket-plan">
             <PlanStatus plans={plans} />
             {newest !== null && newest.text !== null && (
-                <NewestPlan
-                    key={newest.plan.id}
-                    ticketKey={ticketKey}
-                    plans={plans}
-                    newest={newest}
-                    text={newest.text}
-                />
+                <PendingWork value={reportPending}>
+                    <NewestPlan
+                        key={newest.plan.id}
+                        ticketKey={ticketKey}
+                        plans={plans}
+                        newest={newest}
+                        text={newest.text}
+                    />
+                </PendingWork>
             )}
             {newest !== null && newest.text === null && (
                 <Panel>
@@ -62,6 +85,13 @@ export function TicketPlan({ ticketKey, plans }: { ticketKey: string; plans: Tic
                 </Panel>
             )}
             {earlier.length > 0 && <EarlierPlans ticketKey={ticketKey} plans={earlier} />}
+            <ConfirmLeave
+                open={leaving.status === 'blocked'}
+                edits={held.has('edit')}
+                words={held.has('words')}
+                onStay={() => leaving.reset?.()}
+                onLeave={() => leaving.proceed?.()}
+            />
         </section>
     )
 }
@@ -93,6 +123,12 @@ function PlanStatus({ plans }: { plans: TicketPlans }) {
                 <span>None yet: the next tick dispatches a planner.</span>
             )}
             {plans.planning !== null && <span>Run {plans.planning} is writing a new plan.</span>}
+            {plans.planning === null && plans.changes_asked !== null && (
+                <span>
+                    You asked for changes <Age at={plans.changes_asked} variant="ago" />: the next tick asks the planner
+                    for a new plan.
+                </span>
+            )}
         </p>
     )
 }
@@ -138,7 +174,11 @@ function NewestPlan({
     const status = newest.plan.status
     const editable = plans.planning === null && (status === 'proposed' || status === 'approved')
     const dirty = markdown !== text
+    usePending(dirty, 'edit')
     const approvable = status === 'proposed' || (status === 'approved' && (newest.changed_since_approval || dirty))
+    // Open comments reach no one on Approve: the implement reads the plan alone. While any are, Approve steps back for
+    // Ask for changes, and the line under the actions says why.
+    const open = held.filter((thread) => !thread.resolved).length
 
     function refresh(): Promise<void> {
         return client.invalidateQueries({ queryKey: keys.ticketPlans(ticketKey) })
@@ -265,16 +305,22 @@ function NewestPlan({
             onChange={setMarkdown}
             editable={editable}
             edited={newest.edited}
+            // A waiting plan that replaced one is read for what changed, so its changes show first.
             previous={
                 before !== undefined && typeof replaced?.text === 'string'
-                    ? { label: `plan ${before.id}`, markdown: replaced.text }
+                    ? { label: `plan ${before.id}`, markdown: replaced.text, shown: status === 'proposed' }
                     : undefined
             }
             onAskForChanges={status === 'proposed' ? askForChanges : undefined}
+            asked={plans.changes_asked !== null}
             actions={
                 <div className="flex flex-wrap items-center gap-2" data-testid="plan-actions">
                     {approvable && (
-                        <Button onClick={() => decide('approve')} disabled={busy > 0}>
+                        <Button
+                            variant={status === 'proposed' && open > 0 ? 'outline' : 'default'}
+                            onClick={() => decide('approve')}
+                            disabled={busy > 0}
+                        >
                             <Check />
                             {dirty ? 'Save and approve' : 'Approve'}
                         </Button>
@@ -304,12 +350,22 @@ function NewestPlan({
                     <p className="text-xs text-muted-foreground">
                         Approving takes the plan as saved, your edits included, and lets its implement go ahead.
                         {status === 'approved' && ' Saving an edit means approving it again.'}
+                        {status === 'proposed' && open > 0 && ` ${openText(open)}`}
                     </p>
                     <Notice error={failure}>{said}</Notice>
                 </div>
             }
         />
     )
+}
+
+// What approving does to the comments still open, which reach the planner only through Ask for changes.
+function openText(open: number): string {
+    const which =
+        open === 1
+            ? '1 comment is still open: approving does not send it'
+            : `${open} comments are still open: approving sends none of them`
+    return `${which}, since the implement reads the plan alone. Ask for changes does.`
 }
 
 /** The ticket's earlier plans, newest first, each read only once opened. */
@@ -361,4 +417,47 @@ function EarlierPlan({ ticketKey, plan }: { ticketKey: string; plan: PlanSummary
 // An earlier plan is read only: nothing changes its threads.
 function ignore(): void {
     // Nothing to do.
+}
+
+// Leaving the page with an edit not yet saved, or words in a comment not yet sent, asks first, as a document does:
+// Stay, which takes the focus and which Escape gives too, or Leave, which loses them.
+function ConfirmLeave({
+    open,
+    edits,
+    words,
+    onStay,
+    onLeave,
+}: {
+    open: boolean
+    edits: boolean
+    words: boolean
+    onStay: () => void
+    onLeave: () => void
+}) {
+    const lost = [edits && 'your edits to the plan are not saved', words && 'what you wrote in a comment is not sent']
+    return (
+        <AlertDialog
+            open={open}
+            onOpenChange={(next) => {
+                if (!next) {
+                    onStay()
+                }
+            }}
+        >
+            <AlertDialogContent>
+                <AlertDialogTitle>Leave this page?</AlertDialogTitle>
+                <AlertDialogDescription>{leaveText(lost.filter((part) => part !== false))}</AlertDialogDescription>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Stay</AlertDialogCancel>
+                    <AlertDialogAction onClick={onLeave}>Leave</AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+    )
+}
+
+// What leaving loses, as a sentence: `Your edits to the plan are not saved, and what you wrote ... is not sent.`
+function leaveText(parts: string[]): string {
+    const said = parts.join(', and ')
+    return `${said.charAt(0).toUpperCase()}${said.slice(1)}.`
 }

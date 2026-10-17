@@ -30,19 +30,34 @@ If code and the design disagree, the design doc wins until a decision entry says
   design saying otherwise is incomplete. The design says what canopy does and why, not how the code does it; what
   belongs there, and where the rest goes, is at the top of `docs/design/README.md`. Most PRs add a sentence there, or
   change one, or none.
-- Every new runtime dependency gets a `docs/DECISIONS.md` entry saying why stdlib was insufficient. A dev-only tool (a
-  linter, a checker, a test plugin) gets none; a comment where it is configured says what it is for.
+- Add a dependency judiciously: when it clearly beats the code we would write instead, and its PR says why. It gets a
+  `docs/DECISIONS.md` entry only when it passes that file's bar: code across canopy is shaped around it, it handles
+  untrusted input, or it would otherwise be proposed again. Most need none. A dev-only tool (a linter, a checker, a
+  test plugin) gets a comment where it is configured saying what it is for.
 - Most PRs add no decision entry. `docs/DECISIONS.md` holds only what every future agent must know, whatever part of
-  the code it works on: a constraint that spans the codebase, a rule the trust boundary relies on, a runtime
-  dependency, or a direction the operator settled. The test: could an agent working on an unrelated part of canopy
-  break it, or reopen it, without knowing? If not, it is not a decision entry. Why a feature behaves as it does, and
-  what was rejected for it, goes in the design next to the behavior; why a line of code is so goes in a comment
-  there; the story of a change goes in its PR; progress goes on the milestone's lines in `docs/ROADMAP.md`. A new
-  feature, command, config key, or default is not a decision by itself. When in doubt, leave it out.
+  the code it works on: a constraint that spans the codebase, a rule the trust boundary relies on, or a direction the
+  operator settled. The test: could an agent working on an unrelated part of canopy break it, or reopen it, without
+  knowing? If not, it is not a decision entry. Why a feature behaves as it does, and what was rejected for it, goes in
+  the design next to the behavior; why a line of code is so goes in a comment there; the story of a change goes in its
+  PR; progress goes on the milestone's lines in `docs/ROADMAP.md`. A new feature, command, config key, default, or
+  dependency is not a decision by itself. When in doubt, leave it out.
 - An entry that passes is short: a title that states the decision and two to four one-line bullets. The bar and the
   format are at the top of `docs/DECISIONS.md`.
-- Changes to `docs/TRUST_MODEL.md`, `prompts/overseer.md`, or anything under `agents/` require an explicit human
-  approval note in the PR description. These files define what the loop is allowed to do.
+- `docs/TRUST_MODEL.md`, `.agents/prompts/overseer.md`, and everything under `.agents/agents/` define what the loop is
+  allowed to do. A PR that changes them says in its summary what the change lets the loop do; the operator approves it
+  by merging the PR, and no separate approval note is asked for.
+- An issue you file carries labels from each group, before anything else about it is worked out:
+  - **Type**, one: `bug`, `enhancement`, `documentation`, `measure` (a measurement for `docs/MEASUREMENTS.md`), or
+    `milestone` (tracks a ROADMAP milestone; the roadmap is the record, the issue holds the discussion).
+  - **Priority**, one: `P0` next up (misleads the operator, wastes runs, or blocks other work), `P1` high, `P2`
+    medium, `P3` low or waiting on something else, `P4` parked on purpose, such as a deferred milestone. Keep P0 and
+    P1 short enough to mean something; when a tier crowds, move something down.
+  - **Area**, one or more: `area: ui`, `loop`, `runs`, `reviews`, `workspaces`, `trust`, `prompts`, `memory`.
+  - **Status**, only when it applies: `needs-decision` when the operator must settle something first, and `blocked`
+    when it waits on another issue, which its body or a comment names.
+
+  Other labels are canopy's own: the queue label and `needs-human`, which the loop reads and writes, and `agent` on
+  its PRs. Never set those by hand to file an issue.
 - When unsure, prefer the smaller change and leave a note in the PR. Do not invent requirements.
 
 ## Toolchain
@@ -54,9 +69,9 @@ If code and the design disagree, the design doc wins until a decision entry says
 - `rumdl` lints and formats Markdown with every default rule. `editorconfig-checker` (`ec`) holds every file that is
   not Python or Markdown to `.editorconfig`. `shellcheck` lints shell scripts and `actionlint` the GitHub workflows.
   All are dev dependencies, so `uv sync` installs them and `make lint` runs them.
-- ruff selects every stable rule, and the preview pydoclint rules (D018): a public module, class, or function has a
-  Google docstring, with Returns, Yields, and Raises sections that match its body. Opt out with a commented `ignore`
-  entry or a `noqa` with a code; never narrow `select`.
+- ruff selects every stable rule, and preview rules named one by one, the pydoclint ones among them (D018): a public
+  module, class, or function has a Google docstring, with Returns, Yields, and Raises sections that match its body.
+  Opt out with a commented `ignore` entry or a `noqa` with a code; never narrow `select`.
 - `make all` runs fmt, lint (including type checks), and tests. It must pass before any PR.
 - `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it, as two jobs side by side
   (`lint test` and `ui-check`), except on a pull request that changes only docs, where every check passes without
@@ -64,9 +79,9 @@ If code and the design disagree, the design doc wins until a decision entry says
 - `make install-check` installs canopy with `uv tool install` into an empty HOME and runs a dry tick against the
   fakes (D046). CI runs it too; run it when you change packaging, bundled files, or the install steps.
 - Stdlib first: `sqlite3`, `tomllib`, `subprocess`, `fcntl`, `json`, `logging`. Add a third-party dependency only when
-  stdlib makes the code materially worse, and record why. Adopted so far: `click` for the CLI (D025), `pydantic` for
-  validating config and anything parsed from another program's output (D026), `hypothesis` for property tests of input
-  validators (dev only), `pytest-xdist` to run the tests in parallel (dev only), `rich` for terminal output
+  stdlib makes the code materially worse, and say why in its PR. Adopted so far: `click` for the CLI (D025),
+  `pydantic` for validating config and anything parsed from another program's output (D026), `hypothesis` for property
+  tests of input validators (dev only), `pytest-xdist` to run the tests in parallel (dev only), `rich` for terminal output
   (D043), `fastapi` and `uvicorn` for the web UI's server (D074, only in `canopy.serve`), and `httpx2` for its test
   client (D079, dev only), and `syrupy` for snapshot tests (dev only).
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
@@ -119,12 +134,14 @@ If code and the design disagree, the design doc wins until a decision entry says
 - SQLite: WAL mode, `PRAGMA foreign_keys=ON`, numbered migrations in `migrations/NNNN_name.sql` applied in order at
   startup, recorded in a `schema_migrations` table. Never edit a shipped migration; add a new one. The series was
   squashed into `0001_init.sql` once, for v0.1 (D068); that is not a precedent for editing one.
-  A new migration adds its hash to `SHIPPED` in `tests/canopy/test_db.py`, and a row to `SEED` for each table it
-  creates; a test there applies every migration to a journal with data in it and fails on any row lost.
+  A new migration gets a companion, `tests/canopy/core/migrations/NNNN.sql` for the same version, opening with the
+  migration's sha256 and holding a row for each table it creates; `tests/canopy/core/test_db.py` fails on an edited
+  migration, and applies every migration to a journal with data in it and fails on any row lost. Two PRs that take the
+  same version conflict on the companion: the one merged second renumbers its migration and companion both.
 - A query that returns a table's whole rows reads them as that table's row type in `core/records.py`
   (`records.fetch_all`, `records.fetch_one`), not as `sqlite3.Row`. A new table gets its row type in the PR that adds
-  it, and an old one when a PR already changes its queries. `tests/canopy/test_records.py` holds each row type to its
-  table, so a migration that adds a column to a typed table adds the field too. A status, kind, or phase column is a
+  it, and an old one when a PR already changes its queries. `tests/canopy/core/test_records.py` holds each row type to
+  its table, so a migration that adds a column to a typed table adds the field too. A status, kind, or phase column is a
   field of its `core/vocab.py` enum, so the row carries the member and refuses a value the vocabulary does not hold. A
   helper that reads the same columns from several tables, some still untyped, reads them through `records.columns`.
 - A run's and a tick's status, a run's kind, and a ticket's phase are closed vocabularies in `core/vocab.py`, each a
@@ -132,7 +149,7 @@ If code and the design disagree, the design doc wins until a decision entry says
   journal where it branches on it. A branch over one is a `match` ending in `case _: assert_never(...)`, so a new value
   fails the type check until every branch handles it. click matches an enum choice by its name, so a `click.Choice` over
   one takes its values. A table made from M36 on constrains each `status`, `kind`, and `phase` column with
-  `CHECK (column IN (...))`; `tests/canopy/test_db.py` fails on one that does not.
+  `CHECK (column IN (...))`; `tests/canopy/core/test_db.py` fails on one that does not.
 - Hard guards live in code, judgment lives in prompts. Capacity limits, attempt limits, cooldowns, "never merge", and
   "one worker per ticket" are enforced by the harness regardless of what the overseer asks for.
 - Log with `logging`, JSON lines to `.canopy/canopy.log` in the workspace. Every tick has an id that appears in every
@@ -148,7 +165,7 @@ If code and the design disagree, the design doc wins until a decision entry says
   `from unittest.mock import ...`.
 - A mock is specced: `mock.patch.object(module, "fn", autospec=True)`, with `side_effect` or `return_value` for what
   it does, or `mock.create_autospec(...)`, so a call the real thing would refuse fails the test. Never a bare
-  `Mock()` or `MagicMock()`. Patching a plain value (a limit, a constant) needs no spec.
+  `Mock()` or `MagicMock()`; ruff fails the lint on them. Patching a plain value (a limit, a constant) needs no spec.
 - A patch lasts as long as its `with` block. A fixture that patches yields inside the block. A helper that sets up
   state for the code after it is a context manager (`with in_tick(conn) as tick_id:`, `with worker_does(...):`), and
   a helper that needs a patch only while it runs opens and closes its own. `hermetic_agent_env` restores the whole
@@ -159,25 +176,35 @@ If code and the design disagree, the design doc wins until a decision entry says
   it through an env var.
 - Fixtures live in `tests/conftest.py`: `fakes_on_path`, `treehouse_state` (the fake pool's state file), `agent_log`
   (what each fake agent run saw), and `canopy_env` (a workspace of one repository, `repo`, and a user config in a temp
-  directory, with HOME pointed there; commands that name a repository pass `--repo repo`). Each fake's docstring lists
-  the env vars and state keys it reads. The fake agent can run commands (`FAKE_AGENT_COMMANDS`), which is how a test
-  plays an overseer calling `canopy decide`.
+  directory, with HOME pointed there; commands that name a repository pass `--repo repo`; `append_user` and
+  `append_shared` add to its config files). Each fake's docstring lists the env vars and state keys it reads. The fake
+  agent can run commands (`FAKE_AGENT_COMMANDS`), which is how a test plays an overseer calling `canopy decide`. Beside
+  them are the plain helpers every test may need: `git`, and `executable` for a script a test puts on a path.
 - What two test modules share lives in one place, never in a test module: `tests/canopy/conftest.py` for fixtures
-  (`conn`, the workspace's journal; `ctx`; the web UI's mock `backend`; `ws`), `tests/canopy/helpers.py` for helpers
-  (`in_tick`, `decisions`, `dispatch_and_run`, and scripting the fake agents: `overseer_does(canopy(...))`,
-  `worker_does`), and `web_helpers.py` and `review_helpers.py` beside it. A test module imports from no other;
+  (`conn`, the workspace's journal; `ctx`; the web UI's mock `backend`; `ws`; `notified` and `sink_script`, notification
+  commands that record what they are sent), `tests/canopy/helpers.py` for helpers (`in_tick`, with `ends_ok=True` for a
+  tick that ends as the block does; `in_run`; `decisions`, `last_tick`, `dispatch_and_run`, `messages`; `present`, for a
+  row the test knows is there; and scripting the fake agents: `overseer_does(canopy(...))`, `worker_does(sleep=60)`,
+  `chore_reports`), and `web_helpers.py` and `review_helpers.py` beside it. A test module imports from no other;
   `tests/canopy/test_layers.py` fails otherwise. Look there before writing a helper, and move one there once a second
-  module needs it.
+  module needs it. A test that plays an overseer, a worker, or another agent scripts it through those helpers, not by
+  patching its `FAKE_*` variables itself; `test_procs.py`, which tests the runner rather than a role, sets them directly.
 - A test opens a journal through `canopy_env.journal()`, or the `journals` fixture for one outside a workspace, never
   `db.connect` directly: those close it when the test ends. A connection, file, or pipe left open raises a
   ResourceWarning, which fails the test like any other warning.
 - Every test directory has an `__init__.py`, `tests/` included (D019). ruff's `INP001` fails the lint on one that does
   not. The root one matters most: without it, `tests/canopy/` is imported as a package named `canopy` and shadows
   `src/canopy`.
+- A test module sits parallel to the package it tests: `tests/canopy/runs/` holds the tests of `canopy.runs`, and
+  `tests/canopy_sandbox/` those of the workspace member `canopy_sandbox`. A feature's tests go with the package that
+  owns it, even when they drive it through the CLI; only tests of canopy as a whole (its layers, its models, its
+  property tests, the OpenCode canary) sit in `tests/canopy/` itself. `tests/canopy/test_layers.py` fails on a test
+  module anywhere else.
 - One end-to-end test runs `canopy tick --dry-run` against the fakes and asserts on the `decisions` and `ticks`
   tables.
 - What canopy renders whole, such as the overseer's state block, is held by a snapshot test: a journal written by hand,
-  the output compared with syrupy's `snapshot` fixture, recorded in the test's `__snapshots__/` directory.
+  the output compared with syrupy's `snapshot` fixture, or `markdown_snapshot` for a file a person can read whole,
+  recorded in the test's `__snapshots__/` directory.
   `make snapshots` records the ones that differ, and the diff is reviewed with the change. A snapshot holds canopy's
   output, never a model's.
 - Prompts are not unit-tested. `canopy tick --dry-run` writes the overseer's plan to the `decisions` table; that table
@@ -204,5 +231,6 @@ If code and the design disagree, the design doc wins until a decision entry says
 - New behavior has a test using the fakes.
 - Docs updated: the design where it states the behavior, within its bar, `README.md` if the install path or daily surface
   changed (and the install path is still five steps), the web UI's guide (`ui/src/guide/`) where a page of it
-  describes what changed, and `DECISIONS.md` only if the change passes its bar.
+  describes what changed, in the guide's own voice (`ui/AGENTS.md`), and `DECISIONS.md` only if the change passes
+  its bar.
 - No new capability lets the loop do something `TRUST_MODEL.md` says it must not.

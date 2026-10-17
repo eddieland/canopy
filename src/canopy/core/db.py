@@ -13,6 +13,7 @@ from collections.abc import Callable, Generator, Iterable, Mapping, Sequence
 from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, assert_never
 
@@ -30,6 +31,10 @@ BUSY_SECONDS = 10.0
 _MIGRATION_RE = re.compile(r"(\d{4})_([a-z0-9_]+)\.sql")
 # The rationale the overseer gives a `done` decision for a ticket the tracker reports closed (DESIGN §7).
 CLOSED_RATIONALE = "closed"
+# The version of canopy this process runs, recorded on each tick it starts (DESIGN §6). Read once, at import: an upgrade
+# while `canopy loop` runs replaces the installed package's metadata, not the code this process loaded, so a read per
+# tick would name the new release on ticks the old code ran.
+CANOPY_VERSION = version("canopy")
 
 # `canopy ticket set --cursor NAME=ID` names, and the column each one updates. The comment cursor is the ticket's; the
 # review and ci cursors are a unit's, since each unit has its own PR (DESIGN §18). The message cursor is a private
@@ -252,12 +257,15 @@ def _rowid(cur: sqlite3.Cursor) -> int:
 
 
 def start_tick(conn: sqlite3.Connection, *, dry_run: bool) -> int:
-    """Insert a `running` tick row and return its id.
+    """Insert a `running` tick row, with the version of canopy running it, and return its id.
 
     Returns:
         The new tick's id.
     """
-    cur = conn.execute("INSERT INTO ticks (started_at, dry_run) VALUES (?, ?)", (now(), int(dry_run)))
+    cur = conn.execute(
+        "INSERT INTO ticks (started_at, dry_run, canopy_version) VALUES (?, ?, ?)",
+        (now(), int(dry_run), CANOPY_VERSION),
+    )
     return _rowid(cur)
 
 
@@ -1205,7 +1213,7 @@ def pull_requests(conn: sqlite3.Connection, limit: int, *, url: str | None = Non
     """
     if limit < 1:
         return []
-    with _snapshot(conn):
+    with read_snapshot(conn):
         urls = json.dumps([url] if url is not None else _candidates(conn, _PR_ACTIVITY, limit))
         return _weighed_pull_requests(conn, urls, limit)
 
@@ -1260,12 +1268,12 @@ def _candidates(conn: sqlite3.Connection, sources: Sequence[str], limit: int) ->
 
 
 @contextmanager
-def _snapshot(conn: sqlite3.Connection) -> Generator[None]:
+def read_snapshot(conn: sqlite3.Connection) -> Generator[None]:
     """Every read in the block sees one snapshot of the journal: a deferred transaction, which writes nothing.
 
-    The candidates and the weighing of them are separate reads, and a commit between them in autocommit could leave
-    out a key that its new activity had just moved among the newest. Inside a transaction already, as the event
-    stream's reads are, the block reads in that one.
+    The journal's connections are autocommit, so without it each query reads its own snapshot, and a commit between two
+    reads could leave a row in one and out of the other: here, a key its new activity had just moved among the newest
+    candidates. Inside a transaction already, as the event stream's reads are, the block reads in that one.
     """
     if conn.in_transaction:
         yield
@@ -1593,7 +1601,7 @@ def recent_tickets(conn: sqlite3.Connection, limit: int, *, key: str | None = No
     """
     if limit < 1:
         return []
-    with _snapshot(conn):
+    with read_snapshot(conn):
         keys = [key] if key is not None else _candidates(conn, _TICKET_ACTIVITY, limit)
         return _weighed_tickets(conn, json.dumps(keys), limit)
 

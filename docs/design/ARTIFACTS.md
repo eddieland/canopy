@@ -4,9 +4,9 @@ Part of the canopy design, normative like all of it: artifacts canopy's workers 
 them, and how those comments come back to a ticket. Sections are numbered across the whole design; the
 [README](README.md) has the map. Previous: [Agent memory](MEMORY.md).
 
-## 29. Artifacts and Louvre (M52)
+## 29. Artifacts and Louvre (M53)
 
-Designed, not built (ROADMAP M52, REQUIREMENTS R20). Until it is built, a worker's output reaches people as a PR, a
+Designed, not built (ROADMAP M53, REQUIREMENTS R20). Until it is built, a worker's output reaches people as a PR, a
 ticket comment, or a plan (§25), and nothing here describes canopy as it is.
 
 An **artifact** is a page a worker publishes for people to read: a report, a design, an HTML mock-up, a plan. People

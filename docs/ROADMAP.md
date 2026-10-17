@@ -299,7 +299,7 @@ Learned: closed on the operator's real use; the day-long check is SCENARIOS S29.
 REQUIREMENTS R14, DESIGN §23. Needs M3. Asked for by the operator (2026-10-09): a check that fails for a
 reason the change did not cause sends a `fix-ci` worker to change code that is not broken, and spends its attempts.
 
-- TRUST_MODEL T1, T3, T6, T7, §6, and §7 as DESIGN §23 lists them, with the operator's approval note in the PR.
+- TRUST_MODEL T1, T3, T6, T7, §6, and §7 as DESIGN §23 lists them.
 - Config: `policy.max_triage_ci_attempts` (default 0), `runtime.triage_cmd`, `runtime.triage_timeout_minutes`,
   `runtime.triage_skill`.
 - `canopy dispatch --kind triage-ci`: `triage_off`, one unit, no slot. `_run` runs it in the unit's primary clone after
@@ -344,13 +344,13 @@ canopy, not built after an incident.
   prefixes for `worker_cmd`, `private_worker_cmd`, `split_cmd`, `setup_cmd`, and chore `cmd`, the allowlist, HTTPS
   remotes, and Ubuntu 24.04's restriction on unprivileged user namespaces. `canopy init` prints the suggested
   `worker_cmd` and writes nothing.
-- The canary (HOST_ISOLATION §6), `tests/canopy/test_sandbox_canary.py`, opt-in with `CANOPY_SANDBOX_CANARY=1`: a
-  plain script run through the real `worker_cmd` prefix and the shipped wrapper, every denial and every positive
+- The canary (HOST_ISOLATION §6), `tests/canopy_sandbox/test_sandbox_canary.py`, opt-in with `CANOPY_SANDBOX_CANARY=1`:
+  a plain script run through the real `worker_cmd` prefix and the shipped wrapper, every denial and every positive
   control §6 lists, the prompt property test included. A Linux CI job runs it with bubblewrap and `srt`.
 - Settled before Accept, each in HOST_ISOLATION §7 or a decision: what treehouse's `return` runs in a slot; caches that
   tools keep as git repositories under the per-run object directory; OpenCode's local MCP servers inside the sandbox.
 - TRUST_MODEL T4 and T6: the sandbox as a control, what it does not cover (the shared kernel, exfiltration through an
-  allowed host), and that it is opt-in, with the operator's approval note in the PR. DESIGN §8 and §15 for the object
+  allowed host), and that it is opt-in. DESIGN §8 and §15 for the object
   directory and reconcile's cleanup; HOST_ISOLATION's settled parts move to DESIGN.
 - Tests with the fakes: an empty object directory sets no git variable for step 5 and is deleted; a worker that commits
   through it is pushed and leaves the slot on step 2's commit with `git gc` clean in the primary clone; a `_run`
@@ -361,39 +361,39 @@ macOS machines, then a day of `canopy loop` with sandboxed workers pushes and op
 tries to read `~/.ssh` or write `~/.config/canopy` is refused.
 
 Status: in progress. The per-run object directory and the `run_slots` link are in: `_run` and reconcile tidy each slot
-before it is returned, and `tests/canopy/test_run_objects.py` holds the fakes-based tests above. Checking them found
-that the tidy step must also drop the slot's own refs, and that `_run`'s own push must put origin's remote-tracking ref
-back (HOST_ISOLATION §4.2). The wrapper and a policy template for each role are in `packages/canopy-sandbox`, tested
-against a fake `srt` in `tests/canopy/test_sandbox_wrapper.py`, `_run` with the wrapper as `worker_cmd`'s prefix
-included. Trying them under `srt` 0.0.79 and bubblewrap found that `srt` binds an `allowRead` path over an
-`allowWrite` path beneath it, so the wrapper names the common git directory entry by entry, and that a write under a
-denied directory lands in a `tmpfs` and is dropped, so the canary must check writes on the host (HOST_ISOLATION §4.2,
-§6). `docs/SANDBOX.md` is the operator's guide, and `canopy init` prints the suggested `worker_cmd`. Running the
-guide's check under `srt` 0.0.79 and bubblewrap 0.9 found that a check run through the wrapper outside canopy must use
-a worktree of its own, since nothing tidies a slot it commits in, and that a process started with `setsid` inside the
-sandbox ends with it. `canopy sandbox setup` installs the wrapper's pinned `srt` in `~/.local/share/canopy/`; trying it
-found that `srt`'s seccomp helper runs inside the sandbox, so under the `$HOME` a template denies it is not found
-unless the wrapper re-allows reading `srt`'s `vendor/` directory, which it now does wherever `srt` is installed. The
-canary is `tests/canopy/test_sandbox_canary.py` (`make sandbox-canary`), and CI's `sandbox-canary` job runs it on Linux
-and macOS after `canopy sandbox setup`. Running it under `srt` 0.0.79 and bubblewrap 0.9 found that `srt` makes its
-network sockets in the run's temp directory, so a long system temp directory fails every run; the wrapper now refuses
-one on Linux with a message that says so. macOS's deep per-user temp directory, which `srt`'s source suggested was too
-long, is not: the macOS job runs a case under it (HOST_ISOLATION §7). Run against a fake `srt` that sandboxes nothing,
-the canary fails every case but its positive controls. It passes in CI on Ubuntu 24.04, with the AppArmor restriction
-lifted as docs/SANDBOX.md says, and on macOS, both with `srt` 0.0.79. What treehouse's `return` runs in a slot is
-settled from its source (HOST_ISOLATION §7): plain git, which reads only what a sandboxed worker cannot write. Tracing
-it found that the slot's own `commondir` and `gitdir` were writable, and a worker that rewrote `commondir` had every
-git on the host in its slot, canopy's included, read a config it wrote; the wrapper now denies writing both, the
-canary checks it, and `_run` and reconcile check `commondir` as they do the `.git` link. Caches that tools keep as git
-repositories are settled too: git's variables, set for the whole run, sent the objects of Go's module sources and of
-OpenCode's snapshots, which persist under its data directory, to the run's directory, so the wrapper now puts a `git`
-of its own first on `PATH` that sets them in the run's worktrees only; pre-commit was never affected. OpenCode's MCP
-servers are settled from its source: a local one is OpenCode's child and runs under the worker's policy, and one
-started with `docker run` cannot work, since the sandbox refuses Unix sockets, which the canary now checks.
-`review_cmd`, HOST_ISOLATION §7's last open wrapping question, is settled as a role of its own, `review`, with a
-template that reads the checkout through the review directory's link and writes none of it, no object directory, and
-no `github.com`; the canary runs its HOME and state attempts as `review` too, and checks that a review writes nothing
-in the checkout. Run against the fake `srt`, every review denial fails and its positive control passes.
+before it is returned, and `tests/canopy/runs/test_run_objects.py` holds the fakes-based tests above. Checking them
+found that the tidy step must also drop the slot's own refs, and that `_run`'s own push must put origin's
+remote-tracking ref back (HOST_ISOLATION §4.2). The wrapper and a policy template for each role are in
+`packages/canopy-sandbox`, tested against a fake `srt` in `tests/canopy_sandbox/test_sandbox_wrapper.py`, `_run` with
+the wrapper as `worker_cmd`'s prefix included. Trying them under `srt` 0.0.79 and bubblewrap found that `srt` binds an
+`allowRead` path over an `allowWrite` path beneath it, so the wrapper names the common git directory entry by entry, and
+that a write under a denied directory lands in a `tmpfs` and is dropped, so the canary must check writes on the host
+(HOST_ISOLATION §4.2, §6). `docs/SANDBOX.md` is the operator's guide, and `canopy init` prints the suggested
+`worker_cmd`. Running the guide's check under `srt` 0.0.79 and bubblewrap 0.9 found that a check run through the wrapper
+outside canopy must use a worktree of its own, since nothing tidies a slot it commits in, and that a process started
+with `setsid` inside the sandbox ends with it. `canopy sandbox setup` installs the wrapper's pinned `srt` in
+`~/.local/share/canopy/`; trying it found that `srt`'s seccomp helper runs inside the sandbox, so under the `$HOME` a
+template denies it is not found unless the wrapper re-allows reading `srt`'s `vendor/` directory, which it now does
+wherever `srt` is installed. The canary is `tests/canopy_sandbox/test_sandbox_canary.py` (`make sandbox-canary`), and
+CI's `sandbox-canary` job runs it on Linux and macOS after `canopy sandbox setup`. Running it under `srt` 0.0.79 and
+bubblewrap 0.9 found that `srt` makes its network sockets in the run's temp directory, so a long system temp directory
+fails every run; the wrapper now refuses one on Linux with a message that says so. macOS's deep per-user temp directory,
+which `srt`'s source suggested was too long, is not: the macOS job runs a case under it (HOST_ISOLATION §7). Run against
+a fake `srt` that sandboxes nothing, the canary fails every case but its positive controls. It passes in CI on Ubuntu
+24.04, with the AppArmor restriction lifted as docs/SANDBOX.md says, and on macOS, both with `srt` 0.0.79. What
+treehouse's `return` runs in a slot is settled from its source (HOST_ISOLATION §7): plain git, which reads only what a
+sandboxed worker cannot write. Tracing it found that the slot's own `commondir` and `gitdir` were writable, and a worker
+that rewrote `commondir` had every git on the host in its slot, canopy's included, read a config it wrote; the wrapper
+now denies writing both, the canary checks it, and `_run` and reconcile check `commondir` as they do the `.git` link.
+Caches that tools keep as git repositories are settled too: git's variables, set for the whole run, sent the objects of
+Go's module sources and of OpenCode's snapshots, which persist under its data directory, to the run's directory, so the
+wrapper now puts a `git` of its own first on `PATH` that sets them in the run's worktrees only; pre-commit was never
+affected. OpenCode's MCP servers are settled from its source: a local one is OpenCode's child and runs under the
+worker's policy, and one started with `docker run` cannot work, since the sandbox refuses Unix sockets, which the canary
+now checks. `review_cmd`, HOST_ISOLATION §7's last open wrapping question, is settled as a role of its own, `review`,
+with a template that reads the checkout through the review directory's link and writes none of it, no object directory,
+and no `github.com`; the canary runs its HOME and state attempts as `review` too, and checks that a review writes
+nothing in the checkout. Run against the fake `srt`, every review denial fails and its positive control passes.
 TRUST_MODEL T4 and T6 name the sandbox as an opt-in control, with its residuals: the shared kernel, the unwrapped
 overseer and harness calls, `/tmp/claude`, and exfiltration through an allowed host with the credentials a run holds
 (D118).
@@ -409,6 +409,8 @@ templates also leave writable and the overseer also reads, are another way out i
 Tracing it found that the data directory is: a `wellknown` entry in `auth.json`, the active account in `opencode.db`,
 and a planted snapshot git directory each make the overseer's OpenCode, or the operator's, run what a worker chose;
 the state directory is not (DESIGN §24, Open).
+CI dropped its macOS canary job 2026-10-17, at the operator's request: macOS is left to the live check on the
+operator's machine.
 Next: data of the sandbox's own, once the operator settles how sandboxed runs get their credentials; then the canary on
 the operator's Linux and macOS machines.
 
@@ -593,7 +595,7 @@ This milestone adds the connectors and the derivation without changing what the 
   the block says so and the overseer runs the query itself that tick, as today. A cheaper overseer skipped the query and
   read only the block's tickets, which stalls new work with no tick failing (2026-10-15 F31, DESIGN §7). A tick whose
   query was due now fails without `canopy queried` (DESIGN §6 step 5), which catches a skipped query but not a result
-  read short or named short. TRUST_MODEL T1, with the approval note.
+  read short or named short. TRUST_MODEL T1.
 - Tests with the fakes: `tests/fakes/connector` prints configured lines; a line out of bounds is refused and the
   rest kept; a cut-off output keeps the previous observations; the derivation over journals written by hand, one
   case per row of the phase table, each a snapshot test (syrupy) as the state block's are.
@@ -608,9 +610,9 @@ Status: not started.
 
 ## M37. The overseer reads the journal
 
-Needs M36's measurement, with the disagreements that were the derivation's fixed, and M48's second stage, which
-waits on the operator's approval note. Sketch only; the design comes first. This is M30's cut, taken from the journal
-rather than a probe, and it is where the trust model gains its first code checks on what the overseer claims.
+Needs M36's measurement, with the disagreements that were the derivation's fixed, and M48's second stage. Sketch
+only; the design comes first. This is M30's cut, taken from the journal rather than a probe, and it is where the trust
+model gains its first code checks on what the overseer claims.
 
 - The state block carries the observations: per ticket, its title, state, labels, blockers, and the comments newer
   than its comment cursor (id, author, time, body, and whether the author is an authorized replier, decided in code);
@@ -620,7 +622,7 @@ rather than a probe, and it is where the trust model gains its first code checks
   (M34's order).
 - The prompt's procedure drops its reads: no tracker search, no ticket or PR reads, no mirror, no provider skill.
   An MCP call is allowed only for a subject the block marks `stale`, one no connector has covered within
-  `connect.max_age_minutes`, with the operator's approval note; M39 removes that too.
+  `connect.max_age_minutes`; M39 removes that too.
 - Claims become references to observations, checked in code: `canopy dispatch --label` is refused `unauthorized`
   unless the connector saw that label on the ticket (D051 gains a code check before the worker's own); a
   `human_replied` resume must name a comment by an authorized replier or an operator message; a `resume` for review
@@ -638,7 +640,7 @@ rather than a probe, and it is where the trust model gains its first code checks
   a tracker with no connector keeps the live-read procedure, or a connector is required (recommended: required; the
   two shipped cover the operator's trackers, and the contract is a page of Python for another).
 - TRUST_MODEL T1 (labels, repliers, and reviewers checked in code; the overseer's MCP narrowed to stale subjects),
-  T2 (a connector's credentials), T7 (`connect.*`), with the approval note; DESIGN §6, §7, §17, §22; D003 edited in
+  T2 (a connector's credentials), T7 (`connect.*`); DESIGN §6, §7, §17, §22; D003 edited in
   place (M48 superseded D081).
 
 Accept: written with the design, before work starts. Live, once built: a re-measurement (MEASUREMENTS) with
@@ -685,7 +687,7 @@ showed the derivation getting right: a rule moves into code only with that evide
   decision about any other ticket is refused `decided`. A dispatch for new items advances the cursors to the items
   the block showed, so the overseer passes `--cursor` only to leave feedback alone.
 - The prompt shrinks to the judgment sections: candidates, the phase table, cursors, mirroring, and the attention
-  list section go, with the operator's approval note.
+  list section go.
 - Tests with the fakes: the harness's decisions over journals written by hand, one per row; a decision on a ticket
   not left to the overseer refused; a fake overseer that handles only the listed tickets closes the tick `ok`.
 
@@ -710,7 +712,7 @@ trust change: the overseer runs when the journal leaves it something to judge, n
   connector that fails during a poll raises `connector_failed` and the loop falls back to today's pacing.
 - The overseer's definition loses the tracker and GitHub MCP servers: it has canopy's tools (M48) and nothing else,
   since a `stale` subject now gets `wait` instead of a live read. TRUST_MODEL T1: the overseer can be steered only by
-  text the journal holds, bounded and labeled by source, and can call no tracker or VCS tool at all. Approval note.
+  text the journal holds, bounded and labeled by source, and can call no tracker or VCS tool at all.
 - M29's open questions are answered by M36's contract (which subjects to watch), `connect.every_minutes` (how often),
   and M40 (a cold overseer run after a long gap). If M36's measurement leaves the derivation untrusted, the series
   need not stop there for want of M29: a gate on the observations alone, running the overseer only when one changed
@@ -786,7 +788,7 @@ no config (TRUST_MODEL T8).
   `PATCH /config`, the changed keys and that hash. The settings page edits them, beside Reload.
 - TRUST_MODEL T8: "It cannot write config" becomes the allowlist, ceilings, and stricter-only keys above, and its
   residual gains a stolen session raising limits up to their ceilings, which outlives a new secret until the operator
-  sees it. With the operator's approval note in the PR. DESIGN §12 marks the keys the page edits and their ceilings,
+  sees it. DESIGN §12 marks the keys the page edits and their ceilings,
   and §22 the routes and the settings page. DECISIONS: an entry for what the web channel may write to config (a rule
   the trust boundary relies on), and one for the TOML writer.
 - Tests with the fakes: an allowed key written and reloaded, the file's comments kept; a key outside the allowlist, a
@@ -846,8 +848,7 @@ word".
   harness checking afterwards that what was posted is the approved text. Open which, and whether canopy should only
   create a pending review for the operator to submit on GitHub themselves, so that submitting stays a human's click.
 - TRUST_MODEL §6 (never submit a PR review, unless this changes it), T1, T5 (what a posted review says it is, with no
-  bot identity, so it speaks in the operator's name), T6, and T8 (publishing from the web channel), and D114, with the
-  operator's approval note in the PR.
+  bot identity, so it speaks in the operator's name), T6, and T8 (publishing from the web channel), and D114.
 - Open: whether a published review is followed on the next commit (M32's open question of a finding's identity across
   commits); whether the loop's own PRs ever get it, for a coworker's benefit; a bound on what one review may post.
 
@@ -912,10 +913,10 @@ What treehouse does that canopy relies on or works around, from its source at th
 
 **Stage 1, the contract.** No behavior changes.
 
-- `tests/canopy/test_pool_contract.py`: a case for each guarantee above and each one `core/treehouse.py`'s callers
+- `tests/canopy/core/test_pool_contract.py`: a case for each guarantee above and each one `core/treehouse.py`'s callers
   depend on (reconcile, dispatch, reviews, sync, the worktrees page). It runs against the fake on every `make check`,
   and against real treehouse when `treehouse` is on `PATH` (`make pool-contract`).
-- A CI job, Linux and macOS, that builds treehouse at the pinned commit with `make treehouse` and runs the suite. Go
+- A CI job, on Linux, that builds treehouse at the pinned commit with `make treehouse` and runs the suite. Go
   is a CI-only dependency, like Node for the sandbox canary. Where the fake and real treehouse disagree, the fake is
   fixed.
 - DESIGN §18 gains "What a pool guarantees", the list the suite checks, each line naming its case.
@@ -958,7 +959,7 @@ What treehouse does that canopy relies on or works around, from its source at th
 - Goes: treehouse's implementation, `pools.backend` (a config still setting it is warned about, then ignored), the
   fake and its fixture, `make treehouse` and the CI job, README's install step, and the mock's pool hashes.
 - Docs: D002 (rewritten as settled), D033's last `Rejected` line, D066's first bullet, DESIGN §8, §9, §18, §22, and
-  §24, REQUIREMENTS R2, README, GETTING_STARTED, PRIOR_ART, and TRUST_MODEL, with the operator's approval note.
+  §24, REQUIREMENTS R2, README, GETTING_STARTED, PRIOR_ART, and TRUST_MODEL.
 
 Open: whether a seeded symlink is copied as a link (treehouse writes its target text into a regular file), checked
 against TRUST_MODEL T4; whether sync warms a new slot (what `post_create` did for M17) or the first run's `setup_cmd`
@@ -968,7 +969,8 @@ Accept: each stage's check, in order. Then `make install-check` and `make binary
 and a fresh install from README on a machine with no Go runs a day of `canopy loop`.
 
 Status: in progress. Stage 1 passed its check 2026-10-16: the contract suite passes against the fake, and against real
-treehouse at the pinned commit in CI on Linux and macOS. Stage 2 is built: canopy's pool passes every contract case, and
+treehouse at the pinned commit in CI on Linux and macOS; CI has run it on Linux only since 2026-10-17, at the
+operator's request. Stage 2 is built: canopy's pool passes every contract case, and
 reconcile's shadow logs `pool_shadow_mismatch`; its check, a week of `canopy loop` with the shadow on, is the
 operator's. Stage 3's choice is built too, ahead of stage 2's check at the operator's request (2026-10-16):
 `pools.backend` picks the pool, each lease goes back to the pool the journal says made it, and sync moves idle slots
@@ -1014,7 +1016,7 @@ of the repo." Humans still authorize everything that lands; canopy still never m
   ticket, worked under its ticket's authorization; authorization checks on tickets are best effort, and the backstops
   are the guards in code and review of what lands") and T6 (a worker's write scope adds creating and linking tickets
   in its ticket's project), a decision entry for the new line, and the overseer prompt, worker
-  prompts, and definitions, with the operator's approval note in the PR.
+  prompts, and definitions.
 - Open: what a parent's phase is once its work has moved into follow-ups; whether a private ticket's worker should
   file journal-only follow-ups; whether an operator who wants the old line should get a private switch that makes
   follow-ups wait for a label.
@@ -1039,7 +1041,7 @@ remote branch is deleted; and no flag shortens retention, which only the user fi
 
 - `canopy gc --dry-run [--json]`: for each kind in §26's table, the count, the bytes, and what a pass with the
   proposed defaults would remove. It refuses when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set; TRUST_MODEL T1 adds
-  `gc` to the commands that do, with the operator's approval note in the PR.
+  `gc` to the commands that do.
 - `[retention]` in the user file (§26, Configuration), validated in full now (non-negative integers), so a later
   stage changes no key; read by nothing but the dry run yet.
 - Check: the operator runs it on their live workspace, the result is a dated section of `MEASUREMENTS.md`, and the
@@ -1114,7 +1116,7 @@ PRs, a stage starting only once the one before has passed its check, recorded on
   descendant and outlives it. The server writes nothing to stderr, and exits when its stdin closes.
 - Check: `make check`, and a hand-run `canopy _mcp` in a dry tick answering an OpenCode client.
 
-**Stage 2, the overseer switches.** With the operator's approval note.
+**Stage 2, the overseer switches.**
 
 - The harness gives the overseer's run the server's entry, removes it from every run it starts, and removes the code
   mode flags from the overseer's environment; the definition
@@ -1256,7 +1258,7 @@ each check recorded on the `Status:` line as it passes.
   count, review date, and invalidated. One active row per scope, ticket, and key. It adds too what each worker run
   was rendered under: each tier's mode and the ids rendered. Their row types in `core/records.py`, their vocabularies
   (the modes among them) in `core/vocab.py`, `CHECK` constraints, and their hashes and seed rows in
-  `tests/canopy/test_db.py`. Built whole in this stage, so stage 2 adds no migration.
+  `tests/canopy/core/test_db.py`. Built whole in this stage, so stage 2 adds no migration.
 - A worker's result gains `notes` (`{key, text}`, text at most 400 characters) and `drop_notes` (keys). `_run`
   validates them and writes them for the run's own ticket, read from its journal row, never from the result, so no run
   writes another ticket's notes. A note under an active key supersedes it; nothing is edited in place. A body equal,
@@ -1283,7 +1285,7 @@ each check recorded on the `Status:` line as it passes.
   the run's lists, and the CLI's lines, built with the `record` half, since that is when the operator most needs them.
 - TRUST_MODEL T1, with the `use` half: a worker may write notes its own ticket's later runs read as data, the same
   exposure as its reports in `{{PREVIOUS_RUNS}}`, with one new property: a note outlives the tracker comment that
-  steered it, bounded by the ticket's life and by `forget`. With the operator's approval note.
+  steered it, bounded by the ticket's life and by `forget`.
 - Tests with the fakes: with `memory` unset, every worker prompt kind and the state block match their snapshots before
   this milestone, and a result carrying `notes` stores nothing. At `record`: a note is stored and is in no prompt of any
   kind; each prompt kind differs from its snapshot when off only by the contract, which asks for `notes` alone;
@@ -1306,7 +1308,7 @@ each check recorded on the `Status:` line as it passes.
   so what moves past it is reading's doing. If notes do not move the baseline, the milestone stops here.
 
 **Stage 2, proposals and lessons.** Behind `memory.proposals`, at `record` first, then at `use`, which needs the
-operator's approval note.
+operator's approval.
 
 - A worker's result gains `proposals` (`{key, text, repo?}`, text at most 600 characters), stored `pending` under the
   same bounds. **A pending proposal is rendered into no prompt.** At most 20 pending per workspace, refusing new ones
@@ -1382,7 +1384,11 @@ named. Search (stage 3), built at the operator's word (2026-10-17) before any ch
 out: `canopy memory search` over an FTS5 index of every memory (migration 0038) ranked with bm25(), scoped by
 `CANOPY_RUN_ID` to the run's ticket's notes, superseded ones included, and its repositories' lessons, each while at
 `use` for the run, the digests naming it, `forget` and `purge` clearing the index too, and `make install-check`
-checking FTS5. Every stage's checks, at `record` and at `use`, are still the operator's.
+checking FTS5. Memory at density (asked for by the operator, 2026-10-17): the lessons digest keeps the lessons last
+promoted, renewed, or used rather than the first by key, `lesson_review` and `lesson_wrong` name ten and count the rest,
+an index on scope and status (migration 0039), and the memory page lists tickets with notes in force, opening each to
+its notes, with every list scrolling in its panel and a memory its digest leaves out saying so. Every stage's checks, at
+`record` and at `use`, are still the operator's.
 
 ## M51. The loop, detached
 
@@ -1394,7 +1400,45 @@ Learned: the live check ran in the toy workspace (TOY_REPOS), not the operator's
 exited, the daemon kept ticking and served the web UI on that workspace's private port, and `stop` during a tick waited
 for it to end `ok`. A daemon with no listener secret ticks but serves nothing, and says so only in `daemon.log`.
 
-## M52. Artifacts, and comments on them back to the ticket
+## M52. Memory's verbs from the web UI
+
+DESIGN §22 and §28, TRUST_MODEL T8. Needs M50. Asked for by the operator (2026-10-17): promote a proposal or a
+ticket's note to a lesson, reject a proposal, renew a lesson, and forget a memory from the page that shows it, without
+a shell. Today the web UI reads memory and writes none, and T8's list of web writes leaves memory out.
+
+- Each write is the function its `canopy memory` verb calls (`promote`, `reject`, `renew`, `forget`), with its guards;
+  a refusal names its guard as the CLI does, and an outcome says what the CLI says: a lesson promoted while proposals
+  are at `record` is recorded and served to no run. Logged with channel `web`.
+- Those functions are in `canopy.memory.manage`, a feature `serve` may not import (DESIGN §5). The build moves
+  `manage` down into `core`, as the verbs both channels call already are (`core/notice.py`, `core/plans.py`); it
+  imports only `core` now, so nothing else moves. DESIGN §5's line for `memory/` drops the operator's verbs.
+- Promote takes the CLI's options: the lesson's text, starting as the source's own and held to the same bound, and its
+  repository, the proposal's or every one for a note. Before the save the form says which lesson in force under the key
+  it would supersede, and, while the text is still a private ticket's run's own words, the warning `promote` gives.
+- Forget cannot be undone, so it asks for the memory's ref typed out (`memory:42`), as a ticket's Forget asks for its
+  key, checked in code. It retires a lesson as it drops a note or a proposal: the body goes, the tombstone stays.
+- Where: the memory page, Promote and Reject on each proposal, Renew and Forget on each lesson; a ticket's Memory panel,
+  Promote on each note that keeps its text, done or invalidated included (PR #687's case); the attention list,
+  Promote as written and Reject on a `memory_proposal`, Renew on each lesson a `lesson_review` names, and a link to the
+  lessons from a `lesson_wrong`. With `memory.proposals` off, none shows. The lists change over the event stream.
+- TRUST_MODEL T8: the web channel gains those four verbs. Its residual gains that a stolen session could make a lesson
+  that reaches every worker at `use`, as a notice set that way does, and outlives a new secret until the operator
+  forgets it. DESIGN §28 drops "the web UI reads memory and writes none"; §22 gains the routes. The guide's memory page
+  and `ui/DESIGN.md`'s pattern for the promote form follow.
+- Tests with the fakes: each verb through the API, and each refused with `CANOPY_RUN_ID` set, on an unknown id, on a
+  proposal no longer pending, on a note whose text is gone, on text past the bound, and with proposals off; Forget
+  refused without the ref typed exactly; Vitest for the forms, Playwright for promoting from the memory and ticket
+  pages.
+- Open: whether a ticket's memory carries the lessons in force, so its form can name the one it would supersede, or the
+  form asks the server when it opens.
+
+Accept: the tests above pass. Live: with proposals at `record`, the operator promotes a done ticket's note in their own
+words from its page and rejects a proposal from the attention list; `canopy memory lessons` shows the lesson, named as
+from that note, and `canopy memory proposals` no longer lists the rejected one.
+
+Status: not started.
+
+## M53. Artifacts, and comments on them back to the ticket
 
 REQUIREMENTS R20, DESIGN §29, TRUST_MODEL T1, T6, and T8, D003, D069, D089. Asked for by the operator (2026-10-17):
 workers publish artifacts people comment on, to Louvre, a hosted platform that is its own program, or to a local

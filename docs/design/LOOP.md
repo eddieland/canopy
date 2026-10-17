@@ -17,7 +17,9 @@ in order:
 
 1. Acquire the lock. If held, log and exit 0, recording no tick.
 2. Apply pending migrations. Close any tick still `running` as `abandoned`: holding the lock proves its process is
-   gone. Record the tick; its id tags all logs. Migrations wait while any running worker, chore, or review run's own
+   gone. Record the tick, with the version of canopy running it, which its decisions name through their tick. The
+   version is read once as the process starts, so a `canopy loop` running across an upgrade records the code it runs,
+   not the code installed. Its id tags all logs. Migrations wait while any running worker, chore, or review run's own
    process is alive, since it writes the old schema; so does the error for a journal with migrations this canopy does
    not know (D068). Until then, the tick and any command that opens the journal fail saying so.
 3. **Reconcile local state.**
@@ -109,10 +111,12 @@ in order:
    cursor and marks nothing done; `canopy mirror` moves no mirror cursor. The rest of the tick is live: reconcile, and
    the attention list and its notifications.
 
-   `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` omits the key. What the overseer writes is
-   rendered into the next prompt, so the CLI bounds it: keys and attention reasons are validated, phases come from §7's
-   table, cursor ids must match `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and rationales, details, and worker context are cut at
-   2000 characters.
+   `canopy decide` takes `wait`, `skip`, or `done`; only a tick-wide `skip` omits the key. Its rationale must give a
+   tick-wide reason (`mcp_unavailable`, `tracker_unsupported`), and a ticket's skip may not give one. Why: an overseer
+   left to guess the form put a tick-wide reason under a made-up key (`queue`) on ticks whose tracker worked, and on
+   one of them ended at the skip with every ticket undecided. What the overseer writes is rendered into the next
+   prompt, so the CLI bounds it: keys and attention reasons are validated, phases come from §7's table, cursor ids must
+   match `[A-Za-z0-9][A-Za-z0-9_.:/-]*`, and rationales, details, and worker context are cut at 2000 characters.
 6. Close the tick with a summary.
 7. **Publish attention** (§14): rewrite `attention.md` from the journal, then deliver to each notification sink (§20)
    the list's change since that sink last heard, the events it takes, and a digest when due; `notify.cmd` is the sink
@@ -316,6 +320,10 @@ escapes it; it stays out of `attention.md` and the `text` format. `canopy forget
 | `needs_human` | `needs_human_label` present, no authorized reply newer than it | wait |
 | `human_replied` | authorized reply newer than the label, or an operator message newer than the message cursor | dispatch `resume` pointing at the reply; the worker removes the label |
 | `split` | a split's parent (§18) | wait; `split_unlabeled` for unlabeled children; done once every child is closed |
+
+A PR's checks are its head commit's check runs, which is all GitHub Actions writes, and its commit statuses only
+beside them, for CI that writes statuses: statuses alone read an Actions repository as pending forever, with nothing
+written, and a red PR waits instead of getting its `fix-ci`.
 
 A unit is `conflicted` when GitHub reports that its PR does not merge cleanly into its base; a mergeability not yet
 computed is not a conflict. GitHub runs no `pull_request` checks on a PR it cannot merge, so `conflicted` comes before
@@ -613,6 +621,10 @@ Worker obligations, stated in every worker prompt:
 - Open each PR through the GitHub MCP, or, with `runtime.pr_skill` set, only with that skill (below).
 - Comment on the ticket describing what was done and linking every PR. In a joint run, each PR's body links its sibling
   PRs and says which merges first.
+- A `resume` worker, once its pushes are done, reads the body of each PR it pushed to or retargeted, and edits it only
+  where the body is now untrue of the PR or leaves out a change to behavior a reviewer must know of. It changes only
+  those sentences, never the title, and never edits a body to restyle it or recount the run: a reviewer reads every
+  edit, and the run's account is its replies and summary.
 - On `blocked`: post the question as a ticket comment, add `needs_human_label`, and push nothing half-finished or
   speculative beyond a WIP commit. A private ticket's worker posts nothing on the ticket: its result line's `summary`
   and `question` are its report and question (§22).

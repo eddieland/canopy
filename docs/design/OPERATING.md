@@ -74,6 +74,12 @@ own cost, and which tools put the most into context. The web UI's spend page sho
   started cold, a heuristic; the journal keeps both counts.
 - The overseer's tools and first calls include dry runs'.
 
+`canopy health` reads the same window for how the runs in it ended: each kind's runs by sort and status, with what they
+cost, the newest that failed with a note on each, and the overseer's asks a guard refused, by guard. A failure is a run
+that did not do what it was started for: a tick that did not close `ok`, or a worker, chore, or review run that ended
+`failed`, `unknown`, `unpushed`, `crashed`, or `timeout`; a worker that asked a question or that the operator stopped
+did. Beside `canopy spend --json`, it is what a chore that looks at canopy itself reads (`examples/chores/`).
+
 ## 12. Configuration
 
 Configuration is layered. Each layer overrides the one before it, key by key:
@@ -470,9 +476,10 @@ names the skill and the prompt then says to use it (§8). Prefer that to a promp
 
 `canopy skill` prints a skill named `canopy` that teaches an agent in the operator's own session the canopy CLI and the
 state directory, how to read the journal read-only, and how to look into what canopy did and found. canopy installs it
-nowhere: the operator saves it where their runtime reads skills, such as `~/.agents/skills/canopy/SKILL.md`, and again
-after upgrading. It is not in the definitions snapshot, where it would help no run. It tells an agent started by canopy
-to follow its prompt instead, and grants nothing: the overseer's and worker's bash rules apply either way.
+only when asked: `canopy skill --install [DIR]` saves it as `canopy/SKILL.md` in `DIR`, `~/.agents/skills` unless
+given, and the operator runs it again after upgrading. It is not in the definitions snapshot, where it would help no
+run. It tells an agent started by canopy to follow its prompt instead, and grants nothing: the overseer's and worker's
+bash rules apply either way.
 
 ### Shell completion
 
@@ -506,7 +513,9 @@ run's status maps to a reason: `crashed` to `crashed`, `unpushed` to `unpushed`,
 the run log. The cause is gone when a newer run starts for the ticket or the ticket is marked done. The overseer does
 not dispatch such a ticket again until an authorized replier comments after the run ended; that is how a human says
 "try again". An operator message after the run ended says it too (§22, D093), the only way on a private ticket.
-`blocked` and `stopped` raise nothing here.
+`blocked` and `stopped` raise nothing here. Nor does a ticket the operator stopped (§22), whatever its latest run: nothing
+dispatches it, so no reply could answer the item, and stopping it says they have seen to it. An `unpushed` run's commits
+stay where `canopy show` names them. Started again, the ticket raises its item again.
 
 The harness raises `awaiting_reply` every tick for each started ticket, not done, whose latest question has no operator
 message after it (§22), and for each public ticket, not done, whose latest plan run ended `blocked` with its question
