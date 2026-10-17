@@ -8,6 +8,7 @@ import chores from '@/guide/chores.md?raw'
 import howTheLoopWorks from '@/guide/how-the-loop-works.md?raw'
 import memory from '@/guide/memory.md?raw'
 import overview from '@/guide/overview.md?raw'
+import philosophy from '@/guide/philosophy.md?raw'
 import plans from '@/guide/plans.md?raw'
 import pullRequests from '@/guide/pull-requests.md?raw'
 import runs from '@/guide/runs.md?raw'
@@ -70,6 +71,7 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
             ['overview', overview],
             ['signing-in', signingIn],
             ['how-the-loop-works', howTheLoopWorks],
+            ['philosophy', philosophy],
         ],
     },
     {

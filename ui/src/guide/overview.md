@@ -7,8 +7,9 @@ it at `http://127.0.0.1:8765/`, unless `serve.bind` or `serve.port` in your conf
 
 The guide comes in three parts, in the order you'll need them.
 
-- **Getting started**: this page, signing in, and [How the loop works](how-the-loop-works), the handful of ideas every
-  other page leans on. Read that one before anything surprises you, not after.
+- **Getting started**: this page, signing in, [How the loop works](how-the-loop-works), the handful of ideas every
+  other page leans on, and [Philosophy](philosophy), why canopy is built the way it is. Read those two before anything
+  surprises you, not after.
 - **Your work**: the pages where the loop waits on you. [Attention](attention) first, then [Tickets](tickets),
   [Plans](plans), and [Pull requests and reviews](pull-requests).
 - **The loop**: the pages where you watch it work. [Runs and worktrees](runs), [Ticks and spend](ticks),
