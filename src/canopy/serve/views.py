@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime, timedelta
+from itertools import starmap
 from pathlib import Path
 from typing import TYPE_CHECKING, assert_never
 
@@ -183,9 +184,7 @@ def spend_breakdown(backend: Backend, ctx: Context, days: int) -> SpendBreakdown
         woken=[SpendWoken(by=w.by, ticks=w.ticks, cost_usd=w.cost_usd) for w in found.woken],
         unpriced=[SpendUnpriced(kind=u.kind, runs=u.runs, unpriced=u.unpriced) for u in found.unpriced],
         idle_share=found.idle_share,
-        idle_ticks=[
-            tick_of(row, decisions) for row, decisions in spending.idle_ticks(ctx.conn, found.since, found.until)
-        ],
+        idle_ticks=list(starmap(tick_of, spending.idle_ticks(ctx.conn, found.since, found.until))),
         done=found.done,
         per_done=found.per_done,
         tickets=[
@@ -308,7 +307,7 @@ def ticks(ctx: Context) -> list[Tick]:
     Returns:
         At most `TICKS` ticks, each with how many decisions it recorded.
     """
-    return [tick_of(row, decisions) for row, decisions in db.recent_ticks(ctx.conn, TICKS)]
+    return list(starmap(tick_of, db.recent_ticks(ctx.conn, TICKS)))
 
 
 def tick_detail(ctx: Context, tick_id: int) -> TickDetail | None:

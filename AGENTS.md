@@ -69,9 +69,9 @@ If code and the design disagree, the design doc wins until a decision entry says
 - `rumdl` lints and formats Markdown with every default rule. `editorconfig-checker` (`ec`) holds every file that is
   not Python or Markdown to `.editorconfig`. `shellcheck` lints shell scripts and `actionlint` the GitHub workflows.
   All are dev dependencies, so `uv sync` installs them and `make lint` runs them.
-- ruff selects every stable rule, and the preview pydoclint rules (D018): a public module, class, or function has a
-  Google docstring, with Returns, Yields, and Raises sections that match its body. Opt out with a commented `ignore`
-  entry or a `noqa` with a code; never narrow `select`.
+- ruff selects every stable rule, and preview rules named one by one, the pydoclint ones among them (D018): a public
+  module, class, or function has a Google docstring, with Returns, Yields, and Raises sections that match its body.
+  Opt out with a commented `ignore` entry or a `noqa` with a code; never narrow `select`.
 - `make all` runs fmt, lint (including type checks), and tests. It must pass before any PR.
 - `make check` is `make all` without fmt: it verifies and never rewrites files. CI runs it, as two jobs side by side
   (`lint test` and `ui-check`), except on a pull request that changes only docs, where every check passes without
@@ -165,7 +165,7 @@ If code and the design disagree, the design doc wins until a decision entry says
   `from unittest.mock import ...`.
 - A mock is specced: `mock.patch.object(module, "fn", autospec=True)`, with `side_effect` or `return_value` for what
   it does, or `mock.create_autospec(...)`, so a call the real thing would refuse fails the test. Never a bare
-  `Mock()` or `MagicMock()`. Patching a plain value (a limit, a constant) needs no spec.
+  `Mock()` or `MagicMock()`; ruff fails the lint on them. Patching a plain value (a limit, a constant) needs no spec.
 - A patch lasts as long as its `with` block. A fixture that patches yields inside the block. A helper that sets up
   state for the code after it is a context manager (`with in_tick(conn) as tick_id:`, `with worker_does(...):`), and
   a helper that needs a patch only while it runs opens and closes its own. `hermetic_agent_env` restores the whole

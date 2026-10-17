@@ -50,12 +50,12 @@ def grant(conn: sqlite3.Connection, config: Config, ref: conversation.Ref, *, ru
 
     Every run still counts (D030): a grant raises the PR's limit, and the next `canopy review run` of it sees it.
 
+    Returns:
+        The PR's review runs, and its limit for them with the grant counted.
+
     Raises:
         Refused: `inside_run` inside one of canopy's own ticks or runs, `bad_ref` for a PR named as `REPO#N`, which
             review runs do not record, or `unknown` for a PR canopy has never reviewed.
-
-    Returns:
-        The PR's review runs, and its limit for them with the grant counted.
     """
     conversation.check_operator()
     if not ref.id.startswith("https://"):
