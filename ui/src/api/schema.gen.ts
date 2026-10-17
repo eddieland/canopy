@@ -294,6 +294,29 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/loop/tick": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Ask the loop for a tick now
+         * @description Ask the loop for a tick now, as `t` at its terminal does. It writes nothing.
+         *
+         *     The wait ends at once, before `loop.min_gap_minutes` and while the loop is paused, which it stays. Asked for during
+         *     a tick, it starts when that one ends.
+         */
+        post: operations["tickNow"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/memory": {
         parameters: {
             query?: never;
@@ -3990,10 +4013,21 @@ export type components = {
             summary: string | null;
             /**
              * Woken By
-             * @description What ended the loop's wait before it: start | timer | gate | message | starts | grant | run | key. None when
-             *     `idle` is.
+             * @description What ended the loop's wait before it: start | timer | gate | message | starts | grant | notice | run | key |
+             *     web. None when `idle` is.
              */
             woken_by: string | null;
+        };
+        /**
+         * TickAsked
+         * @description What asking the loop for a tick now found (DESIGN §6): it starts at once, or when a running tick ends.
+         */
+        TickAsked: {
+            /**
+             * After Tick
+             * @description A tick is running: the one asked for starts when it ends.
+             */
+            after_tick: boolean;
         };
         /**
          * TickDetail
@@ -5679,6 +5713,71 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PauseChanged"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    tickNow: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TickAsked"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

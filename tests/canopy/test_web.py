@@ -18,7 +18,7 @@ from canopy.core import agent_output, config, conversation, db, pause
 from canopy.core.context import Context
 from canopy.core.vocab import RunStatus, StartStatus, TickStatus
 from canopy.infra import resources
-from canopy.loop import repeat, reread, web
+from canopy.loop import repeat, reread, tick_now, web
 from canopy.reviews import grants
 from canopy.runs import policy
 from canopy.serve import live, secret, views
@@ -351,8 +351,23 @@ def test_a_web_reload_reads_the_config_and_asks_the_loop_to_read_it_again(ctx: C
     assert not reload.requested  # the loop is not asked to read a config that does not load
 
 
+def test_a_web_tick_now_asks_the_loop_for_a_tick(ctx: Context) -> None:
+    reload, asked = reread.Reload(), tick_now.TickNow()
+    c, headers = signed_in_client(ctx, reload, asked)
+    assert c.post("/api/loop/tick").status_code == 403  # a write: it needs the session's token
+    assert not asked.requested
+
+    assert c.post("/api/loop/tick", headers=headers).json() == {"after_tick": False}
+    assert asked.take()
+    assert not asked.take()  # one request ends one wait
+
+    reload.ticking = True
+    assert c.post("/api/loop/tick", headers=headers).json() == {"after_tick": True}
+    assert asked.requested  # kept for the wait after the running tick
+
+
 def test_the_stream_sends_the_pause_when_it_changes(ctx: Context) -> None:
-    backend = web.backend(ctx, reread.Reload())
+    backend = web.backend(ctx, reread.Reload(), tick_now.TickNow())
     sent = live._Sent()  # noqa: SLF001  (the stream's own record of what it sent)
     first = [e.root for e in sent.changes(backend, ctx)]
     assert LoopUpdated(paused=None) in first
@@ -454,7 +469,7 @@ def test_summaries_and_rationales_keep_their_line_breaks(ctx: Context) -> None:
 
 def test_spend_is_what_the_runs_and_ticks_that_started_in_the_last_day_30_days_and_ever_cost(ctx: Context) -> None:
     now = datetime(2026, 10, 8, 12, tzinfo=UTC)
-    backend = dataclasses.replace(web.backend(ctx, reread.Reload()), clock=lambda: now)
+    backend = dataclasses.replace(web.backend(ctx, reread.Reload(), tick_now.TickNow()), clock=lambda: now)
     nothing = views.spend(backend, ctx)
     assert (nothing.day.cost_usd, nothing.month.cost_usd, nothing.total_usd) == (None, None, None)  # nothing yet
 

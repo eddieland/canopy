@@ -22,7 +22,7 @@ from canopy.core import db, notice
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, Phase, ReviewRunStatus, StartStatus, TickStatus
 from canopy.infra import resources
-from canopy.loop import pacing, repeat, tick
+from canopy.loop import pacing, repeat, tick, tick_now
 from tests.canopy.helpers import FakeKeys, FakeTime, canopy, chore_toml, console, context, overseer_does
 from tests.conftest import CanopyEnv
 
@@ -723,8 +723,10 @@ def test_a_tick_after_a_wait_a_gate_shortened_records_the_gate(
         assert [w for _, w in recorded(canopy_env)] == [None, "start", "gate"]
 
 
-def loop_ticks(ctx: Context, time: FakeTime, *, interval_minutes: int | None = 15) -> None:
-    """Two ticks of the loop on `time`, against the fakes."""
+def loop_ticks(
+    ctx: Context, time: FakeTime, *, interval_minutes: int | None = 15, asked: tick_now.TickNow | None = None
+) -> None:
+    """Two ticks of the loop on `time`, against the fakes, with `asked` for the web UI's Tick now."""
     term, _ = console()
     repeat.run(
         ctx,
@@ -733,6 +735,7 @@ def loop_ticks(ctx: Context, time: FakeTime, *, interval_minutes: int | None = 1
         max_ticks=2,
         console=term,
         stop=repeat.Stop(),
+        asked=asked,
         sleep=time.sleep,
         clock=time.clock,
     )
@@ -806,6 +809,64 @@ def test_the_tick_now_key_is_not_held_by_the_gap(canopy_env: CanopyEnv, treehous
         )
     assert time.slept == [0.5]
     assert [w for _, w in recorded(canopy_env)] == ["start", "key"]
+
+
+def test_a_tick_asked_for_from_the_web_is_not_held_by_the_gap(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    canopy_env.write_user(canopy_env.user_file.read_text() + "\n[loop]\nmin_gap_minutes = 5\n")
+    ctx = context(canopy_env)
+    asked = tick_now.TickNow()
+    time = FakeTime(on_sleep=asked.request)
+    with overseer_does():
+        loop_ticks(ctx, time, asked=asked)
+    assert time.slept == [0.5]
+    assert [w for _, w in recorded(canopy_env)] == ["start", "web"]
+
+
+def test_a_tick_asked_for_during_a_tick_ends_the_wait_after_it(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    ctx = context(canopy_env)
+    asked = tick_now.TickNow()
+    time = FakeTime()
+    run = tick.run
+
+    def asked_during(tick_ctx: Context, *, dry_run: bool) -> tick.Outcome:
+        asked.request()
+        return run(tick_ctx, dry_run=dry_run)
+
+    with overseer_does(), mock.patch.object(tick, "run", autospec=True, side_effect=asked_during):
+        loop_ticks(ctx, time, asked=asked)
+    assert time.slept == []
+    assert [w for _, w in recorded(canopy_env)] == ["start", "web"]
+
+
+def test_the_tick_now_key_takes_a_web_request_with_it(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    ctx = context(canopy_env)
+    asked, stop = tick_now.TickNow(), repeat.Stop()
+    asked.request()  # kept through the first tick
+    typed = iter(["", repeat.TICK_NOW_KEY])  # dropped after the tick, then pressed at the wait's first step
+    time = FakeTime(on_sleep=lambda: setattr(stop, "requested", True))
+    term, _ = console()
+    with overseer_does():
+        repeat.run(
+            ctx,
+            dry_run=True,
+            interval_minutes=15,
+            max_ticks=3,
+            console=term,
+            stop=stop,
+            asked=asked,
+            keys=lambda: next(typed, ""),
+            sleep=time.sleep,
+            clock=time.clock,
+        )
+    # One tick for the key and the web request together: the wait after it runs until the stop.
+    assert [w for _, w in recorded(canopy_env)] == ["start", "key"]
+    assert time.slept == [0.5]
 
 
 def test_a_tick_run_by_hand_records_nothing_of_the_loop(

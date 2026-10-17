@@ -32,6 +32,9 @@ resume, a notice to workers, and approving a plan. Each goes through the same co
 hold: a refusal names its guard as the CLI prints it. A reply reaches the loop's decisions at the next tick, and the
 conversation marks it as waiting until then.
 
+Tick now, beside Pause in the header, does what `t` does at the loop's terminal: the loop's wait ends and its next tick
+starts at once, even while paused, and a pause stays. While a tick runs, the button waits for it.
+
 Everything else a page shows only reads the journal. Nothing in the browser polls: the pages change as the loop writes,
 over one stream. While it is connected, the dot in the logo beside `canopy` in the header breathes; while a tick runs,
 an arc sweeps its ring.

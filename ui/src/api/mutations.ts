@@ -22,14 +22,16 @@ import type {
     Session,
     Started,
     Stopped,
+    TickAsked,
 } from './types'
 
 /**
  * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, dismissing a finding,
  * sending a review's findings to a worker, granting a run past a limit, asking for a PR to be reviewed, pausing the
- * loop, and a notice to workers. Each goes through the same function on the server as `canopy start`, `stop`,
- * `reply`, `forget`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `pause`, `resume`, and `notice`,
- * with the same guards; a refusal is an ApiError naming its guard.
+ * loop, asking it for a tick now, and a notice to workers. Each goes through the same function on the server as
+ * `canopy start`, `stop`, `reply`, `forget`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `pause`,
+ * `resume`, and `notice`, or as `t` at the loop's terminal, with the same guards; a refusal is an ApiError naming its
+ * guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -241,6 +243,14 @@ export async function clearNotice(): Promise<NoticeChanged> {
  */
 export async function reloadConfig(): Promise<ConfigReload> {
     return unwrap(await api.POST('/api/loop/reload'))
+}
+
+/**
+ * Ask the loop for a tick now, as `t` at its terminal does (DESIGN §6): its wait ends at once, paused or not, and a
+ * pause stays. Asked for during a tick, it starts when that one ends.
+ */
+export async function tickNow(): Promise<TickAsked> {
+    return unwrap(await api.POST('/api/loop/tick'))
 }
 
 /** After a pause, a resume, or a notice set or cleared: show the state it left now, rather than wait for the stream. */

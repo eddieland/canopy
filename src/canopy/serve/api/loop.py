@@ -1,4 +1,4 @@
-"""The loop's pause and the notice to workers, and asking the loop to read its config again.
+"""The loop's pause and the notice to workers, and asking the loop to read its config again or for a tick now.
 
 The pause is `canopy pause` and `canopy resume` (DESIGN §6), the notice `canopy notice` (§8). The loop reads the pause
 and the notice at every step of its wait.
@@ -13,7 +13,7 @@ from canopy.infra import logs
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import REFUSED, WEB, RefusedError
-from canopy.serve.schema import ConfigReload, LoopState, NoticeChanged, NoticeRequest, PauseChanged
+from canopy.serve.schema import ConfigReload, LoopState, NoticeChanged, NoticeRequest, PauseChanged, TickAsked
 
 TAG = "loop"
 router = APIRouter(tags=[TAG])
@@ -89,3 +89,15 @@ def reload_config(backend: BackendDep) -> ConfigReload:
             raise RefusedError(conversation.Refused("config_invalid", str(e))) from None
     _log.info("config reload asked for", extra={"channel": WEB, "changed": list(found.changed)})
     return ConfigReload(changed=list(found.changed), restart=list(found.restart), after_tick=found.after_tick)
+
+
+@router.post("/loop/tick", operation_id="tickNow", summary="Ask the loop for a tick now")
+def tick_now(backend: BackendDep) -> TickAsked:
+    """Ask the loop for a tick now, as `t` at its terminal does. It writes nothing.
+
+    The wait ends at once, before `loop.min_gap_minutes` and while the loop is paused, which it stays. Asked for during
+    a tick, it starts when that one ends.
+    """
+    after_tick = backend.tick_now()
+    _log.info("tick asked for", extra={"channel": WEB, "after_tick": after_tick})
+    return TickAsked(after_tick=after_tick)
