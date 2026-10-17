@@ -29,6 +29,7 @@ from canopy.core.vocab import (
     PlanStatus,
     PoolKind,
     ReviewRunStatus,
+    RunKind,
     StartStatus,
     TickStatus,
 )
@@ -264,6 +265,19 @@ class Plan(Row):
     approved_sha256: str | None
     approved_at: str | None
     approved_channel: str | None
+
+
+@dataclass(frozen=True)
+class TicketGrant(Row):
+    """Runs the operator granted a ticket past its limit for a kind counted per ticket (DESIGN §22, §25)."""
+
+    TABLE: ClassVar[str] = "ticket_grants"
+
+    id: int
+    ticket_key: str
+    kind: RunKind
+    runs: int
+    granted_at: str
 
 
 @dataclass(frozen=True)

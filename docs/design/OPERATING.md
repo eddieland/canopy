@@ -101,6 +101,8 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   prints no events, nor for one recorded before migration 0032.
 - `attempt_grants`: one row per `canopy grant`; the ticket, repository, kind, runs granted, and when (§22).
   Only added to.
+- `ticket_grants`: one row per `canopy grant KEY plan`; the ticket, the kind, runs granted, and when (§25). Only
+  added to.
 - `review_grants`: one row per `canopy grant URL review`; the PR's URL, review runs granted, and when (§21, §22).
   Only added to.
 - `split_children`: one row per ticket a split created; its parent, the repository it covers, and the split run.
@@ -218,6 +220,7 @@ fix_ci_cooldown_minutes = 30
 max_resume_attempts = 3
 max_split_attempts = 1       # per ticket (§18)
 max_plan_attempts = 3        # per ticket (§25)
+plan = "off"                 # off | approve (§25); "approve" is stricter
 stacking = "auto"            # auto | never (§10); "never" is stricter
 
 [trust]

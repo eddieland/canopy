@@ -5,6 +5,11 @@ so the operator reads, greps, and edits it with their own tools. The journal's `
 by: the plan's status, the file's hash as written, and the hash the operator approved. A ticket has at most one plan
 that is not superseded, its current plan, waiting (`proposed`) or `approved`.
 
+Whether a ticket needs a plan is its own setting, set only by the operator (`ask`, `skip`), or with none
+`policy.plan` (`needed`). The operator's verbs here, asking for a plan, skipping it, and approving one, are every
+channel's: each refuses inside one of canopy's own runs, and holds the dispatch lock, so a dispatch reads a ticket's
+plans either before the verb or after it.
+
 A file is written once and never overwritten or deleted: under a temporary name in the ticket's directory, then linked
 to its own, which fails if the name is taken. `plans/` and each ticket's directory are operator-only, and one that is
 not, or a symlink, refuses the write. Every read opens a regular file without following a link and takes at most
@@ -21,9 +26,10 @@ import stat
 from dataclasses import dataclass
 from typing import IO, TYPE_CHECKING, Literal
 
-from canopy.core import db, records
+from canopy.core import conversation, db, records
 from canopy.core.conversation import KEY_RE, MAX_KEY, Refused
-from canopy.core.vocab import PlanStatus
+from canopy.core.vocab import PlanSetting, PlanStatus, RunKind
+from canopy.infra import lock
 
 if TYPE_CHECKING:
     import sqlite3
@@ -64,6 +70,106 @@ class Reading:
     sha256: str | None
     size: int | None
     problem: Problem | None
+
+
+def needed(policy: str, setting: PlanSetting | None) -> bool:
+    """Whether a ticket waits on an approved plan before its implement (DESIGN §25, Which tickets are planned).
+
+    Returns:
+        True when its own setting asks for a plan, or it has none and `policy`, `policy.plan`, is `"approve"`.
+    """
+    return setting is PlanSetting.PLAN or (setting is None and policy == "approve")
+
+
+@dataclass(frozen=True)
+class Asked:
+    """What `ask` or `skip` did: the plan it superseded, if any, and whether the ticket's setting was already so."""
+
+    superseded: int | None
+    already: bool
+
+
+def ask(conn: sqlite3.Connection, key: str, *, dispatch_lock: Path) -> Asked:
+    """Ask for a plan for `key`, whatever the policy: set its own setting to `plan` and supersede its current plan.
+
+    So the ticket needs a plan and has none, and the next tick dispatches one (DESIGN §25).
+
+    Returns:
+        The plan it superseded, if the ticket had one waiting or approved, and whether it already asked for a plan
+        and had none.
+
+    Raises:
+        Refused: `inside_run` inside one of canopy's own ticks or runs; `unknown` for a ticket canopy has no record
+            of; `bad_plan` while a plan run for it is running, or once it has a branch, since a plan then would
+            describe work already started.
+    """
+    conversation.check_operator()
+    with lock.hold(dispatch_lock, wait=True), db.transaction(conn):
+        ticket = _ticket(conn, key)
+        _not_planning(conn, key)
+        if ticket.branch:
+            raise Refused(
+                "bad_plan",
+                f"{key} already has work on {ticket.branch}; a started ticket is not planned, but --skip drops its "
+                "plan",
+            )
+        superseded = supersede(conn, key)
+        already = ticket.plan_setting is PlanSetting.PLAN and superseded is None
+        conn.execute("UPDATE tickets SET plan_setting = ? WHERE key = ?", (PlanSetting.PLAN, key))
+    return Asked(superseded=superseded, already=already)
+
+
+def skip(conn: sqlite3.Connection, key: str, *, dispatch_lock: Path) -> Asked:
+    """Waive `key`'s plan, whatever the policy: set its own setting to `skip` and supersede its current plan.
+
+    So no plan waits on the operator, and no later run carries one: the way past an approved plan whose file is gone,
+    on a ticket with a branch (DESIGN §25).
+
+    Returns:
+        The plan it superseded, if any, and whether the ticket's plan was already skipped.
+
+    Raises:
+        Refused: `inside_run` inside one of canopy's own ticks or runs; `unknown` for a ticket canopy has no record
+            of; `bad_plan` while a plan run for it is running.
+    """
+    conversation.check_operator()
+    with lock.hold(dispatch_lock, wait=True), db.transaction(conn):
+        ticket = _ticket(conn, key)
+        _not_planning(conn, key)
+        superseded = supersede(conn, key)
+        already = ticket.plan_setting is PlanSetting.SKIP and superseded is None
+        conn.execute("UPDATE tickets SET plan_setting = ? WHERE key = ?", (PlanSetting.SKIP, key))
+    return Asked(superseded=superseded, already=already)
+
+
+def _ticket(conn: sqlite3.Connection, key: str) -> records.Ticket:
+    """The ticket the operator names, which canopy must know: its setting is a column of its row.
+
+    Returns:
+        The ticket's row.
+
+    Raises:
+        Refused: (`unknown`) canopy has no record of it.
+    """
+    ticket = db.get_ticket(conn, key)
+    if ticket is None:
+        raise Refused(
+            "unknown", f"canopy has no record of {key}: start it, or label it and let a tick see it, before planning it"
+        )
+    return ticket
+
+
+def _not_planning(conn: sqlite3.Connection, key: str) -> None:
+    """Refuse while a plan run for `key` is running: its plan would land after the operator's word.
+
+    Raises:
+        Refused: (`bad_plan`) a plan run for `key` is running.
+    """
+    running = db.running_run_of(conn, key)
+    if running is not None and running["kind"] == RunKind.PLAN:
+        raise Refused(
+            "bad_plan", f"plan run {running['id']} for {key} is running; wait for it to end, then decide on its plan"
+        )
 
 
 def path_for(state_dir: Path, key: str, run_id: int) -> Path:
@@ -180,20 +286,23 @@ def history(conn: sqlite3.Connection, key: str) -> list[records.Plan]:
     return records.fetch_all(conn, records.Plan, "SELECT * FROM plans WHERE ticket_key = ? ORDER BY id", (key,))
 
 
-def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str) -> records.Plan:
+def approve(conn: sqlite3.Connection, state_dir: Path, key: str, *, channel: str, dispatch_lock: Path) -> records.Plan:
     """Approve the ticket's current plan as its file stands now, the operator's edits included, recording its hash.
 
-    The operator's verbs check the rest first: that no agent run is asking (`inside_run`), and that no plan run for the
-    ticket is running.
+    An operator message newer than the plan, asking for changes, does not stop it: an approval before the new plan run
+    starts is the operator's later word (DESIGN §25, Approving a plan).
 
     Returns:
         The approved plan's row.
 
     Raises:
-        Refused: (`bad_plan`) the ticket has no current plan; it is approved and its file has not changed since; or its
-            file is missing, not a regular file, unreadable, or no longer a plan.
+        Refused: `inside_run` inside one of canopy's own ticks or runs; `bad_plan` while a plan run for the ticket is
+            running, when it has no current plan, when that plan is approved and its file has not changed since, or
+            when its file is missing, not a regular file, unreadable, or no longer a plan.
     """
-    with db.transaction(conn):
+    conversation.check_operator()
+    with lock.hold(dispatch_lock, wait=True), db.transaction(conn):
+        _not_planning(conn, key)
         plan = current(conn, key)
         if plan is None:
             raise Refused("bad_plan", f"{key} has no plan waiting to be approved")

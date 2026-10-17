@@ -8,7 +8,8 @@ covered the unit. `dispatch.py` enforces these; the overseer's state block shows
 
 A split is not a unit's work: it creates tickets and changes no repository (DESIGN §18). Nor is a plan, which writes
 down how the ticket will be done across every repository it touches (DESIGN §25). Their runs are counted per ticket,
-and never in a unit's counts.
+and never in a unit's counts. The operator grants a ticket more plans (`grant_ticket`); a split's limit only config
+raises.
 """
 
 from __future__ import annotations
@@ -35,6 +36,9 @@ SPLIT = RunKind.SPLIT
 PLAN = RunKind.PLAN
 # The kinds whose runs are the ticket's, not a unit's: they work on no branch, and their attempts count per ticket.
 TICKET_KINDS: tuple[str, ...] = (SPLIT, PLAN)
+# The kinds counted per ticket that `canopy grant` takes: a split creates tickets in the tracker, so only config raises
+# its limit.
+TICKET_GRANT_KINDS: tuple[str, ...] = (PLAN,)
 DISPATCH_KINDS: tuple[str, ...] = tuple(RunKind)
 
 
@@ -147,6 +151,50 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
     name = unit(key, repo)
     limit = unit_limits(config, grants(conn).get(name, {}))[kind]
     return Granted(repo=repo, runs=unit_attempts(conn, key, repo)[kind], limit=limit)
+
+
+@dataclass(frozen=True)
+class TicketGranted:
+    """What `grant_ticket` recorded: the ticket's runs and limit of the kind now."""
+
+    runs: int
+    limit: int
+
+
+def grant_ticket(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, runs: int) -> TicketGranted:
+    """Grant `key` `runs` more runs of `kind`, a kind counted per ticket, than the policy allows (DESIGN §25).
+
+    Operator only, as `grant` is. Every run still counts (D030): a grant raises the ticket's limit.
+
+    Returns:
+        The ticket's runs of `kind`, and its limit for them with the grant counted.
+
+    Raises:
+        Refused: `inside_run` inside one of canopy's own ticks or runs, `bad_kind` for a kind the operator cannot
+            grant per ticket, `unknown` for a ticket canopy has no record of.
+    """
+    conversation.check_operator()
+    if kind not in TICKET_GRANT_KINDS:
+        raise conversation.Refused("bad_kind", f"{kind} is not one of {', '.join(TICKET_GRANT_KINDS)}")
+    if db.get_ticket(conn, key) is None:
+        raise conversation.Refused("unknown", f"canopy has no record of {key}, so it has no attempts to grant past")
+    with db.transaction(conn):
+        conn.execute(
+            "INSERT INTO ticket_grants (ticket_key, kind, runs, granted_at) VALUES (?, ?, ?, ?)",
+            (key, kind, runs, db.now()),
+        )
+    return TicketGranted(runs=ticket_attempts(conn, kind).get(key, 0), limit=ticket_limit(conn, config, key, kind))
+
+
+def ticket_limit(conn: sqlite3.Connection, config: Config, key: str, kind: str) -> int:
+    """Return the most runs of `kind`, a kind counted per ticket, that `key` may have: the policy's plus its grants."""
+    return limits(config)[kind] + ticket_grants(conn, kind).get(key, 0)
+
+
+def ticket_grants(conn: sqlite3.Connection, kind: str) -> dict[str, int]:
+    """Return the runs of `kind` the operator granted each ticket past its policy limit. Tickets without are missing."""
+    rows = conn.execute("SELECT ticket_key, sum(runs) FROM ticket_grants WHERE kind = ? GROUP BY ticket_key", (kind,))
+    return {str(r[0]): int(r[1]) for r in rows}
 
 
 def ticket_attempts(conn: sqlite3.Connection, kind: str) -> dict[str, int]:
