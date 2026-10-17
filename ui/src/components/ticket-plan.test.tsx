@@ -1,11 +1,12 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { QueryClient } from '@tanstack/react-query'
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
 import { keys } from '@/api/queries'
 import type { PlanFile, PlanSummary, PlanThreadView, TicketPlans } from '@/api/types'
+import { renderRouted } from '@/test-utils'
 
 import { TicketPlan } from './ticket-plan'
 
@@ -109,7 +110,7 @@ function holdAnswers(): () => void {
     return () => release?.()
 }
 
-function renderPlan(plans: Partial<TicketPlans> = {}) {
+function renderPlan(plans: Partial<TicketPlans> = {}): ReturnType<typeof renderRouted> {
     // Plan 1, which plan 2 replaces, already read: no test leaves a read of it in flight.
     const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } })
     client.setQueryData(keys.ticketPlan('ABC-1', 1), {
@@ -117,11 +118,8 @@ function renderPlan(plans: Partial<TicketPlans> = {}) {
         plan: EARLIER,
         text: '# Plan\n\nAdd a CSV button.\n',
     })
-    return render(
-        <QueryClientProvider client={client}>
-            <TicketPlan ticketKey="ABC-1" plans={{ ...PLANS, ...plans }} />
-        </QueryClientProvider>,
-    )
+    // Under a router: the plan asks before the page is left with work unsaved, through the router's blocker.
+    return renderRouted(<TicketPlan ticketKey="ABC-1" plans={{ ...PLANS, ...plans }} />, { client })
 }
 
 // The plan's editor, through the handle Tiptap leaves on it for tests: an edit there is the operator typing.
@@ -160,17 +158,17 @@ function writes(): string[] {
 
 describe('TicketPlan', () => {
     describe('its status line', () => {
-        it('says why the ticket needs a plan, and its newest plan’s status', () => {
-            renderPlan()
+        it('says why the ticket needs a plan, and its newest plan’s status', async () => {
+            await renderPlan()
             const status = screen.getByTestId('plan-status')
             expect(status.textContent).toMatch(
                 /^Plan needed, by policy\.plan approve\.proposedplan 2, written \S+ ago$/u,
             )
         })
 
-        it('says when the operator’s own word decides, and what was approved, edited, and changed since', () => {
+        it('says when the operator’s own word decides, and what was approved, edited, and changed since', async () => {
             const approved = { ...PLAN, status: 'approved' as const, approved_at: '2026-10-08T11:30:00Z' }
-            renderPlan({
+            await renderPlan({
                 setting: 'plan',
                 newest: {
                     ...NEWEST,
@@ -188,25 +186,25 @@ describe('TicketPlan', () => {
             )
         })
 
-        it('says a planner comes next while there is no plan, and which run writes one', () => {
-            const { unmount } = renderPlan({ newest: null, plans: [] })
+        it('says a planner comes next while there is no plan, and which run writes one', async () => {
+            const { unmount } = await renderPlan({ newest: null, plans: [] })
             expect(screen.getByText('None yet: the next tick dispatches a planner.')).toBeDefined()
             unmount()
 
-            renderPlan({ newest: null, plans: [], planning: 51 })
+            await renderPlan({ newest: null, plans: [], planning: 51 })
             expect(screen.getByText('Run 51 is writing a new plan.')).toBeDefined()
             expect(screen.queryByText(/^None yet/u)).toBeNull()
         })
     })
 
-    it('says why the newest plan’s file cannot be shown, and where it is', () => {
-        renderPlan({ newest: { ...NEWEST, text: null, problem: 'missing' } })
+    it('says why the newest plan’s file cannot be shown, and where it is', async () => {
+        await renderPlan({ newest: { ...NEWEST, text: null, problem: 'missing' } })
         expect(screen.getByText(`plan 2's file is missing: ${NEWEST.path}`)).toBeDefined()
         expect(screen.queryByRole('textbox', { name: 'Plan' })).toBeNull()
     })
 
     it('approves a proposed plan as canopy plan --approve does, and says so in its words', async () => {
-        renderPlan()
+        await renderPlan()
         expect(button('Save').disabled).toBe(true)
         fireEvent.click(button('Approve'))
         expect((await screen.findByRole('status')).textContent).toBe(
@@ -216,7 +214,7 @@ describe('TicketPlan', () => {
     })
 
     it('skips the plan as canopy plan --skip does', async () => {
-        renderPlan()
+        await renderPlan()
         fireEvent.click(button('Skip the plan'))
         expect((await screen.findByRole('status')).textContent).toBe(
             "ABC-1's plan is skipped: its implement goes ahead without one.",
@@ -224,25 +222,25 @@ describe('TicketPlan', () => {
         expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'skip' } }])
     })
 
-    it('offers no Approve for a plan approved and unchanged since, and says an edit needs approving again', () => {
+    it('offers no Approve for a plan approved and unchanged since, and says an edit needs approval again', async () => {
         const approved = { ...PLAN, status: 'approved' as const, approved_at: '2026-10-08T11:30:00Z' }
-        const { unmount } = renderPlan({ newest: { ...NEWEST, plan: approved } })
+        const { unmount } = await renderPlan({ newest: { ...NEWEST, plan: approved } })
         expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
         expect(screen.getByText(/Saving an edit means approving it again\.$/u)).toBeDefined()
         unmount()
 
-        renderPlan({ newest: { ...NEWEST, plan: approved, changed_since_approval: true } })
+        await renderPlan({ newest: { ...NEWEST, plan: approved, changed_since_approval: true } })
         expect(button('Approve')).toBeDefined()
     })
 
-    it('keeps the plan read only while a planner writes a new one', () => {
-        renderPlan({ planning: 51 })
+    it('keeps the plan read only while a planner writes a new one', async () => {
+        await renderPlan({ planning: 51 })
         expect(screen.getByRole('textbox', { name: 'Plan' }).getAttribute('contenteditable')).toBe('false')
         expect(screen.getByText('Run 51 is writing a new plan.')).toBeDefined()
     })
 
     it('says an edit is unsaved, and saves it over the file as read, refused if the file changed', async () => {
-        renderPlan()
+        await renderPlan()
         typeInPlan(' Then a test.')
         expect(screen.getByText('Unsaved edits')).toBeDefined()
         expect(button('Save and approve')).toBeDefined()
@@ -272,7 +270,7 @@ describe('TicketPlan', () => {
     })
 
     it('saves with Ctrl+S anywhere on the page, and only once there is an edit', async () => {
-        renderPlan()
+        await renderPlan()
         const unsaved = new KeyboardEvent('keydown', { key: 's', ctrlKey: true, cancelable: true })
         document.dispatchEvent(unsaved)
         expect(unsaved.defaultPrevented).toBe(true)
@@ -285,7 +283,7 @@ describe('TicketPlan', () => {
     })
 
     it('saves an edit before approving, so the approval takes the plan as edited', async () => {
-        renderPlan()
+        await renderPlan()
         typeInPlan(' Then a test.')
         fireEvent.click(button('Save and approve'))
         expect((await screen.findByRole('status')).textContent).toMatch(/^Plan 2 of ABC-1 is approved/u)
@@ -293,7 +291,7 @@ describe('TicketPlan', () => {
     })
 
     it('asks the planner for changes with a reply, saving an edit first so the planner reads it', async () => {
-        renderPlan()
+        await renderPlan()
         typeInPlan(' Then a test.')
         const ask = screen.getByRole('form', { name: 'Ask for changes' })
         fireEvent.change(within(ask).getByRole('textbox', { name: 'On the whole plan' }), {
@@ -309,7 +307,7 @@ describe('TicketPlan', () => {
     })
 
     it('saves a change to a comment as it is made', async () => {
-        renderPlan({ threads: [THREAD] })
+        await renderPlan({ threads: [THREAD] })
         const card = screen.getByRole('article', { name: 'Comment on “CSV writer”' })
         fireEvent.click(within(card).getByRole('button', { name: 'Resolve' }))
         await waitFor(() => {
@@ -321,7 +319,7 @@ describe('TicketPlan', () => {
 
     it('comments on a passage, and sends a change to that comment to the id the journal gives it', async () => {
         const release = holdAnswers()
-        renderPlan()
+        await renderPlan()
         act(() => {
             editor().commands.setTextSelection({ from: 15, to: 25 })
         })
@@ -343,7 +341,7 @@ describe('TicketPlan', () => {
     })
 
     it('lists the earlier plans, newest first, each read only once opened', async () => {
-        renderPlan({ plans: [{ ...EARLIER, id: 0 }, EARLIER, PLAN] })
+        await renderPlan({ plans: [{ ...EARLIER, id: 0 }, EARLIER, PLAN] })
         const shows = screen.getAllByRole('button', { name: /^Show plan/u }).map((show) => show.textContent)
         expect(shows).toEqual(['Show plan 1', 'Show plan 0'])
         expect(screen.getAllByRole('textbox', { name: 'Plan' })).toHaveLength(1)
