@@ -88,6 +88,53 @@ jobs:
           python-version: "3.12"
           enable-cache: true
 
+      # --locked fails if uv.lock is out of date with pyproject.toml.
+      - name: Install dependencies
+        if: needs.changes.outputs.code != 'false'
+        run: uv sync --locked
+
+      # `make check` is these two and `ui-check`, which runs in the job below so neither waits on the other.
+      # `make all` would run `fmt`, which rewrites files; these only verify. `lint` includes `ruff format --check`,
+      # so unformatted code still fails. COVERAGE=1 writes coverage.xml for the Python tests.
+      - name: Lint, type check, and test
+        if: needs.changes.outputs.code != 'false'
+        run: make lint test COVERAGE=1
+
+      # Codecov authenticates with the run's OIDC token, so no secret is needed; the repository only has to be added
+      # on codecov.io. An upload that fails warns and leaves the check green: Codecov being down never blocks a PR.
+      - name: Upload coverage to Codecov
+        if: needs.changes.outputs.code != 'false'
+        uses: codecov/codecov-action@v7.1.1
+        with:
+          files: coverage.xml
+          use_oidc: true
+          fail_ci_if_error: false
+
+  # The rest of `make check`: the UI's format, lint, types, generated API types, unit tests, and build (ui/AGENTS.md).
+  ui-check:
+    runs-on: ubuntu-latest
+    needs: changes
+    if: ${{ !cancelled() }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      # For the OIDC token the Codecov upload authenticates with.
+      id-token: write
+    steps:
+      - name: Check out repository
+        if: needs.changes.outputs.code != 'false'
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # The generated API types are checked against the schema canopy.serve produces.
+      - name: Set up uv and Python 3.12
+        if: needs.changes.outputs.code != 'false'
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
       - name: Set up Node
         if: needs.changes.outputs.code != 'false'
         uses: actions/setup-node@v7.1.0
@@ -96,17 +143,14 @@ jobs:
           cache: npm
           cache-dependency-path: ui/package-lock.json
 
-      # --locked fails if uv.lock is out of date with pyproject.toml.
       - name: Install dependencies
         if: needs.changes.outputs.code != 'false'
         run: uv sync --locked
 
-      # `make all` would run `fmt`, which rewrites files; `make check` only verifies.
-      # It includes `ruff format --check`, so unformatted code still fails. COVERAGE=1 writes coverage.xml for the
-      # Python tests and ui/coverage/lcov.info for the UI's unit tests.
-      - name: Lint, type check, and test
+      # COVERAGE=1 writes ui/coverage/lcov.info for the UI's unit tests.
+      - name: UI checks
         if: needs.changes.outputs.code != 'false'
-        run: make check COVERAGE=1
+        run: make ui-check COVERAGE=1
 
       # Codecov authenticates with the run's OIDC token, so no secret is needed; the repository only has to be added
       # on codecov.io. An upload that fails warns and leaves the check green: Codecov being down never blocks a PR.
@@ -114,7 +158,7 @@ jobs:
         if: needs.changes.outputs.code != 'false'
         uses: codecov/codecov-action@v7.1.1
         with:
-          files: coverage.xml,ui/coverage/lcov.info
+          files: ui/coverage/lcov.info
           use_oidc: true
           fail_ci_if_error: false
 

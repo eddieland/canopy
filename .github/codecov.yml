@@ -1,6 +1,6 @@
-# Codecov's settings (ci.yml uploads coverage.xml and ui/coverage/lcov.info from `make check COVERAGE=1`). Its commit
-# statuses are informational: they report project and patch coverage on each PR but never fail one, since no milestone
-# sets a coverage bar.
+# Codecov's settings. ci.yml uploads coverage.xml from the lint-and-test job and ui/coverage/lcov.info from the ui-check
+# job, which run side by side. Its commit statuses are informational: they report project and patch coverage on each PR
+# but never fail one, since no milestone sets a coverage bar.
 coverage:
   status:
     project:
@@ -13,7 +13,12 @@ coverage:
 # No PR comment: the statuses and codecov.io carry the numbers, and a comment on every push is noise in the thread.
 comment: false
 
-# One upload carries both reports; components show the Python and the web UI's coverage apart on codecov.io.
+# Two uploads per commit, one from each job: Codecov reports only once both arrive, not on the half that came first.
+codecov:
+  notify:
+    after_n_builds: 2
+
+# Components show the Python and the web UI's coverage apart on codecov.io.
 component_management:
   individual_components:
     - component_id: python
