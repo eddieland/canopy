@@ -120,11 +120,12 @@ such as a shipped migration, may still cite one, and git history has its text.
 - Rejected: also running `ty` (two checkers to satisfy for little extra coverage).
 - Revisit: if strict costs more than it catches; then relax error kinds, not the project.
 
-## D018. ruff selects every stable rule, and the pydoclint rules that check Google docstring sections
+## D018. ruff selects every stable rule, and preview rules named one by one, the docstring sections' among them
 
 - `select = ["ALL"]`. Opt out with a commented `ignore` or a `noqa` with a code, never by narrowing.
-- Preview rules stay off but for the pydoclint `DOC` rules, named one by one under `explicit-preview-rules`: a public
-  function's Returns, Yields, and Raises sections must match its body.
+- Preview rules stay off but for those named one by one under `explicit-preview-rules`, so a ruff bump adds none:
+  the pydoclint `DOC` rules (a public function's Returns, Yields, and Raises sections must match its body), and
+  others chosen for what they catch here. Add one by naming it.
 - Preview mode also turns on preview behavior in stable rules, so a ruff bump can change the lint; fix or opt out then.
 
 ## D019. Every test directory is a package

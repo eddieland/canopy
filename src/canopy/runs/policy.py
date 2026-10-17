@@ -120,14 +120,14 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
     `repo` may be omitted when the ticket has had runs in one repository only. Every run still counts (D030): a grant
     raises the unit's limit, and the next dispatch of that kind sees it.
 
+    Returns:
+        The unit's repository, named or found, and its runs of `kind` and its limit for them with the grant counted.
+
     Raises:
         Refused: `inside_run` inside one of canopy's own ticks or runs, `bad_kind` for a kind with no unit limit (a
             split's is the ticket's, and only config raises it), `unknown` for a ticket canopy has no record of,
             `unknown_repo` for a repository the ticket has had no runs in, or none named when it has had them in
             several.
-
-    Returns:
-        The unit's repository, named or found, and its runs of `kind` and its limit for them with the grant counted.
     """
     conversation.check_operator()
     if kind not in KINDS:
