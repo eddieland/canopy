@@ -11,8 +11,9 @@ over mock data, and so are plans' files and rows (Where plans live and Journal, 
 `canopy dispatch --kind plan`, the planner, its prompt, and `_run` writing the plan (Dispatch, The prompt, and Agent
 definition, below), and the gate: `policy.plan`, the operator's `canopy plan` verbs, `canopy start --plan`, `canopy
 grant KEY plan`, and the `unplanned` and `plan_changed` guards (Which tickets are planned, Approving a plan, and
-Dispatch, below). The overseer does not dispatch a plan yet, since its prompt and the phases do not name one. Until
-M44 lands, §7, §12, §14, §20, and §22 describe canopy as it is. This section says what changes in each.
+Dispatch, below), and the overseer's part: the phases, the state block's plan, `plan_review`, a blocked planner's
+`awaiting_reply`, and `plan.proposed` (Phases and the overseer's part, and Reading plans, below). Until M44 lands, §8
+and §22 describe workers and the ticket page as they are. This section says what changes in each.
 
 Today the `implement` worker plans inside its own session, and nothing of that plan survives but the run's summary. A
 **plan** is a run of its own that reads the ticket and the code and writes down how the work will be done, before any
@@ -185,7 +186,13 @@ before `ready`'s own row:
 
 `plan_proposed` holds no run and no slot, so capacity is free while the operator reads. The state block gains each
 ticket's plan: whether one is needed, and the newest plan's id, status, and time. Never its text: the overseer has no
-use for it, and it is model-written text (T1).
+use for it, and it is model-written text (T1). A ticket plans do not touch, needing none and with no plan or plan run,
+has no `plan` key, so with the policy off the block is as it was. The key also carries the ticket's plan runs and their
+limit, with its grants, and the two facts the rows above turn on, computed by the harness so the overseer compares no
+times: `changes_asked`, an operator message newer than the newest plan that is not superseded and than the latest plan
+run's start, which no planner has read; and `blocked`, the latest plan run ended `blocked` with no operator message
+since. A reply the re-plan has read is older than that run's start, so a re-plan that blocks waits on the operator
+rather than being dispatched again.
 
 `plan_review` is an attention reason (§14) raised by the overseer every tick the plan waits. Its detail names the plan
 and how to answer: `canopy show KEY`, then `canopy plan KEY --approve` or `canopy reply KEY`. Its cause is gone once the
@@ -294,8 +301,10 @@ canopy ships `canopy-planner` in the definitions directory (§13):
 - The web UI's ticket page (§22) shows the newest plan in the plan editor (Commenting on a plan, below), with
   `Approve`, `Ask for changes`, and `Skip`, and lists earlier plans. They call `POST /tickets/{key}/plan` with
   `approve`, `request`, or `skip`, through the same code as the CLI, so with the same refusals.
-- A `plan.proposed` event (§20) tells the operator's sinks a plan is waiting: the ticket and its title. It carries no
-  plan text, so nothing of the plan leaves the machine through a Slack sink.
+- A `plan.proposed` event (§20) tells the operator's sinks a plan is waiting: the ticket and its title, the run, and the
+  plan's id. It carries no plan text, so nothing of the plan leaves the machine through a Slack sink. It is in the
+  `runs` group, recorded with the plan's row, and urgent to a batching sink; a sink that takes only attention hears of
+  the plan from `plan_review`.
 
 ### Commenting on a plan
 

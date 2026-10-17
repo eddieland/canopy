@@ -993,9 +993,10 @@ superseded by `canopy forget`. Plan runs are in: `canopy dispatch --kind plan` w
 `worker-plan.md`, and `_run` writing a `done` plan to its file and recording it `proposed`, with the copy of the plan
 it replaces in its desk. The planner writes its plan to a file in its desk rather than its final message (§25, The
 prompt). The gate is in: `policy.plan`, `canopy plan KEY [--skip | --approve]`, `canopy start KEY --plan`, `canopy
-grant KEY plan` (migration 0034, `ticket_grants`), and the `unplanned` and `plan_changed` guards. What keeps it open:
-the phases and the overseer's part, the worker's copy, `canopy show`'s plans, the threads' tables, and the ticket
-page.
+grant KEY plan` (migration 0034, `ticket_grants`), and the `unplanned` and `plan_changed` guards. The overseer's part
+is in: the `plan_proposed` phase and the plan rows, the state block's `plan`, `plan_review`, a blocked planner's
+`awaiting_reply` on a public ticket, and `plan.proposed`. What keeps it open: the worker's copy, `canopy show`'s
+plans, the threads' tables, and the ticket page.
 
 ## M45. canopy's own worktree pools, replacing treehouse in stages
 

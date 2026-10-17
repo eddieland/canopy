@@ -9,7 +9,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, NotRequired, TypedDict
 
-from canopy.core import conversation, db, pools
+from canopy.core import conversation, db, plans, pools
 from canopy.runs import policy
 
 if TYPE_CHECKING:
@@ -68,6 +68,7 @@ class TicketState(TypedDict):
     last_run: RunState | None
     private: NotRequired[conversation.PrivateSection]
     operator: NotRequired[conversation.OperatorSection]
+    plan: NotRequired[plans.PlanState]
 
 
 class UnitState(TypedDict):
@@ -238,6 +239,7 @@ def state_block(
     notices: Sequence[Notice] = (),
     private: Mapping[str, conversation.PrivateSection] | None = None,
     operator: Mapping[str, conversation.OperatorSection] | None = None,
+    planned: Mapping[str, plans.PlanState] | None = None,
     mirror_delimiter: str,
     attention: list[OpenItem] | None = None,
     query_due: bool,
@@ -255,7 +257,9 @@ def state_block(
     (`notice.recent`), newest first; with none, the block has no `notices` key. `private` holds each private ticket's
     conversation state, by key (DESIGN §22); a public ticket has no `private` key. `operator` holds a public ticket's
     operator messages newer than its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7,
-    D089). `mirror_delimiter` ends the heredoc the overseer passes each mirrored comment's body in: the tick's own, so
+    D089). `planned` holds a ticket's plan, by key: whether it needs one, its plan attempts and limit, and its newest
+    plan's id, status, and time, never its text (DESIGN §25); a ticket plans do not touch has no `plan` key.
+    `mirror_delimiter` ends the heredoc the overseer passes each mirrored comment's body in: the tick's own, so
     no comment can predict it. `attention` is the open items the overseer recorded (`attention.for_overseer`), so it
     sees what leaving one out drops (ROADMAP M28). `query_due` says whether the overseer runs the tracker query this
     tick or works the tickets the block lists alone (DESIGN §7, Spacing the query).
@@ -265,6 +269,7 @@ def state_block(
     """
     private = private or {}
     operator = operator or {}
+    planned = planned or {}
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
     def unit_summary(key: str, u: sqlite3.Row) -> UnitState:
@@ -319,6 +324,8 @@ def state_block(
             summary["private"] = private[key]
         if key in operator:
             summary["operator"] = operator[key]
+        if key in planned:
+            summary["plan"] = planned[key]
         return summary
 
     state: OverseerState = {

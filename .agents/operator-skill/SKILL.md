@@ -148,6 +148,8 @@ no dismissing one, except a chore's finding (below). Reasons:
 | `ready_to_merge` | The PR is approved: merge it. canopy never merges. |
 | `needs_author` | A review comment needs a person (design pushback, scope), or a stacked-on PR closed: decide. |
 | `untrusted_review` | Feedback from a reviewer not in `trust.trusted_reviewers`: say what to do with `canopy reply`. |
+| `plan_review` | A ticket's plan waits on you: `canopy show KEY`, then `canopy plan KEY --approve` or `canopy reply KEY`. |
+| `plan_changed` | An approved plan's file changed: approve it again, or `canopy plan KEY` for a new one, or `--skip`. |
 | `attempt_limit` | The ticket used up its attempts of one kind. Take it over, or `canopy grant KEY KIND` for another run. |
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong. Read the run log the detail names. |
 | `chore_failed` | A chore's latest run could not check (failed, timed out, crashed): read its log. |

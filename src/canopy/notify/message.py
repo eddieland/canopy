@@ -33,7 +33,7 @@ def _line(text: object) -> str:
     return " ".join(str(text).split())
 
 
-def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: PLR0911  (one shape per kind)
+def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: C901, PLR0911  (one shape per kind)
     """One line of text for an event, for a person.
 
     Returns:
@@ -51,6 +51,8 @@ def event_line(kind: str, fields: Mapping[str, object]) -> str:  # noqa: PLR0911
         if f.get("question"):
             extras.append(f"question: {f.get('question')}")
         return _line(f"{text}: {' '.join(extras)}" if extras else text)
+    if kind == "plan.proposed":
+        return f"? {f.get('ticket')} plan {f.get('plan')} waits on your approval: canopy show {f.get('ticket')}"
     if kind == "chore.ended":
         findings = f.get("findings") or 0
         text = f"< chore:{f.get('chore')} run {f.get('run')} ended {f.get('status')} ({findings} findings)"

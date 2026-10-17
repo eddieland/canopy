@@ -41,7 +41,8 @@ in order:
      `ticks.read_at`). The latest `ok` tick's message is what the web UI calls acknowledged (§22); idle pacing reads
      both (below).
    - Record as this tick's decisions the harness's attention items for runs (§14), `awaiting_reply` for each started
-     ticket whose latest question has no operator message after it (§22), `chore_failed` for each configured chore
+     ticket whose latest question has no operator message after it (§22), and for each public ticket whose latest plan
+     run asked one (§25), `chore_failed` for each configured chore
      whose latest ended run did not end `ok` (§19), and `repo_missing` for each mapped repository with no clone.
 4. **Render the state block**, the overseer's whole message: a generated `## State` section holding one JSON object.
    The object is compact JSON, one line with no space after `,` or `:`: the block is written fresh every tick and
@@ -395,7 +396,8 @@ model-written text, and the Slack sink escapes it. It stays out of `attention.md
 
 | Phase | Derived from | Next action |
 |---|---|---|
-| `ready` | one of `tracker.labels` present, not closed, no run active, no branch, no open blocker | dispatch `implement` |
+| `ready` | one of `tracker.labels` present, not closed, no run active, no branch, no open blocker | dispatch `implement`, or `plan` when the ticket needs one and has none (§25) |
+| `plan_proposed` | the ticket's newest plan waits on the operator (§25) | attention `plan_review`; dispatch `plan` again after an operator message |
 | `blocked` | as `ready`, but a blocker ticket is open | dispatch `implement` stacked on the blocker's branch if its PR is open and green (§10), else wait |
 | `running` | active `runs` row | wait |
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |

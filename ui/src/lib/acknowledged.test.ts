@@ -30,6 +30,10 @@ describe('answered', () => {
         expect(answered(item, listing({ awaiting: null }))).toBe(true)
     })
 
+    it("is a public ticket's planner question answered", () => {
+        expect(answered(item, listing({ awaiting: null, start: null, private: false }))).toBe(true)
+    })
+
     it('is not while the question still waits, the ticket is stopped, or the tickets are not loaded', () => {
         expect(answered(item, listing({}))).toBe(false)
         expect(answered(item, listing({ awaiting: null, start: 'stopped' }))).toBe(false)

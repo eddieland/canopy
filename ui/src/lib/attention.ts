@@ -17,8 +17,9 @@ const FAILED = new Set([
     'canopy_unavailable',
 ])
 
-// Reasons that wait on the operator's own answer: a private ticket's question, an untrusted review's go-ahead (D089).
-const WAITING = new Set(['awaiting_reply', 'untrusted_review'])
+// Reasons that wait on the operator's own answer: a private ticket's question or a planner's, an untrusted review's
+// go-ahead (D089), or a plan to approve (DESIGN §25).
+const WAITING = new Set(['awaiting_reply', 'untrusted_review', 'plan_review'])
 
 // Reasons for a PR that is done for now and waits on someone else: a reviewer, or the merge (DESIGN §7). Nothing is
 // stuck while one is open, so they never count as blocking.

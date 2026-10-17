@@ -325,6 +325,7 @@ A closed set, written by the harness from the journal. Text fields are cut to th
 | `attention` | `attention.resolved` | an item the sink was told of left the list | ticket, title, reason |
 | `runs` | `run.started` | dispatch started a worker | ticket, title, run, kind, branch, attempt, limit |
 | `runs` | `run.ended` | a run's row closed | ticket, title, run, kind, status, branch, pr, prs, summary, question, message |
+| `runs` | `plan.proposed` | a plan run's plan was recorded, waiting on the operator (§25) | ticket, title, run, plan; never its text |
 | `chores` | `chore.ended` | a chore run's row was closed (§19) | chore, run, status, summary, how many findings |
 | `reviews` | `review.ended` | a review run's row was closed (§21) | pr, ticket, title, run, status, verdict, impact, how many findings |
 | `loop` | `loop.failing` | the latest 3 ticks all ended other than `ok` | count, latest status and tick, its log |
@@ -383,7 +384,8 @@ something needs the operator now:
   happened since, and sends one message. A sink that has never delivered, or whose last delivery is older than the
   window, sends at once, so the first message after a quiet spell is not late.
 - Urgent goes at once, with everything held: a new attention item, a `run.ended` whose status is `blocked` (its
-  question), `loop.failing`, and `loop.sink_failing`. A resolved item, a run started or ended otherwise, a chore or
+  question), a `plan.proposed`, which holds its ticket until the operator answers, `loop.failing`, and
+  `loop.sink_failing`. A resolved item, a run started or ended otherwise, a chore or
   review ended, `loop.recovered`, and a digest wait.
 - A held message waits for a tick: it goes at the first one after its window, up to `loop.interval_minutes` later,
   or longer once idle pacing stretches the wait (§6). Holding does not wake the loop, since a tick runs the overseer.
@@ -405,7 +407,7 @@ something needs the operator now:
 `text` is lines for a person. Attention alone is exactly §14's message, so `notify.cmd` output is unchanged. Event
 lines, then digest lines, follow the attention lines, then the closing path line. Without attention changes a message
 starts `canopy: N events`, or `canopy digest` for a digest alone. Event lines start `>` for a run started, `<` for a
-run or chore run ended, `!` for the loop's own events, `*` for a test.
+run or chore run ended, `?` for a plan waiting on the operator, `!` for the loop's own events, `*` for a test.
 
 `json` is one object:
 

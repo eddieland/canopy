@@ -215,7 +215,10 @@ Controls in code, not prompts:
   `capacity.max_chores` chore runs at once, each with its own timeout (DESIGN §19).
 - Mirrored comments: at most 100 `canopy mirror` calls a tick, each body cut at 2000 characters (DESIGN §22).
 - Plans: a plan run holds a slot within `capacity.max_workers`, has the worker's timeout, and counts toward
-  `policy.max_plan_attempts` per ticket, never reset (DESIGN §25).
+  `policy.max_plan_attempts` per ticket, never reset, raised only by the operator, in config or per ticket with
+  `canopy grant KEY plan` (DESIGN §25). A plan waiting on the operator holds no slot. The plan gate is a guard in code:
+  an `implement` for a ticket that needs a plan and has none approved is refused (`unplanned`), whatever the overseer
+  asks for, and only the operator's channels ask for, skip, or approve a plan.
 
 ### T4. Damage to the operator's machine
 

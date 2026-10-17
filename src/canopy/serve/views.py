@@ -20,6 +20,7 @@ from canopy.core import (
     items,
     notice,
     pause,
+    plans,
     records,
     search,
     transcript,
@@ -626,7 +627,10 @@ def summary(conn: sqlite3.Connection, row: sqlite3.Row) -> TicketSummary:
     status: StartStatus | None = None
     if record is not None:
         status = "started" if conversation.is_started(record) else "stopped"
+    # A public ticket's questions are on the tracker, but for a planner's, which canopy holds (DESIGN §25).
     waiting = conversation.latest_question(conn, key) if status == "started" else None
+    if record is None:
+        waiting = plans.question(conn, key)
     running = db.running_run_of(conn, key)
     return TicketSummary(
         key=key,
