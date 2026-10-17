@@ -19,12 +19,12 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  # A pull request that changes only docs needs none of the checks below. They still run, so the required checks
-  # report, but every step is skipped and they pass in seconds. Docs are anything under docs/ and any Markdown file
+  # A pull request that changes only docs needs none of the checks below. They still run, so `ci-passed` sees them
+  # succeed, but every step is skipped and they pass in seconds. Docs are anything under docs/ and any Markdown file
   # outside .agents/, src/, and packages/, whose Markdown ships in the wheel. Pushes to main and manual runs always
   # check everything, so a Markdown lint error a docs-only PR let through fails there.
-  # The jobs that need this one run even if it fails, and anything but code=false runs their steps in full: a
-  # skipped required check counts as passing.
+  # The jobs that need this one run even if it fails, and anything but code=false runs their steps in full, so an
+  # unexpected output checks too much, never too little.
   changes:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -63,8 +63,6 @@ jobs:
             echo "Only docs changed; the checks pass without running." | tee -a "$GITHUB_STEP_SUMMARY"
           fi
 
-  # The job id is the status check name ("CI / lint-and-test") that branch
-  # protection matches on. Keep it stable; don't add a `name:` or versions here.
   lint-and-test:
     runs-on: ubuntu-latest
     needs: changes
@@ -361,3 +359,19 @@ jobs:
       - name: Install with uv tool install and run a dry tick
         if: needs.changes.outputs.code != 'false'
         run: make install-check
+
+  # The one check branch protection requires, so a new job, or a new OS in a matrix, needs no change to the ruleset:
+  # list the job in `needs` here, or nothing requires it. It runs whatever happened above and fails unless every job
+  # it needs succeeded, since a required check that is skipped counts as passing.
+  ci-passed:
+    runs-on: ubuntu-latest
+    needs: [changes, lint-and-test, ui-check, sandbox-canary, pool-contract, ui-e2e, install-check]
+    if: ${{ always() }}
+    timeout-minutes: 5
+    steps:
+      - name: Check that every job succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$NEEDS"
+          jq -e 'all(.[]; .result == "success")' <<<"$NEEDS" >/dev/null
