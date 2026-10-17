@@ -44,6 +44,18 @@ If code and the design disagree, the design doc wins until a decision entry says
 - `docs/TRUST_MODEL.md`, `.agents/prompts/overseer.md`, and everything under `.agents/agents/` define what the loop is
   allowed to do. A PR that changes them says in its summary what the change lets the loop do; the operator approves it
   by merging the PR, and no separate approval note is asked for.
+- An issue you file carries labels from each group, before anything else about it is worked out:
+  - **Type**, one: `bug`, `enhancement`, `documentation`, `measure` (a measurement for `docs/MEASUREMENTS.md`), or
+    `milestone` (tracks a ROADMAP milestone; the roadmap is the record, the issue holds the discussion).
+  - **Priority**, one: `P0` next up (misleads the operator, wastes runs, or blocks other work), `P1` high, `P2`
+    medium, `P3` low or waiting on something else, `P4` parked on purpose, such as a deferred milestone. Keep P0 and
+    P1 short enough to mean something; when a tier crowds, move something down.
+  - **Area**, one or more: `area: ui`, `loop`, `runs`, `reviews`, `workspaces`, `trust`, `prompts`, `memory`.
+  - **Status**, only when it applies: `needs-decision` when the operator must settle something first, and `blocked`
+    when it waits on another issue, which its body or a comment names.
+
+  Other labels are canopy's own: the queue label and `needs-human`, which the loop reads and writes, and `agent` on
+  its PRs. Never set those by hand to file an issue.
 - When unsure, prefer the smaller change and leave a note in the PR. Do not invent requirements.
 
 ## Toolchain
