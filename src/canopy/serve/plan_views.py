@@ -22,8 +22,8 @@ def ticket_plans(ctx: Context, key: str) -> TicketPlans | None:
     """The ticket's plans, or None if the journal has no record of the ticket.
 
     Returns:
-        Whether it needs a plan and why, the plan run writing one now, the newest plan as its file stands, every plan,
-        and the operator's comments.
+        Whether it needs a plan and why, the plan run writing one now, when the operator asked for changes no planner
+        has read, the newest plan as its file stands, every plan, and the operator's comments.
     """
     ticket = db.get_ticket(ctx.conn, key)
     if ticket is None:
@@ -31,11 +31,13 @@ def ticket_plans(ctx: Context, key: str) -> TicketPlans | None:
     found = plans.history(ctx.conn, key)
     running = db.running_run_of(ctx.conn, key)
     planning = int(running["id"]) if running is not None and running["kind"] == RunKind.PLAN else None
+    asked = plans.changes_asked(ctx.conn, ticket)
     return TicketPlans(
         needed=plans.needed(ctx.config.policy.plan, ticket.plan_setting),
         setting=ticket.plan_setting.value if ticket.plan_setting is not None else None,
         policy=ctx.config.policy.plan,
         planning=planning,
+        changes_asked=db.parse_time(asked) if asked is not None else None,
         newest=plan_file(ctx, found[-1]) if found else None,
         plans=[plan_summary(p) for p in found],
         threads=[thread_view(t) for t in plan_threads.threads(ctx.conn, key)],
