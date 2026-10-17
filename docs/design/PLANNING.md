@@ -292,8 +292,10 @@ page-level detail.
 - **A comment** is a thread on a passage: the comment and its replies, open until the operator resolves it. It is
   anchored by the passage's words and a little text either side, never by a position, which the first edit above it
   would make wrong. On a new plan, each thread is looked for again by its words. A passage that is gone is found
-  nowhere, and its thread says `passage gone` rather than move to other words: a reworded passage may no longer be
-  what the comment was about. An open thread's comment and replies can be edited in place; nothing marks one edited.
+  nowhere, and its thread says `passage gone` rather than move to other words: a reworded passage may no longer be what
+  the comment was about. A new plan rewrites what it was asked to change, so its comments lose their passages together,
+  and the operator can resolve all of those at once. An open thread's comment and replies can be edited in place;
+  nothing marks one edited.
 - **Ask for changes** sends the open threads, in the plan's order, as one operator message: each passage quoted, its
   comment and replies, then the operator's note on the whole plan, if any. It is a reply, within `canopy reply`'s
   bound (§22), so the re-plan works as Approving a plan, above, says. A request over the bound is not sent; the
