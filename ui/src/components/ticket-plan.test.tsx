@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { createMemoryHistory, createRootRoute, createRouter, RouterContextProvider } from '@tanstack/react-router'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
@@ -117,9 +118,16 @@ function renderPlan(plans: Partial<TicketPlans> = {}) {
         plan: EARLIER,
         text: '# Plan\n\nAdd a CSV button.\n',
     })
+    // The plan asks before the page is left, so it needs a router: one on the ticket's page, with nothing to load.
+    const router = createRouter({
+        routeTree: createRootRoute(),
+        history: createMemoryHistory({ initialEntries: ['/tickets/ABC-1'] }),
+    })
     return render(
         <QueryClientProvider client={client}>
-            <TicketPlan ticketKey="ABC-1" plans={{ ...PLANS, ...plans }} />
+            <RouterContextProvider router={router}>
+                <TicketPlan ticketKey="ABC-1" plans={{ ...PLANS, ...plans }} />
+            </RouterContextProvider>
         </QueryClientProvider>,
     )
 }
