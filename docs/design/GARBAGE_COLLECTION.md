@@ -63,7 +63,7 @@ to run, and must not stop the loop that would free it.
 `canopy gc` runs the same pass by hand, taking the tick lock as `canopy workspace sync` does (§18):
 
 - `canopy gc --dry-run` changes nothing, and reports for each row of the table above how many there are, their bytes,
-  and what a pass would remove. Its JSON form is where a re-measurement (`docs/MEASUREMENTS.md`) starts.
+  and what a pass would remove.
 - `--vacuum`, `--git`, and `--caches` add the steps below that the loop never runs on its own.
 - It refuses inside a tick or a run, as `forget` and `grant` do (TRUST_MODEL T1). No flag shortens retention; only
   the operator's own config does. An agent that could remove history early could remove the transcript that shows
