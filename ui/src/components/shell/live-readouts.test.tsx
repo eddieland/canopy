@@ -1,10 +1,11 @@
 import { QueryClient } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { keys } from '@/api/queries'
 import type { LoopState, MemoryState, Meta, Tick } from '@/api/types'
 import type { StreamStatus } from '@/hooks/use-event-stream'
+import { StreamContext } from '@/hooks/use-loop-down'
 import { renderRouted } from '@/test-utils'
 
 import { LiveReadouts } from './live-readouts'
@@ -59,7 +60,12 @@ afterEach(() => {
 
 function renderReadouts(
     stream: StreamStatus,
-    { meta = META, tick = null, memory = null }: { meta?: Meta; tick?: Tick | null; memory?: MemoryState | null } = {},
+    {
+        meta = META,
+        tick = null,
+        memory = null,
+        downSince = null,
+    }: { meta?: Meta; tick?: Tick | null; memory?: MemoryState | null; downSince?: number | null } = {},
 ) {
     const client = new QueryClient()
     // Nothing is fetched: each readout's data is what the test seeds, as the stream would send it.
@@ -69,18 +75,35 @@ function renderReadouts(
     client.setQueryData(keys.meta, meta)
     client.setQueryData(keys.tick, { tick, acknowledged: null })
     client.setQueryData<LoopState>(keys.loop, { memory, notice: null, paused: null })
-    return renderRouted(<LiveReadouts stream={stream} />, { client })
+    return renderRouted(
+        <StreamContext value={{ status: stream, downSince }}>
+            <LiveReadouts stream={stream} />
+        </StreamContext>,
+        { client },
+    )
 }
 
 describe('LiveReadouts', () => {
     it.each([
-        ['connecting', 'connecting'],
+        ['connecting', 'opening'],
         ['open', 'live'],
-        ['reconnecting', 'reconnecting'],
+        ['reconnecting', 'retrying'],
         ['closed', 'offline'],
     ] as const)('says a %s stream is %s', async (stream, said) => {
         await renderReadouts(stream)
         expect(screen.getByText(said)).toBeDefined()
+    })
+
+    it('says a stream just dropped is retrying, and once down past the first retry, for how long', async () => {
+        const { unmount } = await renderReadouts('reconnecting', { downSince: Date.now() - 1_000 })
+        expect(screen.getByTestId('stream-status').textContent).toBe('retrying')
+        unmount()
+
+        await renderReadouts('reconnecting', { downSince: Date.now() - 2 * 60_000 })
+        await waitFor(() => {
+            expect(screen.getByTestId('stream-status').textContent).toBe('down · 2m')
+        })
+        expect(screen.getByTestId('stream-status').title).toMatch(/^Down since .+: the loop isn't answering\.$/u)
     })
 
     it('flags fixture data as mock, and only fixture data', async () => {

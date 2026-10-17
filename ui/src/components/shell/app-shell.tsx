@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetDescription, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import type { StreamStatus } from '@/hooks/use-event-stream'
 import { useLiveUpdates } from '@/hooks/use-live-updates'
+import { StreamContext } from '@/hooks/use-loop-down'
 import { useRailMode } from '@/hooks/use-rail-mode'
 import type { RailMode } from '@/hooks/use-rail-mode'
 import { useBuddy } from '@/lib/buddy'
@@ -18,6 +19,7 @@ import { useTheme } from '@/theme/use-theme'
 
 import { Buddy } from './buddy'
 import { LiveReadouts } from './live-readouts'
+import { LoopDownBand } from './loop-down-band'
 import { LoopPause } from './loop-pause'
 import { Mark } from './mark'
 import { Nav } from './nav'
@@ -90,97 +92,106 @@ export function AppShell() {
         return <SignIn />
     }
     return (
-        <Sheet open={sheet && railOpen} onOpenChange={setRailOpen}>
-            <div className="grid h-dvh grid-rows-[3rem_minmax(0,1fr)] print:h-auto">
-                <header
-                    data-testid="app-header"
-                    className="relative z-10 flex items-center justify-between gap-4 border-b bg-surface/85 px-4"
-                >
-                    {/* The aurora: a hairline through the sections' colors along the header's foot, over its
+        // What the stream says, for whatever under the shell reads it: the readout, the band, the loop's actions.
+        <StreamContext value={stream}>
+            <Sheet open={sheet && railOpen} onOpenChange={setRailOpen}>
+                <div className="grid h-dvh grid-rows-[3rem_minmax(0,1fr)] print:h-auto">
+                    <header
+                        data-testid="app-header"
+                        className="relative z-10 flex items-center justify-between gap-4 border-b bg-surface/85 px-4"
+                    >
+                        {/* The aurora: a hairline through the sections' colors along the header's foot, over its
                         border. */}
-                    <span
-                        aria-hidden
-                        className={cn(
-                            'pointer-events-none absolute inset-x-0 -bottom-px h-0.5 opacity-90',
-                            'bg-linear-to-r from-section-attention via-section-runs to-section-worktrees',
-                        )}
-                    />
-                    <div className="flex items-center gap-2.5">
-                        <LiveMark stream={stream} />
-                        <span className="font-mono text-sm font-medium tracking-tight">canopy</span>
-                    </div>
-                    <Ticker />
-                    {/* Three groups, the actions, the readouts, and the theme, a rule between each. */}
-                    <div className="flex items-center gap-2">
-                        <NewerBuild />
-                        <LoopPause />
-                        <TickNow />
-                        <Rule />
-                        <LiveReadouts stream={stream} />
-                        <Rule />
-                        <ThemeToggle />
-                    </div>
-                </header>
-                <div
-                    ref={takeKeys}
-                    tabIndex={-1}
-                    data-scroll-restoration-id={PAGE_SCROLLER}
-                    className={cn('page-scroll grid outline-none', COLUMNS[mode])}
-                >
-                    {/* The rail spans the whole row, so its border and fill reach the page's foot. What it holds
+                        <span
+                            aria-hidden
+                            className={cn(
+                                'pointer-events-none absolute inset-x-0 -bottom-px h-0.5 opacity-90',
+                                'bg-linear-to-r from-section-attention via-section-runs to-section-worktrees',
+                            )}
+                        />
+                        <div className="flex items-center gap-2.5">
+                            <LiveMark stream={stream.status} />
+                            <span className="font-mono text-sm font-medium tracking-tight">canopy</span>
+                        </div>
+                        <Ticker />
+                        {/* Three groups, the actions, the readouts, and the theme, a rule between each. */}
+                        <div className="flex items-center gap-2">
+                            <NewerBuild />
+                            <LoopPause />
+                            <TickNow />
+                            <Rule />
+                            <LiveReadouts stream={stream.status} />
+                            <Rule />
+                            <ThemeToggle />
+                        </div>
+                    </header>
+                    <div
+                        ref={takeKeys}
+                        tabIndex={-1}
+                        data-scroll-restoration-id={PAGE_SCROLLER}
+                        className={cn('page-scroll grid outline-none', COLUMNS[mode])}
+                    >
+                        {/* The rail spans the whole row, so its border and fill reach the page's foot. What it holds
                         sticks, a column as tall as the window under the header (its 3rem row above), so the footer
                         stays at the window's foot however long the page; the part above it scrolls on its own in a
                         window too short. The room left between them is Sprig's, when it is on. */}
-                    {mode === 'full' && (
-                        <aside className="border-r bg-surface/60">
-                            <div className="sticky top-0 flex h-[calc(100dvh-3rem)] flex-col print:static print:h-auto">
-                                <RailColumn buddy={buddy === 'on'} />
-                            </div>
-                        </aside>
-                    )}
-                    {mode === 'strip' && (
-                        <aside className="border-r bg-surface/60" data-testid="rail-strip">
-                            <div className="sticky top-0 flex flex-col items-center pt-2 print:static">
-                                <RailButton />
-                                <div className="w-full">
-                                    <Nav compact />
+                        {mode === 'full' && (
+                            <aside className="border-r bg-surface/60">
+                                <div
+                                    className={cn(
+                                        'sticky top-0 flex h-[calc(100dvh-3rem)] flex-col',
+                                        'print:static print:h-auto',
+                                    )}
+                                >
+                                    <RailColumn buddy={buddy === 'on'} />
                                 </div>
-                            </div>
-                        </aside>
-                    )}
-                    <main className="min-w-0 p-6">
-                        <NoticeBanner />
-                        <ViewTransition>
-                            <div className="stagger mx-auto flex max-w-[112rem] flex-col gap-6">
-                                <Outlet />
-                            </div>
-                        </ViewTransition>
-                    </main>
+                            </aside>
+                        )}
+                        {mode === 'strip' && (
+                            <aside className="border-r bg-surface/60" data-testid="rail-strip">
+                                <div className="sticky top-0 flex flex-col items-center pt-2 print:static">
+                                    <RailButton />
+                                    <div className="w-full">
+                                        <Nav compact />
+                                    </div>
+                                </div>
+                            </aside>
+                        )}
+                        <main className="min-w-0 p-6">
+                            <LoopDownBand />
+                            <NoticeBanner />
+                            <ViewTransition>
+                                <div className="stagger mx-auto flex max-w-[112rem] flex-col gap-6">
+                                    <Outlet />
+                                </div>
+                            </ViewTransition>
+                        </main>
+                    </div>
                 </div>
-            </div>
-            {sheet && (
-                <SheetContent
-                    data-testid="rail-sheet"
-                    className="w-52"
-                    // A link followed or a search sent leaves for another page: the sheet would cover it.
-                    onClick={(event) => {
-                        if (event.target instanceof Element && event.target.closest('a') !== null) {
+                {sheet && (
+                    <SheetContent
+                        data-testid="rail-sheet"
+                        className="w-52"
+                        // A link followed or a search sent leaves for another page: the sheet would cover it.
+                        onClick={(event) => {
+                            if (event.target instanceof Element && event.target.closest('a') !== null) {
+                                setRailOpen(false)
+                            }
+                        }}
+                        onSubmit={() => {
                             setRailOpen(false)
-                        }
-                    }}
-                    onSubmit={() => {
-                        setRailOpen(false)
-                    }}
-                >
-                    <SheetTitle className="sr-only">Rail</SheetTitle>
-                    <SheetDescription className="sr-only">
-                        Search, the pages, the runs working now, and the spend
-                    </SheetDescription>
-                    <RailColumn buddy={buddy === 'on'} />
-                </SheetContent>
-            )}
-            <Rave />
-        </Sheet>
+                        }}
+                    >
+                        <SheetTitle className="sr-only">Rail</SheetTitle>
+                        <SheetDescription className="sr-only">
+                            Search, the pages, the runs working now, and the spend
+                        </SheetDescription>
+                        <RailColumn buddy={buddy === 'on'} />
+                    </SheetContent>
+                )}
+                <Rave />
+            </Sheet>
+        </StreamContext>
     )
 }
 

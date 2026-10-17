@@ -7,13 +7,16 @@ import { Age } from '@/components/age'
 import { Word } from '@/components/status'
 import { TickLink } from '@/components/tick-link'
 import type { StreamStatus } from '@/hooks/use-event-stream'
+import { useLoopDown } from '@/hooks/use-loop-down'
 import { TICK_TONE } from '@/lib/ticks'
+import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
+// Each no longer than `down · 59m`, the width the readout keeps (`w-[10ch]`), so a drop moves nothing beside it.
 const STREAM_LABEL: Record<StreamStatus, string> = {
-    connecting: 'connecting',
+    connecting: 'opening',
     open: 'live',
-    reconnecting: 'reconnecting',
+    reconnecting: 'retrying',
     closed: 'offline',
 }
 
@@ -25,6 +28,9 @@ export function LiveReadouts({ stream }: { stream: StreamStatus }) {
     const meta = useQuery(metaQuery)
     const last = useQuery(tickQuery)
     const memory = useQuery(loopQuery).data?.memory ?? null
+    const down = useLoopDown()
+    // Down past the first retry's wait, it says for how long, in the color of what waits on the operator.
+    const since = down.offline && down.since !== null ? new Date(down.since).toISOString() : null
     return (
         // Inset as far as a ghost button's label, so the rules either side sit midway between their neighbors.
         <div className="flex items-center gap-4 px-2.5" data-testid="live-readouts">
@@ -33,13 +39,26 @@ export function LiveReadouts({ stream }: { stream: StreamStatus }) {
             <span
                 className={cn(
                     'readout inline-flex items-center gap-1.5 text-2xs uppercase',
-                    stream === 'open' ? 'text-accent' : 'text-muted-foreground',
+                    since === null
+                        ? stream === 'open'
+                            ? 'text-accent'
+                            : 'text-muted-foreground'
+                        : 'text-status-blocked',
                 )}
+                title={since === null ? undefined : `Down since ${localTime(since)}: the loop isn't answering.`}
                 data-testid="stream-status"
-                data-status={stream}
+                data-status={since === null ? stream : 'down'}
             >
                 {meta.data?.mock && <span className="rounded-sm border px-1 text-muted-foreground">mock</span>}
-                {STREAM_LABEL[stream]}
+                <span className="inline-block w-[10ch] text-right whitespace-nowrap">
+                    {since === null ? (
+                        STREAM_LABEL[stream]
+                    ) : (
+                        <>
+                            down · <Age at={since} className="text-2xs text-inherit" />
+                        </>
+                    )}
+                </span>
             </span>
         </div>
     )

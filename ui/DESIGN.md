@@ -164,6 +164,16 @@ Rules:
   its status when not `ok`, in `status-failed` when it failed or was abandoned, its summary on hover, linking to its
   page), the stream's state (and `mock`), and the theme toggle, in three groups with a hairline rule between each: the
   actions, the readouts, the theme.
+- The stream's readout holds one width, `down · 59m`'s (`w-[10ch]`, its text to the right), so a drop moves nothing
+  beside it: `live` in the accent while open, `opening` and `retrying` muted while it connects or has just dropped, and
+  once it has been down past the first retry's wait (`RETRY_FIRST_MS`, 5s), `down · 2m`, an `Age` from the drop, in
+  `status-blocked`, when it dropped on hover. Only `canopy loop` serves the UI (D073), so a stream that stays down
+  almost always means the loop stopped, and the page says so rather than look live: after 10s a band heads the content
+  column, as the notice to workers does, saying the loop isn't answering, that the page shows what it last said and how
+  long ago, and `canopy loop` or `canopy daemon start` as code (`LoopDownBand`). While it is down, Pause and Tick now
+  wait, with the band's reason on hover; the Working rail dims to 60%, as stale search hits do; and an empty attention
+  list says nothing needed the operator as of the drop rather than celebrate. What is on screen stays. All of it reads
+  the stream from the shell (`useLoopDown`), and leaves the moment the stream opens again, with no reload.
   The readouts hug their text, inset as far as a ghost button's label, so each rule sits midway. The counters are the
   attention page's, and the nav's Attention item shows how many items it lists, on every page, split by severity as the
   Attention counter splits them: broken in `status-failed`, waiting on the operator's answer in `status-blocked`, the
