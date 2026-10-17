@@ -226,8 +226,11 @@ timeout_minutes = 15
 - **Not sandboxed.** The sandbox wrapper hides the workspace's `.canopy/` from a run whose directory is in the
   workspace ([SANDBOX.md](../../docs/SANDBOX.md)), and these chores read the journal in it. Leave the `canopy-sandbox`
   prefix off their `cmd`.
-- **Fill in the lists.** `canopy-efficiency.md` names your MCP servers and which agents need each, so that a server
-  only one agent uses is not reported unused for the others. `opencode mcp list` shows what you have.
+- **Fill in the lists.** `canopy-efficiency.md` names your MCP servers and which agents need each, so that a server an
+  agent needs but seldom calls is not reported unused for it. `opencode mcp list` shows what you have.
+- **Disable for some agents.** A `Disable:` finding names canopy's agents to deny a server or skill for, and the rule
+  to add to `~/.config/opencode/opencode.json`, which leaves it on for your own sessions and canopy's other agents:
+  `"agent": {"canopy-overseer": {"permission": {"sentry_*": "deny", "skill": {"*": "deny"}}}}`.
 - **A finding is a recommendation.** Its title says which kind (`Tune:`, `Disable:`, `Fix:`, `Feature:`), and its
   detail the figures it rests on. Act on it, or answer it with `canopy reply chore:canopy-efficiency '<note>'` ("keep
   the jira server for workers; it is for private tickets"), and the next run leaves it out.
