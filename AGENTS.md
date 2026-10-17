@@ -30,15 +30,17 @@ If code and the design disagree, the design doc wins until a decision entry says
   design saying otherwise is incomplete. The design says what canopy does and why, not how the code does it; what
   belongs there, and where the rest goes, is at the top of `docs/design/README.md`. Most PRs add a sentence there, or
   change one, or none.
-- Every new runtime dependency gets a `docs/DECISIONS.md` entry saying why stdlib was insufficient. A dev-only tool (a
-  linter, a checker, a test plugin) gets none; a comment where it is configured says what it is for.
+- Every new runtime dependency of the Python package gets a `docs/DECISIONS.md` entry saying why stdlib was
+  insufficient. A dev-only tool (a linter, a checker, a test plugin) gets none; a comment where it is configured says
+  what it is for. The web UI's libraries are a judgment call, not an entry each (`ui/AGENTS.md`).
 - Most PRs add no decision entry. `docs/DECISIONS.md` holds only what every future agent must know, whatever part of
   the code it works on: a constraint that spans the codebase, a rule the trust boundary relies on, a runtime
-  dependency, or a direction the operator settled. The test: could an agent working on an unrelated part of canopy
-  break it, or reopen it, without knowing? If not, it is not a decision entry. Why a feature behaves as it does, and
-  what was rejected for it, goes in the design next to the behavior; why a line of code is so goes in a comment
-  there; the story of a change goes in its PR; progress goes on the milestone's lines in `docs/ROADMAP.md`. A new
-  feature, command, config key, or default is not a decision by itself. When in doubt, leave it out.
+  dependency of the Python package, or a direction the operator settled. The test: could an agent working on an
+  unrelated part of canopy break it, or reopen it, without knowing? If not, it is not a decision entry. Why a feature
+  behaves as it does, and what was rejected for it, goes in the design next to the behavior; why a line of code is so
+  goes in a comment there; the story of a change goes in its PR; progress goes on the milestone's lines in
+  `docs/ROADMAP.md`. A new feature, command, config key, or default is not a decision by itself. When in doubt, leave
+  it out.
 - An entry that passes is short: a title that states the decision and two to four one-line bullets. The bar and the
   format are at the top of `docs/DECISIONS.md`.
 - `docs/TRUST_MODEL.md`, `.agents/prompts/overseer.md`, and everything under `.agents/agents/` define what the loop is
