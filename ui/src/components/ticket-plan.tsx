@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Save, SkipForward } from 'lucide-react'
-import { useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 
 import {
     changePlanThread,
@@ -25,6 +25,12 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { planText } from '@/lib/outcomes'
 import { fromServer, movedAnchors, threadChanges } from '@/lib/plan-threads'
 import type { PlanThread, ThreadChange } from '@/lib/plan-threads'
+import { isApple } from '@/lib/send-key'
+import { ariaKeys, isPressed, keysLabel } from '@/lib/shortcut'
+
+const APPLE = isApple(navigator.userAgent)
+// Save, as a document's: anywhere on the page while the plan is open.
+const SAVE_KEYS = 'Mod-s'
 
 /**
  * A ticket's plan (docs/design/PLANNING.md §25): its newest plan in the plan editor, where the operator edits it and
@@ -210,6 +216,22 @@ function NewestPlan({
         enqueue(async () => setSaid(await work()))
     }
 
+    const onSaveKey = useEffectEvent((event: KeyboardEvent) => {
+        if (!isPressed(SAVE_KEYS, event, APPLE)) {
+            return
+        }
+        // Never the browser's own Save, which would keep a copy of the page rather than save the plan.
+        event.preventDefault()
+        if (dirty && busy === 0) {
+            act(saveAndSay)
+        }
+    })
+    useEffect(() => {
+        const listener = (event: KeyboardEvent) => onSaveKey(event)
+        document.addEventListener('keydown', listener)
+        return () => document.removeEventListener('keydown', listener)
+    }, [])
+
     function decide(action: PlanChanged['action']) {
         act(async () => {
             if (dirty && action === 'approve') {
@@ -257,10 +279,20 @@ function NewestPlan({
                             {dirty ? 'Save and approve' : 'Approve'}
                         </Button>
                     )}
-                    <Button variant="outline" onClick={() => act(saveAndSay)} disabled={busy > 0 || !dirty}>
+                    <Button
+                        variant="outline"
+                        onClick={() => act(saveAndSay)}
+                        disabled={busy > 0 || !dirty}
+                        title={`Save (${keysLabel(SAVE_KEYS, APPLE)})`}
+                        aria-keyshortcuts={ariaKeys(SAVE_KEYS, APPLE)}
+                    >
                         <Save />
                         Save
                     </Button>
+                    {dirty && (
+                        // As a document says it, so an edit not yet in the plan's file is never taken for one that is.
+                        <span className="text-xs text-muted-foreground">Unsaved edits</span>
+                    )}
                     <Button variant="ghost" onClick={() => decide('skip')} disabled={busy > 0}>
                         <SkipForward />
                         Skip the plan

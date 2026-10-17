@@ -17,6 +17,27 @@ export function ariaKeys(keys: string, apple: boolean): string {
         .join('+')
 }
 
+/**
+ * Whether a key press is the shortcut on this keyboard: its key, with its modifiers and no others, `Mod` being ⌘ on an
+ * Apple keyboard and Ctrl elsewhere.
+ */
+export function isPressed(
+    keys: string,
+    press: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>,
+    apple: boolean,
+): boolean {
+    const modifiers = keys.split('-')
+    const key = modifiers.pop() ?? ''
+    const mod = modifiers.includes('Mod')
+    return (
+        press.key.toLowerCase() === key.toLowerCase() &&
+        press.metaKey === (apple && mod) &&
+        press.ctrlKey === (!apple && mod) &&
+        press.altKey === modifiers.includes('Alt') &&
+        press.shiftKey === modifiers.includes('Shift')
+    )
+}
+
 const APPLE_NAMES: Partial<Record<string, string>> = { Mod: '⌘', Alt: '⌥', Shift: '⇧' }
 const OTHER_NAMES: Partial<Record<string, string>> = { Mod: 'Ctrl' }
 

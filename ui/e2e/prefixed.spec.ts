@@ -414,6 +414,15 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     const said = page.getByTestId('plan-bar').getByRole('status')
     await expect(plan(page).getByRole('heading', { level: 1 })).toHaveText('Schedule report exports')
 
+    // An edit is marked unsaved until ⌘S (Ctrl+S) saves it, as a document's is.
+    await plan(page).getByText('Exports to anything but CSV.').click()
+    await page.keyboard.press('End')
+    await page.keyboard.type(' Or PDF.')
+    await expect(actions.getByText('Unsaved edits')).toBeVisible()
+    await page.keyboard.press('ControlOrMeta+s')
+    await expect(said).toContainText('Saved the plan.')
+    await expect(actions.getByText('Unsaved edits')).toHaveCount(0)
+
     // A comment is saved as it is made: it is there when the page is read again.
     await select(page, 'owner_timezone()')
     await page.getByRole('toolbar', { name: 'Format' }).getByRole('button', { name: 'Comment' }).click()
