@@ -495,8 +495,11 @@ Reasons are exactly the attention rows in the phase table plus `crashed`, `unpus
 `repo_missing` and the overseer's `multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18). Chores add
 `chore_failed` and their findings, listed by chore after the ticket items (§19). Reviews add `review_failed` and
 `review_limit`, about a PR (§21). A notice to workers adds the overseer's `notice_rerun`: a check failed while a notice
-was in force, the notice has ended, and no newer run of the check exists, so the operator reruns it (§8). An item about
-one unit of a ticket names its repository and is shown as `KEY (repo)`.
+was in force, the notice has ended, and no newer run of the check exists, so the operator reruns it (§8). Agent memory
+adds the harness's `memory_proposal`, about a done ticket whose runs' proposals wait on the operator, and
+`lesson_review` and `lesson_wrong`, about the workspace, each one item naming every lesson it is about; none while
+`memory.proposals` is off, and the last two only at `use` (§28). An item about one unit of a ticket names its
+repository and is shown as `KEY (repo)`.
 
 The harness raises the run reasons itself, every tick, after reconcile. For a ticket not marked done, its latest
 run's status maps to a reason: `crashed` to `crashed`, `unpushed` to `unpushed`, `unknown` or `timeout` to

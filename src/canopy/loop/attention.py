@@ -23,7 +23,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
 
-from canopy.core import chore_view, contract, conversation, db
+from canopy.core import chore_view, contract, conversation, db, memory
 from canopy.core.items import Item, age, fingerprint, one_line, subject
 from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import logs
@@ -69,7 +69,14 @@ def run_reason(status: RunStatus) -> str | None:
 UNAVAILABLE: str = TickStatus.CANOPY_UNAVAILABLE
 # What the harness records itself (`tick._record_harness_items`, and `UNAVAILABLE`), so the overseer does not.
 HARNESS_REASONS = frozenset(
-    {*filter(None, map(run_reason, RunStatus)), "awaiting_reply", chore_view.FAILED_REASON, "repo_missing", UNAVAILABLE}
+    {
+        *filter(None, map(run_reason, RunStatus)),
+        "awaiting_reply",
+        chore_view.FAILED_REASON,
+        "repo_missing",
+        UNAVAILABLE,
+        *memory.HARNESS_REASONS,
+    }
 )
 # How far back to look when working out how long an item has been open.
 _HISTORY_TICKS = 1000

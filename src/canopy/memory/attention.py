@@ -1,0 +1,81 @@
+"""The attention items memory raises (DESIGN §14, §28), every tick their cause holds, for the operator alone.
+
+`memory_proposal`, about a ticket marked done, while a proposal from its runs waits: a merge has checked the work it
+came from. `lesson_review`, one item naming every lesson due, and `lesson_wrong`, one naming every lesson a run reported
+wrong since its last renewal: both only at `use`, since no run reads a lesson before. None arises while
+`memory.proposals` is off. The overseer never sees them: they are harness reasons (`attention.HARNESS_REASONS`).
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING
+
+from canopy.core import db, memory
+from canopy.core.vocab import MemoryMode
+
+if TYPE_CHECKING:
+    import sqlite3
+
+    from canopy.core.config import Config
+
+
+@dataclass(frozen=True)
+class Item:
+    """One item to raise: its ticket, or None for one about the workspace, its reason, and its detail."""
+
+    ticket_key: str | None
+    reason: str
+    detail: str
+
+
+def items(conn: sqlite3.Connection, config: Config, now: datetime | None = None) -> list[Item]:
+    """Return the memory items whose cause holds now.
+
+    Returns:
+        A `memory_proposal` per done ticket with a proposal pending, by ticket; then at `use` one `lesson_review` and
+        one `lesson_wrong` when any lesson calls for it.
+    """
+    mode = config.memory.proposals
+    if mode is MemoryMode.OFF:
+        return []
+    found: list[Item] = []
+    done = {
+        str(r["key"])
+        for r in conn.execute("SELECT key FROM tickets WHERE done = 1 AND key IN (SELECT ticket_key FROM memories)")
+    }
+    by_ticket: dict[str, list[int]] = {}
+    for p in memory.pending_proposals(conn):
+        if p.ticket_key in done:
+            by_ticket.setdefault(p.ticket_key, []).append(p.id)
+    for key, ids in sorted(by_ticket.items()):
+        detail = (
+            f"{_named('proposal', ids)} from {key}'s runs wait on you, and its work is done: "
+            "`canopy memory proposals`, then promote or reject each"
+        )
+        found.append(Item(key, memory.PROPOSAL_REASON, detail))
+    if mode is not MemoryMode.USE:
+        return found
+    stamp = db.format_time(now or datetime.now(UTC))
+    lessons = memory.active_lessons(conn)
+    due = [m.id for m in lessons if m.review_at is not None and m.review_at <= stamp]
+    if due:
+        detail = (
+            f"{_named('lesson', due)} {'is' if len(due) == 1 else 'are'} due for review: renew each with "
+            "`canopy memory renew ID`, graduate it into a repository's AGENTS.md or a skill, or forget it"
+        )
+        found.append(Item(None, memory.REVIEW_REASON, detail))
+    wrong = [(m.id, m.wrong_run_id) for m in lessons if m.wrong_at is not None]
+    if wrong:
+        said = ", ".join(f"{i} (run {run})" for i, run in wrong)
+        detail = (
+            f"a run reported lesson{'s' if len(wrong) > 1 else ''} {said} wrong: read it with `canopy memory lessons`, "
+            "then renew or forget it"
+        )
+        found.append(Item(None, memory.WRONG_REASON, detail))
+    return found
+
+
+def _named(what: str, ids: list[int]) -> str:
+    return f"{what} {ids[0]}" if len(ids) == 1 else f"{what}s {', '.join(map(str, ids))}"

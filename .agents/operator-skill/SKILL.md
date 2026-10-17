@@ -58,6 +58,9 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy pause`, `canopy resume` | The loop starts no tick until resumed; running workers keep going. `p` in the loop too. |
 | `canopy memory list [KEY]` | Agent memory's tiers in words, then the ticket notes workers recorded; `--run ID`, `--digest`. |
 | `canopy memory forget ID`, `purge` | Deletes one memory's text, or many (`--ticket`, `--run`, `--all`); the rows stay. |
+| `canopy memory proposals` | The lessons workers proposed that wait on you, each with where it came from. |
+| `canopy memory promote ID [--text T]` | Makes a proposal a lesson in your words; `reject ID` ends one instead. |
+| `canopy memory lessons`, `renew ID` | The lessons you promoted, their review dates and reports; `renew` keeps one. |
 | `canopy notice 'TEXT' [--for 4h]` | Every run dispatched until it lapses hears TEXT, such as a CI outage; `--clear` lifts it. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
@@ -158,6 +161,9 @@ no dismissing one, except a chore's finding (below). Reasons:
 | `review_failed`, `review_limit` | A PR's review failed or hit its limit. `canopy review show` lists them; at the limit, `canopy grant URL review`. |
 | `notice_rerun` | A check failed during an outage your notice named, and the notice has ended: rerun the check. |
 | `repo_missing` | A repository in the workspace map has no clone: run `canopy workspace sync`. |
+| `memory_proposal` | A done ticket's runs proposed lessons: `canopy memory proposals`, then `promote` or `reject` each. |
+| `lesson_review` | Lessons are due for review: `canopy memory renew ID`, graduate one into AGENTS.md, or `forget` it. |
+| `lesson_wrong` | A run reported a lesson wrong: read it with `canopy memory lessons`, then `renew` or `forget` it. |
 | `canopy_unavailable` | `canopy --version` failed where the loop runs, so the overseer did not run: fix the install or PATH. |
 | `multi_repo` | Independent pieces in several repositories, or a split not done: decide. Ask for a split below. |
 | `split_unlabeled` | A split's children have no queue label: label each one you want worked. |
