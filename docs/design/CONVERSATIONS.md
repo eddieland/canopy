@@ -735,7 +735,7 @@ it cost.
   95% of a short session's third request, by characters. `opencode export <id>` holds the session's messages, one
   assistant message per call with the same parts the log prints, and the prompt as its first user message, but none
   of that either; nor does OpenCode's DEBUG log. Recording it needs a proxy between the runtime and the provider,
-  which no milestone lists.
+  which no milestone lists. A recorder run by hand split it per agent once (MEASUREMENTS 2026-10-17, SCENARIOS S40).
 - Rejected: `opencode export` on request, again. Beside what the log and the prompt hold, it would add only a running
   session's calls before its run ends, for a runtime process behind the listener.
 
