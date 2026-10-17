@@ -202,42 +202,16 @@ deferred list's trigger fires.
 
 ## M15. Sessions and recent runs
 
-REQUIREMENTS R4 and R6, D055. Needs M2. Sketch only; the design comes first.
+REQUIREMENTS R4 and R6, D055. Each run records its OpenCode session id and the session is titled for its ticket;
+`canopy status` lists recent runs with outcome, PR, summary, cost, log, and session; `fix-ci` and `resume` start a fresh
+session, with the ticket's latest runs' reports in the prompt (DESIGN §8).
 
-- Record each run's OpenCode session id in `runs`, read from what `opencode run` reports, without the harness parsing
-  runtime-specific output beyond one validated field (D009, D026). Done with `--format json`, which also gives
-  M13 each run's cost.
-- `canopy status` lists recent runs as well as running ones: ticket, kind, outcome, PR, one-line summary, run log, and
-  session id, so the operator can open a transcript with OpenCode's own tools.
-- Decide, against the decisions corpus, whether `fix-ci` and `resume` should continue the session of the run that
-  wrote the PR instead of starting fresh (PRIOR_ART warns about long-lived sessions fed events).
-- Workers run against OpenCode's server (`opencode serve`, with `opencode run --attach`), so the operator can
-  `opencode attach` to a running worker and prompt it. The listener follows TRUST_MODEL T8: a private bind address,
-  loopback by default, refused if wildcard or public; the operator's listener secret from an operator-only file, passed
-  only to the server. Verify OpenCode's server authentication on the pinned version first.
-- Whether one server serves every run or each run gets its own, and what happens to a session whose run has ended: its
-  slot is returned and may be leased again, so prompting it must not run tools in that directory. Either the session
-  is read-only once its run ends, or prompting it starts a `resume` dispatch through the guards.
-- Prompting is the operator's own input (T8): it is not checked against `trust.authorized_repliers`, and it lifts no
-  guard. Capacity, attempt limits, the run's timeout, and push verification still apply.
-
-Accept: written with the design, before work starts, and like every milestone's, a real run of what it delivers.
-
-Status: in progress. Taken in part on request (2026-10-07): each worker and split run records its session id, and
-`canopy status` lists the ten most recent runs with their outcome, PRs, summary, cost, run log, and session id; M27
-shows a session's transcript in the web UI. A `worker_cmd` in a user file from before needs `--format json` added.
-Checking a run's session against `opencode export` is SCENARIOS S30. What keeps it open: workers against OpenCode's
-server. Decided (2026-10-16): `fix-ci` and `resume` start a fresh session, as every run does (DESIGN §8, A fresh
-session per run), since a continued one would keep stale prompts and cost more than the short runs it replaces.
-On request (2026-10-16), a public worker's prompt carries the ticket's latest three runs' reports
-(`{{PREVIOUS_RUNS}}`, DESIGN §8), so a fresh session still learns what the runs before it concluded.
-Taken in part on request (2026-10-13): the overseer names
-each ticket (`canopy ticket set --title`), the name shows beside the key in `canopy status`, `canopy show`, and the web
-UI, and every default template passes it, or a tick's, chore's, or review's own, as the session title
-(`opencode run --title={title}`, DESIGN §13). Learned: `run --format json` prints no event with OpenCode's own title,
-so canopy names sessions rather than reading them back. Next: workers renaming their ticket through their result line,
-once real runs show whether the overseer's names hold up. On request (2026-10-13), a `json` notification carries the
-title beside each ticket key and the Slack sink shows it (DESIGN §20); `attention.md` and the `text` format do not.
+Status: done 2026-10-17.
+Learned: closed by the operator on a week of real use at work, with workers against OpenCode's server not built: the
+session ids and the web UI's transcripts (M27) proved enough to follow a run. `run --format json` prints no event with
+OpenCode's own title, so canopy names sessions rather than reading them back. A session's check against `opencode
+export` is SCENARIOS S30.
+Next: workers against OpenCode's server, for prompting a running worker, is on the deferred list.
 
 ## M16. Worktree setup for large monorepos
 
@@ -1582,5 +1556,8 @@ for it to end `ok`. A daemon with no listener secret ticks but serves nothing, a
   change.
 - Watching a PR (M42's watch mode): when the operator asks canopy to review the same coworker's PR again after each
   push often enough to want it to follow the PR until it merges. DESIGN §21 (Review requests) says what it needs.
+- Workers against OpenCode's server (M15's last bullets): when the operator wants to prompt a running worker rather
+  than read its transcript and answer it after. The listener follows TRUST_MODEL T8, and OpenCode's server
+  authentication on the pinned version is checked first.
 - Flaky CI triage (M25): when live use shows `fix-ci` attempts spent on failures the change did not cause. The design
   (DESIGN §23) and the milestone's bullets stand as written.
