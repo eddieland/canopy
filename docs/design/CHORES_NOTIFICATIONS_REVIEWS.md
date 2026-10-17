@@ -175,6 +175,11 @@ result, and exits 0 only on `ok`.
   started. Reconcile treats it as any run: killed, it is marked `crashed` at the next tick.
 - It refuses `inside_run`, like `start` and `reply` (§22), and its own agent has `CANOPY_RUN_ID` set. The overseer's
   bash allows only `canopy ...`, which cannot unset `CANOPY_TICK_ID`, so the loop cannot try a chore.
+- The web UI tries a chore too (asked for by the operator, 2026-10-15), from the chore's page (§22): a recorded try,
+  with the same `running` refusal and no guard on time or capacity. A request cannot wait out a chore's timeout, so a
+  detached `canopy _chore` does the run, as the overseer's are, rather than the server's own process. It has no
+  `--context` or `--no-record`: an unrecorded try's output has nowhere to go but a terminal, and the context is the
+  overseer's to give.
 
 ### Findings on the attention list
 

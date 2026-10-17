@@ -540,7 +540,8 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   textconv filter the commit names.
 - The web channel writes only through the functions the CLI's verbs use (T1), with their guards: it can start, stop,
   reply to, and forget tickets, end a stopped ticket's run, grant a unit or a PR one more run as `canopy grant` does,
-  note something to a chore as `canopy reply chore:NAME` does, dismiss a chore's or a review's finding or take that
+  note something to a chore as `canopy reply chore:NAME` does, try a chore as a recorded `canopy chore try` does,
+  dismiss a chore's or a review's finding or take that
   back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, make and end a review
   request on a PR as `canopy start URL --review` and `canopy stop URL` do, pause and resume the loop as
   `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, ask for, skip,
@@ -552,11 +553,14 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   editor read it; and the operator's comments on a plan's passages, in the journal. Nothing else. It cannot write
   config: a reload reads only the operator's own files, and a `serve.*` change waits for a restart, so the listener's
   bind and port never change under it. A forget must carry the ticket's key typed out, checked in code. A grant
-  allows one more run a request, with `canopy grant`'s guards. It cannot run a chore.
+  allows one more run a request, with `canopy grant`'s guards. A try is the operator's, as the CLI's is: it waits for
+  no `every_minutes`, hours, or `capacity.max_chores` (DESIGN §19), and only a run of the same chore already running
+  refuses it.
 
 Residual: anyone on the private network who obtains the secret can steer the operator's workers with the operator's
-credentials. A notice set that way reaches every run's prompt, every ticket's, until it lapses, at most seven days, or
-the operator clears it, and it outlives a new secret; the banner on every page and `canopy status` show it while it is
+credentials, and run each chore back to back, one at a time per chore, at the operator's cost. A notice set that way
+reaches every run's prompt, every ticket's, until it lapses, at most seven days, or the operator clears it, and it
+outlives a new secret; the banner on every page and `canopy status` show it while it is
 in force. Binding to a private address rather than loopback relies on the network for the rest. A local user on a
 shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port
 on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
@@ -581,7 +585,8 @@ loop's terminal would.
 - Take runtime or notify commands, chores, review settings, prompt paths, capacity, queue labels, authorized
   repliers, or trusted reviewers from the repository. (`policy.max_reviews_per_pr` is policy: the repository may only
   lower it.)
-- Run a chore more often than its `every_minutes`, or more than `capacity.max_chores` chore runs at once.
+- Run a chore more often than its `every_minutes`, or more than `capacity.max_chores` chore runs at once, but for a
+  try the operator starts from the shell or the web UI (DESIGN §19).
 - Listen on a wildcard or public address, or serve journal data or take the operator's input without the operator's
   listener secret (T8). The web UI's own files, which hold no data, are served to sign in.
 

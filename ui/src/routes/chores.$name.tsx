@@ -17,6 +17,7 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } fro
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunDot, Word } from '@/components/status'
+import { TryChore } from '@/components/try-chore'
 import { cadenceText, choreLine, findingsReadout, runsText, windowText } from '@/lib/chores'
 import { costText } from '@/lib/cost-total'
 import { ordered, useListOrder } from '@/lib/list-order'
@@ -99,6 +100,9 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                             {chore.when ?? <span className="font-mono text-xs">whenever it is due</span>}
                         </Field>
                     </Fields>
+                    <div className="border-t" data-testid="chore-actions">
+                        <TryChore chore={chore} />
+                    </div>
                 </Panel>
                 <Panel className="2xl:col-start-2 2xl:row-span-4 2xl:row-start-1" data-testid="chore-notes">
                     <ChoreNotes detail={detail} />
