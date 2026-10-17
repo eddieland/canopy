@@ -6,19 +6,13 @@ from typing import TYPE_CHECKING
 
 from canopy.core import db
 from canopy.infra import resources
-from canopy.serve import mock
 from tests.canopy.helpers import context, with_memory
-from tests.canopy.web_helpers import client, signed_in_client
+from tests.canopy.web_helpers import at, client, signed_in_client
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
     from canopy.serve.backend import Backend
     from tests.conftest import CanopyEnv
-
-
-def at(minutes: int) -> str:
-    """A mock time as the API sends it."""
-    return mock.at(minutes).replace(".000Z", "Z")
 
 
 def test_the_loop_state_names_each_tiers_mode_in_words(backend: Backend) -> None:

@@ -27,6 +27,7 @@ from tests.canopy.helpers import (
     operator,
     overseer_does,
     planner_does,
+    present,
     state_block,
 )
 from tests.conftest import CanopyEnv, GitPool
@@ -97,8 +98,7 @@ def test_a_proposed_plan_waits_and_a_reply_asks_for_changes(
         "changes_asked": False,
         "blocked": False,
     }
-    ticket = db.get_ticket(conn, KEY)
-    assert ticket is not None
+    ticket = present(db.get_ticket(conn, KEY))
     assert ticket.phase == "plan_proposed"
     assert any(i.reason == "plan_review" for i in attention.current(conn))
     # The plan's text never reaches the overseer.
@@ -128,12 +128,9 @@ def test_an_approval_after_a_reply_wins(canopy_env: CanopyEnv, git_pool: GitPool
         dispatch_and_run(conn, *PLAN)
     assert operator("reply", KEY, "Make it blue.") == 0
     assert operator("plan", KEY, "--approve") == 0
-    ticket = db.get_ticket(conn, KEY)
-    assert ticket is not None
-    section = plans.state_section(conn, "approve", ticket, attempts=1, limit=3)
-    assert section is not None
-    newest = section["newest"]
-    assert newest is not None
+    ticket = present(db.get_ticket(conn, KEY))
+    section = present(plans.state_section(conn, "approve", ticket, attempts=1, limit=3))
+    newest = present(section["newest"])
     assert newest["status"] == PlanStatus.APPROVED
 
 
@@ -148,8 +145,7 @@ def test_a_blocked_planner_waits_on_the_operator_on_a_public_ticket(
     with planner_does(plan=None, result={"status": "blocked", "summary": "unclear", "question": QUESTION}):
         run = dispatch_and_run(conn, *PLAN)
     assert run["status"] == RunStatus.BLOCKED
-    asked = plans.question(conn, KEY)
-    assert asked is not None
+    asked = present(plans.question(conn, KEY))
     assert str(asked["body"]) == QUESTION
 
     # The harness raises it: the planner wrote nothing to the ticket, so no label or comment says it waits.

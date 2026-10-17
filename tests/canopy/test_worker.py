@@ -28,6 +28,7 @@ from tests.canopy.helpers import (
     dispatch_and_run,
     in_tick,
     pool,
+    present,
     scripted,
     slot_of,
     tools_of,
@@ -107,9 +108,8 @@ def test_the_session_title_names_the_ticket_and_its_title(
         re.sub(r"^worker_cmd = .*$", f"worker_cmd = '{template}'", canopy_env.user_file.read_text(), flags=re.MULTILINE)
     )
     if title is not None:
-        with in_tick(conn) as tick_id:
+        with in_tick(conn, ends_ok=True):
             assert main(["ticket", "set", "PROJ-1", "--title", title]) == 0
-            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
     with worker_does(*commit_and_push("agent/PROJ-1-work")):
         dispatch_and_run(conn, *WORK)
     [w] = agent_runs(agent_log)
@@ -466,8 +466,7 @@ def test_a_run_is_claimed_once(
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         conn.execute("UPDATE runs SET pid = 1 WHERE id = 2")
         assert main(["_run", "2"]) == 1
-        still = db.get_run(conn, 2)
-        assert still is not None
+        still = present(db.get_run(conn, 2))
         assert still["status"] == "running"
         assert len(agent_runs(agent_log)) == 1
 
@@ -494,12 +493,10 @@ def test_sigterm_returns_the_slot(
 
 
 def test_parse_result_takes_the_last_json_object_line() -> None:
-    parsed = worker.parse_result('chatter\n{"status": "done"}\n\n  \n')
-    assert parsed is not None
+    parsed = present(worker.parse_result('chatter\n{"status": "done"}\n\n  \n'))
     assert parsed.status == "done"
     # A plugin's notice after the result is passed over (DESIGN §13).
-    parsed = worker.parse_result('{"status": "done"}\n[policy-plugin] session audited\n')
-    assert parsed is not None
+    parsed = present(worker.parse_result('{"status": "done"}\n[policy-plugin] session audited\n'))
     assert parsed.status == "done"
     # An invalid last object is no result, even with a valid one before it.
     assert worker.parse_result('{"status": "done"}\n{"status": "finished"}\nchatter\n') is None

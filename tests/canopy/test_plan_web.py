@@ -21,6 +21,7 @@ from tests.canopy.helpers import (
     dispatch_in_tick,
     operator,
     planner_does,
+    present,
     prompt_of,
 )
 from tests.canopy.web_helpers import refused, signed_in_client
@@ -57,15 +58,15 @@ def test_a_tickets_plans_are_read_as_their_files_stand(ctx: Context) -> None:
     c, _ = signed_in_client(ctx)
     assert c.get(f"/api/tickets/{KEY}/plans").status_code == 404
     plan_id = proposed(ctx)
-    found = c.get(f"/api/tickets/{KEY}/plans").json()
-    assert (found["needed"], found["setting"], found["policy"], found["planning"]) == (False, None, "off", None)
-    newest = found["newest"]
+    listed = c.get(f"/api/tickets/{KEY}/plans").json()
+    assert (listed["needed"], listed["setting"], listed["policy"], listed["planning"]) == (False, None, "off", None)
+    newest = listed["newest"]
     assert (newest["text"], newest["problem"], newest["sha256"]) == (TEXT, None, sha(TEXT))
     assert (newest["edited"], newest["changed_since_approval"]) == (False, False)
     assert newest["plan"]["id"] == plan_id
     assert newest["plan"]["status"] == "proposed"
-    assert [p["id"] for p in found["plans"]] == [plan_id]
-    assert found["threads"] == []
+    assert [p["id"] for p in listed["plans"]] == [plan_id]
+    assert listed["threads"] == []
 
     # The operator's own edit shows, and a file that is gone is said to be, never an empty plan.
     path = Path(newest["path"])
@@ -82,8 +83,7 @@ def test_the_plan_route_approves_asks_and_skips_as_canopy_plan_does(ctx: Context
     plan_id = proposed(ctx)
     approved = c.post(f"/api/tickets/{KEY}/plan", json={"action": "approve"}, headers=headers)
     assert approved.json() == {"action": "approve", "plan": plan_id, "superseded": None, "already": False}
-    plan = plans.current(ctx.conn, KEY)
-    assert plan is not None
+    plan = present(plans.current(ctx.conn, KEY))
     assert (plan.status, plan.approved_channel) == (PlanStatus.APPROVED, "web")
     assert refused(c.post(f"/api/tickets/{KEY}/plan", json={"action": "approve"}, headers=headers)).startswith(
         "bad_plan: plan 1 of PROJ-1 is approved, and its file has not changed since"
@@ -91,8 +91,8 @@ def test_the_plan_route_approves_asks_and_skips_as_canopy_plan_does(ctx: Context
 
     asked = c.post(f"/api/tickets/{KEY}/plan", json={"action": "request"}, headers=headers)
     assert asked.json() == {"action": "request", "plan": None, "superseded": plan_id, "already": False}
-    found = c.get(f"/api/tickets/{KEY}/plans").json()
-    assert (found["needed"], found["setting"], found["newest"]["plan"]["status"]) == (True, "plan", "superseded")
+    listed = c.get(f"/api/tickets/{KEY}/plans").json()
+    assert (listed["needed"], listed["setting"], listed["newest"]["plan"]["status"]) == (True, "plan", "superseded")
     skipped = c.post(f"/api/tickets/{KEY}/plan", json={"action": "skip"}, headers=headers)
     assert skipped.json() == {"action": "skip", "plan": None, "superseded": None, "already": False}
     assert c.post(f"/api/tickets/{KEY}/plan", json={"action": "merge"}, headers=headers).status_code == 422
@@ -126,8 +126,7 @@ def test_an_edit_saved_from_the_web_is_the_file_approve_takes(ctx: Context) -> N
     assert path.read_text() == edited
 
     assert c.post(f"/api/tickets/{KEY}/plan", json={"action": "approve"}, headers=headers).status_code == 200
-    approved = plans.current(ctx.conn, KEY)
-    assert approved is not None
+    approved = present(plans.current(ctx.conn, KEY))
     assert plans.approved_text(ctx.state_dir, approved) == edited
 
     # Saving over an approved plan needs approving it again.

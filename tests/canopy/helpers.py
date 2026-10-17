@@ -12,6 +12,7 @@ import time
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal, NamedTuple, TypedDict, Unpack, cast
 from unittest import mock
@@ -74,12 +75,37 @@ PROMPT_VALUES = {
 # Ticks and the journal
 
 
+def present[T](value: T | None) -> T:
+    """`value`, failing the test if it is None: what a lookup returns when the test knows the row is there."""
+    assert value is not None
+    return value
+
+
 @contextmanager
-def in_tick(conn: sqlite3.Connection, *, dry_run: bool = False) -> Iterator[int]:
-    """Start a tick and act inside it, as the overseer does: CANOPY_TICK_ID names it until the block ends."""
+def in_tick(conn: sqlite3.Connection, *, dry_run: bool = False, ends_ok: bool = False) -> Iterator[int]:
+    """Start a tick and act inside it, as the overseer does: CANOPY_TICK_ID names it until the block ends.
+
+    With `ends_ok`, the tick ends ok as the block does, as one whose overseer finished; without it, it is still running.
+    """
     tick_id = db.start_tick(conn, dry_run=dry_run)
     with mock.patch.dict(os.environ, {"CANOPY_TICK_ID": str(tick_id)}):
         yield tick_id
+        if ends_ok:
+            db.finish_tick(conn, tick_id, TickStatus.OK, "test")
+
+
+@contextmanager
+def in_run(run_id: int | str) -> Iterator[None]:
+    """Act inside run `run_id`, as its agent does: CANOPY_RUN_ID names it until the block ends."""
+    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": str(run_id)}):
+        yield
+
+
+def seen(conn: sqlite3.Connection, env: CanopyEnv, *keys: str) -> None:
+    """Record `keys`, KEY if none, as tickets an earlier tick saw: canopy knows them, and the state block shows them."""
+    with db.transaction(conn):
+        for key in keys or (KEY,):
+            db.touch_ticket(conn, key, str(env.root))
 
 
 def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
@@ -122,11 +148,25 @@ def running_run(ctx: Context, key: str, *, private: bool = True) -> int:
     return run_id
 
 
+def earlier(now: datetime, days: float, hours: float = 0) -> str:
+    """The time `days` and `hours` before `now`, as the journal writes it."""
+    return db.format_time(now - timedelta(days=days, hours=hours))
+
+
+def only_tick(conn: sqlite3.Connection) -> records.Tick:
+    """The one tick in the journal."""
+    [tick] = records.fetch_all(conn, records.Tick, "SELECT * FROM ticks")
+    return tick
+
+
+def last_tick(conn: sqlite3.Connection) -> records.Tick:
+    """The tick started last."""
+    return present(db.last_tick(conn))
+
+
 def last_run(conn: sqlite3.Connection) -> sqlite3.Row:
     """The run recorded last."""
-    row = conn.execute("SELECT * FROM runs ORDER BY id DESC LIMIT 1").fetchone()
-    assert row is not None
-    return row
+    return present(conn.execute("SELECT * FROM runs ORDER BY id DESC LIMIT 1").fetchone())
 
 
 type ToolRow = tuple[str, int, int, int]
@@ -159,6 +199,11 @@ def unit_of(conn: sqlite3.Connection, key: str) -> sqlite3.Row:
     return row
 
 
+def plan_file(env: CanopyEnv, run_id: int, key: str = KEY) -> Path:
+    """Where the plan run `run_id` of `key` wrote its plan, in the workspace's state directory."""
+    return env.state_dir / "plans" / key / f"{run_id}.md"
+
+
 def prompt_of(env: CanopyEnv, run_id: int) -> str:
     """The prompt the run's worker was given."""
     return (env.state_dir / "runs" / f"{run_id}.prompt").read_text()
@@ -168,8 +213,7 @@ def wait_for_run(conn: sqlite3.Connection, run_id: int, timeout: float = 30) -> 
     """Wait for a detached run to close its row."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        row = db.get_run(conn, run_id)
-        assert row is not None
+        row = present(db.get_run(conn, run_id))
         if row["status"] != "running":
             return row
         time.sleep(0.05)
@@ -237,9 +281,7 @@ def dispatch_and_run(
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         run_id = int(last_run(conn)["id"])
         assert main(["_run", str(run_id)], runner=runner) == 0
-    run = db.get_run(conn, run_id)
-    assert run is not None
-    return run
+    return present(db.get_run(conn, run_id))
 
 
 def dispatch_refused(conn: sqlite3.Connection, *args: str, key: str = KEY) -> list[tuple[str, str]]:
@@ -479,7 +521,7 @@ def commit_and_push(branch: str, message: str = "PROJ-1: the change") -> list[li
     ]
 
 
-def agent_runs(agent_log: Path) -> list[dict[str, object]]:
+def agent_runs(agent_log: Path) -> list[dict[str, Any]]:
     """Each fake agent run, in order, as the fake logged it; none if no agent ran."""
     if not agent_log.exists():
         return []
@@ -488,13 +530,13 @@ def agent_runs(agent_log: Path) -> list[dict[str, object]]:
 
 def commands_run(agent_log: Path) -> list[list[dict[str, Any]]]:
     """The commands each fake agent run ran, in order: each one's argv, exit code, stdout, and stderr."""
-    return [cast("list[dict[str, Any]]", run["commands"]) for run in agent_runs(agent_log)]
+    return [run["commands"] for run in agent_runs(agent_log)]
 
 
 def state_block(agent_log: Path) -> dict[str, Any]:
     """The state block the last agent to run, an overseer, was given in its prompt."""
     *_, overseer = agent_runs(agent_log)
-    return json_block(cast("list[str]", overseer["argv"])[-1])
+    return json_block(overseer["argv"][-1])
 
 
 def json_block(text: str) -> dict[str, Any]:

@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from canopy.core.context import Context
 from canopy.loop import reread, tick_now, web
+from canopy.serve import mock as serve_mock
 from canopy.serve.app import create_app
 from canopy.serve.auth import Sessions
 from canopy.serve.backend import Backend
@@ -14,6 +15,11 @@ from canopy.serve.options import ServeOptions
 
 SECRET = "s3cret-" + "x" * 40
 ORIGIN = "http://127.0.0.1:8765"
+
+
+def at(minutes: int) -> str:
+    """A time of the mock journal's, `minutes` after it starts, as the API sends it."""
+    return serve_mock.at(minutes).replace(".000Z", "Z")
 
 
 def client(ui_dir: Path | None, backend: Backend, *, key: str | None = None, **options: object) -> TestClient:
