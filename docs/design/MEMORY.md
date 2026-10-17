@@ -50,10 +50,10 @@ proposals = "off"      # off | record | use
 
 With both keys off, `{{TICKET_MEMORY}}`, `{{WORKSPACE_LESSONS}}`, and `{{MEMORY_CONTRACT}}` render as the empty string,
 placed so that every shipped prompt is the same bytes as before memory existed; an override without them still serves.
-Memory's result fields are parsed apart from the result and never stored in `result_json`, so what a worker sends
-anyway is stored nowhere. `canopy memory` says memory is off, the web UI shows no memory page or readout, no memory
-attention item arises, and no run records a memory row. The one footprint is empty tables: migrations are not
-conditional, and a second database file would cost a second schema lifecycle and the foreign keys to `runs` and
+Memory's result fields are parsed apart from the result and never stored in `result_json`, so what a worker sends anyway
+is stored nowhere. `canopy memory` says memory is off, the web UI shows no memory page or readout, no memory attention
+item arises, and no run records a memory row. The one footprint is empty tables and an empty search index: migrations
+are not conditional, and a second database file would cost a second schema lifecycle and the foreign keys to `runs` and
 `tickets`.
 
 ### The contract
@@ -150,16 +150,42 @@ leaves them out and no tick spends a decision on them. None arises while `memory
   lesson past its date comes up together at the first tick, in one item, the review the operator wants before an old
   lesson is served.
 
+### Search
+
+The digests are capped, and a note that a later one under its key replaced leaves them, so `canopy memory search WORDS`
+finds the rest by their words, best match first: SQLite's full-text index over each memory's key and text, ranked with
+bm25(), a word in a key weighing more than one in a text. A query is read as words, never as the index's query syntax,
+so nothing a worker types is an error. It adds to what is pushed into the prompt and replaces none of it.
+
+- In a worker's run, which `CANOPY_RUN_ID` names, it finds only what that run's prompt could be served, each tier only
+  while the journal says it was at `use` for the run: its ticket's notes in force and those they replaced, and the
+  lessons for the repositories it leased. Never another ticket's notes, an invalidated note, or a pending proposal. A
+  run that has ended finds nothing, a review or a chore no memory at all, and the overseer is refused, since it reads
+  no memory.
+- What it finds is framed as the digests frame it, a note as data to check and a lesson as the operator's word, both
+  kept off the tracker and the PRs, with every hidden character named. It is not rendered into the prompt, so a run
+  cites none of it in `memory_used` or `memory_wrong`.
+- A digest names the command where it helps: the ticket's whenever it has notes, the lessons' when its cap left some
+  out. A run told nothing of memory is told nothing of search, and with memory off every prompt stays the same bytes.
+- In the operator's shell it finds every memory that still has its text, proposals and every ticket's notes included.
+- The index holds no copy of a text: `forget` and `purge` leave no word of what they deleted in it. It needs SQLite
+  built with FTS5, which every journal's migrations create and `make install-check` checks.
+- T1 is unchanged: a run reaches its own ticket's notes and the lessons a run in its repositories is served. A steered
+  worker that names another run's id reaches what its bash could read from the journal anyway (T1's residual, D076).
+
+Rejected for search: embeddings, a runtime dependency and weakest on facts that changed, which is canopy's usual case;
+and a search as the only way to read memory, since agents skip tools they are not made to use.
+
 ### Commands
 
 `canopy memory` lists ticket notes (`list`), the proposals waiting with where each came from (`proposals`), and the
 lessons with their review dates and reports (`lessons`), each after every tier's mode in words; `list` and `lessons`
-also print the digest a run would get, labelled as served or as what `use` would serve. `promote`, `reject`, and
-`renew` make and keep lessons. `forget ID` deletes one memory's text and `purge` many (a ticket's runs', a run's, or
-all), leaving the rows; a forgotten lesson is retired. They delete with `secure_delete` on and checkpoint the write-ahead
-log after, so a purged poison or a leaked secret does not survive in free pages. Every one that writes refuses as
-`inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `notice` does (TRUST_MODEL T1). `canopy status` names
-each tier's mode while one is on.
+also print the digest a run would get, labelled as served or as what `use` would serve. `promote`, `reject`, and `renew`
+make and keep lessons. `search WORDS` finds memories by their words (Search). `forget ID` deletes one memory's text and
+`purge` many (a ticket's runs', a run's, or all), leaving the rows; a forgotten lesson is retired. They delete with
+`secure_delete` on and checkpoint the write-ahead log after, so a purged poison or a leaked secret does not survive in
+free pages. Every one that writes refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `notice`
+does (TRUST_MODEL T1). `canopy status` names each tier's mode while one is on.
 
 ### Showing memory
 
@@ -175,8 +201,8 @@ in the CLI and the web UI alike, whatever was written to the journal by hand.
 
 Rejected:
 
-- A memory tool the worker calls to read: agents skip tools they are not made to use.
-- Embeddings: a runtime dependency, and weakest on facts that changed, which is canopy's usual case.
+- A memory tool the worker calls in place of the digests: agents skip tools they are not made to use.
+- Embeddings: see Search.
 - Notes in `result_json`: `purge` could not reach them without rewriting every run's result.
 
 ### Trust model changes

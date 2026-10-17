@@ -61,6 +61,7 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy memory proposals` | The lessons workers proposed that wait on you, each with where it came from. |
 | `canopy memory promote ID [--text T]` | Makes a proposal a lesson in your words; `reject ID` ends one instead. |
 | `canopy memory lessons`, `renew ID` | The lessons you promoted, their review dates and reports; `renew` keeps one. |
+| `canopy memory search WORDS` | Every memory with its text, best match first; `--ticket KEY` for one ticket's. |
 | `canopy notice 'TEXT' [--for 4h]` | Every run dispatched until it lapses hears TEXT, such as a CI outage; `--clear` lifts it. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |

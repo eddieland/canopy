@@ -1551,7 +1551,11 @@ Proposals and lessons (stage 2), at `record` and `use`: proposals under the boun
 instructions, review dates, `lesson_review` and `lesson_wrong`, and T1's lessons, approved by the operator (2026-10-17).
 The web API's memory routes, read only, and each tier's mode on the loop's state; the web UI's readout, memory page
 with each tier's band, a ticket's Memory panel, and a run's lists, every worker's text plain with hidden characters
-named.
+named. Search (stage 3), built at the operator's word (2026-10-17) before any check had shown the digests leave entries
+out: `canopy memory search` over an FTS5 index of every memory (migration 0038) ranked with bm25(), scoped by
+`CANOPY_RUN_ID` to the run's ticket's notes, superseded ones included, and its repositories' lessons, each while at
+`use` for the run, the digests naming it, `forget` and `purge` clearing the index too, and `make install-check`
+checking FTS5. Every stage's checks, at `record` and at `use`, are still the operator's.
 
 ## Deferred, with the trigger that would unblock each
 

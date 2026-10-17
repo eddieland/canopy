@@ -61,6 +61,8 @@ HARNESS_REASONS = frozenset({PROPOSAL_REASON, REVIEW_REASON, WRONG_REASON})
 TICKET_MEMORY = "TICKET_MEMORY"
 WORKSPACE_LESSONS = "WORKSPACE_LESSONS"
 MEMORY_CONTRACT = "MEMORY_CONTRACT"
+# What a run is told to run to search its memory past its digest (`canopy memory search`).
+SEARCH_COMMAND = "canopy memory search WORDS"
 _NOTES_HEADING = "## Notes from earlier runs"
 _LESSONS_HEADING = "## Lessons from the operator"
 
@@ -702,6 +704,12 @@ def ticket_digest(conn: sqlite3.Connection, key: str) -> Digest:
     body = [entries[n.id] for n in kept] or ["None: no earlier run of this ticket left a note."]
     if left_out:
         body.append(f"[{left_out} older notes are left out of this prompt.]")
+    if active:
+        # Search reaches what the cap left out, and the notes a later note under the key replaced (`memory.search`).
+        body.append(
+            f"`{SEARCH_COMMAND}` searches this ticket's notes, the ones later notes replaced"
+            f"{' and the ones left out here' if left_out else ''} included."
+        )
     if kept:
         body.append(
             "In your result, name the ids of notes you relied on in `memory_used` and of notes you found wrong in "
@@ -739,7 +747,7 @@ def lessons_digest(conn: sqlite3.Connection, repos: Collection[str] | None, *, c
     )
     body = [_lesson_entry(m) for m in kept] or ["None: the operator has promoted no lesson yet."]
     if left_out:
-        body.append(f"[{left_out} more lessons are left out of this prompt.]")
+        body.append(f"[{left_out} more lessons are left out of this prompt; `{SEARCH_COMMAND}` finds them.]")
     if cite and kept:
         body.append(
             "In your result, name the ids of lessons you relied on in `memory_used`, and of any you found wrong in "

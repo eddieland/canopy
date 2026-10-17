@@ -1,9 +1,10 @@
 """The operator's verbs on agent memory (DESIGN §28, Commands): forgetting and purging, and making lessons.
 
 Each deletes bodies, never rows: a forgotten memory is a tombstone that keeps who wrote it and when. The delete runs
-with `PRAGMA secure_delete` on, and the write-ahead log is checkpointed after it, so a purged poison or a leaked
-secret does not survive in free pages or the log. Only the operator's shell runs these: they refuse inside canopy's
-ticks and runs. A lesson is made only here, from a proposal the operator promotes: no agent writes one.
+with `PRAGMA secure_delete` on, the search index is merged after it so it keeps no word of the text, and the
+write-ahead log is checkpointed, so a purged poison or a leaked secret does not survive in free pages or the log. Only
+the operator's shell runs these: they refuse inside canopy's ticks and runs. A lesson is made only here, from a
+proposal the operator promotes: no agent writes one.
 """
 
 from __future__ import annotations
@@ -90,6 +91,9 @@ def _scrub(conn: sqlite3.Connection, where: str, params: tuple[object, ...], *, 
                 (MemoryStatus.INVALID, why, db.now(), *params),
             )
             count = cur.rowcount
+            # The index's triggers marked the deleted words; merging its segments drops them, and frees the pages
+            # that held them for `secure_delete` to zero.
+            conn.execute("INSERT INTO memories_fts (memories_fts) VALUES ('optimize')")
     finally:
         conn.execute(f"PRAGMA secure_delete = {before}")
     busy = int(conn.execute("PRAGMA wal_checkpoint(TRUNCATE)").fetchone()[0])
