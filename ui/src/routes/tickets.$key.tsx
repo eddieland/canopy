@@ -213,7 +213,7 @@ function TicketMemoryPanel({ ticketKey }: { ticketKey: string }) {
         return null
     }
     return (
-        <Panel className="mt-6" data-testid="ticket-memory">
+        <Panel data-testid="ticket-memory">
             <PanelHeader label="Memory">
                 <span className="readout text-xs text-muted-foreground">{data?.notes.length ?? ''}</span>
             </PanelHeader>
