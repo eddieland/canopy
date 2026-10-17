@@ -24,10 +24,9 @@ The nav on the left lists them, most used first. If you learn only one, learn At
 
 ## The rail
 
-The strip beside the nav, on every page. From the top: a search box over the whole journal (press `/` to jump to it,
-as is tradition), the runs working right now, and what the last 24 hours and the last 30 days cost. Its foot names the
-version canopy is serving, which links to canopy's releases on GitHub, and opens this guide, which you have already
-found. Well done.
+The strip beside the nav, on every page. From the top: a search box over the whole journal (press `/` to jump to
+it), the runs working right now, and what the last 24 hours and the last 30 days cost. Its foot names the version
+canopy is serving, which links to canopy's releases on GitHub, and opens this guide.
 
 ## Acting from the UI
 
@@ -41,11 +40,11 @@ until then. Patience is a virtue; here it's also the architecture.
 
 **Tick now**, beside Pause in the header, does what pressing `t` does at the loop's terminal: it cuts the loop's wait
 short and starts the next tick at once, even while paused. It doesn't unpause anything; a pause stays a pause. While a
-tick is running, the button waits for it to finish. One tick at a time is a rule, not a suggestion.
+tick is running, the button waits for it to finish.
 
 Everything else only reads the journal and changes nothing. Pages update as the loop writes, over a single stream,
 so there's no need to reload. The worktrees are the one exception: reading them asks every pool, so that page rereads
-them every 10 seconds while you're looking at it, and has a Read again button for the impatient. While the stream is
+them every 10 seconds while you're looking at it, and has a Read again button. While the stream is
 connected, the dot in the logo beside `canopy` in the header breathes; while a tick runs, an arc sweeps its ring. If
 the dot stops breathing, the page has stopped hearing from the loop.
 
