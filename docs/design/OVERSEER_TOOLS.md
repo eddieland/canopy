@@ -75,7 +75,7 @@ produce it, and that one the shadowing check refuses (below).
 | Tool | Today | Input |
 | --- | --- | --- |
 | `dispatch` | `canopy dispatch` | its arguments and options as fields, `repos` a list |
-| `decide` | `canopy decide` | `key` (optional only for a tick-wide `skip`), `action`, `rationale` |
+| `decide` | `canopy decide` | `key` (omitted only for a tick-wide `skip`, whose `rationale` gives its reason), `action`, `rationale` |
 | `queried` | `canopy queried` | `keys`, a list, empty for none |
 | `attention` | `canopy attention` | its arguments and options as fields |
 | `ticket-set` | `canopy ticket set` | its arguments and options as fields |
