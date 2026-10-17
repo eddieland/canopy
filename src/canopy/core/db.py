@@ -658,6 +658,7 @@ def insert_run(
     started: Callable[[int], Event | None] | None = None,
     private: bool = False,
     check: Callable[[], None] | None = None,
+    plan_id: int | None = None,
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
 
@@ -666,6 +667,7 @@ def insert_run(
     pushes nothing (DESIGN §18). `started` builds the `run.started` event from the run's id, recorded in the same
     transaction, or None when no sink takes it. `private` marks a run on a private ticket (DESIGN §22). `check` runs
     first in the transaction and refuses the run by raising: what it reads cannot change before the row is written.
+    `plan_id` is the approved plan an `implement` or `resume` follows, the one its prompt names (DESIGN §25).
 
     Returns:
         The new run's id.
@@ -674,9 +676,9 @@ def insert_run(
         if check is not None:
             check()
         cur = conn.execute(
-            "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path, private) "
-            "VALUES (?, ?, ?, ?, ?, '', ?)",
-            (tick_id, key, kind, branch, now(), int(private)),
+            "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path, private, plan_id) "
+            "VALUES (?, ?, ?, ?, ?, '', ?, ?)",
+            (tick_id, key, kind, branch, now(), int(private), plan_id),
         )
         run_id = _rowid(cur)
         conn.execute("UPDATE runs SET log_path = ? WHERE id = ?", (str(runs_dir / f"{run_id}.log"), run_id))

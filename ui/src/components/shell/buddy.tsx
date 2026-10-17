@@ -5,11 +5,12 @@ import type { CSSProperties } from 'react'
 
 import { HatDrawing } from '@/components/hat'
 import { useFits } from '@/hooks/use-fits'
-import { pageOf, setBuddy, tipFor } from '@/lib/buddy'
-import type { Page } from '@/lib/buddy'
+import { setBuddy, tipFor } from '@/lib/buddy'
+import type { View } from '@/lib/buddy'
 import { useWardrobe } from '@/lib/hats'
 import type { HatId } from '@/lib/hats'
 import { cn } from '@/lib/utils'
+import type { FileRoutesById } from '@/routeTree.gen'
 
 /** How long a tip stays up before Sprig takes the hint. */
 const TIP_SECONDS = 20
@@ -21,7 +22,7 @@ type Room = 'roomy' | 'tight'
 
 /**
  * Sprig, the helper at the foot of the side rail: a bent wire with a sprig on top and googly eyes that follow the
- * pointer. On every page it offers a tip about that page, the dumber the better (`TIPS` in src/lib/buddy.ts); clicking
+ * pointer. On every view it offers a tip about that view, the dumber the better (`TIPS` in src/lib/buddy.ts); clicking
  * it offers another. The tip closes with its button, or by itself after a while. Settings turns Sprig off, and so
  * does the tip's "Don't show me tips again".
  *
@@ -32,19 +33,18 @@ type Room = 'roomy' | 'tight'
  * when asked for, with a click. A slot shorter still leaves Sprig out, rather than squeeze the blocks above.
  */
 export function Buddy() {
-    const pathname = useRouterState({ select: (state) => state.location.pathname })
-    const page = pageOf(pathname)
+    const view = viewOf(useRouterState({ select: (state) => state.matches.at(-1)?.routeId }))
     // Read once per page load, as the ticker's reel is: the tip must not change under the reader.
     const [today] = useState(() => Date.now())
-    // How many more tips the reader asked for, counted per page: a new one starts at its own first tip.
-    const [asked, setAsked] = useState<{ page: Page | undefined; n: number }>({ page, n: 0 })
-    const n = asked.page === page ? asked.n : 0
-    const another = () => setAsked({ page, n: n + 1 })
-    const tip = tipFor(pathname, n, today)
+    // How many more tips the reader asked for, counted per view: a new one starts at its own first tip.
+    const [asked, setAsked] = useState<{ view: View | undefined; n: number }>({ view, n: 0 })
+    const n = asked.view === view ? asked.n : 0
+    const another = () => setAsked({ view, n: n + 1 })
+    const tip = tipFor(view, n, today)
     const [slot, room] = useFits(roomFor)
     const { worn } = useWardrobe()
     // A different tip opens a new bubble: the key remounts it, open, and raises Sprig's brows. A page that offers the
-    // tip already shown (another of the section's pages) leaves the bubble as it is, open or closed. Sprig, and a
+    // tip already shown (the same view, filtered another way) leaves the bubble as it is, open or closed. Sprig, and a
     // bubble shown in a tight slot, rise out of the slot over the blocks above: positioned, so they paint over them.
     return (
         <div ref={slot} className="flex min-h-0 flex-1 flex-col justify-end print:hidden">
@@ -73,6 +73,14 @@ export function Buddy() {
             </aside>
         </div>
     )
+}
+
+/**
+ * The view a route is: every route but the root, which only redirects. Returning the route as a view is what holds
+ * `TIPS` to the routes, so a new route fails the type check until it has tips of its own.
+ */
+function viewOf(routeId: keyof FileRoutesById | undefined): View | undefined {
+    return routeId === undefined || routeId === '__root__' || routeId === '/' ? undefined : routeId
 }
 
 /**

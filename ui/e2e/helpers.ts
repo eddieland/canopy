@@ -1,5 +1,5 @@
 import { expect } from '@playwright/test'
-import type { Page } from '@playwright/test'
+import type { Locator, Page } from '@playwright/test'
 
 import { E2E_SECRET } from './secret.ts'
 
@@ -14,6 +14,7 @@ export const ROUTES = [
     'worktrees',
     'tickets',
     'tickets/ABC-102',
+    'tickets/ABC-105',
     'pull-requests',
     `pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`,
     'reviews',
@@ -209,4 +210,44 @@ export async function serveReview(
         const body = (await response.json()) as Record<string, unknown>
         await route.fulfill({ response, json: { ...body, findings, diff: { files, truncated: true } } })
     })
+}
+
+/** The plan editor's document. */
+export function plan(page: Page): Locator {
+    return page.getByRole('textbox', { name: 'Plan', exact: true })
+}
+
+/**
+ * Selects `text` inside the plan, as a drag over it would. ProseMirror reads the page's selection on `selectionchange`,
+ * which the browser fires later, so this waits for it: a key pressed next acts on these words, not the ones before.
+ */
+export async function select(page: Page, text: string): Promise<void> {
+    await plan(page).evaluate(async (root, wanted) => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+        for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+            const at = node.textContent?.indexOf(wanted) ?? -1
+            if (at !== -1) {
+                const range = document.createRange()
+                range.setStart(node, at)
+                range.setEnd(node, at + wanted.length)
+                const selection = globalThis.getSelection()
+                const current = selection !== null && selection.rangeCount > 0 ? selection.getRangeAt(0) : undefined
+                if (
+                    current?.compareBoundaryPoints(Range.START_TO_START, range) === 0 &&
+                    current.compareBoundaryPoints(Range.END_TO_END, range) === 0
+                ) {
+                    // Already selected: no selectionchange would come.
+                    return
+                }
+                const read = new Promise((resolve) => {
+                    document.addEventListener('selectionchange', resolve, { once: true })
+                })
+                selection?.removeAllRanges()
+                selection?.addRange(range)
+                await read
+                return
+            }
+        }
+        throw new Error(`no text node holds ${wanted}`)
+    }, text)
 }

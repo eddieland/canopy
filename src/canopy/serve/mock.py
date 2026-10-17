@@ -11,6 +11,8 @@ fix-ci and two reviews, so ABC-100 is at its fix-ci limit in web and PR 88 at it
 and 40, tick 2, and chore run 2 left their sessions' events in their logs, as `--format json` prints them, for their
 transcripts (DESIGN §22), and the running runs 41 and 43 the events their workers printed so far, with the latest tool
 call on each one's row (§8).
+ABC-105 is planned (§25): its plan waits on the operator, with three comments on it, one resolved, and an earlier plan
+it superseded, each written to its file under the state directory.
 Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser's clock gets the same page every time.
 `changes` moves the running run's cost now and then, which the event stream then shows.
 """
@@ -18,12 +20,13 @@ Times are fixed around 2026-10-08 12:00 UTC, so a test that freezes the browser'
 from __future__ import annotations
 
 import asyncio
+import itertools
 import json
 from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from canopy.core import chore_view, config, conversation, db, pools, workspace
+from canopy.core import chore_view, config, conversation, db, plans, pools, workspace
 from canopy.core.items import Item
 from canopy.core.vocab import RunStatus
 from canopy.infra import logs, resources
@@ -254,6 +257,7 @@ def seed(directory: Path) -> Backend:
         db.migrate(ctx.conn, resources.migrations_dir())
         with db.transaction(ctx.conn):
             _fixtures(ctx.conn, root)
+            _plans(ctx.conn, ws.state_dir, root)
             mock_reviews.seed(ctx.conn, ws.state_dir, at)
     _transcripts(ws.state_dir)
     return backend
@@ -541,6 +545,8 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             "UPDATE runs SET activity_tool = ?, activity = ?, activity_at = ? WHERE id = ?",
             (tool, did, at(minutes), run_id),
         )
+    # Run 39's peak is the most one model call in its transcript was sent (_transcripts), as its page's chart shows.
+    conn.execute("UPDATE runs SET tokens_peak_context = 30200 WHERE id = 39")
     run_slots = (
         # run, repo, slot, lease, holder: run 43 is joint, a slot in web and one in mobile; 37 and 40 ended long ago
         (37, "web", 4, "lease-37", "canopy:ABC-100"),
@@ -639,6 +645,124 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     _chore_fixtures(conn, root)
     _decisions(conn)
     _tools(conn)
+
+
+# ABC-105's plans (DESIGN §25): the first, superseded after the operator asked for changes, and the second, waiting on
+# them, with their comments on it, two open and one resolved. Each comment's passage is in the second plan.
+_FIRST_PLAN = """# Schedule report exports
+
+## What changes
+
+In **web**, a report gains a *Schedule* menu: daily or weekly, at an hour. A new job, `ExportJob`, runs each schedule
+and emails the CSV.
+
+## Tests
+
+- [ ] a daily schedule runs once a day
+"""
+_PLAN = """# Schedule report exports
+
+## What changes
+
+In **web**, a report gains a *Schedule* menu: daily or weekly, at an hour the operator picks. A new job,
+`ExportJob`, runs each schedule through the existing CSV export and emails a link to the file, never the file itself.
+
+In **api**, `ReportQuery` gains `owner_timezone()`, so an hour means the owner's hour.
+
+## Files
+
+| Repository | File | Why |
+| --- | --- | --- |
+| web | `app/reports/schedule.py` | the menu and its form |
+| web | `app/jobs/export_job.py` | the job |
+| api | `api/reports/query.py` | `owner_timezone()` |
+
+## Tests
+
+- [ ] a daily schedule runs once a day, at the owner's hour
+- [ ] a weekly schedule skips the other six days
+- [ ] the email links to the file and does not attach it
+
+## Out of scope
+
+- Exports to anything but CSV.
+
+## Risks
+
+> The job runner retries a failed job three times. A report that always fails would email nothing, and say nothing.
+"""
+_PLAN_THREADS = (
+    # quote, prefix, suffix, body, minutes, resolved, replies
+    (
+        "emails a link to the file, never the file itself",
+        "the existing CSV export and",
+        ".",
+        "How long does the link work? Say so in the plan.",
+        -10,
+        False,
+        ("Seven days, as the share links do.",),
+    ),
+    (
+        "A report that always fails would email nothing, and say nothing.",
+        "retries a failed job three times.",
+        "",
+        "Raise it on the attention list after the third failure.",
+        -9,
+        False,
+        (),
+    ),
+    (
+        "at an hour the operator picks",
+        "a report gains a Schedule menu: daily or weekly,",
+        ". A new job,",
+        "Good: the ticket asks for the owner's hour.",
+        -11,
+        True,
+        (),
+    ),
+)
+
+
+def _plans(conn: sqlite3.Connection, state_dir: Path, root: Path) -> None:
+    conn.execute(
+        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, title, phase) VALUES (?, ?, ?, ?, ?, ?)",
+        ("ABC-105", str(root), at(-90), at(-8), "Schedule report exports", "plan_proposed"),
+    )
+    for run_id, started, ended, summary in (
+        (35, -60, -52, "A schedule menu and a job that emails the CSV."),
+        (44, -30, -14, "A schedule menu, a job that emails a link to the CSV, and the owner's timezone."),
+    ):
+        conn.execute(
+            "INSERT INTO runs (id, tick_id, ticket_key, kind, branch, started_at, ended_at, status, result_json, "
+            "log_path, private, cost_usd) VALUES (?, 1, 'ABC-105', 'plan', '', ?, ?, 'done', ?, ?, 0, 0.64)",
+            (
+                run_id,
+                at(started),
+                at(ended),
+                json.dumps({"status": "done", "summary": summary}),
+                str(state_dir / "runs" / f"{run_id}.log"),
+            ),
+        )
+    for plan_id, run_id, text, status, created in (
+        (1, 35, _FIRST_PLAN, "superseded", -52),
+        (2, 44, _PLAN, "proposed", -14),
+    ):
+        written = plans.write(state_dir, "ABC-105", run_id, text)
+        conn.execute(
+            "INSERT INTO plans (id, ticket_key, run_id, created_at, status, sha256, size) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (plan_id, "ABC-105", run_id, at(created), status, written.sha256, written.size),
+        )
+    for quote, prefix, suffix, body, minutes, resolved, replies in _PLAN_THREADS:
+        thread_id = conn.execute(
+            "INSERT INTO plan_threads (ticket_key, quote, prefix, suffix, body, created_at, resolved_at) "
+            "VALUES ('ABC-105', ?, ?, ?, ?, ?, ?) RETURNING id",
+            (quote, prefix, suffix, body, at(minutes), at(minutes + 1) if resolved else None),
+        ).fetchone()[0]
+        for reply in replies:
+            conn.execute(
+                "INSERT INTO plan_replies (thread_id, body, created_at) VALUES (?, ?, ?)",
+                (thread_id, reply, at(minutes + 2)),
+            )
 
 
 def _chore_fixtures(conn: sqlite3.Connection, root: Path) -> None:
@@ -804,9 +928,10 @@ def _tool(session: str, minutes: float, tool: str, state: Mapping[str, object], 
     )
 
 
-def _step(session: str, minutes: float, cost: float, reason: str = "tool-calls") -> str:
-    # Most of what a call sends is read back from the provider's cache, after the first.
-    sent = int(cost * 30_000)
+def _step(session: str, minutes: float, cost: float, reason: str = "tool-calls", sent: int | None = None) -> str:
+    # Most of what a call sends is read back from the provider's cache, after the first. `sent` is the call's context,
+    # for a session whose context grows as a real one does; without it, a share of the cost.
+    sent = int(cost * 30_000) if sent is None else sent
     tokens = {
         "input": sent // 4,
         "output": int(cost * 3_000),
@@ -826,6 +951,25 @@ def _done(session: str, minutes: float, title: str, command: str, output: str, *
     """
     state = {"status": "completed", "input": {"command": command, "description": title}, "output": output}
     return _tool(session, minutes, "bash", {**state, "title": title}, seconds)
+
+
+def _coverage() -> str:
+    """The table Jest prints after a run's tests when it collects coverage: a line per file, a long tool result.
+
+    Returns:
+        The table, as printed.
+    """
+    dirs = ("api", "components", "hooks", "lib", "pages", "routes", "search", "store", "styles", "utils")
+    names = ("client", "format", "index", "keys", "list", "menu", "panel", "query", "table", "toast", "types", "view")
+    rule = f"{'-' * 36}|---------|----------|---------|---------|-------------------"
+    lines = [rule, f"{'File':<36}| % Stmts | % Branch | % Funcs | % Lines | Uncovered Line #s", rule]
+    for i, (folder, name) in enumerate(itertools.product(dirs, names)):
+        uncovered = (i * 37) % 41
+        covered = 100 - uncovered
+        missed = f"{12 + i % 30}-{40 + i % 50}" if uncovered else ""
+        row = f"{covered:>8.2f} | {covered - i % 9:>8.2f} | {covered - i % 5:>7.2f} | {covered:>7.2f}"
+        lines.append(f"{f'src/{folder}/{name}.ts':<36}|{row} | {missed}")
+    return "\n".join([*lines, rule, ""])
 
 
 _SEARCH_BOX = """\
@@ -938,7 +1082,7 @@ def _transcripts(state_dir: Path) -> None:
                 "error": f"File not found: {web}/src/search/useSearch.ts",
             },
         ),
-        _step(s39, -89.3, 0.82),
+        _step(s39, -89.3, 0.82, sent=24_600),
         _start(s39, -89.2),
         _text(s39, -80, "There is no search hook yet. I'll add one that debounces and aborts the stale request."),
         _tool(
@@ -958,10 +1102,10 @@ def _transcripts(state_dir: Path) -> None:
             "Run the search tests",
             "npm test -- search",
             "PASS src/search/SearchBox.test.tsx\n  ✓ debounces input (310 ms)\n  ✓ cancels a stale request (12 ms)\n\n"
-            "Tests: 2 passed, 2 total\n",
+            f"Tests: 2 passed, 2 total\n\n{_coverage()}",
             seconds=14,
         ),
-        _step(s39, -69.9, 0.97),
+        _step(s39, -69.9, 0.97, sent=25_900),
         _start(s39, -69.8),
         _done(
             s39,
@@ -994,7 +1138,7 @@ def _transcripts(state_dir: Path) -> None:
             '{"status": "done", "summary": "Search now debounces input and cancels stale requests.", '
             '"prs": {"web": "https://github.com/acme/web/pull/88"}}',
         ),
-        _step(s39, -61, 0.52, reason="stop"),
+        _step(s39, -61, 0.52, reason="stop", sent=30_200),
     ]
     run_40 = [
         _start(s40, -74.1),

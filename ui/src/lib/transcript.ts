@@ -1,4 +1,11 @@
-import type { TranscriptEntry, TranscriptStep, TranscriptTokens, TranscriptTool } from '@/api/types'
+import type {
+    TranscriptEntry,
+    TranscriptPrompt,
+    TranscriptStep,
+    TranscriptText,
+    TranscriptTokens,
+    TranscriptTool,
+} from '@/api/types'
 import { indent, tokenize } from '@/lib/json-lines'
 import { literal } from '@/lib/search'
 
@@ -51,6 +58,11 @@ export function runTokens(newTokens: number | null, peakContext: number | null):
     }
     const peak = peakContext === null ? '' : `, ${tokenCount(peakContext)} peak context`
     return `, ${tokenCount(newTokens)} tokens${peak}`
+}
+
+/** A change in tokens with its sign, as the context chart and By call say a step: `+4.3k`, `-2.0k`, `+0`. */
+export function signed(n: number): string {
+    return n < 0 ? `-${tokenCount(-n)}` : `+${tokenCount(n)}`
 }
 
 /** A token count in a list's column, with what it counts (`12.3k tokens`), or a dash when nothing reported one. */
@@ -155,6 +167,114 @@ export function sentTokens(tokens: TranscriptTokens): number {
 /** How many tokens a model call wrote, its reasoning included. */
 export function wroteTokens(tokens: TranscriptTokens): number {
     return tokens.output + tokens.reasoning
+}
+
+// How many characters make a token, roughly: for canopy's prompt, the one text sent whose tokens nobody counted apart.
+const CHARS_PER_TOKEN = 4
+
+/** One entry a model call's context grew by: what the call before it printed, which it was sent anew. */
+export interface Addition {
+    /** Its place in the transcript's entries, which the page shows it by. */
+    i: number
+    /** The entry: a tool call, its input and what it returned, or the agent's text. */
+    entry: TranscriptText | TranscriptTool
+    /** How many characters it holds. */
+    chars: number
+    /** Its share of the step up, in tokens, by its characters: an estimate, since the runtime counts only the whole. */
+    tokens: number
+}
+
+/** One model call's context, as the transcript's chart draws it. */
+export interface CallContext {
+    /** Its number, from 1. */
+    n: number
+    /** What it was sent, from the cache or not; null when the runtime counted none. */
+    sent: number | null
+    /** Of `sent`, what was there before it: the call before's context, or, for the first, the runtime's own. */
+    carried: number
+    /** Of `sent`, what is new: for the first, canopy's prompt, estimated; else the step up from the call before. */
+    added: number
+    /** How many more tokens it was sent than the call before, below 0 if some were dropped; null without both. */
+    step: number | null
+    /** What the call before printed, largest first, sharing a step up: empty for the first, or with no step up. */
+    additions: Addition[]
+}
+
+/** A transcript's context over its model calls. */
+export interface ContextShape {
+    /** Each model call, in order. */
+    calls: CallContext[]
+    /** The call sent the most, the first of them on a tie; null when the runtime counted none. */
+    peak: CallContext | null
+    /** canopy's prompt, in tokens, estimated from its characters; null when it kept none. */
+    prompt: number | null
+    /** The largest single addition, with the call it grew; null when no call grew. */
+    largest: { call: CallContext; addition: Addition } | null
+}
+
+/**
+ * How a session's context grew, call by call. A call is sent all that the call before was, then what that call
+ * printed: its text and its tool calls, each with what it returned. So a step up between two calls is shared among
+ * those entries by their characters, largest first, and the first call's context is canopy's prompt and the rest, the
+ * runtime's own overhead: the agent's definition, its system prompt, and its tools.
+ */
+export function contextShape(entries: TranscriptEntry[], prompt: TranscriptPrompt | null): ContextShape {
+    const printed: { n: number; sent: number | null; entries: Omit<Addition, 'tokens'>[] }[] = []
+    for (const [i, entry] of entries.entries()) {
+        if (entry.call === null) {
+            continue
+        }
+        let call = printed.at(-1)
+        if (call?.n !== entry.call) {
+            call = { n: entry.call, sent: null, entries: [] }
+            printed.push(call)
+        }
+        if (entry.kind === 'step') {
+            call.sent = entry.split === null ? null : sentTokens(entry.split)
+        } else if (entry.kind === 'text') {
+            call.entries.push({ i, entry, chars: entry.text.length })
+        } else if (entry.kind === 'tool') {
+            call.entries.push({ i, entry, chars: entry.input.length + entry.output.length })
+        }
+    }
+    const promptTokens = prompt === null ? null : Math.round(prompt.text.length / CHARS_PER_TOKEN)
+    const calls = printed.map((call, k): CallContext => {
+        const before = printed[k - 1]
+        const sent = call.sent
+        if (before === undefined) {
+            const added = Math.min(sent ?? 0, promptTokens ?? 0)
+            return { n: call.n, sent, carried: (sent ?? 0) - added, added, step: null, additions: [] }
+        }
+        if (sent === null || before.sent === null) {
+            return { n: call.n, sent, carried: sent ?? 0, added: 0, step: null, additions: [] }
+        }
+        const step = sent - before.sent
+        const added = Math.max(0, step)
+        return { n: call.n, sent, carried: sent - added, added, step, additions: shared(before.entries, added) }
+    })
+    let peak: CallContext | null = null
+    let largest: ContextShape['largest'] = null
+    for (const call of calls) {
+        if (call.sent !== null && call.sent > (peak?.sent ?? -1)) {
+            peak = call
+        }
+        const top = call.additions[0]
+        if (top !== undefined && top.tokens > (largest?.addition.tokens ?? 0)) {
+            largest = { call, addition: top }
+        }
+    }
+    return { calls, peak, prompt: promptTokens, largest }
+}
+
+/** A step up shared among the entries that made it, by their characters, largest first. */
+function shared(entries: Omit<Addition, 'tokens'>[], step: number): Addition[] {
+    const chars = entries.reduce((sum, e) => sum + e.chars, 0)
+    if (step === 0 || chars === 0) {
+        return []
+    }
+    return entries
+        .map((e) => ({ ...e, tokens: Math.round((step * e.chars) / chars) }))
+        .toSorted((a, b) => (b.chars === a.chars ? a.i - b.i : b.chars - a.chars))
 }
 
 /**

@@ -21,6 +21,18 @@ export type TicketSummary = Schemas['TicketSummary']
 export type TicketDetail = Schemas['TicketDetail']
 /** What a ticket's or a PR's agent runs cost in all (DESIGN §13), and how many runs and reviews that counts. */
 export type CostTotal = Schemas['CostTotal']
+/** A ticket's plans: whether it needs one, its newest as the file stands, every plan, and the operator's comments. */
+export type TicketPlans = Schemas['TicketPlans']
+/** A plan as its file stands now, read bounded and never through a link (DESIGN §25). */
+export type PlanFile = Schemas['PlanFile']
+/** One of a ticket's plans: its status and approval, never its text. */
+export type PlanSummary = Schemas['PlanSummary']
+/** One of the operator's comments on a plan: a thread on a passage, with its replies. */
+export type PlanThreadView = Schemas['PlanThreadView']
+/** What the operator's word on a plan did: approve, request, or skip. */
+export type PlanChanged = Schemas['PlanChanged']
+/** A plan's file as saved from the editor: its hash now, which the next save sends back. */
+export type PlanSaved = Schemas['PlanSaved']
 /** One message in a ticket's conversation. */
 export type Message = Schemas['Message']
 /** A ticket's work in one repository: its PR and phase (DESIGN §18). */
@@ -117,6 +129,8 @@ export type ChoreRunFinding = Schemas['ChoreRunFinding']
 export type Transcript = Schemas['Transcript']
 /** One entry of a transcript, told apart by its `kind`: text, a tool call, a model call's end, or an error. */
 export type TranscriptEntry = Transcript['entries'][number]
+/** A finished piece of the agent's text, or of its reasoning. */
+export type TranscriptText = Schemas['TranscriptText']
 /** One tool call, once it ended: its input as indented JSON, and its output, or its error. */
 export type TranscriptTool = Schemas['TranscriptTool']
 /** One model call's end: why, what it cost, and its tokens together and by kind. */

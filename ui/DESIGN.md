@@ -41,6 +41,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `section-attention`, `-runs`, `-worktrees`, ... | Each nav section's color (rules below). Identity, never state. |
 | `diff-add`, `diff-del` | A diff's added and removed lines: a 12% tint behind a line, and its `+` or `-`. |
 | `spend-overseer`, `-idle`, `-workers`, `-chores`, `-reviews`, `-dry-run` | The spend chart's series, as fills only. |
+| `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; diff code. |
 | `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
 | `buddy-eye`, `buddy-pupil` | Sprig's googly eyes: the white and the pupil, and its rim. |
@@ -81,6 +82,10 @@ Rules:
   nowhere else: they are fills, never text, so the legend's words are `muted-foreground` beside a swatch. Idle overseer
   spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both themes, WCAG's
   bar for a graphic, which `tokens.test.ts` measures.
+- **Context fills** (`context-carried`, `context-added`) draw a transcript's context chart and nothing else: a neutral
+  with the canvas's indigo in it for what a model call carried, a cyan for what it added. Fills, never text, so the
+  legend's words are `muted-foreground` beside a swatch; each reaches 3:1 on `surface` and on `surface-raised`, the
+  picked call's, which `tokens.test.ts` measures.
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check
   it on both themes' surfaces before using it.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
@@ -276,9 +281,10 @@ Sprig:
 - Sprig (`Buddy`, `src/components/shell/buddy.tsx`) is a bent wire with a sprig on top and googly eyes, behind a
   keyboard it vibe codes on (`Keyboard`), at the foot of the side rail, under a speech bubble offering a tip about
   the page. The keyboard stands in front of the wire's foot, inside the figure's own box, so Sprig takes no more room
-  for it. It is off until Settings turns it on. Its tips are by page (`TIPS` in `src/lib/buddy.ts`): a set for each
-  nav section (`src/lib/sections.ts`, so a new section must get its own) and for the search page, then ones for
-  anywhere. Every one is a joke, and none opens with "Tip:",
+  for it. It is off until Settings turns it on. Its tips are by view (`TIPS` in `src/lib/buddy.ts`), by the route's
+  id: several of its own for every route, a section's list and one of its items apart (`/tickets/` and
+  `/tickets/$key`), so the same joke never shows on two views; then ones for anywhere. A new route is a type error
+  there until it has its own. Every one is a joke, and none opens with "Tip:",
   which on the ticker names something real; a joke dressed as a tip opens with "Unhelpful tip:". The jokes come in
   several voices (the paperclip's "It looks like you're...", a false "Fun fact:", a "Hot take:", a diary entry, a
   haiku, a riddle), mixed in each list so that no voice follows itself. Clicking Sprig, or the bubble's Another tip,
@@ -622,14 +628,15 @@ list, an empty state, or a skeleton by hand.
   not JSON; then how long it took. A canopy command that printed a refusal is `failed`, with a `refused: <guard>` chip
   in `status-failed`. It opens to its input and its output (or error), JSON indented and colored as a tick's output is
   with Pretty on (below), every value as written, in monospace blocks at most 24rem tall. A model call is a muted line
-  with its tokens and cost, and its reason only when it is not `tool-calls`, as every call but the last is; it opens the
-  same way to its tokens by kind, each a label and a readout on one line, and All open leaves it closed. A runtime error
-  is tinted `status-failed`. The header has the session id, then a hairline rule and the modes: the order, By call, and
-  All open, a `Toggle` that opens every call turned on and closes them all turned off, and is on too while a search has
-  opened what it found. Above the rows, how many tool calls, failed and refused ones, and model calls, and at that
-  line's end a search field (`Find lines`, `SearchField` at its `sm` size). A search keeps only the rows with a line
-  that holds it, letters in either case and every character taken literally, and says how many lines and rows that is in
-  the field; its matches are marked on the accent's tint as the search page's are (`MarkedText`), inside a block's
+  with its tokens `in · out`, as By call says them, and its cost, and its reason only when it is not `tool-calls`, as
+  every call but the last is; it opens the same way to its tokens by kind, each a label and a readout on one line, and
+  All open leaves it closed. A runtime error is tinted `status-failed`. The header has the session id, then a hairline
+  rule and the modes: the order, By call, and All open, a `Toggle` that opens every call turned on and closes them all
+  turned off, and is on too while a search has opened what it found. Above the rows, how many tool calls, failed and
+  refused ones, and model calls, and at that line's end a search field (`Find lines`, `SearchField` at its `sm` size).
+  A search keeps only the rows with a line that holds it, letters in either case and every character taken literally,
+  and says how many lines and rows that is in the field; its matches are marked on the accent's tint as the search
+  page's are (`MarkedText`), inside a block's
   colored JSON too (`markedTokens`). A tool call whose input or output holds it opens to it, until All open is turned on
   or off; a model call is numbers alone and is never kept. Escape or the clear button empties it, and a search nothing
   matches says so in place of the rows. A By call `Toggle` in the header, as Pretty is, groups the rows by the model
@@ -642,6 +649,23 @@ list, an empty state, or a skeleton by hand.
   body is built only when opened, and All open opens the calls. A run's id in a list (`run:N`) opens its page, which is
   the run's fields over its transcript, and a chore run's id (`chore:NAME#N`) its page, whose findings sit between the
   two; a tick's page has the overseer's under its decisions.
+- **A transcript's context** (`ContextChart`, `contextShape` in `src/lib/transcript.ts`) sits between the counts and
+  the rows, in either view, once a model call has its tokens. Its line: a `context` label, the peak (`peak 30.2k at
+  call 3`), the largest single addition as a button in the accent (the tool and its summary, or `text` and its start)
+  with its tokens and the call it grew, and the legend. Under it a bar per call, as tall as what it was sent (input,
+  cache read, and cache write), 24px at most, from one baseline, the peak's at 80% with its size over it: what the
+  call carried from the call before in `context-carried`, what it added on top in `context-added`, 2px apart, the top
+  segment's corners rounded. The first call's is the runtime's own overhead and canopy's prompt, the prompt's tokens
+  its characters over four; a call the runtime counted none of has no bar. The bars are a `ToggleGroup`'s items, each
+  named for its call, size, and step on hover and to a screen reader; the axis under them names each call, every
+  fifth back from the last past twelve. The call picked, at first the one the largest addition grew, sits raised, and
+  a line under the chart says what grew it: the step on the call before, then what that call printed (its text, and
+  its tool calls, each input and output), largest first, each its share of the step by its characters (`≈4.2k`, the
+  characters on hover), at most five and then how many more. The first call's line splits it into the prompt and the
+  runtime's own; a call smaller than the one before says so and names nothing. Each entry named is a button that shows
+  its row: it turns By call and the search off, opens the row if it is a tool call, scrolls it to the window's middle,
+  focuses it, and sets it on the accent's tint at 14%. A session of one call has the line alone: one bar says nothing
+  the line does not. By call, each call's line has its step after its input, `30.2k in (+4.3k) · 1.8k out`.
 - **A tick's output** (`TickOutputPanel`) is the overseer's file as written, under the tick's transcript: one muted line
   naming the file until `Show output`, a `Disclosure` in the header, opens it. Open, it is one monospace block, its
   lines wrapped anywhere (JSON events have no spaces to break at), scrolling inside the panel (`PanelScroll`) and opened
@@ -675,27 +699,34 @@ list, an empty state, or a skeleton by hand.
   hairlines with its header row on `surface-raised` at half, a quote muted behind a hairline. What the plan holds as
   characters (HTML, an image) is muted monospace; a link is underlined in `muted-foreground` with its address on hover,
   never a link. The toolbar (`Toolbar`, below) is `icon-xs` toggles in groups split by hairlines: undo and redo, the
-  paragraph's style (a choice of one), the marks and the blocks (each on or off, raised while on at the cursor), then
-  `Comment`, enabled while text is selected. Each control's tooltip names it and the shortcut the editor binds to it, on
-  this keyboard (`Bold (⌘B)`, `Bold (Ctrl+B)` elsewhere), and declares the same keys as `aria-keyshortcuts`. The plan's
-  header, with the toolbar, is `sticky`, and what the editor scrolls into view (the cursor as it types, a passage a
-  comment shows) stops 48px below it. A selection also shows a `Comment` bubble over it. A commented passage sits on the
-  accent's tint at 14%; the open one, or the one being commented on, at 28% and underlined in the accent; clicking a
-  passage opens its thread, and the cursor leaving it, or Escape, closes it. A thread is its passage quoted (two lines,
-  a hairline in the accent at its left, the whole on hover; a button that shows it in the plan), the comment and its
-  replies as text with their ages, and ghost `xs` actions, `Reply`, `Resolve` (`Reopen`), and `Delete`. While the thread
-  is open, the comment and each reply carry an `Edit` beside their age, in `text-2xs`, which turns it into the comment
-  form in place, holding its words, with `Save`; the actions hide while it is open. `Delete` asks first, in the actions'
-  place, since nothing brings a thread back: `Delete this comment and its replies?` in muted `text-xs`, then `Keep`,
-  which takes the focus, and `Delete` in `destructive`; Escape keeps it too, and the focus goes back to `Delete`; the
-  open thread sits on the accent's tint, as a selected row does. A thread whose passage is gone carries a `passage gone`
-  chip and stays in the list, last. Resolved threads fold under a `Disclosure` (`Show 2 resolved`). A comment or reply
-  form sends on the key Settings names, as a reply does, and Escape drops it. A form takes the cursor when it opens,
-  after any words it holds. `Comment` again, on new words, moves an empty comment to them; one half written stays on its
-  passage, and the cursor goes back to it, so its words are never lost or carried to other words. The comments end in
-  `Ask for changes`: a note on the whole plan and the button, with how many open comments go with it, or how far over a
-  reply's bound the request is. Until plans reach a ticket's page (M44), the editor is on `/plan-editor`, over a sample
-  plan on mock data only, with what the planner would read and the plan's Markdown under it.
+  paragraph's style, the marks and the blocks (each on or off, raised while on at the cursor), then `Comment`, enabled
+  while text is selected. Each control's tooltip names it and the shortcut the editor binds to it, on this keyboard
+  (`Bold (⌘B)`, `Bold (Ctrl+B)` elsewhere), and declares the same keys as `aria-keyshortcuts`. The paragraph's style is
+  a menu, as a document's is: its button names the style in force (`Heading 2 ▾`), and it lists Text and Heading 1 to 4,
+  each set as the plan sets it, with its keys at the right in muted monospace and a check in the accent on the one in
+  force; a style chosen leaves the cursor in the plan. After the blocks, a `Table` menu inserts a table where none is (a
+  header row and two rows of three columns, as a plan's Files table is), and inside one adds a row above or below or a
+  column left or right, and deletes a row, a column, or the table; what the cursor's place does not allow is disabled,
+  and an action leaves the cursor in the plan. An empty plan shows its prompt in `muted-foreground` where its first line
+  starts: `Write the plan here, or paste its Markdown.` The plan's header, with the toolbar, is `sticky`, and what the
+  editor scrolls into view (the cursor as it types, a passage a comment shows) stops 48px below it. A selection also
+  shows a `Comment` bubble over it. A commented passage sits on the accent's tint at 14%; the open one, or the one being
+  commented on, at 28% and underlined in the accent; clicking a passage opens its thread, and the cursor leaving it, or
+  Escape, closes it. A thread is its passage quoted (two lines, a hairline in the accent at its left, the whole on
+  hover; a button that shows it in the plan), the comment and its replies as text with their ages, and ghost `xs`
+  actions, `Reply`, `Resolve` (`Reopen`), and `Delete`. While the thread is open, the comment and each reply carry an
+  `Edit` beside their age, in `text-2xs`, which turns it into the comment form in place, holding its words, with `Save`;
+  the actions hide while it is open. `Delete` asks first, in the actions' place, since nothing brings a thread back:
+  `Delete this comment and its replies?` in muted `text-xs`, then `Keep`, which takes the focus, and `Delete` in
+  `destructive`; Escape keeps it too, and the focus goes back to `Delete`; the open thread sits on the accent's tint, as
+  a selected row does. A thread whose passage is gone carries a `passage gone` chip and stays in the list, last.
+  Resolved threads fold under a `Disclosure` (`Show 2 resolved`). A comment or reply form sends on the key Settings
+  names, as a reply does, and Escape drops it. A form takes the cursor when it opens, after any words it holds.
+  `Comment` again, on new words, moves an empty comment to them; one half written stays on its passage, and the cursor
+  goes back to it, so its words are never lost or carried to other words. The comments end in `Ask for changes`: a note
+  on the whole plan and the button, with how many open comments go with it, or how far over a reply's bound the request
+  is. Until plans reach a ticket's page (M44), the editor is on `/plan-editor`, over a sample plan on mock data only,
+  with what the planner would read and the plan's Markdown under it.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then how often it may start and its window (`cadenceText`: `every 360 minutes`, as
   the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed

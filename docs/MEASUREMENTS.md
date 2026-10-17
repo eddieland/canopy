@@ -424,3 +424,207 @@ Part D. Recommendation
 Write the report to `.canopy/roadmap-analysis.md`, with Part A's numbers in tables that could go into a
 MEASUREMENTS section, and end with a ten-line summary.
 ```
+
+## 2026-10-17: what each agent's first request holds
+
+What the fixed prefix of each canopy agent's first model call is made of: the system prompt, by who wrote each part,
+and each tool's schema, by where it came from. 2026-10-13 F12 put the overseer's at about 32k tokens and could not
+split it, since no file records it (DESIGN CONVERSATIONS, model calls). Cited by no milestone yet.
+
+### Setup
+
+- OpenCode 1.19.3, model `anthropic/claude-opus-5-5`, its Anthropic provider's base URL pointed at a recorder on
+  loopback ([below](#re-measuring-the-first-request)) that saved each request's body and answered `ok`. One
+  `opencode run --agent NAME --format json --title=probe "Say ok."` per agent, as canopy's default templates run it,
+  with `OPENCODE_CONFIG_DIR` set to the snapshot, in a directory that is not a git checkout. Each run sent one request.
+- canopy's definitions at this section's commit, rendered by `definitions.ensure` for a Jira workspace on defaults: the
+  overseer's body is `overseer.md` and the `tracker-jira` skill after it.
+- One MCP server: GitHub's, v2.0.2 built from source, over stdio, on its default toolsets (context, copilot, issues,
+  pull_requests, repos, users), with a placeholder token. Not Atlassian's: it needs a sign-in the machine this ran on
+  could not make. So every table here lacks the tracker's tools and instructions, and this measures canopy's
+  definitions and OpenCode, not the operator's machine; S40 re-runs it there.
+- Sizes are characters of what the request sent, each tool as compact JSON. Tokens are characters / 4, not a provider's
+  count.
+- `opencode debug agent NAME` was tried first. It prints the agent's body, its permission rules, and which built-in
+  tools it keeps, the same set the request carried, but no tool's schema, no MCP tool, and nothing OpenCode adds to the
+  body. The recorder is still needed for sizes.
+
+### What the first request holds
+
+Thousands of tokens, as characters / 4; a tool row's count of tools in brackets.
+
+| | overseer | worker | worker-private | reviewer | chore | splitter | planner |
+|---|---|---|---|---|---|---|---|
+| OpenCode's own system prompt | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| Body: canopy's text | 14.0 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 |
+| Body: the `tracker-jira` skill | 0.9 | | | | | | |
+| OpenCode: model line and `<env>` | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 | 0.1 |
+| GitHub server's instructions | 0.5 | 0.5 | 0.5 | 0.5 | 0.5 | 0.5 | 0.5 |
+| OpenCode: list of skills | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 | 0.4 |
+| **System prompt** | **15.8** | **1.0** | **1.0** | **1.0** | **1.0** | **1.0** | **1.0** |
+| Built-in tools | 3.2 (6) | 3.9 (8) | 3.9 (8) | 1.2 (4) | 1.2 (4) | 1.8 (5) | 1.9 (6) |
+| OpenCode's MCP resource tools | 0.4 (3) | 0.4 (3) | 0.4 (3) | 0.4 (3) | 0.4 (3) | 0.4 (3) | 0.4 (3) |
+| GitHub server's tools | 13.1 (46) | 9.8 (34) | 9.8 (34) | 7.0 (25) | 7.3 (26) | 7.2 (25) | 6.9 (24) |
+| **Tools** | **16.6 (55)** | **14.1 (45)** | **14.1 (45)** | **8.6 (32)** | **8.9 (33)** | **9.4 (33)** | **9.2 (33)** |
+| **Prefix** | **32.4** | **15.1** | **15.1** | **9.6** | **9.9** | **10.4** | **10.2** |
+
+The built-in tools, in characters: `bash` 5,275, `todowrite` 2,686, `edit` 1,958, `read` 1,734, `grep` 1,183, `glob`
+1,114, `write` 1,026, `skill` 676. The overseer has `bash`, `todowrite`, `read`, `grep`, `glob`, and `skill`; both
+workers add `edit` and `write`; the reviewer and the chore have `read`, `grep`, `glob`, and `skill`; the splitter adds
+`todowrite` to those, the planner `edit` and `write`. The two workers' requests match here, since what tells them apart
+is the tracker server's rules. The GitHub tools largest in characters: `issue_write` 3,702, `pull_request_read`
+2,628, `list_issues` 2,406, `pull_request_review_write` 2,239, `search_issues` 2,015. After the prefix comes the run's
+message, canopy's rendered prompt: the state block for the overseer, a `worker-*.md` prompt for a worker.
+
+### Findings
+
+- **F33. OpenCode's own prompt is not sent.** An agent with a body has the body sent in its place, followed by a model
+  line, `<env>` (working directory, platform, today's date), each MCP server's instructions, and the list of skills:
+  1.8k characters of OpenCode's and 2.0k of GitHub's server. So canopy writes nearly all of each system prompt, and
+  every agent but the overseer has a 300-character stub there. `<env>` holds the date, so the cached prefix changes
+  once a day (inferred).
+- **F34. Tools are most of every prefix.** They are 51% of the overseer's and 89% to 93% of every other agent's.
+  GitHub's server alone is 40% of the overseer's and 65% to 74% of the others'.
+- **F35. A tool denied outright is not sent; one allowed for some pattern is.** The overseer's `deny` scalars kept
+  `edit`, `write`, `task`, and `webfetch` out of its request; its `bash`, allowed only for `canopy *` and
+  `treehouse status*`, was sent whole, as was the planner's `edit`, allowed for its one file. An MCP tool follows the
+  name patterns: those of the reviewer, the chore, the splitter, and the planner took GitHub's 46 tools to 24 to 26.
+  The exception is OpenCode's three MCP resource tools (`list_mcp_resources`, `list_mcp_resource_templates`,
+  `read_mcp_resource`): a copy of the overseer that denied each by name still sent all three. Whether a call to one is
+  refused was not checked.
+- **F36. The overseer is sent GitHub's write tools.** Its definition denies no MCP tool, so it is offered all 46,
+  `merge_pull_request`, `push_files`, `create_or_update_file`, `create_pull_request`, `issue_write`,
+  `add_issue_comment`, and `pull_request_review_write` among them. TRUST_MODEL says the overseer has no edit or write
+  tools and acts only through the `canopy` CLI. Branch protection still guards the default branch (T1), and the
+  tracker's write tools are likely offered the same way (inferred; not in this setup). The reviewer and the chore are
+  sent `request_copilot_review`: their patterns have no `*copilot*`, the planner's does. → a change under `agents/`.
+- **F37. Denying them is also the largest cut to the tools.** A copy of the overseer with the reviewer's write patterns,
+  less `*branch*`, `*file*`, and `*label*` (the overseer lists branches, 2026-10-15 F28), plus `*copilot*`, kept 27 of
+  GitHub's tools (29.8k of 52.4k characters) and lost `todowrite`, which `*write*` matches: its prefix went from 32.4k
+  to 26.1k tokens (−20%). Adding `skill: deny`, since its skill is already in its body, dropped the `skill` tool and the
+  list of skills: 25.6k (−21%). The reads the overseer was seen to make (2026-10-13: PR reads, status, reviews,
+  comments, branch lists) are four tools, `pull_request_read`, `list_pull_requests`, `search_pull_requests`, and
+  `list_branches`, 6.8k characters; allowing only those, with `skill` denied, would make it about 19.8k (−39%,
+  inferred: its calls were not counted by tool name).
+- **F38. The overseer's own prompt is the largest single part:** 56k characters, 14.0k tokens, 43% of its prefix, and
+  grown from 45 KB on 2026-10-13 (F11). Since M34 it is the cached system prompt, so a warm tick reads it at the cache's
+  price and a cold one, most of them (2026-10-15 F23), writes it.
+- **F39. Production's prefix is larger than this one.** 2026-10-15 F23's warm first step read 49.6k tokens from the
+  cache by the provider's count, with Atlassian's server. This setup's overseer prefix is 32.4k by characters / 4,
+  without it. The difference is Atlassian's tools and instructions, the prompt's growth since, and characters / 4
+  against the provider's counter; this check cannot split them (inferred).
+- **F40. Fifteen of GitHub's tools have no use in any canopy prompt** (inferred, from the prompts and the 2026-10-13
+  tool counts): releases, tags, teams, users, repository search, creating and forking a repository, collaborators,
+  Copilot, and `ui_get`. Every run of every agent is sent 11 to 15 of them, 7.7k to 10.7k characters (1.9k to 2.7k
+  tokens). The GitHub server's toolsets or excluded tools are the operator's config; deny patterns are canopy's.
+
+The three largest things worth cutting, by tokens a run saves:
+
+1. **The overseer's GitHub tools it never calls** (F36, F37): 6.3k tokens a tick with write patterns, about 12.6k with
+   an allowlist of its reads. It also closes F36. A change under `agents/`, so it needs the operator's approval.
+2. **The overseer's prompt** (F38): 14.0k tokens, the largest single part. Cutting it is prompt work, judged by
+   `canopy tick --dry-run`'s decisions, not by this check.
+3. **GitHub tools no agent uses** (F40): 1.9k to 2.7k tokens on every run of every agent, in the operator's GitHub
+   server config or in each definition's patterns.
+
+Smaller: the overseer's `todowrite` and `skill` with the list of skills (1.2k together, F37); OpenCode's MCP resource
+tools (0.4k), which a definition cannot deny (F35).
+
+### Re-measuring the first request
+
+Re-run after an OpenCode upgrade, a new MCP server or toolset, or a change under `agents/` (SCENARIOS S40), on the
+operator's machine so that their MCP servers are in it. Start the recorder, `python3 recorder.py OUT_DIR`:
+
+```python
+# python3 recorder.py OUT_DIR: save each request's body as OUT_DIR/NNN.json, and answer "ok" as Anthropic's API streams.
+import json
+import sys
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+OUT = Path(sys.argv[1])
+MESSAGE = {
+    "id": "msg_0",
+    "type": "message",
+    "role": "assistant",
+    "model": "recorder",
+    "content": [],
+    "stop_reason": None,
+    "stop_sequence": None,
+    "usage": {"input_tokens": 1, "output_tokens": 1},
+}
+EVENTS = [
+    {"type": "message_start", "message": MESSAGE},
+    {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+    {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "ok"}},
+    {"type": "content_block_stop", "index": 0},
+    {"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 1}},
+    {"type": "message_stop"},
+]
+
+
+class Recorder(BaseHTTPRequestHandler):
+    def do_POST(self):
+        body = self.rfile.read(int(self.headers["Content-Length"]))
+        (OUT / f"{len(list(OUT.glob('*.json'))):03}.json").write_bytes(body)
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.end_headers()
+        for event in EVENTS:
+            self.wfile.write(f"event: {event['type']}\ndata: {json.dumps(event)}\n\n".encode())
+
+
+OUT.mkdir(parents=True, exist_ok=True)
+ThreadingHTTPServer(("127.0.0.1", 8765), Recorder).serve_forever()
+```
+
+In an empty directory that is not a checkout, write an `opencode.json` that points the provider at it, leaving the
+operator's own config, and its MCP servers, as they are:
+
+```json
+{"provider": {"anthropic": {"options": {"baseURL": "http://127.0.0.1:8765/v1", "apiKey": "recorder"}}}}
+```
+
+From that directory, with `SNAP` the workspace's snapshot, `<state_dir>/runtime/<definitions_digest>` of its latest
+tick, run each agent once, moving `OUT_DIR/000.json` aside after each. The first run in a new directory once took
+minutes here, while OpenCode set the directory up; run it again if it times out.
+
+```sh
+env OPENCODE_CONFIG_DIR="$SNAP" opencode run --agent canopy-overseer --format json --title=probe "Say ok."
+```
+
+Then split each request by source, `python3 split.py OUT_DIR/000.json "$SNAP/agents/canopy-overseer.md"`. An MCP
+tool's source is its name before the first `_`, the server's name.
+
+```python
+# python3 split.py REQUEST.json AGENT.md: the request's first-call prefix by what wrote each part, in characters.
+import json
+import re
+import sys
+
+request = json.load(open(sys.argv[1]))
+body = open(sys.argv[2]).read().split("\n---\n", 1)[1].strip()
+system = "".join(block["text"] for block in request["system"])
+start = system.find(body)
+rest = system[start + len(body) :]
+skill = re.search(r"The skill `[\w-]+` follows", body)
+mcp = re.search(r"<mcp_instructions>.*?</mcp_instructions>\n?", rest, re.S)
+skills = rest.find("Skills provide")
+rows = {
+    "OpenCode: before the body": start,
+    "body: canopy's text": skill.start() if skill else len(body),
+    "body: skill": len(body) - skill.start() if skill else 0,
+    "OpenCode: model line and env": len(rest.split("<mcp_instructions>")[0].split("Skills provide")[0]),
+    "MCP servers' instructions": len(mcp[0]) if mcp else 0,
+    "OpenCode: skill list": len(rest) - skills if skills >= 0 else 0,
+}
+for tool in request["tools"]:
+    name = tool["name"]
+    source = "MCP resources" if "mcp_resource" in name else name.split("_")[0] if "_" in name else "built-in"
+    rows[f"tools: {source}"] = rows.get(f"tools: {source}", 0) + len(json.dumps(tool, separators=(",", ":")))
+rows["prefix"] = len(system) + sum(n for k, n in rows.items() if k.startswith("tools:"))
+for key, n in rows.items():
+    print(f"{key:32} {n:>8,} {n / 4000:6.1f}k")
+```
+
+`start` is -1 when the body is not in the system prompt: OpenCode has moved it, and the split needs reading again.

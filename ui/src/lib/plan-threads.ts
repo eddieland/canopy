@@ -3,6 +3,7 @@
 // given as it was, so a component keeps the list in state. The open threads become one message to the planner
 // (`changeRequest`), which is how the operator asks for changes: the next plan is written with every comment and the
 // passage it is on in front of it.
+import type { PlanThreadView } from '@/api/types'
 import { ATOM, collapse } from '@/lib/plan-anchors'
 import type { Anchor } from '@/lib/plan-anchors'
 
@@ -131,6 +132,74 @@ export function changeRequest(threads: PlanThread[], starts: ReadonlyMap<string,
         parts.push(open.length > 0 ? `On the whole plan:\n${note.trim()}` : note.trim())
     }
     return parts.join('\n\n')
+}
+
+/** The journal's threads (`GET /tickets/{key}/plans`), as the editor holds them: each id the journal's, as text. */
+export function fromServer(threads: PlanThreadView[]): PlanThread[] {
+    return threads.map((thread) => ({
+        id: String(thread.id),
+        anchor: { quote: thread.quote, prefix: thread.prefix, suffix: thread.suffix },
+        body: thread.body,
+        at: thread.at,
+        resolved: thread.resolved,
+        replies: thread.replies.map((reply) => ({ id: String(reply.id), body: reply.body, at: reply.at })),
+    }))
+}
+
+/** One write that brings the journal's threads to what the editor holds. */
+export type ThreadChange =
+    | { kind: 'add'; thread: PlanThread }
+    | { kind: 'delete'; id: string }
+    | { kind: 'edit'; id: string; body: string }
+    | { kind: 'resolve'; id: string; resolved: boolean }
+    | { kind: 'reply'; id: string; body: string }
+    | { kind: 'edit-reply'; id: string; replyId: string; body: string }
+
+/**
+ * The writes that take the threads from `before` to `after`, in order: new threads, then each thread's changes, then
+ * deletions. A passage an edit moved is not among them: it is saved with the plan (`movedAnchors`).
+ */
+export function threadChanges(before: PlanThread[], after: PlanThread[]): ThreadChange[] {
+    const was = new Map(before.map((thread) => [thread.id, thread]))
+    const now = new Set(after.map((thread) => thread.id))
+    const changes: ThreadChange[] = []
+    for (const thread of after) {
+        const old = was.get(thread.id)
+        if (old === undefined) {
+            changes.push({ kind: 'add', thread })
+            continue
+        }
+        if (old.body !== thread.body) {
+            changes.push({ kind: 'edit', id: thread.id, body: thread.body })
+        }
+        if (old.resolved !== thread.resolved) {
+            changes.push({ kind: 'resolve', id: thread.id, resolved: thread.resolved })
+        }
+        const replies = new Map(old.replies.map((reply) => [reply.id, reply]))
+        for (const reply of thread.replies) {
+            const prior = replies.get(reply.id)
+            if (prior === undefined) {
+                changes.push({ kind: 'reply', id: thread.id, body: reply.body })
+            } else if (prior.body !== reply.body) {
+                changes.push({ kind: 'edit-reply', id: thread.id, replyId: reply.id, body: reply.body })
+            }
+        }
+    }
+    for (const thread of before) {
+        if (!now.has(thread.id)) {
+            changes.push({ kind: 'delete', id: thread.id })
+        }
+    }
+    return changes
+}
+
+/** The threads of `saved`, the journal's, whose passage `held`, the editor's, has since moved or reworded. */
+export function movedAnchors(saved: PlanThread[], held: PlanThread[]): PlanThread[] {
+    const was = new Map(saved.map((thread) => [thread.id, thread]))
+    return held.filter((thread) => {
+        const old = was.get(thread.id)
+        return old !== undefined && !sameAnchor(old.anchor, thread.anchor)
+    })
 }
 
 // A passage as the planner reads it: without the placeholders its HTML tags and images stand as in the editor's text,

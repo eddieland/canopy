@@ -54,6 +54,7 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy forget KEY` | Forgets a ticket's branch and PRs so its next implement starts over; runs still count. |
 | `canopy grant KEY KIND` | Lets a ticket at its attempt limit have one more run of KIND; `--runs N` for more. |
 | `canopy grant URL review` | Lets the PR at URL, at `max_reviews_per_pr`, have one more review; `--runs N` for more. |
+| `canopy plan KEY` | Has a ticket planned before its implement; `--approve` the plan as its file stands, `--skip` it. |
 | `canopy pause`, `canopy resume` | The loop starts no tick until resumed; running workers keep going. `p` in the loop too. |
 | `canopy notice 'TEXT' [--for 4h]` | Every run dispatched until it lapses hears TEXT, such as a CI outage; `--clear` lifts it. |
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
@@ -147,6 +148,8 @@ no dismissing one, except a chore's finding (below). Reasons:
 | `ready_to_merge` | The PR is approved: merge it. canopy never merges. |
 | `needs_author` | A review comment needs a person (design pushback, scope), or a stacked-on PR closed: decide. |
 | `untrusted_review` | Feedback from a reviewer not in `trust.trusted_reviewers`: say what to do with `canopy reply`. |
+| `plan_review` | A ticket's plan waits on you: `canopy show KEY`, then `canopy plan KEY --approve` or `canopy reply KEY`. |
+| `plan_changed` | An approved plan's file changed: approve it again, or `canopy plan KEY` for a new one, or `--skip`. |
 | `attempt_limit` | The ticket used up its attempts of one kind. Take it over, or `canopy grant KEY KIND` for another run. |
 | `crashed`, `unpushed`, `unknown_result`, `worker_failed` | A run went wrong. Read the run log the detail names. |
 | `chore_failed` | A chore's latest run could not check (failed, timed out, crashed): read its log. |

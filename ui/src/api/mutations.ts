@@ -13,6 +13,9 @@ import type {
     LoopState,
     NoticeChanged,
     PauseChanged,
+    PlanChanged,
+    PlanSaved,
+    PlanThreadView,
     Replied,
     ReviewDismissed,
     ReviewRequested,
@@ -95,6 +98,76 @@ export async function stopReview(url: string): Promise<ReviewRequestStopped> {
 export async function replyTicket(key: string, body: string, submission: string): Promise<Replied> {
     return unwrap(
         await api.POST('/api/tickets/{key}/replies', { params: { path: { key } }, body: { body, submission } }),
+    )
+}
+
+/**
+ * `canopy plan KEY --approve`, `canopy plan KEY`, or `canopy plan KEY --skip`: approve the newest plan as its file
+ * stands, ask for a new one, or skip the plan (DESIGN §25).
+ */
+export async function decidePlan(key: string, action: PlanChanged['action']): Promise<PlanChanged> {
+    return unwrap(await api.POST('/api/tickets/{key}/plan', { params: { path: { key } }, body: { action } }))
+}
+
+/**
+ * Write the editor's Markdown over the plan's file, as the operator's own editor would. `readSha256` is the file's hash
+ * as the editor read it: a file changed since is refused (`bad_plan`), never overwritten unseen.
+ */
+export async function savePlan(key: string, plan: number, markdown: string, readSha256: string): Promise<PlanSaved> {
+    return unwrap(
+        await api.PUT('/api/tickets/{key}/plans/{plan_id}/file', {
+            params: { path: { key, plan_id: plan } },
+            body: { markdown, read_sha256: readSha256 },
+        }),
+    )
+}
+
+/** A comment on a passage of the ticket's plan: a new open thread, anchored by the passage's words. */
+export async function commentPlan(
+    key: string,
+    anchor: { quote: string; prefix: string; suffix: string },
+    body: string,
+): Promise<PlanThreadView> {
+    return unwrap(
+        await api.POST('/api/tickets/{key}/plan-threads', { params: { path: { key } }, body: { ...anchor, body } }),
+    )
+}
+
+/** A reply in one of the ticket's plan comment threads. */
+export async function replyPlanThread(key: string, thread: number, body: string): Promise<PlanThreadView> {
+    return unwrap(
+        await api.POST('/api/tickets/{key}/plan-threads/{thread_id}/replies', {
+            params: { path: { key, thread_id: thread } },
+            body: { body },
+        }),
+    )
+}
+
+/** A change to one of the ticket's plan comment threads: its words, a reply's, whether resolved, or its passage. */
+export async function changePlanThread(
+    key: string,
+    thread: number,
+    change: {
+        body?: string
+        reply?: number
+        resolved?: boolean
+        anchor?: { quote: string; prefix: string; suffix: string }
+    },
+): Promise<PlanThreadView> {
+    return unwrap(
+        await api.PATCH('/api/tickets/{key}/plan-threads/{thread_id}', {
+            params: { path: { key, thread_id: thread } },
+            body: change,
+        }),
+    )
+}
+
+/** Delete one of the ticket's plan comment threads, with its replies. */
+export async function deletePlanThread(key: string, thread: number): Promise<void> {
+    unwrap(
+        await api.DELETE('/api/tickets/{key}/plan-threads/{thread_id}', {
+            params: { path: { key, thread_id: thread } },
+        }),
     )
 }
 

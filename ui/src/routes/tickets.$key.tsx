@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
-import { ticketQuery } from '@/api/queries'
+import { ticketPlansQuery, ticketQuery } from '@/api/queries'
 import type { TicketDetail } from '@/api/types'
 import { Age } from '@/components/age'
 import { Conversation } from '@/components/conversation'
@@ -20,6 +20,7 @@ import { StartTicket } from '@/components/start-ticket'
 import { Chip, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
 import { TicketLinks } from '@/components/ticket-links'
+import { TicketPlan } from '@/components/ticket-plan'
 import { WorkingNow } from '@/components/working-now'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
@@ -28,7 +29,10 @@ import { cn } from '@/lib/utils'
 import { phaseLabel, phaseWord } from '@/lib/phase'
 import { None } from '@/components/none'
 
-/** One ticket: its work and the operator's actions, its conversation and the reply, then its runs and decisions. */
+/**
+ * One ticket: its work and the operator's actions, its conversation and the reply, then its runs and decisions; and
+ * for a ticket plans touch, its plan below them, in the plan editor (DESIGN §25).
+ */
 export const Route = createFileRoute('/tickets/$key')({
     component: TicketPage,
 })
@@ -74,6 +78,8 @@ function Ticket({ detail }: { detail: TicketDetail }) {
     const runsOrder = useListOrder('ticket-runs')
     const decisionsOrder = useListOrder('ticket-decisions')
     const conversationOrder = useListOrder('conversation')
+    const plans = useQuery(ticketPlansQuery(ticket.key)).data
+    const planned = plans !== undefined && (plans.needed || plans.plans.length > 0)
     const how = ticket.private
         ? `Private, ${ticket.start ?? 'started'}. Its conversation stays in canopy; nothing reaches the ticket.`
         : 'Public: its queue label authorizes it. Its conversation is on the ticket, and copied here.'
@@ -191,6 +197,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     )}
                 </Panel>
             </div>
+            {planned && <TicketPlan ticketKey={ticket.key} plans={plans} />}
         </>
     )
 }

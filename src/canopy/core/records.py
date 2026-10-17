@@ -29,6 +29,7 @@ from canopy.core.vocab import (
     PlanStatus,
     PoolKind,
     ReviewRunStatus,
+    RunKind,
     StartStatus,
     TickStatus,
 )
@@ -264,6 +265,49 @@ class Plan(Row):
     approved_sha256: str | None
     approved_at: str | None
     approved_channel: str | None
+
+
+@dataclass(frozen=True)
+class TicketGrant(Row):
+    """Runs the operator granted a ticket past its limit for a kind counted per ticket (DESIGN §22, §25)."""
+
+    TABLE: ClassVar[str] = "ticket_grants"
+
+    id: int
+    ticket_key: str
+    kind: RunKind
+    runs: int
+    granted_at: str
+
+
+@dataclass(frozen=True)
+class PlanThread(Row):
+    """One of the operator's comments on a ticket's plan, anchored by its passage's words (DESIGN §25)."""
+
+    TABLE: ClassVar[str] = "plan_threads"
+
+    id: int
+    ticket_key: str
+    # The passage, and up to 32 characters either side of it, each with its whitespace collapsed.
+    quote: str
+    prefix: str
+    suffix: str
+    body: str
+    created_at: str
+    # When the operator resolved it; None while it is open.
+    resolved_at: str | None
+
+
+@dataclass(frozen=True)
+class PlanReply(Row):
+    """A reply in a plan's comment thread (DESIGN §25)."""
+
+    TABLE: ClassVar[str] = "plan_replies"
+
+    id: int
+    thread_id: int
+    body: str
+    created_at: str
 
 
 @dataclass(frozen=True)

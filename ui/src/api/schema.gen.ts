@@ -800,6 +800,157 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/tickets/{key}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decide a ticket's plan
+         * @description `canopy plan KEY --approve`, `canopy plan KEY`, or `--skip`: approve the newest plan, ask for a new one, or skip.
+         *
+         *     Approving takes the file as it stands, edits included. Asking for changes is a reply, not this.
+         */
+        post: operations["changeTicketPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tickets/{key}/plan-threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Comment on a passage of a ticket's plan
+         * @description A new open thread on a passage, anchored by its words and the text either side, never by a position.
+         */
+        post: operations["commentTicketPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tickets/{key}/plan-threads/{thread_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete a comment thread on a plan
+         * @description Delete the thread and its replies.
+         */
+        delete: operations["deleteTicketPlanThread"];
+        options?: never;
+        head?: never;
+        /**
+         * Change a comment thread on a plan
+         * @description Edit the comment's words or a reply's, resolve or reopen the thread, or move it to its passage's new words.
+         */
+        patch: operations["changeTicketPlanThread"];
+        trace?: never;
+    };
+    "/api/tickets/{key}/plan-threads/{thread_id}/replies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reply in a comment thread on a plan
+         * @description A reply at the end of the thread's replies.
+         */
+        post: operations["replyTicketPlanThread"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tickets/{key}/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a ticket's plans
+         * @description Whether the ticket needs a plan, its newest as the file stands, every plan, and the operator's comments.
+         *
+         *     A key that is not a ticket's is refused `bad_ref` or `unsupported`; one canopy has no record of is a 404.
+         */
+        get: operations["getTicketPlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tickets/{key}/plans/{plan_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get one of a ticket's plans
+         * @description One of the ticket's plans, earlier ones included, as its file stands: what `canopy show --plans` prints.
+         */
+        get: operations["getTicketPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tickets/{key}/plans/{plan_id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Save an edit of a ticket's plan
+         * @description Write the plan editor's Markdown over the plan's file, as the operator's own editor would.
+         *
+         *     Only the current plan, waiting or approved; an approved one then needs approving again. Refused `bad_plan` while a
+         *     plan run for the ticket is running, and when the file changed since the editor read it, by `read_sha256`.
+         */
+        put: operations["saveTicketPlan"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tickets/{key}/replies": {
         parameters: {
             query?: never;
@@ -2075,6 +2226,320 @@ export type components = {
          * @enum {string}
          */
         PauseChannel: "loop" | "cli" | "web";
+        /**
+         * PlanAction
+         * @description The operator's word on a ticket's plan: `canopy plan KEY --approve`, `canopy plan KEY`, or `--skip`.
+         */
+        PlanAction: {
+            /**
+             * Action
+             * @description `approve` the newest plan as its file stands, `request` a new plan, or `skip` the plan.
+             * @enum {string}
+             */
+            action: "approve" | "request" | "skip";
+        };
+        /**
+         * PlanAnchor
+         * @description A comment's passage, as its words and the text either side of them, each with its whitespace collapsed.
+         */
+        PlanAnchor: {
+            /**
+             * Prefix
+             * @description Up to 32 characters before it.
+             * @default
+             */
+            prefix: string;
+            /**
+             * Quote
+             * @description The passage.
+             */
+            quote: string;
+            /**
+             * Suffix
+             * @description Up to 32 characters after it.
+             * @default
+             */
+            suffix: string;
+        };
+        /**
+         * PlanChanged
+         * @description What the operator's word on a plan did.
+         */
+        PlanChanged: {
+            /**
+             * Action
+             * @description What was asked.
+             * @enum {string}
+             */
+            action: "approve" | "request" | "skip";
+            /**
+             * Already
+             * @description Whether the ticket's setting already said so, and nothing was superseded.
+             */
+            already: boolean;
+            /**
+             * Plan
+             * @description The plan approved, for `approve`.
+             */
+            plan: number | null;
+            /**
+             * Superseded
+             * @description The plan a request or a skip superseded, if the ticket had one.
+             */
+            superseded: number | null;
+        };
+        /**
+         * PlanCommentRequest
+         * @description A comment on a passage of a ticket's plan: the passage, the text either side of it, and what it says.
+         */
+        PlanCommentRequest: {
+            /**
+             * Body
+             * @description What it says. Bounded again in code at 4000 characters, after stripping.
+             */
+            body: string;
+            /**
+             * Prefix
+             * @description Up to 32 characters before it.
+             * @default
+             */
+            prefix: string;
+            /**
+             * Quote
+             * @description The passage, whitespace collapsed.
+             */
+            quote: string;
+            /**
+             * Suffix
+             * @description Up to 32 characters after it.
+             * @default
+             */
+            suffix: string;
+        };
+        /**
+         * PlanFile
+         * @description A plan as its file stands now, read bounded and never through a link (DESIGN §25, Where plans live).
+         */
+        PlanFile: {
+            /**
+             * Changed Since Approval
+             * @description For an approved plan, whether it differs from the text the operator approved, which then needs approving again
+             *     before its implement (`plan_changed`).
+             */
+            changed_since_approval: boolean;
+            /**
+             * Edited
+             * @description Whether it differs from what the planner wrote.
+             */
+            edited: boolean;
+            /**
+             * Path
+             * @description The file, under the state directory: the operator reads and edits it with their own tools too.
+             */
+            path: string;
+            /** @description The plan the file is. */
+            plan: components["schemas"]["PlanSummary"];
+            /**
+             * Problem
+             * @description Why it is not: missing, not a regular file, unreadable, not UTF-8, empty, or over the bound.
+             */
+            problem: string | null;
+            /**
+             * Sha256
+             * @description The file's SHA-256 now, whenever it could be read: what a save sends back, so an edit made elsewhere since is
+             *     never overwritten unseen.
+             */
+            sha256: string | null;
+            /**
+             * Text
+             * @description Its Markdown, or none when the file is not a plan any more: `problem` says why.
+             */
+            text: string | null;
+        };
+        /**
+         * PlanReplyRequest
+         * @description A reply in a comment thread on a plan.
+         */
+        PlanReplyRequest: {
+            /**
+             * Body
+             * @description What it says. Bounded again in code at 4000 characters, after stripping.
+             */
+            body: string;
+        };
+        /**
+         * PlanReplyView
+         * @description A reply in a comment thread on a plan.
+         */
+        PlanReplyView: {
+            /**
+             * At
+             * Format: date-time
+             * @description When it was written.
+             */
+            at: string;
+            /**
+             * Body
+             * @description What it says.
+             */
+            body: string;
+            /**
+             * Id
+             * @description Its id, unique among the ticket's replies.
+             */
+            id: number;
+        };
+        /**
+         * PlanSave
+         * @description The plan editor's Markdown, to write over the plan's file, and the file's hash as the editor read it.
+         */
+        PlanSave: {
+            /**
+             * Markdown
+             * @description The plan as edited. A plan is at most 100,000 characters (DESIGN §25).
+             */
+            markdown: string;
+            /**
+             * Read Sha256
+             * @description The file's SHA-256 when the editor read it: a file changed since is refused, never overwritten unseen.
+             */
+            read_sha256: string;
+        };
+        /**
+         * PlanSaved
+         * @description The plan's file as saved.
+         */
+        PlanSaved: {
+            /**
+             * Sha256
+             * @description Its SHA-256 now: what the next save sends back.
+             */
+            sha256: string;
+            /**
+             * Size
+             * @description Its size in bytes.
+             */
+            size: number;
+        };
+        /**
+         * PlanSummary
+         * @description One of a ticket's plans (DESIGN §25): its status and approval, never its text.
+         */
+        PlanSummary: {
+            /**
+             * Approved At
+             * @description When the operator approved it, the latest time; none if never.
+             */
+            approved_at: string | null;
+            /**
+             * Approved Channel
+             * @description How they approved it: `cli` or `web`.
+             */
+            approved_channel: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             * @description When the planner wrote it.
+             */
+            created_at: string;
+            /**
+             * Id
+             * @description The plan's id, as `canopy show --plans` names it `plan:ID`.
+             */
+            id: number;
+            /**
+             * Run Id
+             * @description The plan run that wrote it, whose id names its file.
+             */
+            run_id: number;
+            /**
+             * Status
+             * @description Waiting on the operator, approved, or replaced by a newer plan, a request for one, a skip, or a forget.
+             * @enum {string}
+             */
+            status: "proposed" | "approved" | "superseded";
+        };
+        /**
+         * PlanThreadChange
+         * @description A change to a comment thread on a plan: its comment's words, a reply's, or whether it is resolved.
+         */
+        PlanThreadChange: {
+            /** @description The passage as it now stands, after an edit of the plan moved or changed its words; none to leave it. */
+            anchor?: components["schemas"]["PlanAnchor"] | null;
+            /**
+             * Body
+             * @description New words for the comment, or with `reply` for that reply.
+             */
+            body?: string | null;
+            /**
+             * Reply
+             * @description The reply `body` is for; none for the comment itself.
+             */
+            reply?: number | null;
+            /**
+             * Resolved
+             * @description Resolve the thread, or reopen it; none to leave it.
+             */
+            resolved?: boolean | null;
+        };
+        /**
+         * PlanThreadDeleted
+         * @description A comment thread on a plan, deleted with its replies.
+         */
+        PlanThreadDeleted: {
+            /**
+             * Id
+             * @description The thread deleted.
+             */
+            id: number;
+        };
+        /**
+         * PlanThreadView
+         * @description One of the operator's comments on a ticket's plan: a thread on a passage, with its replies (DESIGN §25).
+         */
+        PlanThreadView: {
+            /**
+             * At
+             * Format: date-time
+             * @description When it was written.
+             */
+            at: string;
+            /**
+             * Body
+             * @description What the comment says.
+             */
+            body: string;
+            /**
+             * Id
+             * @description Its id, unique among the ticket's threads.
+             */
+            id: number;
+            /**
+             * Prefix
+             * @description Up to 32 characters before the passage, the nearest last.
+             */
+            prefix: string;
+            /**
+             * Quote
+             * @description The passage it is on, whitespace collapsed.
+             */
+            quote: string;
+            /**
+             * Replies
+             * @description Its replies, oldest first.
+             */
+            replies: components["schemas"]["PlanReplyView"][];
+            /**
+             * Resolved
+             * @description Whether the operator resolved it. A resolved thread is kept, and asks the planner for nothing.
+             */
+            resolved: boolean;
+            /**
+             * Suffix
+             * @description Up to 32 characters after it, the nearest first.
+             */
+            suffix: string;
+        };
         /**
          * Pool
          * @description One repository's treehouse pool, read when asked for.
@@ -3444,6 +3909,45 @@ export type components = {
             units: components["schemas"]["Unit"][];
         };
         /**
+         * TicketPlans
+         * @description A ticket's plans: whether it needs one, the newest as its file stands, the earlier ones, and the comments.
+         */
+        TicketPlans: {
+            /**
+             * Needed
+             * @description Whether its implement waits on an approved plan, by its own setting or `policy.plan`.
+             */
+            needed: boolean;
+            /** @description The newest plan, as its file stands; none if it has had none. */
+            newest: components["schemas"]["PlanFile"] | null;
+            /**
+             * Planning
+             * @description The plan run writing a plan for it now, if one is: the plan verbs and a save refuse until it ends.
+             */
+            planning: number | null;
+            /**
+             * Plans
+             * @description Every plan, oldest first, the newest included.
+             */
+            plans: components["schemas"]["PlanSummary"][];
+            /**
+             * Policy
+             * @description `policy.plan`.
+             * @enum {string}
+             */
+            policy: "off" | "approve";
+            /**
+             * Setting
+             * @description The operator's own word for this ticket, which overrides the policy; none to follow it.
+             */
+            setting: ("plan" | "skip") | null;
+            /**
+             * Threads
+             * @description The operator's comments, oldest first: a thread is the ticket's, not one plan's, so it carries to the next.
+             */
+            threads: components["schemas"]["PlanThreadView"][];
+        };
+        /**
          * TicketSummary
          * @description A ticket as the tickets list shows it.
          */
@@ -4019,7 +4523,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -4084,7 +4588,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -4170,7 +4674,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -4260,7 +4764,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -4350,7 +4854,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -4447,7 +4951,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -4544,7 +5048,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -4779,7 +5283,7 @@ export interface operations {
                     "text/event-stream": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -4835,7 +5339,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -4913,7 +5417,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -4987,7 +5491,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -5052,7 +5556,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -5126,7 +5630,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -5191,7 +5695,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -5256,7 +5760,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -5333,7 +5837,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -5419,7 +5923,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -5505,7 +6009,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -5591,7 +6095,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -5665,7 +6169,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -5730,7 +6234,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -5807,7 +6311,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -5897,7 +6401,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -5987,7 +6491,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -6061,7 +6565,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -6138,7 +6642,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -6224,7 +6728,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -6301,7 +6805,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -6366,7 +6870,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -6426,7 +6930,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -6482,7 +6986,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -6538,7 +7042,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -6606,7 +7110,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -6680,7 +7184,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -6745,7 +7249,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -6831,7 +7335,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -6921,7 +7425,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -7011,7 +7515,743 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    changeTicketPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanAction"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanChanged"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    commentTicketPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanCommentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanThreadView"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    deleteTicketPlanThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+                /** @description The comment thread's id. */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanThreadDeleted"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    changeTicketPlanThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+                /** @description The comment thread's id. */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanThreadChange"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanThreadView"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    replyTicketPlanThread: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+                /** @description The comment thread's id. */
+                thread_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanReplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanThreadView"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getTicketPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TicketPlans"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such ticket. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    getTicketPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+                /** @description The plan's id, as `plan:ID` names it. */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanFile"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such plan of this ticket. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    saveTicketPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The ticket's key, as the tracker names it: `PROJ-1`. */
+                key: string;
+                /** @description The plan's id, as `plan:ID` names it. */
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanSave"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanSaved"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -7101,7 +8341,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -7187,7 +8427,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -7277,7 +8517,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -7351,7 +8591,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -7428,7 +8668,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -7514,7 +8754,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -7600,7 +8840,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;
@@ -7674,7 +8914,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Refused before the route ran: a body over 256 KiB. */
+            /** @description Refused before the route ran: a body over 1280 KiB. */
             413: {
                 headers: {
                     [name: string]: unknown;

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, notice, outbox, plans, pools, prompts
 from canopy.core.context import DISPATCH_LOCK
-from canopy.core.vocab import PoolKind, RunKind, RunStatus, StartStatus
+from canopy.core.vocab import PlanStatus, PoolKind, RunKind, RunStatus, StartStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
 from canopy.runs import policy
@@ -364,6 +364,7 @@ def _plan(
     _check_child_repo(ctx, key, names)
     if kind == policy.PLAN:
         return Plan(branch="", base=None, label=configured, repos=names, private=private or starts, starts=starts)
+    _check_planned(ctx, key, kind)
     branch = _branch(ctx, key, kind, slug, names)
     if base is not None:
         _check_base(ctx.config.trust.branch_prefix, branch, base)
@@ -519,6 +520,38 @@ def _check_plan(ctx: Context, key: str, *, slug: str | None, base: str | None) -
         )
 
 
+def _check_planned(ctx: Context, key: str, kind: str) -> None:
+    """Refuse work a plan the operator approved should govern, but does not (DESIGN §25).
+
+    A guard in code, whatever the overseer asks for: an `implement` waits on an approved plan when the ticket needs
+    one, and an `implement` or `resume` never follows a plan whose file is no longer the text the operator approved.
+    A `fix-ci` fixes a failure, not the plan's work, and carries no plan.
+
+    Raises:
+        Refusal: an `implement` for a ticket that needs a plan and has none approved (`unplanned`); an `implement` or
+            `resume` whose approved plan's file is missing, unreadable, or no longer has its approved hash
+            (`plan_changed`).
+    """
+    if kind not in (RunKind.IMPLEMENT, RunKind.RESUME):
+        return
+    ticket = db.get_ticket(ctx.conn, key)
+    plan = plans.current(ctx.conn, key)
+    approved = plan is not None and plan.status is PlanStatus.APPROVED
+    setting = ticket.plan_setting if ticket is not None else None
+    if kind == RunKind.IMPLEMENT and not approved and plans.needed(ctx.config.policy.plan, setting):
+        waiting = "its plan waits on the operator's approval" if plan is not None else "it has no plan approved"
+        raise Refusal(
+            "unplanned", f"{key} needs a plan before its implement, and {waiting}; dispatch `plan` or wait for it"
+        )
+    if plan is not None and approved and plans.approved_text(ctx.state_dir, plan) is None:
+        path = plans.path_for(ctx.state_dir, key, plan.run_id)
+        raise Refusal(
+            "plan_changed",
+            f"plan {plan.id} of {key}, {path}, is no longer the text the operator approved; they approve it again, "
+            f"or ask for a new one or skip it",
+        )
+
+
 def _check_child_repo(ctx: Context, key: str, repos: Sequence[str]) -> None:
     """Refuse any repository for a split's child other than the one the split recorded for it (DESIGN §18).
 
@@ -628,7 +661,7 @@ def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: 
     if kind in policy.TICKET_KINDS:
         # A split or a plan is the ticket's, not a unit's: its count is per ticket.
         done = policy.ticket_attempts(ctx.conn, kind).get(key, 0)
-        ticket_limit = policy.limits(ctx.config)[kind]
+        ticket_limit = policy.ticket_limit(ctx.conn, ctx.config, key, kind)
         refused = policy.blocked(key, kind, counts={kind: done}, limit=ticket_limit, cooldown_until=None)
         if refused is not None:
             raise Refusal(*refused)
@@ -758,6 +791,7 @@ def _spawn(
         "WORKER_COMMENT": prompts.worker_comment(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
         "MARK_COMMENTS": prompts.mark_comments(cfg.trust.comment_prefix, cfg.trust.comment_suffix),
         "OPEN_PR": prompts.open_pr(cfg.runtime.pr_skill),
+        "PLAN": "None.",
         "PLAN_FILE": plans.REPLACED,
         "PLAN_OUT": plans.WRITTEN,
         "MAX_PLAN_CHARS": f"{plans.MAX_CHARS:,}",
@@ -786,6 +820,11 @@ def _spawn(
             required = (*required, *prompts.REQUIRED_OPERATOR)
     if review is not None:
         required = (*required, *prompts.REQUIRED_REVIEW)
+    # `_run` writes the copy where the worker starts: its desk, or its one worktree (DESIGN §25).
+    followed = _plan_note(ctx, key, kind, (desk or first.slot_path) / plans.COPY)
+    if followed is not None:
+        values["PLAN"] = followed[1]
+        required = (*required, *prompts.REQUIRED_PLAN_COPY)
     try:
         prompt = prompts.render_worker(
             cfg, kind, values, required=required, private=plan.private, notice=notice.for_prompt(ctx.conn)
@@ -805,6 +844,7 @@ def _spawn(
         started=outbox.run_started(cfg, key=key, kind=kind, branch=branch, attempt=attempt, limit=limit),
         private=plan.private,
         check=functools.partial(_check_start_again, ctx, key, plan),
+        plan_id=followed[0] if followed is not None else None,
     )
     run = db.get_run(ctx.conn, run_id)
     if run is None:
@@ -820,6 +860,24 @@ def _spawn(
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, "runs", run_id, pid)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
+
+
+def _plan_note(ctx: Context, key: str, kind: str, copy: Path) -> tuple[int, str] | None:
+    """Return the approved plan an `implement` or a `resume` follows, and its `{{PLAN}}`, if the ticket has one.
+
+    The run records the plan's id, so `_run` writes the copy of the plan this prompt names, and no other (DESIGN §25).
+
+    Returns:
+        The plan's id, and where the run's copy will be with the plan's outline; or None for another kind, or a ticket
+        with no approved plan.
+    """
+    if kind not in (RunKind.IMPLEMENT, RunKind.RESUME):
+        return None
+    approved = plans.approved_of(ctx.conn, key)
+    text = plans.approved_text(ctx.state_dir, approved) if approved is not None else None
+    if approved is None or text is None:
+        return None
+    return approved.id, prompts.plan_note(copy, plans.outline(text))
 
 
 def _check_start_again(ctx: Context, key: str, plan: Plan) -> None:

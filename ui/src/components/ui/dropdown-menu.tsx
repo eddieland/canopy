@@ -1,6 +1,7 @@
-// shadcn/ui DropdownMenu, Radix base, ported by hand; see button.tsx. Only the parts the UI uses: no checkbox, radio,
-// or sub-menus. shadcn's `bg-accent` focus tint is `surface-raised` here (DESIGN.md), it has no shadow but its
+// shadcn/ui DropdownMenu, Radix base, ported by hand; see button.tsx. Only the parts the UI uses: no checkbox or
+// sub-menus. shadcn's `bg-accent` focus tint is `surface-raised` here (DESIGN.md), it has no shadow but its
 // hairline, and it does not animate, so it opens as fast as the links it holds.
+import { Check } from 'lucide-react'
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
 import type { ComponentProps } from 'react'
 
@@ -58,4 +59,55 @@ function DropdownMenuItem({ className, ...props }: ComponentProps<typeof Dropdow
     )
 }
 
-export { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger }
+/** Items of which one is chosen, as a style is; `value` is the chosen one's and `onValueChange` hears a new choice. */
+function DropdownMenuRadioGroup(props: ComponentProps<typeof DropdownMenuPrimitive.RadioGroup>) {
+    return <DropdownMenuPrimitive.RadioGroup data-slot="dropdown-menu-radio-group" {...props} />
+}
+
+/** One choice in a DropdownMenuRadioGroup, with a check at its left while it is the chosen one. */
+function DropdownMenuRadioItem({
+    className,
+    children,
+    ...props
+}: ComponentProps<typeof DropdownMenuPrimitive.RadioItem>) {
+    return (
+        <DropdownMenuPrimitive.RadioItem
+            data-slot="dropdown-menu-radio-item"
+            className={cn(
+                'relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden',
+                'select-none focus:bg-surface-raised data-disabled:pointer-events-none data-disabled:opacity-50',
+                '[&_svg]:pointer-events-none [&_svg]:shrink-0',
+                className,
+            )}
+            {...props}
+        >
+            <span className="pointer-events-none absolute left-2 flex size-4 items-center justify-center">
+                <DropdownMenuPrimitive.ItemIndicator>
+                    <Check className="size-4 text-accent" />
+                </DropdownMenuPrimitive.ItemIndicator>
+            </span>
+            {children}
+        </DropdownMenuPrimitive.RadioItem>
+    )
+}
+
+/** A hairline between a menu's groups. */
+function DropdownMenuSeparator({ className, ...props }: ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
+    return (
+        <DropdownMenuPrimitive.Separator
+            data-slot="dropdown-menu-separator"
+            className={cn('-mx-1 my-1 h-px bg-border', className)}
+            {...props}
+        />
+    )
+}
+
+export {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuRadioGroup,
+    DropdownMenuRadioItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+}
