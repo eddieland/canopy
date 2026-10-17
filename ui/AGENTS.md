@@ -133,7 +133,9 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
   deliberately and the PR says why; look at each new image before it merges. The Screenshots workflow never deletes an
   image: a PR that stops taking one deletes its baseline. Every screenshot applies `e2e/screenshot.css`, which
   replaces what changes with the build rather than the page (the rail's version, which names the commit, shows a
-  placeholder as long as a dev build's). `README.md` shows
+  placeholder as long as a dev build's). The guide's screenshot shows its layout, not its words, which most UI pull
+  requests edit: `guideReadsSpecimen` serves the page with `e2e/guide-specimen.md`'s placeholder Latin in place of its
+  own, so a guide edit rewrites no image. `README.md` shows
   `attention-dark`, `tickets-ABC-102-dark`, `runs-39-dark`, `reviews-4-dark`, and `ticks-2-dark`: rename them there too.
   The baselines are CI's Chromium and fonts, so regenerate them there: push the branch, then run the Screenshots
   workflow on it (`gh workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or an agent's GitHub tools). It
