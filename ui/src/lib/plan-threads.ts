@@ -107,13 +107,22 @@ export function inPlanOrder(threads: PlanThread[], starts: ReadonlyMap<string, n
     return [...found, ...lost]
 }
 
+/** What a change request says when the operator edited the plan's text themselves. */
+export const EDITED = 'I edited the plan myself before asking: keep my edits, unless a comment here asks otherwise.'
+
 /**
  * The message that asks the planner for a new plan: each open thread, in plan order, as the passage it is on, the
- * comment, and its replies, then the operator's `note` on the whole plan, if any. It is the operator's words and the
- * plan's own, so it goes to the planner as an operator message, as a reply does. Empty when there is nothing to ask:
- * no open thread and no note.
+ * comment, and its replies, then the operator's `note` on the whole plan, if any, and with `edited`, that the operator
+ * edited the plan's text. The planner keeps what it was not asked to change, but reads the plan it replaces as its
+ * own: this says which words are the operator's. It is the operator's words and the plan's own, so it goes to the
+ * planner as an operator message, as a reply does. Empty when there is nothing to ask: no open thread and no note.
  */
-export function changeRequest(threads: PlanThread[], starts: ReadonlyMap<string, number>, note = ''): string {
+export function changeRequest(
+    threads: PlanThread[],
+    starts: ReadonlyMap<string, number>,
+    note = '',
+    edited = false,
+): string {
     const open = inPlanOrder(threads, starts).filter((thread) => !thread.resolved)
     const parts: string[] = []
     if (open.length > 0) {
@@ -130,6 +139,9 @@ export function changeRequest(threads: PlanThread[], starts: ReadonlyMap<string,
     }
     if (note.trim()) {
         parts.push(open.length > 0 ? `On the whole plan:\n${note.trim()}` : note.trim())
+    }
+    if (edited && parts.length > 0) {
+        parts.push(EDITED)
     }
     return parts.join('\n\n')
 }

@@ -297,9 +297,11 @@ page-level detail.
   and the operator can resolve all of those at once. An open thread's comment and replies can be edited in place;
   nothing marks one edited.
 - **Ask for changes** sends the open threads, in the plan's order, as one operator message: each passage quoted, its
-  comment and replies, then the operator's note on the whole plan, if any. It is a reply, within `canopy reply`'s
-  bound (§22), so the re-plan works as Approving a plan, above, says. A request over the bound is not sent; the
-  operator resolves or shortens some. Resolved threads ask for nothing.
+  comment and replies, then the operator's note on the whole plan, if any, and, when the operator edited the plan's
+  text, a line saying so: the planner keeps what it was not asked to change, but reads the plan it replaces as its own,
+  and the line says which words are the operator's, to keep. It is a reply, within `canopy reply`'s bound (§22), so the
+  re-plan works as Approving a plan, above, says. A request over the bound is not sent; the operator resolves or
+  shortens some. Resolved threads ask for nothing.
 - **Editing** in the web UI edits the plan's file, as the operator's own editor would: through the web channel behind
   its token (T8), with the same care as the planner's write (operator-only, refusing a symlink or a file that is not
   regular), replaced whole so a reader never sees half a file. It saves only a `proposed` or approved plan's file, an

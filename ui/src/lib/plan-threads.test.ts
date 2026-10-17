@@ -6,6 +6,7 @@ import {
     addReply,
     addThread,
     changeRequest,
+    EDITED,
     editReply,
     editThread,
     fromServer,
@@ -90,6 +91,11 @@ describe('changeRequest', () => {
                 'Keep it small.',
             ].join('\n'),
         )
+    })
+
+    it('says the plan was edited, after what it asks, and never asks for that alone', () => {
+        expect(changeRequest([], new Map(), 'Shorter.', true)).toBe(`Shorter.\n\n${EDITED}`)
+        expect(changeRequest([], new Map(), '', true)).toBe('')
     })
 
     it('says which passages are gone, and is empty with nothing to ask', () => {

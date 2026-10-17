@@ -510,6 +510,25 @@ test('Ask for changes sends the open comments, each on its passage, with the not
     await expect(request).toContainText('(no longer in the plan)')
     await expect(request).not.toContainText('RFC 4180')
     await expect(request).toContainText('On the whole plan:\nKeep it to one PR per repository.')
+    await expect(request).not.toContainText('I edited the plan myself')
+})
+
+test('a plan edited before Ask for changes says so, so the planner keeps the edits', async ({ page }) => {
+    await select(page, 'Scheduling exports.')
+    await page.keyboard.type('Scheduling exports, for now.')
+    await page.getByRole('form', { name: 'Ask for changes' }).getByRole('button', { name: 'Ask for changes' }).click()
+    await expect(page.getByLabel('Change request')).toContainText(
+        'I edited the plan myself before asking: keep my edits, unless a comment here asks otherwise.',
+    )
+})
+
+test('a plan edited and the edit undone says nothing of it', async ({ page }) => {
+    await select(page, 'Scheduling exports.')
+    await page.keyboard.type('Scheduling exports, for now.')
+    await page.keyboard.press('ControlOrMeta+z')
+    await expect(plan(page)).toContainText('Scheduling exports.')
+    await page.getByRole('form', { name: 'Ask for changes' }).getByRole('button', { name: 'Ask for changes' }).click()
+    await expect(page.getByLabel('Change request')).not.toContainText('I edited the plan myself')
 })
 
 test('clicking a commented passage opens its thread and puts the cursor there', async ({ page }) => {
