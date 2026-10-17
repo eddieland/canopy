@@ -55,8 +55,7 @@ read a dry run's plan. The web UI shows the same (§22).
 `canopy spend` weighs what agent runs cost against what they got done, by UTC day over a window (7 days by default,
 today's so far included), so that comparing two windows tells whether spending more bought more: each kind's cost, the
 ticks by what they bought and what woke them, the tickets done and the spend per ticket done, each ticket's and PR's
-own cost, and which tools put the most into context. `--json` adds each kind's first calls by definitions snapshot,
-for a re-measurement (`docs/MEASUREMENTS.md`) to start from. The web UI's spend page shows it (§22). What it counts:
+own cost, and which tools put the most into context. The web UI's spend page shows it (§22). What it counts:
 
 - Every figure is by start: a run counts on the day it started, within the window, all read at one moment.
 - A ticket is done in the window by its newest `done` decision there (§7), if still done and not forgotten. That is

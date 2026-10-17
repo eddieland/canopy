@@ -595,7 +595,7 @@ it.
 
 How it serves, true of every page:
 
-- Under one path prefix (`serve.base_path`; `--base-path` for `python -m canopy.serve`; empty by default), so a proxy
+- Under one path prefix (`serve.base_path`, empty by default), so a proxy
   can mount it anywhere: the API at `{base}/api`, the app's hashed files at `{base}/assets/`, and `index.html` for
   every other GET or HEAD. One build serves under any prefix. The prefix comes from config, never from a request
   header.
