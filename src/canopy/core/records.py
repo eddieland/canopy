@@ -24,6 +24,10 @@ from typing import Any, ClassVar
 # Imported for real, not under TYPE_CHECKING: `typing.get_type_hints` resolves a row type's fields when it is read.
 from canopy.core.vocab import (
     ChoreRunStatus,
+    MemoryAuthor,
+    MemoryMode,
+    MemoryScope,
+    MemoryStatus,
     Phase,
     PlanSetting,
     PlanStatus,
@@ -308,6 +312,59 @@ class PlanReply(Row):
     thread_id: int
     body: str
     created_at: str
+
+
+@dataclass(frozen=True)
+class Memory(Row):
+    """A ticket's note, a worker's proposal, or the operator's lesson (DESIGN §28). `body` is None once forgotten."""
+
+    TABLE: ClassVar[str] = "memories"
+
+    id: int
+    scope: MemoryScope
+    ticket_key: str | None
+    repo: str | None
+    key: str
+    body: str | None
+    status: MemoryStatus
+    why: str | None
+    author: MemoryAuthor
+    run_id: int | None
+    tick_id: int | None
+    head: str | None
+    supersedes: int | None
+    promoted_from: int | None
+    created_at: str
+    approved_at: str | None
+    last_used_at: str | None
+    use_count: int
+    review_at: str | None
+    invalidated_at: str | None
+    wrong_at: str | None
+    wrong_run_id: int | None
+
+
+@dataclass(frozen=True)
+class RunMemory(Row):
+    """What a run's prompt was rendered under, each memory tier's mode, and what `_run` refused of it (DESIGN §28)."""
+
+    TABLE: ClassVar[str] = "run_memory"
+
+    run_id: int
+    ticket_notes: MemoryMode
+    proposals: MemoryMode
+    # A JSON list of the entries refused from the run's result, each the field, the key if valid, and why.
+    refused: str
+
+
+@dataclass(frozen=True)
+class MemoryRead(Row):
+    """A memory rendered into a run's prompt (DESIGN §28)."""
+
+    TABLE: ClassVar[str] = "memory_reads"
+
+    run_id: int
+    memory_id: int
 
 
 @dataclass(frozen=True)

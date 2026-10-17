@@ -132,6 +132,7 @@ canopy (harness, Python)
     chores.py      chore run, chore wait, chore try, _chore
     notify.py      notify test
     reviews.py     review run, review wait, review end, review show, _review
+    memory.py      memory list: agent memory's tiers and what they hold (§28)
 
   loop/            the tick (§6), which drives the features below
     tick.py        lock, migrate, reconcile, run the overseer, close the tick, publish
@@ -229,6 +230,7 @@ canopy (harness, Python)
     outbox.py      the events notification sinks receive, recorded with the fact they report (§20)
     pause.py       the loop's pause, which every channel writes: whether `canopy loop` starts another tick (§6)
     notice.py      the operator's notice to workers, which every channel writes: what every later run hears (§8)
+    memory.py      agent memory (§28): each tier's mode, in the words every surface shows it
     plans.py       each plan's file, written once and read bounded, and its row: current, superseded, approved
                    by its file's hash (§25)
     definitions.py the snapshot of agents/ and skills/ that agent runs load (§13), the private worker's rendered from

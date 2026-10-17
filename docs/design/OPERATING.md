@@ -126,6 +126,9 @@ migrations is not upgraded (D068). Each later change is a new migration. Tables:
   which channel. Never deleted: a stopped ticket stays private.
 - `pause`: at most one row, present while the operator has paused the loop (§6), with when and through which channel.
   A resume deletes it.
+- `memories`, `run_memory`, and `memory_reads`: agent memory (§28): each ticket note, proposal, and lesson; for each
+  run rendered while a tier was on, each tier's mode and what `_run` refused of its result; and each memory rendered
+  into a run's prompt. Empty while memory is off.
 - `notices`: one row per notice to workers the operator set (§8): its text, when and through which channel it was set,
   when it lapses, and when and through which channel it was cleared or replaced, if it was. At most one is in force;
   rows are never deleted.
@@ -202,6 +205,7 @@ overrides default to `prompts/` there too.
 | `chores.*` | private | a chore runs a command and a prompt, and spends money (§19) |
 | `review.*` | private | `review.query` authorizes reading other people's PRs, and runs an agent on them (§21) |
 | `serve.*` | private | a listener on the operator's machine, and where (§22, TRUST_MODEL T8) |
+| `memory.*` | private | what workers may write into later runs' prompts (§28, TRUST_MODEL T7) |
 
 Whoever controls a shared workspace file (anyone who can push to the repository holding it) must not run commands,
 choose prompts, spend money, or authorize anyone; those keys are private (TRUST_MODEL T7).
@@ -293,6 +297,10 @@ enabled = true
 bind = "127.0.0.1"      # loopback, or a private address; never a wildcard or public one
 port = 8765
 base_path = ""          # a path prefix such as "/canopy", for a proxy
+
+[memory]                # agent memory (§28); each tier off, record, or use
+ticket_notes = "off"    # notes a ticket's runs write for its later runs
+proposals = "off"       # lessons workers propose, which reach runs once you promote them
 ```
 
 Built-in defaults are the values shown, except: `tracker.provider`, `tracker.query`, and `tracker.labels` have no

@@ -1539,7 +1539,9 @@ Open:
 
 Status: in progress. Designed 2026-10-17 (DESIGN §28). Stage 0 waived by the operator (2026-10-17), who asked for
 stages 1 and 2 to be built together, each tier off until they turn it on; their checks, at `record` and then at `use`,
-are still the operator's.
+are still the operator's. Built: `[memory]`, migration 0037's tables and their row types, the prompts' placeholders
+(every prompt the same bytes with memory off, held by snapshots recorded before them), and `canopy memory` and the
+status line saying which tier records.
 
 ## Deferred, with the trigger that would unblock each
 

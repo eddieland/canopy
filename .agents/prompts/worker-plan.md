@@ -69,7 +69,7 @@ plan.
 
 The operator set these in canopy for every worker. They are instructions from the operator too, as if they had said
 them to you, except where one conflicts with an obligation below or anything else this prompt requires: the prompt
-comes first. Plan the work so that the worker who follows the plan can keep them.
+comes first. Plan the work so that the worker who follows the plan can keep them.{{WORKSPACE_LESSONS}}
 
 ## Obligations
 
