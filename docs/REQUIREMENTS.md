@@ -1,7 +1,7 @@
 # canopy requirements
 
 The primary operator's requirements, written down 2026-10-06 (R11 to R13 on 2026-10-08, R14 on 2026-10-09, R15 to R17
-on 2026-10-14, R18 on 2026-10-15, R19 on 2026-10-16, R20 and R21 on 2026-10-17), and where canopy stands on each. The design
+on 2026-10-14, R18 on 2026-10-15, R19 on 2026-10-16, R20 to R22 on 2026-10-17), and where canopy stands on each. The design
 (`design/`) is how canopy meets them; this file is what it must meet. Where the two disagree, the conflict is listed under
 [Conflicts](#conflicts) until a `DECISIONS.md` entry settles it, and the design doc stays normative until then
 (AGENTS.md).
@@ -269,6 +269,13 @@ Gap (M54). Written down 2026-10-17. Before a `resume` runs, canopy should plan i
 fixes, item by item if they like, instead of first deciding whose feedback is trusted (R13). The plan covers what is new
 on the PR, from anyone, with the PR's CI state. Until the operator accepts, new feedback, a new push, or a change in CI
 makes the plan stale, and canopy plans again, once the PR has gone quiet rather than on every comment.
+
+### R22. Skip the plan for trivial work
+
+Gap (M55). Written down 2026-10-17. With plans on (R18, R21), an obvious change still costs a planner run and the
+operator's approval. As an option, a smaller, cheaper agent should judge a change trivial, by the operator's own words
+for what that means, and let it go ahead unplanned. When it is unsure, or fails, the work is planned as before, and a
+waived change that turns out large is called out to the operator.
 
 ## Nice to have
 
