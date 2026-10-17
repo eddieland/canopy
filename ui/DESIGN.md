@@ -137,7 +137,10 @@ Rules:
   opening the run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window. The
   spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it is shown
   nowhere else, but for the lifetime total Sprig's hats are bought with (Fun, below). The footer is two lines, the
-  version, a link out to canopy's releases on GitHub, with the width to itself, then the guide and Settings; it sits at
+  version, a link out to canopy's releases on GitHub, with the width to itself, then the guide and Settings as two
+  filled pills alike, `foreground` on `surface-raised` with no border, so they stand out from the version's print; the
+  footer's tighter padding pays for their height, so it is no taller than with plain links and Sprig's slot is
+  unchanged. It sits at
   the foot of the sticky column, so at the window's foot however long the page; in a window too short for the rest, the
   part above it scrolls on its own. The room left between the blocks and the footer is Sprig's (Fun, below).
 - **Narrower than `lg`, the rail is a strip** (`useRailMode`), since half of a second monitor is under it and a whole
@@ -747,7 +750,7 @@ list, an empty state, or a skeleton by hand.
   the code and why to the design. It talks to the operator as `you`, in plain, direct sentences, as good developer
   docs do, with the odd dry aside from a staff engineer who has seen a few incidents: an aside rides on a fact, never
   stands in for one, and they stay rare enough to land. A new page is a file there and a line in its group in
-  `SOURCES`; the rail's foot, beside the version, opens the guide.
+  `SOURCES`; the rail's foot, under the version, opens the guide.
 - **A question before losing work** (`AlertDialog`, `src/components/ui/alert-dialog.tsx`): a page that holds the
   operator's work not yet saved or sent asks before it is left, in a dialog centred over the canvas at 70%, on
   `surface` with a hairline border: its question as the title (`Leave this page?`), what leaving loses under it, then

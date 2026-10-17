@@ -143,4 +143,10 @@ describe('RailFooter', () => {
         await follow(screen.getByRole('link', { name: 'Guide' }))
         expect(router.state.location.pathname).toBe('/guide')
     })
+
+    it('opens Settings', async () => {
+        const { router } = await renderRouted(<RailFooter />, { client: seeded(keys.meta, META) })
+        await follow(screen.getByRole('link', { name: 'Settings' }))
+        expect(router.state.location.pathname).toBe('/settings')
+    })
 })
