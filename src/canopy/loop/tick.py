@@ -51,6 +51,27 @@ RECENTLY_DONE_DAYS = 30
 # How a tick ended: the status it closed its row with, or, with no row, `lock_busy` when another tick held the lock and
 # `error` when `canopy loop` caught the tick raising.
 type OutcomeStatus = TickStatus | Literal["lock_busy", "error"]
+# What ended `canopy loop`'s wait before its deadline: the operator's act (a message, a ticket started or stopped, a
+# grant, a notice set or cleared), a run ending, the operator pressing the loop's tick-now key, or the operator asking
+# from the web UI.
+type Woken = Literal["message", "starts", "grant", "notice", "run", "key", "web"]
+# What started a tick the loop ran, recorded on its row (`ticks.woken_by`): the loop starting, a wait that ran its
+# length, one a gate shortened, or what ended one early.
+type WokenBy = Woken | Literal["start", "timer", "gate"]
+# How the overseer's session title says what started its tick (DESIGN §13); a tick run by hand has no `WokenBy`.
+_WOKEN_TITLES: dict[WokenBy | None, str] = {
+    None: "by hand",
+    "start": "loop start",
+    "timer": "timer",
+    "gate": "gate",
+    "message": "message",
+    "starts": "start or stop",
+    "grant": "grant",
+    "notice": "notice",
+    "run": "run ended",
+    "key": "asked",
+    "web": "asked",
+}
 
 
 @dataclass(frozen=True)
@@ -63,8 +84,10 @@ class Outcome:
     usage: agent_output.Usage | None = None  # what the overseer cost, when the runtime reported it
 
 
-def run(ctx: Context, *, dry_run: bool) -> Outcome:
+def run(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None = None) -> Outcome:
     """Run one tick: take the lock, then everything in DESIGN §6. A busy lock is an outcome, not an error.
+
+    `woken_by` is what started a tick `canopy loop` runs, for the overseer's session title; None for one run by hand.
 
     Returns:
         How the tick ended: its id, status, summary, and what the overseer cost. A busy lock is `lock_busy`, with no
@@ -72,7 +95,7 @@ def run(ctx: Context, *, dry_run: bool) -> Outcome:
     """
     try:
         with lock.hold(ctx.lock_path):
-            outcome = _locked(ctx, dry_run=dry_run)
+            outcome = _locked(ctx, dry_run=dry_run, woken_by=woken_by)
             # After the tick is closed: the list is the latest `ok` tick's, and this tick may be it.
             attention.publish(ctx, logs.for_tick(outcome.tick_id))
             return outcome
@@ -91,17 +114,41 @@ def state_block(
     Returns:
         The `## State` section, the overseer's whole message.
     """
-    block, _ = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due)
+    block, _, _ = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due)
     return block
 
 
+def session_title(tick_id: int, woken_by: WokenBy | None, *, tickets: int, running: int, open_items: int) -> str:
+    """The overseer's session title: what started tick `tick_id`, then what it faces (DESIGN §13).
+
+    `tickets` counts the open tickets its state block lists, `running` the worker runs still running, and `open_items`
+    the attention list's items.
+
+    Returns:
+        `tick <id> · <what started it> · <what it faces>`, such as `tick 412 · run ended · 2 tickets, 1 running`.
+    """
+    faces = [
+        f"{tickets} ticket{'' if tickets == 1 else 's'}" if tickets else "",
+        f"{running} running" if running else "",
+        f"{open_items} need{'s' if open_items == 1 else ''} you" if open_items else "",
+    ]
+    return f"tick {tick_id} · {_WOKEN_TITLES[woken_by]} · {', '.join(f for f in faces if f) or 'nothing open'}"
+
+
 def _render(
-    ctx: Context, *, tick_id: int, dry_run: bool, now: datetime, reconciled: reconcile.Reconciled, query_due: bool
-) -> tuple[str, duties.Duties]:
+    ctx: Context,
+    *,
+    tick_id: int,
+    dry_run: bool,
+    now: datetime,
+    reconciled: reconcile.Reconciled,
+    query_due: bool,
+    woken_by: WokenBy | None = None,
+) -> tuple[str, duties.Duties, str]:
     """Render the state block, and read what it asks of the overseer from the same journal reads (DESIGN §6 step 5).
 
     Returns:
-        The `## State` section, and the overseer's duties this tick.
+        The `## State` section, the overseer's duties this tick, and its session title, which `woken_by` starts.
     """
     running = db.running_runs(ctx.conn, "runs")
     last_runs = db.latest_runs(ctx.conn)
@@ -156,7 +203,10 @@ def _render(
         recently_done=recently_done,
         chores=chores,
     )
-    return block, owed
+    title = session_title(
+        tick_id, woken_by, tickets=len(tickets), running=len(running), open_items=len(attention.current(ctx.conn))
+    )
+    return block, owed, title
 
 
 def _plans(ctx: Context, tickets: Iterable[records.Ticket]) -> dict[str, plans.PlanState]:
@@ -173,7 +223,7 @@ def _plans(ctx: Context, tickets: Iterable[records.Ticket]) -> dict[str, plans.P
     return found
 
 
-def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
+def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome:
     applied = db.migrate(ctx.conn, resources.migrations_dir())
     abandoned = db.abandon_unfinished_ticks(ctx.conn)
     tick_id = db.start_tick(ctx.conn, dry_run=dry_run)
@@ -206,14 +256,16 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
     now = datetime.now(UTC)
     query_due = _query_due(ctx, now)
     db.set_tick_query(ctx.conn, tick_id, due=query_due)
-    block, owed = _render(ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due)
+    block, owed, title = _render(
+        ctx, tick_id=tick_id, dry_run=dry_run, now=now, reconciled=reconciled, query_due=query_due, woken_by=woken_by
+    )
     unavailable = _check_canopy(ctx, tick_id, log)
     if unavailable is not None:
         detail = f"{unavailable}; the overseer did not run. Make `canopy --version` work where the loop runs"
         db.record_decision(ctx.conn, tick_id, None, f"{attention.ACTION_PREFIX}{attention.UNAVAILABLE}", detail)
         return finish(TickStatus.CANOPY_UNAVAILABLE, unavailable)
     # The state block is the whole message: the prompt is in the overseer's definition, cached across ticks (DESIGN §6).
-    failure, usage = _run_overseer(ctx, tick_id, block, dry_run=dry_run, log=log)
+    failure, usage = _run_overseer(ctx, tick_id, block, title, dry_run=dry_run, log=log)
     if failure is not None:
         return finish(TickStatus.OVERSEER_FAILED, failure, usage)
 
@@ -310,9 +362,9 @@ def _check_canopy(ctx: Context, tick_id: int, log: logs.TickAdapter) -> str | No
 
 
 def _run_overseer(
-    ctx: Context, tick_id: int, block: str, *, dry_run: bool, log: logs.TickAdapter
+    ctx: Context, tick_id: int, block: str, title: str, *, dry_run: bool, log: logs.TickAdapter
 ) -> tuple[str | None, agent_output.Usage | None]:
-    """Run `overseer_cmd` with the state block `block` as its `{prompt}`.
+    """Run `overseer_cmd` with the state block `block` as its `{prompt}`, and `title` as its `{title}`.
 
     Output goes to `<state_dir>/ticks/<id>.log` as the overseer prints it, its stderr after it once it ends, and the
     block to `<id>.prompt` beside it first, for the transcript's first model call (DESIGN §22). What its events report
@@ -333,7 +385,7 @@ def _run_overseer(
     except definitions.DefinitionsError as e:
         log.error("overseer not started", extra={"reason": str(e), "dry_run": dry_run})  # noqa: TRY400
         return str(e), None
-    argv = render_command(ctx.config.runtime.overseer_cmd, block, definitions_dir, f"tick {tick_id}")
+    argv = render_command(ctx.config.runtime.overseer_cmd, block, definitions_dir, title)
     timeout_minutes = ctx.config.runtime.overseer_timeout_minutes
     log.info("running overseer", extra={"cmd": argv[0], "timeout_minutes": timeout_minutes})
     out_dir = ctx.state_dir / "ticks"
