@@ -136,7 +136,7 @@ relying on a permission they check.
 
 - **S26. A watched session** (M12). `canopy loop` against the real queue for a working session. Expect each tick's
   block to be legible. Ctrl-C during a tick stops the loop when that tick ends; Ctrl-C during the wait stops it at
-  once.
+  once. With a worker running, the loop then names it and waits for it to end, and a second Ctrl-C leaves it running.
 - **S27. An overnight loop** (M21). Leave `canopy loop` running overnight. Expect, in its output and log (`loop waits`
   lines), waits reaching `loop.idle_max_minutes` after a quiet evening, back at `loop.interval_minutes` within one tick
   of the first morning activity, and each run's end followed by a tick within a couple of minutes. Re-measure
