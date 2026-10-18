@@ -379,7 +379,9 @@ Motion says something arrived or changed, and gives the page some life without a
 a skeleton, and fun (Fun, above). The keyframes and utilities are in `src/index.css`.
 
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
-  new one is ready, because navigations run inside React transitions.
+  new one is ready, because navigations run inside React transitions. A transition that redraws part of a page, as a
+  transcript's search does at each key, is typed `in-page` (`inPage`), and the outlet leaves it be: cross-faded, each
+  key waited on a snapshot of the whole page.
 - A page's blocks rise in one after another (`stagger` on the page column), and so do the attention list's rows, the
   Working rows, and a conversation's bubbles. Any other list's rows arrive with their panel, as one block. A row or
   bubble the stream adds later rises in on its own. A bubble pops (`[--enter:pop]`) from the corner nearest its side.
@@ -750,6 +752,15 @@ list, an empty state, or a skeleton by hand.
   transcript's last runtime error, else its last failed or refused tool call, as its time, its name or tool, and its
   first line in mono `status-failed`, a button that shows its row as the context chart's entries do (below); the page
   holds the transcript's view (`useTranscriptView`) for both. A skeleton holds its place while the transcript is read.
+  A transcript over 100 rows draws the first 100 (`TRANSCRIPT_BUDGET`, `src/lib/transcript.ts`), in order or By call,
+  since one at the server's bounds (2,000 entries) drawn whole is 80,000 elements, and every key typed in its search
+  waited on all of them; 100 keeps the page under 10,000 elements even when a search opens every call it draws. After
+  them a fold, a row on `surface-raised/50` with a ghost `xs` button in a diff's fold's words (below), `Show 60 more
+  rows` or `Show 100 of 1,900 more rows` (`more calls` By call), draws the next 100; it only adds. A search still
+  reads every entry, drawn or not, and draws the first 100 of the rows it keeps, the fold counting the rest; a new
+  search, By call turned on or off, or another session starts again at 100. The search redraws the rows in a
+  transition behind the field (`inPage`, `src/lib/in-page.ts`), which the outlet does not cross-fade (Motion, above).
+  All open opens the rows drawn. A row shown from the chart or `ended on` is drawn first, with every row before it.
 - **A transcript's context** (`ContextChart`, `contextShape` in `src/lib/transcript.ts`) sits between the counts and
   the rows, in either view, once a model call has its tokens. Its line: a `context` label, the peak (`peak 30.2k at
   call 3`), the largest single addition as a button in the accent (the tool and its summary, or `text` and its start)
@@ -1053,9 +1064,11 @@ list, an empty state, or a skeleton by hand.
   rest, and says so in a muted line above the first file. Each run of lines it leaves out is a fold, a row on
   `surface-raised/50` with a ghost `xs` button, `Show 60 hidden lines`, or `Show 500 of 13,029 hidden lines` past a
   step, which draws the next 500; a fold only adds, as rich text's `show N more lines` does, so it is a plain button,
-  not a `Disclosure`. The panels take any card anchored at a line (`DiffPanels`, a card renderer and a `place`d list),
-  so a PR's threads sit on a run's diff as findings do on a review's (A PR's threads, below). A file's panel folds away
-  whole on `Hide diff`, a `Disclosure` at its header's end, to its header and a muted line counting what it hides
+  not a `Disclosure`. A transcript's rows fold the same way past 100, a step of 100 (`TRANSCRIPT_BUDGET`, A
+  transcript, above): its row is some thirty elements to a diff line's few. The panels take any card anchored at a
+  line (`DiffPanels`, a card renderer and a `place`d list), so a PR's threads sit on a run's diff as findings do on a
+  review's (A PR's threads, below). A file's panel folds away whole on `Hide diff`, a `Disclosure` at its header's
+  end, to its header and a muted line counting what it hides
   (`9 lines and 1 finding folded away`). Above the first file, an outline `xs` button names the file types shown
   (`All file types`, `.ts only`, `2 of 3 file types`) and opens a `DropdownMenu` of them, each a checkbox item with its
   count of files, every one ticked at first; unticking one hides its files, the menu staying open so several flip in

@@ -1,5 +1,5 @@
 import { ChevronRight, ChevronsUpDown, Rows3 } from 'lucide-react'
-import { useDeferredValue, useState } from 'react'
+import { useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type {
@@ -13,6 +13,7 @@ import type {
 import { ContextChart } from '@/components/context-chart'
 import { Copyable } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
+import { FoldButton } from '@/components/fold-button'
 import { SearchField } from '@/components/input'
 import { JsonTokens } from '@/components/json-text'
 import { MarkedText } from '@/components/marked-text'
@@ -33,10 +34,12 @@ import {
     byCall,
     callLine,
     contextShape,
+    drawnRows,
     duration,
     elapsed,
     findQueryOf,
     hitsIn,
+    moreLabel,
     outcome,
     sentTokens,
     shownOutput,
@@ -45,6 +48,7 @@ import {
     summary,
     tally,
     tokenCount,
+    TRANSCRIPT_BUDGET,
     wroteTokens,
 } from '@/lib/transcript'
 import type { ModelCall as Call } from '@/lib/transcript'
@@ -61,10 +65,11 @@ const NO_CALLS: readonly Call[] = []
  * printed them. Above them, a chart of each model call's context and what grew it, whose entries show their rows. By
  * call, the same entries are grouped by the model call they came from, each opening to what it was sent and what it
  * did. In order, a search keeps the rows with a line that holds it, its matches marked, and opens a tool call whose
- * input or output holds it. All of it is agent output, rendered as text. `running` says the session has not ended:
- * its events reach the log as the runtime prints them, so it is what the agent has done so far. Its header names the
- * session, but for `session={false}`, on a page whose identity panel names it already. A page that shows a row from
- * outside the panel passes the `view` it holds (`useTranscriptView`).
+ * input or output holds it. A long transcript draws a page of its rows, or of its calls By call, and a fold after them
+ * draws more (`TRANSCRIPT_BUDGET`). All of it is agent output, rendered as text. `running` says the session has not
+ * ended: its events reach the log as the runtime prints them, so it is what the agent has done so far. Its header
+ * names the session, but for `session={false}`, on a page whose identity panel names it already. A page that shows a
+ * row from outside the panel passes the `view` it holds (`useTranscriptView`).
  */
 export function TranscriptPanel({
     transcript,
@@ -78,16 +83,14 @@ export function TranscriptPanel({
     view?: TranscriptView
 }) {
     const own = useTranscriptView()
-    const { grouped, setGrouped, typed, setTyped, target, show } = view ?? own
-    // A long transcript is searched behind the field, so typing never waits on it.
-    const deferred = useDeferredValue(typed)
+    const { grouped, setGrouped, typed, found, setTyped, target, show } = view ?? own
     const entries = transcript?.entries ?? []
     const counts = tally(entries)
     const calls = byCall(entries)
     const shape = contextShape(entries, transcript?.prompt ?? null)
     const callView = grouped && calls.calls.length > 0
     // The search is the events' in order: By call keeps its own, whole.
-    const query = callView ? null : findQueryOf(deferred)
+    const query = callView ? null : findQueryOf(found)
     const words = query === null ? [] : [query]
     // Bumped by All open, on or off: each call remounts open or closed, then toggles on its own. It wins over the
     // search it was made under; a new search opens the calls it finds again.
@@ -105,6 +108,23 @@ export function TranscriptPanel({
         entries.map((entry, i) => ({ entry, i, hits: query === null ? null : hitsIn(entry, query) })),
     )
     const shown = numbered.filter((n) => n.hits === null || n.hits.row + n.hits.body > 0)
+    // By call's rows: the entries before the first call, then the calls.
+    const callRows = calls.before.length + calls.calls.length
+    // The rows drawn (TRANSCRIPT_BUDGET): a page of them, and each step a fold was asked for, until the transcript,
+    // its view, or its search changes; and on through a row just shown, so it is drawn before it is scrolled to. The
+    // draw-through is the showing's alone: a later search, view, or session starts again at a page.
+    const budget = JSON.stringify([transcript?.session_id ?? null, callView, query])
+    const round = target?.round ?? 0
+    const [asked, setAsked] = useState({ budget, round: 0, rows: 0, through: 0 })
+    const fresh = asked.budget !== budget || asked.round !== round
+    const shownNow = asked.round !== round && target !== null && !callView
+    const through = fresh ? (shownNow ? shown.findIndex((n) => n.i === target.i) + 1 : 0) : asked.through
+    const rows = fresh ? 0 : asked.rows
+    if (fresh) {
+        setAsked({ budget, round, rows, through })
+    }
+    const drawn = callView ? drawnRows(callRows, rows, 0) : drawnRows(shown.length, rows, through)
+    const more = () => setAsked({ budget, round, rows: drawn + TRANSCRIPT_BUDGET.step, through })
     // A search opens a call whose input or output holds it, until All open is turned on or off under it.
     const searchOpens = (hits: { body: number } | null) => hits !== null && hits.body > 0 && opened.query !== query
     // All open stays on while the calls stand open together: it was turned on, or a search opened what it found.
@@ -214,13 +234,14 @@ export function TranscriptPanel({
                                         open={opened.open}
                                     />
                                 )),
-                            ])}
+                            ]).slice(0, drawn)}
+                            {drawn < callRows && <Fold label={moreLabel(callRows - drawn, 'calls')} onShow={more} />}
                         </ol>
                     ) : shown.length === 0 ? (
                         <Empty>no line holds “{query}”</Empty>
                     ) : (
                         <ol className="divide-y" data-testid="transcript-entries">
-                            {shown.map(({ entry, i, hits }) => {
+                            {shown.slice(0, drawn).map(({ entry, i, hits }) => {
                                 const targeted = target?.i === i
                                 // A row whose place changes remounts to it, as does the one the chart shows.
                                 const open = opened.open || searchOpens(hits) || targeted
@@ -237,11 +258,23 @@ export function TranscriptPanel({
                                     />
                                 )
                             })}
+                            {drawn < shown.length && (
+                                <Fold label={moreLabel(shown.length - drawn, 'rows')} onShow={more} />
+                            )}
                         </ol>
                     )}
                 </>
             )}
         </Panel>
+    )
+}
+
+/** The rows the page does not draw yet (`TRANSCRIPT_BUDGET`), and a button to draw the next of them. */
+function Fold({ label, onShow }: { label: string; onShow: () => void }) {
+    return (
+        <li className="bg-surface-raised/50 px-1 py-0.5" data-testid="transcript-fold">
+            <FoldButton label={label} onShow={onShow} />
+        </li>
     )
 }
 

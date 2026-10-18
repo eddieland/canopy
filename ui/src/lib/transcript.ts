@@ -7,6 +7,7 @@ import type {
     TranscriptTokens,
     TranscriptTool,
 } from '@/api/types'
+import { foldWords } from '@/lib/fold'
 import { indent, tokenize } from '@/lib/json-lines'
 import { literal } from '@/lib/search'
 
@@ -427,6 +428,30 @@ export function shownOutput(entry: TranscriptTool): string {
     return entry.output ? pretty(entry.output) : 'no output'
 }
 
+/**
+ * How much of a transcript the page draws before the operator asks for more. A transcript at the server's bounds
+ * (2,000 entries, 2,000,000 characters) drawn whole is about 80,000 elements: half a second to paint, and every key
+ * typed in its search waits on all of them. So the page draws the first `page` rows, in order or By call, of those a
+ * search keeps or of all of them, and a fold after them shows `step` more a click, as a diff's do (`DIFF_BUDGET`). A
+ * row here is some thirty elements to a diff line's few, so its page is a twentieth of a diff's: about 3,000
+ * elements, and under 10,000 even when a search opens every call it draws.
+ */
+export const TRANSCRIPT_BUDGET = { page: 100, step: 100 } as const
+
+/**
+ * How many of `count` rows the page draws: a budget's page, or the rows its fold was asked for (`asked`), or more, up
+ * to `through`, so a row the page was asked to show, the `through`th, is drawn before it is scrolled to.
+ */
+export function drawnRows(count: number, asked: number, through: number): number {
+    return Math.min(count, Math.max(TRANSCRIPT_BUDGET.page, asked, through))
+}
+
+/** What a transcript's fold says, holding `hidden` rows (or calls, By call) back: `Show 100 of 1,900 more rows`. */
+export function moreLabel(hidden: number, what: 'rows' | 'calls'): string {
+    const nouns = what === 'rows' ? (['more row', 'more rows'] as const) : (['more call', 'more calls'] as const)
+    return foldWords(hidden, TRANSCRIPT_BUDGET.step, nouns)
+}
+
 /** A transcript's search as typed, its ends trimmed, or null when that leaves nothing to find. */
 export function findQueryOf(raw: string): string | null {
     const query = raw.trim()
@@ -447,26 +472,54 @@ export interface Hits {
  * model call is numbers alone, and never matches.
  */
 export function hitsIn(entry: TranscriptEntry, query: string): Hits {
+    const pattern = new RegExp(literal(query), 'iu')
+    const { row, body } = searchedOf(entry)
+    const holding = (lines: readonly string[]) => lines.filter((line) => pattern.test(line)).length
+    return { row: holding(row), body: holding(body) }
+}
+
+// An entry's lines as a search reads them: its row's, and what it opens to.
+interface Searched {
+    row: readonly string[]
+    body: readonly string[]
+}
+
+// Each entry's lines, laid out the first time a search reads it, and kept while the entry is: a transcript's entries
+// are the same objects until it is read again. Laying out a tool call's output as its opened row shows it is most of a
+// search's work, some 10ms for 2,000 entries, and the compiler keeps nothing the panel lays out beside its search from
+// one key typed to the next.
+const SEARCHED = new WeakMap<TranscriptEntry, Searched>()
+
+function searchedOf(entry: TranscriptEntry): Searched {
+    const known = SEARCHED.get(entry)
+    if (known !== undefined) {
+        return known
+    }
+    const searched = layOut(entry)
+    SEARCHED.set(entry, searched)
+    return searched
+}
+
+function layOut(entry: TranscriptEntry): Searched {
     switch (entry.kind) {
         case 'text': {
-            return { row: linesHolding([entry.text], query), body: 0 }
+            return { row: linesOf([entry.text]), body: [] }
         }
         case 'tool': {
             const row = [entry.tool, summary(entry), outcome(entry).line ?? '']
-            return { row: linesHolding(row, query), body: linesHolding([entry.input, shownOutput(entry)], query) }
+            return { row: linesOf(row), body: linesOf([entry.input, shownOutput(entry)]) }
         }
         case 'step': {
-            return { row: 0, body: 0 }
+            return { row: [], body: [] }
         }
         case 'error': {
-            return { row: linesHolding([entry.name, entry.message], query), body: 0 }
+            return { row: linesOf([entry.name, entry.message]), body: [] }
         }
     }
 }
 
-function linesHolding(texts: string[], query: string): number {
-    const pattern = new RegExp(literal(query), 'iu')
-    return texts.flatMap((text) => text.split('\n')).filter((line) => pattern.test(line)).length
+function linesOf(texts: readonly string[]): string[] {
+    return texts.flatMap((text) => text.split('\n'))
 }
 
 function oneLine(text: string): string {

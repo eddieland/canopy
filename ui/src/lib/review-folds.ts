@@ -1,4 +1,5 @@
 import type { DiffFile } from '@/api/types'
+import { foldWords, grouped } from '@/lib/fold'
 
 /**
  * How much of a review's diff the page draws before the operator asks for more. A diff at the server's bounds (500
@@ -8,9 +9,6 @@ import type { DiffFile } from '@/api/types'
  * in what it leaves out shows `step` more lines a click.
  */
 export const DIFF_BUDGET = { page: 2000, context: 10, step: 500 } as const
-
-// A count grouped by thousands (`13,029`), the same in every browser's locale.
-const GROUPED = new Intl.NumberFormat('en-US')
 
 /** A run of a file's lines, by their index across its hunks in order, from `from` up to and not including `to`. */
 export interface Span {
@@ -117,18 +115,13 @@ export function reveal(spans: readonly Span[], span: Span): Span[] {
 
 /** What a fold's button says it does: `Show 60 hidden lines`, or `Show 500 of 13,029 hidden lines` past a step. */
 export function foldLabel(fold: Span): string {
-    const hidden = fold.to - fold.from
-    const next = nextStep(fold).to - fold.from
-    if (next === hidden) {
-        return `Show ${GROUPED.format(hidden)} hidden ${hidden === 1 ? 'line' : 'lines'}`
-    }
-    return `Show ${GROUPED.format(next)} of ${GROUPED.format(hidden)} hidden lines`
+    return foldWords(fold.to - fold.from, DIFF_BUDGET.step, ['hidden line', 'hidden lines'])
 }
 
 /** What the line above a folded diff says: how many of its lines the page draws at first, and how a fold shows more. */
 export function foldedText(drawn: number, total: number): string {
     return (
-        `A long diff: the page shows ${GROUPED.format(drawn)} of its ${GROUPED.format(total)} lines at first, those ` +
+        `A long diff: the page shows ${grouped(drawn)} of its ${grouped(total)} lines at first, those ` +
         'around each finding among them. A fold shows more.'
     )
 }
@@ -138,7 +131,7 @@ export function foldedText(drawn: number, total: number): string {
  * folded away` when cards sit on it. `cards` names what they are, one and many (`['finding', 'findings']`).
  */
 export function fileFoldedText(lines: number, count: number, cards: readonly [string, string]): string {
-    const counted = `${GROUPED.format(lines)} ${lines === 1 ? 'line' : 'lines'}`
+    const counted = `${grouped(lines)} ${lines === 1 ? 'line' : 'lines'}`
     if (count === 0) {
         return `${counted} folded away`
     }

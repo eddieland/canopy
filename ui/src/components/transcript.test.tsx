@@ -2,7 +2,9 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { Transcript, TranscriptEntry, TranscriptTokens } from '@/api/types'
+import type { TranscriptView } from '@/hooks/use-transcript-view'
 import { setListOrder } from '@/lib/list-order'
+import { TRANSCRIPT_BUDGET } from '@/lib/transcript'
 
 import { TranscriptPanel } from './transcript'
 
@@ -78,6 +80,39 @@ const ENTRIES: TranscriptEntry[] = [
     },
     { kind: 'text', call: 3, at: '2026-10-08T12:01:00Z', text: 'Trying again.', reasoning: false, cut: false },
 ]
+
+const { page: PAGE, step: STEP } = TRANSCRIPT_BUDGET
+// A transcript longer than a page and a fold's step: its last 50 rows are the fold's second click's.
+const LONG = PAGE + STEP + 50
+
+// A session that only talks: `said 1` to `said N`.
+function said(n: number): TranscriptEntry[] {
+    return Array.from({ length: n }, (_, i) => ({
+        kind: 'text',
+        call: 1,
+        at: AT,
+        text: `said ${i + 1}`,
+        reasoning: false,
+        cut: false,
+    }))
+}
+
+// Model call `n`'s end.
+function step(n: number): TranscriptEntry {
+    const split = tokens({ input: 100 })
+    return { kind: 'step', call: n, at: AT, reason: 'tool-calls', split, tokens: 100, cost_usd: 0.01 }
+}
+
+// A page's view of the transcript, held outside the panel; the test sets its row last shown.
+const VIEW: TranscriptView = {
+    grouped: false,
+    setGrouped: () => {},
+    typed: '',
+    found: '',
+    setTyped: () => {},
+    target: null,
+    show: () => {},
+}
 
 function transcript(fields: Partial<Transcript> = {}): Transcript {
     return {
@@ -323,6 +358,78 @@ describe('TranscriptPanel', () => {
         fireEvent.click(screen.getByRole('button', { name: 'All open' }))
         expect(screen.getAllByRole('region', { name: /^call \d input$/u })).toHaveLength(3)
         expect(screen.getByText('canopy kept no prompt for this session')).toBeDefined()
+    })
+
+    it('draws a page of a long transcript’s rows, and a fold after them that shows more', () => {
+        render(<TranscriptPanel transcript={transcript({ entries: said(LONG) })} running={false} />)
+        expect(rows().getByText(`said ${PAGE}`)).toBeDefined()
+        expect(rows().queryByText(`said ${PAGE + 1}`)).toBeNull()
+
+        fireEvent.click(screen.getByRole('button', { name: `Show ${STEP} of ${STEP + 50} more rows` }))
+        expect(rows().getByText(`said ${PAGE + STEP}`)).toBeDefined()
+        expect(rows().queryByText(`said ${PAGE + STEP + 1}`)).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'Show 50 more rows' }))
+        expect(rows().getByText(`said ${LONG}`)).toBeDefined()
+        expect(screen.queryByRole('button', { name: /more rows/u })).toBeNull()
+    })
+
+    it('searches every entry, drawn or not, and draws what it keeps within the same budget', () => {
+        render(<TranscriptPanel transcript={transcript({ entries: said(LONG) })} running={false} />)
+        search(`said ${LONG - 1}`)
+        expect(rows().getByText(`said ${LONG - 1}`)).toBeDefined()
+
+        search('said')
+        expect(screen.getByTestId('transcript-found').textContent).toBe(`${LONG} lines, ${LONG} rows`)
+        fireEvent.click(screen.getByRole('button', { name: `Show ${STEP} of ${STEP + 50} more rows` }))
+        expect(screen.getByRole('button', { name: 'Show 50 more rows' })).toBeDefined()
+        // A new search draws a page of what it keeps again.
+        search('said 1')
+        search('said')
+        expect(screen.getByRole('button', { name: `Show ${STEP} of ${STEP + 50} more rows` })).toBeDefined()
+    })
+
+    it('opens only the rows it draws with All open', () => {
+        const entries = Array.from({ length: LONG }, (_, i) => ({ ...(ENTRIES[2] as TranscriptEntry), call: i + 1 }))
+        render(<TranscriptPanel transcript={transcript({ entries })} running={false} />)
+        fireEvent.click(allOpen())
+        const open = screen.getAllByRole('group').filter((group) => group instanceof HTMLDetailsElement && group.open)
+        expect(open).toHaveLength(PAGE)
+    })
+
+    it('draws a page of a long session’s calls by call, and a fold after them', () => {
+        const entries = said(PAGE + 50).flatMap((entry, i) => [{ ...entry, call: i + 1 }, step(i + 1)])
+        render(<TranscriptPanel transcript={transcript({ entries })} running={false} />)
+        fireEvent.click(screen.getByRole('button', { name: 'By call' }))
+        expect(screen.getByRole('button', { name: new RegExp(`^\\S+ call ${PAGE} `, 'u') })).toBeDefined()
+        expect(screen.queryByRole('button', { name: new RegExp(`^\\S+ call ${PAGE + 1} `, 'u') })).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'Show 50 more calls' }))
+        expect(screen.getByRole('button', { name: new RegExp(`^\\S+ call ${PAGE + 50} `, 'u') })).toBeDefined()
+    })
+
+    it('draws on through the row a page shows from outside it, before scrolling to it', () => {
+        const scrolled = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
+        const view = { ...VIEW, target: { i: LONG - 20, round: 1 } }
+        render(<TranscriptPanel transcript={transcript({ entries: said(LONG) })} running={false} view={view} />)
+        expect(rows().getByText(`said ${LONG - 19}`)).toBeDefined()
+        expect(rows().queryByText(`said ${LONG - 18}`)).toBeNull()
+        expect(scrolled).toHaveBeenCalledWith({ block: 'center' })
+    })
+
+    it('draws through a shown row only for its showing, so a later search keeps to the page', () => {
+        const entries = said(LONG)
+        const view = { ...VIEW, target: { i: LONG - 20, round: 1 } }
+        const { rerender } = render(
+            <TranscriptPanel transcript={transcript({ entries })} running={false} view={view} />,
+        )
+        expect(rows().getByText(`said ${LONG - 19}`)).toBeDefined()
+        rerender(
+            <TranscriptPanel transcript={transcript({ entries })} running={false} view={{ ...view, found: 'said' }} />,
+        )
+        expect(rows().queryByText(`said ${PAGE + 1}`)).toBeNull()
+        expect(screen.getByRole('button', { name: `Show ${STEP} of ${STEP + 50} more rows` })).toBeDefined()
+        // Cleared, the search starts again at a page too, not at the row shown before it.
+        rerender(<TranscriptPanel transcript={transcript({ entries })} running={false} view={view} />)
+        expect(rows().queryByText(`said ${PAGE + 1}`)).toBeNull()
     })
 
     it('shows the row the context chart names in order and unsearched, open and scrolled to', () => {

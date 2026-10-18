@@ -13,6 +13,7 @@ import { StreamContext } from '@/hooks/use-loop-down'
 import { useRailMode } from '@/hooks/use-rail-mode'
 import type { RailMode } from '@/hooks/use-rail-mode'
 import { useBuddy } from '@/lib/buddy'
+import { IN_PAGE } from '@/lib/in-page'
 import { isSearchShortcut } from '@/lib/search'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/theme/use-theme'
@@ -53,7 +54,8 @@ export const PAGE_SCROLLER = 'page'
  *
  * Navigations run inside React transitions (TanStack Router starts them), so the old page stays until the new one
  * is ready, and the <ViewTransition> around the outlet cross-fades between them. The new page's blocks rise in one
- * after another (`stagger`).
+ * after another (`stagger`). A transition that redraws part of a page (`inPage`), as a search's rows, is not
+ * cross-faded.
  */
 export function AppShell() {
     // Follows the system theme and other tabs on every page, the sign-in page included.
@@ -161,7 +163,7 @@ export function AppShell() {
                         <main className="min-w-0 p-6">
                             <LoopDownBand />
                             <NoticeBanner />
-                            <ViewTransition>
+                            <ViewTransition update={{ [IN_PAGE]: 'none', default: 'auto' }}>
                                 <div className="stagger mx-auto flex max-w-[112rem] flex-col gap-6">
                                     <Outlet />
                                 </div>
