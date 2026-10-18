@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { NOW, ROUTES, settled, signIn } from './helpers.ts'
+import { FULL_RAIL, NOW, ROUTES, settled, signIn, windowWidth } from './helpers.ts'
 
 // Half of a second monitor, where the UI often sits: the rail a strip of icons.
 const HALF = { width: 820, height: 900 }
@@ -68,6 +68,29 @@ test.describe('on half a monitor', () => {
         await expect(page).toHaveURL(/\/search\?q=web$/u)
         await expect(page.getByRole('dialog', { name: 'Rail' })).toHaveCount(0)
     })
+})
+
+test("the worktrees counters stand four across or two by two, by the pane's width, never three and one", async ({
+    page,
+}) => {
+    await page.goto('worktrees')
+    await settled(page)
+    const counters = page.getByTestId('pool-counters').locator(':scope > *')
+    await expect(counters).toHaveCount(4)
+    for (const [width, across] of [
+        [820, 2],
+        [960, 4],
+        [FULL_RAIL, 4],
+        [1440, 4],
+    ] as const) {
+        await windowWidth(page, width)
+        const boxes = await counters.evaluateAll((els) =>
+            els.map((el) => ({ left: el.getBoundingClientRect().left, top: el.getBoundingClientRect().top })),
+        )
+        // A grid's counters share their row's top and their column's left exactly: as many of each as it has.
+        expect(new Set(boxes.map((box) => Math.round(box.left))).size, `columns at ${width}px`).toBe(across)
+        expect(new Set(boxes.map((box) => Math.round(box.top))).size, `rows at ${width}px`).toBe(4 / across)
+    }
 })
 
 /** How far the window and the page scroll sideways: neither should. */
