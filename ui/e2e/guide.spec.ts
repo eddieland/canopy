@@ -39,6 +39,15 @@ test('a page links to a heading on it, to the next page and back, and to a secti
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('Settings')
 })
 
+test("a page's book opens the guide at the part about it, and the guide's own pages have none", async ({ page }) => {
+    await page.goto('runs/39')
+    await settled(page)
+    await page.getByTestId('page-guide').click()
+    await expect(page).toHaveURL(/\/guide\/runs#a-runs-page$/u)
+    await expect(page.getByRole('heading', { level: 2, name: "A run's page" })).toBeInViewport()
+    await expect(page.getByTestId('page-guide')).toHaveCount(0)
+})
+
 test('under lg, the guide pages fold into a toggle above the page', async ({ page }) => {
     await page.setViewportSize({ width: 800, height: 900 })
     await page.goto('guide/overview')

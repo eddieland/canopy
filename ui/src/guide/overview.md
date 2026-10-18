@@ -16,6 +16,9 @@ The guide comes in four parts, in the order you'll need them.
   [Chores](chores), [Memory](memory), and [Settings](settings).
 - **Reference**: the [Glossary](glossary), every word the other pages assume you know, for when one of them does.
 
+You don't have to come in through the front door. Every page has a book at its top right that opens the part of this
+guide about that page, so the answer to "what is this?" is one click from the thing you're asking about.
+
 ## The pages
 
 The nav on the left lists them, most used first. If you learn only one, learn Attention.

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link, useMatchRoute } from '@tanstack/react-router'
-import { ChevronRight, RotateCw } from 'lucide-react'
+import { Link, useMatchRoute, useRouterState } from '@tanstack/react-router'
+import { BookOpen, ChevronRight, RotateCw } from 'lucide-react'
 import { Children } from 'react'
 import type { ComponentProps, ReactNode } from 'react'
 
@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSection } from '@/hooks/use-section'
 import { blocking } from '@/lib/attention'
+import { guideFor } from '@/lib/guide'
 import { pageTitle } from '@/lib/page-title'
 import { readFailure } from '@/lib/read-failure'
 import { SECTION_LABEL, SECTION_TEXT } from '@/lib/sections'
@@ -27,6 +28,9 @@ import { cn, isBlank } from '@/lib/utils'
  * A detail page's title leads with what it is about: its `subject`, after the page's reference in a quieter data face
  * (`run:39 Debounce search input`), and its description says the subject's state. What a kind of page shows, the same
  * on every instance, is its `help`, on the title's hover.
+ *
+ * At its top right, a book opens the guide's page about the page shown, at the heading about it (`guideFor`), on every
+ * page the guide has one about.
  */
 export function PageHeader({
     title,
@@ -75,70 +79,97 @@ export function PageHeader({
     const plain = typeof title === 'string' ? title : undefined
     const named = plain === undefined || isBlank(subject) ? plain : `${plain} ${subject}`
     return (
-        <header className="flex flex-col gap-1">
+        <header className="flex items-start gap-4">
             {/* React puts it in the document's head, ahead of index.html's, so it names the tab. */}
             <title>{pageTitle(tab ?? named, attention)}</title>
-            <nav aria-label="Breadcrumb">
-                <ol className="flex flex-wrap items-center gap-1 panel-label">
-                    <li
-                        className={cn(
-                            'flex items-center gap-1',
-                            section === undefined ? 'text-accent' : SECTION_TEXT[section],
-                        )}
-                    >
-                        {section === undefined ? (
-                            root
-                        ) : linked ? (
-                            <Link
-                                to={section}
-                                activeOptions={{ exact: true }}
-                                className="underline-offset-4 hover:underline"
-                            >
-                                {SECTION_LABEL[section]}
-                            </Link>
-                        ) : (
-                            SECTION_LABEL[section]
-                        )}
-                        {end}
-                    </li>
-                    {steps.map((step, i) => (
-                        // The parents never reorder: their place is their identity.
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+                <nav aria-label="Breadcrumb">
+                    <ol className="flex flex-wrap items-center gap-1 panel-label">
                         <li
-                            key={i}
                             className={cn(
-                                'flex min-w-0 items-center gap-1 normal-case',
-                                '[&_a]:truncate [&_a]:underline-offset-4 [&_a:hover]:text-foreground',
-                                '[&_a:hover]:underline',
+                                'flex items-center gap-1',
+                                section === undefined ? 'text-accent' : SECTION_TEXT[section],
                             )}
                         >
-                            {step}
+                            {section === undefined ? (
+                                root
+                            ) : linked ? (
+                                <Link
+                                    to={section}
+                                    activeOptions={{ exact: true }}
+                                    className="underline-offset-4 hover:underline"
+                                >
+                                    {SECTION_LABEL[section]}
+                                </Link>
+                            ) : (
+                                SECTION_LABEL[section]
+                            )}
                             {end}
                         </li>
-                    ))}
-                </ol>
-            </nav>
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words" title={help}>
-                    {isBlank(subject) ? (
-                        title
-                    ) : (
-                        // The reference in its data face, quieter, so the subject reads as the page's name (DESIGN §7).
-                        <>
-                            <span className="font-mono font-normal text-muted-foreground">{title}</span> {subject}
-                        </>
-                    )}
-                </h1>
-                {chips}
+                        {steps.map((step, i) => (
+                            // The parents never reorder: their place is their identity.
+                            <li
+                                key={i}
+                                className={cn(
+                                    'flex min-w-0 items-center gap-1 normal-case',
+                                    '[&_a]:truncate [&_a]:underline-offset-4 [&_a:hover]:text-foreground',
+                                    '[&_a:hover]:underline',
+                                )}
+                            >
+                                {step}
+                                {end}
+                            </li>
+                        ))}
+                    </ol>
+                </nav>
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <h1 className="min-w-0 text-xl font-semibold tracking-tight break-words" title={help}>
+                        {isBlank(subject) ? (
+                            title
+                        ) : (
+                            // The reference in its data face, quieter, so the subject reads as the page's name
+                            // (DESIGN §7).
+                            <>
+                                <span className="font-mono font-normal text-muted-foreground">{title}</span> {subject}
+                            </>
+                        )}
+                    </h1>
+                    {chips}
+                </div>
+                {!isBlank(children) && (
+                    // Balanced, so a two-line description splits evenly rather than leaving a word or two on its last
+                    // line, and a command in it never breaks across lines.
+                    <p className="max-w-3xl text-sm text-balance text-muted-foreground [&_code]:whitespace-nowrap">
+                        {children}
+                    </p>
+                )}
+                {links}
             </div>
-            {!isBlank(children) && (
-                // Balanced, so a two-line description splits evenly rather than leaving a word or two on its last line,
-                // and a command in it never breaks across lines.
-                <p className="max-w-3xl text-sm text-balance text-muted-foreground [&_code]:whitespace-nowrap">
-                    {children}
-                </p>
-            )}
-            {links}
+            <GuideBook />
         </header>
+    )
+}
+
+/** The book at a page header's top right, opening the guide's page about the page shown; nothing on one it has none. */
+function GuideBook() {
+    const guide = guideFor(useRouterState({ select: (state) => state.matches.at(-1)?.routeId }))
+    if (guide === undefined) {
+        return null
+    }
+    const name = `The guide: ${guide.page.title}`
+    return (
+        <Button asChild variant="ghost" size="icon-sm" className="-mt-1 -mr-1.5">
+            <Link
+                to="/guide/$page"
+                params={{ page: guide.page.slug }}
+                hash={guide.hash}
+                title={name}
+                aria-label={name}
+                data-testid="page-guide"
+            >
+                <BookOpen aria-hidden />
+            </Link>
+        </Button>
     )
 }
 
