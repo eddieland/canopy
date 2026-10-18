@@ -21,6 +21,7 @@ import { parseWith } from '@/lib/rich-text'
 import type { Block, Inline, Line } from '@/lib/rich-text'
 import { SECTIONS } from '@/lib/sections'
 import type { Section } from '@/lib/sections'
+import type { FileRoutesById } from '@/routeTree.gen'
 
 /** Where a link in the guide goes: a page of it (at a heading, with `hash`), a section of the app, or the web. */
 export type GuideTarget =
@@ -100,6 +101,36 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
     },
 ]
 
+/**
+ * The guide's page about each page of the app, by its route id, as a link in the guide names it (`runs#a-runs-page`):
+ * what the book in a page's header opens. Every route is here but those with no page of their own (the root and the
+ * redirects) and the guide's, so a new route fails the type check until it names one; a test fails on a page or a
+ * heading the guide lacks.
+ */
+export const PAGE_GUIDES = {
+    '/attention': 'attention',
+    '/tickets/': 'tickets',
+    '/tickets/$key': 'tickets#a-tickets-page',
+    '/tickets/$key_/plan': 'plans',
+    '/plan-editor': 'plans',
+    '/pull-requests/': 'pull-requests',
+    '/pull-requests/pr': 'pull-requests#the-pull-requests-page',
+    '/reviews/': 'pull-requests#the-reviews-page',
+    '/reviews/$id': 'pull-requests#a-reviews-page',
+    '/runs/': 'runs',
+    '/runs/$id': 'runs#a-runs-page',
+    '/worktrees': 'runs#worktrees',
+    '/chores/': 'chores',
+    '/chores/$name': 'chores#a-chores-page',
+    '/chores/$name_/runs/$id': 'chores#a-chores-page',
+    '/ticks/': 'ticks',
+    '/ticks/$id': 'ticks#a-ticks-page',
+    '/spend': 'ticks#the-spend-page',
+    '/memory': 'memory',
+    '/search': 'overview#search',
+    '/settings': 'settings',
+} as const satisfies Record<Exclude<keyof FileRoutesById, '__root__' | '/' | '/guide/' | '/guide/$page'>, string>
+
 const SLUGS: ReadonlySet<string> = new Set(SOURCES.flatMap(({ pages }) => pages.map(([slug]) => slug)))
 const PAGE_REF = /^([a-z0-9-]*)(?:#([a-z0-9-]+))?$/u
 const WEB = /^https?:\/\/\S+$/u
@@ -122,6 +153,25 @@ export function guidePage(slug: string): GuidePage | undefined {
 export function guideNeighbours(slug: string): { previous: GuidePage | undefined; next: GuidePage | undefined } {
     const at = GUIDE.findIndex((page) => page.slug === slug)
     return { previous: at > 0 ? GUIDE[at - 1] : undefined, next: at === -1 ? undefined : GUIDE[at + 1] }
+}
+
+/** A route's page of the guide, at a heading of it or its top: where the book in that route's header goes. */
+export interface GuideFor {
+    /** The guide's page. */
+    page: GuidePage
+    /** The heading on it, or undefined for its top. */
+    hash: string | undefined
+}
+
+/**
+ * The guide's page about the route `routeId`, at the heading about it, or undefined for a route the guide has no page
+ * about: the root, the 404, and the guide itself.
+ */
+export function guideFor(routeId: keyof FileRoutesById | undefined): GuideFor | undefined {
+    const guides: Partial<Record<keyof FileRoutesById, string>> = PAGE_GUIDES
+    const [slug = '', hash] = routeId === undefined ? [] : (guides[routeId]?.split('#') ?? [])
+    const page = guidePage(slug)
+    return page === undefined ? undefined : { page, hash }
 }
 
 /**

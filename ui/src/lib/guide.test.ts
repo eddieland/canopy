@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import { anchor, GUIDE, GUIDE_GROUPS, guideNeighbours, guidePage, guideTarget, plainText } from './guide'
+import {
+    anchor,
+    GUIDE,
+    GUIDE_GROUPS,
+    guideFor,
+    guideNeighbours,
+    guidePage,
+    guideTarget,
+    PAGE_GUIDES,
+    plainText,
+} from './guide'
 import type { GuidePage, GuidePiece } from './guide'
 import type { Block, Line } from './rich-text'
 
@@ -35,6 +45,30 @@ describe('guideNeighbours', () => {
         })
         expect(walked).toEqual(order.map((_, i) => [order[i - 1], order[i + 1]]))
         expect(guideNeighbours('no-such-page')).toEqual({ previous: undefined, next: undefined })
+    })
+})
+
+describe('guideFor', () => {
+    it('opens a page of the guide for every route it names, at a heading that is there', () => {
+        const problems = Object.entries(PAGE_GUIDES).flatMap(([route, ref]) => {
+            const guide = guideFor(route as keyof typeof PAGE_GUIDES)
+            if (guide === undefined) {
+                return [`${route}: no page ${ref}`]
+            }
+            return guide.hash === undefined || anchors(guide.page.body).includes(guide.hash) ? [] : [`${route}: ${ref}`]
+        })
+        expect(problems).toEqual([])
+    })
+
+    it('opens a page at its top, or at the heading about the route', () => {
+        expect(guideFor('/runs/')).toEqual({ page: guidePage('runs'), hash: undefined })
+        expect(guideFor('/runs/$id')).toEqual({ page: guidePage('runs'), hash: 'a-runs-page' })
+    })
+
+    it('has none for the root, the guide, or no route at all', () => {
+        expect(guideFor('__root__')).toBeUndefined()
+        expect(guideFor('/guide/$page')).toBeUndefined()
+        expect(guideFor(undefined)).toBeUndefined()
     })
 })
 

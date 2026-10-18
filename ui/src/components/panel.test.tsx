@@ -1,5 +1,12 @@
-import { QueryClient } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import {
+    createMemoryHistory,
+    createRootRoute,
+    createRoute,
+    createRouter,
+    Link,
+    RouterProvider,
+} from '@tanstack/react-router'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -74,6 +81,35 @@ describe('PageHeader', () => {
     it('starts the trail with its root on a page in no section', async () => {
         await renderRouted(<PageHeader title="Search" root="Search" />, { at: '/search', client: client([]) })
         expect(trail().textContent).toBe('Search')
+    })
+
+    it('opens the guide’s page about the page shown from a book, and has none in the guide itself', async () => {
+        const runs = createRootRoute()
+        const run = createRoute({
+            getParentRoute: () => runs,
+            path: '/runs/$id',
+            component: () => <PageHeader title="run:39" />,
+        })
+        const guide = createRoute({
+            getParentRoute: () => runs,
+            path: '/guide/$page',
+            component: () => <PageHeader title="Runs and worktrees" root="The loop" />,
+        })
+        const router = createRouter({
+            routeTree: runs.addChildren([run, guide]),
+            history: createMemoryHistory({ initialEntries: ['/runs/39'] }),
+        })
+        await router.load()
+        render(
+            <QueryClientProvider client={client([])}>
+                <RouterProvider router={router} />
+            </QueryClientProvider>,
+        )
+        const book = await screen.findByRole('link', { name: 'The guide: Runs and worktrees' })
+        expect(book.getAttribute('href')).toBe('/guide/runs#a-runs-page')
+        fireEvent.click(book)
+        await screen.findByRole('heading', { level: 1, name: 'Runs and worktrees' })
+        expect(screen.queryByRole('link', { name: /^The guide/u })).toBeNull()
     })
 
     it('says what every page of its kind shows on the title’s hover, and a description only if any', async () => {
