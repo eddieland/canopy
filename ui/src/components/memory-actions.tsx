@@ -14,9 +14,10 @@ import { InlineCode } from '@/components/rich-text'
 import { RowLine } from '@/components/rows'
 import { Button } from '@/components/ui/button'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { lessonChars, MAX_LESSON_CHARS, repoChoices } from '@/lib/memory'
+import { lessonChars, MAX_LESSON_CHARS, memoryStand, repoChoices } from '@/lib/memory'
 import { memoryForgottenText, PRIVATE_WORDS, promotedText, rejectedText, renewedText } from '@/lib/outcomes'
 import { memoryRef } from '@/lib/refs'
+import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
 // The operator's verbs on agent memory from the page that shows it (DESIGN §28, ROADMAP M52): each the function its
@@ -43,8 +44,9 @@ export function MemorySaid({ said, className }: { said: string | null; className
 }
 
 /**
- * A proposal's verbs, under its row: Promote, which opens the form for the lesson's words and repository, Reject, and
- * at the line's end Forget, for a proposal whose text must go and not merely be declined. With `asWritten`, as on an
+ * A proposal's verbs, under its row: Promote, which opens the form for the lesson's words and repository, As written,
+ * which promotes it at once in its own, Reject, and at the line's end Forget, for a proposal whose text must go and
+ * not merely be declined. With `asWritten`, as on an
  * attention item, Promote makes the lesson at once, in the proposal's own words and for its repository, as `canopy
  * memory promote ID` does. With `forget` false, as there, no Forget.
  */
@@ -86,6 +88,18 @@ export function ProposalActions({
                         <ArrowUpFromLine />
                         {asWritten ? 'Promote as written' : 'Promote'}
                     </Button>
+                    {/* Most proposals are promoted in their own words: one click, as `canopy memory promote ID`. */}
+                    {!asWritten && (
+                        <Button
+                            variant="ghost"
+                            size="xs"
+                            title={`canopy memory promote ${proposal.id}: in its own words and for its repository`}
+                            onClick={() => promote.mutate()}
+                            disabled={pending}
+                        >
+                            As written
+                        </Button>
+                    )}
                     <Button
                         variant="ghost"
                         size="xs"
@@ -159,6 +173,9 @@ export function NoteActions({ note, onSaid }: Said & { note: MemoryEntry }) {
  */
 export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson: MemoryEntry; forget?: boolean }) {
     const client = useQueryClient()
+    const now = useNow()
+    // Renewing is the decision a due or wrong lesson asks for; on one in force and not due it is there, but quiet.
+    const asked = ['due', 'wrong'].includes(memoryStand(lesson, now))
     const [confirming, setConfirming] = useState(false)
     const renew = useMutation({
         mutationFn: () => renewMemory(lesson.id),
@@ -171,8 +188,9 @@ export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson
         <RowLine from="key" className="flex flex-col gap-2">
             <span className="flex flex-wrap items-center gap-2">
                 <Button
-                    variant="outline"
+                    variant={asked ? 'outline' : 'ghost'}
                     size="xs"
+                    className={cn(!asked && 'text-muted-foreground')}
                     title={`canopy memory renew ${lesson.id}`}
                     onClick={() => renew.mutate()}
                     disabled={renew.isPending}
@@ -328,14 +346,18 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
 }
 
 /**
- * The quiet Forget at the end of a memory's line of verbs, in `status-failed` text, which opens the challenge under it.
+ * The quiet Forget at the end of a memory's line of verbs, which opens the challenge under it: muted at rest, since it
+ * is the rarest verb and cannot be undone, and in `status-failed` only while its row is hovered or it has the focus.
  */
 function ForgetButton({ memory, onClick, disabled }: { memory: MemoryEntry; onClick: () => void; disabled?: boolean }) {
     return (
         <Button
             variant="ghost"
             size="xs"
-            className="ml-auto text-status-failed hover:text-status-failed"
+            className={cn(
+                'ml-auto text-muted-foreground',
+                'group-hover/copy:text-status-failed hover:text-status-failed focus-visible:text-status-failed',
+            )}
             title={`canopy memory forget ${memory.id}`}
             onClick={onClick}
             disabled={disabled}
