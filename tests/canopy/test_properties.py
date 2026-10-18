@@ -178,6 +178,8 @@ def test_every_config_key_declares_a_scope() -> None:
     assert private >= {
         "runtime.overseer_cmd",
         "runtime.worker_cmd",
+        "runtime.worker_cmd_prefix",
+        "runtime.worker_cmd_suffix",
         "notify.cmd",
         "paths.prompt_overrides",
         "paths.worker_instructions",

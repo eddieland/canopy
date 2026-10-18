@@ -7,7 +7,7 @@ write; and checks what it cannot install, because that needs root: bubblewrap, s
 on macOS, and unprivileged user namespaces. It also checks what srt itself only warns about, in a debug log nobody
 reads: a bubblewrap older than srt fully supports, and a machine srt has no seccomp filter for. It changes no config:
 the sandbox is opt-in until the operator prefixes the command templates, and `canopy init` prints the line for
-`worker_cmd`.
+`worker_cmd_prefix`.
 """
 
 from __future__ import annotations

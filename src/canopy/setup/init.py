@@ -41,19 +41,19 @@ Branch protection canopy relies on (TRUST_MODEL §7). Configure it on the reposi
   - Workers push only to branches under {prefix}; nothing else should be pushable by the loop.
 """
 
-# The wrapper canopy installs beside itself, and the prefix it gives a worker's template (DESIGN §24).
+# The wrapper canopy installs beside itself, and the prefix it gives a worker run's commands (DESIGN §24).
 SANDBOX_WRAPPER = "canopy-sandbox"
 SANDBOX_PREFIX = f"{SANDBOX_WRAPPER} worker --read {config.DEFINITIONS_DIR} --"
 SANDBOX_SUGGESTION = """\
 Optional: run workers in a sandbox, so a steered worker cannot read your secrets or change canopy's config. Run
 `canopy sandbox setup` (https://github.com/eddieland/canopy/blob/main/docs/SANDBOX.md), then set this in
-{user_file}, with the same prefix on private_worker_cmd, split_cmd, and plan_cmd:
+{user_file}, which prefixes worker_cmd, private_worker_cmd, split_cmd, and plan_cmd:
   [runtime]
   {line}
 """
 # What `canopy sandbox setup` prints instead, having just done that.
 SANDBOX_NEXT = """\
-Then set this in {user_file}, with the same prefix on private_worker_cmd, split_cmd, and plan_cmd
+Then set this in {user_file}, which prefixes worker_cmd, private_worker_cmd, split_cmd, and plan_cmd
 (https://github.com/eddieland/canopy/blob/main/docs/SANDBOX.md, step 5):
   [runtime]
   {line}
@@ -89,25 +89,25 @@ def ssh_push_urls(runner: procs.Runner, clone: Path) -> list[str]:
     return [url for url in result.stdout.split() if is_ssh_url(url)]
 
 
-def sandbox_suggestion(worker_cmd: str, user_file: Path, *, text: str = SANDBOX_SUGGESTION) -> str:
-    """Return how to sandbox workers: `worker_cmd` behind `canopy-sandbox`'s prefix, as a line of `user_file`.
+def sandbox_suggestion(runtime: config.Runtime, user_file: Path, *, text: str = SANDBOX_SUGGESTION) -> str:
+    """Return how to sandbox workers: `runtime.worker_cmd_prefix` behind `canopy-sandbox`'s, as a line of `user_file`.
 
     `text` says it, with `{user_file}` and `{line}` in it: `canopy init`'s, by default.
 
     Printed, never written: the sandbox is opt-in, and needs `canopy sandbox setup` run first (DESIGN §24).
 
     Returns:
-        The text to print, or "" when `worker_cmd` already runs through `canopy-sandbox`.
+        The text to print, or "" when `worker_cmd` already runs through `canopy-sandbox`, by its prefix or its own.
     """
-    if Path(config.command_words(worker_cmd)[0]).name == SANDBOX_WRAPPER:
+    if Path(config.command_words(runtime.worker_template(runtime.worker_cmd))[0]).name == SANDBOX_WRAPPER:
         return ""
-    value = f"{SANDBOX_PREFIX}\n      {worker_cmd}"
-    line = f"worker_cmd = '''{value}'''"
-    # A template TOML read from a basic string can hold what a literal one cannot: three quotes, a control character.
+    value = " ".join(part for part in (SANDBOX_PREFIX, runtime.worker_cmd_prefix) if part)
+    line = f"worker_cmd_prefix = '{value}'"
+    # A prefix TOML reads from a basic string can hold what a literal one cannot: a quote, a control character.
     with contextlib.suppress(tomllib.TOMLDecodeError):
-        if tomllib.loads(line)["worker_cmd"] == value:
+        if tomllib.loads(line)["worker_cmd_prefix"] == value:
             return text.format(user_file=user_file, line=line)
-    return text.format(user_file=user_file, line=f"worker_cmd = {json.dumps(value, ensure_ascii=False)}")
+    return text.format(user_file=user_file, line=f"worker_cmd_prefix = {json.dumps(value, ensure_ascii=False)}")
 
 
 @dataclass

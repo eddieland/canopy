@@ -180,10 +180,11 @@ closed" item. If they decline, note it in your summary and go to stage 8. If the
    repositories' builds fetch from, which you can read from their lockfiles and CI config. In `allowRead`, the
    toolchains they build with that exist on this machine, and their credential helper's files, such as `~/.config/gh`.
    A workspace outside `$HOME` goes in `denyRead`. Leave the placeholders as they are.
-3. Prefix every command template in `~/.config/canopy/config.toml`, never a workspace file, as SANDBOX.md step 5
-   shows: `worker_cmd`, `private_worker_cmd`, `split_cmd`, `plan_cmd`, `chore_cmd`, `review_cmd`, and `setup_cmd` if
-   one is set. Ask whether any chore sets a `cmd` of its own: each needs the `canopy-sandbox chore --` prefix there
-   too, as step 5 shows, and the check below does not catch one that lacks it. Leave `overseer_cmd` as it is.
+3. Prefix every command template in `~/.config/canopy/config.toml`, never a workspace file, as SANDBOX.md step 5 shows:
+   `worker_cmd_prefix` for `worker_cmd`, `private_worker_cmd`, `split_cmd`, and `plan_cmd`, then `chore_cmd`,
+   `review_cmd`, and `setup_cmd` if one is set. Ask whether any chore sets a `cmd` of its own: each needs the
+   `canopy-sandbox chore --` prefix there too, as step 5 shows, and the check below does not catch one that lacks it.
+   Leave `overseer_cmd` as it is.
 4. Run SANDBOX.md's check (step 6) against one repository and show the result. Every line but the last two must say
    `refused`, and the last two `allowed`. If one does not, find which template entry lets it through, fix it, and
    check again. Do not move on with a failing check unless the operator decides to leave the sandbox off.

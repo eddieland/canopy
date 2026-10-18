@@ -281,7 +281,7 @@ def test_root_and_an_install_without_the_wrapper_on_path_are_told_what_to_do(mac
 
 
 @pytest.mark.skipif(not sys.platform.startswith("linux"), reason="the command checks the machine it runs on")
-def test_the_command_prints_what_it_did_and_the_line_for_worker_cmd(
+def test_the_command_prints_what_it_did_and_the_line_for_the_prefix(
     machine: Machine, capsys: pytest.CaptureFixture[str]
 ) -> None:
     machine.install(*LINUX_COMMANDS)
@@ -291,7 +291,7 @@ def test_the_command_prints_what_it_did_and_the_line_for_worker_cmd(
     assert "wrote   " in out
     assert "installed srt" in out
     assert "To do" not in out
-    assert "worker_cmd = '''canopy-sandbox worker --read {definitions_dir} --" in out
+    assert "worker_cmd_prefix = 'canopy-sandbox worker --read {definitions_dir} --'" in out
 
     (machine.bin / "rg").unlink()
     assert main(["sandbox", "setup"]) == 1

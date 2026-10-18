@@ -275,6 +275,15 @@ def _setup_command(value: str) -> str:
     return value
 
 
+def _wrapper(value: str) -> str:
+    # `runtime.worker_cmd_prefix` or `worker_cmd_suffix`. It may name `{definitions_dir}` and `{title}`, replaced as in
+    # the template it wraps, but the prompt is that template's to place, exactly once (D023).
+    if PROMPT in value:
+        raise ValueError(f"must not contain {PROMPT}; the command it wraps places the prompt")
+    shlex.split(value)
+    return value
+
+
 def _user_path(value: Path) -> Path:
     # A relative path would resolve against the working directory, which is the workspace: its files would stand in
     # for the operator's prompts (TRUST_MODEL T7). `Path("")` is `.`, so an empty value is refused here too.
@@ -292,6 +301,7 @@ CommandTemplate = Annotated[StrictStr, AfterValidator(_command_template)]
 AgentTemplate = Annotated[StrictStr, AfterValidator(_command_template), AfterValidator(_agent_template)]
 NotifyCommand = Annotated[StrictStr, AfterValidator(_notify_command)]
 SetupCommand = Annotated[StrictStr, AfterValidator(_setup_command)]
+Wrapper = Annotated[StrictStr, AfterValidator(_wrapper)]
 UserPath = Annotated[Path, AfterValidator(_user_path)]
 
 
@@ -595,6 +605,10 @@ class Runtime(Section):
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json --thinking "
         "--title={title} {prompt}"
     )
+    # Words before and after each command a worker run starts (`worker_cmd`, `private_worker_cmd`, `split_cmd`,
+    # `plan_cmd`), such as a sandbox wrapper or a model option, so one key covers all four (DESIGN §12).
+    worker_cmd_prefix: Annotated[Wrapper, Scope.PRIVATE] = ""
+    worker_cmd_suffix: Annotated[Wrapper, Scope.PRIVATE] = ""
     review_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 20
     overseer_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 15
     worker_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 45
@@ -605,6 +619,14 @@ class Runtime(Section):
     # ends the run `crashed` (DESIGN §8). Empty means none. It runs the branch's code on this machine.
     setup_cmd: Annotated[SetupCommand, Scope.PRIVATE] = ""
     setup_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 30
+
+    def worker_template(self, template: str) -> str:
+        """Return `template`, one of a worker run's commands, between `worker_cmd_prefix` and `worker_cmd_suffix`.
+
+        Each part splits into words on its own, ending outside any quote, so the result's words are the prefix's, the
+        template's, then the suffix's.
+        """
+        return " ".join(part for part in (self.worker_cmd_prefix, template, self.worker_cmd_suffix) if part)
 
 
 class Review(Section):

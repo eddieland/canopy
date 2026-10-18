@@ -146,7 +146,7 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
     click.echo()
     click.echo(init.BRANCH_PROTECTION.format(prefix=cfg.trust.branch_prefix), nl=False)
     click.echo(setup_workspace.protection_targets(ws), nl=False)
-    if sandbox := init.sandbox_suggestion(cfg.runtime.worker_cmd, user_file):
+    if sandbox := init.sandbox_suggestion(cfg.runtime, user_file):
         click.echo()
         click.echo(sandbox, nl=False)
     # A repository can carry copies of canopy's agents that an earlier single-repository init committed there.
@@ -204,20 +204,20 @@ def cmd_sandbox_setup(click_ctx: click.Context) -> int:
         "\nFill in your hosts in each template: your model provider, your tracker's and other MCP services,\n"
         "and the registries your builds fetch from (docs/SANDBOX.md, step 3)."
     )
-    worker_cmd = _worker_cmd(runner_of(click_ctx), user_file)
-    if suggestion := init.sandbox_suggestion(worker_cmd, user_file, text=init.SANDBOX_NEXT):
+    runtime = _runtime(runner_of(click_ctx), user_file)
+    if suggestion := init.sandbox_suggestion(runtime, user_file, text=init.SANDBOX_NEXT):
         click.echo()
         click.echo(suggestion, nl=False)
     return 1 if report.todo else 0
 
 
-def _worker_cmd(runner: procs.Runner, user_file: Path) -> str:
-    """The `worker_cmd` this workspace's config sets, or the built-in one outside a workspace or if it does not load."""
+def _runtime(runner: procs.Runner, user_file: Path) -> config.Runtime:
+    """The `[runtime]` this workspace's config sets, or the built-in one outside a workspace or if it does not load."""
     root = workspace.find_root(Path.cwd())
     if root is not None:
         with contextlib.suppress(config.ConfigError):
-            return config.load(root, user_file, runner).runtime.worker_cmd
-    return config.Runtime().worker_cmd
+            return config.load(root, user_file, runner).runtime
+    return config.Runtime()
 
 
 @click.command("skill")

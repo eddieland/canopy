@@ -392,6 +392,8 @@ def _run_agent(
 ) -> tuple[procs.Result, str]:
     """Check the places the agent reads config from, make the run's desk if it has one, and run `template` in it.
 
+    `template` runs between `runtime.worker_cmd_prefix` and `worker_cmd_suffix` (DESIGN §12).
+
     A private run's places, and a plan's, must also name none of the tracker server's tools (DESIGN §22, §25).
     `desk_files` are written into the desk, by name, readable only by the operator, before the agent starts.
 
@@ -421,7 +423,7 @@ def _run_agent(
             raise _SetupError(definitions.naming_tools_message(tools.server, naming))
     title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
-    argv = render_command(template, prompt, snapshot, title)
+    argv = render_command(ctx.config.runtime.worker_template(template), prompt, snapshot, title)
     if desked:
         cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), [(s.repo, s.path) for s in slots])
         for name, text in (desk_files or {}).items():

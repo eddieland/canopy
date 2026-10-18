@@ -186,31 +186,37 @@ def test_init_warns_about_copies_of_canopys_agents(canopy_env: CanopyEnv, capsys
     assert old.exists()
 
 
-def test_init_suggests_a_sandboxed_worker_cmd_and_writes_none(
+def test_init_suggests_a_sandbox_prefix_and_writes_none(
     canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
 ) -> None:
     before = canopy_env.user_file.read_text()
-    worker_cmd = load(canopy_env.root, canopy_env.user_file).runtime.worker_cmd
     assert main(["init"]) == 0
     out = capsys.readouterr().out
 
     assert "Optional: run workers in a sandbox" in out
-    suggested = _suggested_worker_cmd(out)
-    assert shlex.split(suggested) == [*SANDBOX_PREFIX, *shlex.split(worker_cmd)]
+    suggested = _suggested_prefix(out)
+    assert shlex.split(suggested) == SANDBOX_PREFIX
     assert canopy_env.user_file.read_text() == before
 
-    # The suggestion is a template the config accepts.
-    lines = [
-        f"worker_cmd = {json.dumps(suggested)}" if x.startswith("worker_cmd =") else x for x in before.splitlines()
-    ]
-    canopy_env.write_user("\n".join(lines) + "\n")
-    assert load(canopy_env.root, canopy_env.user_file).runtime.worker_cmd == suggested
+    # The suggestion is a prefix the config accepts, and every command a worker run starts goes through the wrapper.
+    canopy_env.write_user(
+        before.replace("\n[runtime]\n", f"\n[runtime]\nworker_cmd_prefix = {json.dumps(suggested)}\n")
+    )
+    runtime = load(canopy_env.root, canopy_env.user_file).runtime
+    for template in (runtime.worker_cmd, runtime.private_worker_cmd, runtime.split_cmd, runtime.plan_cmd):
+        assert shlex.split(runtime.worker_template(template)) == [*SANDBOX_PREFIX, *shlex.split(template)]
 
 
+@pytest.mark.parametrize(
+    "sandboxed",
+    [
+        "\nworker_cmd = '/opt/bin/canopy-sandbox worker --read {definitions_dir} -- env",
+        "\nworker_cmd_prefix = '/opt/bin/canopy-sandbox worker --read {definitions_dir} --'\nworker_cmd = 'env",
+    ],
+)
 def test_init_suggests_nothing_once_workers_are_sandboxed(
-    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+    canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str], sandboxed: str
 ) -> None:
-    sandboxed = "\nworker_cmd = '/opt/bin/canopy-sandbox worker --read {definitions_dir} -- env"
     canopy_env.write_user(canopy_env.user_file.read_text().replace("\nworker_cmd = 'env", sandboxed))
     assert main(["init"]) == 0
     out = capsys.readouterr().out
@@ -219,27 +225,27 @@ def test_init_suggests_nothing_once_workers_are_sandboxed(
 
 
 @pytest.mark.parametrize(
-    "worker_cmd",
+    "prefix",
     [
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --title={title} {prompt}",
+        "",
+        "nice -n 10",
         # What a TOML literal string cannot hold, so the suggestion falls back to a basic one.
-        "agent {definitions_dir} {prompt} --sep \"'''\"",
-        'agent {definitions_dir} {prompt} --sep "\x07"',
-        "agent {definitions_dir} '{prompt}'",
+        'env SEP="\'"',
+        'env SEP="\x07"',
     ],
 )
-def test_sandbox_suggestion_reads_back_as_the_prefixed_template(worker_cmd: str, tmp_path: Path) -> None:
-    out = sandbox_suggestion(worker_cmd, tmp_path / "config.toml")
+def test_sandbox_suggestion_puts_the_wrapper_before_the_prefix(prefix: str, tmp_path: Path) -> None:
+    out = sandbox_suggestion(config.Runtime(worker_cmd_prefix=prefix), tmp_path / "config.toml")
     assert str(tmp_path / "config.toml") in out
-    assert shlex.split(_suggested_worker_cmd(out)) == [*SANDBOX_PREFIX, *shlex.split(worker_cmd)]
+    assert shlex.split(_suggested_prefix(out)) == [*SANDBOX_PREFIX, *shlex.split(prefix)]
 
 
 SANDBOX_PREFIX = ["canopy-sandbox", "worker", "--read", "{definitions_dir}", "--"]
 
 
-def _suggested_worker_cmd(out: str) -> str:
-    """Read the `worker_cmd` that init suggests, from the `[runtime]` table it prints."""
-    value: str = tomllib.loads(out[out.index("  [runtime]\n") :])["runtime"]["worker_cmd"]
+def _suggested_prefix(out: str) -> str:
+    """Read the `worker_cmd_prefix` that init suggests, from the `[runtime]` table it prints."""
+    value: str = tomllib.loads(out[out.index("  [runtime]\n") :])["runtime"]["worker_cmd_prefix"]
     return value
 
 

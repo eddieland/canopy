@@ -119,6 +119,20 @@ def test_the_session_title_names_the_ticket_and_its_title(
     assert argv[3] == f"--title={session_title}"
 
 
+def test_the_worker_runs_between_the_prefix_and_the_suffix(
+    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
+) -> None:
+    """One prefix and suffix wrap every command a worker run starts, such as a sandbox wrapper (DESIGN §12)."""
+    wrap = "worker_cmd_prefix = 'env CANOPY_WRAPPED={title}'\nworker_cmd_suffix = '--variant high'\n"
+    canopy_env.write_user(canopy_env.user_file.read_text().replace("\n[runtime]\n", f"\n[runtime]\n{wrap}"))
+    with worker_does(*commit_and_push("agent/PROJ-1-work")):
+        run = dispatch_and_run(conn, *WORK)
+    assert run["status"] == "done"
+    [w] = agent_runs(agent_log)
+    assert w["env"]["CANOPY_WRAPPED"] == "PROJ-1 implement"
+    assert w["argv"][-2:] == ["--variant", "high"]
+
+
 def test_a_run_makes_no_local_branch(
     canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
 ) -> None:
