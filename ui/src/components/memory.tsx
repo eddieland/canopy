@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-import type { MemoryDigest, MemoryEntry, MemoryTier } from '@/api/types'
+import type { MemoryDigest, MemoryEntry, MemoryProposal, MemoryTier } from '@/api/types'
 import { Age } from '@/components/age'
 import { RowLine, ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
@@ -143,5 +143,20 @@ export function MemoryDigestView({ digest, served }: { digest: MemoryDigest; ser
                 {digest.text}
             </pre>
         </section>
+    )
+}
+
+/** Where a proposal came from, under its row: how its run ended, its ticket's state, and a private run's warning. */
+export function ProposalProvenance({ proposal }: { proposal: MemoryProposal }) {
+    return (
+        <RowLine from="key" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+            {proposal.run_kind !== null && (
+                <span>
+                    its run: <Word word={proposal.run_kind} />, ended <Word word={proposal.run_status ?? 'unknown'} />
+                </span>
+            )}
+            <span>{proposal.ticket_done ? 'its ticket is done' : 'its ticket is not done yet'}</span>
+            {proposal.private && <Chip tone="blocked">private: its text may hold what you kept off the tracker</Chip>}
+        </RowLine>
     )
 }

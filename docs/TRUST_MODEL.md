@@ -550,14 +550,17 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   back as `canopy dismiss` does, send a review's findings to a worker as `canopy send` does, make and end a review
   request on a PR as `canopy start URL --review` and `canopy stop URL` do, pause and resume the loop as
   `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, ask for, skip,
-  or approve a ticket's plan as `canopy plan` does, ask the loop to read its config files again as SIGHUP does, and
+  or approve a ticket's plan as `canopy plan` does, promote a proposal or a ticket's note to a lesson, reject a
+  proposal, renew a lesson, and forget a note's, a proposal's, or a lesson's text as `canopy memory promote`,
+  `reject`, `renew`, and `forget` do (DESIGN §28), ask the loop to read its config files again as SIGHUP does, and
   ask it for a tick now as `t` at its terminal does.
   Beyond the CLI's verbs it writes two things, both the operator's own words on a plan (DESIGN §25): an edit of a
   plan's file, saved as the operator's own editor would, operator-only and never through a link, only over the
   ticket's current plan, never while a plan run for it is running, and never over a file that changed since the
   editor read it; and the operator's comments on a plan's passages, in the journal. Nothing else. It cannot write
   config: a reload reads only the operator's own files, and a `serve.*` change waits for a restart, so the listener's
-  bind and port never change under it. A forget must carry the ticket's key typed out, checked in code. A grant
+  bind and port never change under it. A forget must carry the ticket's key typed out, checked in code, and a
+  memory's forget its ref (`memory:42`). A grant
   allows one more run a request, with `canopy grant`'s guards. A try is the operator's, as the CLI's is: it waits for
   no `every_minutes`, hours, or `capacity.max_chores` (DESIGN §19), and only a run of the same chore already running
   refuses it.
@@ -566,7 +569,10 @@ Residual: anyone on the private network who obtains the secret can steer the ope
 credentials, and run each chore back to back, one at a time per chore, at the operator's cost. A notice set that way
 reaches every run's prompt, every ticket's, until it lapses, at most seven days, or the operator clears it, and it
 outlives a new secret; the banner on every page and `canopy status` show it while it is
-in force. Binding to a private address rather than loopback relies on the network for the rest. A local user on a
+in force. A lesson promoted that way reaches every worker's prompt while `memory.proposals` is `use`, as such a notice
+does, with no lapse: it outlives a new secret until the operator forgets it, and `canopy memory lessons` and the
+memory page list it, with where it came from. Binding to a private address rather than loopback relies on the network
+for the rest. A local user on a
 shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port
 on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
 read the UI, and write with it only by also reading the token, which takes a same-origin page. A signed-in session

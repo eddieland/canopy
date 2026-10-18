@@ -474,3 +474,61 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     await expect(page.getByTestId('conversation')).toContainText('Which timezone when the owner has none set?')
     await expect(page.getByTestId('plan-card')).toContainText('superseded')
 })
+
+// The mock's lessons are recording (canopy/serve/mock.py, `_memory`): a promoted lesson is served to no run.
+test("a proposal is promoted in the operator's words and another rejected from the memory page", async ({ page }) => {
+    await page.goto('memory')
+    const lessons = page.getByTestId('memory-lessons')
+    const proposal = lessons.getByTestId('memory-5')
+    await proposal.getByRole('button', { name: 'Promote', exact: true }).click()
+    const form = proposal.getByRole('form', { name: 'Promote memory:5' })
+    await expect(form.getByTestId('promote-replaces')).toHaveText(
+        'No lesson is in force under web-tests: it replaces none.',
+    )
+    await expect(form.getByRole('radio', { name: 'web' })).toHaveAttribute('aria-checked', 'true')
+    await form.getByLabel('The lesson, in your words').fill("Run web's tests once, with `npm test -- --run`.")
+    await form.getByRole('button', { name: 'Promote memory:5' }).click()
+    const said = lessons.getByRole('status')
+    await expect(said).toContainText('Proposal 5 is lesson')
+    await expect(said).toContainText('It is recorded, not served: memory.proposals is record')
+    await expect(proposal).toHaveCount(0)
+    const lesson = lessons.getByTestId('memory-rows').last().getByText("Run web's tests once")
+    await expect(lesson).toBeVisible()
+
+    await lessons.getByTestId('memory-6').getByRole('button', { name: 'Reject' }).click()
+    await expect(said).toHaveText('Proposal 6 is rejected.')
+    await expect(lessons.getByTestId('memory-6')).toHaveCount(0)
+    await expect(lessons.getByText('no proposals wait on you now')).toBeVisible()
+})
+
+test("a ticket's note is promoted from its page for one repository, and the lesson forgotten", async ({ page }) => {
+    await page.goto('tickets/ABC-102')
+    const panel = page.getByTestId('ticket-memory')
+    const note = panel.getByTestId('memory-4')
+    await note.getByRole('button', { name: 'Promote' }).click()
+    const form = note.getByRole('form', { name: 'Promote memory:4' })
+    await expect(form.getByRole('radio', { name: 'every repository' })).toHaveAttribute('aria-checked', 'true')
+    await form.getByRole('radio', { name: 'web' }).click()
+    await form.getByRole('button', { name: 'Promote memory:4' }).click()
+    const said = panel.getByRole('status')
+    await expect(said).toContainText('Note 4 is lesson')
+    await expect(said).toContainText('(export-encoding) for web')
+    // The note stays its ticket's.
+    await expect(note).toContainText('active')
+    const id = /lesson (?<id>\d+)/u.exec((await said.textContent()) ?? '')?.groups?.['id']
+    expect(id).toBeDefined()
+
+    await page.goto('memory')
+    const lesson = page.getByTestId('memory-lessons').getByTestId(`memory-${id}`)
+    await expect(lesson).toContainText('export-encoding')
+    await lesson.getByRole('button', { name: 'Forget' }).click()
+    const challenge = lesson.getByRole('form', { name: `Forget memory:${id}` })
+    const forget = challenge.getByRole('button', { name: `Forget memory:${id}` })
+    await expect(forget).toBeDisabled()
+    await challenge.getByLabel(`Type memory:${id} to confirm`).fill(`memory:${id}`)
+    await forget.click()
+    await expect(page.getByTestId('memory-lessons').getByRole('status')).toHaveText(
+        `Memory ${id} (lesson export-encoding) is forgotten: its text is deleted.`,
+    )
+    await expect(lesson).toHaveCount(0)
+})

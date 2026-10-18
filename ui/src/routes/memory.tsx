@@ -1,15 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 
 import { memoryQuery, ticketMemoryQuery } from '@/api/queries'
-import type { MemoryOverview, MemoryProposal, MemoryState, TicketNotes } from '@/api/types'
+import type { MemoryOverview, MemoryState, TicketNotes } from '@/api/types'
 import { Age } from '@/components/age'
 import { Disclosure } from '@/components/disclosure'
-import { MemoryBand, MemoryDigestView, MemoryRows } from '@/components/memory'
+import { MemoryBand, MemoryDigestView, MemoryRows, ProposalProvenance } from '@/components/memory'
+import { LessonActions, MemorySaid, ProposalActions } from '@/components/memory-actions'
 import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
-import { ListRow, RowLine } from '@/components/rows'
-import { Chip, Word } from '@/components/status'
+import { ListRow } from '@/components/rows'
 import { TicketLink } from '@/components/ticket-link'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ticketNotesUsedText } from '@/lib/memory'
@@ -20,8 +20,8 @@ import { cn } from '@/lib/utils'
  * Agent memory (DESIGN §28): each tier under a band that says what reads it, the tickets with notes in force, each
  * opening to its notes, and the lessons with the proposals waiting on the operator, each with what a run would be
  * served. Every list scrolls in its panel, so a busy workspace's thousands of notes and hundreds of lessons keep the
- * page in reach. It reads only: promoting, rejecting, renewing, and forgetting are `canopy memory`'s, in the
- * operator's shell.
+ * page in reach. A proposal is promoted or rejected, and a lesson renewed or forgotten, from its row, as `canopy
+ * memory` does, while `memory.proposals` is on (ROADMAP M52).
  */
 export const Route = createFileRoute('/memory')({
     component: MemoryPage,
@@ -32,8 +32,8 @@ function MemoryPage() {
     return (
         <>
             <PageHeader title="Memory">
-                What workers recorded of what they learn, and the lessons you promoted. Promote, reject, renew, and
-                forget them with <code className="font-mono text-xs">canopy memory</code>.
+                What workers recorded of what they learn, and the lessons you promoted. Promote and reject proposals,
+                and renew and forget lessons, here or with <code className="font-mono text-xs">canopy memory</code>.
             </PageHeader>
             {data === undefined ? (
                 <Panel>
@@ -54,7 +54,21 @@ function MemoryPage() {
 
 function Tiers({ overview, state }: { overview: MemoryOverview; state: MemoryState }) {
     const { tickets, proposals, lessons, lessons_digest: digest } = overview
-    const provenance = new Map(proposals.map((p) => [p.entry.id, <Provenance key={p.entry.id} proposal={p} />]))
+    // What a verb did, under the panel's band: its row may have left the list once it was done.
+    const [said, setSaid] = useState<string | null>(null)
+    const acting = state.lessons.mode !== 'off'
+    const belowProposals = new Map(
+        proposals.map((p) => [
+            p.entry.id,
+            <Fragment key={p.entry.id}>
+                <ProposalProvenance proposal={p} />
+                {acting && <ProposalActions proposal={p.entry} onSaid={setSaid} />}
+            </Fragment>,
+        ]),
+    )
+    const belowLessons = new Map(
+        acting ? lessons.map((m) => [m.id, <LessonActions key={m.id} lesson={m} onSaid={setSaid} />]) : [],
+    )
     return (
         <div className="stagger flex flex-col gap-6">
             <Panel data-testid="memory-notes">
@@ -81,25 +95,23 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
                     <span className="readout text-xs text-muted-foreground">{lessons.length}</span>
                 </PanelHeader>
                 <MemoryBand tier={state.lessons} name="lessons" />
+                <MemorySaid said={said} className="border-b px-3 py-2" />
                 <h3 className="px-3 pt-2 panel-label">Proposals, waiting on you: none reaches a run</h3>
                 {proposals.length === 0 ? (
                     <Empty>no proposals wait on you now</Empty>
                 ) : (
                     <PanelScroll label="Proposals">
-                        <MemoryRows entries={proposals.map((p) => p.entry)} ticket below={provenance} />
+                        <MemoryRows entries={proposals.map((p) => p.entry)} ticket below={belowProposals} />
                     </PanelScroll>
                 )}
                 <h3 className="border-t px-3 pt-2 panel-label">
                     Lessons you promoted: reported wrong first, then by review date
                 </h3>
                 {lessons.length === 0 ? (
-                    <Empty>
-                        no lessons yet: promote a proposal with{' '}
-                        <code className="font-mono text-xs">canopy memory promote ID</code>
-                    </Empty>
+                    <Empty>no lessons yet: promote a proposal above, or a ticket&apos;s note from its page</Empty>
                 ) : (
                     <PanelScroll label="Lessons you promoted">
-                        <MemoryRows entries={lessons} digest={digest} />
+                        <MemoryRows entries={lessons} digest={digest} below={belowLessons} />
                     </PanelScroll>
                 )}
                 {digest !== null && <MemoryDigestView digest={digest} served="served to every run" />}
@@ -145,19 +157,4 @@ function OpenNotes({ ticketKey }: { ticketKey: string }) {
         return <Empty>no notes in force now: its page lists the ones before</Empty>
     }
     return <MemoryRows entries={inForce} digest={data.digest} />
-}
-
-/** Where a proposal came from: how its run ended, its ticket's state, and a warning on one from a private run. */
-function Provenance({ proposal }: { proposal: MemoryProposal }) {
-    return (
-        <RowLine from="key" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-            {proposal.run_kind !== null && (
-                <span>
-                    its run: <Word word={proposal.run_kind} />, ended <Word word={proposal.run_status ?? 'unknown'} />
-                </span>
-            )}
-            <span>{proposal.ticket_done ? 'its ticket is done' : 'its ticket is not done yet'}</span>
-            {proposal.private && <Chip tone="blocked">private: its text may hold what you kept off the tracker</Chip>}
-        </RowLine>
-    )
 }

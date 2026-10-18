@@ -10,6 +10,10 @@ import type {
     Granted,
     Limit,
     LoopState,
+    MemoryForgotten,
+    MemoryPromoted,
+    MemoryRejected,
+    MemoryRenewed,
     NoticeChanged,
     PauseChanged,
     PlanChanged,
@@ -21,6 +25,7 @@ import type {
     ReviewRequestStopped,
     ReviewSent,
     Session,
+    PromoteRequest,
     Started,
     Stopped,
     TickAsked,
@@ -29,10 +34,10 @@ import type {
 /**
  * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, trying a chore, dismissing
  * a finding, sending a review's findings to a worker, granting a run past a limit, asking for a PR to be reviewed,
- * pausing the loop, asking it for a tick now, and a notice to workers. Each goes through the same function on the
- * server as `canopy start`, `stop`, `reply`, `forget`, `chore try`, `dismiss`, `send`, `grant`, `start URL --review`,
- * `stop URL`, `pause`, `resume`, and `notice`, or as `t` at the loop's terminal, with the same guards; a refusal is an
- * ApiError naming its guard.
+ * pausing the loop, asking it for a tick now, a notice to workers, and the verbs on agent memory. Each goes through
+ * the same function on the server as `canopy start`, `stop`, `reply`, `forget`, `chore try`, `dismiss`, `send`,
+ * `grant`, `start URL --review`, `stop URL`, `pause`, `resume`, `notice`, and `memory promote`, `reject`, `renew`, and
+ * `forget`, or as `t` at the loop's terminal, with the same guards; a refusal is an ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -260,6 +265,45 @@ export async function reloadConfig(): Promise<ConfigReload> {
  */
 export async function tickNow(): Promise<TickAsked> {
     return unwrap(await api.POST('/api/loop/tick'))
+}
+
+/**
+ * `canopy memory promote ID [--text TEXT] [--repo NAME]`: a pending proposal, or a ticket's note, as a lesson in the
+ * operator's name. A `text` of null keeps the source's own, and a `repo` of null a proposal's, or every one for a note.
+ */
+export async function promoteMemory(id: number, request: PromoteRequest): Promise<MemoryPromoted> {
+    return unwrap(
+        await api.POST('/api/memory/{memory_id}/promote', { params: { path: { memory_id: id } }, body: request }),
+    )
+}
+
+/** `canopy memory reject ID`: the proposal ends, and no lesson is made of it. */
+export async function rejectMemory(id: number): Promise<MemoryRejected> {
+    return unwrap(await api.POST('/api/memory/{memory_id}/reject', { params: { path: { memory_id: id } } }))
+}
+
+/** `canopy memory renew ID`: the lesson comes up for review later, and a run's report that it is wrong is cleared. */
+export async function renewMemory(id: number): Promise<MemoryRenewed> {
+    return unwrap(await api.POST('/api/memory/{memory_id}/renew', { params: { path: { memory_id: id } } }))
+}
+
+/** `canopy memory forget ID`, with the memory's ref as typed: refused `not_confirmed` unless it matches. */
+export async function forgetMemory(id: number, confirm: string): Promise<MemoryForgotten> {
+    return unwrap(
+        await api.POST('/api/memory/{memory_id}/forget', { params: { path: { memory_id: id } }, body: { confirm } }),
+    )
+}
+
+/**
+ * After a verb on memory: read every tier's memory and every ticket's notes again now, rather than wait for a tick. The
+ * attention list stays as the last tick left it: an item about memory leaves at the next tick, as an answered one does.
+ */
+export function refreshMemory(client: QueryClient): Promise<void> {
+    const ticket = keys.ticketMemory('')
+    return client.invalidateQueries({
+        predicate: ({ queryKey }) =>
+            queryKey[0] === keys.memory[0] || (queryKey[0] === ticket[0] && queryKey[2] === ticket[2]),
+    })
 }
 
 /** After a pause, a resume, or a notice set or cleared: show the state it left now, rather than wait for the stream. */

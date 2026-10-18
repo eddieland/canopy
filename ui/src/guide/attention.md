@@ -39,6 +39,11 @@ A `plan review` item leads with the plan's card, the same one the ticket's page 
 it, how many comments are open, **Approve**, and **Open plan**. Approve right there if you've already read it; open it
 if you haven't, which is the honest option more often than anyone admits. See [Plans](plans).
 
+Memory's items carry what they're about. A `memory proposal` lists the proposals from the done ticket's runs, each with
+**Promote as written** and **Reject**; a `lesson review` lists the lessons due, each with **Renew**; a `lesson wrong`
+points you to the memory page, where the lesson a run doubted heads the list. See
+[Memory](memory#keeping-lessons-honest).
+
 An item about a PR no ticket owns, such as one canopy only reviews, offers **Allow one more** when the PR is at its
 review limit. An item about nothing in particular, like a repository that's missing, has nothing to answer here: it
 leaves when you fix its cause.

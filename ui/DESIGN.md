@@ -213,7 +213,19 @@ Rules:
   only` for a run that read nothing because its tier was recording. The memory page lists the tickets with notes in
   force, a row each opening to its notes, which it reads only then; each list scrolls in its panel, and a row in force
   that its digest's cap leaves out says so in its second line, in the same words for served and recording that the
-  digest's label keeps apart. The UI reads memory and writes none.
+  digest's label keeps apart. The verbs on memory (`src/components/memory-actions.tsx`) sit in a line under a row,
+  `xs` as a row's buttons are, and only while lessons are on: an outline `Promote` and a ghost `Reject` under a
+  proposal, `Promote` under a ticket's note that keeps its text, and an outline `Renew` and a ghost `Forget` in
+  `status-failed` text at the line's end under a lesson. **Promote** opens its form in place of that line, on the
+  surface with a hairline: the lesson's words in a field, starting as the source's own, with their count against the
+  bound in the readout at its corner (in `status-failed` past it, when the button is disabled); the repositories whose
+  runs read it as a segmented control, `every repository` first for a source that names none; a muted line naming the
+  lesson in force under its key that it would replace, as plain `MemoryText`, reserved while the lessons are read; the
+  CLI's warning in `status-blocked` while the text is still a private ticket's run's own words; and `Promote memory:5`
+  with a ghost `Cancel`. **Forget** asks for the lesson's ref typed out, as a ticket's Forget asks for its key. A row
+  can leave once its verb is done, so what it did is said once, in the CLI's words, under the panel's band, and only a
+  refusal stays under the row. On the attention list, a `memory_proposal` item lists its proposals with
+  `Promote as written`, which saves at once, and `Reject`; a `lesson_review`, its lessons due with `Renew` alone.
 - **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
   (`NewerBuild`): an accent button, the action to take, saying on hover why and that unsent text is lost. It never
   reloads on its own, since the operator may be typing. The page knows its build from the `canopy-build` meta tag the
