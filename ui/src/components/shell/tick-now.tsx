@@ -12,9 +12,15 @@ import { cn } from '@/lib/utils'
  * The header's Tick now: `t` at the loop's terminal (docs/DESIGN.md §6). The loop's wait ends at once, before its
  * least gap and while it is paused, which it stays. While the latest tick runs, the button waits for it: the tick
  * starting and ending is the state the readouts beside it show, so it has no `Notice`. A failure colors the button and
- * says why on hover and to a screen reader. While the loop isn't answering, it waits, and says so on hover.
+ * says why on hover and to a screen reader. While the loop isn't answering, it waits, and says so on hover. `inline`,
+ * it is a link's words in an `Empty`'s sentence that names it as the next step, and does the same.
  */
-export function TickNow() {
+export function TickNow({
+    inline = false,
+}: {
+    /** In a sentence, as a link's words, with no icon. */
+    inline?: boolean
+}) {
     const running = useQuery(tickQuery).data?.tick?.status === 'running'
     // Nothing would hear it while the loop is down: it waits, and says why, rather than fail with the browser's words.
     const down = useLoopDown().offline
@@ -23,9 +29,13 @@ export function TickNow() {
     return (
         <>
             <Button
-                variant="ghost"
+                variant={inline ? 'link' : 'ghost'}
                 size="sm"
-                className={cn(failed !== null && 'text-status-failed')}
+                // Inline, it sits on the sentence's baseline in its type, as a link there does.
+                className={cn(
+                    inline && 'h-auto p-0 align-baseline font-normal',
+                    failed !== null && 'text-status-failed',
+                )}
                 title={
                     (down ? LOOP_DOWN_TITLE : failed) ??
                     (running
@@ -35,7 +45,7 @@ export function TickNow() {
                 disabled={down || running || ask.isPending}
                 onClick={() => ask.mutate()}
             >
-                <FastForward />
+                {!inline && <FastForward />}
                 Tick now
             </Button>
             {failed !== null && (
