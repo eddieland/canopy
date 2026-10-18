@@ -5,6 +5,9 @@ import type {
     Dismissed,
     Forgot,
     Granted,
+    MemoryForgotten,
+    MemoryPromoted,
+    MemoryRenewed,
     NoticeChanged,
     PlanChanged,
     Replied,
@@ -15,6 +18,7 @@ import type {
     Started,
     Stopped,
 } from '@/api/types'
+import { localTime } from '@/lib/time'
 
 // What each of the operator's actions did, in the words the CLI's verb prints (canopy/cli/conversation.py), and what
 // one that failed says in canopy's words rather than the browser's.
@@ -215,5 +219,56 @@ export function planText(key: string, changed: PlanChanged): string {
     return (
         `${superseded}${key} is planned first: the next tick dispatches a planner, and nothing is implemented until ` +
         'you approve its plan.'
+    )
+}
+
+/**
+ * What a promote made, as `canopy memory promote` says it (canopy/cli/memory.py): the lesson and its review date, the
+ * lesson it replaces, and whether runs read it now or it is recorded and served to none.
+ */
+export function promotedText(promoted: MemoryPromoted): string {
+    const { lesson, source } = promoted
+    const kind = source.scope === 'proposal' ? 'Proposal' : 'Note'
+    const where = lesson.repo === null ? '' : ` for ${lesson.repo}`
+    const due = lesson.review_at === null ? '' : `, due for review at ${localTime(lesson.review_at)}`
+    const head = `${kind} ${source.id} is lesson ${lesson.id} (\`${lesson.key}\`)${where}${due}.`
+    const replaces =
+        promoted.superseded === null ? '' : ` It replaces lesson ${promoted.superseded}, under the same key.`
+    const served = promoted.served
+        ? ' Every run dispatched from now on reads it.'
+        : ' It is recorded, not served: memory.proposals is record, so no run reads it until it is use.'
+    return `${head}${replaces}${promoted.private ? ` ${PRIVATE_WORDS}` : ''}${served}`
+}
+
+/**
+ * The warning `canopy memory promote` gives for a lesson whose text is still a private ticket's run's own words, said
+ * after the promote and by the form before it.
+ */
+export const PRIVATE_WORDS =
+    "Warning: its text is from a private ticket's run, and may hold what you kept off the tracker. If it is not fit " +
+    'for every worker, forget the lesson and promote it again in your own words.'
+
+/** What a reject did, as `canopy memory reject` says it. */
+export function rejectedText(id: number): string {
+    return `Proposal ${id} is rejected.`
+}
+
+/** What a renew did, as `canopy memory renew` says it: when the lesson is next due for review. */
+export function renewedText(renewed: MemoryRenewed): string {
+    return `Lesson ${renewed.id} is renewed: due for review at ${localTime(renewed.review_at)}.`
+}
+
+/**
+ * What a forget deleted, as `canopy memory forget` says it, and that the text may stay in the journal's log a while
+ * when a reader held it open.
+ */
+export function memoryForgottenText(forgot: MemoryForgotten): string {
+    const head = `Memory ${forgot.id} (${forgot.scope} \`${forgot.key}\`) is forgotten: its text is deleted.`
+    if (forgot.checkpointed) {
+        return head
+    }
+    return (
+        `${head} A reader held the journal's write-ahead log open, so the deleted text may stay in the log until ` +
+        "SQLite's next checkpoint."
     )
 }

@@ -1,14 +1,14 @@
 """Agent memory as the API sends it (DESIGN §28): each tier's mode in words, the notes, proposals, and lessons.
 
-The web UI reads memory and writes none. What a worker wrote is sent as the journal holds it, and the UI shows it as
-plain text with every hidden character named, never as Markdown or a link.
+What a worker wrote is sent as the journal holds it, and the UI shows it as plain text with every hidden character
+named, never as Markdown or a link.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, cast
 
-from canopy.core import db, memory
+from canopy.core import db, memory, memory_manage
 from canopy.core.vocab import MemoryMode
 from canopy.serve.schema import (
     MemoryDigest,
@@ -67,8 +67,9 @@ def overview(ctx: Context) -> MemoryOverview:
         state=state(settings),
         tickets=[_ticket_notes(t) for t in memory.ticket_notes(ctx.conn)],
         proposals=[_proposal(ctx, p) for p in memory.pending_proposals(ctx.conn)],
-        lessons=[entry(m) for m in sorted(memory.active_lessons(ctx.conn), key=_review_order)],
+        lessons=[entry(ctx, m) for m in sorted(memory.active_lessons(ctx.conn), key=_review_order)],
         lessons_digest=digest,
+        repos=[r.name for r in ctx.ws.repos],
     )
 
 
@@ -86,7 +87,7 @@ def ticket_memory(ctx: Context, key: str) -> TicketMemory | None:
         digest = _digest(memory.ticket_digest(ctx.conn, key), served=mode is MemoryMode.USE)
     return TicketMemory(
         state=state(ctx.config.memory),
-        notes=[entry(m) for m in memory.notes(ctx.conn, key, every=True)],
+        notes=[entry(ctx, m) for m in memory.notes(ctx.conn, key, every=True)],
         digest=digest,
     )
 
@@ -104,17 +105,17 @@ def run_memory(ctx: Context, run_id: int) -> RunMemory | None:
         return RunMemory(rendered=None, wrote=[], read=[], refused=[])
     return RunMemory(
         rendered=RunMemoryModes(ticket_notes=_mode(rendered.ticket_notes), lessons=_mode(rendered.proposals)),
-        wrote=[entry(m) for m in memory.written_by(ctx.conn, run_id)],
-        read=[entry(m) for m in memory.read_by(ctx.conn, run_id)],
+        wrote=[entry(ctx, m) for m in memory.written_by(ctx.conn, run_id)],
+        read=[entry(ctx, m) for m in memory.read_by(ctx.conn, run_id)],
         refused=[MemoryRefusal(field=r.field, key=r.key, why=r.why) for r in memory.refused_of(rendered)],
     )
 
 
-def entry(m: records.Memory) -> MemoryEntry:
+def entry(ctx: Context, m: records.Memory) -> MemoryEntry:
     """A memory as the API sends it.
 
     Returns:
-        Its fields, its times as datetimes.
+        Its fields, its times as datetimes, and whether a private ticket's run wrote it.
     """
     return MemoryEntry(
         id=m.id,
@@ -134,6 +135,7 @@ def entry(m: records.Memory) -> MemoryEntry:
         wrong_at=_time(m.wrong_at),
         wrong_run_id=m.wrong_run_id,
         promoted_from=m.promoted_from,
+        private=memory_manage.from_private_run(ctx.conn, m),
     )
 
 
@@ -165,7 +167,7 @@ def _proposal(ctx: Context, p: records.Memory) -> MemoryProposal:
     run = db.get_run(ctx.conn, p.run_id) if p.run_id is not None else None
     ticket = db.get_ticket(ctx.conn, p.ticket_key) if p.ticket_key is not None else None
     return MemoryProposal(
-        entry=entry(p),
+        entry=entry(ctx, p),
         run_kind=str(run["kind"]) if run is not None else None,
         run_status=str(run["status"]) if run is not None else None,
         private=bool(run["private"]) if run is not None else False,

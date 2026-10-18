@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import { leftOutText, memorySegments, readNothingText, ticketNotesUsedText, usedText, visibleText } from './memory'
+import {
+    dueForReview,
+    leftOutText,
+    lessonChars,
+    memorySegments,
+    readNothingText,
+    repoChoices,
+    ticketNotesUsedText,
+    usedText,
+    visibleText,
+} from './memory'
 
 describe('visibleText', () => {
     it('names every character that hides text by its code point, as canopy memory list does', () => {
@@ -54,5 +64,36 @@ describe('leftOutText', () => {
     it('never says a recording tier’s left-out memory is left out of a prompt that is served', () => {
         expect(leftOutText(true)).toBe('left out of the prompt, past its cap')
         expect(leftOutText(false)).toBe('would be left out at use, past its cap')
+    })
+})
+
+describe('lessonChars', () => {
+    it('counts code points past the spaces at either end, as the server bounds a lesson', () => {
+        expect(lessonChars('  two words  ')).toBe(9)
+        expect(lessonChars('a\u{1F600}b')).toBe(3)
+        expect(lessonChars('   ')).toBe(0)
+    })
+})
+
+describe('repoChoices', () => {
+    it('offers every repository only for a source that names none, and a proposal its own first', () => {
+        expect(repoChoices({ repo: null }, ['api', 'web'])).toEqual([null, 'api', 'web'])
+        expect(repoChoices({ repo: 'web' }, ['api', 'web'])).toEqual(['web', 'api'])
+        // Kept though the workspace map dropped it: promoting as written leaves the proposal's repository as it is.
+        expect(repoChoices({ repo: 'gone' }, ['api'])).toEqual(['gone', 'api'])
+    })
+})
+
+describe('dueForReview', () => {
+    it('keeps the lessons whose review date has come, the longest overdue first', () => {
+        const now = Date.parse('2026-10-08T12:00:00Z')
+        const lessons = [
+            { id: 1, review_at: '2026-10-08T11:00:00Z' },
+            { id: 2, review_at: '2026-10-09T00:00:00Z' },
+            { id: 3, review_at: '2026-09-01T00:00:00Z' },
+            { id: 4, review_at: null },
+            { id: 5, review_at: '2026-10-08T12:00:00Z' },
+        ]
+        expect(dueForReview(lessons, now).map((m) => m.id)).toEqual([3, 1, 5])
     })
 })

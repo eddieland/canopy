@@ -3,8 +3,8 @@
 Each deletes bodies, never rows: a forgotten memory is a tombstone that keeps who wrote it and when. The delete runs
 with `PRAGMA secure_delete` on, the search index is merged after it so it keeps no word of the text, and the
 write-ahead log is checkpointed, so a purged poison or a leaked secret does not survive in free pages or the log. Only
-the operator's shell runs these: they refuse inside canopy's ticks and runs. A lesson is made only here, from a
-proposal or a ticket's note the operator promotes: no agent writes one.
+the operator runs these, from `canopy memory` or the web UI: they refuse inside canopy's ticks and runs. A lesson is
+made only here, from a proposal or a ticket's note the operator promotes: no agent writes one.
 """
 
 from __future__ import annotations
@@ -19,6 +19,8 @@ from canopy.core.memory_text import TextRefused, check_text
 from canopy.core.vocab import MemoryAuthor, MemoryMode, MemoryScope, MemoryStatus
 
 if TYPE_CHECKING:
+    from collections.abc import Sequence
+
     from canopy.core.config import Config
 
 
@@ -102,23 +104,35 @@ def _scrub(conn: sqlite3.Connection, where: str, params: tuple[object, ...], *, 
 
 @dataclass(frozen=True)
 class Promoted:
-    """A lesson the operator promoted: what it came from, the lesson it superseded, and whether runs read it now."""
+    """A lesson the operator promoted: what it came from, the lesson it superseded, and whether runs read it now.
+
+    `private` is whether its text is still a private ticket's run's own words, which may hold what the operator kept
+    off the tracker: the source was a private run's and no `text` replaced it.
+    """
 
     lesson: records.Memory
     source: records.Memory
     superseded: int | None
     served: bool
+    private: bool
 
 
 def promote(
-    conn: sqlite3.Connection, config: Config, memory_id: int, *, text: str | None = None, repo: str | None = None
+    conn: sqlite3.Connection,
+    config: Config,
+    memory_id: int,
+    *,
+    text: str | None = None,
+    repo: str | None = None,
+    repos: Sequence[str] = (),
 ) -> Promoted:
     """Copy a pending proposal, or a ticket's note, into a new lesson the operator authored.
 
     The lesson takes `text` in place of the source's own if given, and `repo` in place of a proposal's repository; a
     note names none, so its lesson is for every repository unless `repo` is given. It keeps the source's key,
     supersedes an active lesson under the key, and is due for review `REVIEW_DAYS` on. A proposal is `superseded`; a
-    note stays as it was, its ticket's. At `record` the lesson is recorded and served to no run.
+    note stays as it was, its ticket's. At `record` the lesson is recorded and served to no run. `repos` are the
+    workspace's repositories, which `repo` must be one of.
 
     Returns:
         The lesson, the memory it came from, the lesson it superseded, and whether runs are served lessons now.
@@ -126,10 +140,14 @@ def promote(
     Raises:
         Refused: (`inside_run`) inside one of canopy's ticks or runs; (`off`) proposals are off; (`unknown`) no
             proposal or note has the id; (`not_pending`) a proposal is not waiting on the operator; (`forgotten`) a
-            note's text is gone; (`bad_text`) the text is outside the bounds.
+            note's text is gone; (`unknown_repo`) `repo` is not in `repos`; (`bad_text`) the text is outside the
+            bounds.
         RuntimeError: The lesson it wrote cannot be read back.
     """
     source = _promotable(conn, config, memory_id)
+    if repo is not None and repo not in repos:
+        names = ", ".join(repos) or "none yet"
+        raise conversation.Refused("unknown_repo", f"{repo!r} is not a repository in this workspace ({names})")
     try:
         body = check_text(text if text is not None else source.body, memory.MAX_PROPOSAL_CHARS)
     except TextRefused as e:
@@ -173,7 +191,18 @@ def promote(
         raise RuntimeError(f"lesson {lesson_id} vanished")
     served = config.memory.proposals is MemoryMode.USE
     superseded = old.id if old is not None else None
-    return Promoted(lesson=lesson, source=source, superseded=superseded, served=served)
+    private = text is None and from_private_run(conn, source)
+    return Promoted(lesson=lesson, source=source, superseded=superseded, served=served, private=private)
+
+
+def from_private_run(conn: sqlite3.Connection, found: records.Memory) -> bool:
+    """Whether a run on a private ticket wrote `found`, so its text may hold what the operator kept off the tracker.
+
+    Returns:
+        True for a note or a proposal a private run wrote; False for a lesson, which no run writes.
+    """
+    run = db.get_run(conn, found.run_id) if found.run_id is not None else None
+    return run is not None and bool(run["private"])
 
 
 def reject(conn: sqlite3.Connection, config: Config, proposal_id: int) -> records.Memory:

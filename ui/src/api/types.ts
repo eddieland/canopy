@@ -201,3 +201,13 @@ export type MemoryOverview = Schemas['MemoryOverview']
 export type TicketMemory = Schemas['TicketMemory']
 /** What a run wrote and read of memory, and what it had refused. */
 export type RunMemory = Schemas['RunMemory']
+/** A promote, as `canopy memory promote ID [--text TEXT] [--repo NAME]` takes it. */
+export type PromoteRequest = Schemas['PromoteRequest']
+/** What a promote made: the lesson, what it came from, the lesson it superseded, and whether runs read it now. */
+export type MemoryPromoted = Schemas['MemoryPromoted']
+/** A proposal the operator rejected. */
+export type MemoryRejected = Schemas['MemoryRejected']
+/** A lesson the operator renewed, and when it is next due for review. */
+export type MemoryRenewed = Schemas['MemoryRenewed']
+/** A memory whose text a forget deleted, its row left. */
+export type MemoryForgotten = Schemas['MemoryForgotten']

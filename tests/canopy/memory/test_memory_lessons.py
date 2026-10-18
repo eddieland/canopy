@@ -10,13 +10,12 @@ from typing import TYPE_CHECKING
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import db, memory, prompts, records
+from canopy.core import db, memory, memory_manage, prompts, records
 from canopy.core.config import load
 from canopy.core.vocab import MemoryScope, MemoryStatus, RunKind
 from canopy.infra import logs, resources
 from canopy.loop import attention
 from canopy.memory import attention as memory_attention
-from canopy.memory import manage
 from canopy.memory import reconcile as memory_reconcile
 from tests.canopy.helpers import (
     BRANCH,
@@ -103,7 +102,7 @@ def promoted(
 ) -> records.Memory:
     """Promote a fresh proposal of `text`, from a run of `ticket`, as the operator does."""
     cfg = load(canopy_env.root, canopy_env.user_file)
-    return manage.promote(conn, cfg, proposed(conn, text, key=key, repo=repo, ticket=ticket)).lesson
+    return memory_manage.promote(conn, cfg, proposed(conn, text, key=key, repo=repo, ticket=ticket)).lesson
 
 
 @pytest.mark.usefixtures("git_pool")
@@ -295,7 +294,7 @@ def test_promote_reject_and_renew_refuse_inside_a_run(
 def test_promote_refuses_while_proposals_are_off(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     proposal = proposed(conn)
     with pytest.raises(Exception, match=r"memory\.proposals is off"):
-        manage.promote(conn, load(canopy_env.root, canopy_env.user_file), proposal)
+        memory_manage.promote(conn, load(canopy_env.root, canopy_env.user_file), proposal)
 
 
 def test_promote_takes_the_operators_words_and_supersedes_the_lesson_under_its_key(
@@ -304,13 +303,13 @@ def test_promote_takes_the_operators_words_and_supersedes_the_lesson_under_its_k
     with_memory(canopy_env, proposals="use")
     first = promoted(conn, canopy_env)
     cfg = load(canopy_env.root, canopy_env.user_file)
-    again = manage.promote(conn, cfg, proposed(conn, "Different words."), text="  Use `make test-api`. ")
+    again = memory_manage.promote(conn, cfg, proposed(conn, "Different words."), text="  Use `make test-api`. ")
     assert again.superseded == first.id
     assert (again.lesson.body, again.served) == ("Use `make test-api`.", True)
     old = present(memory.get(conn, first.id))
     assert (old.status, old.why) == (MemoryStatus.SUPERSEDED, f"superseded by lesson {again.lesson.id}")
     with pytest.raises(Exception, match="hides text"):
-        manage.promote(conn, cfg, proposed(conn, "Third."), text="bad\u202etext")
+        memory_manage.promote(conn, cfg, proposed(conn, "Third."), text="bad\u202etext")
 
 
 def test_promote_makes_a_note_a_lesson_and_leaves_the_note_its_tickets(
@@ -336,7 +335,9 @@ def test_promote_makes_a_note_a_lesson_and_leaves_the_note_its_tickets(
     assert main(["memory", "lessons"]) == 0
     assert f"from note {note} of {KEY};" in capsys.readouterr().out
     # Without --repo, a note's lesson is every repository's.
-    again = manage.promote(conn, load(canopy_env.root, canopy_env.user_file), noted(conn, "Run `make lint` twice."))
+    again = memory_manage.promote(
+        conn, load(canopy_env.root, canopy_env.user_file), noted(conn, "Run `make lint` twice.")
+    )
     assert (again.lesson.repo, again.superseded) == (None, lesson.id)
 
 
@@ -347,14 +348,14 @@ def test_promote_refuses_a_lesson_a_forgotten_note_and_a_repository_not_in_the_m
     cfg = load(canopy_env.root, canopy_env.user_file)
     lesson = promoted(conn, canopy_env)
     with pytest.raises(Exception, match=f"no proposal or note has id {lesson.id}"):
-        manage.promote(conn, cfg, lesson.id)
+        memory_manage.promote(conn, cfg, lesson.id)
     note = noted(conn, "Run `make lint` twice.")
     capsys.readouterr()
     assert main(["memory", "promote", str(note), "--repo", "nowhere"]) == 1
     assert "'nowhere' is not a repository in this workspace (repo)" in capsys.readouterr().err
-    manage.forget(conn, note)
+    memory_manage.forget(conn, note)
     with pytest.raises(Exception, match=f"note {note}'s text is gone: forgotten"):
-        manage.promote(conn, cfg, note)
+        memory_manage.promote(conn, cfg, note)
     assert [m.scope for m in memories(conn)].count(MemoryScope.LESSON) == 1
 
 

@@ -1259,7 +1259,10 @@ class MemoryEntry(_Model):
     wrong_run_id: int | None
     """The run that reported it."""
     promoted_from: int | None
-    """A lesson's proposal."""
+    """A lesson's proposal, or the note it was promoted from."""
+    private: bool = False
+    """Whether the run that wrote it worked a private ticket: its text may hold what the operator kept off the
+    tracker."""
 
 
 class MemoryProposal(_Model):
@@ -1316,6 +1319,8 @@ class MemoryOverview(_Model):
     """The lessons in force: any a run reported wrong first, then by review date, the one due first."""
     lessons_digest: MemoryDigest | None
     """What every run would be served of the lessons; None while proposals are off."""
+    repos: list[str]
+    """The workspace's repositories, by name: one a promoted lesson may be served to alone."""
 
 
 class TicketMemory(_Model):
@@ -1360,6 +1365,68 @@ class RunMemory(_Model):
     """What was rendered into its prompt. Empty while recording: then nothing was served."""
     refused: list[MemoryRefusal]
     """What it sent that was not written."""
+
+
+class PromoteRequest(_Model):
+    """A promote, as `canopy memory promote ID [--text TEXT] [--repo NAME]` takes it (DESIGN §28)."""
+
+    text: Annotated[str | None, Field(max_length=4000)] = None
+    """The lesson in the operator's words; None keeps the source's own. Bounded again in code, as the CLI's is."""
+    repo: Annotated[str | None, Field(max_length=200)] = None
+    """The one repository whose runs are served the lesson; None keeps a proposal's, and a note's every one."""
+
+
+class MemoryPromoted(_Model):
+    """What a promote made: the lesson, what it came from, the lesson it superseded, and whether runs read it now."""
+
+    lesson: MemoryEntry
+    """The new lesson, the operator's."""
+    source: MemoryEntry
+    """The proposal or note it came from, as it was."""
+    superseded: int | None
+    """The lesson under the same key it replaced, if there was one."""
+    served: bool
+    """Whether runs are served lessons now, `memory.proposals` at `use`; False while recording."""
+    private: bool
+    """Whether its text is still a private ticket's run's own words, which may hold what the operator kept off the
+    tracker: the warning `canopy memory promote` gives."""
+
+
+class MemoryRejected(_Model):
+    """A proposal the operator rejected: no lesson is made of it."""
+
+    id: int
+    """The proposal's id."""
+
+
+class MemoryRenewed(_Model):
+    """A lesson the operator renewed: it comes up for review again later, and a run's report it is wrong is cleared."""
+
+    id: int
+    """The lesson's id."""
+    review_at: datetime
+    """When it is next due for review."""
+
+
+class MemoryForgetRequest(_Model):
+    """A forget, and the memory's ref as the operator typed it: the challenge, checked again in code (DESIGN §22)."""
+
+    confirm: Annotated[str, Field(max_length=200)]
+    """The memory's ref, `memory:42`, typed by the operator; anything else is refused `not_confirmed`."""
+
+
+class MemoryForgotten(_Model):
+    """A memory whose text a forget deleted: its row stays, without the text. A forgotten lesson is retired."""
+
+    id: int
+    """The memory's id."""
+    scope: MemoryScopeName
+    """What it was."""
+    key: str
+    """Its key."""
+    checkpointed: bool
+    """Whether the journal's write-ahead log was checkpointed after; False while a reader held it open, when the text
+    may stay in the log until SQLite's next checkpoint."""
 
 
 class NoticeRequest(_Model):

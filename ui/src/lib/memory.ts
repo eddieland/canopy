@@ -73,6 +73,41 @@ export function readNothingText(served: boolean): string {
     return served ? 'none' : 'none, recording only'
 }
 
+/**
+ * The most characters a lesson may hold, as a proposal's (`canopy.core.memory.MAX_PROPOSAL_CHARS`): a promote is held
+ * to it again on the server, past spaces at either end, which it trims.
+ */
+export const MAX_LESSON_CHARS = 600
+
+/** How many characters a lesson's text counts, as the server counts them: code points, without surrounding spaces. */
+export function lessonChars(text: string): number {
+    // oxlint-disable-next-line typescript/no-misused-spread -- code points are what the server counts, not graphemes
+    return [...text.trim()].length
+}
+
+/**
+ * The repositories a promote may serve its lesson to, as `canopy memory promote --repo` takes them: null for every
+ * one, offered only for a source that names none (a note, or a proposal for every repository), then the workspace's.
+ * A proposal for one repository keeps it unless another is named, so its own comes first, even once the workspace map
+ * has dropped it.
+ */
+export function repoChoices(source: Pick<MemoryEntry, 'repo'>, repos: readonly string[]): (string | null)[] {
+    if (source.repo === null) {
+        return [null, ...repos]
+    }
+    return [source.repo, ...repos.filter((r) => r !== source.repo)]
+}
+
+/** The lessons whose review date has come, the longest overdue first, as a `lesson_review` item names them. */
+export function dueForReview<T extends Pick<MemoryEntry, 'id' | 'review_at'>>(lessons: readonly T[], now: number): T[] {
+    return lessons
+        .filter((m) => m.review_at !== null && Date.parse(m.review_at) <= now)
+        .toSorted((a, b) => {
+            const overdue = Date.parse(a.review_at ?? '') - Date.parse(b.review_at ?? '')
+            return overdue === 0 ? a.id - b.id : overdue
+        })
+}
+
 function codePoint(char: string): string {
     const point = char.codePointAt(0) ?? 0
     return `<U+${point.toString(16).toUpperCase().padStart(4, '0')}>`

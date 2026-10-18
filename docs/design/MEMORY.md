@@ -208,13 +208,26 @@ make and keep lessons. `search WORDS` finds memories by their words (Search). `f
 free pages. Every one that writes refuses as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `notice`
 does (TRUST_MODEL T1). `canopy status` names each tier's mode while one is on.
 
+The web UI takes `promote`, `reject`, `renew`, and `forget` (M52) through the same functions, so with the same guards
+and refusals, logged with channel `web` (§22). Promote takes the CLI's options, the lesson's words and its repository,
+and before the save names the lesson in force under the key it would replace, and warns while the text is still a
+private ticket's run's own words, as the CLI warns after. The form reads the lessons in force and the workspace's
+repositories from the memory overview when it opens, rather than every ticket's memory carrying them: a ticket's page
+reads them only when the operator promotes from it. Forget cannot be undone, so it carries the memory's ref typed out
+(`memory:42`), checked in code before anything is read, as a ticket's forget carries its key. `purge` stays the CLI's:
+a verb over many memories at once is not a click. The verbs show where the memories do: Promote and Reject on each
+proposal, and Renew and Forget on each lesson, on the memory page; Promote on each of a ticket's notes that keeps its
+text, done or invalidated ones too, on its page; and on the attention list, Promote as written and Reject on a
+`memory_proposal`'s proposals, Renew on the lessons a `lesson_review` is about, and the way to the lessons from a
+`lesson_wrong`. With `memory.proposals` off, none shows.
+
 ### Showing memory
 
 Wherever memory shows, the operator must never take recorded memory for memory in use, or the reverse: each tier's
 mode is said in words, never by color alone, and the two modes never share a label. The web UI's header names whether
 any memory is in use while a tier is on; its memory page, a ticket's page, and a run's page say for each tier what reads
-it, what a run wrote and read, and what it would be served. The web UI reads memory and writes none: every write is the
-CLI's, in the operator's shell. How it looks is `ui/DESIGN.md`'s.
+it, what a run wrote and read, and what it would be served, with the operator's verbs on them (Commands). How it looks
+is `ui/DESIGN.md`'s.
 
 A busy workspace holds thousands of notes and hundreds of lessons, so the memory page lists the tickets with notes in
 force, one row each with its count, and reads a ticket's notes only when the operator opens its row; the lessons come
@@ -244,6 +257,12 @@ Approved by the operator (2026-10-17), in the PRs that build each tier's `use`:
   could insert a lesson into the journal, as it could a notice.
 - T7: `memory.*` is private.
 
+With M52, approved by the operator in merging its PR:
+
+- T8: the web channel promotes, rejects, renews, and forgets, through the CLI's functions. Its residual gains that a
+  stolen session could make a lesson that reaches every worker at `use`, as a notice set that way does, and that
+  outlives a new secret until the operator forgets it.
+
 ### Open
 
 - Agent-written workspace facts with code citations the harness checks at read. A citation proves the code exists, not
@@ -251,4 +270,3 @@ Approved by the operator (2026-10-17), in the PRs that build each tier's `use`:
 - Whether promoted lessons and the standing-instructions file become one surface the operator edits.
 - Whether a ticket reopened from `recently_done` gets its notes back.
 - A chore that drafts proposals from transcripts, only if workers' own proposals prove too few.
-- Whether the web UI should promote and reject, behind the web channel's token.

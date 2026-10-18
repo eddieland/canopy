@@ -39,7 +39,8 @@ and its branches. Below:
 - **Plan**, when the ticket has or needs one: a card saying where the plan stands, with **Approve** while it can be
   approved and **Open plan**, which opens the plan on its own page. When a plan waits on your approval, the card leads
   the page. See [Plans](plans).
-- **Memory**, while ticket notes are on: the notes its runs left for the runs after them. See [Memory](memory).
+- **Memory**, while ticket notes are on: the notes its runs left for the runs after them, each one that keeps its text
+  with Promote while lessons are on. See [Memory](memory#promoting-and-rejecting).
 
 A key canopy has never seen gets a page too, saying so, with the form to start it.
 

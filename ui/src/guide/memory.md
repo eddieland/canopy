@@ -43,7 +43,8 @@ Recorded memory and memory in use never share a label, so you never mistake one 
 - **Ticket notes** lists the tickets with notes in force, one row each with how many and how runs used them. Open a
   row for its notes. A busy workspace has thousands, so the page reads a ticket's notes only once you ask.
 - **Lessons** lists the proposals waiting on you first, each with where it came from: its run's kind and how it ended,
-  and whether its ticket is done. Then the lessons you promoted, the ones a run reported wrong first, then by review
+  and whether its ticket is done, and Promote and Reject under it. Then the lessons you promoted, each with Renew and
+  Forget, the ones a run reported wrong first, then by review
   date, so what needs you heads the list. Under them is the exact text every run is served from your lessons, labelled
   `served to every run`, or `would be served at use` while recording.
 
@@ -76,41 +77,54 @@ start it again.
 
 ## Promoting and rejecting
 
-The memory page only reads, for now. Promoting, rejecting, renewing, and forgetting are `canopy memory`'s, in your
-shell, and each works at `record` as at `use`, so you can build up your lessons before any is served.
+Each proposal on the memory page has **Promote** and **Reject** under it, and so does each of a ticket's notes, on the
+ticket's own page, Promote alone. They do what `canopy memory promote` and `canopy memory reject` do in your shell,
+with the same refusals, and both work at `record` as at `use`, so you can build up your lessons before any is served.
+None of them shows while lessons are off.
 
-- `canopy memory promote ID` makes a proposal a lesson. `--text` puts it in your own words, which is usually an
-  improvement, and `--repo` serves it only to runs in one repository. A lesson already in force under the same key is
-  superseded.
+- **Promote** opens the lesson to be: the proposal's words, which you can rewrite (usually an improvement), held to the
+  same 600 characters, and the repository whose runs read it. A proposal keeps its own repository unless you pick
+  another; a note's lesson is for every repository unless you pick one. Before you save, the form names the lesson in
+  force under the same key, if there is one, since yours replaces it.
 - It promotes a ticket's note too, done or invalidated, as long as the note still has its text: what a ticket taught
-  is often clearest once its PR has merged. That lesson is for every repository unless `--repo` names one.
-- `canopy memory reject ID` ends a proposal.
+  is often clearest once its PR has merged. The note stays its ticket's.
+- **Reject** ends a proposal. Nothing asks twice: nothing is lost that a worker can't propose again.
 
-Promoting a proposal or a note from a private ticket's run, in its own words, warns you: its text may hold what you
-kept off the tracker. At most 20 proposals wait at once, and one nobody reviews expires after 14 days, so the queue
-can't bury you.
+What it did shows under the panel's band, in the CLI's words, including that a lesson promoted while recording is
+recorded and read by no run. Promoting a private ticket's run's words as they stand warns you, before you save and
+after: its text may hold what you kept off the tracker. At most 20 proposals wait at once, and one nobody reviews
+expires after 14 days, so the queue can't bury you.
+
+In your shell, `canopy memory promote ID` takes `--text` for your words and `--repo` for the repository, and
+`canopy memory reject ID` rejects.
 
 ## Keeping lessons honest
 
 A lesson never lapses on its own: it's your word, and only you retire it. Each comes up for review 90 days after you
-promoted it or a run last used it. Then you renew it (`canopy memory renew ID`), move it into a repository's AGENTS.md
-or a skill through a ticket and a PR you merge, or forget it.
+promoted it or a run last used it. Then you renew it, with **Renew** under it on the memory page or
+`canopy memory renew ID`, move it into a repository's AGENTS.md or a skill through a ticket and a PR you merge, or
+forget it. Renewing also clears a run's report that it's wrong.
 
 Three attention items keep you honest, all yours and never the overseer's, and none while lessons are off:
 
 - `memory proposal`, when a ticket is marked done and its runs' proposals are waiting. Its merge has checked the work
-  they came from, which makes now a good time to judge them.
-- `lesson review`, for the lessons due, longest overdue first. Only while lessons are in use: switching to use brings
-  every overdue lesson up at once, in one item, before any of them is served.
-- `lesson wrong`, for the lessons a run reported wrong since you last renewed them. A worker can't retire your lesson;
-  it can only tell you.
+  they came from, which makes now a good time to judge them. The item lists them, each with **Promote as written** and
+  **Reject**; to put one in your own words, promote it from the memory page.
+- `lesson review`, for the lessons due, longest overdue first, each with **Renew**. Only while lessons are in use:
+  switching to use brings every overdue lesson up at once, in one item, before any of them is served.
+- `lesson wrong`, for the lessons a run reported wrong since you last renewed them, with the way to the memory page,
+  where they head the lessons. A worker can't retire your lesson; it can only tell you.
+
+Each item leaves at the next tick once you've dealt with what it names, as an answered question does.
 
 ## Forgetting
 
-`canopy memory forget ID` deletes one memory's text and keeps its row, so the history still says something was there;
-a forgotten lesson is retired. `canopy memory purge` does the same for many: a ticket's runs', a run's, or, with
-`--all`, everything. Neither can be undone, and neither leaves a word of what it deleted in the search index or the
-journal's free pages. That's the point, if what you're deleting is a leaked secret.
+**Forget**, under each lesson on the memory page, or `canopy memory forget ID` for any memory, deletes its text and
+keeps its row, so the history still says something was there; a forgotten lesson is retired. It can't be undone, so the
+page asks you to type the lesson's ref, `memory:42`, before the button wakes up. `canopy memory purge`, in your shell
+alone, does the same for many: a ticket's runs', a run's, or, with `--all`, everything. Neither leaves a word of what it
+deleted in the search index or the journal's free pages. That's the point, if what you're deleting is a leaked
+secret.
 
 ## Search
 
