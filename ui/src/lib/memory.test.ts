@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
     dueForReview,
+    memoryStand,
+    reviewText,
     lapsesText,
     leftOutText,
     lessonChars,
@@ -41,7 +43,7 @@ describe('visibleText', () => {
 
 describe('usedText', () => {
     it('says a memory no run used was read by none, and one used how often', () => {
-        expect(usedText({ use_count: 0, last_used_at: null })).toBe('read by no run')
+        expect(usedText({ use_count: 0, last_used_at: null })).toBeNull()
         expect(usedText({ use_count: 1, last_used_at: '2026-10-08T11:00:00Z' })).toBe('used by 1 run')
         expect(usedText({ use_count: 3, last_used_at: '2026-10-08T11:00:00Z' })).toBe('used by 3 runs')
     })
@@ -56,7 +58,7 @@ describe('readNothingText', () => {
 
 describe('ticketNotesUsedText', () => {
     it('says how many of a ticket’s notes in force a run relied on, or that none was read', () => {
-        expect(ticketNotesUsedText({ count: 4, used: 0 })).toBe('read by no run')
+        expect(ticketNotesUsedText({ count: 4, used: 0 })).toBeNull()
         expect(ticketNotesUsedText({ count: 4, used: 3 })).toBe('3 of 4 used by runs')
     })
 })
@@ -110,5 +112,30 @@ describe('lapsesText', () => {
     it('says a proposal past its time lapses at the next tick, which invalidates it', () => {
         expect(lapsesText('2026-10-08T12:00:00Z', now)).toBe('lapses at the next tick')
         expect(lapsesText('2026-10-01T12:00:00Z', now)).toBe('lapses at the next tick')
+    })
+})
+
+describe('memoryStand', () => {
+    const now = Date.parse('2026-10-08T12:00:00Z')
+    const lesson = { status: 'active' as const, wrong_run_id: null, review_at: '2027-01-06T12:00:00Z' }
+
+    it('reads a lesson in force as active until a run reports it wrong or its review date comes', () => {
+        expect(memoryStand(lesson, now)).toBe('active')
+        expect(memoryStand({ ...lesson, review_at: '2026-10-01T12:00:00Z' }, now)).toBe('due')
+        expect(memoryStand({ ...lesson, review_at: '2026-10-01T12:00:00Z', wrong_run_id: 44 }, now)).toBe('wrong')
+    })
+
+    it('keeps the journal’s status for a memory out of force or waiting', () => {
+        expect(memoryStand({ ...lesson, status: 'pending' }, now)).toBe('pending')
+        expect(memoryStand({ ...lesson, status: 'invalid', wrong_run_id: 44 }, now)).toBe('invalid')
+    })
+})
+
+describe('reviewText', () => {
+    const now = Date.parse('2026-10-08T12:00:00Z')
+
+    it('says how long until a lesson comes up for review, or how long it is overdue', () => {
+        expect(reviewText('2026-12-29T13:00:00Z', now)).toBe('review in 82d')
+        expect(reviewText('2026-10-05T12:00:00Z', now)).toBe('review overdue 3d')
     })
 })

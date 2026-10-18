@@ -5034,6 +5034,11 @@ export type components = {
              */
             ticket_key: string;
             /**
+             * Title
+             * @description The ticket's title, as the overseer named it; None while it has named none.
+             */
+            title: string | null;
+            /**
              * Used
              * @description How many of those a run said it relied on.
              */

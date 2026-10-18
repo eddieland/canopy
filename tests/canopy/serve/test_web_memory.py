@@ -86,6 +86,8 @@ def test_the_overview_counts_the_notes_in_force_by_ticket_and_holds_the_proposal
         ("ABC-102", 1, 0),
         ("ABC-100", 2, 0),
     ]
+    # Each with its title, so the row names the ticket as every other list does.
+    assert all(t["title"] for t in overview["tickets"])
     assert [(p["entry"]["id"], p["run_kind"], p["private"], p["ticket_done"]) for p in overview["proposals"]] == [
         (5, "implement", False, False),
         (6, "implement", True, False),

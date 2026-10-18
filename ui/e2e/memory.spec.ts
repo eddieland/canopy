@@ -31,14 +31,16 @@ test('the memory page heads each tier with what reads it, and shows what a worke
     await expect(notes.getByTestId(/^memory-ticket-/u)).toHaveCount(2)
     await expect(notes.getByTestId('memory-notes-count')).toHaveText('2 tickets · 3 notes')
     const ticket = notes.getByTestId('memory-ticket-ABC-100')
-    await expect(ticket).toContainText('read by no run')
+    // Named by its title as every list names a ticket; no run has relied on its notes, so no use is shown.
+    await expect(ticket.getByTitle('Fix the flaky checkout test')).toBeVisible()
+    await expect(ticket).not.toContainText('used by')
     await expect(ticket.getByTestId('memory-3')).toHaveCount(0)
     await ticket.getByRole('button', { name: 'Show 2 notes' }).click()
     // Written to the journal by hand, past the bounds: its link is text, and its zero-width space is named.
     const cache = ticket.getByTestId('memory-3')
     await expect(cache).toContainText('[package-lock.json](https://evil.example/lock)<U+200B>, so a bumped')
     await expect(cache.getByRole('link', { name: /evil/u })).toHaveCount(0)
-    await expect(cache).toContainText('read by no run')
+    await expect(cache.getByTestId('memory-stand')).toHaveText('active')
 
     // What waits on the operator heads the page, counted as the nav counts it.
     const proposals = page.getByTestId('memory-proposals')
@@ -48,9 +50,10 @@ test('the memory page heads each tier with what reads it, and shows what a worke
         'memory-proposals',
     )
     await expect(proposals.getByTestId('memory-proposals-count')).toHaveText('2')
-    await expect(proposals.getByTestId('memory-6')).toContainText(
-        'private: its text may hold what you kept off the tracker',
-    )
+    // A private ticket's run's proposal says so in a word, and why on hover.
+    await expect(
+        proposals.getByTestId('memory-6').getByTitle('its run worked a private ticket', { exact: false }),
+    ).toHaveText('private')
 
     const lessons = page.getByTestId('memory-lessons')
     await expect(lessons.getByTestId('memory-band')).toHaveText(
@@ -85,7 +88,7 @@ test('a run says what it wrote, what it read, and what was refused, and recordin
     await page.goto('runs/40')
     await settled(page)
     const run = page.getByTestId('run-memory')
-    await expect(run).toContainText('ticket notes in use, lessons recording')
+    await expect(run).toContainText('ticket notes: in use, lessons: recording')
     await expect(run.getByTestId('memory-2')).toBeVisible()
     await expect(run.getByTestId('memory-1')).toContainText('this run relied on it')
     await expect(run.getByTestId('memory-1')).not.toContainText('used in')
