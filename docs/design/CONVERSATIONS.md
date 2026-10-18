@@ -515,8 +515,9 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
 - A transcript says why it has nothing: no session (a template without `--format json`), no log, or none of its
   events yet. A worker run's events reach its log as the worker prints them (§8), so a running run's transcript is
   what it has done so far; a chore run's reach its log only when it ends (§19), as a tick's output does (§6). A model
-  call's reasoning shows only with OpenCode's `--thinking`, which the default templates leave out, and a subagent's
-  calls are its own session's (§13), so a `task` call shows as one tool call with its answer.
+  call's reasoning shows only with OpenCode's `--thinking`, which every default template passes, so a transcript says
+  why a call made the tool calls it did, not only that it made them; a provider that redacts its reasoning shows none.
+  A subagent's calls are its own session's (§13), so a `task` call shows as one tool call with its answer.
 - OpenCode reports a shell call completed whatever its exit, so the UI marks a canopy command refused, with its
   guard, by reading canopy's own `Error: <verb> refused (<guard>)` line from its output; no other command's.
 - Not on the event stream, since a log can be large: the UI reads a transcript again when the stream moves its run's

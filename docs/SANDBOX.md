@@ -173,18 +173,23 @@ prints the `worker_cmd` line for your current template.
 [runtime]
 # Multi-line literal strings: the template is split into words, so a line break is only a space.
 worker_cmd = '''canopy-sandbox worker --read {definitions_dir} --
-    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json --title={title} {prompt}'''
+    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json --thinking
+    --title={title} {prompt}'''
 private_worker_cmd = '''canopy-sandbox worker --read {definitions_dir} --
-    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker-private --format json
+    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker-private --format json --thinking
     --title={title} {prompt}'''
 split_cmd = '''canopy-sandbox worker --read {definitions_dir} --
-    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json --title={title} {prompt}'''
+    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json --thinking
+    --title={title} {prompt}'''
 plan_cmd = '''canopy-sandbox worker --read {definitions_dir} --
-    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json --title={title} {prompt}'''
+    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json --thinking
+    --title={title} {prompt}'''
 chore_cmd = '''canopy-sandbox chore --read {definitions_dir} --
-    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json --title={title} {prompt}'''
+    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json --thinking
+    --title={title} {prompt}'''
 review_cmd = '''canopy-sandbox review --read {definitions_dir} --
-    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json --title={title} {prompt}'''
+    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json --thinking
+    --title={title} {prompt}'''
 # setup_cmd takes no placeholders; give the wrapper no --read.
 setup_cmd = "canopy-sandbox setup -- sh -c 'pnpm install --frozen-lockfile'"
 ```

@@ -24,7 +24,7 @@ Chores are private (§12); one in a workspace file is a config error (TRUST_MODE
 [runtime]
 # the default
 chore_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json
-    --title={title} {prompt}'''
+    --thinking --title={title} {prompt}'''
 
 [capacity]
 max_chores = 1            # chore runs at once; separate from max_workers
@@ -506,7 +506,7 @@ low_impact = """Only docs, comments, or tests change; or one dependency moves by
 [runtime]
 # the default
 review_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json
-    --title={title} {prompt}'''
+    --thinking --title={title} {prompt}'''
 review_timeout_minutes = 20
 
 [capacity]
