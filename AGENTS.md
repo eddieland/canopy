@@ -132,6 +132,12 @@ If code and the design disagree, the design doc wins until a decision entry says
   base class, decorator, or default value. `runs/dispatch.py` and `notify/deliver.py` are examples. A module still out
   of order is never a reason to hold a change, and needs no bulk fix: write new modules in order, and reorder an old
   one when a PR is already changing it, if that is cheap.
+- A comment that says what a name is, for a module's constant or type alias, a class attribute, a field of a
+  dataclass, pydantic model, or `NamedTuple`, or an enum member, is a Sphinx doc comment: lines starting `#:`
+  directly above the name, so editors and doc tools attach it to the name. A note on why the code is so stays a plain
+  `#`. A class's docstring says what the class is; what one field holds goes on that field, not in the docstring.
+  `runs/dispatch.py` is an example. Older modules still spell these with `#`, and need no bulk fix: write new ones
+  with `#:`, and convert a module's when a PR is already changing it, if that is cheap.
 - SQLite: WAL mode, `PRAGMA foreign_keys=ON`, numbered migrations in `migrations/NNNN_name.sql` applied in order at
   startup, recorded in a `schema_migrations` table. Never edit a shipped migration; add a new one. The series was
   squashed into `0001_init.sql` once, for v0.1 (D068); that is not a precedent for editing one.
