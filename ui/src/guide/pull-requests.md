@@ -64,6 +64,11 @@ looking. canopy reviews:
   pushes to them, fixes them, or opens a ticket for them.
 - **A PR you ask about**, below.
 
+It reports defects the change brings, not style and not what CI already checks. Each finding says what's wrong, the
+case that shows it, and the smallest fix, pinned to the line of the diff where it lives. A bug the code had before the
+PR goes in the summary instead, so a worker is never sent to fix code its PR didn't touch, which is how a two-line fix
+becomes a refactor nobody asked for.
+
 Reviews are off while `capacity.max_reviews` is 0, and each commit is reviewed once.
 
 canopy treats its own reviewer as it treats anyone else's. With `canopy:review` in `trust.trusted_reviewers`, findings
