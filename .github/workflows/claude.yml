@@ -6,8 +6,10 @@ name: Claude
 # asked to change, with the Claude GitHub App's token: to the pull request's branch, or to a new claude/ branch for an
 # issue. The Protect main ruleset keeps it off main, and it never approves or merges. On a pull request the action
 # restores .claude/ and CLAUDE.md from the base branch, so the pull request cannot add hooks or settings to the run.
+# zizmor flags issue_comment, which runs with this repository's secrets for anyone who can comment. Here the action
+# refuses a commenter without write access, as said above, and the env scrub keeps the token from Claude's commands.
 on:
-  issue_comment:
+  issue_comment: # zizmor: ignore[dangerous-triggers]
     types: [created]
   pull_request_review_comment:
     types: [created]
@@ -51,7 +53,7 @@ jobs:
       CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
     steps:
       - name: Check out repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           fetch-depth: 1
