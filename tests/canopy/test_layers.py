@@ -118,14 +118,19 @@ def test_no_test_module_imports_another() -> None:
 def imported_tests(path: Path, source: str) -> list[str]:
     """Each import in `source`, the text of the module at `path`, of a test module."""
     found: list[str] = []
+    module = path.relative_to(TESTS.parent)
     for node in ast.walk(ast.parse(source, filename=str(path))):
-        names: list[str] = []
         if isinstance(node, ast.Import):
             names = [alias.name for alias in node.names]
         elif isinstance(node, ast.ImportFrom) and node.module is not None:
             names = [node.module, *(f"{node.module}.{alias.name}" for alias in node.names)]
-        where = f"{path.relative_to(TESTS.parent)}:{getattr(node, 'lineno', 0)}"
-        found.extend(f"{where}: imports {n}, a test module" for n in names if n.rpartition(".")[2].startswith("test_"))
+        else:
+            continue
+        found.extend(
+            f"{module}:{node.lineno}: imports {n}, a test module"
+            for n in names
+            if n.rpartition(".")[2].startswith("test_")
+        )
     return found
 
 
