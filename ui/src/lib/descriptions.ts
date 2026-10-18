@@ -3,7 +3,6 @@
 
 import type { ChoreRun, PullRequest, ReviewSummary, Run, Tick } from '@/api/types'
 import { runRef } from '@/lib/refs'
-import { shortSha, verdictText } from '@/lib/reviews'
 import { NO_TICKET, readable } from '@/lib/words'
 
 /** A run's page: how it ended, its kind, and its ticket, as `done · implement · ABC-099`. */
@@ -11,10 +10,12 @@ export function runDescription(run: Pick<Run, 'status' | 'kind' | 'ticket_key'>)
     return line(readable(run.status), readable(run.kind), run.ticket_key)
 }
 
-/** A review's page: how it ended, its verdict once it has one, and the commit it read. */
-export function reviewDescription(review: ReviewSummary): string {
-    const verdict = review.state === 'running' ? null : verdictText(review)
-    return line(readable(review.status), verdict, shortSha(review.sha))
+/**
+ * A review's page: how it ended, alone. Its panel leads with what it found, then its verdict and the commit it read,
+ * each said there once (ui/DESIGN.md, "A review").
+ */
+export function reviewDescription(review: Pick<ReviewSummary, 'status'>): string {
+    return readable(review.status)
 }
 
 /** A PR's page: its ticket, or why it has none, how many of its reviews canopy keeps, and the run working it now. */

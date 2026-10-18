@@ -19,6 +19,21 @@ test('a review opens from the nav and puts each finding on its line of the diff'
     await expect(page).toHaveURL(/\/reviews\/4$/u)
     await expect(page.getByRole('heading', { level: 1 })).toHaveText('review:4 acme/web#88 Debounce search input')
     await expect(nav.getByRole('link', { name: 'Reviews' })).toHaveAttribute('data-status', 'active')
+    // Each fact once: the description is its status, and the panel leads with what the review found.
+    const main = page.getByRole('main')
+    await expect(main.getByText('done', { exact: true })).toHaveCount(1)
+    await expect(main.getByRole('term').first()).toHaveText('summary')
+    await expect(main.getByRole('definition').first()).toHaveText(
+        'Stale requests are aborted now. Two smaller things remain; neither holds the merge on its own.',
+    )
+    await expect(main.getByText('9b2f4c6', { exact: true })).toHaveCount(1)
+    await expect(main.getByText('3 findings, 1 major', { exact: true })).toHaveCount(1)
+    // The PR's earlier review is a line under the PR, not a field of its own.
+    await expect(page.getByTestId('other-reviews')).toContainText('review:1, 1 blocking finding')
+    // No field's label wraps in a 1280px window: each is one line, as high as the first.
+    const heights = await main.getByRole('term').evaluateAll((labels) => labels.map((label) => label.clientHeight))
+    expect(heights.length).toBeGreaterThan(1)
+    expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1)
 
     const files = page.getByTestId('diff-file')
     await expect(files).toHaveCount(2)
@@ -33,8 +48,12 @@ test('a review opens from the nav and puts each finding on its line of the diff'
     await expect(hook.locator('[data-highlighted]').getByText('export', { exact: true }).first()).toHaveClass(
         'text-syntax-literal',
     )
-    // A finding about a file the diff does not touch has a panel of its own.
-    await expect(page.getByText('Not in the diff', { exact: true })).toBeVisible()
+    // A finding about a file the diff does not touch has a panel of its own, after the files.
+    const elsewhere = page.getByText('Not in the diff', { exact: true })
+    await expect(elsewhere).toBeVisible()
+    const lastFile = await files.last().boundingBox()
+    const elsewhereBox = await elsewhere.boundingBox()
+    expect(elsewhereBox?.y).toBeGreaterThan((lastFile?.y ?? Infinity) + (lastFile?.height ?? 0) - 1)
 
     // The findings list links to each card.
     await page.getByRole('link', { name: 'The debounce delay is a bare number' }).click()
@@ -42,12 +61,18 @@ test('a review opens from the nav and puts each finding on its line of the diff'
     await expect(page.locator('#finding-2')).toBeInViewport()
 })
 
-test('a review from before diffs were kept lists its findings without one', async ({ page }) => {
+test('a review from before diffs were kept lists its findings as their cards, once each', async ({ page }) => {
     await page.goto('reviews/1')
     await expect(page.getByText('no diff kept for this review')).toBeVisible()
-    await expect(page.getByTestId('finding')).toHaveCount(1)
+    // The findings list is the cards: the blocking one shows once, where it is, its box on its card.
+    const card = page.getByTestId('finding')
+    await expect(card).toHaveCount(1)
+    await expect(page.getByText('A stale response replaces the results of a newer query')).toHaveCount(1)
+    await expect(card).toContainText('src/search/useSearch.ts:11')
+    await expect(card.getByTestId('pick-finding-1')).toBeVisible()
+    await expect(page.getByText('not in the diff')).toHaveCount(0)
     // The PR's other review links to its newer one.
-    await page.getByRole('link', { name: 'review:4' }).click()
+    await page.getByTestId('other-reviews').getByRole('link', { name: 'review:4' }).click()
     await expect(page).toHaveURL(/\/reviews\/4$/u)
 })
 

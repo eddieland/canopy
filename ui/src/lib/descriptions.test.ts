@@ -41,14 +41,9 @@ describe('runDescription', () => {
 })
 
 describe('reviewDescription', () => {
-    it('says how it ended, its verdict, and the commit it read', () => {
-        expect(reviewDescription(REVIEW)).toBe('done · 3 findings, 1 major · 9b2f4c6')
-    })
-
-    it('leaves out the verdict while it reviews', () => {
-        expect(reviewDescription({ ...REVIEW, status: 'running', state: 'running', verdict: null })).toBe(
-            'running · 9b2f4c6',
-        )
+    it('says how it ended, and leaves its verdict and commit to its panel', () => {
+        expect(reviewDescription(REVIEW)).toBe('done')
+        expect(reviewDescription({ status: 'running' })).toBe('running')
     })
 })
 
