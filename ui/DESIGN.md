@@ -43,7 +43,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `spend-overseer`, `-idle`, `-workers`, `-chores`, `-reviews`, `-dry-run` | The spend chart's series, as fills only. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; diff code. |
-| `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
+| `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | Fun's: ticker flair, rave beams, glow sticks. |
 | `buddy-eye`, `buddy-pupil` | Sprig's googly eyes: the white and the pupil, and its rim. |
 | `buddy-leaf` | The sprig on Sprig's head. A green of its own, yellower than `status-running`'s, its near twin. |
 | `buddy-hat` | A hat's felt: a dark grey, and the propeller's stem. |
@@ -367,6 +367,11 @@ Sprig:
   tip shows only when asked for, by a click on Sprig, and closes as any other; one Sprig would offer on its own it lets
   pass, and waits again. A slot shorter still leaves Sprig out. The bubble keeps its room once closed, so closing it
   never moves Sprig.
+- **At the lightswitch rave** (below), Sprig joins in: it dances on its foot in time with the lights, its keyboard
+  staying put, and waves a glow stick each side, in `flair-green` and `flair-purple`. Its tips are the rave's alone
+  (`RAVE` in `src/lib/buddy.ts`), on every view. Flipping the lights off offers one at once, as Sprig would offer one
+  unasked, so only in a roomy slot and a tab in sight; a page that loads with them already off waits its usual while.
+  A tip from before the rave is hidden once it starts, and a rave tip once it ends, as another view hides a tip.
 - **Sprig's hats** are bought at the foot of Settings' Fun panel (`HatShop` in `src/routes/settings.tsx`, the shop in
   `src/lib/hats.ts`, the drawings in `src/components/hat.tsx`). The wallet is `total_usd` from `GET /api/spend`,
   everything canopy has ever spent, less the price of each hat bought, so it fills as canopy works; nothing real is
@@ -408,8 +413,8 @@ The lightswitch rave:
 
 Motion says something arrived or changed, and gives the page some life without asking for attention. It is short
 (at most 700ms), eased out (`cubic-bezier(0.2, 0, 0, 1)`), and never loops on anything but the logo, a running run,
-a skeleton, the empty inbox, the header's ticker, Sprig's blink and typing, and the lightswitch rave. The keyframes
-and utilities are in `src/index.css`.
+a skeleton, the empty inbox, the header's ticker, Sprig's blink, typing, and dance, and the lightswitch rave. The
+keyframes and utilities are in `src/index.css`.
 
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
   new one is ready, because navigations run inside React transitions.
@@ -435,7 +440,8 @@ and utilities are in `src/index.css`.
 - An item leaving the attention list fades and folds shut as a leaf tumbles off it (Fun, above). Its fold is the one
   animation that fills forwards: the row is let go once it has played.
 - The lightswitch rave flicks the lights off and on every 0.6 seconds in steps, the switch's lever flicking with them,
-  while its beams turn once every 8 seconds (Fun, above).
+  while its beams turn once every 8 seconds (Fun, above). Sprig dances on the same beat, leaning one way as the lights
+  come on, sinking as they go off, and leaning the other way the next time, its glow sticks waving as it goes.
 - Sprig's tip pops in a moment after it is offered, its brows rise once with each new tip, its eyes blink now and
   then and look toward the pointer, and every 5 seconds it types a burst on its keyboard, each key it presses sinking
   and lighting in the accent for a moment.
@@ -445,8 +451,8 @@ and utilities are in `src/index.css`.
   animations frozen is the page at rest.
 - Everything above is off under `prefers-reduced-motion: reduce`: the theme swaps instantly, values and rows appear
   in place, pulses, ripples, and the drifting leaf are hidden, a cleared item is simply gone, the ticker shows its
-  first headline in place, Sprig's eyes and keys hold still, and the rave rests with its lights off. New motion goes
-  inside a `prefers-reduced-motion: no-preference` block or a `motion-safe:` variant.
+  first headline in place, Sprig's eyes, keys, and dance hold still, and the rave rests with its lights off. New
+  motion goes inside a `prefers-reduced-motion: no-preference` block or a `motion-safe:` variant.
 
 ## No layout shift
 

@@ -455,6 +455,55 @@
 }
 
 /*
+ * Sprig dances while the lightswitch rave is on (src/components/shell/rave.tsx), on its foot, in time with the lights:
+ * it leans one way as they come on, sinks as they go off, leans the other way as they come on again. Two of the rave's
+ * 0.6-second beats a round, each starting with the lights on, from the same moment as theirs.
+ */
+@keyframes buddy-dance {
+    0%,
+    100% {
+        transform: rotate(-6deg);
+    }
+    25%,
+    75% {
+        transform: translateY(1.5px) scaleY(0.95);
+    }
+    50% {
+        transform: rotate(6deg);
+    }
+}
+
+@utility animate-buddy-dance {
+    transform-box: view-box;
+    transform-origin: 24px 82px;
+    @media (prefers-reduced-motion: no-preference) {
+        animation: buddy-dance 1.2s ease-in-out infinite;
+    }
+}
+
+/*
+ * Sprig's glow sticks wave from their grips (`--grip`) in time with its dance. Both turn the same way at once, and they
+ * point opposite ways, so as one sweeps out the other comes in.
+ */
+@keyframes buddy-wave {
+    0%,
+    100% {
+        transform: rotate(-20deg);
+    }
+    50% {
+        transform: rotate(25deg);
+    }
+}
+
+@utility animate-buddy-wave {
+    transform-box: fill-box;
+    transform-origin: var(--grip, center);
+    @media (prefers-reduced-motion: no-preference) {
+        animation: buddy-wave 1.2s ease-in-out infinite;
+    }
+}
+
+/*
  * Sprig types on its keyboard in bursts: each key it presses (`--key`, its place in the burst) sinks and lights in the
  * accent for a moment, a burst every 5 seconds. At rest, and under reduced motion, no key is pressed.
  */

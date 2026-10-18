@@ -25,6 +25,18 @@ export function useRave(): RaveSetting {
     return useSyncExternalStore(subscribe, getSnapshot)
 }
 
+/**
+ * Calls `listener` each time the rave starts, from this tab or another, never for a rave already on when it is called.
+ * Returns the function that stops it.
+ */
+export function onRaveStart(listener: () => void): () => void {
+    return subscribe(() => {
+        if (snapshot === 'on') {
+            listener()
+        }
+    })
+}
+
 /** Stores the setting and applies it now. */
 export function setRave(next: RaveSetting): void {
     try {

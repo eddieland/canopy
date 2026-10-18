@@ -9,7 +9,8 @@ import {
 } from '@tanstack/react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ANYWHERE, nextTip, STORAGE_KEY, TIPS } from '@/lib/buddy'
+import { ANYWHERE, nextTip, RAVE, STORAGE_KEY, TIPS, tipsFor } from '@/lib/buddy'
+import { setRave } from '@/lib/rave'
 
 import { Buddy } from './buddy'
 
@@ -22,9 +23,29 @@ beforeEach(() => {
 
 afterEach(() => {
     cleanup()
+    act(() => setRave('off'))
     vi.useRealTimers()
+    vi.unstubAllGlobals()
     localStorage.clear()
 })
+
+// A ResizeObserver that measures once, as the browser does when it starts observing: in happy-dom, which lays nothing
+// out, Sprig's slot then has room for its bubble.
+class MeasureOnce implements ResizeObserver {
+    readonly #callback: ResizeObserverCallback
+
+    constructor(callback: ResizeObserverCallback) {
+        this.#callback = callback
+    }
+
+    observe(): void {
+        this.#callback([], this)
+    }
+
+    disconnect(): void {}
+
+    unobserve(): void {}
+}
 
 // Sprig beside two pages whose route ids are views with tips of their own, as the rail holds it on every page.
 async function renderBuddy(at: '/attention' | '/settings') {
@@ -54,7 +75,8 @@ function shown(): string | null {
     if (bubble.classList.contains('invisible')) {
         return null
     }
-    return [...Object.values(TIPS).flat(), ...ANYWHERE].find((tip) => within(bubble).queryByText(tip) !== null) ?? null
+    const all = [...Object.values(TIPS).flat(), ...ANYWHERE, ...RAVE]
+    return all.find((tip) => within(bubble).queryByText(tip) !== null) ?? null
 }
 
 describe('Buddy', () => {
@@ -74,10 +96,10 @@ describe('Buddy', () => {
     it('picks each tip at random, never the one just offered', async () => {
         vi.spyOn(Math, 'random').mockReturnValue(0.5)
         // The pick that holds the bubble's room at load, then the one a click offers, which is never it.
-        const held = nextTip('/attention', '', () => 0.5)
+        const held = nextTip(tipsFor('/attention', false), '', () => 0.5)
         await renderBuddy('/attention')
         fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
-        expect(shown()).toBe(nextTip('/attention', held, () => 0.5))
+        expect(shown()).toBe(nextTip(tipsFor('/attention', false), held, () => 0.5))
         expect(shown()).not.toBe(held)
     })
 
@@ -98,5 +120,34 @@ describe('Buddy', () => {
         await renderBuddy('/attention')
         fireEvent.click(screen.getByRole('button', { name: "Don't show me tips again" }))
         expect(localStorage.getItem(STORAGE_KEY)).toBe('off')
+    })
+
+    describe('at the lightswitch rave', () => {
+        it('talks of nothing else, on any page', async () => {
+            act(() => setRave('on'))
+            await renderBuddy('/attention')
+            fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
+            expect(RAVE).toContain(shown())
+        })
+
+        it('offers a tip about it as the lights go off, and hides it once they come back on', async () => {
+            vi.stubGlobal('ResizeObserver', MeasureOnce)
+            await renderBuddy('/settings')
+            fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
+            expect(RAVE).not.toContain(shown())
+
+            act(() => setRave('on'))
+            expect(RAVE).toContain(shown())
+
+            act(() => setRave('off'))
+            expect(shown()).toBeNull()
+        })
+
+        it('says nothing unasked on a page that loads with the lights already raving', async () => {
+            vi.stubGlobal('ResizeObserver', MeasureOnce)
+            act(() => setRave('on'))
+            await renderBuddy('/attention')
+            expect(shown()).toBeNull()
+        })
     })
 })
