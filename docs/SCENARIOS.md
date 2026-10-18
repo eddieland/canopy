@@ -77,6 +77,8 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
 
 ### A ticket's lifecycle
 
+- **S8. Label to PR** (M2). Label a real ticket. Expect it to reach an open PR unattended, its slot returned, and a
+  correct `runs` row. Kill the worker with SIGKILL mid-run: the next tick marks it `crashed` and returns the slot.
 - **S9. A failing check, to the limit** (M3, M56). On a PR whose check fails, expect exactly one `resume --reason ci`
   per cooldown window and an `attempt_limit` item at the limit, with no attempt after it.
 - **S43. A red check and a review comment, one run** (M56). On one of the loop's PRs with a red check and a new review
@@ -207,10 +209,8 @@ Each records its numbers in `MEASUREMENTS.md`, as a dated section.
 
 Retired 2026-10-18. Daily use exercises each, and the tests with the fakes hold the harness's half.
 
-- **S8. Label to PR** (M2). Every ticket the loop carries to a PR runs it; a worker killed mid-run is
-  `tests/canopy/runs/test_reconcile.py`'s.
-- **S17. Mirrored comments** (M19). Mirroring ran through three days of real use, counted in MEASUREMENTS 2026-10-15
-  (F22), whose re-measuring prompt counts it again; the cost before and after was a one-time comparison.
+- **S17. Mirrored comments** (M19). The overseer mirrors every ticket's new comments in daily use; the cost before and
+  after was a one-time comparison of a change long shipped.
 - **S26. A watched session** (M12). The loop is the operator's daily surface; Ctrl-C in each state is
   `tests/canopy/loop/test_loop.py`'s.
 - **S29. Why a ticket was or was not dispatched** (M24). The web UI reads the same decisions `canopy decisions` prints.
