@@ -1,0 +1,250 @@
+"""Reading the threads a run's drafts answer (DESIGN §29): after the run, and each tick until a read is whole."""
+
+from __future__ import annotations
+
+import json
+import os
+import signal
+import sqlite3
+import threading
+import time
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+import pytest
+
+from canopy.cli.main import main
+from canopy.core import drafts, observe, records, replies
+from canopy.core.config import load
+from canopy.core.vocab import DraftKind, DraftStatus, ReviewItem
+from canopy.infra import logs, procs
+from canopy.loop import attention
+from canopy.runs import drafted
+from tests.canopy.helpers import (
+    DRAFTS_PR,
+    KEY,
+    all_drafts,
+    approving,
+    canopy,
+    overseer_does,
+    present,
+    run_drafting,
+    state_block,
+)
+
+if TYPE_CHECKING:
+    from canopy.core.context import Context
+    from tests.conftest import CanopyEnv
+
+PR = DRAFTS_PR
+RESUME = ("--label", "agent-ready-tester", "--kind", "resume", "--reason", "review")
+
+
+def comment(n: int, thread: str = "PRRT_1", author: str = "alice", body: str = "Rename this.") -> dict[str, Any]:
+    """A review comment line, as the reader prints it without `kind` and `pr`."""
+    where = {"id": thread, "path": "src/app.py", "line": 12, "side": "right", "outdated": False, "resolved": False}
+    return {"item": "comment", "id": n, "author": author, "bot": False, "time": "2026-10-18T10:00:00Z", "body": body,
+            "url": f"{PR}#discussion_r{n}", "review": 101, "thread": where}  # fmt: skip
+
+
+def github_has(state: Path, *reviews: dict[str, Any], **more: object) -> None:
+    """Make the fake GitHub hold PR with `reviews`, and the other state keys given."""
+    state.write_text(json.dumps({"prs": {PR: {"reviews": list(reviews)}}, **more}))
+
+
+def thread(n: int, did: str = "changed", text: str = "Renamed.") -> dict[str, object]:
+    return {"on": "thread", "pr": PR, "comment": n, "did": did, "text": text}
+
+
+def reads(state: Path) -> list[dict[str, Any]]:
+    log = state.parent / "github.jsonl"
+    lines: list[str] = log.read_text().splitlines() if log.exists() else []
+    return [json.loads(line)["request"] for line in lines if json.loads(line)["program"] == "connect"]
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_after_a_run_its_pr_is_read_and_its_drafts_checked(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path
+) -> None:
+    approving(canopy_env)
+    github_has(github_state, comment(501), comment(502, "PRRT_2"))
+    run = run_drafting(conn, [thread(501), thread(999), {"on": "pr", "pr": PR, "text": "Fixed CI."}])
+    reply, unknown, body = all_drafts(conn)
+    assert (reply.status, reply.thread_id) == (DraftStatus.WAITING, "PRRT_1")
+    assert reply.checked_at is not None
+    assert (unknown.status, unknown.why) == (DraftStatus.REFUSED, f"unknown_thread: {PR} has no review comment 999")
+    assert (body.status, body.thread_id) == (DraftStatus.WAITING, None)
+    found = present(replies.run_replies(conn, int(run["id"])))
+    assert [(r.number, r.why) for r in drafts.refused_of(found)] == [(2, unknown.why)]
+    assert reads(github_state) == [{"prs": [PR]}]
+    observed = records.fetch_all(conn, records.ObservedReview, "SELECT * FROM observed_reviews ORDER BY id")
+    assert [(o.item, o.id, o.thread_id, o.author) for o in observed] == [
+        (ReviewItem.COMMENT, 501, "PRRT_1", "alice"),
+        (ReviewItem.COMMENT, 502, "PRRT_2", "alice"),
+    ]
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_failed_read_keeps_the_drafts_unchecked_until_a_tick_reads_the_pr_whole(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, ctx: Context
+) -> None:
+    approving(canopy_env)
+    github_has(github_state, comment(501), down=True)
+    run_drafting(conn, [thread(501)])
+    [draft] = all_drafts(conn)
+    assert draft.status is DraftStatus.UNCHECKED
+    [item] = drafted.waiting(conn)
+    assert (item.ticket_key, item.repo) == (KEY, "repo")
+    assert (
+        item.detail
+        == f"1 draft waits on you, for {PR}; its threads could not be read yet, so 1 cannot be sent until they are"
+    )
+    assert drafts.unchecked_prs(conn) == [PR]
+
+    github_has(github_state, comment(501), unread=[PR])
+    drafted.reconcile(ctx, logs.for_tick(None))
+    assert present(drafts.get(conn, draft.id)).status is DraftStatus.UNCHECKED
+
+    github_has(github_state, comment(501))
+    drafted.reconcile(ctx, logs.for_tick(None))
+    assert present(drafts.get(conn, draft.id)).status is DraftStatus.WAITING
+    assert drafted.waiting(conn)[0].detail == f"1 draft waits on you, for {PR}"
+    assert len(reads(github_state)) == 3
+    drafted.reconcile(ctx, logs.for_tick(None))
+    assert len(reads(github_state)) == 3, "a PR with no unchecked draft is not read again"
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_stop_cuts_the_read_after_a_run_short(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, tmp_path: Path
+) -> None:
+    approving(canopy_env)
+    reading = tmp_path / "reading"
+    github_has(github_state, comment(501), hang=str(reading))
+    stopper = threading.Thread(target=stop_once_there, args=(reading,), daemon=True)
+    stopper.start()
+    started = time.monotonic()
+    run = run_drafting(conn, [thread(501)])
+    stopper.join()
+    assert time.monotonic() - started < 50, "the read was not cut short"
+    assert run["status"] == "done"
+    [draft] = all_drafts(conn)
+    assert draft.status is DraftStatus.UNCHECKED
+    assert signal.getsignal(signal.SIGTERM) is signal.SIG_DFL
+
+
+def stop_once_there(path: Path) -> None:
+    """Send this process SIGTERM once `path` exists, as `canopy stop` would a run, or give up after 30 seconds."""
+    deadline = time.monotonic() + 30
+    while not path.exists():
+        if time.monotonic() > deadline:
+            return
+        time.sleep(0.05)
+    os.kill(os.getpid(), signal.SIGTERM)
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_later_runs_draft_supersedes_an_unsent_one_for_the_same_thread(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path
+) -> None:
+    approving(canopy_env)
+    github_has(github_state, comment(501), comment(503, "PRRT_1", "bob"), comment(502, "PRRT_2"))
+    run_drafting(conn, [thread(501), thread(502), {"on": "pr", "pr": PR, "text": "One."}])
+    later = run_drafting(conn, [thread(503, text="Renamed, again."), {"on": "pr", "pr": PR, "text": "Two."}], *RESUME)
+    old_reply, untouched, old_body, reply, body = all_drafts(conn)
+    assert (old_reply.status, old_reply.superseded_by) == (DraftStatus.SUPERSEDED, reply.id)
+    assert old_reply.why == f"superseded by run {later['id']}'s draft 1"
+    assert untouched.status is DraftStatus.WAITING
+    assert (old_body.status, old_body.superseded_by) == (DraftStatus.SUPERSEDED, body.id)
+    assert (reply.status, body.status) == (DraftStatus.WAITING, DraftStatus.WAITING)
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_run_drafts_once_for_a_thread(canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path) -> None:
+    approving(canopy_env)
+    github_has(github_state, comment(501), comment(503, "PRRT_1", "bob"))
+    run_drafting(conn, [thread(501), thread(503)])
+    first, second = all_drafts(conn)
+    assert first.status is DraftStatus.WAITING
+    assert (second.status, second.why) == (
+        DraftStatus.REFUSED,
+        "a second draft for the thread draft 1 answers; a thread takes one",
+    )
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_ticket_draft_supersedes_the_ticket_draft_before_it(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path
+) -> None:
+    approving(canopy_env, '\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "canopy-post-github"\n')
+    github_has(github_state)
+    ticket = {"on": "ticket", "url": "https://github.com/acme/api/issues/1", "text": "Which base?"}
+    run_drafting(conn, [ticket])
+    run_drafting(conn, [{**ticket, "text": "Which base, main or next?"}], *RESUME)
+    old, new = all_drafts(conn)
+    assert (old.kind, old.status, old.superseded_by) == (DraftKind.TICKET, DraftStatus.SUPERSEDED, new.id)
+    assert new.status is DraftStatus.WAITING
+    [item] = drafted.waiting(conn)
+    assert (item.ticket_key, item.repo, item.detail) == (KEY, None, "1 draft waits on you, for the ticket")
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_drafts_on_a_merged_pr_wait_on_nobody(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path
+) -> None:
+    approving(canopy_env)
+    github_has(github_state, comment(501))
+    run_drafting(conn, [thread(501)])
+    assert len(drafted.waiting(conn)) == 1
+    state = json.loads(github_state.read_text())
+    state["prs"][PR]["pr"] = {"state": "merged"}
+    github_state.write_text(json.dumps(state))
+    found = observe.read(
+        conn, load(canopy_env.root, canopy_env.user_file), procs.SubprocessRunner(), [PR], logs.for_tick(None)
+    )
+    assert found.whole == {PR}
+    assert drafted.waiting(conn) == []
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_waiting_drafts_are_the_operators_item_alone(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, agent_log: Path
+) -> None:
+    approving(canopy_env)
+    github_has(github_state, comment(501))
+    run_drafting(conn, [thread(501)])
+    with overseer_does(canopy("decide", KEY, "wait", "--rationale", "waiting on review")):
+        assert main(["tick"]) == 0
+    assert [(i.ticket_key, i.reason, i.repo) for i in attention.current(conn)] == [(KEY, "drafts_waiting", "repo")]
+    assert "drafts_waiting" not in str(state_block(agent_log))
+    assert attention.for_overseer(conn) == []
+
+
+def test_a_read_records_only_what_it_read_whole_and_passes_over_lines_it_cannot_use(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    other = "https://github.com/acme/api/pull/8"
+    lines = [
+        {"kind": "pr", "url": PR, "repository": "acme/api", "number": 7, "state": "open"},
+        {"kind": "review", "pr": PR, **comment(501)},
+        {"kind": "review", "pr": PR, "item": "comment", "id": 502, "body": "no thread"},
+        {"kind": "review", "pr": PR, "item": "comment", "id": "x"},
+        {"kind": "check", "pr": PR},
+        {"kind": "review", "pr": other, **comment(601)},
+        {"kind": "end", "prs": [PR]},
+    ]
+    reader = tmp_path / "reader"
+    reader.write_text(
+        "#!/bin/sh\ncat >/dev/null\ncat <<'EOF'\n" + "\n".join(map(json.dumps, lines)) + "\nnot json\nEOF\n"
+    )
+    reader.chmod(0o755)
+    canopy_env.write_private(f'[connect.sources.github]\nkind = "vcs"\ncmd = "{reader}"\n')
+    found = observe.read(
+        conn, load(canopy_env.root, canopy_env.user_file), procs.SubprocessRunner(), [PR, other], logs.for_tick(None)
+    )
+    assert found.whole == {PR}
+    assert found.failure == "the reader did not read it whole"
+    observed = records.fetch_all(conn, records.ObservedReview, "SELECT * FROM observed_reviews")
+    assert [(o.pr_url, o.id) for o in observed] == [(PR, 501)]
+    [pr] = records.fetch_all(conn, records.ObservedPr, "SELECT * FROM observed_prs")
+    assert (pr.url, pr.number, pr.draft) == (PR, 7, False)

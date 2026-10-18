@@ -47,7 +47,7 @@ from canopy.core.config import render_command, setup_words
 from canopy.core.vocab import PoolKind, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
-from canopy.runs import desks, dispatch, policy, tidy
+from canopy.runs import desks, dispatch, drafted, policy, tidy
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -255,7 +255,25 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
                 log.warning("run was already closed; its outcome is not recorded", extra=fields)
             procs.drop_lifelock(Path(run["log_path"]))
             log.info("run finished", extra={**fields, "status": outcome.status})
+            _check_drafts(ctx, run_id, stop, log)
     return outcome
+
+
+def _check_drafts(ctx: Context, run_id: int, stop: stopping.StopOnSignal, log: logs.TickAdapter) -> None:
+    """Read the PRs the run's drafts answer, after the run is closed: its slots are returned and it holds no capacity.
+
+    A failure here is logged, never raised: the run is closed, and the tick's reconcile reads the PRs again. So a stop
+    signal is heard again for the read, which it cuts short, rather than waiting out the reader's timeout.
+    """
+    try:
+        stop.armed = True
+        drafted.after_run(ctx, run_id, log)
+    except stopping.Stopped:
+        log.info("drafts not checked: the run was stopped", extra={"run_id": run_id})
+    except Exception:
+        log.exception("drafts not checked", extra={"run_id": run_id})
+    finally:
+        stop.armed = False
 
 
 def _record_reported(ctx: Context, run_id: int, outcome: Outcome) -> None:

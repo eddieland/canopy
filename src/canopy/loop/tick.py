@@ -18,7 +18,7 @@ from canopy.memory import attention as memory_attention
 from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
 from canopy.reviews import view as review_view
-from canopy.runs import policy, reconcile
+from canopy.runs import drafted, policy, reconcile
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
@@ -185,6 +185,7 @@ def _locked(ctx: Context, *, dry_run: bool) -> Outcome:
         return finish(TickStatus.RECONCILE_FAILED, str(e))
     chore_reconcile.run(ctx, log)
     memory_reconcile.run(ctx, log)
+    drafted.reconcile(ctx, log)
     # Before anything reads a message or a run: the harness items and the state block see at least every message, and
     # every run that started or ended, up to here. Idle pacing reads the time (DESIGN §6).
     db.set_tick_read(ctx.conn, tick_id)
@@ -255,6 +256,9 @@ def _record_harness_items(ctx: Context, tick_id: int) -> None:
     for remembered in memory_attention.items(ctx.conn, ctx.config):
         action = f"{attention.ACTION_PREFIX}{remembered.reason}"
         db.record_decision(ctx.conn, tick_id, remembered.ticket_key, action, remembered.detail)
+    for draft in drafted.waiting(ctx.conn):
+        action = f"{attention.ACTION_PREFIX}{drafted.WAITING_REASON}"
+        db.record_decision(ctx.conn, tick_id, draft.ticket_key, action, draft.detail, repo=draft.repo)
     for failed in chore_view.failed_items(ctx.conn, ctx.config, ctx.workspace):
         action = f"{attention.ACTION_PREFIX}{chore_view.FAILED_REASON}"
         db.record_decision(ctx.conn, tick_id, None, action, failed.detail, chore=failed.chore)
