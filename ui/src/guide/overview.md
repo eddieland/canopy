@@ -75,6 +75,7 @@ The bar across the top of every page. From the left:
   while paused. It doesn't unpause anything; a pause stays a pause. While a tick is running, the button waits for it
   to finish.
 - **The readouts.** The last tick, as `tick:12 · 3m ago`, with its status when it didn't end ok; it opens the tick.
+  Before the first one, it says `no tick yet`.
   `memory: recording` or `memory: in use` while agent memory is on, which opens the memory page.
 
 While a notice to workers is in force, a banner above every page shows it until it lapses, with **Clear** to end it

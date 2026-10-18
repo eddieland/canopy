@@ -86,7 +86,9 @@ between you and them.
 
 [Reviews](/reviews) lists every review, newest first: its verdict, its ticket, how big the change is (`low impact`,
 `normal impact`, `high impact`), the PR and commit, and what it cost. A verdict reads `clean`, or counts the findings
-with the worst among them, such as `3 findings, 1 major`. A finding is `blocking`, `major`, or `minor`.
+with the worst among them, such as `3 findings, 1 major`. A finding is `blocking`, `major`, or `minor`. With no review
+yet, it points you to **Review a PR** above the list, which works with the defaults, and to `review.agent_prs` and
+`review.query`, which have the loop review PRs on its own.
 
 ## A review's page
 
