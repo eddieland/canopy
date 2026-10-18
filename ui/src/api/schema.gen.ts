@@ -4799,6 +4799,13 @@ export type components = {
              */
             decisions: components["schemas"]["Decision"][];
             /**
+             * Drafts
+             * @description Its own drafts (DESIGN §29), the comments its runs would have posted on it, the newest run's first; at most
+             *     10.
+             * @default []
+             */
+            drafts: components["schemas"]["Draft"][];
+            /**
              * Limits
              * @description Each kind's limit in each repository it has had runs in, then the review limit of each of its units' PRs canopy
              *     has reviewed.

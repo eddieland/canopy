@@ -37,6 +37,11 @@ and its branches. Below:
 - **Runs**: every run on the ticket, each linking to its transcript.
 - **Decisions**: what each tick decided about the ticket, and why, in the overseer's words. A `refused` decision names
   the guard that stopped it, and an `attention` decision the reason it reached your list.
+- **Drafts for the ticket**, when its runs drafted comments for it: a question a blocked run would have asked there, or
+  what a run did, each with the issue it goes to, so you can check a worker didn't get creative with the URL. **Send**,
+  **Edit**, and **Drop** work as on a PR's threads ([Pull requests](pull-requests#replying-to-your-coworkers-reviews)).
+  This needs a `tracker` source with a post command; without one, workers post their ticket comments themselves,
+  marked.
 - **Plan**, when the ticket has or needs one: a card saying where the plan stands, with **Approve** while it can be
   approved and **Open plan**, which opens the plan on its own page. When a plan waits on your approval, the card leads
   the page. See [Plans](plans).

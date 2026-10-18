@@ -1592,7 +1592,8 @@ and edit, drop, and send take the CLI's functions; and TRUST_MODEL T8 for both. 
 diff, each draft under its thread with Send, Edit, and Drop, a send of every waiting draft as one review, and a warning
 when the PR's head is past the diff; `drafts_waiting` opens it; the diff with cards on its lines takes any card
 (`DiffPanels`), M32's page keeping its look; and the mock journal's PR 88 carries a run's drafts, with canopy's GitHub
-programs answered in process, so a draft sent from `--mock` posts nowhere. Left: a ticket's draft on the ticket's page.
+programs answered in process, so a draft sent from `--mock` posts nowhere. A ticket's own drafts on its page and in
+its `drafts_waiting` item, each naming the issue it goes to. Left: the live acceptance above.
 
 ## M54. Plans before feedback runs
 
