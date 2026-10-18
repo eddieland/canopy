@@ -198,7 +198,9 @@ If code and the design disagree, the design doc wins until a decision entry says
   `result=` and `exit_code=` one it fails. A run comes back as a `Ran`, with its `reasons` and its worker's `prompt`;
   `scenario.refuses(...)` is a dispatch canopy turns down, as the decisions it made instead, and
   `scenario.time_passes(minutes=31)` moves the journal's times into the past, never an `UPDATE` of one table's times.
-  A step the verbs do not cover is written with the helpers above, in the same test; a verb two tests need goes there.
+  A scenario keeps the story as it played, and a failed test's report prints it, a numbered step for each move; a step
+  the scenario cannot record stays out of it, so prefer a verb where one fits. A step the verbs do not cover is written
+  with the helpers above, in the same test; a verb two tests need goes there.
 - A test opens a journal through `canopy_env.journal()`, or the `journals` fixture for one outside a workspace, never
   `db.connect` directly: those close it when the test ends. A connection, file, or pipe left open raises a
   ResourceWarning, which fails the test like any other warning.
