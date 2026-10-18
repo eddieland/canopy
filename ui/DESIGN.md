@@ -154,16 +154,27 @@ Rules:
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
-- **Wide screens use the width** from `2xl`: the attention list widens, and a detail page with a thread (below) puts
-  it beside the rest, a ticket's conversation beside its work, runs, and decisions, a chore's notes beside its
-  schedule, findings, runs, and spend. The source keeps the narrow order, which is the reading order; the grid only
-  places the thread in a second column (`2xl:col-start-2 2xl:row-span-N`), over rows whose last is `1fr`, so a long
-  thread leaves no gaps between the panels beside it.
+- **Wide screens use the width** from `2xl`: the attention list widens, and a detail page puts its thread or main
+  content (below) beside the rest, a ticket's conversation beside its work, runs, and decisions, a chore's open
+  findings and runs beside its schedule, notes, and spend. The source keeps the narrow order, which is the reading
+  order; the grid only places that content in a second column (`2xl:col-start-2 2xl:row-span-N`), over rows whose
+  last is `1fr`, so a long thread or list leaves no gaps between the panels beside it. Content of two panels is one
+  column element spanning those rows, so the first panel's length never stretches a row beside it.
 - Between the header's name and its readouts, the ticker crawls joke headlines (Fun, below).
 - The header carries the loop's pause (`LoopPause`) and Tick now (`TickNow`), the latest tick (`tick:12 · 3m ago`,
   its status when not `ok`, in `status-failed` when it failed or was abandoned, its summary on hover, linking to its
   page), the stream's state (and `mock`), and the theme toggle, in three groups with a hairline rule between each: the
   actions, the readouts, the theme.
+- The stream's readout holds one width, `down · 59m`'s (`w-[10ch]`, its text to the right), so a drop moves nothing
+  beside it: `live` in the accent while open, `opening` and `retrying` muted while it connects or has just dropped, and
+  once it has been down past the first retry's wait (`RETRY_FIRST_MS`, 5s), `down · 2m`, an `Age` from the drop, in
+  `status-blocked`, when it dropped on hover. Only `canopy loop` serves the UI (D073), so a stream that stays down
+  almost always means the loop stopped, and the page says so rather than look live: after 10s a band heads the content
+  column, as the notice to workers does, saying the loop isn't answering, that the page shows what it last said and how
+  long ago, and `canopy loop` or `canopy daemon start` as code (`LoopDownBand`). While it is down, Pause and Tick now
+  wait, with the band's reason on hover; the Working rail dims to 60%, as stale search hits do; and an empty attention
+  list says nothing needed the operator as of the drop rather than celebrate. What is on screen stays. All of it reads
+  the stream from the shell (`useLoopDown`), and leaves the moment the stream opens again, with no reload.
   The readouts hug their text, inset as far as a ghost button's label, so each rule sits midway. The counters are the
   attention page's, and the nav's Attention item shows how many items it lists, on every page, split by severity as the
   Attention counter splits them: broken in `status-failed`, waiting on the operator's answer in `status-blocked`, the
@@ -234,17 +245,20 @@ Rules:
 - **A detail page has one skeleton**: what it is, then its thread or main content, then the lists that support it.
   First the identity panel, its subject's fields (a ticket's Work, a run's Run, a PR's Pull request, a chore's
   Schedule); its actions sit in that panel's foot, under a hairline, never in a panel of their own above the content.
-  Then the thread the operator came to answer, with its form: a ticket's conversation and the reply, a chore's notes
-  and the note form. A page with no thread has its main content there instead: a run's transcript, a chore run's
-  findings and transcript, a tick's decisions, a review's findings and diff, a PR's reviews. Then the supporting
+  Then the thread the operator came to answer, with its form: a ticket's conversation and the reply. A page with no
+  thread has its main content there instead: a run's transcript, a chore's open findings and runs, a chore run's
+  findings and transcript, a tick's decisions, a review's findings and diff, a PR's reviews. A chore's notes are a
+  thread nothing waits on, written now and then, so they follow its main content, with its spend. Then the supporting
   lists: runs, decisions, spend. So on a half-width second monitor a ticket's reply is reached before its runs and
   decisions, and the attention detail, the other place a ticket is answered, reads in the same order: the item, the
   ticket's actions and any limit it is stuck at, then its conversation and the reply. An action over a whole list
   sits in that list's panel header, as a transcript's All open does: the worktrees' Read again heads their one Pools
-  panel, a section per pool in it. A ticket whose plan waits on the operator (proposed, no planner running) leads with
-  the plan instead, above its Work panel, since the plan is what they came to answer and its own line says where the
-  ticket stands; otherwise its plan follows the lists. Where it sits is settled as the page opens, so a plan approved
-  there stays where it was read.
+  panel, a section per pool in it. A ticket's plan is on a page of its own, `/tickets/$key/plan`, under the ticket in
+  the trail; the ticket's page has its card (`PlanCard`): the plan's reference and status chip in its header, the run
+  that wrote it and its open comments as fields, and `Open plan` in its foot, primary while the plan waits on the
+  operator. A ticket whose plan waits on the operator (proposed, no planner running) leads with the card, above its
+  Work panel, since the plan is what they came to answer; otherwise the card follows the lists. Where it sits is
+  settled as the page opens, so a plan approved meanwhile leaves its card where it was read.
 - **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
   section's name in its color, then the pages between it and this one. On the section's own list the name is plain
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
@@ -414,7 +428,8 @@ and utilities are in `src/index.css`.
 - `scrollbar-gutter: stable` on what the page scrolls in (`page-scroll`), so a page that grows a scrollbar does not
   move.
 - Async content gets its space before it arrives: a fixed width for readouts, a minimum height for panels.
-- A skeleton (`PanelSkeleton`) shows only while there is no data at all. A refetch or a stream update keeps what is on
+- A skeleton (`PanelSkeleton`) shows only while there is no data at all, and only while the read is pending: once it
+  has failed, a Notice takes its place at its height (`PanelLoading`). A refetch or a stream update keeps what is on
   screen.
 
 ## Themes
@@ -485,6 +500,13 @@ list, an empty state, or a skeleton by hand.
   shimmering bars, each shorter than the last. It takes the minimum height its content will, so nothing moves when
   the data lands: `min-h-72` for a page's main panel or a list that runs long (tickets, runs, ticks), `min-h-40` for
   a list that holds a few (the attention list, the chores, a pool's slots).
+- **`PanelLoading`** (`src/components/panel.tsx`): a skeleton while a read is pending; a Notice once it has failed.
+  A page's main panel shows it while its data is `undefined`, given the query: until the read fails it is the
+  `PanelSkeleton`, and after, at the skeleton's minimum height, a `Notice` saying why (`src/lib/read-failure.ts`: the
+  server's status and words, or that canopy did not answer and `canopy loop` serves the page) and a ghost `Read again`
+  that refetches it. A 404 or a 409 is the page's own state, handled before it. The query client retries a read once,
+  so a failure shows within about two seconds, and nothing refetches it after but the button or the stream. A page of
+  many panels over one read (Spend) shows it once, in its first panel, and leaves out the rest.
 - **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel: its column heads in
   `panel-label` type, its row heads in plain text, its figures right-aligned readouts. Its panel's header repeats none
   of its rows.
@@ -660,9 +682,9 @@ list, an empty state, or a skeleton by hand.
   new tab. A PR shown in its own place (a run's or decision's PR) is a `PullRequestLink` (below), and so is a GitHub
   PR's address in a conversation's bubble or a chore's finding, its detail or its link, as in the harness's lines
   (`InlineCode`).
-- **A chore's notes** are a conversation of the operator's words alone, between the chore's schedule and its findings
-  and runs, with a note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the
-  next run` in `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
+- **A chore's notes** are a conversation of the operator's words alone, after the chore's findings and runs and before
+  its spend, with a note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the next
+  run` in `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
 - **Decisions** are rows (`Decisions`): the subject, a ticket or chore as a link, a unit as its ticket and repository
   (on its subject's page, the tick instead, with its age), the action as a chip, a PR as a link, and the rationale
   under them as rich text, from the action's column. A `refused:` action's chip is in `status-failed` and an

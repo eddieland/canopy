@@ -6,6 +6,7 @@ import { loopQuery } from '@/api/queries'
 import type { Pause as Paused } from '@/api/types'
 import { Age } from '@/components/age'
 import { Button } from '@/components/ui/button'
+import { LOOP_DOWN_TITLE, useLoopDown } from '@/hooks/use-loop-down'
 import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -19,11 +20,13 @@ const CHANNEL: Record<Paused['channel'], string> = {
 /**
  * The header's pause: `canopy pause` and `canopy resume` (docs/DESIGN.md §6). Running, a Pause button; paused, how
  * long it has been and a Resume button. The pause is the journal's, so a pause from the loop's terminal or the CLI
- * shows here as the stream sends it. A failure colors the button and says why on hover and to a screen reader.
+ * shows here as the stream sends it. A failure colors the button and says why on hover and to a screen reader. While
+ * the loop isn't answering, it waits, and says so on hover.
  */
 export function LoopPause() {
     const client = useQueryClient()
     const loop = useQuery(loopQuery)
+    const down = useLoopDown().offline
     const toggle = useMutation({
         mutationFn: (pause: boolean) => (pause ? pauseLoop() : resumeLoop()),
         onSuccess: (changed) => showLoop(client, changed.loop),
@@ -49,12 +52,12 @@ export function LoopPause() {
                 size="sm"
                 className={cn('w-20', failed !== null && 'text-status-failed')}
                 title={
-                    failed ??
+                    (down ? LOOP_DOWN_TITLE : failed) ??
                     (paused === null
                         ? 'Pause the loop: no tick starts until you resume it. A tick already running finishes.'
                         : 'Resume the loop: it ticks when its wait runs out, at once if it already has.')
                 }
-                disabled={toggle.isPending}
+                disabled={down || toggle.isPending}
                 onClick={() => toggle.mutate(paused === null)}
             >
                 {paused === null ? <Pause /> : <Play />}

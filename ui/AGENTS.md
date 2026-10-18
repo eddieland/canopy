@@ -20,12 +20,13 @@ memory, and do not upgrade in passing.
   elsewhere. A control Radix has a primitive for uses its wrapper, never hand-written ARIA state (`DESIGN.md`).
 - TanStack Router (file-based, `src/routes/`) and TanStack Query.
 - Tiptap on ProseMirror for the plan editor alone (D120): only `src/lib/plan-*.ts` and
-  `src/components/plan-editor.tsx` import it.
+  `src/components/plan-editor.tsx` import it, and only the pages that show a plan load it: a ticket's plan page and
+  the sample editor, never the ticket's page, whose plan card does not import it.
 - Shiki for a review's diff alone (D121): only `src/lib/highlight.ts` and `src/lib/languages.ts`, its grammars,
   import it, and only on demand, each grammar its own chunk.
 - jsdiff (`diff`) for a plan's word diff alone: only `src/lib/plan-diff.ts` imports it.
-- oxlint (with the React Compiler's rules and eslint-plugin-jsdoc's, and type-aware rules through oxlint-tsgolint)
-  and oxfmt, Vitest, Playwright.
+- oxlint (with the React Compiler's rules, eslint-plugin-jsdoc's, eslint-plugin-playwright's on `e2e/`, and
+  type-aware rules through oxlint-tsgolint) and oxfmt, Vitest, Playwright.
 
 Add a library as the repository's `AGENTS.md` says, when it clearly beats the code we would write instead, and pin it
 exactly like the rest. One that only a few files need is held to them, as Tiptap (D120) and Shiki (D121) are.
@@ -79,7 +80,9 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
 - **Signed out is a state, not a route.** The shell shows the sign-in page whenever the session query says signed
   out, and any 401 sets that (`src/lib/query-client.ts`). Never keep the listener secret in the page: it is sent once,
   to `POST /api/session`.
-- **Never blank content.** A skeleton only when `data` is `undefined`. Reserve space for anything async.
+- **Never blank content.** A skeleton only when `data` is `undefined`, and only while the read is pending: a page's
+  main panel uses `PanelLoading`, which says why a failed read failed and reads again. Reserve space for anything
+  async.
 - **Typed search params.** Validate in the route's `validateSearch` and return every key, `undefined` when invalid:
   the router merges the result over the raw search, so an omitted key keeps the raw string (see
   `routes/runs.index.tsx`).
@@ -133,7 +136,10 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
   deliberately and the PR says why; look at each new image before it merges. The Screenshots workflow never deletes an
   image: a PR that stops taking one deletes its baseline. Every screenshot applies `e2e/screenshot.css`, which
   replaces what changes with the build rather than the page (the rail's version, which names the commit, shows a
-  placeholder as long as a dev build's). `README.md` shows
+  placeholder as long as a dev build's). The guide's screenshot shows how a page is drawn, not what the guide says,
+  which most UI pull requests edit: `placeholderGuide` serves a guide of placeholder Latin in place of the real
+  one, its pages and their list included, with `e2e/guide-specimen.md` the page taken, so a guide edit rewrites no
+  image. `README.md` shows
   `attention-dark`, `tickets-ABC-102-dark`, `runs-39-dark`, `reviews-4-dark`, and `ticks-2-dark`: rename them there too.
   The baselines are CI's Chromium and fonts, so regenerate them there: push the branch, then run the Screenshots
   workflow on it (`gh workflow run screenshots.yml --ref BRANCH`, or the Actions tab, or an agent's GitHub tools). It
@@ -143,6 +149,9 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
   that fail the comparison, so a change subtle enough to pass within the threshold (a token's small shift) leaves the
   old images in place: run it with `update` set to `all` (`-f update=all`) to rewrite every one.
   `npx playwright test --update-snapshots=changed` does the same locally, on a machine whose rendering may not match.
+- On CI, Playwright runs a failed test once more, and one that passes then still fails the run, named flaky in the
+  report: fix it, as a broken one is. The lint holds `e2e/` to eslint-plugin-playwright's recommended rules, which
+  refuse most of what makes a browser test flaky.
 - Playwright hides scrollbars in headless Chromium, so those screenshots never show one. `e2e/scrollbars.spec.ts`
   keeps them, for what a scrollbar is part of: a long list scrolling in its panel.
 

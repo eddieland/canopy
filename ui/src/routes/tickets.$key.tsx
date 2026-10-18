@@ -15,7 +15,17 @@ import { GrantLimits } from '@/components/grant-limits'
 import { MemoryBand, MemoryDigestView, MemoryRows } from '@/components/memory'
 import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
-import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton, ThreadScroll } from '@/components/panel'
+import { PlanCard } from '@/components/plan-card'
+import {
+    Empty,
+    PageHeader,
+    Panel,
+    PanelHeader,
+    PanelLoading,
+    PanelScroll,
+    PanelSkeleton,
+    ThreadScroll,
+} from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReplyForm } from '@/components/reply-form'
 import { RunsTable } from '@/components/runs-table'
@@ -23,7 +33,6 @@ import { StartTicket } from '@/components/start-ticket'
 import { Chip, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
 import { TicketLinks } from '@/components/ticket-links'
-import { TicketPlan } from '@/components/ticket-plan'
 import { WorkingNow } from '@/components/working-now'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
@@ -34,7 +43,7 @@ import { None } from '@/components/none'
 
 /**
  * One ticket: its work and the operator's actions, its conversation and the reply, then its runs and decisions; and
- * for a ticket plans touch, its plan below them, in the plan editor (DESIGN §25).
+ * for a ticket plans touch, its plan's card below them, which opens the plan's own page (DESIGN §25).
  */
 export const Route = createFileRoute('/tickets/$key')({
     component: TicketPage,
@@ -42,9 +51,10 @@ export const Route = createFileRoute('/tickets/$key')({
 
 function TicketPage() {
     const { key } = Route.useParams()
-    const { data, error } = useQuery(ticketQuery(key))
-    // The plans too, before the page paints: a plan waiting on the operator leads the page, which would otherwise
-    // push everything down as it arrived.
+    const query = useQuery(ticketQuery(key))
+    const { data, error } = query
+    // The plans too, before the page paints: a plan waiting on the operator leads the page with its card, which would
+    // otherwise push everything down as it arrived.
     const plans = useQuery(ticketPlansQuery(key))
     if (error instanceof ApiError && error.status === 404) {
         return <Unknown ticketKey={key} />
@@ -64,7 +74,7 @@ function TicketPage() {
             <>
                 <PageHeader title={key} />
                 <Panel>
-                    <PanelSkeleton rows={1} className="min-h-72" />
+                    <PanelLoading query={query} rows={1} className="min-h-72" />
                 </Panel>
             </>
         )
@@ -87,8 +97,8 @@ function Ticket({ detail }: { detail: TicketDetail }) {
     const conversationOrder = useListOrder('conversation')
     const plans = useQuery(ticketPlansQuery(ticket.key)).data
     const planned = plans !== undefined && (plans.needed || plans.plans.length > 0)
-    // A plan waiting on the operator is what they came to answer, so it leads the page. Where it sits is settled once,
-    // as the plans arrive: a plan approved here stays where it was read, rather than move and lose what it said.
+    // A plan waiting on the operator is what they came to answer, so its card leads the page. Where it sits is settled
+    // once, as the plans arrive: a plan approved meanwhile leaves its card where it was read, rather than move it.
     const [planLeads, setPlanLeads] = useState<boolean | undefined>(undefined)
     if (planLeads === undefined && plans !== undefined) {
         setPlanLeads(plans.newest?.plan.status === 'proposed' && plans.planning === null)
@@ -106,7 +116,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
             >
                 {how}
             </PageHeader>
-            {planned && planLeads === true && <TicketPlan ticketKey={ticket.key} plans={plans} />}
+            {planned && planLeads === true && <PlanCard ticketKey={ticket.key} plans={plans} />}
             {/* The detail skeleton (DESIGN.md): what it is and its actions, its conversation, then its lists. */}
             {/* Wide, the conversation moves beside the rest, as in the inbox; the source keeps the reading order. */}
             <div
@@ -211,7 +221,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     )}
                 </Panel>
             </div>
-            {planned && planLeads === false && <TicketPlan ticketKey={ticket.key} plans={plans} />}
+            {planned && planLeads === false && <PlanCard ticketKey={ticket.key} plans={plans} />}
             <TicketMemoryPanel ticketKey={ticket.key} />
         </>
     )

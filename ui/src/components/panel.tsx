@@ -1,14 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useMatchRoute } from '@tanstack/react-router'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, RotateCw } from 'lucide-react'
 import { Children } from 'react'
 import type { ComponentProps, ReactNode } from 'react'
 
 import { attentionQuery } from '@/api/queries'
+import { Notice } from '@/components/notice'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSection } from '@/hooks/use-section'
 import { blocking } from '@/lib/attention'
 import { pageTitle } from '@/lib/page-title'
+import { readFailure } from '@/lib/read-failure'
 import { SECTION_LABEL, SECTION_TEXT } from '@/lib/sections'
 import { cn, isBlank } from '@/lib/utils'
 
@@ -261,6 +264,43 @@ export function PanelSkeleton({ rows = 2, className }: { rows?: number; classNam
             {Array.from({ length: rows }, (_, i) => (
                 <Skeleton key={i} className={cn('h-4', BAR_WIDTHS[i % BAR_WIDTHS.length])} />
             ))}
+        </div>
+    )
+}
+
+/** The part of a query `PanelLoading` reads: whether it failed, whether it is reading, and how to read again. */
+export interface PanelRead {
+    /** Why the last read failed, or null while none has. */
+    error: unknown
+    /** Whether a read is in flight, the first or one asked for again. */
+    isFetching: boolean
+    /** Reads it again. */
+    refetch: () => Promise<unknown>
+}
+
+/**
+ * What a panel shows while it has no data at all: a skeleton while the read is pending, and once it has failed, why,
+ * in a `Notice`, with a ghost `Read again`, in the skeleton's place and at its minimum height (`className`), so nothing
+ * moves either way. A failed read never shimmers on as if it were still coming.
+ */
+export function PanelLoading({ query, rows, className }: { query: PanelRead; rows?: number; className?: string }) {
+    if (query.error === null || query.error === undefined) {
+        return <PanelSkeleton rows={rows} className={className} />
+    }
+    return (
+        <div className={cn('flex flex-col items-start gap-2 p-3', className)} data-testid="panel-failed">
+            <Notice error={readFailure(query.error)} />
+            {/* Its text, not its hover's edge, in line with the notice's. */}
+            <Button
+                variant="ghost"
+                size="xs"
+                className="-ml-2"
+                onClick={() => void query.refetch()}
+                disabled={query.isFetching}
+            >
+                <RotateCw />
+                {query.isFetching ? 'Reading' : 'Read again'}
+            </Button>
         </div>
     )
 }

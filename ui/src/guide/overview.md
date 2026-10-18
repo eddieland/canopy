@@ -60,7 +60,7 @@ The bar across the top of every page. From the left:
   to finish.
 - **The readouts.** The last tick, as `tick:12 · 3m ago`, with its status when it didn't end ok; it opens the tick.
   `memory: recording` or `memory: in use` while agent memory is on, which opens the memory page. And the stream:
-  `LIVE`, `CONNECTING`, `RECONNECTING`, or `OFFLINE`.
+  `LIVE`, `OPENING`, `RETRYING` just after a drop, or `DOWN · 2M` once it has been down a while.
 - **The mock flag**, a boxed `mock`, when the server runs over a sample journal (`python -m canopy.serve --mock`)
   instead of your workspace's. No loop runs behind it, and nothing you do there reaches a ticket.
 
@@ -99,6 +99,14 @@ until then. Patience is a virtue; here it's also the architecture.
 Everything else only reads the journal and changes nothing. Pages update as the loop writes, over a single stream,
 so there's no need to reload. The worktrees are the one exception: reading them asks every pool, so that page rereads
 them every 10 seconds while you're looking at it, and has a Read again button.
+
+When the loop stops, so does the stream, and the header's `live` turns into `down · 2m` and counts. After ten seconds
+a band over the page says the loop isn't answering and how to start it again, Pause and Tick now wait, and everything
+on screen is what the loop said last. It all clears itself the moment the loop is back, no reload needed. A dashboard
+that looks live while nobody is home is how you end up waiting an afternoon on a ticket nothing is working.
+
+When a page can't read what it shows, it says so where the content would be, with the server's answer or the news that
+nothing answered at all, and a **Read again** button. A placeholder that shimmers forever is optimism, not a status.
 
 ## Signing in
 

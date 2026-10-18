@@ -13,7 +13,7 @@ import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
 import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
-import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll } from '@/components/panel'
 import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunDot, Word } from '@/components/status'
@@ -39,7 +39,8 @@ export const Route = createFileRoute('/chores/$name')({
 
 function ChorePage() {
     const { name } = Route.useParams()
-    const { data, error } = useQuery(choreQuery(name))
+    const query = useQuery(choreQuery(name))
+    const { data, error } = query
     if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {
         return (
             <>
@@ -60,7 +61,7 @@ function ChorePage() {
             <>
                 <PageHeader title={choreRef(name)} />
                 <Panel>
-                    <PanelSkeleton rows={1} className="min-h-72" />
+                    <PanelLoading query={query} rows={1} className="min-h-72" />
                 </Panel>
             </>
         )
@@ -77,12 +78,13 @@ function Chore({ detail }: { detail: ChoreDetail }) {
             <PageHeader title={choreRef(chore.name)} help={HELP}>
                 {choreLine(chore, now)}
             </PageHeader>
-            {/* The detail skeleton (DESIGN.md): what it is, its notes, then its lists. Wide, the notes move beside the
-                rest, as a ticket's conversation does; the source keeps the reading order. */}
+            {/* The detail skeleton (DESIGN.md): what it is, then its main content, its open findings and the runs that
+                found them, then its notes and spend. Wide, findings and runs take the wide column beside the rest; the
+                source keeps the reading order. */}
             <div
                 className={cn(
                     'stagger flex flex-col gap-6',
-                    '2xl:grid 2xl:grid-cols-[minmax(0,40rem)_minmax(0,1fr)] 2xl:grid-rows-[auto_auto_auto_1fr]',
+                    '2xl:grid 2xl:grid-cols-[minmax(0,40rem)_minmax(0,1fr)] 2xl:grid-rows-[auto_auto_1fr]',
                     '2xl:items-start',
                 )}
             >
@@ -104,51 +106,54 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                         <TryChore chore={chore} />
                     </div>
                 </Panel>
-                <Panel className="2xl:col-start-2 2xl:row-span-4 2xl:row-start-1" data-testid="chore-notes">
+                {/* One column of its own, so a long list of findings never stretches the schedule's row. */}
+                <div className="flex flex-col gap-6 2xl:col-start-2 2xl:row-span-3 2xl:row-start-1">
+                    <Panel data-testid="chore-findings">
+                        <PanelHeader label="Open findings">
+                            <span className="readout text-xs text-muted-foreground" data-testid="chore-findings-count">
+                                {findingsReadout(chore.findings, chore.more_findings)}
+                            </span>
+                        </PanelHeader>
+                        {chore.findings.length === 0 ? (
+                            <Empty>
+                                {chore.more_findings > 0
+                                    ? 'no open findings listed: its latest ok run counted some past its max_findings'
+                                    : 'no open findings now: its latest ok run found nothing'}
+                            </Empty>
+                        ) : (
+                            <PanelScroll label="Open findings">
+                                <ul className="divide-y">
+                                    {chore.findings.map((finding) => (
+                                        <ChoreFindingRow key={finding.id} finding={finding} chore={chore.name} />
+                                    ))}
+                                </ul>
+                            </PanelScroll>
+                        )}
+                    </Panel>
+                    <Panel>
+                        <PanelHeader label="Runs">
+                            <span className="flex items-center gap-2">
+                                {runs.length > 1 && <OrderToggle list="chore-runs" />}
+                                <span className="readout text-xs text-muted-foreground">{runs.length}</span>
+                            </span>
+                        </PanelHeader>
+                        {runs.length === 0 ? (
+                            <Empty>no runs yet: the overseer starts one when it is due</Empty>
+                        ) : (
+                            <PanelScroll label="Runs">
+                                <ul className="divide-y" data-testid="chore-runs">
+                                    {ordered('chore-runs', runsOrder, runs).map((run) => (
+                                        <RunRow key={run.id} name={chore.name} run={run} />
+                                    ))}
+                                </ul>
+                            </PanelScroll>
+                        )}
+                    </Panel>
+                </div>
+                <Panel className="2xl:col-start-1 2xl:row-start-2" data-testid="chore-notes">
                     <ChoreNotes detail={detail} />
                 </Panel>
-                <Panel className="2xl:col-start-1 2xl:row-start-2" data-testid="chore-findings">
-                    <PanelHeader label="Open findings">
-                        <span className="readout text-xs text-muted-foreground" data-testid="chore-findings-count">
-                            {findingsReadout(chore.findings, chore.more_findings)}
-                        </span>
-                    </PanelHeader>
-                    {chore.findings.length === 0 ? (
-                        <Empty>
-                            {chore.more_findings > 0
-                                ? 'no open findings listed: its latest ok run counted some past its max_findings'
-                                : 'no open findings now: its latest ok run found nothing'}
-                        </Empty>
-                    ) : (
-                        <PanelScroll label="Open findings">
-                            <ul className="divide-y">
-                                {chore.findings.map((finding) => (
-                                    <ChoreFindingRow key={finding.id} finding={finding} chore={chore.name} />
-                                ))}
-                            </ul>
-                        </PanelScroll>
-                    )}
-                </Panel>
-                <Panel className="2xl:col-start-1 2xl:row-start-3">
-                    <PanelHeader label="Runs">
-                        <span className="flex items-center gap-2">
-                            {runs.length > 1 && <OrderToggle list="chore-runs" />}
-                            <span className="readout text-xs text-muted-foreground">{runs.length}</span>
-                        </span>
-                    </PanelHeader>
-                    {runs.length === 0 ? (
-                        <Empty>no runs yet: the overseer starts one when it is due</Empty>
-                    ) : (
-                        <PanelScroll label="Runs">
-                            <ul className="divide-y" data-testid="chore-runs">
-                                {ordered('chore-runs', runsOrder, runs).map((run) => (
-                                    <RunRow key={run.id} name={chore.name} run={run} />
-                                ))}
-                            </ul>
-                        </PanelScroll>
-                    )}
-                </Panel>
-                <Panel className="2xl:col-start-1 2xl:row-start-4" data-testid="chore-spend">
+                <Panel className="2xl:col-start-1 2xl:row-start-3" data-testid="chore-spend">
                     <PanelHeader label="Spend" />
                     <SpendTable spend={chore.spend} />
                 </Panel>

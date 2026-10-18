@@ -40,3 +40,8 @@ export function messageRef(id: number | string): string {
 export function slotRef(name: string): string {
     return `#${name}`
 }
+
+/** A ticket's plan, as `canopy show --plans` reads it: `plan:2`. */
+export function planRef(id: number | string): string {
+    return `plan:${id}`
+}

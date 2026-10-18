@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises'
+
 import { expect } from '@playwright/test'
 import type { Locator, Page } from '@playwright/test'
 
@@ -15,6 +17,7 @@ export const ROUTES = [
     'tickets',
     'tickets/ABC-102',
     'tickets/ABC-105',
+    'tickets/ABC-105/plan',
     'pull-requests',
     `pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`,
     'reviews',
@@ -99,6 +102,65 @@ async function growToPage(page: Page): Promise<void> {
         throw new Error('the page has no viewport to grow')
     }
     await page.setViewportSize({ width: viewport.width, height: Math.max(viewport.height, Math.ceil(height)) })
+}
+
+/**
+ * Serves a placeholder guide in place of the real one: its groups, its pages, and their words, all Latin, with
+ * `e2e/guide-specimen.md` at `slug` and every kind of block and link a page can have on it. The guide's screenshot is
+ * taken so, to hold how a page is drawn and nothing the guide says: its words and its list of pages change in most UI
+ * pull requests and would otherwise rewrite the image in each, and conflict on it. The guide's pages are compiled into
+ * the app's script as one array, `` [{title:`Getting started`,pages:[[`overview`,`...`], ...]}, ...] ``, which is
+ * swapped as the script is served. The specimen's title, `Lorem ipsum`, shows that the swap took.
+ */
+export async function placeholderGuide(page: Page, slug: string): Promise<void> {
+    const specimen = await readFile(new URL('guide-specimen.md', import.meta.url), 'utf8')
+    const guide = JSON.stringify([
+        {
+            title: 'Prima pars',
+            pages: [
+                ['dolor-sit', '# Dolor sit amet\n\nConsectetur adipiscing elit.'],
+                [slug, specimen],
+                ['consectetur', '# Consectetur adipiscing\n\nSed do eiusmod tempor.'],
+            ],
+        },
+        {
+            title: 'Secunda pars',
+            pages: [
+                ['incididunt', '# Incididunt ut labore\n\nEt dolore magna aliqua.'],
+                ['minim-veniam', '# Ut enim ad minim veniam\n\nQuis nostrud exercitation.'],
+            ],
+        },
+    ])
+    await page.route('**/assets/*.js', async (route) => {
+        const response = await route.fetch()
+        const script = await response.text()
+        const at = /\[\{title:`[^`]*`,pages:\[\[/u.exec(script)?.index
+        const body = at === undefined ? script : script.slice(0, at) + guide + script.slice(arrayEnd(script, at))
+        await route.fulfill({ response, body })
+    })
+}
+
+// Where the array literal opening at `start` in `script` ends: the index after its closing bracket. Brackets inside a
+// string or template literal are its characters, not the array's.
+function arrayEnd(script: string, start: number): number {
+    let depth = 0
+    for (let i = start; i < script.length; i += 1) {
+        const char = script[i] ?? ''
+        if (char === '`' || char === '"' || char === "'") {
+            i += 1
+            while (i < script.length && script[i] !== char) {
+                i += script[i] === '\\' ? 2 : 1
+            }
+        } else if ('[{('.includes(char)) {
+            depth += 1
+        } else if (']})'.includes(char)) {
+            depth -= 1
+            if (depth === 0) {
+                return i + 1
+            }
+        }
+    }
+    throw new Error('the guide array in the app script never closes')
 }
 
 /**
