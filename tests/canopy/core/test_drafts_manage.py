@@ -11,9 +11,9 @@ from unittest import mock
 
 import pytest
 
-from canopy.core import drafts, drafts_manage
+from canopy.core import drafts, drafts_manage, observe
 from canopy.core.vocab import DraftStatus
-from canopy.infra import logs
+from canopy.infra import logs, procs
 from canopy.runs import drafted
 from tests.canopy.helpers import (
     DRAFTS_PR,
@@ -29,6 +29,9 @@ from tests.canopy.helpers import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Collection
+
+    from canopy.core.config import Config
     from canopy.core.context import Context
     from tests.conftest import CanopyEnv
 
@@ -111,6 +114,30 @@ def test_an_edit_since_the_operator_read_the_draft_refuses_the_send_stale(
     assert posted["replies"] == [{"comment": 501, "text": "Renamed it to `retries`."}]
     [draft] = all_drafts(conn)
     assert drafts.text_of(conn, draft.id).version == 2
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_an_edit_while_the_send_reads_the_pr_refuses_it_stale_and_posts_nothing(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    run_id = drafted_run(canopy_env, conn, github_state, [thread(501)])
+    seen = hashed(conn, run_id, 1)
+    read = observe.read
+
+    def edited_meanwhile(
+        conn: sqlite3.Connection, config: Config, runner: procs.Runner, prs: Collection[str], log: logs.TickAdapter
+    ) -> observe.Read:
+        # The operator edits in another tab while the send reads the PR again, after it checked the hash.
+        found = read(conn, config, runner, prs, log)
+        assert operator("draft", "edit", f"run:{run_id}", "1", "--text", "Not what was seen.") == 0
+        return found
+
+    capsys.readouterr()
+    with mock.patch.object(observe, "read", autospec=True, side_effect=edited_meanwhile):
+        assert operator("draft", "send", f"run:{run_id}", seen) == 1
+    assert "send refused (stale)" in capsys.readouterr().err
+    assert reads(github_state, "post") == []
+    assert drafts_manage.find(conn, run_id, 1).status is DraftStatus.WAITING
 
 
 @pytest.mark.usefixtures("git_pool")

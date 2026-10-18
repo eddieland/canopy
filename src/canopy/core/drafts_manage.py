@@ -201,6 +201,7 @@ def send(
     conversation.check_operator()
     outcome = Sent()
     chosen: dict[int, records.Draft] = {}
+    seen: dict[int, str] = {}
     for w in wanted:
         draft = find(conn, w.run_id, w.number)
         if draft.status is DraftStatus.SENT:
@@ -208,12 +209,13 @@ def send(
             continue
         _check_sendable(conn, draft, w.hash)
         chosen[draft.id] = draft
+        seen[draft.id] = w.hash
     if not chosen:
         return outcome
     groups = _groups(chosen.values())
     sources = {key: _poster(config, key) for key in groups}
     _check_threads(conn, config, runner, keys=[k for k in groups if k.pr is not None], groups=groups, log=log)
-    _claim(conn, chosen.values(), channel)
+    _claim(conn, chosen.values(), seen, channel)
     for key, group in groups.items():
         _post(conn, sources[key], runner, key=key, group=group, outcome=outcome, log=log)
     return outcome
@@ -243,7 +245,11 @@ def _check_sendable(conn: sqlite3.Connection, draft: records.Draft, seen: str) -
             assert_never(draft.status)
     current = hash_of(drafts.text_of(conn, draft.id).body)
     if current != seen:
-        raise conversation.Refused("stale", f"{where}'s text changed since you saw it: it is {current} now")
+        raise conversation.Refused("stale", _changed(draft, current))
+
+
+def _changed(draft: records.Draft, current: str) -> str:
+    return f"run {draft.run_id}'s draft {draft.number}'s text changed since you saw it: it is {current} now"
 
 
 @dataclass(frozen=True)
@@ -355,16 +361,24 @@ def _quoted(draft: records.Draft, comment: records.ObservedReview) -> str:
     return f"draft {draft.number} of run {draft.run_id}: comment {comment.id} by {comment.author}: {cut}"
 
 
-def _claim(conn: sqlite3.Connection, chosen: Iterable[records.Draft], channel: str) -> None:
-    """Claim the drafts for this send, so two sends at once post them once.
+def _claim(conn: sqlite3.Connection, chosen: Iterable[records.Draft], seen: Mapping[int, str], channel: str) -> None:
+    """Claim the drafts for this send, so two sends at once post them once, each at the text the operator saw.
+
+    The hash is checked again here, since the PRs were read between the first check and this one, and an edit may have
+    come in meanwhile; once claimed, a draft takes no edit, so what posts is the version claimed.
 
     Raises:
-        Refused: (`sending`, or the status it now has) another send claimed one first, or it changed since it was read.
+        Refused: (`stale`) a text changed since the operator saw it; (`sending`, or the status it now has) another send
+            claimed one first, or it changed since it was read.
     """
     now = db.now()
     with db.transaction(conn):
         for draft in chosen:
-            version = drafts.text_of(conn, draft.id).version
+            text = drafts.text_of(conn, draft.id)
+            current = hash_of(text.body)
+            if current != seen[draft.id]:
+                raise conversation.Refused("stale", _changed(draft, current))
+            version = text.version
             claimed = conn.execute(
                 "UPDATE drafts SET status = ?, send_started_at = ?, send_version = ?, sent_channel = ? "
                 "WHERE id = ? AND status = ?",
