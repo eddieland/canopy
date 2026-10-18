@@ -3,10 +3,11 @@ import { createFileRoute } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
 import { runMemoryQuery, runQuery, runTranscriptQuery } from '@/api/queries'
-import type { Run } from '@/api/types'
+import type { Run, Transcript } from '@/api/types'
 import { Age } from '@/components/age'
 import { Copyable, CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
+import { EndedOnField } from '@/components/ended-on'
 import { Field, Fields } from '@/components/fields'
 import { MemoryRows } from '@/components/memory'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
@@ -18,6 +19,7 @@ import { TicketField } from '@/components/ticket-field'
 import { Timestamp } from '@/components/timestamp'
 import { RunOutputPanel } from '@/components/raw-output'
 import { TranscriptPanel } from '@/components/transcript'
+import { useTranscriptView } from '@/hooks/use-transcript-view'
 import { runDescription } from '@/lib/descriptions'
 import { runRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
@@ -53,6 +55,8 @@ function Loaded({ id }: { id: number }) {
     const { data, error } = query
     // Read beside the run, not after it: the page waits on the slower of the two, not on both in turn.
     const { data: transcript } = useQuery(runTranscriptQuery(id))
+    // The Run panel shows a transcript row as the context chart does, so the page holds how the transcript is shown.
+    const view = useTranscriptView()
     if (error instanceof ApiError && error.status === 404) {
         return <NoRun title={runRef(id)}>{error.message}</NoRun>
     }
@@ -77,8 +81,8 @@ function Loaded({ id }: { id: number }) {
                 {runDescription(data)}
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
-                <RunPanel run={data} />
-                <TranscriptPanel transcript={transcript} running={data.state === 'running'} />
+                <RunPanel run={data} transcript={transcript} onShow={view.show} />
+                <TranscriptPanel transcript={transcript} running={data.state === 'running'} view={view} />
                 <RunOutputPanel id={data.id} />
                 <RunMemoryPanel id={data.id} />
             </div>
@@ -97,7 +101,15 @@ function NoRun({ title, children }: { title: string; children: string }) {
     )
 }
 
-function RunPanel({ run }: { run: Run }) {
+function RunPanel({
+    run,
+    transcript,
+    onShow,
+}: {
+    run: Run
+    transcript: Transcript | undefined
+    onShow: (i: number) => void
+}) {
     return (
         <Panel>
             <PanelHeader label="Run">
@@ -127,6 +139,7 @@ function RunPanel({ run }: { run: Run }) {
                     </Field>
                 )}
                 <Field label="summary">{run.summary ? <RichText text={run.summary} /> : <None />}</Field>
+                <EndedOnField status={run.status} transcript={transcript} onShow={onShow} />
                 {run.prs.length > 0 && (
                     <Field label="pull requests" mono>
                         <span className="flex flex-wrap gap-x-4">

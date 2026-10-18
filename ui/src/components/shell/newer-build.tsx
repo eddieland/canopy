@@ -18,7 +18,15 @@ export function NewerBuild() {
         return null
     }
     return (
-        <Button size="sm" title={HINT} data-testid="newer-build" onClick={() => globalThis.location.reload()}>
+        // The accent's tint, not its fill: it stands out among the header's ghost buttons without outshouting them.
+        <Button
+            variant="ghost"
+            size="sm"
+            className="bg-accent/14 text-accent hover:bg-accent/22 hover:text-accent"
+            title={HINT}
+            data-testid="newer-build"
+            onClick={() => globalThis.location.reload()}
+        >
             <RotateCw aria-hidden />
             Reload
         </Button>

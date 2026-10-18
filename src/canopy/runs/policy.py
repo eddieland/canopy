@@ -158,14 +158,14 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
         repo = worked[0]
     elif repo not in worked:
         raise conversation.Refused("unknown_repo", f"{key} has had no runs in {repo}")
+    # The limit is read in the grant's own write transaction, so it counts this grant and none committed after it.
     with db.transaction(conn):
         conn.execute(
             "INSERT INTO attempt_grants (ticket_key, repo, kind, runs, granted_at) VALUES (?, ?, ?, ?, ?)",
             (key, repo, kind, runs, db.now()),
         )
-    name = unit(key, repo)
-    limit = unit_limits(config, grants(conn).get(name, {}))[kind]
-    return Granted(repo=repo, runs=unit_attempts(conn, key, repo)[kind], limit=limit)
+        limit = unit_limits(config, grants(conn).get(unit(key, repo), {}))[kind]
+        return Granted(repo=repo, runs=unit_attempts(conn, key, repo)[kind], limit=limit)
 
 
 @dataclass(frozen=True)
@@ -193,12 +193,13 @@ def grant_ticket(conn: sqlite3.Connection, config: Config, key: str, kind: str, 
         raise conversation.Refused("bad_kind", f"{kind} is not one of {', '.join(TICKET_GRANT_KINDS)}")
     if db.get_ticket(conn, key) is None:
         raise conversation.Refused("unknown", f"canopy has no record of {key}, so it has no attempts to grant past")
+    # Read in the grant's own transaction, as `grant` reads its limit.
     with db.transaction(conn):
         conn.execute(
             "INSERT INTO ticket_grants (ticket_key, kind, runs, granted_at) VALUES (?, ?, ?, ?)",
             (key, kind, runs, db.now()),
         )
-    return TicketGranted(runs=ticket_attempts(conn, kind).get(key, 0), limit=ticket_limit(conn, config, key, kind))
+        return TicketGranted(runs=ticket_attempts(conn, kind).get(key, 0), limit=ticket_limit(conn, config, key, kind))
 
 
 def ticket_limit(conn: sqlite3.Connection, config: Config, key: str, kind: str) -> int:

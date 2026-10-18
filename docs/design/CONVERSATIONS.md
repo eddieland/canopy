@@ -218,8 +218,9 @@ UI (below), and:
   deleted. The unit's limit for the kind is `policy.max_<kind>_attempts` plus the sum of its grants of that kind, so
   lowering the policy lowers it too.
 - resets no count: every run, before and after, still counts (D030). The command prints the unit's runs and its new
-  limit. The state block shows the unit's `granted` counts beside its `attempts`, and the overseer compares against
-  their sum (§6 step 4); a dispatch's attempt limit and the worker's `{{MAX_ATTEMPTS}}` include them.
+  limit, read in the grant's own transaction, so two grants at once each report their own. The state block shows the
+  unit's `granted` counts beside its `attempts`, and the overseer compares against their sum (§6 step 4); a dispatch's
+  attempt limit and the worker's `{{MAX_ATTEMPTS}}` include them.
 - dispatches nothing. The next tick decides from the ticket's phase as usual, so the trigger a refused dispatch left
   (§8: cursors advance only once a worker starts) is still new, and a ticket whose last run failed still waits for a
   reply (§14).
@@ -524,6 +525,10 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   call's reasoning shows only with OpenCode's `--thinking`, which every default template passes, so a transcript says
   why a call made the tool calls it did, not only that it made them; a provider that redacts its reasoning shows none.
   A subagent's calls are its own session's (§13), so a `task` call shows as one tool call with its answer.
+- A run or chore run that ended `failed`, `crashed`, or `unknown` names in its Run panel what its session ended on:
+  the transcript's last runtime error, else its last failed or refused tool call, which shows its row. Why it ended is
+  most of why its page is opened, and the transcript has it last. Not a `timeout`, `unpushed`, or `stopped` run: the
+  clock, a branch, or the operator ended those, and a last error would only look like the cause.
 - OpenCode reports a shell call completed whatever its exit, so the UI marks a canopy command refused, with its
   guard, by reading canopy's own `Error: <verb> refused (<guard>)` line from its output; no other command's.
 - Not on the event stream, since a log can be large: the UI reads a transcript again when the stream moves its run's

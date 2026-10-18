@@ -3,12 +3,13 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
 import { choreRunQuery, choreRunTranscriptQuery } from '@/api/queries'
-import type { ChoreRunDetail } from '@/api/types'
+import type { ChoreRunDetail, Transcript } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreFindingRow } from '@/components/chore-finding'
 import { ChoreLink } from '@/components/chore-link'
 import { CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
+import { EndedOnField } from '@/components/ended-on'
 import { Field, Fields } from '@/components/fields'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
@@ -16,6 +17,7 @@ import { RichText } from '@/components/rich-text'
 import { RunDot, Word } from '@/components/status'
 import { Timestamp } from '@/components/timestamp'
 import { TranscriptPanel } from '@/components/transcript'
+import { useTranscriptView } from '@/hooks/use-transcript-view'
 import { choreRunDescription } from '@/lib/descriptions'
 import { choreRef, choreRunRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
@@ -54,6 +56,8 @@ function Loaded({ name, id }: { name: string; id: number }) {
     const { data, error } = query
     // Read beside the run, not after it: the page waits on the slower of the two, not on both in turn.
     const { data: transcript } = useQuery(choreRunTranscriptQuery(name, id))
+    // The Run panel shows a transcript row as the context chart does, so the page holds how the transcript is shown.
+    const view = useTranscriptView()
     const title = choreRunRef(name, id)
     if (error instanceof ApiError && error.status === 404) {
         return (
@@ -88,7 +92,7 @@ function Loaded({ name, id }: { name: string; id: number }) {
                 {choreRunDescription(data.run, data.findings.length)}
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
-                <RunPanel detail={data} />
+                <RunPanel detail={data} transcript={transcript} onShow={view.show} />
                 {data.findings.length > 0 && (
                     <Panel data-testid="chore-run-findings">
                         <PanelHeader label="Findings">
@@ -101,7 +105,7 @@ function Loaded({ name, id }: { name: string; id: number }) {
                         </ul>
                     </Panel>
                 )}
-                <TranscriptPanel transcript={transcript} running={data.run.state === 'running'} />
+                <TranscriptPanel transcript={transcript} running={data.run.state === 'running'} view={view} />
             </div>
         </>
     )
@@ -126,7 +130,15 @@ function ChoreCrumb({ name }: { name: string }) {
     )
 }
 
-function RunPanel({ detail }: { detail: ChoreRunDetail }) {
+function RunPanel({
+    detail,
+    transcript,
+    onShow,
+}: {
+    detail: ChoreRunDetail
+    transcript: Transcript | undefined
+    onShow: (i: number) => void
+}) {
     const { run } = detail
     return (
         <Panel>
@@ -151,6 +163,7 @@ function RunPanel({ detail }: { detail: ChoreRunDetail }) {
                 </Field>
                 {detail.note && <Field label="harness">{detail.note}</Field>}
                 <Field label="summary">{detail.summary ? <RichText text={detail.summary} /> : <None />}</Field>
+                <EndedOnField status={run.status} transcript={transcript} onShow={onShow} />
                 <Field label="spent" mono>
                     <Cost usd={run.cost_usd} />
                     <span title={RUN_TOKENS_TITLE}>{runTokens(run.new_tokens, run.peak_context)}</span>
