@@ -3,12 +3,13 @@ import { Link } from '@tanstack/react-router'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { ApiError } from '@/api/client'
 import { mockAttention } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { AttentionItem } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
-import { PageHeader, ThreadScroll } from './panel'
+import { PageHeader, PanelLoading, ThreadScroll } from './panel'
 
 afterEach(() => {
     cleanup()
@@ -126,6 +127,43 @@ function scrollTo(region: HTMLElement, top: number) {
     region.scrollTop = top
     fireEvent.scroll(region)
 }
+
+describe('PanelLoading', () => {
+    it('shimmers while the read is pending, and says nothing failed', () => {
+        render(<PanelLoading query={{ error: null, isFetching: true, refetch: vi.fn<() => Promise<unknown>>() }} />)
+        expect(screen.getByTestId('panel-skeleton')).toBeTruthy()
+        expect(screen.queryByRole('alert')).toBeNull()
+    })
+
+    it('says why a failed read failed, in place of the skeleton, and reads again when asked', () => {
+        const refetch = vi.fn<() => Promise<unknown>>(async () => {})
+        render(
+            <PanelLoading
+                query={{ error: new ApiError(500, 'database is locked'), isFetching: false, refetch }}
+                className="min-h-72"
+            />,
+        )
+        expect(screen.queryByTestId('panel-skeleton')).toBeNull()
+        expect(screen.getByRole('alert').textContent).toBe(
+            'could not read it: the server answered 500: database is locked',
+        )
+        fireEvent.click(screen.getByRole('button', { name: 'Read again' }))
+        expect(refetch).toHaveBeenCalledOnce()
+    })
+
+    it('holds Read again while the read it asked for is in flight', () => {
+        render(
+            <PanelLoading
+                query={{
+                    error: new TypeError('Failed to fetch'),
+                    isFetching: true,
+                    refetch: vi.fn<() => Promise<unknown>>(),
+                }}
+            />,
+        )
+        expect(screen.getByRole('button', { name: 'Reading' }).hasAttribute('disabled')).toBe(true)
+    })
+})
 
 describe('ThreadScroll', () => {
     it('keeps to the newest end as the thread grows, but not while the operator reads further up', () => {
