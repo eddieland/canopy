@@ -17,6 +17,26 @@ Memory comes in two tiers, split by how far a worker's words can travel.
 The overseer reads no memory and writes none, and reviews, chores, and splits get neither tier: a reviewer stays
 independent of what the author believed.
 
+## How it protects you
+
+Memory is a worker's words reaching a later prompt, which is exactly what anyone steering a worker through a ticket
+comment would want. So the walls are in code, not in a prompt asking nicely.
+
+- **A run writes only on its own ticket.** canopy files a note under the ticket the run was started for, taken from
+  the run's own record, never from anything the worker says. Only that ticket's later runs read it, and a run renews or
+  drops only the notes it was served. The worst a steered run can do is mislead its own ticket's next run, which is
+  told to check what it reads against the branch and the PR.
+- **Nothing reaches every worker until you approve it.** A worker can only propose a lesson, and a proposal reaches no
+  prompt at any mode. It takes effect when you promote it, on the memory page or with `canopy memory promote`, and what
+  goes out is your text, in your name. `promote`, `reject`, and `renew` refuse to run inside a tick or a run, so a
+  worker can't approve its own proposal by typing the command.
+- **The text is checked on the way in.** A note or a proposal is capped in length, and canopy refuses one carrying
+  hidden characters or anything that looks like a secret. That doesn't make it true; it makes it something you can read.
+
+One gap, named so you don't find it later: unless you run workers in a sandbox, a worker's shell runs as you, and could
+write to the journal as you could. The walls above stop a worker that plays by canopy's commands, not one that goes
+around them.
+
 ## Turning it on
 
 Each tier has a mode under `[memory]` in your own config, the user file or the private file, never the workspace's:
