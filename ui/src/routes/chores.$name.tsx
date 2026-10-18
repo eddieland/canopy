@@ -19,7 +19,15 @@ import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunDot, Word } from '@/components/status'
 import { TryChore } from '@/components/try-chore'
-import { cadenceText, choreLine, findingsReadout, listedText, runsText, windowText } from '@/lib/chores'
+import {
+    cadenceText,
+    choreHealth,
+    findingsReadout,
+    listedText,
+    runsText,
+    startsAnyTime,
+    windowText,
+} from '@/lib/chores'
 import { costText } from '@/lib/cost-total'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { choreRef } from '@/lib/refs'
@@ -77,7 +85,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
     return (
         <>
             <PageHeader title={choreRef(chore.name)} help={HELP}>
-                {choreLine(chore, now)}
+                {choreHealth(chore, now)}
             </PageHeader>
             <ChoreLimitBanner chore={chore} />
             {/* The detail skeleton (DESIGN.md): what it is, then its main content, its open findings and the runs that
@@ -90,19 +98,24 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                     '2xl:items-start',
                 )}
             >
-                <Panel className="2xl:col-start-1 2xl:row-start-1">
-                    {/* Where it stands, running or when it last ran and is next due, is the page's description. */}
+                <Panel className="2xl:col-start-1 2xl:row-start-1" data-testid="chore-schedule">
+                    {/* Where it stands, how its last run ended, and its open findings are the page's description. A
+                        window or condition left at its default is no row: only what the config says is a fact. */}
                     <PanelHeader label="Schedule" />
                     <Fields>
                         <Field label="at most" mono>
                             {cadenceText(chore.every_minutes)}
                         </Field>
-                        <Field label="starts" mono>
-                            {windowText(chore)}
-                        </Field>
-                        <Field label="when" className="whitespace-pre-wrap">
-                            {chore.when ?? <span className="font-mono text-xs">whenever it is due</span>}
-                        </Field>
+                        {!startsAnyTime(chore) && (
+                            <Field label="starts" mono>
+                                {windowText(chore)}
+                            </Field>
+                        )}
+                        {chore.when !== null && (
+                            <Field label="when" className="whitespace-pre-wrap">
+                                {chore.when}
+                            </Field>
+                        )}
                     </Fields>
                     <div className="border-t" data-testid="chore-actions">
                         <TryChore chore={chore} />

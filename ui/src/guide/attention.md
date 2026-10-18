@@ -97,8 +97,9 @@ Sending the same reply twice, say after a dropped connection, records it once.
 
 ## Chore items
 
-An item about a chore shows the chore's notes, with a box to add one: your next instruction to its runs, such as "the
-deploy check is red on purpose until Friday". A note doesn't wake the loop; the chore's next run reads it.
+An item about a chore shows the chore's notes, with **Show a note for its next runs** to add one: your next instruction
+to its runs, such as "the deploy check is red on purpose until Friday". A note doesn't wake the loop; the chore's next
+run reads it.
 
 A chore's finding has a **dismiss** button. It keeps the finding off the list until the chore stops reporting it, so a
 finding that clears and comes back is listed again. Undo a dismissal on the chore's page. [Chores](chores)

@@ -633,9 +633,10 @@ list, an empty state, or a skeleton by hand.
   them shows its detail and nothing to answer. The page keeps no list of the runs working now: the rail's, on every
   page, is the one, so one count of them shows at a time.
 - **The reply form is open only where a reply is awaited** (`ReplyForm`): a question waiting, an untrusted review
-  waiting on the go-ahead, any private ticket, whose workers hear the operator only there, and a chore's notes. A public
-  ticket with nothing waiting gets a `Disclosure`, `Show a note for its next worker`, since a full-size box invites a
-  reply nothing waits on; it opens by itself once a reply is awaited or a draft is kept. Its placeholder speaks of an
+  waiting on the go-ahead, and any private ticket, whose workers hear the operator only there. A public ticket with
+  nothing waiting gets a `Disclosure`, `Show a note for its next worker`, since a full-size box invites a reply nothing
+  waits on, and a chore's note form always does, `Show a note for its next runs`, since nothing ever waits on a note;
+  it opens by itself once a reply is awaited or a draft is kept. Its placeholder speaks of an
   untrusted review only while one waits. It is the form's rule, so the ticket's page and its attention item agree.
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
   wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
@@ -663,8 +664,10 @@ list, an empty state, or a skeleton by hand.
   PR's address in a conversation's bubble or a chore's finding, its detail or its link, as in the harness's lines
   (`InlineCode`).
 - **A chore's notes** are a conversation of the operator's words alone, after the chore's findings and runs and before
-  its spend, with a note form (`ChoreNotes`). A note no run of the chore has started since carries `waiting for the next
-  run` in `status-running` (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
+  its spend, with a note form folded under its `Disclosure` (`ChoreNotes`). With no notes the panel is its header and
+  that one line, and the form's placeholder says what the empty list would have: its runs follow its prompt file
+  alone. A note no run of the chore has started since carries `waiting for the next run` in `status-running`
+  (`src/lib/chores.ts`): no tick reads a note, so the tick chip would be wrong there.
 - **Decisions** are rows (`Decisions`): the subject, a ticket or chore as a link, a unit as its ticket and repository
   (on its subject's page, the tick instead, with its age), the action as a chip, a PR as a link, and the rationale
   under them as rich text, from the action's column. A `refused:` action's chip is in `status-failed` and an
@@ -845,8 +848,11 @@ list, an empty state, or a skeleton by hand.
   the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed
   as `canopy status` counts them (`findingsText`: `1 open finding · 2 dismissed`; its page's findings panel the
   same, `findingsReadout`: `1 · 2 dismissed`), and what its runs cost in the last
-  24 hours and 30 days (`costText`, a dash when none reported a cost). Its page's description is that line, and it
-  puts that spend in a table under its
+  24 hours and 30 days (`costText`, a dash when none reported a cost). Its page's description says whether it is
+  healthy (`choreHealth`): that line, while a run works how the last one ended too, since the running one has said
+  nothing yet, then its open findings when any (`last ok 9d ago, due now · 1 open finding`,
+  `running for 10m · last ok 2h ago`). Its Schedule panel names what the config sets: `at most` always, a window or
+  `when` only when set, since a default is no fact about the chore. The page puts that spend in a table under its
   runs, a row a window: runs (`runsText`: `4, 1 unpriced`), total, average, p99, and max. A chore run is a row like a
   run's, its id as `chore:deps#2` (Names, below) linking to its page, with its findings as a chip on
   an `ok` run. A finding is one row (`ChoreFindingRow`) on a chore's page and a chore run's alike; an open one says
