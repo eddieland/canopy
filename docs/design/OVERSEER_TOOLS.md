@@ -26,10 +26,10 @@ verbs stay while the tools settle, and go once nothing needs them (stage 3).
 How much the first two buy is measured before anything is built (stage 0): how often the overseer's bash calls fail
 today on usage or quoting.
 
-Workers are out of scope. They run no `canopy` command, and their definitions deny `canopy *`; what they report is read
-from their final line after they exit (§8), so nothing a worker writes reaches the journal while it runs. A tool a
-worker could call mid-run would end that. A tool that only checks a draft result against the contract and writes
-nothing would not, and is a possible later step, not part of M48.
+Workers are out of scope. Their definitions deny `canopy *` but `canopy memory search` (§28), which writes nothing;
+what they report is read from their final line after they exit (§8), so nothing a worker writes reaches the journal
+while it runs. A tool a worker could call mid-run would end that. A tool that only checks a draft result against the
+contract and writes nothing would not, and is a possible later step, not part of M48.
 
 ### The server
 

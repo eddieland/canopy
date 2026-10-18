@@ -185,10 +185,14 @@ so nothing a worker types is an error. It adds to what is pushed into the prompt
 - A digest names the command where it helps: the ticket's whenever it has notes, the lessons' when its cap left some
   out. A run told nothing of memory is told nothing of search, and with memory off every prompt stays the same bytes.
 - In the operator's shell it finds every memory that still has its text, proposals and every ticket's notes included.
+- Both worker definitions allow it, the one `canopy` command they do (§13). A sandboxed worker cannot run it: the
+  journal is in the part of `.canopy/` its policy denies (§24), so it has its digests.
 - The index holds no copy of a text: `forget` and `purge` leave no word of what they deleted in it. It needs SQLite
   built with FTS5, which every journal's migrations create and `make install-check` checks.
 - T1 is unchanged: a run reaches its own ticket's notes and the lessons a run in its repositories is served. A steered
-  worker that names another run's id reaches what its bash could read from the journal anyway (T1's residual, D076).
+  worker that names another run's id, or clears `CANOPY_RUN_ID` to search as the operator does, reaches no more than
+  its bash could read from the journal anyway (T1's residual, D076): its bash allows every command but a few, so an
+  unsandboxed worker can open the journal itself, and the definitions' rules are defense in depth (T4).
 
 Rejected for search: embeddings, a runtime dependency and weakest on facts that changed, which is canopy's usual case;
 and a search as the only way to read memory, since agents skip tools they are not made to use.
