@@ -6,7 +6,7 @@ import contextlib
 import json
 import os
 import sqlite3
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from unittest import mock
@@ -44,6 +44,24 @@ def scenario(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, conn
     """The workspace, with the fake treehouse and agents on PATH, where a test tells a ticket's story
     (`scenario_helpers.py`). A test whose workers push asks for `git_pool` too."""
     return Scenario(canopy_env, conn, agent_log)
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(item: pytest.Item) -> Generator[None, pytest.TestReport, pytest.TestReport]:
+    """A failed scenario test's report carries the story as it played, in a section of its own (`scenario_helpers.py`).
+
+    Yields:
+        Nothing: pytest makes the report meanwhile.
+
+    Returns:
+        The report pytest made.
+    """
+    report = yield
+    told = item.funcargs.get("scenario") if isinstance(item, pytest.Function) else None
+    # The call's report: the journal is still open, since fixtures are torn down after it.
+    if report.when == "call" and report.failed and isinstance(told, Scenario):
+        report.sections.append(("scenario", told.told()))
+    return report
 
 
 @pytest.fixture
