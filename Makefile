@@ -52,11 +52,10 @@ snapshots: ## Run all tests, recording every snapshot that differs
 
 ##@ Flaky tests
 
-# A flaky test is most often a new one, so these run the tests a change touched many times over, and fail if any run
-# does: before a test merges, not after it has failed someone else's pull request. Run them before claiming a flaky
-# test is fixed, too. BASE is what the change is measured from: by default where this branch left origin/main, and on
-# CI's pull requests HEAD^1, the base side of the merge commit it checks out. ALL=1 runs every test instead, as the
-# Flaky tests workflow does each night. REPEAT is how many times each runs.
+# For when a test is suspected of being flaky, and to prove a fix for one: these run the tests a change touched many
+# times over, and fail if any run does. Nothing runs them unasked; the Flaky tests workflow runs them on CI's runners on
+# demand. BASE is what the change is measured from, by default where this branch left origin/main; ALL=1 runs every
+# test instead. REPEAT is how many times each runs.
 BASE ?= $(shell git merge-base origin/main HEAD 2>/dev/null)
 REPEAT ?= 10
 need-base = @test -n "$(ALL)$(BASE)" || { echo "BASE is empty: fetch origin/main, or pass BASE=ref or ALL=1"; exit 1; }
