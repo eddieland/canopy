@@ -76,11 +76,16 @@ test("30 days' table scrolls in its panel under its column names, and a week's s
     const scrolls = () => region.evaluate((el) => el.scrollHeight > el.clientHeight)
     expect(await scrolls()).toBe(true)
 
-    // Scrolled to the oldest day, the column names stay at the region's top.
+    // Scrolled to the oldest day, the column names stay at the region's top. Within a pixel: a sticky header lands on a
+    // fraction of one that differs between runs, and once missed the half pixel `toBeCloseTo(y, 0)` allows by 0.02.
     await region.evaluate((el) => el.scrollTo({ top: el.scrollHeight }))
-    const head = await page.getByTestId('spend-table').locator('thead').boundingBox()
-    const box = await region.boundingBox()
-    expect(head?.y).toBeCloseTo(box?.y ?? Number.NaN, 0)
+    const thead = page.getByTestId('spend-table').locator('thead')
+    await expect
+        .poll(async () => {
+            const [head, box] = await Promise.all([thead.boundingBox(), region.boundingBox()])
+            return Math.abs((head?.y ?? Number.NaN) - (box?.y ?? Number.NaN))
+        })
+        .toBeLessThanOrEqual(1)
 
     await page.getByTestId('spend-window-7').click()
     await expect(page.getByTestId('spend-table').locator('tbody tr')).toHaveCount(7)
