@@ -1,14 +1,26 @@
-import { cleanup, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { QueryClient } from '@tanstack/react-query'
+import { cleanup, fireEvent, screen, within } from '@testing-library/react'
+import type { Middleware } from 'openapi-fetch'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { api } from '@/api/client'
 import { draft } from '@/api/mocks'
+import { keys } from '@/api/queries'
 import { renderRouted } from '@/test-utils'
 
 import { TicketDrafts } from './ticket-drafts'
 
 const ISSUE = 'https://github.com/acme/api/issues/1'
 
+// The server stand-in: every write answers with the draft, dropped.
+const server: Middleware = {
+    onRequest() {
+        return Response.json(ticketDraft())
+    },
+}
+
 afterEach(() => {
+    api.eject(server)
     cleanup()
 })
 
@@ -36,5 +48,16 @@ describe('TicketDrafts', () => {
         await renderRouted(<TicketDrafts ticketKey="ABC-1" drafts={[ticketDraft()]} bare />)
         expect(screen.queryByText('Drafts for the ticket')).toBeNull()
         expect(screen.getByTestId('draft')).toBeTruthy()
+    })
+
+    it("reads the ticket and the attention list again after a verb, as a PR's drafts do", async () => {
+        api.use(server)
+        const client = new QueryClient()
+        const invalidated = vi.spyOn(client, 'invalidateQueries')
+        await renderRouted(<TicketDrafts ticketKey="ABC-1" drafts={[ticketDraft()]} />, { client })
+        fireEvent.click(screen.getByRole('button', { name: 'Drop' }))
+        await screen.findByRole('status')
+        const refreshed = invalidated.mock.calls.map(([filters]) => filters?.queryKey)
+        expect(refreshed).toEqual(expect.arrayContaining([keys.ticket('ABC-1'), keys.attention]))
     })
 })

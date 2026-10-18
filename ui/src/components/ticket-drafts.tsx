@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query'
 
-import { refreshTicket } from '@/api/mutations'
+import { refreshTicketDrafts } from '@/api/mutations'
 import type { Draft } from '@/api/types'
 import { Panel, PanelHeader } from '@/components/panel'
 import { DraftCard } from '@/components/review-threads'
@@ -27,7 +27,7 @@ export function TicketDrafts({
     if (drafts.length === 0) {
         return null
     }
-    const changed = () => void refreshTicket(client, ticketKey)
+    const changed = () => void refreshTicketDrafts(client, ticketKey)
     const cards = (
         <div className={cn('flex flex-col gap-2 p-3', bare && className)} data-testid="ticket-drafts">
             {drafts.map((d) => (
