@@ -90,7 +90,7 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.chore('deps'))?.isInvalidated).toBe(true)
     })
 
-    it("reads a chore run's page and transcript again only when its status moves", () => {
+    it("reads a chore run's page and transcript again only when its status or cost moves", () => {
         const client = new QueryClient()
         const [chore] = mockChores
         const run = chore?.latest
@@ -108,6 +108,13 @@ describe('applyStreamEvent', () => {
         client.setQueryData(keys.choreRun(chore.name, run.id), { ...detail, run: { ...run, status: 'running' } })
         applyStreamEvent(client, { type: 'chores.updated', chores: mockChores })
         expect(client.getQueryState(keys.choreRun(chore.name, run.id))?.isInvalidated).toBe(true)
+        expect(client.getQueryState(keys.choreRunTranscript(chore.name, run.id))?.isInvalidated).toBe(true)
+
+        // A model call that ended moved its cost, and its agent's events reached the log as it printed them.
+        client.setQueryData(keys.choreRun(chore.name, run.id), detail)
+        client.setQueryData(keys.choreRunTranscript(chore.name, run.id), { status: 'read', entries: [] })
+        const spent = { ...chore, latest: { ...run, cost_usd: (run.cost_usd ?? 0) + 0.25 } }
+        applyStreamEvent(client, { type: 'chores.updated', chores: [spent] })
         expect(client.getQueryState(keys.choreRunTranscript(chore.name, run.id))?.isInvalidated).toBe(true)
     })
 
@@ -179,7 +186,7 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryState(keys.runTranscript(second.id))?.isInvalidated).toBe(false)
     })
 
-    it('marks a tick transcript stale when its status moves, not as it records decisions', () => {
+    it("marks a tick's transcript and output stale as its log grows: a model call's cost, a decision, its end", () => {
         const client = new QueryClient()
         const empty = { status: 'read', session_id: null, entries: [], truncated: false, unreadable: 0 } as const
         const running = {
@@ -203,13 +210,24 @@ describe('applyStreamEvent', () => {
         client.setQueryData(keys.tickTranscript(2), empty)
         client.setQueryData(keys.tickOutput(3), { status: 'no_output', text: '', size: 0, truncated: false })
 
-        applyStreamEvent(client, { type: 'tick.updated', tick: { ...running, decisions: 2 }, acknowledged: null })
+        // Nothing its log holds moved.
+        applyStreamEvent(client, { type: 'tick.updated', tick: running, acknowledged: null })
         expect(client.getQueryState(keys.tickTranscript(3))?.isInvalidated).toBe(false)
 
-        const ended = { ...running, status: 'ok', ended_at: '2026-10-08T12:01:00Z', decisions: 2 }
+        // Its overseer's events reach the log as it prints them: a decision and a model call's end move the tick.
+        const spent = { ...running, cost_usd: 0.12 }
+        applyStreamEvent(client, { type: 'tick.updated', tick: spent, acknowledged: null })
+        expect(client.getQueryState(keys.tickTranscript(3))?.isInvalidated).toBe(true)
+        client.setQueryData(keys.tickTranscript(3), empty)
+        applyStreamEvent(client, { type: 'tick.updated', tick: { ...spent, decisions: 2 }, acknowledged: null })
+        expect(client.getQueryState(keys.tickTranscript(3))?.isInvalidated).toBe(true)
+        client.setQueryData(keys.tickTranscript(3), empty)
+        client.setQueryData(keys.tickOutput(3), { status: 'no_output', text: '', size: 0, truncated: false })
+
+        const ended = { ...spent, status: 'ok', ended_at: '2026-10-08T12:01:00Z', decisions: 2 }
         applyStreamEvent(client, { type: 'tick.updated', tick: ended, acknowledged: null })
         expect(client.getQueryState(keys.tickTranscript(3))?.isInvalidated).toBe(true)
-        // Its output with it: the overseer's file is written as the tick ends.
+        // Its output with it: the overseer's stderr is written as the tick ends.
         expect(client.getQueryState(keys.tickOutput(3))?.isInvalidated).toBe(true)
         expect(client.getQueryState(keys.tickTranscript(2))?.isInvalidated).toBe(false)
     })

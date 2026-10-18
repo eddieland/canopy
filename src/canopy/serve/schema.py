@@ -1120,8 +1120,8 @@ class TickOutput(_Model):
     """
 
     status: Literal["read", "no_output"]
-    """`read`: the file was read. `no_output`: it is missing (none kept, or the tick is still running), a symlink, or
-    not a regular file."""
+    """`read`: the file was read; a running tick's holds what its overseer has printed so far. `no_output`: it is
+    missing (none kept, or its overseer has not started), a symlink, or not a regular file."""
     text: str = ""
     """The end of the file, starting at a whole line."""
     size: int = 0

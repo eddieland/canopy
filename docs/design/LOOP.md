@@ -79,10 +79,11 @@ in order:
 
    Then run the overseer with `overseer_cmd`, cwd the workspace root (§18), timeout `overseer_timeout_minutes`, and
    `CANOPY_TICK_ID` set. `canopy dispatch`, `decide`, `queried`, `attention`, and `mirror` refuse if it is unset or
-   names a tick that is not running (D020). Its output goes to `<state_dir>/ticks/<tick id>.log`, readable only by the
-   operator, never to the journal. Its session is recorded as soon as it prints one, and session and cost (§13) again
-   when it ends. It succeeded if it exited 0 and a line of its final message (§13), trimmed of whitespace and
-   backticks, is exactly `CANOPY_TICK_DONE`; otherwise the tick closes as `overseer_failed`. Text around that line is
+   names a tick that is not running (D020). Its output goes to `<state_dir>/ticks/<tick id>.log` as it prints it, its
+   stderr after once it ends, readable only by the operator, never to the journal. Its session is recorded as soon as
+   it prints one, what it has spent at each model call's end, and session and cost (§13) again when it ends. It
+   succeeded if it exited 0 and a line of its final message (§13), trimmed of whitespace and backticks, is exactly
+   `CANOPY_TICK_DONE`; otherwise the tick closes as `overseer_failed`. Text around that line is
    allowed, since models summarize and a tick lost on its summary is lost to the attention list (MEASUREMENTS
    2026-10-12, F2). The check is on the final message because it catches a run that exits 0 short of the last step (a
    refused tool call, a cut-off session); the token is a word no model writes by chance. A successful run that recorded

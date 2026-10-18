@@ -359,7 +359,7 @@ test("a chore run's id opens its page: what it reported, in full, over its sessi
 
     await page.goto('chores/build-health/runs/4')
     await settled(page)
-    await expect(page.getByTestId('transcript')).toContainText('the session’s events reach the log when it ends')
+    await expect(page.getByTestId('transcript')).toContainText('no events yet: they show here as the agent prints them')
     await page.goto('chores/deps/runs/4')
     await expect(page.getByText("chore 'deps' has no run 4")).toBeVisible()
 })

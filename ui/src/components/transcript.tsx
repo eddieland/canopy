@@ -60,18 +60,16 @@ const NO_CALLS: readonly Call[] = []
  * call, the same entries are grouped by the model call they came from, each opening to what it was sent and what it
  * did. In order, a search keeps the rows with a line that holds it, its matches marked, and opens a tool call whose
  * input or output holds it. All of it is agent output, rendered as text. `running` says the session has not ended:
- * its events reach the log when it does, or with `live`, a worker run's, as the runtime prints them. Its header names
- * the session, but for `session={false}`, on a page whose identity panel names it already.
+ * its events reach the log as the runtime prints them, so it is what the agent has done so far. Its header names the
+ * session, but for `session={false}`, on a page whose identity panel names it already.
  */
 export function TranscriptPanel({
     transcript,
     running,
-    live = false,
     session = true,
 }: {
     transcript: Transcript | undefined
     running: boolean
-    live?: boolean
     session?: boolean
 }) {
     const [grouped, setGrouped] = useState(false)
@@ -164,7 +162,7 @@ export function TranscriptPanel({
             {transcript === undefined ? (
                 <PanelSkeleton />
             ) : entries.length === 0 ? (
-                <Empty>{empty(transcript, running, live)}</Empty>
+                <Empty>{empty(transcript, running)}</Empty>
             ) : (
                 <>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b px-3 py-1.5">
@@ -250,25 +248,20 @@ export function TranscriptPanel({
     )
 }
 
-function empty(transcript: Transcript, running: boolean, live: boolean): string {
-    if (running && live) {
+function empty(transcript: Transcript, running: boolean): string {
+    if (running) {
         // Its session is recorded at its first event, so before then there is none.
-        return 'no events yet: they show here as the worker prints them'
+        return 'no events yet: they show here as the agent prints them'
     }
     switch (transcript.status) {
         case 'no_session': {
             return 'the runtime reported no session: a template without --format json prints no events'
         }
         case 'no_log': {
-            // A running tick knows its session before its output is written.
-            return running
-                ? 'the session’s events reach the log when it ends'
-                : 'its log is gone, or is not a file canopy reads'
+            return 'its log is gone, or is not a file canopy reads'
         }
         case 'read': {
-            return running
-                ? 'the session’s events reach the log when it ends'
-                : 'the log holds none of the session’s events'
+            return 'the log holds none of the session’s events'
         }
     }
 }

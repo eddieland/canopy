@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
 from canopy.chores import history, start
-from canopy.core import agent_output, conversation, db, definitions, outbox
+from canopy.core import agent_output, conversation, db, definitions, outbox, progress
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
 from canopy.core.config import render_command
@@ -153,6 +153,8 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
         "running chore",
         extra={"chore_run_id": run_id, "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": chore.timeout_minutes},
     )
+    out.write("--- chore stdout ---\n")
+    out.flush()
     done = ctx.runner.run(
         argv,
         cwd=cwd,
@@ -164,8 +166,12 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
         },
         timeout=chore.timeout_minutes * 60,
         on_start=lambda pid: db.set_agent_pid(ctx.conn, "chore_runs", run_id, pid),
+        # Each line reaches the run log as the agent prints it, so a running chore's transcript is what it did so far.
+        on_line=progress.Progress(
+            ctx.conn, "chore_runs", run_id, out, log, agent="chore", fields={"chore_run_id": run_id}
+        ),
     )
-    out.write(f"--- chore stdout ---\n{done.stdout}\n--- chore stderr ---\n{done.stderr}\n")
+    out.write(f"\n--- chore stderr ---\n{done.stderr}\n")
     out.write(f"--- chore exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
     output = agent_output.read(done.stdout)

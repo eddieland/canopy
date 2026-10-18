@@ -77,7 +77,7 @@ function Loaded({ id }: { id: number }) {
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <RunPanel run={data} />
-                <TranscriptPanel transcript={transcript} running={data.state === 'running'} live />
+                <TranscriptPanel transcript={transcript} running={data.state === 'running'} />
                 <RunMemoryPanel id={data.id} />
             </div>
         </>

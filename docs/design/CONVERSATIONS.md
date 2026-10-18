@@ -515,8 +515,8 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   dropped, line breaks kept. A log that is a symlink, a FIFO, or anything but a regular file is not read: it is opened
   without following links and without blocking.
 - A transcript says why it has nothing: no session (a template without `--format json`), no log, or none of its
-  events yet. A worker run's events reach its log as the worker prints them (§8), so a running run's transcript is
-  what it has done so far; a chore run's reach its log only when it ends (§19), as a tick's output does (§6). A model
+  events yet. A worker run's, a chore run's, and a tick's events reach its log as the agent prints them (§6, §8, §19),
+  so a running one's transcript is what it has done so far, read again as its cost or decisions move. A model
   call's reasoning shows only with OpenCode's `--thinking`, which every default template passes, so a transcript says
   why a call made the tool calls it did, not only that it made them; a provider that redacts its reasoning shows none.
   A subagent's calls are its own session's (§13), so a `task` call shows as one tool call with its answer.
@@ -560,7 +560,8 @@ line that is not one of its events, sent the operator back to the file, most of 
 - The server reads the end of the tick's output file as written, on each request: its stdout, the `--- stderr ---`
   line the tick writes, and its stderr (§6). The same checks as a transcript's, at most its last 1 MiB from the first
   whole line in it, control characters dropped and line breaks kept. It says the file's size and whether it was cut,
-  or `no_output` when there is none (the tick kept none, or is still running). Its end, since that is where a failed
+  or `no_output` when there is none (the tick kept none, or its overseer has not started); a running tick's holds
+  what its overseer has printed so far, its stderr once it ends. Its end, since that is where a failed
   tick says why, and the transcript has the session from its start.
 - Everything in it is agent output, rendered as text.
 - A tick's output only. A run's log is the worker's and its setup commands' (§8), and stays its transcript (above)
