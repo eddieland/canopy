@@ -80,7 +80,9 @@ With no network for Playwright's browser, set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` t
 - **Signed out is a state, not a route.** The shell shows the sign-in page whenever the session query says signed
   out, and any 401 sets that (`src/lib/query-client.ts`). Never keep the listener secret in the page: it is sent once,
   to `POST /api/session`.
-- **Never blank content.** A skeleton only when `data` is `undefined`. Reserve space for anything async.
+- **Never blank content.** A skeleton only when `data` is `undefined`, and only while the read is pending: a page's
+  main panel uses `PanelLoading`, which says why a failed read failed and reads again. Reserve space for anything
+  async.
 - **Typed search params.** Validate in the route's `validateSearch` and return every key, `undefined` when invalid:
   the router merges the result over the raw search, so an omitted key keeps the raw string (see
   `routes/runs.index.tsx`).

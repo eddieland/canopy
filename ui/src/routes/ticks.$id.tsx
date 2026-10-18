@@ -10,7 +10,7 @@ import { Cost } from '@/components/cost'
 import { Decisions } from '@/components/decisions'
 import { Field, Fields } from '@/components/fields'
 import { OrderToggle } from '@/components/order-toggle'
-import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TickOutputPanel } from '@/components/tick-output'
@@ -40,7 +40,8 @@ function TickPage() {
 }
 
 function Loaded({ id }: { id: number }) {
-    const { data, error } = useQuery(tickDetailQuery(id))
+    const query = useQuery(tickDetailQuery(id))
+    const { data, error } = query
     const { data: transcript } = useQuery(tickTranscriptQuery(id))
     if (error instanceof ApiError && error.status === 404) {
         return <NoTick title={tickRef(id)}>{error.message}</NoTick>
@@ -50,7 +51,7 @@ function Loaded({ id }: { id: number }) {
             <>
                 <PageHeader title={tickRef(id)} />
                 <Panel>
-                    <PanelSkeleton rows={1} className="min-h-72" />
+                    <PanelLoading query={query} rows={1} className="min-h-72" />
                 </Panel>
             </>
         )

@@ -5,7 +5,7 @@ import { spendBreakdownQuery } from '@/api/queries'
 import type { SpendBreakdown, SpendDay, SpendPullRequest, SpendTicket, SpendTool } from '@/api/types'
 import { Cost } from '@/components/cost'
 import { None } from '@/components/none'
-import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
@@ -68,7 +68,11 @@ export const Route = createFileRoute('/spend')({
 function SpendPage() {
     const days = Route.useSearch().days ?? SPEND_WINDOWS[0]
     const navigate = Route.useNavigate()
-    const { data } = useQuery(spendBreakdownQuery(days))
+    const query = useQuery(spendBreakdownQuery(days))
+    const { data } = query
+    // A read that failed with nothing on screen says so once, in Totals, with Read again, rather than leave every panel
+    // under it shimmering as if it were still coming.
+    const failed = data === undefined && query.error !== null
     return (
         <>
             <PageHeader title="Spend">
@@ -98,72 +102,92 @@ function SpendPage() {
                         ))}
                     </ToggleGroup>
                 </PanelHeader>
-                {data === undefined ? <PanelSkeleton className="min-h-20" /> : <Totals found={data} />}
+                {data === undefined ? <PanelLoading query={query} className="min-h-20" /> : <Totals found={data} />}
             </Panel>
-            <Panel data-testid="spend-by-day">
-                <PanelHeader label="By day" />
-                {data === undefined ? <PanelSkeleton rows={6} className="min-h-72" /> : <ByDay days={data.per_day} />}
-            </Panel>
-            <div className="grid gap-6 xl:grid-cols-2">
-                <Panel data-testid="spend-tickets">
-                    <PanelHeader label="By ticket">
-                        <span className="readout text-xs text-muted-foreground">{data?.tickets.length ?? ''}</span>
-                    </PanelHeader>
-                    {data === undefined ? (
-                        <PanelSkeleton rows={5} className="min-h-40" />
-                    ) : (
-                        <Tickets tickets={data.tickets} days={days} />
-                    )}
-                </Panel>
-                <Panel data-testid="spend-pull-requests">
-                    <PanelHeader label="By pull request">
-                        <span className="readout text-xs text-muted-foreground">
-                            {data?.pull_requests.length ?? ''}
-                        </span>
-                    </PanelHeader>
-                    {data === undefined ? (
-                        <PanelSkeleton rows={5} className="min-h-40" />
-                    ) : (
-                        <PullRequests pullRequests={data.pull_requests} days={days} />
-                    )}
-                </Panel>
-            </div>
-            <Panel data-testid="spend-tools">
-                <PanelHeader label="By tool">
-                    <span className="readout text-xs text-muted-foreground">{data?.tools.length ?? ''}</span>
-                </PanelHeader>
-                {data === undefined ? (
-                    <PanelSkeleton rows={5} className="min-h-40" />
-                ) : (
-                    <Tools tools={data.tools} days={days} />
-                )}
-            </Panel>
-            <div className="grid gap-6 xl:grid-cols-2">
-                <Panel data-testid="spend-ticks">
-                    <PanelHeader label="Ticks by what they bought" />
-                    {data === undefined ? <PanelSkeleton rows={5} className="min-h-40" /> : <TickGroups found={data} />}
-                </Panel>
-                <Panel data-testid="spend-woken">
-                    <PanelHeader label="Ticks by what woke them" />
-                    {data === undefined ? <PanelSkeleton rows={4} className="min-h-40" /> : <Woken found={data} />}
-                </Panel>
-            </div>
-            <Panel data-testid="spend-idle-ticks">
-                <PanelHeader label="Idle ticks">
-                    <span className="readout text-xs text-muted-foreground">{data?.idle_ticks.length ?? ''}</span>
-                </PanelHeader>
-                {data === undefined ? (
-                    <PanelSkeleton className="min-h-24" />
-                ) : data.idle_ticks.length === 0 ? (
-                    <Empty size="panel">no idle ticks in these {days} days</Empty>
-                ) : (
-                    <ul className="divide-y" data-testid="spend-idle-tick-list">
-                        {data.idle_ticks.map((tick) => (
-                            <TickRow key={tick.id} tick={tick} />
-                        ))}
-                    </ul>
-                )}
-            </Panel>
+            {!failed && (
+                <>
+                    <Panel data-testid="spend-by-day">
+                        <PanelHeader label="By day" />
+                        {data === undefined ? (
+                            <PanelSkeleton rows={6} className="min-h-72" />
+                        ) : (
+                            <ByDay days={data.per_day} />
+                        )}
+                    </Panel>
+                    <div className="grid gap-6 xl:grid-cols-2">
+                        <Panel data-testid="spend-tickets">
+                            <PanelHeader label="By ticket">
+                                <span className="readout text-xs text-muted-foreground">
+                                    {data?.tickets.length ?? ''}
+                                </span>
+                            </PanelHeader>
+                            {data === undefined ? (
+                                <PanelSkeleton rows={5} className="min-h-40" />
+                            ) : (
+                                <Tickets tickets={data.tickets} days={days} />
+                            )}
+                        </Panel>
+                        <Panel data-testid="spend-pull-requests">
+                            <PanelHeader label="By pull request">
+                                <span className="readout text-xs text-muted-foreground">
+                                    {data?.pull_requests.length ?? ''}
+                                </span>
+                            </PanelHeader>
+                            {data === undefined ? (
+                                <PanelSkeleton rows={5} className="min-h-40" />
+                            ) : (
+                                <PullRequests pullRequests={data.pull_requests} days={days} />
+                            )}
+                        </Panel>
+                    </div>
+                    <Panel data-testid="spend-tools">
+                        <PanelHeader label="By tool">
+                            <span className="readout text-xs text-muted-foreground">{data?.tools.length ?? ''}</span>
+                        </PanelHeader>
+                        {data === undefined ? (
+                            <PanelSkeleton rows={5} className="min-h-40" />
+                        ) : (
+                            <Tools tools={data.tools} days={days} />
+                        )}
+                    </Panel>
+                    <div className="grid gap-6 xl:grid-cols-2">
+                        <Panel data-testid="spend-ticks">
+                            <PanelHeader label="Ticks by what they bought" />
+                            {data === undefined ? (
+                                <PanelSkeleton rows={5} className="min-h-40" />
+                            ) : (
+                                <TickGroups found={data} />
+                            )}
+                        </Panel>
+                        <Panel data-testid="spend-woken">
+                            <PanelHeader label="Ticks by what woke them" />
+                            {data === undefined ? (
+                                <PanelSkeleton rows={4} className="min-h-40" />
+                            ) : (
+                                <Woken found={data} />
+                            )}
+                        </Panel>
+                    </div>
+                    <Panel data-testid="spend-idle-ticks">
+                        <PanelHeader label="Idle ticks">
+                            <span className="readout text-xs text-muted-foreground">
+                                {data?.idle_ticks.length ?? ''}
+                            </span>
+                        </PanelHeader>
+                        {data === undefined ? (
+                            <PanelSkeleton className="min-h-24" />
+                        ) : data.idle_ticks.length === 0 ? (
+                            <Empty size="panel">no idle ticks in these {days} days</Empty>
+                        ) : (
+                            <ul className="divide-y" data-testid="spend-idle-tick-list">
+                                {data.idle_ticks.map((tick) => (
+                                    <TickRow key={tick.id} tick={tick} />
+                                ))}
+                            </ul>
+                        )}
+                    </Panel>
+                </>
+            )}
         </>
     )
 }

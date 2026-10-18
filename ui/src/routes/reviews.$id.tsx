@@ -11,7 +11,7 @@ import { Age } from '@/components/age'
 import { Copyable } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
-import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { Notice } from '@/components/notice'
 import { FindingCard, ReviewDiffPanels } from '@/components/review-diff'
@@ -53,7 +53,8 @@ function ReviewPage() {
 }
 
 function Loaded({ id }: { id: number }) {
-    const { data, error } = useQuery(reviewQuery(id))
+    const query = useQuery(reviewQuery(id))
+    const { data, error } = query
     if (error instanceof ApiError && error.status === 404) {
         return <NoReview title={reviewRef(id)}>{error.message}</NoReview>
     }
@@ -62,7 +63,7 @@ function Loaded({ id }: { id: number }) {
             <>
                 <PageHeader title={reviewRef(id)} />
                 <Panel>
-                    <PanelSkeleton rows={1} className="min-h-72" />
+                    <PanelLoading query={query} rows={1} className="min-h-72" />
                 </Panel>
             </>
         )

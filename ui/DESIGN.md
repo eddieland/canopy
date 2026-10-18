@@ -416,7 +416,8 @@ and utilities are in `src/index.css`.
 - `scrollbar-gutter: stable` on what the page scrolls in (`page-scroll`), so a page that grows a scrollbar does not
   move.
 - Async content gets its space before it arrives: a fixed width for readouts, a minimum height for panels.
-- A skeleton (`PanelSkeleton`) shows only while there is no data at all. A refetch or a stream update keeps what is on
+- A skeleton (`PanelSkeleton`) shows only while there is no data at all, and only while the read is pending: once it
+  has failed, a Notice takes its place at its height (`PanelLoading`). A refetch or a stream update keeps what is on
   screen.
 
 ## Themes
@@ -487,6 +488,13 @@ list, an empty state, or a skeleton by hand.
   shimmering bars, each shorter than the last. It takes the minimum height its content will, so nothing moves when
   the data lands: `min-h-72` for a page's main panel or a list that runs long (tickets, runs, ticks), `min-h-40` for
   a list that holds a few (the attention list, the chores, a pool's slots).
+- **`PanelLoading`** (`src/components/panel.tsx`): a skeleton while a read is pending; a Notice once it has failed.
+  A page's main panel shows it while its data is `undefined`, given the query: until the read fails it is the
+  `PanelSkeleton`, and after, at the skeleton's minimum height, a `Notice` saying why (`src/lib/read-failure.ts`: the
+  server's status and words, or that canopy did not answer and `canopy loop` serves the page) and a ghost `Read again`
+  that refetches it. A 404 or a 409 is the page's own state, handled before it. The query client retries a read once,
+  so a failure shows within about two seconds, and nothing refetches it after but the button or the stream. A page of
+  many panels over one read (Spend) shows it once, in its first panel, and leaves out the rest.
 - **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel: its column heads in
   `panel-label` type, its row heads in plain text, its figures right-aligned readouts. Its panel's header repeats none
   of its rows.

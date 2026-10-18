@@ -16,7 +16,16 @@ import { MemoryBand, MemoryDigestView, MemoryRows } from '@/components/memory'
 import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
 import { PlanCard } from '@/components/plan-card'
-import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton, ThreadScroll } from '@/components/panel'
+import {
+    Empty,
+    PageHeader,
+    Panel,
+    PanelHeader,
+    PanelLoading,
+    PanelScroll,
+    PanelSkeleton,
+    ThreadScroll,
+} from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReplyForm } from '@/components/reply-form'
 import { RunsTable } from '@/components/runs-table'
@@ -42,7 +51,8 @@ export const Route = createFileRoute('/tickets/$key')({
 
 function TicketPage() {
     const { key } = Route.useParams()
-    const { data, error } = useQuery(ticketQuery(key))
+    const query = useQuery(ticketQuery(key))
+    const { data, error } = query
     // The plans too, before the page paints: a plan waiting on the operator leads the page with its card, which would
     // otherwise push everything down as it arrived.
     const plans = useQuery(ticketPlansQuery(key))
@@ -64,7 +74,7 @@ function TicketPage() {
             <>
                 <PageHeader title={key} />
                 <Panel>
-                    <PanelSkeleton rows={1} className="min-h-72" />
+                    <PanelLoading query={query} rows={1} className="min-h-72" />
                 </Panel>
             </>
         )

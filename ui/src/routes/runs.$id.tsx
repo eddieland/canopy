@@ -9,7 +9,7 @@ import { Copyable, CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
 import { MemoryRows } from '@/components/memory'
-import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RichText } from '@/components/rich-text'
 import { RunDoing } from '@/components/run-doing'
@@ -47,7 +47,8 @@ function RunPage() {
 }
 
 function Loaded({ id }: { id: number }) {
-    const { data, error } = useQuery(runQuery(id))
+    const query = useQuery(runQuery(id))
+    const { data, error } = query
     // Read beside the run, not after it: the page waits on the slower of the two, not on both in turn.
     const { data: transcript } = useQuery(runTranscriptQuery(id))
     if (error instanceof ApiError && error.status === 404) {
@@ -58,7 +59,7 @@ function Loaded({ id }: { id: number }) {
             <>
                 <PageHeader title={runRef(id)} />
                 <Panel>
-                    <PanelSkeleton rows={1} className="min-h-72" />
+                    <PanelLoading query={query} rows={1} className="min-h-72" />
                 </Panel>
             </>
         )

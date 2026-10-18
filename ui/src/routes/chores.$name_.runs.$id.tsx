@@ -11,7 +11,7 @@ import { CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { Field, Fields } from '@/components/fields'
 import { Notice } from '@/components/notice'
-import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { RunDot, Word } from '@/components/status'
 import { Timestamp } from '@/components/timestamp'
@@ -50,7 +50,8 @@ function ChoreRunPage() {
 }
 
 function Loaded({ name, id }: { name: string; id: number }) {
-    const { data, error } = useQuery(choreRunQuery(name, id))
+    const query = useQuery(choreRunQuery(name, id))
+    const { data, error } = query
     // Read beside the run, not after it: the page waits on the slower of the two, not on both in turn.
     const { data: transcript } = useQuery(choreRunTranscriptQuery(name, id))
     const title = choreRunRef(name, id)
@@ -76,7 +77,7 @@ function Loaded({ name, id }: { name: string; id: number }) {
             <>
                 <PageHeader parents={<ChoreCrumb name={name} />} title={title} />
                 <Panel>
-                    <PanelSkeleton rows={1} className="min-h-72" />
+                    <PanelLoading query={query} rows={1} className="min-h-72" />
                 </Panel>
             </>
         )

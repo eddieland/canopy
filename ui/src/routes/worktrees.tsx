@@ -14,7 +14,7 @@ import { Counter } from '@/components/counter'
 import type { Tone } from '@/components/counter'
 import { Disclosure } from '@/components/disclosure'
 import { Notice } from '@/components/notice'
-import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ListRow, RowGrid, RowLine } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
@@ -46,7 +46,8 @@ export const Route = createFileRoute('/worktrees')({
 
 function WorktreesPage() {
     const { state } = Route.useSearch()
-    const { data, error, refetch } = useQuery(worktreesQuery)
+    const query = useQuery(worktreesQuery)
+    const { data, error, refetch } = query
     const shown = data?.filter((pool) => poolShown(pool, state))
     // Only a read the operator asked for shows on the button: the timed one would make it flicker.
     const [reading, setReading] = useState(false)
@@ -94,11 +95,17 @@ function WorktreesPage() {
                         <span className="readout text-xs text-muted-foreground">{shown?.length}</span>
                     </span>
                 </PanelHeader>
-                <Notice error={error} className="border-b px-3 py-2" />
+                {/* A failed read keeps the pools on screen, under why; with none yet, it says why in their place. */}
+                {data !== undefined && <Notice error={error} className="border-b px-3 py-2" />}
                 {shown === undefined ? (
-                    <PanelSkeleton className="min-h-40" />
+                    <PanelLoading query={query} className="min-h-40" />
                 ) : shown.length === 0 && state !== undefined ? (
                     <Empty>no {state} slots now: no pool has one</Empty>
+                ) : shown.length === 0 ? (
+                    <Empty>
+                        no pools yet: <code className="font-mono text-xs">canopy workspace sync</code> makes one for
+                        each repository
+                    </Empty>
                 ) : (
                     <div className="divide-y">
                         {shown.map((pool) => (
