@@ -27,6 +27,19 @@ it, and `time_passes` moves every time the journal recorded into the past, so a 
         scenario.time_passes(hours=1)
         scenario.run(fix, worker=pushes())
 
+A run can be left at work while the story goes on around it: `starts`, or a tick with `hold=True`, holds each worker
+it starts before it does anything and gives the run back as `Working`. The test then says what becomes of it: it
+`finishes`, doing what its script says, or its `canopy _run` `dies`, as a crash or a shutdown would leave it, its worker
+still at work, for the next tick to find. A run still held when the test ends is stopped:
+
+    def test_a_run_whose_process_died_is_crashed_on_the_next_tick(scenario: Scenario, git_pool: GitPool) -> None:
+        working = scenario.starts(worker=pushes())
+        [(action, _)] = scenario.refuses(dispatches())
+        assert action == "refused:running"
+        working.dies()
+        ticked = scenario.tick(*waits("PROJ-1"))
+        assert ticked.actions[0] == "attention:crashed"
+
 The overseer is played whole, not only its commands: what its query found (`queried=`), the line it ends on
 (`result=`), and how it runs (`exit_code=`, `says=`, ...), so a tick it fails, or a duty it leaves undone, is a story
 too:
@@ -53,18 +66,23 @@ attention list as the test left it, so the failure reads in the order the ticket
 """
 
 import json
+import os
 import shlex
 import sqlite3
-from collections.abc import Iterable, Mapping, Sequence
-from contextlib import AbstractContextManager, ExitStack
+import sys
+import time
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from contextlib import AbstractContextManager, ExitStack, contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Unpack
+from unittest import mock
 
 from canopy.cli.main import main
 from canopy.core import db, records
 from canopy.core.vocab import Phase, ResumeReason, RunKind, RunStatus, TickStatus
+from canopy.infra import procs
 from canopy.loop import attention
 from tests.canopy.helpers import (
     BRANCH,
@@ -92,8 +110,25 @@ from tests.canopy.helpers import (
 )
 from tests.conftest import CanopyEnv
 
-# What a worker does: one of the `*_does` helpers' blocks, or `pushes` or `asks`.
+#: What a worker does: one of the `*_does` helpers' blocks, or `pushes` or `asks`.
 type Worker = AbstractContextManager[None]
+
+#: How long a held worker, or a test waiting on one, waits before it gives up.
+HOLD_TIMEOUT = 60
+
+#: The command a held worker runs first, with the gates' directory: it says it is at work, in `<run id>.working`, then
+#: waits for `<run id>.open` before it goes on to what its script says. It gives up after HOLD_TIMEOUT, failing, so a
+#: worker no test lets go of does not outlast its test by much.
+GATE = f"""
+import os, pathlib, sys, time
+gate = pathlib.Path(sys.argv[1], os.environ["CANOPY_RUN_ID"])
+gate.with_suffix(".working").touch()
+deadline = time.monotonic() + {HOLD_TIMEOUT}
+while not gate.with_suffix(".open").exists():
+    if time.monotonic() > deadline:
+        sys.exit("held too long")
+    time.sleep(0.02)
+"""
 
 
 @dataclass(frozen=True)
@@ -137,19 +172,71 @@ class Ran:
 
     def __str__(self) -> str:
         """The run in a line, for a failed step's message: what it was for, how it ended, and what its result said."""
-        why = f" for {', '.join(self.reasons)}" if self.reasons else ""
         result: dict[str, Any] = json.loads(self.row["result_json"] or "{}")
         said = [str(result[k]) for k in ("summary", "question", "harness") if result.get(k)]
-        return ": ".join([f"run {self.id}, {self.kind} of {self.row['ticket_key']}{why}", self.status, *said])
+        return ": ".join([_named(self.row, self.reasons), self.status, *said])
+
+
+@dataclass(frozen=True)
+class Working:
+    """A worker run held at work: its worker started and waits there until the test says what becomes of the run."""
+
+    #: The scenario the run is part of.
+    scenario: "Scenario"
+    #: The run's id.
+    id: int
+    #: Why it runs, if it is a resume.
+    reasons: tuple[ResumeReason, ...]
+
+    @property
+    def row(self) -> sqlite3.Row:
+        """The run's row as it stands."""
+        return present(db.get_run(self.scenario.conn, self.id))
+
+    def finishes(self) -> Ran:
+        """Let the worker go on to what its script says, and wait for the run to end.
+
+        Returns:
+            The run, closed.
+        """
+        (self.scenario.gates / f"{self.id}.open").touch()
+        ran = self.scenario.ran(wait_for_run(self.scenario.conn, self.id, timeout=HOLD_TIMEOUT))
+        self.scenario.story.append(str(ran))
+        return ran
+
+    def dies(self) -> None:
+        """Kill the run's own process, `canopy _run`, at once, as a crash or a machine's shutdown would.
+
+        Its row stays `running`, and the worker it started stays at work, as they would for the next tick's reconcile
+        to find.
+        """
+        pid = int(self.row["pid"])
+        procs.kill_group(pid)
+        deadline = time.monotonic() + HOLD_TIMEOUT
+        while procs.alive(pid):
+            assert time.monotonic() < deadline, f"run {self.id}'s `canopy _run` outlived its kill"
+            time.sleep(0.02)
+        self.scenario.story.append(
+            f"{_named(self.row, self.reasons)}: its `canopy _run` dies, its worker still at work"
+        )
+
+    def __str__(self) -> str:
+        """The run in a line, for a failed step's message: what it is for, and that it is at work."""
+        return f"{_named(self.row, self.reasons)}: at work"
 
 
 @dataclass(frozen=True)
 class Ticked:
-    """What a tick did: its row, its decisions in the order it recorded them, and the worker runs it started, ended."""
+    """What a tick did: its row, its decisions in the order it recorded them, and the worker runs it started."""
 
+    #: The tick's row, closed.
     tick: records.Tick
+    #: Its decisions, in the order it recorded them.
     decisions: list[records.Decision]
+    #: The runs it started, each waited for until it ended.
     runs: list[Ran]
+    #: The runs it started and left at work, with `hold=True`.
+    working: list[Working] = field(default_factory=list)
 
     @property
     def actions(self) -> list[str]:
@@ -160,7 +247,7 @@ class Ticked:
         """How the tick ended and what it decided, for a failed step's message."""
         lines = [f"{self.tick.status}: {self.tick.summary}"]
         lines += map(_decided, self.decisions)
-        lines += [f"  {r}" for r in self.runs]
+        lines += [f"  {r}" for r in [*self.runs, *self.working]]
         return "\n".join(lines)
 
 
@@ -171,14 +258,19 @@ class Scenario:
     env: CanopyEnv
     conn: sqlite3.Connection
     agent_log: Path
-    # Each move made so far, and what canopy did with it, in the order they were made: `told` reads it out.
+    #: Where each held worker's gate is, a file per run (GATE).
+    gates: Path
+    #: Each move made so far, and what canopy did with it, in the order they were made: `told` reads it out.
     story: list[str] = field(default_factory=list, init=False)
+    #: Each run held so far, whatever became of it since, for `close` to stop what is left of it.
+    held: list[int] = field(default_factory=list, init=False)
 
     def tick(
         self,
         *commands: list[str],
         worker: Worker | None = None,
         dry_run: bool = False,
+        hold: bool = False,
         code: int = 0,
         queried: Sequence[str] | None = (),
         result: str = TICK_DONE,
@@ -186,10 +278,11 @@ class Scenario:
     ) -> Ticked:
         """Run one tick, `canopy tick`, its overseer running `commands`, and wait for each run it dispatches to end.
 
-        Each run's worker does `worker`, the fake's default `done` if None. The overseer records `queried`, the keys its
-        query found, when the query is due, or no query at all if None; it ends on `result`, by default the line that
-        ends a tick, and runs as `overseer` says (`exit_code`, `says`, ...). The tick must exit `code`, and a failure
-        says how it ended instead.
+        Each run's worker does `worker`, the fake's default `done` if None. With `hold`, each is held at work instead,
+        and the tick's runs are left `working` for the test to finish or kill. The overseer records `queried`, the keys
+        its query found, when the query is due, or no query at all if None; it ends on `result`, by default the line
+        that ends a tick, and runs as `overseer` says (`exit_code`, `says`, ...). The tick must exit `code`, and a
+        failure says how it ended instead.
 
         Returns:
             What the tick did.
@@ -200,12 +293,17 @@ class Scenario:
             stack.enter_context(overseer_does(*commands, result=result, queried=recorded, **overseer))
             if worker is not None:
                 stack.enter_context(worker)
+            if hold:
+                stack.enter_context(self._held())
             exited = main(argv)
             tick = last_tick(self.conn)
             started = self.conn.execute("SELECT id FROM runs WHERE tick_id = ? ORDER BY id", (tick.id,)).fetchall()
             # A run is detached from the tick, so the worker's script must last until it ends.
-            runs = [self._ran(wait_for_run(self.conn, int(r["id"]))) for r in started]
-        ticked = Ticked(present(db.get_tick(self.conn, tick.id)), db.decisions_for_tick(self.conn, tick.id), runs)
+            ids = [int(r["id"]) for r in started]
+            runs = [] if hold else [self.ran(wait_for_run(self.conn, run_id)) for run_id in ids]
+        working = [self._at_work(run_id) for run_id in ids] if hold else []
+        made = db.decisions_for_tick(self.conn, tick.id)
+        ticked = Ticked(present(db.get_tick(self.conn, tick.id)), made, runs, working)
         self.story.append(f"tick {tick.id}, exits {exited}: {ticked}")
         assert exited == code, f"tick {tick.id} exited {exited}, not {code}: {ticked}"
         return ticked
@@ -233,10 +331,36 @@ class Scenario:
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(last_run(self.conn)["id"])
                 exited = main(["_run", str(run_id)], runner=runner)
-        ran = self._ran(present(db.get_run(self.conn, run_id)))
+        ran = self.ran(present(db.get_run(self.conn, run_id)))
         self.story.append(str(ran) if exited == 0 else f"{ran}, and `canopy _run` exits {exited}")
         assert exited == 0, ran
         return ran
+
+    def starts(self, command: list[str] | None = None, *, worker: Worker | None = None) -> Working:
+        """Dispatch `command`, a `dispatches(...)`, KEY's `implement` if None, in a tick of its own, and hold its worker
+        at work, the worker set to do `worker` once the test lets it go on.
+
+        The run is detached, as a tick's is, and the overseer is not run.
+
+        Returns:
+            The run, at work.
+        """
+        command = command or dispatches()
+        assert command[:2] == ["canopy", "dispatch"], command
+        with ExitStack() as stack:
+            if worker is not None:
+                stack.enter_context(worker)
+            stack.enter_context(self._held())
+            with in_tick(self.conn) as tick_id:
+                exited = main(command[1:])
+                if exited != 0:
+                    self._tell(f"tick {tick_id} does not dispatch {shlex.join(command)}", tick_id)
+                assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
+                run_id = int(last_run(self.conn)["id"])
+        working = self._at_work(run_id)
+        self.story.append(str(working))
+        return working
 
     def refuses(self, command: list[str], *, dry_run: bool = False) -> list[tuple[str, str]]:
         """Dispatch `command`, a `dispatches(...)`, in a tick of its own, which canopy must refuse, starting no run.
@@ -312,13 +436,52 @@ class Scenario:
             items = [f"unread ({e})"]
         return "\n".join([*steps, f"The attention list now: {', '.join(items)}."])
 
-    def _tell(self, step: str, tick_id: int) -> None:
-        self.story.append("\n".join([step, *map(_decided, db.decisions_for_tick(self.conn, tick_id))]))
+    def ran(self, row: sqlite3.Row) -> Ran:
+        """The run `row` as it ended.
 
-    def _ran(self, row: sqlite3.Row) -> Ran:
+        Returns:
+            The run, with why it ran and where its prompt is.
+        """
         run_id = int(row["id"])
         reasons = db.run_reasons(self.conn, [run_id]).get(run_id, ())
         return Ran(row, reasons, self.env.state_dir / "runs" / f"{run_id}.prompt")
+
+    def close(self) -> None:
+        """Stop what is left of every run held at work, its `canopy _run` and its worker both, as the test ends."""
+        for run_id in self.held:
+            row = present(db.get_run(self.conn, run_id))
+            if row["status"] == RunStatus.RUNNING:
+                for pid in (row["pid"], row["worker_pid"]):
+                    if pid is not None:
+                        procs.kill_group(int(pid))
+
+    def _tell(self, step: str, tick_id: int) -> None:
+        self.story.append("\n".join([step, *map(_decided, db.decisions_for_tick(self.conn, tick_id))]))
+
+    @contextmanager
+    def _held(self) -> Iterator[None]:
+        # The worker's script is in its environment by now; GATE goes first in it. A run reads the environment as it
+        # starts, so the gate lasts as long as the run does.
+        self.gates.mkdir(exist_ok=True)
+        script = os.environ.get("FAKE_WORKER_COMMANDS", os.environ.get("FAKE_AGENT_COMMANDS", "[]"))
+        gated = [[sys.executable, "-c", GATE, str(self.gates)], *json.loads(script)]
+        with mock.patch.dict(os.environ, {"FAKE_WORKER_COMMANDS": json.dumps(gated)}):
+            yield
+
+    def _at_work(self, run_id: int) -> Working:
+        self.held.append(run_id)
+        working = self.gates / f"{run_id}.working"
+        deadline = time.monotonic() + HOLD_TIMEOUT
+        while True:
+            row = present(db.get_run(self.conn, run_id))
+            # The worker's pid too, which `_run` records just after it starts the worker, so `close` knows what to stop.
+            if working.exists() and row["worker_pid"] is not None:
+                break
+            assert row["status"] == RunStatus.RUNNING, f"{self.ran(row)}, before its worker was at work"
+            assert time.monotonic() < deadline, f"run {run_id}'s worker was not at work after {HOLD_TIMEOUT}s"
+            time.sleep(0.02)
+        reasons = db.run_reasons(self.conn, [run_id]).get(run_id, ())
+        return Working(self, run_id, reasons)
 
 
 # What the overseer does in a tick: each is the command it runs, for `Scenario.tick`.
@@ -383,6 +546,11 @@ def asks(question: str = QUESTION) -> Worker:
 def fails(summary: str = "could not build") -> Worker:
     """The worker pushes nothing and reports it failed, saying `summary`."""
     return worker_does(result=json.dumps({"status": "failed", "summary": summary}))
+
+
+def _named(row: sqlite3.Row, reasons: Sequence[ResumeReason]) -> str:
+    why = f" for {', '.join(reasons)}" if reasons else ""
+    return f"run {row['id']}, {row['kind']} of {row['ticket_key']}{why}"
 
 
 def _decided(decision: records.Decision) -> str:

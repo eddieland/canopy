@@ -40,10 +40,20 @@ def ctx(canopy_env: CanopyEnv) -> Context:
 
 
 @pytest.fixture
-def scenario(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, conn: sqlite3.Connection) -> Scenario:
+def scenario(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, conn: sqlite3.Connection, tmp_path: Path
+) -> Iterator[Scenario]:
     """The workspace, with the fake treehouse and agents on PATH, where a test tells a ticket's story
-    (`scenario_helpers.py`). A test whose workers push asks for `git_pool` too."""
-    return Scenario(canopy_env, conn, agent_log)
+    (`scenario_helpers.py`). A test whose workers push asks for `git_pool` too.
+
+    Yields:
+        The scenario, whose runs still held at work are stopped once the test ends.
+    """
+    told = Scenario(canopy_env, conn, agent_log, tmp_path / "gates")
+    try:
+        yield told
+    finally:
+        told.close()
 
 
 @pytest.hookimpl(wrapper=True)
