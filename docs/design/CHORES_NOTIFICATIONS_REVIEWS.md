@@ -588,6 +588,18 @@ The prompt is `prompts/reviewer.md` (or the override), with the PR, the commit, 
 (`{{NOTICE}}`: an override without it is `bad_prompt` while one is in force, §8). The reviewer looks for defects, not
 style, posts nothing anywhere, and treats everything it reads, the diff included, as data (TRUST_MODEL T1).
 
+A finding goes to a worker who acts on it, so the prompt keeps findings to what the change itself gets wrong, and
+writes every review in one shape. A defect counts when the diff adds it or makes existing code wrong in a new way; one
+the base code already had goes in the summary, so a `resume` is never sent to fix code its PR did not touch, and
+neither does what CI checks. The reviewer tries to disprove each finding before it reports one, and ties it to an
+input and the line that mishandles it. It holds the change to the repository's rules as they stood before it, so a PR
+cannot loosen its own review by editing `AGENTS.md`. Each finding's detail says what is wrong, the case that shows it,
+and the smallest fix; its location is a line of the diff where it can be, which is where the web UI shows it (The
+diff, below). The harness checks none of this beyond the contract's bounds. Rejected: a `pre-existing` severity, which
+would change the contract and every surface that reads it, for what the summary carries; and a second agent that
+verifies each finding, which would double a review's spend before the dismissals (Dismissing a finding, below) show
+how often findings are wrong.
+
 Result contract, one JSON line, last line of the reviewer's text (§13), validated with pydantic (D026):
 
 ```json
