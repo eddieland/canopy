@@ -9,7 +9,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -26,10 +26,14 @@ from tests.canopy.helpers import (
     all_drafts,
     approving,
     canopy,
+    comment,
+    github_has,
     overseer_does,
     present,
+    reads,
     run_drafting,
     state_block,
+    thread,
 )
 
 if TYPE_CHECKING:
@@ -38,28 +42,6 @@ if TYPE_CHECKING:
 
 PR = DRAFTS_PR
 RESUME = ("--label", "agent-ready-tester", "--kind", "resume", "--reason", "review")
-
-
-def comment(n: int, thread: str = "PRRT_1", author: str = "alice", body: str = "Rename this.") -> dict[str, Any]:
-    """A review comment line, as the reader prints it without `kind` and `pr`."""
-    where = {"id": thread, "path": "src/app.py", "line": 12, "side": "right", "outdated": False, "resolved": False}
-    return {"item": "comment", "id": n, "author": author, "bot": False, "time": "2026-10-18T10:00:00Z", "body": body,
-            "url": f"{PR}#discussion_r{n}", "review": 101, "thread": where}  # fmt: skip
-
-
-def github_has(state: Path, *reviews: dict[str, Any], **more: object) -> None:
-    """Make the fake GitHub hold PR with `reviews`, and the other state keys given."""
-    state.write_text(json.dumps({"prs": {PR: {"reviews": list(reviews)}}, **more}))
-
-
-def thread(n: int, did: str = "changed", text: str = "Renamed.") -> dict[str, object]:
-    return {"on": "thread", "pr": PR, "comment": n, "did": did, "text": text}
-
-
-def reads(state: Path) -> list[dict[str, Any]]:
-    log = state.parent / "github.jsonl"
-    lines: list[str] = log.read_text().splitlines() if log.exists() else []
-    return [json.loads(line)["request"] for line in lines if json.loads(line)["program"] == "connect"]
 
 
 @pytest.mark.usefixtures("git_pool")

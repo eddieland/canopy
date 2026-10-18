@@ -127,10 +127,11 @@ approval does (§25). Every verb refuses as `inside_run` when `CANOPY_TICK_ID` o
   as a review's findings are (§21).
 - `canopy draft edit run:ID N --text TEXT` makes a new version of its text, kept beside the run's own. `canopy draft
   drop run:ID N...` dismisses drafts as a finding is dismissed, and `--undo` takes that back.
-- `canopy draft send run:ID N@HASH...` sends drafts, each with the hash of its text as the operator last saw it. In
-  order, it refuses:
+- `canopy draft send run:ID N@HASH...` sends drafts, each with the hash of its text as the operator last saw it. Every
+  check runs before anything posts, and any refusal posts nothing. It refuses:
+  - `unchecked`, `superseded`, `dropped`, `refused`: as above; `unconfirmed`, below.
   - `stale`: the draft's text is no longer that hash, since an edit in another tab or shell, as M41's config write is.
-  - `unchecked`, `superseded`, `dropped`: as above.
+    The hash is checked again as the send claims the draft, after the PR's read, and a claimed draft takes no edit.
   - `thread_changed`: a whole read of the PR, made now, shows a comment on the draft's thread newer than the draft's
     basis, at first the run's start, other than one the operator sent through canopy. The refusal names the new
     comments, the page shows them under the thread, and it moves the draft's basis to the newest of them, so sending
