@@ -5,7 +5,7 @@ by hand still fits in between. The loop also holds its own lock, `<state_dir>/lo
 loops on one state dir would run the overseer twice as often.
 
 How long to wait after a tick is `pacing`'s decision: the configured interval, longer after idle ticks in a row, and
-never past a harness gate (DESIGN §6, Idle pacing); pacing by what a tick cost will join it (ROADMAP M13). The
+never past a harness gate (DESIGN §6, Idle pacing); it does not read what a tick cost (ROADMAP, Deferred). The
 operator's acts since the last tick read the journal end the wait early (DESIGN §22): a message to a ticket, such as a
 `canopy reply`; a ticket started or stopped; attempts or reviews granted; a notice to workers set or cleared. With idle
 pacing on, a run ending after the tick read the journal does too. A config reload does not: it applies at the wait's

@@ -155,27 +155,16 @@ Next: the closing line does not say a signal stopped it; a small follow-up, not 
 
 ## M13. Spend-paced loop
 
-D042's pacing rule, fed by what ticks cost. Needs M12. Sketch only; the design comes first.
+Every agent run canopy starts records its cost in dollars and tokens: worker, split, chore, and review runs and each
+tick's overseer (with M15's session ids). The loop's per-tick block, `canopy tick`, `canopy status`, `canopy decisions`,
+and the web UI's attention page (the last 24 hours and 30 days) and chores pages show it.
 
-- Record what each overseer run and each worker run cost, in tokens and dollars, in the journal next to its tick or
-  run. Worker, split, chore, and review runs and each tick's overseer do.
-- A spend budget in the user config, and a pacing rule that lengthens the wait when recent ticks cost more and returns
-  to `loop.interval_minutes` when they cost less. Idle ticks are M21's: the loop waits the longer of the two rules,
-  within M21's gate deadlines.
-- Spend in the loop's per-tick block and in `canopy status`.
-- Open: what the budget's unit is (per day, per tick, or both); whether a worker's cost counts against the tick that
-  dispatched it. How the runtime reports cost is settled: OpenCode's JSON events on stdout.
-
-Accept: written with the design, before work starts.
-
-Status: deferred 2026-10-15. The operator judged the budget and the pacing rule unneeded once M36 to M39 make the
-journal the source of truth for the world, so the overseer runs only when the journal leaves it something to judge.
-Taken in part before that (2026-10-07, 2026-10-08, and 2026-10-13), with M15's session ids: worker, split, chore, and
-review runs and each tick's overseer record their cost in dollars and tokens, so every agent run canopy starts is in
-the spend, and the loop's per-tick block, `canopy tick`, `canopy status`, `canopy decisions`, and the web UI's
-attention page (the last 24 hours and 30 days) show it, and its chores pages each chore's. A tick's cost is its
-overseer's alone, so a worker's is not counted against the tick that dispatched it. An `overseer_cmd`, `review_cmd`,
-or chore `cmd` in a user file from before needs `--format json` added.
+Status: done 2026-10-18.
+Learned: closed on the operator's request with the cost recording in and the spend budget and pacing rule unbuilt; the
+operator judged them unneeded once M36 to M39 run the overseer only when the journal leaves it something to judge. A
+tick's cost is its overseer's alone, so a worker's is not counted against the tick that dispatched it. An
+`overseer_cmd`, `review_cmd`, or chore `cmd` in a user file from before needs `--format json` added.
+Next: the budget and the pacing rule move to the deferred list, with the trigger that would bring them back.
 
 ## M14. PR-scoped work
 
@@ -489,7 +478,7 @@ Learned: closed on the operator's request before the day-long live check, which 
 command and the route makes them agree by construction, so the check is against the journal. The open questions
 settled small: the rail's two counters stay and open the page, and `--json` is in, for a re-measurement to start from.
 Next: a re-measurement (MEASUREMENTS) can take idle share and `woken_by` from `canopy spend --json` rather than an
-analysis session; M13's budget can read the same breakdown.
+analysis session; a spend budget, if one is built (Deferred), can read the same breakdown.
 
 ## M34. A cacheable overseer prompt
 
@@ -1791,8 +1780,8 @@ tests above pass and the design names `fix-ci` only as an old run's kind; the li
 
 ## Deferred, with the trigger that would unblock each
 
-- Spend-paced loop (M13): when, with M39 built, overseer spend per day still runs past what the operator will pay
-  (`canopy spend` shows it). The cost recording is in; the budget and the pacing rule are what remain.
+- Spend-paced loop (left out of M13): when, with M39 built, overseer spend per day still runs past what the operator
+  will pay (`canopy spend` shows it). M13's cost recording is in; a spend budget and a pacing rule are what remain.
 - PR-scoped work (M14): when the operator keeps fixing CI or answering review on their own hand-written PRs by hand,
   often enough to want canopy to do it.
 - Webhooks: when tick latency is measured as a real cost.
@@ -1806,5 +1795,6 @@ tests above pass and the design names `fix-ci` only as an old run's kind; the li
   push often enough to want it to follow the PR until it merges. DESIGN §21 (Review requests) says what it needs.
 - Workers against OpenCode's server (M15's last bullets): when the operator wants to prompt a running worker rather than
   read its transcript and answer it after. The listener follows TRUST_MODEL T8, and OpenCode's server authentication on
-  the pinned version is checked first. - Flaky CI triage (M25): when live use shows `resume` attempts for CI spent on
-  failures the change did not cause. The design (DESIGN §23) and the milestone's bullets stand as written.
+  the pinned version is checked first.
+- Flaky CI triage (M25): when live use shows `resume` attempts for CI spent on failures the change did not cause. The
+  design (DESIGN §23) and the milestone's bullets stand as written.
