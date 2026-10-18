@@ -104,6 +104,9 @@ def sandbox(canopy_env: CanopyEnv, fakes_on_path: Path, tmp_path: Path) -> Itera
         tempfile.TemporaryDirectory(prefix="sandbox.", dir="/tmp") as tmp,
         mock.patch.dict(os.environ, {**variables, "TMPDIR": tmp}),
     ):
+        # The operator's own, which the wrapper keeps: CI's runners set one.
+        for name in ("UV_PYTHON_INSTALL_DIR", "UV_TOOL_DIR"):
+            os.environ.pop(name, None)
         yield Sandbox(log, templates, Path(tmp), cache_home, Path(os.environ["XDG_DATA_HOME"]))
 
 
@@ -200,7 +203,7 @@ def test_a_worker_runs_under_a_policy_made_for_its_slot(sandbox: Sandbox, tmp_pa
     assert filesystem["allowRead"][: len(paths) + 2] == [*paths, tmp, str(definitions)]
     assert str(shared) not in filesystem["allowRead"]
     assert filesystem["allowWrite"][:4] == [str(slot), str(own), str(objects), tmp]
-    protected = [slot / ".git", own / "config.worktree", own / "commondir", own / "gitdir"]
+    protected = [slot / ".git", own / "config.worktree", own / "commondir", own / "gitdir", sandbox.operators()]
     assert filesystem["denyWrite"] == [str(p) for p in protected]
     assert "#" not in json.dumps(call["settings"])
     assert call["settings"]["network"]["allowedDomains"][0] == "api.anthropic.com"
@@ -428,6 +431,25 @@ def test_each_role_starts_with_the_operators_logins_in_a_data_directory_of_its_o
     assert (data / "opencode" / "auth.json").stat().st_mode & 0o777 == 0o600
 
 
+@pytest.mark.parametrize("place", ["missing", "link"])
+def test_the_operators_opencode_data_is_denied_writing_wherever_it_leads(
+    sandbox: Sandbox, tmp_path: Path, place: str
+) -> None:
+    """Missing, it is made, as OpenCode would at its first start, so that it is denied before a run could make it.
+    A link, as a dotfile manager makes, is denied with where it leads."""
+    target = tmp_path / "dotfiles" / "opencode"
+    if place == "link":
+        target.mkdir(parents=True)
+        sandbox.data_home.mkdir(parents=True, exist_ok=True)
+        sandbox.operators().symlink_to(target, target_is_directory=True)
+
+    assert wrap("chore", "true", cwd=tmp_path).ok
+
+    deny_write = sandbox.only_call()["settings"]["filesystem"]["denyWrite"]
+    assert sandbox.operators().is_dir()
+    assert deny_write == [str(sandbox.operators()), *([str(target)] if place == "link" else [])]
+
+
 def test_a_refreshed_token_is_copied_back_and_nothing_else(sandbox: Sandbox, tmp_path: Path) -> None:
     """Only the tokens and expiry of a login the operator has, of the same kind, and later: never a new login, a
     `wellknown` one, an API key, where a token is sent, or whose account it is."""
@@ -553,7 +575,7 @@ def test_a_chore_reads_its_cwd_and_gets_no_git(sandbox: Sandbox, tmp_path: Path)
     tmp = call["env"]["TMPDIR"]
     assert filesystem["allowRead"][:3] == [str(cwd.resolve()), tmp, "/defs"]
     assert str(cwd.resolve()) not in filesystem["allowWrite"]
-    assert filesystem["denyWrite"] == []
+    assert filesystem["denyWrite"] == [str(sandbox.operators())]
     assert "GIT_OBJECT_DIRECTORY" not in call["env"]
 
 
@@ -577,7 +599,7 @@ def test_a_review_reads_its_checkout_and_writes_none_of_it(sandbox: Sandbox, tmp
     cache, data = sandbox.caches() / "review", sandbox.datas() / "review"
     assert [p for p in filesystem["allowWrite"] if p.startswith(str(tmp_path))] == [str(data), str(cache)]
     assert filesystem["allowWrite"][0] == tmp
-    assert filesystem["denyWrite"] == []
+    assert filesystem["denyWrite"] == [str(sandbox.operators())]
     assert "github.com" not in call["settings"]["network"]["allowedDomains"]  # it pushes and fetches nothing
     assert call["env"] == {
         "CLAUDE_CODE_TMPDIR": tmp,
