@@ -1083,7 +1083,9 @@ remote branch is deleted; and no flag shortens retention, which only the user fi
   normally; a SCENARIOS entry, since it is worth running again on each git upgrade.
 - Open: whether the pass runs `--git` on its own, weekly, after that check.
 
-Status: not started.
+Status: in progress. Stage 1 is built (2026-10-18): `canopy gc --dry-run [--json]` and `[retention]`, validated in
+full and read by nothing else. Its check, the operator's live run recorded in `MEASUREMENTS.md` and §26's defaults set
+from it, is the operator's; stage 2 waits on it.
 
 ## M48. The overseer's tools over MCP
 

@@ -633,6 +633,26 @@ class Memory(Section):
         return MemoryMode.USE in (self.ticket_notes, self.proposals)
 
 
+class Retention(Section):
+    """The `[retention]` table: how long canopy keeps its own history (DESIGN §26). `0` keeps that kind forever.
+
+    Private: only the operator's own config shortens retention, since an agent that could remove history early could
+    remove the transcript that shows what it did. Read by nothing but `canopy gc --dry-run` yet (ROADMAP M47).
+    """
+
+    # A run's, chore run's, or review's log, prompt, and diff, once it ended this long ago.
+    run_files_days: Annotated[Count, Scope.PRIVATE] = 30
+    # A tick's log and prompt; a tick that did not close `ok` keeps them for `run_files_days`.
+    tick_files_days: Annotated[Count, Scope.PRIVATE] = 7
+    # The attention rows the harness raised, once outside the window the attention list reads.
+    journal_days: Annotated[Count, Scope.PRIVATE] = 90
+    # `canopy.log` is rotated past this many MiB, and this many rotated files are kept.
+    log_max_mib: Annotated[Count, Scope.PRIVATE] = 50
+    log_keep: Annotated[Count, Scope.PRIVATE] = 3
+    # The text of a note or proposal no longer in force (DESIGN §28); a lesson's is never removed.
+    memory_days: Annotated[Count, Scope.PRIVATE] = 30
+
+
 class Loop(Section):
     """The `[loop]` table: how `canopy loop` paces ticks. Every tick runs the overseer, so this sets its spend."""
 
@@ -886,6 +906,7 @@ class Config(Section):
     notify: Notify
     serve: Serve
     memory: Memory
+    retention: Retention
     # Tables of tables, keyed by name; private as a whole (TABLE_SECTIONS).
     chores: Annotated[dict[ChoreName, Chore], Scope.PRIVATE] = {}
 
@@ -908,6 +929,7 @@ SECTIONS: dict[str, type[Section]] = {
     "notify": Notify,
     "serve": Serve,
     "memory": Memory,
+    "retention": Retention,
 }
 
 

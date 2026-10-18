@@ -143,3 +143,13 @@ cmd = ""
 # agent_prs = true                                            # the loop's own PRs, before a human is asked
 # query = 'repo:acme/api is:pr is:open author:@me -is:draft'  # your own PRs, reviewed for you alone
 # low_impact = "Only docs, comments, or tests change."
+
+# Optional: how long canopy keeps its own history (DESIGN §26); 0 keeps a kind forever. `canopy gc --dry-run` shows
+# what each kind holds and what a pass would remove; nothing removes anything yet (ROADMAP M47).
+# [retention]
+# run_files_days = 30    # a run's, chore run's, or review's log, prompt, and diff, once it ended this long ago
+# tick_files_days = 7    # a tick's log and prompt; a tick not `ok` keeps them for run_files_days
+# journal_days = 90      # harness attention rows, past the window the attention list reads
+# log_max_mib = 50       # canopy.log is rotated past this
+# log_keep = 3           # and this many rotated files are kept
+# memory_days = 30       # the text of a note or proposal no longer in force; a lesson's is never removed
