@@ -13,7 +13,8 @@ work: most operators never need stage 5.
 | [5](#5-a-bazel-repository-with-several-slots) | A large Bazel repository in the workspace | Shared caches, warm hooks, a sized pool |
 
 This guide assumes README's install steps 1 to 3: treehouse and canopy installed, and your agent runtime connected to
-GitHub's and your tracker's MCP servers. It picks up at step 4.
+GitHub's and your tracker's MCP servers. It picks up at step 4. To have your own agent take you through the install
+and stages 1 to 3 in an interview instead, see [QUICKSTART.md](QUICKSTART.md).
 
 ## Where things live
 
