@@ -5,6 +5,7 @@ import { mockChores } from '@/api/mocks'
 import {
     awaitsRun,
     cadenceText,
+    choreHealth,
     choreLine,
     choreRunState,
     dueText,
@@ -13,6 +14,7 @@ import {
     listedText,
     overLimitText,
     runsText,
+    startsAnyTime,
     windowText,
 } from './chores'
 
@@ -28,6 +30,9 @@ describe('chores', () => {
         expect(windowText(deps)).toBe('mon,tue,wed,thu,fri 08:00-18:00 UTC')
         expect(windowText({ days: [], hours: null, timezone: null })).toBe('any time')
         expect(windowText({ days: ['sat'], hours: null, timezone: null })).toBe('sat all day local time')
+        expect(startsAnyTime(deps)).toBe(false)
+        expect(startsAnyTime({ days: [], hours: null })).toBe(true)
+        expect(startsAnyTime({ days: [], hours: '08:00-18:00' })).toBe(false)
     })
 
     it('say when a chore is next due, now once that time has passed', () => {
@@ -46,6 +51,25 @@ describe('chores', () => {
             started_at: '2026-10-08T12:20:00Z',
         }
         expect(choreLine({ ...deps, running }, NOW)).toBe('running for 10m')
+    })
+
+    it("say on a chore's page how healthy it is: where it stands, how its last run ended, its open findings", () => {
+        expect(choreHealth(deps, NOW)).toBe('last ok 4h ago, due in 1h · 1 open finding')
+        const running = {
+            ...latest,
+            status: 'running',
+            state: 'running' as const,
+            started_at: '2026-10-08T12:20:00Z',
+        }
+        expect(choreHealth({ ...deps, running }, NOW)).toBe('running for 10m · last ok 4h ago · 1 open finding')
+        expect(choreHealth({ ...deps, running, latest: null, findings: [] }, NOW)).toBe('running for 10m')
+        expect(choreHealth({ ...deps, findings: [] }, NOW)).toBe('last ok 4h ago, due in 1h')
+        expect(choreHealth({ ...deps, findings: deps.findings.map((f) => ({ ...f, dismissed: true })) }, NOW)).toBe(
+            'last ok 4h ago, due in 1h',
+        )
+        expect(choreHealth({ ...deps, findings: [], more_findings: 12 }, NOW)).toBe(
+            'last ok 4h ago, due in 1h · 0 open findings · 12 not listed',
+        )
     })
 
     it("count a window's runs, and the ones that reported no cost", () => {

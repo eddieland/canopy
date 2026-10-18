@@ -16,13 +16,21 @@ schedule, and what its runs cost over the last day and month. To run one now ins
 
 ## A chore's page
 
-- **Schedule**: how often it may run, the hours it may start in, and its `when`, the words you gave the overseer for
-  when it's worth running.
+The line under its name says whether it's healthy: how its latest run ended and when it's next due, then its open
+findings, if it has any (`last ok 4h ago, due in 1h · 1 open finding`). While a run works, it says that and still how
+the last one ended, since the running one hasn't said anything yet.
+
+- **Schedule**: how often it may run, then, if you set them, the hours it may start in and its `when`, the words you
+  gave the overseer for when it's worth running. A chore that may start any time, whenever it's due, shows just the
+  first.
 - **Open findings**: what its latest ok run found. Each finding also reaches the attention list.
 - **Runs**: every run, with its status, how many findings it had, its cost, and its summary. A run's page has its
   transcript, as a worker's does, filling in while the run works.
 - **Notes**: what you've told its runs. More on these below.
 - **Spend**: its runs' cost over the last 24 hours and 30 days, average and worst included.
+
+On a wide screen, the open findings and runs take the wide column, since that's where you act, and the schedule, notes,
+and spend sit beside them.
 
 A chore run that doesn't end ok reaches the attention list as `chore failed`.
 
@@ -57,10 +65,11 @@ more, and `max_findings` goes up. Either way, decide once, rather than skimming 
 
 ## Notes to a chore
 
-A note is an instruction to the chore's next runs, such as a finding to leave out or a place to look harder. Write one
-in **Notes** and press **Add note**, or your send key; it's `canopy reply chore:NAME`. Every run reads the latest ten,
-oldest first, and a later note wins over an earlier one. A note no run has read yet is marked `waiting for the next
-run`.
+A note is an instruction to the chore's next runs, such as a finding to leave out or a place to look harder. Nothing
+waits on one, so the box stays folded: open **Show a note for its next runs** in **Notes**, write it, and press **Add
+note**, or your send key; it's `canopy reply chore:NAME`. Every run reads the latest ten, oldest first, and a later
+note wins over an earlier one. A note no run has read yet is marked `waiting for the next run`. A chore with no notes
+follows its prompt file alone, which is how most of them should spend most of their lives.
 
 Nothing deletes a note. To take one back, write a newer one that says so. Notes never reach the overseer or the
 attention list: they shape what the chore looks for, not when it runs.

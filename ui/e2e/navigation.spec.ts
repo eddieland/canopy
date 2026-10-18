@@ -304,8 +304,14 @@ test('the chores page lists each chore as canopy status does, and a chore page w
 
     await page.goto('chores/deps')
     await settled(page)
-    // Where it stands is its description, as its line in the list says it.
-    await expect(page.locator('main header p')).toHaveText('last ok 4h ago, due in 1h')
+    // Whether it is healthy is its description: where it stands, as its line in the list says it, then its findings.
+    await expect(page.locator('main header p')).toHaveText('last ok 4h ago, due in 1h · 1 open finding')
+    // Its schedule names what its config sets, and leaves out a default.
+    await expect(page.getByTestId('chore-schedule').getByRole('definition')).toHaveText([
+        'every 360 minutes',
+        'mon,tue,wed,thu,fri 08:00-18:00 UTC',
+        'Skip it when nothing has merged to main since the last run.',
+    ])
     await expect(page.getByTestId('chore-spend-24h').getByRole('cell')).toHaveText([
         '2',
         '$0.47',
@@ -319,7 +325,46 @@ test('the chores page lists each chore as canopy status does, and a chore page w
     await expect(page.getByTestId('chore-run-2')).toContainText('1 finding')
     await expect(page.getByTestId('chore-run-2')).toContainText('session ses_chore2')
     await expect(page.getByTestId('chore-notes').getByTestId('message-8')).toContainText("docs site's lockfile")
+    // Nothing waits on a note, so its form waits to be asked for.
+    await expect(page.getByRole('form', { name: 'Note' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Show a note for its next runs' }).click()
     await expect(page.getByRole('form', { name: 'Note' })).toBeVisible()
+
+    // While a run works, the description still says how the last one ended; a chore with no window or condition
+    // shows how often it may start alone.
+    await page.goto('chores/build-health')
+    await settled(page)
+    await expect(page.locator('main header p')).toHaveText('running for 40m · last ok 2h ago')
+    await expect(page.getByTestId('chore-schedule').getByRole('term')).toHaveText(['at most'])
+    await expect(page.getByTestId('chore-notes').getByRole('textbox')).toHaveCount(0)
+})
+
+test("a chore's page puts its open findings and runs first, and wide, in the wide column", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto('chores/deps')
+    await settled(page)
+    const box = async (testId: string) => {
+        const found = await page.getByTestId(testId).boundingBox()
+        if (found === null) {
+            throw new Error(`${testId} is not on the page`)
+        }
+        return found
+    }
+    // What it is, then where the operator acts, its open findings, and the runs that found them, then the rest.
+    const findings = await box('chore-findings')
+    expect(findings.y).toBeLessThan(480)
+    expect((await box('chore-schedule')).y).toBeLessThan(findings.y)
+    expect(findings.y).toBeLessThan((await box('chore-runs')).y)
+    expect((await box('chore-runs')).y).toBeLessThan((await box('chore-notes')).y)
+    expect((await box('chore-notes')).y).toBeLessThan((await box('chore-spend')).y)
+
+    // Wide, findings and runs fill the wide column, beside the schedule, notes, and spend.
+    await page.setViewportSize({ width: 1600, height: 900 })
+    const schedule = await box('chore-schedule')
+    expect((await box('chore-findings')).x).toBeGreaterThan(schedule.x + schedule.width)
+    expect((await box('chore-runs')).x).toBeGreaterThan(schedule.x + schedule.width)
+    expect((await box('chore-notes')).x).toBe(schedule.x)
+    expect((await box('chore-spend')).x).toBe(schedule.x)
 })
 
 test('a chore not defined for this workspace says so', async ({ page }) => {
