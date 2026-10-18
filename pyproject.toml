@@ -38,6 +38,8 @@ dependencies = [
     "fastapi>=0.143.0",
     "pydantic>=2.14.0",
     "rich>=15.0.0",
+    # FastAPI's own foundation; canopy.serve's middleware and responses import it directly, so it is declared too.
+    "starlette>=1.7.0",
     "uvicorn>=0.54.0",
 ]
 
