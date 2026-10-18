@@ -637,7 +637,10 @@ list, an empty state, or a skeleton by hand.
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
   wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
   accent's tint for the operator's own words, which sit on the right. A bubble's corner nearest its side is square.
-  The question still open carries a `waiting on you` chip in `status-blocked`.
+  The question still open carries a `waiting on you` chip in `status-blocked`. A forgotten ticket's conversation
+  (`TicketThread`) shows what came after the forget; the messages from before it fold at the oldest end under a muted
+  line saying when, opened by `Show N earlier messages`, a `Disclosure`, and dimmed, since the loop no longer reads
+  them. The panel's count is of the messages after the forget.
   Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text, but for their URLs (below). An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
   (`src/lib/acknowledged.ts`), and an `awaiting_reply` item it answered an `answered` chip, with a line saying it leaves
