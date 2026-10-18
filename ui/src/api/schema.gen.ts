@@ -2506,6 +2506,13 @@ export type components = {
              */
             use_count: number;
             /**
+             * Used By
+             * @description The latest runs that said they relied on it, newest first, at most five. A run from before canopy named them
+             *     counts in `use_count` but is not here.
+             * @default []
+             */
+            used_by: number[];
+            /**
              * Why
              * @description The harness's words for its latest change of status, such as `superseded by note 41`.
              */
@@ -3986,6 +3993,18 @@ export type components = {
             refused: components["schemas"]["MemoryRefusal"][];
             /** @description The modes it was rendered under; None for a run rendered with memory off, which wrote and read nothing. */
             rendered: components["schemas"]["RunMemoryModes"] | null;
+            /**
+             * Used
+             * @description The ids of what it read that it said it relied on, its `memory_used`.
+             * @default []
+             */
+            used: number[];
+            /**
+             * Wrong
+             * @description The ids of what it read that it said was wrong, its `memory_wrong`.
+             * @default []
+             */
+            wrong: number[];
             /**
              * Wrote
              * @description What it wrote, in order.
