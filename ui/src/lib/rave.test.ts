@@ -65,3 +65,28 @@ describe('useRave', () => {
         expect(result.current).toBe('on')
     })
 })
+
+describe('onRaveStart', () => {
+    beforeEach(() => localStorage.clear())
+
+    it('hears each start, from this tab or another, never a rave already on or one ending', async () => {
+        localStorage.setItem('canopy-rave', 'on')
+        const rave = await load()
+        const heard = vi.fn<() => void>()
+        const stop = rave.onRaveStart(heard)
+        expect(heard).not.toHaveBeenCalled()
+
+        rave.setRave('off')
+        expect(heard).not.toHaveBeenCalled()
+        rave.setRave('on')
+        expect(heard).toHaveBeenCalledTimes(1)
+        otherTab(rave.STORAGE_KEY, 'off')
+        otherTab(rave.STORAGE_KEY, 'on')
+        expect(heard).toHaveBeenCalledTimes(2)
+
+        stop()
+        rave.setRave('off')
+        rave.setRave('on')
+        expect(heard).toHaveBeenCalledTimes(2)
+    })
+})

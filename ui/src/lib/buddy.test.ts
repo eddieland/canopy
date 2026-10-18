@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { breakStorage, otherTab, otherTabClears } from '@/test-utils'
 
-import { ANYWHERE, DEFAULT, nextTip, parseBuddy, TIPS } from './buddy'
+import { ANYWHERE, DEFAULT, nextTip, parseBuddy, RAVE, TIPS, tipsFor } from './buddy'
 import type { View } from './buddy'
 
 // The setting is read when the module loads, so each test loads a fresh copy.
@@ -31,12 +31,12 @@ describe('TIPS', () => {
     })
 
     it('never says the same thing twice, on any page', () => {
-        const all = [...Object.values(TIPS).flat(), ...ANYWHERE]
+        const all = [...Object.values(TIPS).flat(), ...ANYWHERE, ...RAVE]
         expect(new Set(all).size).toBe(all.length)
     })
 
     it('never follows a voice with itself in a list, the last round to the first', () => {
-        for (const tips of [...Object.values(TIPS), ANYWHERE]) {
+        for (const tips of [...Object.values(TIPS), ANYWHERE, RAVE]) {
             const voices = tips.map((tip) => tip.split(' ').slice(0, 2).join(' '))
             for (const [n, voice] of voices.entries()) {
                 expect(voice).not.toBe(voices[(n + 1) % voices.length])
@@ -46,21 +46,21 @@ describe('TIPS', () => {
 
     it('keeps every tip short enough for the bubble', () => {
         // A longer tip makes the bubble taller, which the rail's slot must hold whole (src/components/shell/buddy.tsx).
-        for (const tip of [...Object.values(TIPS).flat(), ...ANYWHERE]) {
+        for (const tip of [...Object.values(TIPS).flat(), ...ANYWHERE, ...RAVE]) {
             expect(tip.length).toBeLessThanOrEqual(100)
         }
     })
 
     it('never opens a line with "Tip:", which is for the ticker\'s real tips', () => {
-        for (const tip of [...Object.values(TIPS).flat(), ...ANYWHERE]) {
+        for (const tip of [...Object.values(TIPS).flat(), ...ANYWHERE, ...RAVE]) {
             expect(tip).not.toMatch(/^Tip:/u)
         }
     })
 })
 
 // Draws `count` tips for a view, each with an even share of the range a random number falls in.
-function drawAll(view: View | undefined, count: number): Set<string> {
-    return new Set(Array.from({ length: count }, (_, n) => nextTip(view, '', () => n / count)))
+function drawAll(view: View | undefined, count: number, rave = false): Set<string> {
+    return new Set(Array.from({ length: count }, (_, n) => nextTip(tipsFor(view, rave), '', () => n / count)))
 }
 
 describe('nextTip', () => {
@@ -73,12 +73,17 @@ describe('nextTip', () => {
         expect(drawAll(undefined, ANYWHERE.length)).toEqual(new Set(ANYWHERE))
     })
 
+    it("draws only from the rave's while the lights rave, on any view", () => {
+        expect(drawAll('/chores/$name', RAVE.length, true)).toEqual(new Set(RAVE))
+        expect(drawAll(undefined, RAVE.length, true)).toEqual(new Set(RAVE))
+    })
+
     it('never offers the tip just offered, on its view or another', () => {
         const views = [...(Object.keys(TIPS) as View[]), undefined]
         for (const view of views) {
-            for (const last of [...(view === undefined ? [] : TIPS[view]), ...ANYWHERE]) {
+            for (const last of tipsFor(view, false)) {
                 for (const random of [0, 0.5, 0.999]) {
-                    expect(nextTip(view, last, () => random)).not.toBe(last)
+                    expect(nextTip(tipsFor(view, false), last, () => random)).not.toBe(last)
                 }
             }
         }

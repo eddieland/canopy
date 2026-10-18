@@ -8,8 +8,9 @@ import { nextIndex } from '@/lib/headlines'
  * journal text, and none of them is real: a line that names something real belongs in the ticker's tips, which open
  * with "Tip:", so Sprig's jokes open with anything else. They come in several voices, mixed in each list so that no
  * voice follows itself: the paperclip's "It looks like you're...", an "Unhelpful tip:", a "Did you know?" or "Fun
- * fact:" that is not one, a "Hot take:", a "Dear diary," entry, a haiku, a riddle. It is off until Settings turns it
- * on, which is kept in localStorage like the theme, and synced across tabs.
+ * fact:" that is not one, a "Hot take:", a "Dear diary," entry, a haiku, a riddle. While the lightswitch rave is on
+ * (src/lib/rave.ts), Sprig has only the rave on its mind. It is off until Settings turns it on, which is kept in
+ * localStorage like the theme, and synced across tabs.
  */
 
 /** Whether Sprig shows. */
@@ -231,13 +232,34 @@ export const ANYWHERE: readonly string[] = [
     'Dear diary, they gave me a keyboard to help vibe code. I have no hands. The vibes are immaculate.',
 ]
 
+/** Sprig's tips while the lightswitch rave is on, on every view: it has nothing else on its mind. */
+export const RAVE: readonly string[] = [
+    'It looks like you found the light switch. The Cheat would be proud. The Cheat is always proud.',
+    'Fun fact: I have no feet, no hands, and no rhythm. I am dancing anyway.',
+    'Dear diary, the lights went out and nobody screamed. Then they came back. Then out. So alive.',
+    'Haiku: lights off, then lights on / my one leaf waves in the dark / the switch flicks, I bop',
+    'Unhelpful tip: the lights are off half the time, so the runs cost half as much. They do not.',
+    'Hot take: the overseer would rave too, if it ever looked up from the tickets.',
+    'Did you know? A worker never sees the lights go off. It works in the dark either way.',
+    'Riddle: what goes off and on all night and never makes up its mind? The lights. And me.',
+]
+
 /**
- * The next tip for a view: one at random from its own and the ones for anywhere, as the ticker picks its headlines
- * (`nextIndex`), but never `last`, the tip just offered, wherever it was offered. So no tip follows itself, on the
- * same view or on the next.
+ * The tips Sprig picks from on a view: the view's own, then the ones for anywhere. While the lightswitch rave is on,
+ * the rave's alone, on any view.
  */
-export function nextTip(view: View | undefined, last: string, random: () => number = Math.random): string {
-    const tips = [...(view === undefined ? [] : TIPS[view]), ...ANYWHERE]
+export function tipsFor(view: View | undefined, rave: boolean): readonly string[] {
+    if (rave) {
+        return RAVE
+    }
+    return [...(view === undefined ? [] : TIPS[view]), ...ANYWHERE]
+}
+
+/**
+ * The next tip from `tips` (`tipsFor`): one at random, as the ticker picks its headlines (`nextIndex`), but never
+ * `last`, the tip just offered, wherever it was offered. So no tip follows itself, on the same view or on the next.
+ */
+export function nextTip(tips: readonly string[], last: string, random: () => number = Math.random): string {
     return tips[nextIndex(tips.length, tips.indexOf(last), random)] ?? ''
 }
 

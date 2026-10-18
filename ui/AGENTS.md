@@ -160,3 +160,5 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
 - `make check` passes (it runs `npm run check`), and `make ui-e2e` passes.
 - New behavior has a unit test or a Playwright test; a new route has its screenshots.
 - `DESIGN.md` here is updated for any new token, pattern, or rule, and the guide for anything a page of it describes.
+  Fun is the exception: what the ticker, Sprig, the rave, and the like do is written in their code, and `DESIGN.md`
+  keeps only the rules all fun shares (its Fun section), changed only when one of those changes.
