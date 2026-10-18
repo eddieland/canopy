@@ -166,24 +166,14 @@ gh auth setup-git    # or any credential helper
 ## 5. Prefix the commands
 
 In `~/.config/canopy/config.toml`, never a workspace file (TRUST_MODEL T7), put `canopy-sandbox`, its role, and `--`
-before each command. `--read {definitions_dir}` lets the agent read canopy's agent definitions (D040). `canopy init`
-prints the `worker_cmd` line for your current template.
+before each command. `--read {definitions_dir}` lets the agent read canopy's agent definitions (D040).
+`worker_cmd_prefix` goes before all four commands a worker run starts, `worker_cmd`, `private_worker_cmd`,
+`split_cmd`, and `plan_cmd`; `canopy init` prints its line.
 
 ```toml
 [runtime]
+worker_cmd_prefix = 'canopy-sandbox worker --read {definitions_dir} --'
 # Multi-line literal strings: the template is split into words, so a line break is only a space.
-worker_cmd = '''canopy-sandbox worker --read {definitions_dir} --
-    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json --thinking
-    --title={title} {prompt}'''
-private_worker_cmd = '''canopy-sandbox worker --read {definitions_dir} --
-    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker-private --format json --thinking
-    --title={title} {prompt}'''
-split_cmd = '''canopy-sandbox worker --read {definitions_dir} --
-    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json --thinking
-    --title={title} {prompt}'''
-plan_cmd = '''canopy-sandbox worker --read {definitions_dir} --
-    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json --thinking
-    --title={title} {prompt}'''
 chore_cmd = '''canopy-sandbox chore --read {definitions_dir} --
     env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json --thinking
     --title={title} {prompt}'''
@@ -194,8 +184,8 @@ review_cmd = '''canopy-sandbox review --read {definitions_dir} --
 setup_cmd = "canopy-sandbox setup -- sh -c 'pnpm install --frozen-lockfile'"
 ```
 
-- Prefix every one of them. `private_worker_cmd` is easy to miss, and a private ticket's worker then runs outside the
-  sandbox.
+- Prefix every one of them. If you wrap the worker templates by hand instead of with `worker_cmd_prefix`,
+  `private_worker_cmd` is easy to miss, and a private ticket's worker then runs outside the sandbox.
 - A chore with a `cmd` of its own (DESIGN §19) needs the prefix there too, with `--read {definitions_dir}` only if the
   command names it: `cmd = 'canopy-sandbox chore -- opencode run --agent build-health --format json {prompt}'`.
 - Leave `overseer_cmd` as it is. The overseer needs the journal and the config the sandbox denies.

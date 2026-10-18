@@ -29,13 +29,13 @@ fallback if `srt` changes under us; the harness would not notice the swap.
 
 ### The wrapper
 
-The operator sets, in the user file or the workspace's private file (§12), never the workspace file:
+The operator sets, in the user file or the workspace's private file (§12), never the workspace file, a prefix for
+each command, or one for the four a worker run starts:
 
 ```toml
 [runtime]
-# A multi-line literal string: the template is split into words, so the line break is only a space.
-worker_cmd = '''canopy-sandbox worker --read {definitions_dir} -- env OPENCODE_CONFIG_DIR={definitions_dir}
-    opencode run --agent canopy-worker --format json {prompt}'''
+# Before worker_cmd, private_worker_cmd, split_cmd, and plan_cmd alike (§12).
+worker_cmd_prefix = 'canopy-sandbox worker --read {definitions_dir} --'
 ```
 
 `canopy-sandbox` is a short program canopy installs beside itself, not harness code (D041, D117). Its first argument is
@@ -65,7 +65,7 @@ and:
    and `-c` takes a shell command. It waits for `srt` and then removes its directory; a run killed with SIGKILL leaves
    one that a later run removes. It re-allows reading `srt`'s `vendor/`, whose seccomp helper runs inside the sandbox.
 
-Because `worker_cmd` is a private key (TRUST_MODEL T7), a repository cannot remove the prefix. Because the sandbox
+Because `runtime.*` keys are private (TRUST_MODEL T7), a repository cannot remove the prefix. Because the sandbox
 denies writes to `~/.config/canopy`, a worker cannot remove it either.
 
 ### What is wrapped
@@ -244,7 +244,7 @@ it. On Linux the sandboxed processes are in a PID namespace that dies with bubbl
 sandbox. canopy reads the result line, not the exit status, and a timeout is canopy's own clock.
 
 No config key turns the sandbox on. `canopy sandbox setup` installs the templates and the pinned `srt`, and checks
-what needs root (§12, D117); `canopy init` prints a suggested `worker_cmd`. Neither writes the config.
+what needs root (§12, D117); `canopy init` prints a suggested `worker_cmd_prefix`. Neither writes the config.
 
 ### The canary
 

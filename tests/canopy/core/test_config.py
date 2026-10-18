@@ -322,6 +322,25 @@ def test_render_command_fills_in_the_title_and_nothing_inside_the_prompt() -> No
     assert argv == ["agent", "run", "--title=PROJ-1 implement: {prompt}", "do {title}"]
 
 
+def test_a_worker_template_runs_between_the_prefix_and_the_suffix() -> None:
+    runtime = config.Runtime(worker_cmd_prefix="wrap --read {definitions_dir} --", worker_cmd_suffix="--model 'a b'")
+    argv = render_command(runtime.worker_template("agent {prompt}"), "do it", Path("/defs"), "PROJ-1 implement")
+    assert argv == ["wrap", "--read", "/defs", "--", "agent", "do it", "--model", "a b"]
+    assert config.Runtime().worker_template("agent {prompt}") == "agent {prompt}"
+
+
+@pytest.mark.parametrize("key", ["worker_cmd_prefix", "worker_cmd_suffix"])
+@pytest.mark.parametrize(
+    ("value", "error"), [("wrap {prompt}", "must not contain {prompt}"), ("wrap 'open", "No closing quotation")]
+)
+def test_a_worker_prefix_or_suffix_places_no_prompt(canopy_env: CanopyEnv, key: str, value: str, error: str) -> None:
+    canopy_env.write_user(
+        canopy_env.user_file.read_text().replace("\n[runtime]\n", f'\n[runtime]\n{key} = "{value}"\n')
+    )
+    with pytest.raises(ConfigError, match=re.escape(f"runtime.{key}: Value error, {error}")):
+        load(canopy_env.root, canopy_env.user_file)
+
+
 @pytest.mark.parametrize("key", ["overseer_cmd", "worker_cmd"])
 def test_an_agent_template_without_the_definitions_dir_prints_its_replacement(canopy_env: CanopyEnv, key: str) -> None:
     old = f"opencode run --agent canopy-{key.removesuffix('_cmd')} {{prompt}}"
