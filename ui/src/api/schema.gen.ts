@@ -2479,6 +2479,8 @@ export type components = {
              * @description When a run last said so; None if none has: read by no run.
              */
             last_used_at: string | null;
+            /** @description A lesson's source, as the CLI names it; None for a note or a proposal, or a source no longer in the journal. */
+            origin: components["schemas"]["MemoryOrigin"] | null;
             /**
              * Private
              * @description Whether the run that wrote it worked a private ticket: its text may hold what the operator kept off the
@@ -2589,6 +2591,29 @@ export type components = {
          */
         MemoryModeName: "off" | "record" | "use";
         /**
+         * MemoryOrigin
+         * @description What a lesson was promoted from (DESIGN §28): a proposal, or a ticket's note.
+         */
+        MemoryOrigin: {
+            /**
+             * Id
+             * @description The source's id.
+             */
+            id: number;
+            /**
+             * Run Id
+             * @description The run that wrote it.
+             */
+            run_id: number | null;
+            /** @description What the source is. */
+            scope: components["schemas"]["MemoryScopeName"];
+            /**
+             * Ticket Key
+             * @description The ticket whose run wrote it.
+             */
+            ticket_key: string | null;
+        };
+        /**
          * MemoryOverview
          * @description Every tier's memory (DESIGN §28): the tickets with notes in force, the proposals waiting, and the lessons.
          */
@@ -2651,6 +2676,13 @@ export type components = {
         MemoryProposal: {
             /** @description The proposal. */
             entry: components["schemas"]["MemoryEntry"];
+            /**
+             * Expires At
+             * Format: date-time
+             * @description When it lapses unless the operator decides it, `PROPOSAL_DAYS` after it was written: the first tick after
+             *     invalidates it.
+             */
+            expires_at: string;
             /**
              * Private
              * @description Whether that run was on a private ticket, whose text may hold what the operator kept off the tracker.

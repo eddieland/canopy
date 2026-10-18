@@ -205,6 +205,8 @@ export type MemoryTier = Schemas['MemoryTier']
 export type MemoryState = Schemas['MemoryState']
 /** One note, proposal, or lesson. Its text is a worker's, or the operator's for a lesson: plain text. */
 export type MemoryEntry = Schemas['MemoryEntry']
+/** What a lesson was promoted from: a proposal, or a ticket's note. */
+export type MemoryOrigin = Schemas['MemoryOrigin']
 /** A proposal waiting on the operator, with where it came from. */
 export type MemoryProposal = Schemas['MemoryProposal']
 /** What a run would be served of one tier, as its prompt would carry it. */

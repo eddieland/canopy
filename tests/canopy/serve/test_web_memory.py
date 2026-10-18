@@ -90,8 +90,15 @@ def test_the_overview_counts_the_notes_in_force_by_ticket_and_holds_the_proposal
         (5, "implement", False, False),
         (6, "implement", True, False),
     ]
+    # Each proposal lapses PROPOSAL_DAYS after it was written, unless decided.
+    for p in overview["proposals"]:
+        lapses = datetime.fromisoformat(p["expires_at"]) - datetime.fromisoformat(p["entry"]["created_at"])
+        assert lapses == timedelta(days=14)
     [lesson] = overview["lessons"]
     assert (lesson["id"], lesson["scope"], lesson["repo"], lesson["promoted_from"]) == (8, "lesson", "web", 7)
+    # A lesson names its source as the CLI does; a proposal names none.
+    assert lesson["origin"] == {"id": 7, "scope": "proposal", "ticket_key": "ABC-103", "run_id": 38}
+    assert overview["proposals"][0]["entry"]["origin"] is None
     digest = overview["lessons_digest"]
     assert (digest["ids"], digest["served"], digest["left_out"]) == ([8], False, 0)
     assert digest["text"].startswith("## Lessons from the operator")

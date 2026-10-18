@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
     dueForReview,
+    lapsesText,
     leftOutText,
     lessonChars,
     memorySegments,
@@ -95,5 +96,19 @@ describe('dueForReview', () => {
             { id: 5, review_at: '2026-10-08T12:00:00Z' },
         ]
         expect(dueForReview(lessons, now).map((m) => m.id)).toEqual([3, 1, 5])
+    })
+})
+
+describe('lapsesText', () => {
+    const now = Date.parse('2026-10-08T12:00:00Z')
+
+    it('says how long a proposal has left, in the largest whole unit', () => {
+        expect(lapsesText('2026-10-11T13:00:00Z', now)).toBe('lapses in 3d')
+        expect(lapsesText('2026-10-08T15:30:00Z', now)).toBe('lapses in 3h')
+    })
+
+    it('says a proposal past its time lapses at the next tick, which invalidates it', () => {
+        expect(lapsesText('2026-10-08T12:00:00Z', now)).toBe('lapses at the next tick')
+        expect(lapsesText('2026-10-01T12:00:00Z', now)).toBe('lapses at the next tick')
     })
 })

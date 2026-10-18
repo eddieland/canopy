@@ -538,6 +538,23 @@ test("a proposal is promoted in the operator's words and another rejected from t
     await expect(proposals.getByText('all decided: no proposal waits on you')).toBeVisible()
 })
 
+test("a ticket's note is forgotten from the memory page, where it shows", async ({ page }) => {
+    await page.goto('memory')
+    const notes = page.getByTestId('memory-notes')
+    const ticket = notes.getByTestId('memory-ticket-ABC-100')
+    await ticket.getByRole('button', { name: 'Show 2 notes' }).click()
+    const note = ticket.getByTestId('memory-2')
+    await note.getByRole('button', { name: 'Forget' }).click()
+    const challenge = note.getByRole('form', { name: 'Forget memory:2' })
+    await challenge.getByLabel('Type memory:2 to confirm').fill('memory:2')
+    await challenge.getByRole('button', { name: 'Forget memory:2' }).click()
+    await expect(notes.getByRole('status')).toContainText('Memory 2 (ticket')
+    await expect(notes.getByRole('status')).toContainText('is forgotten: its text is deleted.')
+    // No longer in force, so its ticket's row lists one note.
+    await expect(note).toHaveCount(0)
+    await expect(ticket.getByRole('button', { name: 'Hide 1 note' })).toBeVisible()
+})
+
 test("a ticket's note is promoted from its page for one repository, and the lesson forgotten", async ({ page }) => {
     await page.goto('tickets/ABC-102')
     const panel = page.getByTestId('ticket-memory')

@@ -1,11 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Eraser, Octagon, Play, Square } from 'lucide-react'
 import { useState } from 'react'
-import type { SubmitEvent } from 'react'
 
 import { forgetTicket, refreshTicket, startTicket, stopTicket } from '@/api/mutations'
 import type { TicketSummary } from '@/api/types'
-import { Input } from '@/components/input'
+import { ForgetForm } from '@/components/forget-form'
 import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
 import { forgotText, startedText, stoppedText } from '@/lib/outcomes'
@@ -99,75 +98,22 @@ export function TicketActions({ ticket, quiet = false }: { ticket: TicketSummary
                 )}
             </div>
             {confirming === 'forget' && (
-                <ForgetChallenge
-                    ticketKey={key}
+                <ForgetForm
+                    confirm={key}
+                    name="Forget"
                     pending={pending}
                     onForget={(typed) => forget.mutate(typed)}
                     onCancel={() => setConfirming(null)}
-                />
+                >
+                    canopy drops what it knows of {key}&apos;s branch, PRs, and phase, and its next implement starts
+                    over on a new branch. Its runs stay, and still count toward the attempt limits. Its conversation
+                    stays too, folded away on its page, since no worker reads it again. Closing its PRs and deleting its
+                    branch on origin stay yours. This cannot be undone here.
+                </ForgetForm>
             )}
             <Notice error={start.error ?? stop.error ?? forget.error} reserve>
                 {said}
             </Notice>
         </div>
-    )
-}
-
-/** What forgetting does, and a field the ticket's key must be typed into before the button that forgets is enabled. */
-function ForgetChallenge({
-    ticketKey,
-    pending,
-    onForget,
-    onCancel,
-}: {
-    ticketKey: string
-    pending: boolean
-    onForget: (typed: string) => void
-    onCancel: () => void
-}) {
-    const [typed, setTyped] = useState('')
-    const matches = typed === ticketKey
-
-    function submit(event: SubmitEvent<HTMLFormElement>) {
-        event.preventDefault()
-        if (matches) {
-            onForget(typed)
-        }
-    }
-
-    return (
-        <form
-            onSubmit={submit}
-            aria-label="Forget"
-            className="flex flex-col gap-2 rounded-md border border-status-failed/40 bg-status-failed/5 p-3"
-        >
-            <p className="text-xs text-foreground">
-                canopy drops what it knows of {ticketKey}&apos;s branch, PRs, and phase, and its next implement starts
-                over on a new branch. Its runs stay, and still count toward the attempt limits. Its conversation stays
-                too, folded away on its page, since no worker reads it again. Closing its PRs and deleting its branch on
-                origin stay yours. This cannot be undone here.
-            </p>
-            <label className="panel-label" htmlFor="forget-confirm">
-                Type {ticketKey} to confirm
-            </label>
-            <div className="flex flex-wrap items-center gap-2">
-                <Input
-                    id="forget-confirm"
-                    value={typed}
-                    onChange={(event) => setTyped(event.target.value)}
-                    placeholder={ticketKey}
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="max-w-56 font-mono"
-                />
-                <Button type="submit" variant="destructive" disabled={pending || !matches}>
-                    <Eraser />
-                    Forget {ticketKey}
-                </Button>
-                <Button type="button" variant="ghost" onClick={onCancel} disabled={pending}>
-                    Keep it
-                </Button>
-            </div>
-        </form>
     )
 }

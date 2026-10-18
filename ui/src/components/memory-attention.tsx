@@ -32,7 +32,7 @@ export function ProposalsWaiting({ ticketKey }: { ticketKey: string }) {
             p.entry.id,
             <Fragment key={p.entry.id}>
                 <ProposalProvenance proposal={p} />
-                <ProposalActions proposal={p.entry} asWritten onSaid={setSaid} />
+                <ProposalActions proposal={p.entry} asWritten forget={false} onSaid={setSaid} />
             </Fragment>,
         ]),
     )
