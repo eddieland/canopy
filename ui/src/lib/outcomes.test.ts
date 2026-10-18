@@ -251,6 +251,7 @@ describe('outcomes', () => {
             wrong_at: null,
             wrong_run_id: null,
             promoted_from: 2,
+            origin: null,
             private: false,
         } as const
         const note = { ...lesson, id: 2, scope: 'ticket', ticket_key: 'ABC-1', repo: null, review_at: null } as const

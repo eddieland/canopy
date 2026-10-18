@@ -2,10 +2,10 @@ import { QueryClient } from '@tanstack/react-query'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { MemoryEntry } from '@/api/types'
+import type { MemoryEntry, MemoryProposal } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
-import { MemoryBand, MemoryDigestView, MemoryRows, MemoryText } from './memory'
+import { MemoryBand, MemoryDigestView, MemoryRows, MemoryText, ProposalProvenance } from './memory'
 
 afterEach(() => {
     cleanup()
@@ -68,6 +68,7 @@ const NOTE: MemoryEntry = {
     used_by: [43],
     last_used_at: '2026-10-08T11:30:00Z',
     promoted_from: null,
+    origin: null,
     private: false,
     created_at: '2026-10-08T10:00:00Z',
 }
@@ -120,6 +121,27 @@ describe('MemoryRows', () => {
         expect(screen.queryByRole('link', { name: 'run:41' })).toBeNull()
         expect(screen.getByText(/^reported wrong by/u).textContent).toBe('reported wrong by run:44')
         expect(screen.getByText('invalid')).toBeDefined()
+    })
+
+    it('names a lesson’s source, its ticket, and the run that wrote it, as the CLI does', async () => {
+        const lesson = {
+            ...NOTE,
+            scope: 'lesson' as const,
+            run_id: null,
+            head: null,
+            promoted_from: 7,
+            origin: { id: 7, scope: 'proposal' as const, ticket_key: 'ABC-103', run_id: 38 },
+        }
+        await renderRows(<MemoryRows entries={[lesson]} />)
+        expect(screen.getByText(/^from proposal/u).textContent).toBe('from proposal memory:7 of ABC-103, by run:38')
+        expect(screen.getByRole('link', { name: 'run:38' }).getAttribute('href')).toBe('/runs/38')
+    })
+
+    it('says when a run reported a lesson wrong', async () => {
+        await renderRows(
+            <MemoryRows entries={[{ ...NOTE, wrong_run_id: 44, wrong_at: '2026-10-08T09:00:00Z' }]} ownRun={41} />,
+        )
+        expect(screen.getByText(/^reported wrong by/u).textContent).toMatch(/^reported wrong by run:44 \S+ ago$/u)
     })
 
     it('says a deleted text was deleted, and a memory no run has read so', async () => {
@@ -176,5 +198,32 @@ describe('MemoryDigestView', () => {
         rerender(<MemoryDigestView digest={{ ...digest, served: false }} served="served to the next run" />)
         expect(screen.getByRole('region', { name: 'would be served at use' })).toBeDefined()
         expect(screen.queryByText('served to the next run')).toBeNull()
+    })
+})
+
+const HOUR = 60 * 60 * 1000
+
+// A proposal of NOTE's that lapses `left` milliseconds from now.
+function proposal(left: number): MemoryProposal {
+    return {
+        entry: { ...NOTE, scope: 'proposal', status: 'pending' },
+        run_kind: 'implement',
+        run_status: 'done',
+        private: false,
+        ticket_done: false,
+        expires_at: new Date(Date.now() + left).toISOString(),
+    }
+}
+
+describe('ProposalProvenance', () => {
+    it('says when a proposal lapses undecided, and marks one in its last days', async () => {
+        await renderRows(<ProposalProvenance proposal={proposal(5 * 24 * HOUR + HOUR)} />)
+        expect(screen.getByTestId('proposal-lapses').textContent).toBe('lapses in 5d')
+        expect(screen.getByTestId('proposal-lapses').className).not.toContain('text-status-blocked')
+
+        cleanup()
+        await renderRows(<ProposalProvenance proposal={proposal(30 * HOUR)} />)
+        expect(screen.getByTestId('proposal-lapses').textContent).toBe('lapses in 1d')
+        expect(screen.getByTestId('proposal-lapses').className).toContain('text-status-blocked')
     })
 })

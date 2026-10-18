@@ -6,6 +6,7 @@ named, never as Markdown or a link.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING, cast
 
 from canopy.core import db, memory, memory_manage
@@ -14,6 +15,7 @@ from canopy.serve.schema import (
     MemoryDigest,
     MemoryEntry,
     MemoryModeName,
+    MemoryOrigin,
     MemoryOverview,
     MemoryProposal,
     MemoryRefusal,
@@ -120,8 +122,8 @@ def entry(ctx: Context, m: records.Memory) -> MemoryEntry:
     """A memory as the API sends it.
 
     Returns:
-        Its fields, its times as datetimes, the latest runs that relied on it, and whether a private ticket's run wrote
-        it.
+        Its fields, its times as datetimes, the latest runs that relied on it, whether a private ticket's run wrote
+        it, and for a lesson what it was promoted from.
     """
     return MemoryEntry(
         id=m.id,
@@ -142,8 +144,16 @@ def entry(ctx: Context, m: records.Memory) -> MemoryEntry:
         wrong_at=_time(m.wrong_at),
         wrong_run_id=m.wrong_run_id,
         promoted_from=m.promoted_from,
+        origin=_origin(ctx, m.promoted_from),
         private=memory_manage.from_private_run(ctx.conn, m),
     )
+
+
+def _origin(ctx: Context, source_id: int | None) -> MemoryOrigin | None:
+    source = memory.get(ctx.conn, source_id) if source_id is not None else None
+    if source is None:
+        return None
+    return MemoryOrigin(id=source.id, scope=source.scope.value, ticket_key=source.ticket_key, run_id=source.run_id)
 
 
 def _tier(mode: MemoryMode, band: str) -> MemoryTier:
@@ -179,6 +189,7 @@ def _proposal(ctx: Context, p: records.Memory) -> MemoryProposal:
         run_status=str(run["status"]) if run is not None else None,
         private=bool(run["private"]) if run is not None else False,
         ticket_done=bool(ticket.done) if ticket is not None else False,
+        expires_at=db.parse_time(p.created_at) + timedelta(days=memory.PROPOSAL_DAYS),
     )
 
 

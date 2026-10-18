@@ -1,16 +1,20 @@
 import type { ReactNode } from 'react'
 
-import type { MemoryDigest, MemoryEntry, MemoryProposal, MemoryTier, RunMemory } from '@/api/types'
+import type { MemoryDigest, MemoryEntry, MemoryOrigin, MemoryProposal, MemoryTier, RunMemory } from '@/api/types'
 import { Age } from '@/components/age'
+import { CopyButton } from '@/components/copy-button'
 import { RowLine, ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { Timestamp } from '@/components/timestamp'
-import { leftOutText, memorySegments, usedText } from '@/lib/memory'
+import { lapsesText, leftOutText, memorySegments, usedText } from '@/lib/memory'
 import { memoryRef } from '@/lib/refs'
-import { localTime } from '@/lib/time'
+import { localTime, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
+
+// A proposal this close to lapsing undecided says so in the color of what waits on the operator.
+const LAPSING_SOON_MS = 2 * 24 * 60 * 60 * 1000
 
 /**
  * What a worker wrote, or the operator for a lesson, as plain text (DESIGN §28): never Markdown or a link, and every
@@ -77,11 +81,15 @@ export function MemoryRows({
     return (
         <ul className="divide-y" data-testid="memory-rows">
             {entries.map((entry) => (
-                <ListRow key={entry.id} kind="memory" data-testid={`memory-${entry.id}`}>
+                <ListRow key={entry.id} kind="memory" className="group/copy" data-testid={`memory-${entry.id}`}>
                     <span className="truncate text-xs" title={entry.why ?? undefined}>
                         <Word word={entry.status} />
                     </span>
-                    <span className="readout text-xs text-muted-foreground">{memoryRef(entry.id)}</span>
+                    {/* Copied, since Forget asks for it typed and the CLI's verbs take it. */}
+                    <span className="flex min-w-0 items-center gap-0.5">
+                        <span className="readout text-xs text-muted-foreground">{memoryRef(entry.id)}</span>
+                        <CopyButton text={memoryRef(entry.id)} label={memoryRef(entry.id)} reveal />
+                    </span>
                     <span className="flex min-w-0 items-center gap-2">
                         <span className="truncate font-mono text-xs">{entry.key}</span>
                         {ticket && entry.ticket_key !== null && <TicketLink ticketKey={entry.ticket_key} />}
@@ -108,6 +116,7 @@ export function MemoryRows({
                             </span>
                         )}
                         {entry.head !== null && <span className="font-mono">at {entry.head}</span>}
+                        {entry.origin !== null && <Origin origin={entry.origin} />}
                         {cited?.used.includes(entry.id) === true && <span>this run relied on it</span>}
                         {cited?.wrong.includes(entry.id) === true && (
                             <span className="text-status-failed">this run found it wrong</span>
@@ -125,6 +134,12 @@ export function MemoryRows({
                         {entry.wrong_run_id !== null && (
                             <span className="text-status-failed">
                                 reported wrong by <RunLink id={entry.wrong_run_id} />
+                                {entry.wrong_at !== null && (
+                                    <>
+                                        {' '}
+                                        <Age at={entry.wrong_at} variant="ago" className="text-status-failed" />
+                                    </>
+                                )}
                             </span>
                         )}
                     </RowLine>
@@ -132,6 +147,30 @@ export function MemoryRows({
                 </ListRow>
             ))}
         </ul>
+    )
+}
+
+/**
+ * What a lesson was promoted from, as the CLI names it, `from proposal memory:7 of ABC-103`, then the run that wrote
+ * it.
+ */
+function Origin({ origin }: { origin: MemoryOrigin }) {
+    return (
+        <span>
+            from {origin.scope} {memoryRef(origin.id)}
+            {origin.ticket_key !== null && (
+                <>
+                    {' '}
+                    of <TicketLink ticketKey={origin.ticket_key} />
+                </>
+            )}
+            {origin.run_id !== null && (
+                <>
+                    {', by '}
+                    <RunLink id={origin.run_id} />
+                </>
+            )}
+        </span>
     )
 }
 
@@ -188,8 +227,13 @@ export function MemoryDigestView({
     )
 }
 
-/** Where a proposal came from, under its row: how its run ended, its ticket's state, and a private run's warning. */
+/**
+ * Where a proposal came from, under its row: how its run ended, its ticket's state, when it lapses undecided (in
+ * `status-blocked` in its last two days), and a private run's warning.
+ */
 export function ProposalProvenance({ proposal }: { proposal: MemoryProposal }) {
+    const now = useNow()
+    const soon = Date.parse(proposal.expires_at) - now < LAPSING_SOON_MS
     return (
         <RowLine from="key" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
             {proposal.run_kind !== null && (
@@ -198,6 +242,13 @@ export function ProposalProvenance({ proposal }: { proposal: MemoryProposal }) {
                 </span>
             )}
             <span>{proposal.ticket_done ? 'its ticket is done' : 'its ticket is not done yet'}</span>
+            <span
+                className={cn(soon && 'text-status-blocked')}
+                title={`at ${localTime(proposal.expires_at)}`}
+                data-testid="proposal-lapses"
+            >
+                {lapsesText(proposal.expires_at, now)}
+            </span>
             {proposal.private && <Chip tone="blocked">private: its text may hold what you kept off the tracker</Chip>}
         </RowLine>
     )

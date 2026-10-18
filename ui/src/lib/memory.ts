@@ -1,4 +1,5 @@
 import type { MemoryEntry } from '@/api/types'
+import { age } from '@/lib/time'
 
 /**
  * Every character a memory's text may not hold (DESIGN §28, Bounds): Unicode's control, format, surrogate,
@@ -66,6 +67,18 @@ export function leftOutText(served: boolean): string {
 /** How runs used a ticket's notes in force: `read by no run`, or how many of them a run relied on. */
 export function ticketNotesUsedText({ count, used }: { count: number; used: number }): string {
     return used === 0 ? 'read by no run' : `${used} of ${count} used by runs`
+}
+
+/**
+ * When a proposal lapses undecided: `lapses in 3d`, in the CLI's largest whole unit, or once its time has passed,
+ * `lapses at the next tick`, which is when canopy invalidates it.
+ */
+export function lapsesText(expiresAt: string, now: number): string {
+    const left = Date.parse(expiresAt) - now
+    if (left <= 0) {
+        return 'lapses at the next tick'
+    }
+    return `lapses in ${age(new Date(now - left).toISOString(), now)}`
 }
 
 /** What a run read, when it read nothing: nothing was served while recording, which is not an empty digest. */

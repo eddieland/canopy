@@ -220,12 +220,13 @@ and before the save names the lesson in force under the key it would replace, an
 private ticket's run's own words, as the CLI warns after. The form reads the lessons in force and the workspace's
 repositories from the memory overview when it opens, rather than every ticket's memory carrying them: a ticket's page
 reads them only when the operator promotes from it. Forget cannot be undone, so it carries the memory's ref typed out
-(`memory:42`), checked in code before anything is read, as a ticket's forget carries its key. `purge` stays the CLI's:
-a verb over many memories at once is not a click. The verbs show where the memories do: Promote and Reject on each
-proposal, and Renew and Forget on each lesson, on the memory page; Promote on each of a ticket's notes that keeps its
-text, done or invalidated ones too, on its page; and on the attention list, Promote as written and Reject on a
-`memory_proposal`'s proposals, Renew on the lessons a `lesson_review` is about, and the way to the lessons from a
-`lesson_wrong`. With `memory.proposals` off, none shows.
+(`memory:42`), checked in code before anything is read, as a ticket's forget carries its key. `purge` stays the CLI's: a
+verb over many memories at once is not a click. The verbs show where the memories do: Promote, Reject, and Forget on
+each proposal, Renew and Forget on each lesson, and Promote and Forget on each of a ticket's notes that keeps its text,
+on the memory page and, done or invalidated ones too, on its ticket's page; Forget is how a leaked secret leaves from
+where the operator sees it; and on the attention list, Promote as written and Reject on a `memory_proposal`'s proposals,
+Renew on the lessons a `lesson_review` is about, and the way to the lessons from a `lesson_wrong`. With
+`memory.proposals` off, none shows.
 
 ### Showing memory
 

@@ -15,7 +15,7 @@ import type {
 import { Age } from '@/components/age'
 import { Disclosure } from '@/components/disclosure'
 import { MemoryBand, MemoryDigestView, MemoryRows, ProposalProvenance } from '@/components/memory'
-import { LessonActions, MemorySaid, ProposalActions } from '@/components/memory-actions'
+import { LessonActions, MemorySaid, NoteActions, ProposalActions } from '@/components/memory-actions'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { ListRow } from '@/components/rows'
 import { TicketLink } from '@/components/ticket-link'
@@ -76,7 +76,7 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
                 <Proposals proposals={proposals} acting={acting} />
                 <Lessons lessons={lessons} digest={digest} tier={state.lessons} acting={acting} />
             </div>
-            <TicketNotesPanel tickets={tickets} tier={state.ticket_notes} />
+            <TicketNotesPanel tickets={tickets} tier={state.ticket_notes} acting={acting} />
         </div>
     )
 }
@@ -185,9 +185,11 @@ function ServedDigest({ digest }: { digest: MemoryDigest }) {
 
 /**
  * The tickets with notes in force, a row each, under the tier's band. Its header counts the rows, the tickets, and the
- * notes they hold beside them, since a row opens to several.
+ * notes they hold beside them, since a row opens to several. While `acting`, each opened note is promoted or
+ * forgotten from its row, and what that did is said under the band.
  */
-function TicketNotesPanel({ tickets, tier }: { tickets: TicketNotes[]; tier: MemoryTier }) {
+function TicketNotesPanel({ tickets, tier, acting }: { tickets: TicketNotes[]; tier: MemoryTier; acting: boolean }) {
+    const [said, setSaid] = useState<string | null>(null)
     const notes = tickets.reduce((sum, t) => sum + t.count, 0)
     return (
         <Panel data-testid="memory-notes">
@@ -198,13 +200,14 @@ function TicketNotesPanel({ tickets, tier }: { tickets: TicketNotes[]; tier: Mem
                 </span>
             </PanelHeader>
             <MemoryBand tier={tier} name="ticket notes" />
+            <MemorySaid said={said} className="border-b px-3 py-2" />
             {tickets.length === 0 ? (
                 <Empty>no notes in force now: a ticket&apos;s runs write them as they end</Empty>
             ) : (
                 <PanelScroll label="Ticket notes">
                     <ul className="divide-y">
                         {tickets.map((t) => (
-                            <TicketNotesRow key={t.ticket_key} notes={t} />
+                            <TicketNotesRow key={t.ticket_key} notes={t} onSaid={acting ? setSaid : undefined} />
                         ))}
                     </ul>
                 </PanelScroll>
@@ -218,7 +221,7 @@ function TicketNotesPanel({ tickets, tier }: { tickets: TicketNotes[]; tier: Mem
  * under it, read only once opened (closed, the content is not mounted), so a workspace of many tickets sends their
  * counts and not every note.
  */
-function TicketNotesRow({ notes }: { notes: TicketNotes }) {
+function TicketNotesRow({ notes, onSaid }: { notes: TicketNotes; onSaid: ((said: string) => void) | undefined }) {
     const [open, setOpen] = useState(false)
     const what = `${notes.count} ${notes.count === 1 ? 'note' : 'notes'}`
     return (
@@ -232,15 +235,18 @@ function TicketNotesRow({ notes }: { notes: TicketNotes }) {
                 <span className="truncate text-xs text-muted-foreground">{ticketNotesUsedText(notes)}</span>
                 <Age at={notes.latest_at} variant="ago" className="text-right" />
                 <CollapsibleContent className={cn('-mx-3 -mb-2.5 border-t', rowLineFrom('key'))}>
-                    <OpenNotes ticketKey={notes.ticket_key} />
+                    <OpenNotes ticketKey={notes.ticket_key} onSaid={onSaid} />
                 </CollapsibleContent>
             </ListRow>
         </Collapsible>
     )
 }
 
-/** A ticket's notes in force, under its row: each marked when the cap leaves it out of its next run's prompt. */
-function OpenNotes({ ticketKey }: { ticketKey: string }) {
+/**
+ * A ticket's notes in force, under its row: each marked when the cap leaves it out of its next run's prompt, and with
+ * `onSaid`, each with its verbs, Promote and Forget.
+ */
+function OpenNotes({ ticketKey, onSaid }: { ticketKey: string; onSaid: ((said: string) => void) | undefined }) {
     const { data } = useQuery(ticketMemoryQuery(ticketKey))
     if (data === undefined) {
         return <PanelSkeleton rows={1} />
@@ -249,5 +255,8 @@ function OpenNotes({ ticketKey }: { ticketKey: string }) {
     if (inForce.length === 0) {
         return <Empty>no notes in force now: its page lists the ones before</Empty>
     }
-    return <MemoryRows entries={inForce} digest={data.digest} />
+    const below = new Map(
+        onSaid === undefined ? [] : inForce.map((n) => [n.id, <NoteActions key={n.id} note={n} onSaid={onSaid} />]),
+    )
+    return <MemoryRows entries={inForce} digest={data.digest} below={below} />
 }

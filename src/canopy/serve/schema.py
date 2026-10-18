@@ -1257,6 +1257,19 @@ type MemoryStatusName = Annotated[
 ]
 
 
+class MemoryOrigin(_Model):
+    """What a lesson was promoted from (DESIGN §28): a proposal, or a ticket's note."""
+
+    id: int
+    """The source's id."""
+    scope: MemoryScopeName
+    """What the source is."""
+    ticket_key: str | None
+    """The ticket whose run wrote it."""
+    run_id: int | None
+    """The run that wrote it."""
+
+
 class MemoryEntry(_Model):
     """One note, proposal, or lesson (DESIGN §28). Its text is a worker's, or the operator's for a lesson."""
 
@@ -1297,6 +1310,8 @@ class MemoryEntry(_Model):
     """The run that reported it."""
     promoted_from: int | None
     """A lesson's proposal, or the note it was promoted from."""
+    origin: MemoryOrigin | None = None
+    """A lesson's source, as the CLI names it; None for a note or a proposal, or a source no longer in the journal."""
     private: bool = False
     """Whether the run that wrote it worked a private ticket: its text may hold what the operator kept off the
     tracker."""
@@ -1315,6 +1330,9 @@ class MemoryProposal(_Model):
     """Whether that run was on a private ticket, whose text may hold what the operator kept off the tracker."""
     ticket_done: bool
     """Whether its ticket is marked done: its work merged or closed, as far as the journal knows."""
+    expires_at: datetime
+    """When it lapses unless the operator decides it, `PROPOSAL_DAYS` after it was written: the first tick after
+    invalidates it."""
 
 
 class MemoryDigest(_Model):

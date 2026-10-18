@@ -27,6 +27,7 @@ const ENTRY: MemoryEntry = {
     wrong_at: null,
     wrong_run_id: null,
     promoted_from: null,
+    origin: null,
     private: false,
 }
 const LESSON: MemoryEntry = {
@@ -191,7 +192,52 @@ describe('ProposalActions', () => {
     })
 })
 
+describe('ProposalActions forget', () => {
+    it('forgets a proposal once its ref is typed, so its words leave the journal', async () => {
+        answer = Response.json({ id: 5, scope: 'proposal', key: 'web-tests', checkpointed: true })
+        const onSaid = vi.fn<(said: string) => void>()
+        renderIn(<ProposalActions proposal={ENTRY} onSaid={onSaid} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Forget' }))
+        const form = screen.getByRole('form', { name: 'Forget memory:5' })
+        expect(form.textContent).toContain('Reject is enough')
+        fireEvent.change(within(form).getByRole('textbox', { name: 'Type memory:5 to confirm' }), {
+            target: { value: 'memory:5' },
+        })
+        fireEvent.click(within(form).getByRole('button', { name: 'Forget memory:5' }))
+        await vi.waitFor(() => {
+            expect(onSaid).toHaveBeenCalledWith('Memory 5 (proposal `web-tests`) is forgotten: its text is deleted.')
+        })
+        expect(sent).toEqual([{ path: '/api/memory/5/forget', body: { confirm: 'memory:5' } }])
+    })
+
+    it('offers no Forget on an attention item', () => {
+        renderIn(<ProposalActions proposal={ENTRY} asWritten forget={false} onSaid={vi.fn<(said: string) => void>()} />)
+        expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Promote as written', 'Reject'])
+    })
+})
+
 describe('NoteActions', () => {
+    it('forgets a note once its ref is typed', async () => {
+        answer = Response.json({ id: 2, scope: 'ticket', key: 'flaky-checkout', checkpointed: true })
+        const onSaid = vi.fn<(said: string) => void>()
+        renderIn(<NoteActions note={NOTE} onSaid={onSaid} />)
+        expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Promote', 'Forget'])
+        fireEvent.click(screen.getByRole('button', { name: 'Forget' }))
+        fireEvent.change(screen.getByRole('textbox', { name: 'Type memory:2 to confirm' }), {
+            target: { value: 'memory:2' },
+        })
+        fireEvent.click(screen.getByRole('button', { name: 'Forget memory:2' }))
+        await vi.waitFor(() => {
+            expect(sent).toEqual([{ path: '/api/memory/2/forget', body: { confirm: 'memory:2' } }])
+        })
+        expect(onSaid).toHaveBeenCalledOnce()
+    })
+
+    it('offers nothing on a note whose text is gone', () => {
+        renderIn(<NoteActions note={{ ...NOTE, text: null }} onSaid={vi.fn<(said: string) => void>()} />)
+        expect(screen.queryAllByRole('button')).toEqual([])
+    })
+
     it('offers no promote for a note whose text is gone', () => {
         renderIn(<NoteActions note={{ ...NOTE, text: null }} onSaid={vi.fn<(said: string) => void>()} />)
         expect(screen.queryByRole('button')).toBeNull()

@@ -61,23 +61,24 @@ notes. The lessons and the notes each open with a band that says the tier's mode
 `ticket notes: recording` beside "Recording only. Workers write these notes; no run reads them." Recorded memory and
 memory in use never share a label, so you never mistake one for the other.
 
-- **Proposals** are what workers suggested, oldest first, each with where it came from: its run's kind and how it
-  ended, and whether its ticket is done, and Promote and Reject under it. None reaches a run until you promote it. The
-  nav counts them beside **Memory** on every page, and so does the panel, so a proposal doesn't quietly expire at 14
-  days because you never came looking. Clear the lot and the panel says so.
+- **Proposals** are what workers suggested, oldest first, each with where it came from: its run's kind and how it ended,
+  whether its ticket is done, and when it lapses if you leave it, and Promote, Reject, and Forget under it. None reaches
+  a run until you promote it. The nav counts them beside **Memory** on every page, and so does the panel, so a proposal
+  doesn't quietly expire at 14 days because you never came looking. Clear the lot and the panel says so.
 - **Lessons** are the ones you promoted, each with Renew and Forget, the ones a run reported wrong first, then by review
   date, so what needs you heads the list. Under them, folded until you open it, is the exact text every run is served
   from your lessons, or would be served at use while recording.
-- **Ticket notes** lists the tickets with notes in force, one row each with how many and how runs used them. Open a
-  row for its notes. A busy workspace has thousands, so the page reads a ticket's notes only once you ask. On a wide
-  screen this panel sits beside the other two.
+- **Ticket notes** lists the tickets with notes in force, one row each with how many and how runs used them. Open a row
+  for its notes, each with Promote and Forget. A busy workspace has thousands, so the page reads a ticket's notes only
+  once you ask. On a wide screen this panel sits beside the other two.
 
 ## Reading a memory
 
 Each memory is a row: where it stands (`active`, `pending`, `superseded`, or `invalid`, with the reason on hover), its
 ref, as `memory:42`, its key, how many runs used it, and how long ago it was written. Under that, what it says, and
-where it came from: the run that wrote it, the commit it was written against, and, for a lesson, its review date and
-any run that reported it wrong.
+where it came from: the run that wrote it, the commit it was written against, and, for a lesson, what it was promoted
+from, its review date, and any run that reported it wrong, and when. Hover over a row for a button that copies its
+ref, which is what Forget and the CLI ask for.
 
 A worker's text is shown as plain text, never as Markdown or a link, unlike everything else a worker writes: a link in
 a note would be a worker's link you'd read as canopy's. Any character that hides text from you but not from a model,
@@ -106,10 +107,10 @@ start it again.
 
 ## Promoting and rejecting
 
-Each proposal on the memory page has **Promote** and **Reject** under it, and so does each of a ticket's notes, on the
-ticket's own page, Promote alone. They do what `canopy memory promote` and `canopy memory reject` do in your shell,
-with the same refusals, and both work at `record` as at `use`, so you can build up your lessons before any is served.
-None of them shows while lessons are off.
+Each proposal on the memory page has **Promote** and **Reject** under it, and each of a ticket's notes has Promote, on
+the memory page and on the ticket's own. They do what `canopy memory promote` and `canopy memory reject` do in your
+shell, with the same refusals, and both work at `record` as at `use`, so you can build up your lessons before any is
+served. None of them shows while lessons are off.
 
 - **Promote** opens the lesson to be: the proposal's words, which you can rewrite (usually an improvement), held to the
   same 600 characters, and the repository whose runs read it. A proposal keeps its own repository unless you pick
@@ -148,12 +149,13 @@ Each item leaves at the next tick once you've dealt with what it names, as an an
 
 ## Forgetting
 
-**Forget**, under each lesson on the memory page, or `canopy memory forget ID` for any memory, deletes its text and
-keeps its row, so the history still says something was there; a forgotten lesson is retired. It can't be undone, so the
-page asks you to type the lesson's ref, `memory:42`, before the button wakes up. `canopy memory purge`, in your shell
-alone, does the same for many: a ticket's runs', a run's, or, with `--all`, everything. Neither leaves a word of what it
-deleted in the search index or the journal's free pages. That's the point, if what you're deleting is a leaked
-secret.
+**Forget**, at the end of any memory's line of buttons, or `canopy memory forget ID`, deletes its text and keeps its
+row, so the history still says something was there: a forgotten lesson is retired, and a forgotten proposal leaves the
+queue. Reject is enough for a proposal you just don't want; Forget is for one whose words shouldn't stay. It can't be
+undone, so the page asks you to type the memory's ref, `memory:42`, before the button wakes up. `canopy memory purge`,
+in your shell alone, does the same for many: a ticket's runs', a run's, or, with `--all`, everything. Neither leaves a
+word of what it deleted in the search index or the journal's free pages. That's the point, if what you're deleting is a
+leaked secret.
 
 ## Search
 

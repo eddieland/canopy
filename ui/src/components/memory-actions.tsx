@@ -6,7 +6,8 @@ import type { ReactNode, SubmitEvent } from 'react'
 import { forgetMemory, promoteMemory, refreshMemory, rejectMemory, renewMemory } from '@/api/mutations'
 import { memoryQuery } from '@/api/queries'
 import type { MemoryEntry } from '@/api/types'
-import { Input, Textarea } from '@/components/input'
+import { ForgetForm } from '@/components/forget-form'
+import { Textarea } from '@/components/input'
 import { MemoryText } from '@/components/memory'
 import { Notice } from '@/components/notice'
 import { InlineCode } from '@/components/rich-text'
@@ -42,17 +43,20 @@ export function MemorySaid({ said, className }: { said: string | null; className
 }
 
 /**
- * A proposal's verbs, under its row: Promote, which opens the form for the lesson's words and repository, and
- * Reject. With `asWritten`, as on an attention item, Promote makes the lesson at once, in the proposal's own words and
- * for its repository, as `canopy memory promote ID` does.
+ * A proposal's verbs, under its row: Promote, which opens the form for the lesson's words and repository, Reject, and
+ * at the line's end Forget, for a proposal whose text must go and not merely be declined. With `asWritten`, as on an
+ * attention item, Promote makes the lesson at once, in the proposal's own words and for its repository, as `canopy
+ * memory promote ID` does. With `forget` false, as there, no Forget.
  */
 export function ProposalActions({
     proposal,
     asWritten = false,
+    forget = true,
     onSaid,
-}: Said & { proposal: MemoryEntry; asWritten?: boolean }) {
+}: Said & { proposal: MemoryEntry; asWritten?: boolean; forget?: boolean }) {
     const client = useQueryClient()
     const [open, setOpen] = useState(false)
+    const [confirming, setConfirming] = useState(false)
     const promote = useMutation({
         mutationFn: () => promoteMemory(proposal.id, { text: null, repo: null }),
         onSuccess: (promoted) => {
@@ -93,34 +97,57 @@ export function ProposalActions({
                         <X />
                         Reject
                     </Button>
+                    {forget && !confirming && (
+                        <ForgetButton memory={proposal} onClick={() => setConfirming(true)} disabled={pending} />
+                    )}
                 </span>
             )}
             {open && <PromoteForm source={proposal} onSaid={onSaid} onClose={() => setOpen(false)} />}
+            {confirming && (
+                <ForgetChallenge memory={proposal} onSaid={onSaid} onCancel={() => setConfirming(false)}>
+                    canopy deletes this proposal&apos;s text, and it leaves the queue unpromoted. Its row stays, saying
+                    which run proposed it. This cannot be undone: Reject is enough, unless the words themselves must go.
+                </ForgetChallenge>
+            )}
             <Notice error={promote.error ?? reject.error} />
         </RowLine>
     )
 }
 
-/** A ticket's note's verb, under its row, while it keeps its text: Promote, which opens the form for the lesson. */
+/**
+ * A ticket's note's verbs, under its row, while it keeps its text: Promote, which opens the form for the lesson, and
+ * at the line's end Forget, which cannot be undone and so asks for the note's ref typed.
+ */
 export function NoteActions({ note, onSaid }: Said & { note: MemoryEntry }) {
     const [open, setOpen] = useState(false)
+    const [confirming, setConfirming] = useState(false)
     if (note.text === null) {
         return null
     }
     return (
-        <RowLine from="key">
+        <RowLine from="key" className="flex flex-col gap-2">
             {open ? (
                 <PromoteForm source={note} onSaid={onSaid} onClose={() => setOpen(false)} />
             ) : (
-                <Button
-                    variant="outline"
-                    size="xs"
-                    title={`canopy memory promote ${note.id}`}
-                    onClick={() => setOpen(true)}
-                >
-                    <ArrowUpFromLine />
-                    Promote
-                </Button>
+                <span className="flex flex-wrap items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="xs"
+                        title={`canopy memory promote ${note.id}`}
+                        onClick={() => setOpen(true)}
+                    >
+                        <ArrowUpFromLine />
+                        Promote
+                    </Button>
+                    {!confirming && <ForgetButton memory={note} onClick={() => setConfirming(true)} />}
+                </span>
+            )}
+            {confirming && (
+                <ForgetChallenge memory={note} onSaid={onSaid} onCancel={() => setConfirming(false)}>
+                    canopy deletes this note&apos;s text, and its ticket&apos;s later runs no longer read it. Its row
+                    stays, saying which run wrote it. This cannot be undone. A lesson promoted from it keeps its own
+                    words.
+                </ForgetChallenge>
             )}
         </RowLine>
     )
@@ -154,16 +181,7 @@ export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson
                     Renew
                 </Button>
                 {forget && !confirming && (
-                    <Button
-                        variant="ghost"
-                        size="xs"
-                        className="ml-auto text-status-failed hover:text-status-failed"
-                        onClick={() => setConfirming(true)}
-                        disabled={renew.isPending}
-                    >
-                        <Eraser />
-                        Forget
-                    </Button>
+                    <ForgetButton memory={lesson} onClick={() => setConfirming(true)} disabled={renew.isPending} />
                 )}
             </span>
             {confirming && (
@@ -310,6 +328,25 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
 }
 
 /**
+ * The quiet Forget at the end of a memory's line of verbs, in `status-failed` text, which opens the challenge under it.
+ */
+function ForgetButton({ memory, onClick, disabled }: { memory: MemoryEntry; onClick: () => void; disabled?: boolean }) {
+    return (
+        <Button
+            variant="ghost"
+            size="xs"
+            className="ml-auto text-status-failed hover:text-status-failed"
+            title={`canopy memory forget ${memory.id}`}
+            onClick={onClick}
+            disabled={disabled}
+        >
+            <Eraser />
+            Forget
+        </Button>
+    )
+}
+
+/**
  * What forgetting does, in `children`, and a field the memory's ref (`memory:8`) must be typed into before the button
  * that forgets is enabled, as a ticket's Forget asks for its key.
  */
@@ -320,54 +357,24 @@ function ForgetChallenge({
     children,
 }: Said & { memory: MemoryEntry; onCancel: () => void; children: ReactNode }) {
     const client = useQueryClient()
-    const id = useId()
     const ref = memoryRef(memory.id)
-    const [typed, setTyped] = useState('')
     const forget = useMutation({
-        mutationFn: () => forgetMemory(memory.id, typed),
+        mutationFn: (typed: string) => forgetMemory(memory.id, typed),
         onSuccess: (forgot) => {
             onSaid(memoryForgottenText(forgot))
             void refreshMemory(client)
         },
     })
-    const matches = typed === ref
-
-    function submit(event: SubmitEvent<HTMLFormElement>) {
-        event.preventDefault()
-        if (matches) {
-            forget.mutate()
-        }
-    }
-
     return (
-        <form
-            onSubmit={submit}
-            aria-label={`Forget ${ref}`}
-            className="flex flex-col gap-2 rounded-md border border-status-failed/40 bg-status-failed/5 p-3"
+        <ForgetForm
+            confirm={ref}
+            name={`Forget ${ref}`}
+            pending={forget.isPending}
+            onForget={(typed) => forget.mutate(typed)}
+            onCancel={onCancel}
+            after={<Notice error={forget.error} />}
         >
-            <p className="text-xs text-foreground">{children}</p>
-            <label className="panel-label" htmlFor={`${id}-confirm`}>
-                Type {ref} to confirm
-            </label>
-            <span className="flex flex-wrap items-center gap-2">
-                <Input
-                    id={`${id}-confirm`}
-                    value={typed}
-                    onChange={(event) => setTyped(event.target.value)}
-                    placeholder={ref}
-                    autoComplete="off"
-                    spellCheck={false}
-                    className="max-w-56 font-mono"
-                />
-                <Button type="submit" variant="destructive" disabled={forget.isPending || !matches}>
-                    <Eraser />
-                    Forget {ref}
-                </Button>
-                <Button type="button" variant="ghost" onClick={onCancel} disabled={forget.isPending}>
-                    Keep it
-                </Button>
-            </span>
-            <Notice error={forget.error} />
-        </form>
+            {children}
+        </ForgetForm>
     )
 }
