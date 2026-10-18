@@ -186,10 +186,15 @@ If code and the design disagree, the design doc wins until a decision entry says
   commands that record what they are sent), `tests/canopy/helpers.py` for helpers (`in_tick`, with `ends_ok=True` for a
   tick that ends as the block does; `in_run`; `decisions`, `last_tick`, `dispatch_and_run`, `messages`; `present`, for a
   row the test knows is there; and scripting the fake agents: `overseer_does(canopy(...))`, `worker_does(sleep=60)`,
-  `chore_reports`), and `web_helpers.py` and `review_helpers.py` beside it. A test module imports from no other;
-  `tests/canopy/test_layers.py` fails otherwise. Look there before writing a helper, and move one there once a second
-  module needs it. A test that plays an overseer, a worker, or another agent scripts it through those helpers, not by
-  patching its `FAKE_*` variables itself; `test_procs.py`, which tests the runner rather than a role, sets them directly.
+  `chore_reports`), and `web_helpers.py`, `review_helpers.py`, and `scenario_helpers.py` beside it. A test module
+  imports from no other; `tests/canopy/test_layers.py` fails otherwise. Look there before writing a helper, and move one
+  there once a second module needs it. A test that plays an overseer, a worker, or another agent scripts it through
+  those helpers, not by patching its `FAKE_*` variables itself; `test_procs.py`, which tests the runner rather than a
+  role, sets them directly.
+- A test that tells a ticket's story, ticks and runs and the operator's commands in turn, tells it through the
+  `scenario` fixture (`scenario_helpers.py`): `scenario.tick(dispatches(kind=RunKind.RESUME, ...), worker=pushes())`
+  checks the tick's exit and waits for the runs it started, and `scenario.run(...)` runs one without the overseer. A
+  step the verbs do not cover is written with the helpers above, in the same test; a verb two tests need goes there.
 - A test opens a journal through `canopy_env.journal()`, or the `journals` fixture for one outside a workspace, never
   `db.connect` directly: those close it when the test ends. A connection, file, or pipe left open raises a
   ResourceWarning, which fails the test like any other warning.
