@@ -1,5 +1,6 @@
 import type {
     TranscriptEntry,
+    TranscriptError,
     TranscriptPrompt,
     TranscriptStep,
     TranscriptText,
@@ -109,6 +110,37 @@ export function tally(entries: TranscriptEntry[]): Tally {
         }
     }
     return found
+}
+
+/** The entry a session that ended badly ended on, with its place in the entries, which the page shows it by. */
+export interface EndedOn {
+    /** Its place in the transcript's entries. */
+    i: number
+    /** A runtime error, or a tool call that failed or was refused. */
+    entry: TranscriptError | TranscriptTool
+    /** What it said, on one line: the error's message, or how the call ended (`outcome`), else what it did. */
+    line: string
+}
+
+/**
+ * What a session that ended badly ended on: its last runtime error, which is what stops a session the runtime gave up
+ * on; else its last failed or refused tool call. Null when it holds neither.
+ */
+export function endedOn(entries: TranscriptEntry[]): EndedOn | null {
+    let tool: EndedOn | null = null
+    for (let i = entries.length - 1; i >= 0; i -= 1) {
+        const entry = entries[i]
+        if (entry?.kind === 'error') {
+            return { i, entry, line: firstLine(entry.message) ?? '' }
+        }
+        if (tool === null && entry?.kind === 'tool') {
+            const { verdict, line } = outcome(entry)
+            if (verdict !== 'done') {
+                tool = { i, entry, line: line ?? summary(entry) }
+            }
+        }
+    }
+    return tool
 }
 
 /** One model call, as the transcript shows it by call: what it was sent that no call before it was, and what it did. */

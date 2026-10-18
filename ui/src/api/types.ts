@@ -141,6 +141,8 @@ export type TranscriptText = Schemas['TranscriptText']
 export type TranscriptTool = Schemas['TranscriptTool']
 /** One model call's end: why, what it cost, and its tokens together and by kind. */
 export type TranscriptStep = Schemas['TranscriptStep']
+/** An error the runtime reported: its name and its message. */
+export type TranscriptError = Schemas['TranscriptError']
 /** One model call's tokens by kind: what it was sent, from the cache or not, and what it wrote. */
 export type TranscriptTokens = Schemas['TranscriptTokens']
 /** The message canopy gave the runtime to start a session: its first model call's input, as far as any file says. */

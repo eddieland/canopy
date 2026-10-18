@@ -153,14 +153,27 @@ test('by call, each model call opens to what it was sent and what it did, as tex
     await expect(transcript.getByTestId('transcript-entries')).toBeVisible()
 })
 
-test("a failed run's transcript ends in the runtime's error, and a running one's is what it printed so far", async ({
+test("a failed run's Run panel names the error it ended on, and a running one's transcript is so far", async ({
     page,
 }) => {
     await page.goto('runs/40')
     await settled(page)
-    await expect(page.getByTestId('transcript-entries').locator('li').last()).toContainText(
-        'APIErrorRate limited: retry after 60s',
-    )
+    const last = page.getByTestId('transcript-entries').locator('li').last()
+    await expect(last).toContainText('APIErrorRate limited: retry after 60s')
+    // Its Run panel names what it ended on, above the transcript, and shows that row on a click.
+    const endedOn = page.getByRole('button', { name: '+3:54 APIError Rate limited: retry after 60s' })
+    await expect(endedOn).toBeVisible()
+    await page.getByRole('searchbox', { name: 'Find lines in the transcript' }).fill('gh run')
+    await expect(last).not.toContainText('APIError')
+    await endedOn.click()
+    await expect(last).toContainText('APIErrorRate limited: retry after 60s')
+    await expect(last).toBeFocused()
+    await expect(last).toBeInViewport()
+
+    // A run that ended done names nothing.
+    await page.goto('runs/39')
+    await settled(page)
+    await expect(page.getByText('ended on')).toHaveCount(0)
 
     await page.goto('runs/41')
     await settled(page)
