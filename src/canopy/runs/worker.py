@@ -700,24 +700,24 @@ def _keep_diffs(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], log: log
 def _keep_diff(slot: _Slot, log_path: Path, log: logs.TickAdapter) -> None:
     """Keep the slot's diff at the run's head, from where it leaves its base, for the PR's page (DESIGN §29).
 
-    Best effort, as a review's is (§21, The diff): the run does not need it, so a failure is logged and the page shows
-    the threads without a diff.
+    Best effort, as a review's is (§21, The diff): the run does not need it, so any failure, git's or the disk's, is
+    logged and the page shows the threads without a diff. The head is written before the diff, so a diff is never kept
+    without the commit it was taken at.
     """
     fields = {"repo": slot.repo, "base": slot.base}
     try:
-        found = slot.git.result("merge-base", f"refs/remotes/origin/{slot.base}", "HEAD")
-        diff = slot.git.result(*review_diff.diff_args(found.stdout.strip(), "HEAD")) if found.ok else None
-    except _SetupError as e:
+        head = slot.git.result("rev-parse", "HEAD")
+        found = slot.git.result("merge-base", f"refs/remotes/origin/{slot.base}", "HEAD") if head.ok else head
+        sha = head.stdout.strip()
+        diff = slot.git.result(*review_diff.diff_args(found.stdout.strip(), sha)) if found.ok else found
+        if not diff.ok:
+            log.warning("run diff not kept", extra={**fields, "error": diff.stderr[:500]})
+            return
+        path = review_diff.run_path_for(log_path, slot.repo)
+        review_diff.keep_head(path, sha)
+        review_diff.keep(path, diff.stdout)
+    except (_SetupError, OSError) as e:
         log.warning("run diff not kept", extra={**fields, "error": str(e)})
-        return
-    if diff is None or not diff.ok:
-        log.warning("run diff not kept", extra={**fields, "error": (diff or found).stderr[:500]})
-        return
-    path = review_diff.run_path_for(log_path, slot.repo)
-    review_diff.keep(path, diff.stdout)
-    head = slot.git.result("rev-parse", "HEAD")
-    if head.ok:
-        review_diff.keep_head(path, head.stdout.strip())
 
 
 def _heads(slots: Sequence[_Slot], log: logs.TickAdapter) -> str | None:

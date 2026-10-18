@@ -10,6 +10,7 @@ import threading
 import time
 from pathlib import Path
 from typing import TYPE_CHECKING
+from unittest import mock
 
 import pytest
 
@@ -246,6 +247,21 @@ def test_a_run_under_approve_keeps_its_diff_at_its_pushed_head(
     head = review_diff.read_head(diff)
     assert head is not None
     assert len(head) == 40
+
+
+@pytest.mark.usefixtures("git_pool")
+@pytest.mark.parametrize("write", ["keep_head", "keep"])
+def test_a_diff_that_cannot_be_kept_leaves_the_run_and_its_drafts_as_they_are(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, write: str
+) -> None:
+    approving(canopy_env)
+    github_has(github_state, comment(501))
+    with mock.patch.object(review_diff, write, autospec=True, side_effect=OSError("No space left on device")):
+        run = run_drafting(conn, [thread(501)])
+    assert run["status"] == "done"
+    [draft] = drafts.of_run(conn, int(run["id"]))
+    assert draft.status is DraftStatus.WAITING
+    assert not review_diff.run_path_for(str(run["log_path"]), "repo").exists()
 
 
 @pytest.mark.usefixtures("git_pool")
