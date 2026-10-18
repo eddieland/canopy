@@ -273,6 +273,15 @@ def test_workers_may_read_a_pr_and_its_ci_with_gh(agent: str) -> None:
             assert not _allowed(rules, refused), refused
 
 
+@pytest.mark.parametrize("agent", ["canopy-worker", definitions.PRIVATE_WORKER])
+def test_workers_may_search_their_memory_and_run_no_other_canopy_command(agent: str) -> None:
+    """The memory digests name `canopy memory search` (DESIGN §28); the loop's other commands stay the overseer's."""
+    rules = _rules(agent, "bash")
+    assert _allowed(rules, "canopy memory search retry backoff")
+    for refused in ("canopy decide", "canopy memory forget 3", "canopy memory search", "canopy reply chore:x hi"):
+        assert not _allowed(rules, refused), refused
+
+
 @pytest.mark.parametrize(
     "tool",
     [
