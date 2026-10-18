@@ -51,7 +51,7 @@ interface WorktreesSearch {
 }
 
 /**
- * Each repository's treehouse pool: its slots, their states, and what holds each one. `?state=` keeps the slots in
+ * Each repository's pool of worktrees: its slots, their states, and what holds each one. `?state=` keeps the slots in
  * that state, and the pools that have one.
  */
 export const Route = createFileRoute('/worktrees')({
@@ -235,7 +235,7 @@ function PoolSection({ pool, state }: { pool: Pool; state: WorktreeState | undef
             )}
             {pool.error === null ? (
                 pool.worktrees.length === 0 ? (
-                    <Empty>no worktrees yet: treehouse makes one when a run or review leases a slot</Empty>
+                    <Empty>no worktrees yet: the pool makes one when a run or review leases a slot</Empty>
                 ) : (
                     <ul className="divide-y" data-testid="worktrees">
                         {slotGroups(pool.worktrees, state).map((group) =>
@@ -339,7 +339,7 @@ function WorktreeDot({ state }: { state: WorktreeState }) {
 
 /**
  * One slot on one line: its state, number, what holds it, its branch, what runs in it, and for how long. Our state
- * word, with treehouse's own on hover; the slot's path on its number. A note or an unreadable branch gets a second
+ * word, with the pool's own on hover; the slot's path on its number. A note or an unreadable branch gets a second
  * line, since it is something to act on. An idle slot is the state and number alone, muted.
  */
 function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: string; shared: boolean }) {
@@ -352,7 +352,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
         <ListRow kind="worktree" className="group/copy py-2" data-testid={`worktree-${w.name}`} data-state={w.state}>
             <span
                 className={cn('flex h-5 items-center gap-1.5 font-mono text-xs', WORKTREE_TEXT[w.state])}
-                title={`treehouse: ${w.status}`}
+                title={`pool: ${w.status}`}
             >
                 <WorktreeDot state={w.state} />
                 {w.state === 'broken' ? w.status : w.state}
@@ -409,7 +409,7 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
     )
 }
 
-/** What holds a slot: a run's ticket and kind, a review's PR, or treehouse's lease holder as it names it. */
+/** What holds a slot: a run's ticket and kind, a review's PR, or the lease holder as the pool names it. */
 function Holder({ worktree: w }: { worktree: Worktree }) {
     if (w.run) {
         return (
@@ -436,7 +436,7 @@ function Holder({ worktree: w }: { worktree: Worktree }) {
 }
 
 /**
- * The processes treehouse found running in a slot, by name and pid. An agent can start many: they take what the branch
+ * The processes the pool found running in a slot, by name and pid. An agent can start many: they take what the branch
  * leaves, cut to fit, and the whole list is on hover, one to a line.
  */
 function Processes({ processes }: { processes: Worktree['processes'] }) {
@@ -444,7 +444,7 @@ function Processes({ processes }: { processes: Worktree['processes'] }) {
     return (
         <span
             className="ml-auto max-w-72 min-w-24 truncate text-right font-mono text-xs text-muted-foreground"
-            title={`processes treehouse found running in it:\n${named.join('\n')}`}
+            title={`processes the pool found running in it:\n${named.join('\n')}`}
             data-testid="worktree-processes"
         >
             {named.join(' · ')}

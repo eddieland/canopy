@@ -1382,7 +1382,7 @@ export type paths = {
         };
         /**
          * List the worktrees
-         * @description Each pool's slots from `treehouse status --json`, with the running run or review holding each.
+         * @description Each pool's slots, as the pool's `status` reports them, with the running run or review holding each.
          */
         get: operations["listWorktrees"];
         put?: never;
@@ -3250,12 +3250,12 @@ export type components = {
         };
         /**
          * Pool
-         * @description One repository's treehouse pool, read when asked for.
+         * @description One repository's pool of worktrees, read when asked for.
          */
         Pool: {
             /**
              * Error
-             * @description Why its worktrees could not be read: no clone, or treehouse failed.
+             * @description Why its worktrees could not be read: no clone, or the pool's read failed.
              */
             error: string | null;
             /**
@@ -3265,7 +3265,8 @@ export type components = {
             repo: string;
             /**
              * Size
-             * @description The size `capacity` declares for it; None leaves it to treehouse's `max_trees` (DESIGN §18).
+             * @description The size `capacity` declares for it; None leaves it at the pool's bound: treehouse's `max_trees`, or 16 for
+             *     canopy's (DESIGN §18).
              */
             size: number | null;
             /**
@@ -3277,7 +3278,7 @@ export type components = {
         };
         /**
          * Process
-         * @description A process treehouse found running in a worktree.
+         * @description A process the pool found running in a worktree.
          */
         Process: {
             /**
@@ -5472,7 +5473,7 @@ export type components = {
         };
         /**
          * Worktree
-         * @description One slot of a treehouse pool, as `treehouse status --json` reports it, with what in the journal holds it.
+         * @description One slot of a pool, as the pool's `status` reports it, with what in the journal holds it.
          */
         Worktree: {
             /**
@@ -5482,7 +5483,7 @@ export type components = {
             branch: string | null;
             /**
              * Branch Error
-             * @description Why treehouse could not read the branch.
+             * @description Why the pool could not read the branch.
              */
             branch_error: string | null;
             /**
@@ -5493,7 +5494,7 @@ export type components = {
             detached: boolean;
             /**
              * Holder
-             * @description Who holds its lease, as treehouse names them.
+             * @description Who holds its lease, as the pool names them.
              */
             holder: string | null;
             /**
@@ -5530,7 +5531,7 @@ export type components = {
             state: components["schemas"]["WorktreeState"];
             /**
              * Status
-             * @description treehouse's own word: available, leased, in-use, dirty, damaged, unverified, or "you're here".
+             * @description The pool's own word: available, leased, in-use, dirty, damaged, or unverified; treehouse's also "you're here".
              */
             status: string;
         };

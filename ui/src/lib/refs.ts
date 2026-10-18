@@ -59,7 +59,7 @@ export function messageRef(id: number | string): string {
     return `#${id}`
 }
 
-/** A worktree slot, as treehouse numbers it in its pool: `#3`. */
+/** A worktree slot, as its pool numbers it: `#3`. */
 export function slotRef(name: string): string {
     return `#${name}`
 }

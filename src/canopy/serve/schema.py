@@ -880,7 +880,7 @@ class ReviewSent(_Model):
 
 
 class Process(_Model):
-    """A process treehouse found running in a worktree."""
+    """A process the pool found running in a worktree."""
 
     pid: int
     """Its process id."""
@@ -900,14 +900,14 @@ class ReviewHold(_Model):
 
 
 class Worktree(_Model):
-    """One slot of a treehouse pool, as `treehouse status --json` reports it, with what in the journal holds it."""
+    """One slot of a pool, as the pool's `status` reports it, with what in the journal holds it."""
 
     name: str
     """The slot's name in its pool."""
     path: str
     """From the workspace root when under it, as a workspace's pools are; else whole."""
     status: str
-    """treehouse's own word: available, leased, in-use, dirty, damaged, unverified, or "you're here"."""
+    """The pool's own word: available, leased, in-use, dirty, damaged, or unverified; treehouse's also "you're here"."""
     state: WorktreeState
     """Its status, grouped as the UI colors it."""
     branch: str | None = None
@@ -915,9 +915,9 @@ class Worktree(_Model):
     detached: bool = False
     """Whether its HEAD is detached."""
     branch_error: str | None = None
-    """Why treehouse could not read the branch."""
+    """Why the pool could not read the branch."""
     holder: str | None = None
-    """Who holds its lease, as treehouse names them."""
+    """Who holds its lease, as the pool names them."""
     leased_at: datetime | None = None
     """When its lease was taken."""
     run: Run | None = None
@@ -931,14 +931,15 @@ class Worktree(_Model):
 
 
 class Pool(_Model):
-    """One repository's treehouse pool, read when asked for."""
+    """One repository's pool of worktrees, read when asked for."""
 
     repo: str
     """The repository, as the workspace names it."""
     size: int | None = None
-    """The size `capacity` declares for it; None leaves it to treehouse's `max_trees` (DESIGN §18)."""
+    """The size `capacity` declares for it; None leaves it at the pool's bound: treehouse's `max_trees`, or 16 for
+    canopy's (DESIGN §18)."""
     error: str | None = None
-    """Why its worktrees could not be read: no clone, or treehouse failed."""
+    """Why its worktrees could not be read: no clone, or the pool's read failed."""
     worktrees: list[Worktree] = []
     """Its slots."""
 

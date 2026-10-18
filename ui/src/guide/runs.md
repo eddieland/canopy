@@ -76,7 +76,7 @@ A slot is:
 - `held`: something else holds it, such as your own shell or a pool sync.
 - `dirty`: nobody holds it, but it has changes nobody committed.
 - `idle`: free for the next run.
-- `broken`: treehouse can't vouch for it; hover for treehouse's own word.
+- `broken`: the pool can't vouch for it; hover for the pool's own word, such as `damaged` or `unverified`.
 
 The chips filter by state. A slot held by no running run is marked as such: the next tick returns it. A pool larger
 than its declared size says so, and `canopy workspace sync` removes the idle slots over it.
@@ -87,5 +87,5 @@ since those changes might be the only copy of someone's afternoon: open the slot
 what you need, and discard the rest.
 
 This page only reads, and it's the one page not kept current by the stream: it rereads the pools every 10 seconds
-while you're looking, and **Read again** rereads them now. Each read takes every pool's lock for a moment, which is
-why it doesn't do so constantly.
+while you're looking, and **Read again** rereads them now. Each read checks every slot of every pool, and under
+treehouse takes each pool's lock for a moment, which is why it doesn't do so constantly.

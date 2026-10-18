@@ -156,8 +156,9 @@ Reviews and chores are kinds of their own. Each kind has its own attempt limit. 
 
 ### Pool
 
-A repository's set of worktrees, kept by treehouse. A run leases a slot from it and hands it back when it stops
-working. See [Runs and worktrees](runs#worktrees).
+A repository's set of worktrees, kept by treehouse, or by canopy itself when your own config sets
+`pools.backend = "canopy"`. A run leases a slot from it and hands it back when it stops working. See
+[Runs and worktrees](runs#worktrees).
 
 ### Reason
 
@@ -182,8 +183,9 @@ what an agent was thinking, this is the receipt. See [Runs and worktrees](runs#a
 
 ### treehouse
 
-The tool that keeps canopy's worktree pools and their leases. canopy asks it for a slot and gives it back, so no run
-ever works in your own checkout.
+The tool that keeps canopy's worktree pools and their leases, unless your own config sets `pools.backend = "canopy"`:
+then canopy keeps them itself, under `pools/` in the workspace, with the leases in its journal. Either way canopy asks
+the pool for a slot and gives it back, so no run ever works in your own checkout.
 
 ### Worker
 

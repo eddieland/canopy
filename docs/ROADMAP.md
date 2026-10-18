@@ -950,8 +950,9 @@ What treehouse does that canopy relies on or works around, from its source at th
 
 - Goes: treehouse's implementation, `pools.backend` (a config still setting it is warned about, then ignored), the
   fake and its fixture, `make treehouse` and the CI job, README's install step, and the mock's pool hashes.
-- Docs: D002 (rewritten as settled), D033's last `Rejected` line, D066's first bullet, DESIGN §8, §9, §18, §22, and
-  §24, REQUIREMENTS R2, README, GETTING_STARTED, PRIOR_ART, and TRUST_MODEL.
+- Docs: D002 (rewritten as settled), D033's last `Rejected` line, D066's first bullet, DESIGN §6, §8, §9, §18, §22,
+  and §24, REQUIREMENTS R2, README, GETTING_STARTED, PRIOR_ART, TRUST_MODEL, and where the web UI's guide and the
+  worktrees API's descriptions name treehouse.
 
 Open: whether a seeded symlink is copied as a link (treehouse writes its target text into a regular file), checked
 against TRUST_MODEL T4; whether sync warms a new slot (what `post_create` did for M17) or the first run's `setup_cmd`

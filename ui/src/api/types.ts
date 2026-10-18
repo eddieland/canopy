@@ -69,7 +69,7 @@ export type ReviewDismissed = Schemas['ReviewDismissed']
 export type ReviewSent = Schemas['ReviewSent']
 /** One message on the event stream, told apart by its `type` (`applyStreamEvent` in live.ts). */
 export type StreamEvent = Schemas['StreamEvent']
-/** One repository's treehouse pool, read when asked for. */
+/** One repository's pool of worktrees, read when asked for. */
 export type Pool = Schemas['Pool']
 /** What the last day and the last 30 days cost, read together, so a month never shows less than its day. */
 export type Spend = Schemas['Spend']
@@ -111,7 +111,7 @@ export type TickAsked = Schemas['TickAsked']
 export type TickDetail = Schemas['TickDetail']
 /** One decision a tick recorded (DESIGN §6): the overseer's, or the harness's attention items and refusals. */
 export type Decision = Schemas['Decision']
-/** One slot of a treehouse pool, as `treehouse status --json` reports it, with what in the journal holds it. */
+/** One slot of a pool, as the pool's `status` reports it, with what in the journal holds it. */
 export type Worktree = Schemas['Worktree']
 /** A worktree's state in the five groups the UI colors (DESIGN §22). */
 export type WorktreeState = Schemas['WorktreeState']

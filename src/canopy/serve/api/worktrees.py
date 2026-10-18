@@ -1,6 +1,6 @@
-"""The worktrees page's read: each pool's slots, from treehouse (serve/worktrees.py).
+"""The worktrees page's read: each pool's slots, from the pool (serve/worktrees.py).
 
-Not on the event stream: each read runs `treehouse status` once per pool.
+Not on the event stream: each read runs the pool's `status` once per pool.
 """
 
 from __future__ import annotations
@@ -17,6 +17,6 @@ router = APIRouter(tags=[TAG])
 
 @router.get("/worktrees", operation_id="listWorktrees", summary="List the worktrees")
 def pools(backend: BackendDep) -> list[Pool]:
-    """Each pool's slots from `treehouse status --json`, with the running run or review holding each."""
+    """Each pool's slots, as the pool's `status` reports them, with the running run or review holding each."""
     with backend.open() as ctx:
         return worktrees.pools(backend, ctx)
