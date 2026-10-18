@@ -30,7 +30,10 @@ RECORDED = (
     "PATH",
     "PIP_CACHE_DIR",
     "TMPDIR",
+    "UV_PYTHON_INSTALL_DIR",
+    "UV_TOOL_DIR",
     "XDG_CACHE_HOME",
+    "XDG_DATA_HOME",
     "npm_config_cache",
 )
 

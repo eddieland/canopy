@@ -30,13 +30,19 @@ In order, it:
    follow it everywhere. Not the operator's: OpenCode imports packages and runs programs from its cache, the
    overseer's OpenCode, outside any sandbox, included, so a cache a run can write is code the host runs later. The
    policy denies reading the directory that holds every role's, as it does the run directories'.
-5. For a worker or setup, puts a `git` of its own first on the command's PATH, in the run's directory, which the
+5. Points the command's XDG_DATA_HOME at the role's own data directory, `$XDG_DATA_HOME/canopy/sandbox/ROLE/`, shared
+   as the cache directory is, and denies writing the operator's OpenCode data directory, whatever the template says:
+   the operator's OpenCode, and the overseer's, run code that directory names (`credentials`). uv, which the
+   templates let a run read, still finds its Pythons and tools in the operator's data directory. Just before the
+   command starts, it copies the operator's OpenCode logins into the role's directory, and when it ends, it copies
+   back each token the run refreshed, and nothing else (`credentials`).
+6. For a worker or setup, puts a `git` of its own first on the command's PATH, in the run's directory, which the
    command may read but not write. It runs the real git, pointed at the run's object directory, `CANOPY_GIT_OBJECTS`,
    with each worktree's shared objects as alternates, when the repository git would act on is one of the run's
    worktrees, and unchanged anywhere else. Exported to every process, git's variables would reach a repository a tool
    keeps in a cache, such as OpenCode's snapshots or Go's module sources, whose objects would then go when the run's
    directory does. A git run by its absolute path gets neither, and in a worktree cannot write objects at all.
-6. Runs `srt --settings POLICY -- COMMAND...`, waits for it, removes its directory, and exits with `srt`'s status.
+7. Runs `srt --settings POLICY -- COMMAND...`, waits for it, removes its directory, and exits with `srt`'s status.
    The `srt` is the one `canopy sandbox setup` installed, pinned by `runtime/package-lock.json`, in
    `$XDG_DATA_HOME/canopy/sandbox-runtime/` (`~/.local/share/canopy/sandbox-runtime/` when that is unset), or else
    the first on `PATH`.
@@ -54,6 +60,7 @@ A placeholder is a whole string in one of the template's lists, and expands to z
     @OBJECTS@        the run's object directory
     @TMPDIR@         the run's temp directory, the command's TMPDIR
     @CACHE@          the role's cache directory, the command's XDG_CACHE_HOME
+    @DATA@           the role's data directory, the command's XDG_DATA_HOME
     @READ@           each `--read` path
 
 `@GIT_SHARED@` names entries, not the directory, because of how `srt` (checked at 0.0.79) restores paths under a
@@ -66,7 +73,8 @@ placeholder, a placeholder inside a longer string, no `filesystem.denyRead`, or 
 a command with no restrictions outside any sandbox at all.
 
 The directory a run killed with SIGKILL leaves behind (canopy kills a timed-out run's whole process group) is removed
-by the next run, once the process that made it is gone.
+by the next run, once the process that made it is gone, and the next run of its role copies back the tokens it
+refreshed.
 
 A program of its own, installed beside canopy, not part of the harness: canopy sees only the command template (D041).
 Stdlib only.
@@ -86,6 +94,8 @@ import sys
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
+
+from canopy_sandbox import credentials
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, MutableMapping, Sequence
@@ -198,8 +208,9 @@ SRT_TMPDIR = "CLAUDE_CODE_TMPDIR"
 # run's temp directory, under names up to this long (checked at 0.0.79); a socket's path holds at most 107 bytes there.
 SRT_SOCKET_NAME = "claude-socks-0123456789abcdef.sock"
 SOCKET_PATH_MAX = 107
-# The cache directory each role's runs share, under `$XDG_CACHE_HOME/canopy/sandbox/`. Setup warms the worker's.
-CACHES = {"worker": "worker", "setup": "worker", "chore": "chore", "review": "review"}
+# The cache and data directories each role's runs share, under `$XDG_CACHE_HOME/canopy/sandbox/` and
+# `$XDG_DATA_HOME/canopy/sandbox/`. Setup warms the worker's caches.
+SHARED = {"worker": "worker", "setup": "worker", "chore": "chore", "review": "review"}
 # Where the command's tools keep their caches, each relative to the role's cache directory. XDG_CACHE_HOME moves
 # OpenCode's, and most tools' on Linux; the rest are npm's, which never follows it, and Go's and pip's, which do not on
 # macOS. Each is the directory the tool takes under XDG_CACHE_HOME on Linux, or else its own name.
@@ -209,6 +220,12 @@ CACHE_ENV = (
     ("GOCACHE", "go-build"),
     ("GOMODCACHE", "go-mod"),
     ("PIP_CACHE_DIR", "pip"),
+)
+# What a run reads from the operator's own data directory once XDG_DATA_HOME is the role's: uv's Pythons and tools,
+# which the templates let it read, each relative to the operator's XDG_DATA_HOME. Set only when the operator has not.
+DATA_KEPT = (
+    ("UV_PYTHON_INSTALL_DIR", "uv/python"),
+    ("UV_TOOL_DIR", "uv/tools"),
 )
 
 
@@ -248,6 +265,7 @@ def run(argv: list[str]) -> int:
         template = load_template(role)
         srt = find_srt()
         cache = cache_dir(role)
+        data = data_dir(role)
         run_dir = make_run_dir()
     except SandboxError as e:
         print(f"canopy-sandbox: {e}", file=sys.stderr)
@@ -257,17 +275,22 @@ def run(argv: list[str]) -> int:
         check_socket_room(tmp)
         tmp.mkdir(mode=0o700)
         bin_dir = git_shim(run_dir, trees, objects) if objects is not None else None
-        policy = fill(template, placeholders(cwd, trees, objects, tmp, cache=cache, reads=reads))
+        policy = fill(template, placeholders(cwd, trees, objects, tmp, cache=cache, data=data, reads=reads))
         readable = [*vendor_dirs(srt), *([bin_dir] if bin_dir is not None else [])]
-        check(policy, [run_dir.parent, cache.parent, *state_dirs(objects, cwd)], readable)
+        operator = data_home() / credentials.RUNTIME
+        denied = [run_dir.parent, cache.parent, data.parent, *state_dirs(objects, cwd)]
+        check(policy, denied, readable, unwritable=[operator] if operator.is_dir() else [])
         settings = run_dir / "policy.json"
         settings.write_text(json.dumps(policy, indent=2) + "\n", encoding="utf-8")
-        return run_srt(srt, settings, command, environment(os.environ, bin_dir, tmp, cache))
+        hand_over(data, operator)
+        status = run_srt(srt, settings, command, environment(os.environ, bin_dir, tmp, cache=cache, data=data))
     except SandboxError as e:
         print(f"canopy-sandbox: {e}", file=sys.stderr)
         return 2
     finally:
         remove(run_dir)
+    take_back(data, operator)
+    return status
 
 
 def scrub(env: MutableMapping[str, str]) -> None:
@@ -420,18 +443,45 @@ def cache_dir(role: str) -> Path:
 
     Returns:
         The directory, with every link in its path resolved.
+    """
+    base = Path(os.environ.get("XDG_CACHE_HOME", ""))
+    root = base if base.is_absolute() else Path.home() / ".cache"
+    return role_dir(root / "canopy" / "sandbox" / SHARED[role], "cache")
+
+
+def data_dir(role: str) -> Path:
+    """Make, if it is missing, the private data directory a run as `role` shares with the role's other runs.
+
+    Returns:
+        The directory, under the operator's XDG_DATA_HOME, with every link in its path resolved.
+    """
+    return role_dir(data_home() / "canopy" / "sandbox" / SHARED[role], "data")
+
+
+def data_home() -> Path:
+    """Return the operator's XDG_DATA_HOME, read before the wrapper sets the command's.
+
+    Returns:
+        The directory, `~/.local/share` when XDG_DATA_HOME is unset or relative.
+    """
+    base = Path(os.environ.get("XDG_DATA_HOME", ""))
+    return base if base.is_absolute() else Path.home() / ".local" / "share"
+
+
+def role_dir(path: Path, kind: str) -> Path:
+    """Make, if it is missing, the private `kind` directory at `path` that a role's runs share.
+
+    Returns:
+        The directory, with every link in its path resolved.
 
     Raises:
         SandboxError: it cannot be made, or it is a link, or not a directory of this user's.
     """
-    base = Path(os.environ.get("XDG_CACHE_HOME", ""))
-    root = base if base.is_absolute() else Path.home() / ".cache"
-    path = root / "canopy" / "sandbox" / CACHES[role]
     try:
         path.mkdir(mode=0o700, parents=True, exist_ok=True)
         info = path.lstat()
     except OSError as e:
-        raise SandboxError(f"the sandbox's cache directory {path} could not be made: {e}") from None
+        raise SandboxError(f"the sandbox's {kind} directory {path} could not be made: {e}") from None
     if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.getuid():
         raise SandboxError(f"{path} is not a directory of this user's; remove it")
     # mkdir sets the mode only on a directory it makes.
@@ -490,6 +540,7 @@ def placeholders(
     tmp: Path,
     *,
     cache: Path,
+    data: Path,
     reads: list[Path],
 ) -> dict[str, list[str]]:
     """Return what each placeholder expands to for this run.
@@ -506,6 +557,7 @@ def placeholders(
         "@OBJECTS@": [objects] if objects is not None else [],
         "@TMPDIR@": [tmp],
         "@CACHE@": [cache],
+        "@DATA@": [data],
         "@READ@": reads,
     }
     return {name: list(dict.fromkeys(str(p) for p in paths)) for name, paths in values.items()}
@@ -556,18 +608,19 @@ def fill(node: object, values: Mapping[str, Iterable[str]]) -> object:
     return node
 
 
-def check(policy: object, denied: Iterable[Path], readable: Iterable[Path]) -> None:
+def check(policy: object, denied: Iterable[Path], readable: Iterable[Path], *, unwritable: Iterable[Path]) -> None:
     """Refuse a policy `srt` would run without a sandbox, or with the network open; deny `denied`, allow `readable`.
 
     `denied` holds the directory of every run's directory: the system temp directory is outside HOME, so without it one
     run could read another's temp directory, a private ticket's included. It holds the directory of every role's cache
-    directory, for an XDG_CACHE_HOME outside HOME, and the workspace's `.canopy/` too, when known, for a workspace
-    outside HOME. The run's own directories in them are re-allowed by the template. `readable` holds what runs inside
-    the sandbox from a denied directory: `srt`'s own helper, under the HOME the template may deny, and the run's `git`,
-    in the run's directory.
+    and data directories, for an XDG_CACHE_HOME or XDG_DATA_HOME outside HOME, and the workspace's `.canopy/` too, when
+    known, for a workspace outside HOME. The run's own directories in them are re-allowed by the template. `readable`
+    holds what runs inside the sandbox from a denied directory: `srt`'s own helper, under the HOME the template may
+    deny, and the run's `git`, in the run's directory. `unwritable` holds what no run may write, whatever the template
+    allows: the operator's OpenCode data directory, which a template from before `@DATA@` let it.
 
     Raises:
-        SandboxError: it denies no reads, has no network allowlist, or its allowRead is not a list.
+        SandboxError: it denies no reads, has no network allowlist, or its allowRead or denyWrite is not a list.
     """
     sections: dict[object, object] = policy if isinstance(policy, dict) else {}
     filesystem = sections.get("filesystem")
@@ -584,6 +637,10 @@ def check(policy: object, denied: Iterable[Path], readable: Iterable[Path]) -> N
     if not isinstance(allow, list):
         raise SandboxError("the policy template's filesystem.allowRead is not a list")
     allow.extend(str(p) for p in readable if str(p) not in allow)
+    deny_write: object = filesystem.setdefault("denyWrite", [])
+    if not isinstance(deny_write, list):
+        raise SandboxError("the policy template's filesystem.denyWrite is not a list")
+    deny_write.extend(str(p) for p in unwritable if str(p) not in deny_write)
 
 
 def state_dirs(objects: Path | None, cwd: Path) -> list[Path]:
@@ -613,17 +670,52 @@ def vendor_dirs(srt: Path) -> list[Path]:
     return [vendor] if name == SRT_PACKAGE and vendor.is_dir() else []
 
 
-def environment(current: Mapping[str, str], bin_dir: Path | None, tmp: Path, cache: Path) -> dict[str, str]:
+def hand_over(data: Path, operator: Path) -> None:
+    """Copy the operator's OpenCode logins, in `operator`, into the role's `data`, after an earlier run's tokens.
+
+    Raises:
+        SandboxError: the logins could not be copied, so the run would start without them.
+    """
+    take_back(data, operator)
+    try:
+        with credentials.locked(data.parent):
+            credentials.share(operator, data)
+    except OSError as e:
+        raise SandboxError(f"your OpenCode logins could not be copied into {data}: {e}") from None
+
+
+def take_back(data: Path, operator: Path) -> None:
+    """Copy into the operator's OpenCode logins, in `operator`, each token a run of the role refreshed in `data`.
+
+    Never fails the run: a token not taken back now is taken back by the role's next run.
+    """
+    try:
+        with credentials.locked(data.parent):
+            taken = credentials.collect(data, operator)
+    except OSError as e:
+        print(f"canopy-sandbox: the tokens a run refreshed could not be copied back from {data}: {e}", file=sys.stderr)
+        return
+    if taken:
+        print(f"canopy-sandbox: copied back the refreshed tokens of {', '.join(taken)}", file=sys.stderr)
+
+
+def environment(
+    current: Mapping[str, str], bin_dir: Path | None, tmp: Path, *, cache: Path, data: Path
+) -> dict[str, str]:
     """Return the command's environment: the wrapper's, scrubbed at start, plus the run's directories.
 
     Returns:
-        The environment to run `srt` with: TMPDIR the run's, every cache the role's, whatever the operator set them to,
-        and `bin_dir`, which holds the run's git, first on PATH.
+        The environment to run `srt` with: TMPDIR the run's, every cache the role's, and XDG_DATA_HOME the role's,
+        whatever the operator set them to, uv's data where the operator keeps it, and `bin_dir`, which holds the
+        run's git, first on PATH.
     """
     env = dict(current)
     env[SRT_TMPDIR] = str(tmp)
     env["TMPDIR"] = str(tmp)
     env.update((name, str(cache / place)) for name, place in CACHE_ENV)
+    for name, place in DATA_KEPT:
+        env.setdefault(name, str(data_home() / place))
+    env["XDG_DATA_HOME"] = str(data)
     if bin_dir is not None:
         env["PATH"] = os.pathsep.join(p for p in (str(bin_dir), env.get("PATH", "")) if p)
     return env

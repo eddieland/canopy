@@ -433,10 +433,13 @@ Controls now:
   each chore's `cmd`, and `review_cmd` with `canopy-sandbox <role>`, which runs the command under `srt` with a policy
   it writes for the run from the operator's template for that role. Under the shipped templates a sandboxed run reads, under
   `$HOME`, only its worktrees and their git directories, canopy's agent definitions, and the runtime's and toolchains'
-  files: not `~/.ssh`, other repositories, `~/.config/canopy`, or the workspace's `.canopy/`. It writes only its
-  worktrees, its slot's own HEAD, index, and reflog, a per-run object directory and temp directory, and the runtime's
-  data: no ref another slot shares, and no hook, git config, `.git` link, or `commondir` that git on the host later
-  reads. A review writes none of its checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
+  files: not `~/.ssh`, other repositories, `~/.config/canopy`, the workspace's `.canopy/`, or the operator's OpenCode
+  data. It writes only its worktrees, its slot's own HEAD, index, and reflog, a per-run object directory and temp
+  directory, and its role's own cache and data directories: no ref another slot shares, no hook, git config, `.git`
+  link, or `commondir` that git on the host later reads, and none of the operator's caches or OpenCode data, which the
+  host's OpenCode, the overseer's included, acts on. Its OpenCode starts with a copy of the operator's logins, and only
+  a refreshed token of a login the operator has is copied back (DESIGN §24, Logins). A review writes none of its
+  checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
   permissions stay as defense in depth.
 - The prefix is in the user file or the workspace's private file, which no repository or workspace file can set (T7)
   and no sandboxed run can write, so neither removes it. The harness never learns whether a run is sandboxed: it runs
@@ -455,7 +458,9 @@ Residual: an unsandboxed run has a filesystem-wide shell as the operator, and th
 give the snapshot its write permission back, as it could do anything else the operator can. A sandboxed one
 shares the kernel, so code written to escape it is not contained. The overseer, `notify.cmd`, and the harness's own
 git and treehouse calls run outside it (HOST_ISOLATION §4.4). Every process `srt` sandboxes can write `/tmp/claude`,
-so two runs can pass files through it. A filter driver the operator's own git config defines still runs on whatever a
+so two runs can pass files through it. A run can hand back, as a refresh, a token of another account for a login the
+operator has, or a bad one, so that the operator's OpenCode works as that account or fails until they log in again; it
+runs no code on the host. A filter driver the operator's own git config defines still runs on whatever a
 branch's `.gitattributes` selects, on a slot's return as on any checkout. A template the operator edits can allow
 anything; canopy checks only that it denies some reads and lists an allowlist.
 
