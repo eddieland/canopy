@@ -319,13 +319,25 @@ def _same_url(a: str, b: str) -> bool:
     return norm(a) == norm(b)
 
 
-def converge_pool(pool: pools.Pool, repo: workspace.Repo, want: int, *, dry_run: bool) -> Checked:
-    """Make or remove slots until `repo`'s pool, `pool`, has `want`.
+@dataclass(frozen=True)
+class Incoming:
+    """The slots of treehouse's pool that a switch to canopy's brings over, as sync makes canopy's pool (DESIGN §18)."""
+
+    #: Idle slots a dry run's move would bring in now; a real sync has moved them before it counts.
+    moving: int = 0
+    #: Slots left in treehouse's pool after the move, busy for now, which a later sync moves once idle.
+    waiting: int = 0
+
+
+def converge_pool(pool: pools.Pool, repo: workspace.Repo, want: int, *, dry_run: bool, incoming: Incoming) -> Checked:
+    """Make or remove slots until `repo`'s pool, `pool`, has `want`, counting the slots a switch brings in.
 
     Slots are made by leasing as `canopy-sync` until the pool is big enough, then returning every one of those leases;
-    one a crashed sync left is returned first. Surplus slots are removed highest name first, and only available ones,
-    with treehouse's unforced `destroy`: a busy one stays until a later sync finds it idle. A new slot is seeded from
-    the pool's include file, as a run's lease would seed it, before its `post_create` hooks run.
+    one a crashed sync left is returned first. A slot still in treehouse's pool after a switch, `incoming.waiting`,
+    counts toward `want`, so none is made in its place and a later sync can move it in without passing the size.
+    Surplus slots are removed highest name first, and only available ones, with treehouse's unforced `destroy`: a busy
+    one stays until a later sync finds it idle. A new slot is seeded from the pool's include file, as a run's lease
+    would seed it, before its `post_create` hooks run.
 
     Returns:
         `slots` with the pool's size, `kept` when treehouse keeps a surplus slot with work in it, or `failed` when the
@@ -335,13 +347,19 @@ def converge_pool(pool: pools.Pool, repo: workspace.Repo, want: int, *, dry_run:
         slots = pool.status()
         if not dry_run and _return_sync_leases(slots, pool):
             slots = pool.status()
-        if len(slots) < want:
-            return _fill(repo, pool, slots, want, dry_run=dry_run)
-        if len(slots) > want:
+        # A dry run counts the slots its move would bring in, as the real sync counts them once moved; a move stops
+        # at the declared size.
+        moving = max(0, min(incoming.moving, want - len(slots)))
+        have = len(slots) + moving
+        waiting = f"; {incoming.waiting} left in treehouse's pool, moved in by a later sync" if incoming.waiting else ""
+        target = max(have, want - incoming.waiting)
+        if have < target:
+            return _fill(repo, pool, slots, have=have, target=target, want=want, waiting=waiting, dry_run=dry_run)
+        if have > want:
             return _trim(repo, pool, slots, want, dry_run=dry_run)
     except pools.PoolError as e:
         return Checked(repo, "failed", f"its pool: {e}")
-    return Checked(repo, "slots", f"{want} of {want}")
+    return Checked(repo, "slots", f"{have} of {want}" + (waiting if have < want else ""))
 
 
 def _return_sync_leases(slots: Sequence[pools.Slot], pool: pools.Pool) -> bool:
@@ -362,23 +380,29 @@ def _fill(
     repo: workspace.Repo,
     pool: pools.Pool,
     slots: Sequence[pools.Slot],
-    want: int,
     *,
+    have: int,
+    target: int,
+    want: int,
+    waiting: str,
     dry_run: bool,
 ) -> Checked:
-    """Lease until the pool has `want` slots, then return every lease. treehouse makes a slot when none is available.
+    """Lease until the pool has `target` slots, then return every lease. treehouse makes a slot when none is available.
+
+    `target` is below the declared size, `want`, by the slots waiting in treehouse's pool, which `waiting` names, if
+    any. `have` is the pool's size, counting the slots a dry run's move would bring in.
 
     Returns:
         `slots` with how many were made, or `failed` when a lease failed or one could not be returned.
     """
     if dry_run:
-        return Checked(repo, "slots", f"{len(slots)} of {want}, would make {want - len(slots)}")
+        return Checked(repo, "slots", f"{have} of {want}, would make {target - have}{waiting}")
     known = {s.path for s in slots}
     held: list[pools.Lease] = []
     error: pools.PoolError | None = None
     try:
-        # Each lease holds a different slot, so `want` leases are always enough to reach `want` slots.
-        while len(known) < want and len(held) < want:
+        # Each lease holds a different slot, so `target` leases are always enough to reach `target` slots.
+        while len(known) < target and len(held) < target:
             leased = pool.lease_as(pools.SYNC_HOLDER, fetch=False)
             held.append(leased)
             known.add(leased.path)
@@ -393,7 +417,7 @@ def _fill(
         detail += f": {error} ({hint})"
     if unreturned:
         detail += f"; {unreturned} still leased as {pools.SYNC_HOLDER}, returned by the next sync"
-    return Checked(repo, "failed" if error is not None or unreturned else "slots", detail)
+    return Checked(repo, "failed" if error is not None or unreturned else "slots", detail + waiting)
 
 
 def _return_leases(held: Iterable[pools.Lease], pool: pools.Pool) -> int:
@@ -484,6 +508,23 @@ def move_slots(source: pools.Pool, into: pool.CanopyPool, repo: workspace.Repo, 
             moved.append(slot.name)
     detail = f"moved {len(moved)} of {len(idle)} idle treehouse slots into {pool.POOLS_DIR}/"
     return Checked(repo, "kept", "; ".join((detail, *kept))) if kept else Checked(repo, "moved", detail)
+
+
+def incoming(source: pools.Pool, *, dry_run: bool) -> Incoming:
+    """Count what treehouse's pool, `source`, holds for canopy's after a switch: its idle slots and the rest.
+
+    Read after `move_slots`: a real sync has moved the idle slots by then, and every slot left waits for a later sync.
+    A dry run moved nothing, so its idle slots are the ones its move would bring in.
+
+    Returns:
+        The slots moving now and waiting; none when treehouse's pool cannot be read, which `move_slots` reports.
+    """
+    try:
+        slots = source.status()
+    except pools.PoolError:
+        return Incoming()
+    idle = sum(s.status == pools.AVAILABLE for s in slots) if dry_run else 0
+    return Incoming(moving=idle, waiting=len(slots) - idle)
 
 
 def drop_idle(source: pools.Pool, repo: workspace.Repo, *, dry_run: bool) -> Checked | None:

@@ -278,9 +278,12 @@ reaches either through one interface and none learns which it has.
   is logged, not fatal. The state block's leased slots come from both.
 - **Switching** is `canopy workspace sync`'s. To `"canopy"`, it moves each idle treehouse slot into `pools/`, keeping
   everything in it, ignored files and build caches too; a busy one waits for a later sync, and its lease goes back to
-  treehouse meanwhile. Back to `"treehouse"`, it removes canopy's idle slots as its trim removes a slot, keeping one
-  with anything to lose, and treehouse makes fresh slots: switching back costs only warm caches. Sync exits 1 on a slot
-  it had to keep.
+  treehouse meanwhile. A slot still in treehouse's pool counts toward canopy's declared size, so sync makes only the
+  slots the move cannot supply, and the waiting slot still fits when it moves; a dry run counts the slots its move
+  would bring in, as the real sync does. A run's lease can still fill canopy's pool to its size meanwhile, if no slot
+  there can be reused; the waiting slot then stays in treehouse's pool, reported kept. Back to `"treehouse"`, it
+  removes canopy's idle slots as its trim removes a slot, keeping one with anything to lose, and treehouse makes fresh
+  slots: switching back costs only warm caches. Sync exits 1 on a slot it had to keep.
 - **No `post_create`.** canopy's pool runs no hook; what one did moves to `runtime.setup_cmd` (§9, BAZEL.md).
 - **Layout.** A repository's slots are `<workspace>/pools/<repo>/<N>/<repo>`. There is no hash of the remote in the
   path: a workspace's repository names are unique, and the pools are the workspace's own (D033).

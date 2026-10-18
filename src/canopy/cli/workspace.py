@@ -181,7 +181,11 @@ def _sync(ctx: Context, *, dry_run: bool) -> list[setup_workspace.Checked]:
             results.append(_report(switched))
         want = ctx.config.capacity.slots_for(repo.name)
         if want is not None and repo.cloned:
-            results.append(_report(setup_workspace.converge_pool(ctx.pool(repo.name), repo, want, dry_run=dry_run)))
+            incoming = _incoming(ctx, repo, dry_run=dry_run)
+            converged = setup_workspace.converge_pool(
+                ctx.pool(repo.name), repo, want, dry_run=dry_run, incoming=incoming
+            )
+            results.append(_report(converged))
         elif want is not None and dry_run:
             # Not cloned yet, so it has no pool: a real sync clones it, then makes every slot.
             results.append(_report(setup_workspace.Checked(repo, "slots", f"0 of {want}, would make {want}")))
@@ -210,6 +214,18 @@ def _switch(ctx: Context, repo: workspace.Repo, *, dry_run: bool) -> setup_works
             return setup_workspace.drop_idle(ctx.canopy_pool(repo.name), repo, dry_run=dry_run)
         case unknown:
             assert_never(unknown)
+
+
+def _incoming(ctx: Context, repo: workspace.Repo, *, dry_run: bool) -> setup_workspace.Incoming:
+    """Count the slots of treehouse's pool that canopy's is to count as its own, after `_switch` (DESIGN §18).
+
+    Returns:
+        The slots moving in now, in a dry run, and those waiting for a later sync; none unless `pools.backend` names
+        canopy's pool and the workspace still has treehouse's.
+    """
+    if ctx.config.pools.backend is not PoolKind.CANOPY or not (ctx.repo_root / workspace.POOLS_DIR).is_dir():
+        return setup_workspace.Incoming()
+    return setup_workspace.incoming(ctx.pool_of(PoolKind.TREEHOUSE, repo.name), dry_run=dry_run)
 
 
 def _clone_or_check(
