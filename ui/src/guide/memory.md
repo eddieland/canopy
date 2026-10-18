@@ -76,11 +76,12 @@ memory in use never share a label, so you never mistake one for the other.
 ## Reading a memory
 
 Each memory is a row, read left to right like every other list in canopy. First where it stands, a dot and a word:
-`active` for a memory in force, `pending` for a proposal waiting on you, `superseded` or `invalid` once it's out of
-force, and for a lesson that needs you, `due` once its review date has come or `wrong` once a run reported it wrong, so
-a glance down the left edge finds them. Hover over the word for the reason. Then its ref, as `memory:42`, with a button
-on hover that copies it, since that's what Forget and the CLI ask for; its ticket, on the proposals; its repository;
-its key; how many runs relied on it, once any has; and how long ago it was written.
+`active` for a memory in force, `recorded` for one in force while its tier only records, which no run reads, `pending`
+for a proposal waiting on you, `superseded` or `invalid` once it's out of force, and for a lesson that needs you, `due`
+once its review date has come or `wrong` once a run reported it wrong, so a glance down the left edge finds them. Hover
+over the word for the reason. Then its ref, as `memory:42`, with a button on hover that copies it, since that's what
+Forget and the CLI ask for; its ticket, on the proposals; its repository; its key; how many runs relied on it, once any
+has; and how long ago it was written.
 
 Under that, what it says, and one line of where it came from: the run that wrote it and the commit it was written
 against; for a proposal, how its run ended, whether its ticket is done, when it lapses (in amber in its last two days),

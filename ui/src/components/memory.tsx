@@ -15,8 +15,8 @@ import { RowLine, ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
-import { lapsesText, leftOutText, memorySegments, memoryStand, reviewText, usedText } from '@/lib/memory'
-import type { MemoryStand } from '@/lib/memory'
+import { lapsesText, leftOutText, memorySegments, memoryStand, reviewText, tierMode, usedText } from '@/lib/memory'
+import type { MemoryStand, TierModes } from '@/lib/memory'
 import { memoryRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
 import { localTime, useNow } from '@/lib/time'
@@ -34,6 +34,7 @@ const STAND_STATE: Record<MemoryStand, RunState> = {
     active: 'done',
     superseded: 'stopped',
     invalid: 'stopped',
+    recorded: 'stopped',
 }
 
 // What each standing means, on hover, where the journal gives no reason of its own.
@@ -44,6 +45,7 @@ const STAND_TITLE: Record<MemoryStand, string> = {
     active: 'in force',
     superseded: 'replaced by a later one under its key',
     invalid: 'no longer in force',
+    recorded: 'recorded: no run reads it while its tier records',
 }
 
 /**
@@ -92,7 +94,8 @@ export function MemoryBand({ tier, name }: { tier: MemoryTier; name: string }) {
  * and one line of where it came from. `facts` adds to that line by a row's id, such as how a proposal's run ended;
  * `below` adds what goes under a row, such as its verbs; `ownRun` leaves out the run whose page it is; `digest` is
  * what a run is served of the entries' tier, so a row in force that its cap leaves out says so; `cited` is what the
- * run whose page it is said of each, so a row it relied on or found wrong says so.
+ * run whose page it is said of each, so a row it relied on or found wrong says so; `modes` is each tier's mode now, so
+ * a memory in force under a tier that only records reads `recorded`, never `active`.
  */
 export function MemoryRows({
     entries,
@@ -102,6 +105,7 @@ export function MemoryRows({
     ownRun,
     digest,
     cited,
+    modes,
 }: {
     entries: MemoryEntry[]
     ticket?: boolean
@@ -110,6 +114,7 @@ export function MemoryRows({
     ownRun?: number
     digest?: MemoryDigest | null | undefined
     cited?: Pick<RunMemory, 'used' | 'wrong'>
+    modes?: TierModes | undefined
 }) {
     const now = useNow()
     const served = new Set(digest?.ids)
@@ -122,7 +127,7 @@ export function MemoryRows({
                     className="group/copy"
                     data-testid={`memory-${entry.id}`}
                 >
-                    <MemoryStanding entry={entry} now={now} />
+                    <MemoryStanding entry={entry} now={now} mode={modes && tierMode(entry.scope, modes)} />
                     {/* Copied, since Forget asks for it typed and the CLI's verbs take it. */}
                     <span className="flex min-w-0 items-center gap-0.5">
                         <span className="readout text-xs text-muted-foreground">{memoryRef(entry.id)}</span>
@@ -176,7 +181,11 @@ export function MemoryRows({
                         {entry.why !== null && <span>{entry.why}</span>}
                         {entry.review_at !== null && entry.status === 'active' && (
                             <span
-                                className={cn(Date.parse(entry.review_at) <= now && 'text-status-blocked')}
+                                className={cn(
+                                    Date.parse(entry.review_at) <= now &&
+                                        (modes === undefined || modes.lessons === 'use') &&
+                                        'text-status-blocked',
+                                )}
                                 title={`at ${localTime(entry.review_at)}`}
                             >
                                 {reviewText(entry.review_at, now)}
@@ -204,10 +213,19 @@ export function MemoryRows({
 /**
  * Where a memory stands, a row's leading column: a dot in its state's color and its word, in that color, the reason on
  * hover. A lesson in force that a run reported wrong reads `wrong`, and one past its review date `due`, since those
- * call for the operator; a proposal is `pending` on them too.
+ * call for the operator; a proposal is `pending` on them too; and one in force under a tier that only records,
+ * `recorded`, muted, since no run reads it.
  */
-function MemoryStanding({ entry, now }: { entry: MemoryEntry; now: number }) {
-    const stand = memoryStand(entry, now)
+function MemoryStanding({
+    entry,
+    now,
+    mode,
+}: {
+    entry: MemoryEntry
+    now: number
+    mode: MemoryTier['mode'] | undefined
+}) {
+    const stand = memoryStand(entry, now, mode)
     const state = STAND_STATE[stand]
     return (
         <span

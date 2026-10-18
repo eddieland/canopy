@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
 
 import { ApiError } from '@/api/client'
-import { runMemoryQuery, runQuery, runTranscriptQuery } from '@/api/queries'
+import { loopQuery, runMemoryQuery, runQuery, runTranscriptQuery } from '@/api/queries'
 import type { Run, Transcript } from '@/api/types'
 import { Age } from '@/components/age'
 import { Copyable, CopyablePath } from '@/components/copy-button'
@@ -179,6 +179,9 @@ function RunPanel({
  */
 function RunMemoryPanel({ id }: { id: number }) {
     const { data } = useQuery(runMemoryQuery(id))
+    // Each tier's mode now, so a memory in force under a tier that only records reads `recorded` in its rows.
+    const tiers = useQuery(loopQuery).data?.memory
+    const modes = tiers ? { ticket_notes: tiers.ticket_notes.mode, lessons: tiers.lessons.mode } : undefined
     const rendered = data?.rendered ?? null
     if (data === undefined || rendered === null) {
         return null
@@ -192,12 +195,16 @@ function RunMemoryPanel({ id }: { id: number }) {
                 </span>
             </PanelHeader>
             <h3 className="px-3 pt-2 panel-label">Wrote</h3>
-            {data.wrote.length === 0 ? <Empty>none</Empty> : <MemoryRows entries={data.wrote} ownRun={id} />}
+            {data.wrote.length === 0 ? (
+                <Empty>none</Empty>
+            ) : (
+                <MemoryRows entries={data.wrote} ownRun={id} modes={modes} />
+            )}
             <h3 className="border-t px-3 pt-2 panel-label">Read</h3>
             {data.read.length === 0 ? (
                 <Empty>{readNothingText(served)}</Empty>
             ) : (
-                <MemoryRows entries={data.read} ownRun={id} cited={data} />
+                <MemoryRows entries={data.read} ownRun={id} cited={data} modes={modes} />
             )}
             {data.refused.length > 0 && (
                 <>

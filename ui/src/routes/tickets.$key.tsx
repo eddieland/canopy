@@ -255,7 +255,16 @@ function TicketMemoryPanel({ ticketKey }: { ticketKey: string }) {
                 <Empty>no notes yet: its runs write them as they end</Empty>
             ) : (
                 <PanelScroll label="Memory">
-                    <MemoryRows entries={data.notes} digest={data.digest} below={below} />
+                    <MemoryRows
+                        entries={data.notes}
+                        digest={data.digest}
+                        below={below}
+                        modes={
+                            memory
+                                ? { ticket_notes: memory.ticket_notes.mode, lessons: memory.lessons.mode }
+                                : undefined
+                        }
+                    />
                 </PanelScroll>
             )}
             {data?.digest && <MemoryDigestView digest={data.digest} served="served to its next run" />}
