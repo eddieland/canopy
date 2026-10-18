@@ -415,6 +415,23 @@ describe('TranscriptPanel', () => {
         expect(scrolled).toHaveBeenCalledWith({ block: 'center' })
     })
 
+    it('draws through a shown row only for its showing, so a later search keeps to the page', () => {
+        const entries = said(LONG)
+        const view = { ...VIEW, target: { i: LONG - 20, round: 1 } }
+        const { rerender } = render(
+            <TranscriptPanel transcript={transcript({ entries })} running={false} view={view} />,
+        )
+        expect(rows().getByText(`said ${LONG - 19}`)).toBeDefined()
+        rerender(
+            <TranscriptPanel transcript={transcript({ entries })} running={false} view={{ ...view, found: 'said' }} />,
+        )
+        expect(rows().queryByText(`said ${PAGE + 1}`)).toBeNull()
+        expect(screen.getByRole('button', { name: `Show ${STEP} of ${STEP + 50} more rows` })).toBeDefined()
+        // Cleared, the search starts again at a page too, not at the row shown before it.
+        rerender(<TranscriptPanel transcript={transcript({ entries })} running={false} view={view} />)
+        expect(rows().queryByText(`said ${PAGE + 1}`)).toBeNull()
+    })
+
     it('shows the row the context chart names in order and unsearched, open and scrolled to', () => {
         const scrolled = vi.spyOn(HTMLElement.prototype, 'scrollIntoView')
         render(<TranscriptPanel transcript={transcript()} running={false} />)

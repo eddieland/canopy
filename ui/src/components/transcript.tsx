@@ -111,16 +111,20 @@ export function TranscriptPanel({
     // By call's rows: the entries before the first call, then the calls.
     const callRows = calls.before.length + calls.calls.length
     // The rows drawn (TRANSCRIPT_BUDGET): a page of them, and each step a fold was asked for, until the transcript,
-    // its view, or its search changes; and on through the row last shown, so it is drawn before it is scrolled to.
+    // its view, or its search changes; and on through a row just shown, so it is drawn before it is scrolled to. The
+    // draw-through is the showing's alone: a later search, view, or session starts again at a page.
     const budget = JSON.stringify([transcript?.session_id ?? null, callView, query])
-    const [asked, setAsked] = useState({ budget, rows: 0 })
-    if (asked.budget !== budget) {
-        setAsked({ budget, rows: 0 })
+    const round = target?.round ?? 0
+    const [asked, setAsked] = useState({ budget, round: 0, rows: 0, through: 0 })
+    const fresh = asked.budget !== budget || asked.round !== round
+    const shownNow = asked.round !== round && target !== null && !callView
+    const through = fresh ? (shownNow ? shown.findIndex((n) => n.i === target.i) + 1 : 0) : asked.through
+    const rows = fresh ? 0 : asked.rows
+    if (fresh) {
+        setAsked({ budget, round, rows, through })
     }
-    const rows = asked.budget === budget ? asked.rows : 0
-    const at = target === null ? -1 : shown.findIndex((n) => n.i === target.i)
-    const drawn = callView ? drawnRows(callRows, rows, 0) : drawnRows(shown.length, rows, at + 1)
-    const more = () => setAsked({ budget, rows: drawn + TRANSCRIPT_BUDGET.step })
+    const drawn = callView ? drawnRows(callRows, rows, 0) : drawnRows(shown.length, rows, through)
+    const more = () => setAsked({ budget, round, rows: drawn + TRANSCRIPT_BUDGET.step, through })
     // A search opens a call whose input or output holds it, until All open is turned on or off under it.
     const searchOpens = (hits: { body: number } | null) => hits !== null && hits.body > 0 && opened.query !== query
     // All open stays on while the calls stand open together: it was turned on, or a search opened what it found.
