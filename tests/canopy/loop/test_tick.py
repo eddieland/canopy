@@ -21,8 +21,10 @@ from tests.canopy.helpers import (
     in_tick,
     only_tick,
     overseer_does,
+    overseer_titles,
     present,
     state_block,
+    titled_overseer,
     tools_of,
     tools_printed,
     with_events,
@@ -101,6 +103,35 @@ def test_dry_run_tick_records_the_overseer_plan(
         assert kept.read_text() == prompt
         assert kept.stat().st_mode & 0o077 == 0
         assert canopy_env.state_dir.stat().st_mode & 0o077 == 0
+
+
+@pytest.mark.parametrize(
+    ("woken_by", "tickets", "running", "open_items", "title"),
+    [
+        (None, 0, 0, 0, "tick 7 · by hand · nothing open"),
+        ("run", 2, 1, 0, "tick 7 · run ended · 2 tickets, 1 running"),
+        ("timer", 1, 0, 1, "tick 7 · timer · 1 ticket, 1 needs you"),
+        ("web", 0, 0, 3, "tick 7 · asked · 3 need you"),
+    ],
+)
+def test_the_session_title_says_what_started_the_tick_and_what_it_faces(
+    woken_by: tick.WokenBy | None, tickets: int, running: int, open_items: int, title: str
+) -> None:
+    """So the runtime's session list tells a tick with something before it from one of a quiet stretch (DESIGN §13)."""
+    assert tick.session_title(7, woken_by, tickets=tickets, running=running, open_items=open_items) == title
+
+
+def test_a_tick_run_by_hand_gives_its_overseer_a_session_title(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    titled_overseer(canopy_env)
+    with overseer_does(
+        canopy("ticket", "set", "PROJ-1", "--repo", "repo", "--phase", "ci_running"),
+        canopy("decide", "PROJ-1", "wait", "--rationale", "checks pending"),
+    ):
+        assert main(["tick", "--dry-run"]) == 0
+        assert main(["tick", "--dry-run"]) == 0
+    assert overseer_titles(agent_log) == ["tick 1 · by hand · nothing open", "tick 2 · by hand · 1 ticket"]
 
 
 def test_overseer_state_names_the_configured_needs_human_label(

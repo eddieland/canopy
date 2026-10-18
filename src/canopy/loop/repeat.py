@@ -39,7 +39,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, assert_never
+from typing import TYPE_CHECKING, assert_never
 
 from rich.live import Live
 from rich.spinner import Spinner
@@ -59,6 +59,7 @@ if TYPE_CHECKING:
     from canopy.core.config import Config
     from canopy.core.context import Context
     from canopy.loop import web
+    from canopy.loop.tick import Woken, WokenBy
     from canopy.serve.backend import Backend
 
 LOCK_FILE_NAME = "loop.lock"
@@ -86,12 +87,6 @@ _STATUS_STYLES = {
 }
 
 
-# What ended a wait before its deadline: the operator's act (a message, a ticket started or stopped, a grant, a notice
-# set or cleared), a run ending, the operator pressing `TICK_NOW_KEY`, or the operator asking from the web UI.
-type Woken = Literal["message", "starts", "grant", "notice", "run", "key", "web"]
-# What started a tick, recorded on its row (`ticks.woken_by`): the loop starting, a wait that ran its length, one a gate
-# shortened, or what ended one early.
-type WokenBy = Woken | Literal["start", "timer", "gate"]
 _WOKEN_NOTES: dict[Woken | None, str] = {
     "message": "operator message; next tick in ",
     "starts": "a ticket started or stopped; next tick in ",
@@ -392,7 +387,7 @@ def _ticks(
         settings.reload.ticking = True
         try:
             with Live(_Ticking(stop, clock), console=console, transient=True, refresh_per_second=8):
-                outcome = _tick(ctx, dry_run=dry_run, log=log)
+                outcome = _tick(ctx, dry_run=dry_run, woken_by=woken_by, log=log)
         finally:
             settings.reload.ticking = False
         ended = clock()
@@ -617,14 +612,14 @@ def _draining(labels: Sequence[str], elapsed: float) -> Text:
     )
 
 
-def _tick(ctx: Context, *, dry_run: bool, log: logs.TickAdapter) -> tick.Outcome:
-    """Run one tick. An unexpected error ends that tick, not the loop, as with a scheduler that starts each tick.
+def _tick(ctx: Context, *, dry_run: bool, woken_by: WokenBy, log: logs.TickAdapter) -> tick.Outcome:
+    """Run one tick, which `woken_by` started. An unexpected error ends that tick, not the loop, as a scheduler would.
 
     Returns:
         The tick's outcome, or an `error` outcome naming the exception when the tick raised one.
     """
     try:
-        return tick.run(ctx, dry_run=dry_run)
+        return tick.run(ctx, dry_run=dry_run, woken_by=woken_by)
     # Logged with its traceback. The journal is in autocommit mode, so the next tick starts clean.
     except Exception as e:
         log.exception("tick raised; the loop goes on", extra={"error": str(e)})

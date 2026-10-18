@@ -23,7 +23,18 @@ from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, Phase, ReviewRunStatus, StartStatus, TickStatus
 from canopy.infra import resources
 from canopy.loop import pacing, repeat, tick, tick_now
-from tests.canopy.helpers import KEY, FakeKeys, FakeTime, canopy, chore_toml, console, context, overseer_does
+from tests.canopy.helpers import (
+    KEY,
+    FakeKeys,
+    FakeTime,
+    canopy,
+    chore_toml,
+    console,
+    context,
+    overseer_does,
+    overseer_titles,
+    titled_overseer,
+)
 from tests.conftest import CanopyEnv
 
 PR = "https://example.test/pr/1"
@@ -549,6 +560,7 @@ def finishes_review(db_path: Path) -> list[str]:
 def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, when: str
 ) -> None:
+    titled_overseer(canopy_env)
     ctx = context(canopy_env)
     db.migrate(ctx.conn, resources.migrations_dir())
     first = db.start_tick(ctx.conn, dry_run=True)
@@ -586,6 +598,9 @@ def test_a_run_ending_after_the_tick_read_the_journal_wakes_the_wait(
         # The hand-made tick, the loop's first, then the tick the wait ended in.
         woken_by = {"an operator message": "message", "before the tick": "timer"}.get(when, "run")
         assert [w for _, w in recorded(canopy_env)] == [None, "start", woken_by]
+        # The overseer's session title says so too (DESIGN §13).
+        woke = {"message": "message", "timer": "timer", "run": "run ended"}[woken_by]
+        assert overseer_titles(agent_log) == ["tick 2 · loop start · 1 ticket", f"tick 3 · {woke} · 1 ticket"]
         if when == "before the tick":
             # The tick could see that run end: nothing for the wait to wake for.
             assert sum(time.slept) == 900
@@ -831,9 +846,9 @@ def test_a_tick_asked_for_during_a_tick_ends_the_wait_after_it(
     time = FakeTime()
     run = tick.run
 
-    def asked_during(tick_ctx: Context, *, dry_run: bool) -> tick.Outcome:
+    def asked_during(tick_ctx: Context, *, dry_run: bool, woken_by: tick.WokenBy | None = None) -> tick.Outcome:
         asked.request()
-        return run(tick_ctx, dry_run=dry_run)
+        return run(tick_ctx, dry_run=dry_run, woken_by=woken_by)
 
     with overseer_does(), mock.patch.object(tick, "run", autospec=True, side_effect=asked_during):
         loop_ticks(ctx, time, asked=asked)
