@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test'
 
 import {
     diffFile,
+    placeholderGuide,
     LIGHT_ROUTES,
     NOW,
     ROUTES,
@@ -22,8 +23,14 @@ for (const theme of THEMES) {
             await page.clock.setFixedTime(NOW)
             await storeTheme(page, theme)
             await signIn(page)
+            if (route === 'guide/overview') {
+                await placeholderGuide(page, 'overview')
+            }
             await page.goto(route)
             await settled(page)
+            if (route === 'guide/overview') {
+                await expect(page.getByRole('heading', { level: 1 })).toHaveText('Lorem ipsum')
+            }
             await expect(page.locator('html')).toHaveClass(theme === 'dark' ? /\bdark\b/u : /^(?!.*\bdark\b)/u)
             const screenshot = WHOLE_ROUTES.includes(route) ? screenshotWhole : screenshotMain
             await screenshot(page, `${route.replaceAll(/[/?=]/gu, '-')}-${theme}.png`)
