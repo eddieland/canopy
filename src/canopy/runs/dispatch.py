@@ -28,21 +28,21 @@ from canopy.runs import policy
 if TYPE_CHECKING:
     from canopy.core.context import Context
 
-# A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17).
+#: A ticket key reaches branch names, lease holders, paths, and argv (DESIGN §17).
 KEY_RE = conversation.KEY_RE
-# The branch is `<branch_prefix><KEY>-<slug>`; the slug is the overseer's short name for the work. At most 40
-# characters: lowercase words joined by single hyphens.
+#: The branch is `<branch_prefix><KEY>-<slug>`; the slug is the overseer's short name for the work. At most 40
+#: characters: lowercase words joined by single hyphens.
 SLUG_RE = re.compile(r"(?=[a-z0-9-]{1,40}\Z)[a-z0-9]+(?:-[a-z0-9]+)*")
-# A stacked run's base is another ticket's branch, `<branch_prefix><KEY>-<slug>`: what follows the prefix is one plain
-# ref component, so it reaches git's argv as safely as a key.
+#: A stacked run's base is another ticket's branch, `<branch_prefix><KEY>-<slug>`: what follows the prefix is one plain
+#: ref component, so it reaches git's argv as safely as a key.
 BASE_TAIL_RE = re.compile(r"(?=.{1,200}\Z)[A-Za-z0-9][A-Za-z0-9_-]*")
 DEFAULT_SLUG = "work"
 JOINT_PR_NOTE = "one per repository, listed under Repositories"
-# A prompt carries at most this much of `MAP.md`.
+#: A prompt carries at most this much of `MAP.md`.
 MAX_MAP = 20_000
 RUNS_DIR = "runs"
-# Each cursor a dispatch moves, and `--review-run`, by the reason a `resume` must name for it (DESIGN §8): what the
-# dispatch handles is a reason it runs. A reason needs no cursor; `conflict`, `no_pr`, and `retarget` have none.
+#: Each cursor a dispatch moves, and `--review-run`, by the reason a `resume` must name for it (DESIGN §8): what the
+#: dispatch handles is a reason it runs. A reason needs no cursor; `conflict`, `no_pr`, and `retarget` have none.
 REASON_CURSORS: Mapping[str, ResumeReason] = {
     "ci": ResumeReason.CI,
     "review": ResumeReason.REVIEW,
@@ -50,7 +50,7 @@ REASON_CURSORS: Mapping[str, ResumeReason] = {
     "comment": ResumeReason.REPLY,
     "message": ResumeReason.REPLY,
 }
-# The attention item a dispatch refused for a retired `fix-ci` prompt override records (DESIGN §8, §14).
+#: The attention item a dispatch refused for a retired `fix-ci` prompt override records (DESIGN §8, §14).
 FIX_CI_OVERRIDE = "fix_ci_override"
 
 
@@ -72,10 +72,7 @@ class Refusal(Exception):  # noqa: N818  (a refusal is an outcome the overseer i
 
 @dataclass(frozen=True)
 class Started:
-    """A dispatched run: its branch, the slots it leased, one per repository, and the desk a joint run works in.
-
-    `starts` says the run started its ticket privately, under `tracker.private` (DESIGN §22).
-    """
+    """A dispatched run: its branch, the slots it leased, one per repository, and the desk a joint run works in."""
 
     run_id: int
     branch: str
@@ -83,6 +80,7 @@ class Started:
     pid: int
     label: str
     desk: Path | None = None
+    #: Whether the run started its ticket privately, under `tracker.private` (DESIGN §22).
     starts: bool = False
 
     @property
@@ -101,21 +99,21 @@ class Leased:
 
 @dataclass(frozen=True)
 class Plan:
-    """What a run would do: its branch, its base, its queue label, and its repositories.
+    """What a run would do: its branch, its base, its queue label, and its repositories."""
 
-    `base` is the branch it stacks on if `--base` named one, the label is in its configured spelling, and the
-    repositories are the names of the units it covers, in the order the dispatch named them. A run over several is a
-    joint run (DESIGN §18). A split or a plan has no branch (""): it reads the repositories it names and changes none of
-    them, from a desk however many it names (DESIGN §25). A private run works a ticket the operator started; its start
-    record authorizes it, and it has no label (DESIGN §22). A run that `starts` the ticket is its first, under
-    `tracker.private`: it is private, and writes the start record.
-    """
-
+    #: A split or a plan has no branch (""): it reads the repositories it names and changes none of them, from a desk
+    #: however many it names (DESIGN §25).
     branch: str
+    #: The branch it stacks on, if `--base` named one.
     base: str | None
+    #: The queue label, in its configured spelling. A private run has none.
     label: str
+    #: The names of the units it covers, in the order the dispatch named them. A run over several is a joint run
+    #: (DESIGN §18).
     repos: tuple[str, ...]
+    #: A private run works a ticket the operator started; its start record authorizes it (DESIGN §22).
     private: bool = False
+    #: A run that starts the ticket is its first, under `tracker.private`: it is private, and writes the start record.
     starts: bool = False
 
     @property
