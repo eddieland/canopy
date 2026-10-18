@@ -1,9 +1,13 @@
 name: CI
 
+# merge_group runs every check on what a merge queue would land: the pull request on top of main and of any ahead of it
+# in the queue. Two pull requests each green on its own base can still break main together, as a test one adds for
+# behavior the other changes; the queue catches that before either lands. Branch protection turns the queue on.
 on:
   pull_request:
   push:
     branches: [main]
+  merge_group:
   workflow_dispatch:
 
 permissions:
