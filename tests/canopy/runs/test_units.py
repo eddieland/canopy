@@ -371,7 +371,9 @@ def test_a_joint_prompt_override_without_the_repositories_is_refused(
     seed_pools(ws, treehouse_state)
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
-    (overrides / "worker-implement.md").write_text("Work {{KEY}} in {{SLOT}} on {{BRANCH}} for {{LABELS}}\n")
+    (overrides / "worker-implement.md").write_text(
+        "Work {{KEY}} in {{SLOT}} on {{BRANCH}} for {{LABELS}}\n{{DRAFTS}}\n"
+    )
     conn = ws.journal()
     with in_tick(conn) as tick_id:
         runner = InlineRunner()

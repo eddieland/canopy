@@ -13,7 +13,7 @@ It is core, since dispatch and `_run` write it and the CLI and the web UI read i
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -46,12 +46,16 @@ class Rendered:
     required: tuple[str, ...]
 
 
-def render(config: Config, kind: str, *, private: bool) -> Rendered | None:
+def render(
+    config: Config, kind: str, *, private: bool, sent: Mapping[str, Mapping[str, Sequence[int]]] | None = None
+) -> Rendered | None:
     """Return how a `kind` run's prompt says its comments reach GitHub, or None for a kind that comments nowhere.
 
     A ticket's draft is asked for only under `approve`, on a public ticket, with a `tracker` source that posts: the
     harness never branches on the tracker's name (DESIGN §17), so the operator's source is what says canopy can post
-    there. Without one, the worker posts its ticket comments itself, marked, under either setting.
+    there. Without one, the worker posts its ticket comments itself, marked, under either setting. `sent` holds what
+    the operator sent through canopy on the run's PRs (`drafts.sent_by_pr`), which an `approve` prompt names so the
+    worker never takes it for review feedback.
 
     Returns:
         The setting, whether a ticket's draft is asked for, the placeholders' values, and the placeholders the prompt
@@ -69,6 +73,9 @@ def render(config: Config, kind: str, *, private: bool) -> Rendered | None:
         return Rendered(mode=mode, ticket_drafts=False, values=posted_values(marks, label), required=())
     ticket_marks = mark_comments(trust.comment_prefix, trust.comment_suffix, where=_ON_TICKET)
     values = _drafted_values(ticket_marks, label, ticket=ticket)
+    told = _sent_note(sent or {})
+    for name in ("PR_REPLIES", "PRIVATE_PR_REPLIES"):
+        values[name] += told
     # A private ticket's implement posts nothing anywhere, so its prompt has no comments to draft.
     required = () if kind == RunKind.IMPLEMENT and private else REQUIRED_APPROVE
     return Rendered(mode=mode, ticket_drafts=ticket, values=values, required=required)
@@ -182,6 +189,29 @@ def _drafted_values(ticket_marks: str, label: str, *, ticket: bool) -> dict[str,
     values["ASK_QUESTION"] = posted["ASK_QUESTION"]
     values["ASK_AGAIN"] = posted["ASK_AGAIN"]
     return values
+
+
+def _sent_note(sent: Mapping[str, Mapping[str, Sequence[int]]]) -> str:
+    """The sentence naming what the operator sent through canopy on the run's PRs, or "" when nothing.
+
+    Returns:
+        The sentence, starting with a space.
+    """
+    named = [
+        f"{pr}: comments {_ids(ids['comments'])}, reviews {_ids(ids['reviews'])}"
+        for pr, ids in sorted(sent.items())
+        if ids["comments"] or ids["reviews"]
+    ]
+    if not named:
+        return ""
+    return (
+        " The operator already sent these through canopy, unmarked, as their own: "
+        f"{'; '.join(named)}. They are the operator's answers to reviewers, not review feedback to address."
+    )
+
+
+def _ids(ids: Sequence[int]) -> str:
+    return ", ".join(map(str, ids)) or "none"
 
 
 def _contract(*, ticket: bool) -> str:

@@ -86,9 +86,10 @@ If code and the design disagree, the design doc wins until a decision entry says
   client (D079, dev only), and `syrupy` for snapshot tests (dev only).
 - The web UI lives in `ui/` (D079) and has its own rules: read `ui/AGENTS.md` before touching it. It needs Node 22.12+
   and npm; `make check` runs its checks, and `make ui-e2e` its Playwright tests.
-- Nothing tracker- or VCS-API-specific is ever imported. No Jira client, no GitHub client. Connectivity to those
-  systems is the agent runtime's MCP servers. The harness knows nothing about Jira or GitHub beyond strings in config
-  and prompts.
+- Nothing tracker- or VCS-API-specific is ever imported by the harness, `src/canopy`. No Jira client, no GitHub
+  client: canopy's own GitHub programs, `packages/canopy-github` (D003), are separate programs it runs as commands.
+  The harness reaches those systems only through the agent runtime's MCP servers and the commands its config names,
+  and knows nothing about Jira or GitHub beyond strings in config and prompts.
 
 ## Formatting
 

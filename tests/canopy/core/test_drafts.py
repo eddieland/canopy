@@ -18,6 +18,7 @@ from tests.canopy.helpers import (
     approving,
     dispatch_in_tick,
     dispatch_refused,
+    posting,
     present,
     prompt_of,
     run_drafting,
@@ -39,7 +40,8 @@ def refused(conn: sqlite3.Connection, run: sqlite3.Row) -> list[tuple[int, str]]
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_under_post_a_workers_drafts_are_stored_nowhere(conn: sqlite3.Connection) -> None:
+def test_under_post_a_workers_drafts_are_stored_nowhere(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    posting(canopy_env)
     run = run_drafting(conn, [THREAD])
     assert run["status"] == "done"
     assert all_drafts(conn) == []
@@ -159,6 +161,7 @@ def test_an_override_without_drafts_serves_under_post_and_is_refused_under_appro
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
     (overrides / "worker-implement.md").write_text("Work on {{KEY}}, labels {{LABELS}}. Reply on the PR.\n")
+    posting(canopy_env)
     assert dispatch_in_tick(conn, *WORK).code == 0
     # Ended, so the next dispatch is refused for its prompt alone.
     conn.execute("UPDATE runs SET status = 'crashed', ended_at = 'x' WHERE status = 'running'")

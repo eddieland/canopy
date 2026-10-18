@@ -203,7 +203,7 @@ def test_an_override_without_the_operator_messages_fails_closed_once_there_are_s
     # would drop what the operator said, so the dispatch is refused instead (D093).
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
-    (overrides / "worker-implement.md").write_text("Implement {{KEY}} if it carries {{LABELS}}.\n")
+    (overrides / "worker-implement.md").write_text("Implement {{KEY}} if it carries {{LABELS}}.\n{{DRAFTS}}\n")
     if replied:
         db.touch_ticket(conn, KEY, str(canopy_env.root))
         reply(conn, GO_AHEAD)

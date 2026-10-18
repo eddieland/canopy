@@ -90,7 +90,7 @@ def test_an_override_without_the_placeholder_fails_closed_once_instructions_are_
         instruct(canopy_env, FIXUP)
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir(parents=True)
-    (overrides / "worker-implement.md").write_text("Implement {{KEY}} if it carries {{LABELS}}.\n")
+    (overrides / "worker-implement.md").write_text("Implement {{KEY}} if it carries {{LABELS}}.\n{{DRAFTS}}\n")
     code, decisions = dispatch_in_tick(conn, *IMPLEMENT)
     if not instructed:
         assert code == 0, decisions

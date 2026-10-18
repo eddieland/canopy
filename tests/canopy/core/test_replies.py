@@ -55,6 +55,7 @@ def test_under_approve_a_prompt_asks_for_drafts(
 
 
 def test_under_post_nothing_is_required_and_drafts_render_empty(canopy_env: CanopyEnv) -> None:
+    canopy_env.write_private('[trust]\nreview_replies = "post"\n')
     cfg = load(canopy_env.root, canopy_env.user_file)
     rendered = present(replies.render(cfg, RunKind.RESUME, private=False))
     assert (rendered.mode, rendered.ticket_drafts, rendered.required) == (ReplyMode.POST, False, ())

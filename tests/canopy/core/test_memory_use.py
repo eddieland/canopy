@@ -118,7 +118,9 @@ def test_a_note_written_at_use_supersedes_by_key(canopy_env: CanopyEnv, conn: sq
 def test_at_use_an_override_without_the_notes_is_refused(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
-    (overrides / "worker-implement.md").write_text("Work on {{KEY}}, labels {{LABELS}}.\n{{MEMORY_CONTRACT}}\n")
+    (overrides / "worker-implement.md").write_text(
+        "Work on {{KEY}}, labels {{LABELS}}.\n{{MEMORY_CONTRACT}}{{DRAFTS}}\n"
+    )
     with_memory(canopy_env, ticket_notes="record")
     assert dispatch_in_tick(conn, *WORK).code == 0
     conn.execute("UPDATE runs SET status = 'crashed', ended_at = 'x' WHERE status = 'running'")

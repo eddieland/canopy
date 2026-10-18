@@ -302,9 +302,13 @@ def test_list_and_show_print_each_draft_with_its_thread_and_hash(
 def test_status_says_how_replies_go_and_how_many_drafts_wait(
     canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    canopy_env.write_private('[trust]\nreview_replies = "post"\n')
     capsys.readouterr()
     assert operator("status") == 0
     assert "Review replies" not in capsys.readouterr().out
+    canopy_env.private_file.unlink()
+    assert operator("status") == 0
+    assert "Review replies: approve, workers draft their comments for you\n" in capsys.readouterr().out
     drafted_run(canopy_env, conn, github_state, [thread(501), thread(502)])
     capsys.readouterr()
     assert operator("status") == 0
@@ -312,4 +316,20 @@ def test_status_says_how_replies_go_and_how_many_drafts_wait(
     assert (
         "Review replies: approve, workers draft their comments for you; 2 drafts wait on you: `canopy draft list`"
         in out
+    )
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_the_next_resume_is_told_what_the_operator_sent(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path
+) -> None:
+    run_id = drafted_run(canopy_env, conn, github_state, [thread(501)])
+    assert operator("draft", "send", f"run:{run_id}", hashed(conn, run_id, 1)) == 0
+    [sent] = all_drafts(conn)
+    resume = ("--label", "agent-ready-tester", "--kind", "resume", "--reason", "review")
+    later = run_drafting(conn, [], *resume)
+    text = (canopy_env.state_dir / "runs" / f"{later['id']}.prompt").read_text()
+    assert (
+        f"The operator already sent these through canopy, unmarked, as their own: {PR}: comments "
+        f"{sent.sent_comment_id}, reviews {sent.sent_review_id}." in text
     )
