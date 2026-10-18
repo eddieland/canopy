@@ -6,19 +6,24 @@ fixture (`tests/canopy/scenario_helpers.py`); these cover the half only a real r
 runtime's permissions above all.
 
 Most came from milestone acceptance criteria that were closed on real use rather than by a dedicated run (ROADMAP,
-2026-10-13). Each names the milestone it came from, which says why the behavior exists.
+2026-10-13). Each names the milestone it came from, which says why the behavior exists. A scenario's number stays
+with it; one retired is listed at the end and its number is not given out again.
 
-Run the ones that touch what changed: the canaries after an OpenCode upgrade, a lifecycle scenario after a change to
-the prompt or the guards it relies on, the install scenarios before a release. A scenario that fails is a bug: file an
-issue with the tick id, and its decisions (`canopy decisions TICK`). A run that measures something, such as spend or
-latency, goes in `MEASUREMENTS.md` as a dated section.
+A scenario earns its place by checking something that daily use would not show and the tests with the fakes cannot:
+a permission, a judgment the operator rarely sees, a path that needs a failure staged, a real system other than the
+tracker and GitHub. One that real use exercises every day, or whose real half has been measured, is retired.
+
+They are grouped by when to run them: the canaries after an OpenCode upgrade, the release checks before a release, a
+live check after a change to the area it names or the prompt and guards it relies on, and a measurement when its entry
+says. A scenario that fails is a bug: file an issue with the tick id, and its decisions (`canopy decisions TICK`). A
+run that measures something, such as spend or latency, goes in `MEASUREMENTS.md` as a dated section.
 
 Toy repositories to run them against, apart from real work and cheap to reset, are planned in `TOY_REPOS.md`.
 
 ## Canaries
 
-Opt-in tests that run a real model under the pinned OpenCode. Run all of them after any OpenCode upgrade, and before
-relying on a permission they check.
+What canopy relies on in the pinned OpenCode: its permissions, its output, and how it streams. Run all of them after
+any OpenCode upgrade, and before relying on a permission they check.
 
 - **S1. The OpenCode canary** (M1, M7, M11, M16). `CANOPY_OPENCODE_CANARY=1 uv run pytest
   tests/canopy/test_opencode_canary.py`, with `CANOPY_OPENCODE_CANARY_MODEL` to pick a model. Expect every test to
@@ -37,13 +42,20 @@ relying on a permission they check.
   `step_finish`'s `output` and `reasoning` (`core/agent_output.py`), which holds only while `output` leaves reasoning
   out. Check that OpenCode's `session.ts` still sets `output: outputTokens - reasoningTokens`; aide found the overlap
   differed in earlier releases (PRIOR_ART).
+- **S30. A session's transcript** (M15, M27). Open a worker run's page and a tick's page. Expect the tool calls
+  `opencode export <id>` shows for the same session id, and, for a failed run, its runtime error.
+- **S38. A running run, watched live** (M27, taken on request 2026-10-15). While a worker runs under the pinned
+  OpenCode, open its row on the runs page and its run's page. Expect its latest tool call on the row within seconds of
+  the call ending, its cost moving at each model call, and its transcript growing as it goes, matching
+  `opencode export <id>` for what it has done so far; and `canopy status` naming the same call. A row that shows
+  nothing until the run ends means OpenCode is buffering its events, not printing them as they happen.
 - **S45. Sandboxed runs keep you logged in** (M26). Confirmed in OpenCode's source (1.19.3), not in a run. With
   every agent command sandboxed (`docs/SANDBOX.md`) and an OAuth login in your OpenCode, a provider's and a remote
   MCP server's, run the loop past the login's expiry. Expect a run's log to say `canopy-sandbox: copied back the
   refreshed tokens of ...`, and your own OpenCode, and the overseer's, still logged in after. After an OpenCode
   upgrade, check that `auth.json` and `mcp-auth.json` still have the shapes DESIGN §24 (Logins) names.
 
-## Install and setup
+## Before a release
 
 - **S5. A second person installs from README** (M5). Someone who has not used canopy follows README's install steps
   without help, then runs it against a ticket of their own. Expect it to work in five steps; file their friction as
@@ -61,8 +73,14 @@ relying on a permission they check.
   `implement` worker to find the seeded file in its slot and its `bazel test` to hit the disk cache another slot
   filled. A `setup_cmd` that exits 1 ends the run `crashed`, with no worker started and the slot returned. A slot's
   Bazel server exits once idle for `--max_idle_secs` after its run.
+- **S28. Served on loopback and a private address** (M20). `canopy loop` serves a real journal to a browser on
+  loopback and on a private address; the worktrees page reads the real pools.
 
-## A ticket's lifecycle
+## Live checks
+
+Run the ones in the area a change touches, or that rely on a prompt or guard it changes.
+
+### A ticket's lifecycle
 
 - **S8. Label to PR** (M2). Label a real ticket. Expect it to reach an open PR unattended, its slot returned, and a
   correct `runs` row. Kill the worker with SIGKILL mid-run: the next tick marks it `crashed` and returns the slot.
@@ -76,13 +94,11 @@ relying on a permission they check.
 - **S11. A blocked question** (M3, M22). Write a ticket that tells the worker to ask first. Expect one concrete question
   on the ticket and `needs-human`. A reply from an account not in `trust.authorized_repliers` does not resume it; an
   authorized one does, and so does `canopy reply` or the web UI's reply, with nothing of it on the ticket.
-- **S12. Stacked tickets** (M4). Two tickets, the second blocked by the first. Expect the second to wait, then be
-  dispatched with `--base` on the first's branch once its PR is open and green. Then merge the first and watch what
-  happens to the second's PR: nothing in canopy checks it.
-- **S41. A plan a week later** (M44). A week after a ticket's plan was approved and implemented, open the ticket's
-  page. Expect every plan it had still there, the approved one marked, with its comments.
+- **S12. Stacked tickets** (M4, M56). Two tickets, the second blocked by the first. Expect the second to wait, then be
+  dispatched with `--base` on the first's branch once its PR is open and green. Then merge the first: expect a
+  `resume (retarget)` for the second, without `--base`, that points its PR at the repository's base branch.
 
-## Several repositories
+### Several repositories
 
 - **S13. One queue over two repositories** (M6). In a two-repository workspace, label one ticket in each. Expect both
   to reach open PRs from one queue, with every worktree under the workspace root.
@@ -92,18 +108,16 @@ relying on a permission they check.
   split in a comment. Expect two linked children, the second blocked by the first, with no queue label on either, and
   nothing dispatched for them until you label them; then they are worked in order, one PR each.
 
-## Private tickets and the conversation
+### Private tickets and trust
 
 - **S16. A private ticket** (M18). After S3, `canopy start` a real ticket. Expect its worker's question in
   `canopy status`, `canopy show`, and the web UI; answer it from the CLI; expect the PR to land for review and the
   ticket to show nothing canopy wrote.
-- **S17. Mirrored comments** (M19). Over a working session, expect each new tracker comment mirrored into the journal
-  once (`canopy show REF`), and compare a tick's cost before and after mirroring.
 - **S18. Untrusted and trusted reviewers** (M22). A review bot's comment on a loop PR waits as `untrusted_review` with
   no dispatch. A reply from the web UI resumes it, with the reply as the worker's instruction. A comment from someone in
   `trust.trusted_reviewers` resumes it without a reply.
 
-## Reviews
+### Reviews
 
 - **S19. A finding, resumed and re-reviewed** (M11). With `review.agent_prs` on, a ticket's PR is reviewed once its
   checks pass; a finding goes back through `resume --review-run`, the new commit is reviewed again, and the ticket
@@ -120,12 +134,12 @@ relying on a permission they check.
   review or the message on the PR or the ticket.
 - **S39. A coworker's PR, reviewed on request** (M42). With no `review.query` and `review.agent_prs` off, ask for one
   coworker's open PR to be reviewed from the CLI (`canopy start URL --review`), and another, in a second repository of
-  the workspace, from the web UI's pull requests page. Expect each reviewed at its head, in its own repository, and
+  the workspace, from the web UI's reviews page. Expect each reviewed at its head, in its own repository, and
   its request to end `reviewed` (`canopy show URL`). Ask for one more on a PR that then merges before the next tick,
   and one on a PR in a repository the workspace does not have: expect the overseer's `canopy review end` to end them
   `merged` and `unknown_repo`. Nothing is posted on any PR.
 
-## Chores and notifications
+### Chores and notifications
 
 - **S22. A build-health chore over several days** (M9, `examples/chores/build-health.md`). Expect it never to start
   sooner than `every_minutes` after its previous run, and the `decisions` table to show the overseer following `when`.
@@ -134,6 +148,10 @@ relying on a permission they check.
   next tick.
 - **S23. Answer a chore from the browser** (M23). Answer one of S22's findings from the web UI's attention list; expect
   the chore's next run's prompt to carry the note.
+- **S42. Try a chore from the browser** (M23). With `canopy loop` running, press Try now on S22's chore's page. Expect
+  its run in Runs at once, running, with no tick; the page to follow it to its end through the stream; its
+  findings on the attention list; and the overseer's next run of it `not_due` counting from the try. Stop the loop
+  while the try runs: the run goes on, and ends recorded.
 - **S24. The desktop sink** (M10). Expect one ticket's blocked question and one attention item as desktop
   notifications, once each.
 - **S25. The Slack sink** (M10). On a real channel, one ticket's dispatch, its worker's question, and its PR each reach
@@ -142,25 +160,28 @@ relying on a permission they check.
   was missed arrives in one message. A digest arrives on its interval, a quiet one included. With a bot token and
   `--threads`: the dispatch starts the ticket's thread, its question is a reply also shown in the channel, a chore's
   run starts its own thread, and the next day's first post about the ticket starts a new one.
-- **S42. Try a chore from the browser** (M23). With `canopy loop` running, press Try now on S22's chore's page. Expect
-  its run in Runs at once, running, with no tick; the page to follow it to its end through the stream; its
-  findings on the attention list; and the overseer's next run of it `not_due` counting from the try. Stop the loop
-  while the try runs: the run goes on, and ends recorded.
 
-## The loop
+### Notices and search
 
-- **S26. A watched session** (M12). `canopy loop` against the real queue for a working session. Expect each tick's
-  block to be legible. Ctrl-C during a tick stops the loop when that tick ends; Ctrl-C during the wait stops it at
-  once. With a worker running, the loop then names it and waits for it to end, and a second Ctrl-C leaves it running.
+- **S37. A notice during a CI outage** (M35). During a CI outage, real or staged (a check that fails fetching a
+  dependency), set a notice from the CLI (`canopy notice 'TEXT' --for 1h`) or the web UI's settings page. Expect the
+  banner on every page and the line in `canopy status`; the next worker's summary to take the notice into account; the
+  overseer to record `wait` for the `ci_red` unit whose check the outage failed, naming the notice, with no `resume`
+  for it; once the notice lapses, `notice_rerun` on the attention list until the operator reruns the check, and no
+  `resume` for it before that newer run; and the next worker's prompt after the lapse to carry `None.` for the notice.
+- **S32. Search** (M31). After a week of `canopy loop`, type into the web UI's search box a word of a ticket's title,
+  then a phrase from a run's summary. Expect the ticket, by its branch, and the run's report among the hits, each
+  opening the page that holds it. Then search for something nothing matches: expect the answer in under a second, and
+  time `GET /search` in the browser's network tab. Over a quarter of a second is the cue to revisit FTS5 (DESIGN §22).
+
+## Measurements
+
+Each records its numbers in `MEASUREMENTS.md`, as a dated section.
+
 - **S27. An overnight loop** (M21). Leave `canopy loop` running overnight. Expect, in its output and log (`loop waits`
   lines), waits reaching `loop.idle_max_minutes` after a quiet evening, back at `loop.interval_minutes` within one tick
   of the first morning activity, and each run's end followed by a tick within a couple of minutes. Re-measure
   afterwards with MEASUREMENTS' prompt; M39 waits on the result.
-- **S31. Reloading config** (M12). With `canopy loop` running in a terminal, change `capacity.max_workers` and
-  `kill -HUP` the loop during a tick, then press Reload on the web UI's settings page during the wait. Expect each tick
-  to finish first, `config reloaded  capacity.max_workers changed` under it, and the next tick's footer to count to the
-  new limit. Then close the terminal window: expect the loop gone, as before. Under `nohup`, expect it to outlive the
-  window and still reload on `kill -HUP`.
 - **S33. The overseer's prompt from the cache** (M34). Run two `canopy tick --dry-run` a minute apart, and read each
   tick's first model call from the journal: `SELECT id, tokens_first_call, tokens_first_cache_write, definitions_digest
   FROM ticks ORDER BY id DESC LIMIT 2` (DESIGN §13; the first `step_finish` event in `<state_dir>/ticks/<id>.log` holds
@@ -168,10 +189,9 @@ relying on a permission they check.
   first call, nearly all read from the cache, to hold the prompt, the provider skill, and the tools; the first tick,
   cold, writes them all. Over a longer stretch, `canopy spend --json`'s `first_calls` gives each snapshot's median first
   call and cold share. Run it after a change to the overseer's definition or prompt, or an OpenCode upgrade, which may
-  change where OpenCode puts an agent's body. Then, after a working session of `canopy loop`, re-measure with
-  MEASUREMENTS' prompt: expect the median tick that starts within the cache's lifetime of the one before at least 15%
-  cheaper than on 2026-10-13 at the same price, with no change in what the ticks decided. If the second tick's write
-  still holds the prompt, M34's change did not take: file an issue. Record the numbers in `MEASUREMENTS.md`.
+  change where OpenCode puts an agent's body. If the second tick's write still holds the prompt, M34's change did not
+  take: file an issue. Record the numbers in `MEASUREMENTS.md`. M34's saving on a warm tick was measured on 2026-10-15
+  (F23).
 - **S34. Overseer reliability re-measured** (M28). After a working session of `canopy loop` against the real queue,
   re-measure with MEASUREMENTS' prompt (Re-measuring). Expect no tick that ran the overseer without a working
   `canopy` (each such tick closes `canopy_unavailable` with its attention item instead), no `overseer_failed` tick
@@ -182,12 +202,6 @@ relying on a permission they check.
   from a query on the journal over the same UTC days: `SELECT sum(cost_usd) FILTER (WHERE idle = 1) / sum(cost_usd)
   FROM ticks WHERE dry_run = 0 AND status != 'running' AND started_at >= date('now', '-6 days')`, the ticks that ended,
   as the share counts. Expect all three to agree, and each day's total on the page to match the CLI's.
-- **S37. A notice during a CI outage** (M35). During a CI outage, real or staged (a check that fails fetching a
-  dependency), set a notice from the CLI (`canopy notice 'TEXT' --for 1h`) or the web UI's settings page. Expect the
-  banner on every page and the line in `canopy status`; the next worker's summary to take the notice into account; the
-  overseer to record `wait` for the `ci_red` unit whose check the outage failed, naming the notice, with no `resume`
-  for it; once the notice lapses, `notice_rerun` on the attention list until the operator reruns the check, and no
-  `resume` for it before that newer run; and the next worker's prompt after the lapse to carry `None.` for the notice.
 - **S40. What each agent's first request holds** (M34's prefix, taken on request 2026-10-17). After an OpenCode
   upgrade, a new MCP server or toolset, or a change under `agents/`, record one short session of each canopy agent
   against a recorder on loopback and split its first request by source, as MEASUREMENTS' 2026-10-17 section says
@@ -196,20 +210,15 @@ relying on a permission they check.
   difference only where the change made one. A body the split cannot find means OpenCode moved it. Record the tables
   in `MEASUREMENTS.md`.
 
-## The web UI
+## Retired
 
-- **S28. Served on loopback and a private address** (M20). `canopy loop` serves a real journal to a browser on
-  loopback and on a private address; the worktrees page reads the real pools.
-- **S29. Why a ticket was or was not dispatched** (M24). After a day of the loop, find in the browser why a ticket was
-  or was not dispatched in a given tick; expect it to match `canopy decisions`.
-- **S30. A session's transcript** (M15, M27). Open a worker run's page and a tick's page. Expect the tool calls
-  `opencode export <id>` shows for the same session id, and, for a failed run, its runtime error.
-- **S38. A running run, watched live** (M27, taken on request 2026-10-15). While a worker runs under the pinned
-  OpenCode, open its row on the runs page and its run's page. Expect its latest tool call on the row within seconds of
-  the call ending, its cost moving at each model call, and its transcript growing as it goes, matching
-  `opencode export <id>` for what it has done so far; and `canopy status` naming the same call. A row that shows
-  nothing until the run ends means OpenCode is buffering its events, not printing them as they happen.
-- **S32. Search** (M31). After a week of `canopy loop`, type into the web UI's search box a word of a ticket's title,
-  then a phrase from a run's summary. Expect the ticket, by its branch, and the run's report among the hits, each
-  opening the page that holds it. Then search for something nothing matches: expect the answer in under a second, and
-  time `GET /search` in the browser's network tab. Over a quarter of a second is the cue to revisit FTS5 (DESIGN §22).
+Retired 2026-10-18. Daily use exercises each, and the tests with the fakes hold the harness's half.
+
+- **S17. Mirrored comments** (M19). The overseer mirrors every ticket's new comments in daily use; the cost before and
+  after was a one-time comparison of a change long shipped.
+- **S26. A watched session** (M12). The loop is the operator's daily surface; Ctrl-C in each state is
+  `tests/canopy/loop/test_loop.py`'s.
+- **S29. Why a ticket was or was not dispatched** (M24). The web UI reads the same decisions `canopy decisions` prints.
+- **S31. Reloading config** (M12). A reload, a closed terminal, and `nohup` are `tests/canopy/loop/test_loop.py`'s and
+  `tests/canopy/infra/test_hangup.py`'s.
+- **S41. A plan a week later** (M44). Plans are files canopy never removes (DESIGN §25), so a week changes nothing.

@@ -1,18 +1,18 @@
 """The attention list rendered to `attention.md`, and its diff piped to `notify.cmd` (DESIGN §6, §14)."""
 
 import os
-import sqlite3
 from datetime import UTC, datetime, timedelta
+from itertools import starmap
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
-from canopy.cli.main import main
 from canopy.core import db
 from canopy.core.config import ConfigError, load
 from canopy.loop import attention
-from tests.canopy.helpers import messages, overseer_does, overseer_records
+from tests.canopy.helpers import messages, waits
+from tests.canopy.scenario_helpers import Scenario, raises, skips_tick
 from tests.conftest import CanopyEnv
 
 NOW = datetime(2026, 9, 24, 12, 0, tzinfo=UTC)
@@ -48,111 +48,83 @@ def test_render_empty() -> None:
     assert attention.render([], NOW) == "# canopy attention\n\nNothing needs you. Updated 2026-09-24 12:00 UTC.\n"
 
 
-def test_every_tick_rewrites_attention_md(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
+def recorded(*items: tuple[str, str]) -> list[list[str]]:
+    """The overseer records each (key, reason) as needing attention, its detail `<key> detail`."""
+    return list(starmap(raises, items))
+
+
+def test_every_tick_rewrites_attention_md(scenario: Scenario, canopy_env: CanopyEnv) -> None:
     path = canopy_env.state_dir / "attention.md"
-    with overseer_records(("PROJ-3", "needs_reviewer")):
-        assert main(["tick", "--dry-run"]) == 0
+    scenario.tick(*recorded(("PROJ-3", "needs_reviewer")), dry_run=True)
     text = path.read_text()
     assert "## needs_reviewer\n\n- PROJ-3, " in text
     assert text.endswith(": PROJ-3 detail\n")
     assert path.stat().st_mode & 0o777 == 0o600
 
-    with overseer_records(waiting=("PROJ-3",)):
-        assert main(["tick", "--dry-run"]) == 0
+    scenario.tick(*waits("PROJ-3"), dry_run=True)
     assert "Nothing needs you." in path.read_text()
 
 
-def test_notify_gets_new_and_resolved_items_once(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    notified: Path,
-    conn: sqlite3.Connection,
-) -> None:
+def test_notify_gets_new_and_resolved_items_once(scenario: Scenario, canopy_env: CanopyEnv, notified: Path) -> None:
     listing = f"Full list: {canopy_env.state_dir / 'attention.md'}\n"
-    with overseer_records(("PROJ-3", "needs_reviewer"), ("PROJ-4", "ready_to_merge")):
-        assert main(["tick"]) == 0
-        assert messages(notified) == [
-            "canopy attention: 2 new, 0 resolved\n"
-            "+ PROJ-3 needs_reviewer: PROJ-3 detail\n"
-            "+ PROJ-4 ready_to_merge: PROJ-4 detail\n" + listing
-        ]
+    both = recorded(("PROJ-3", "needs_reviewer"), ("PROJ-4", "ready_to_merge"))
+    scenario.tick(*both)
+    assert messages(notified) == [
+        "canopy attention: 2 new, 0 resolved\n"
+        "+ PROJ-3 needs_reviewer: PROJ-3 detail\n"
+        "+ PROJ-4 ready_to_merge: PROJ-4 detail\n" + listing
+    ]
 
-        # Still open, even with a reworded detail: nothing new to say.
-        reworded = [
-            ["canopy", "attention", "PROJ-3", "needs_reviewer", "--detail", "reworded"],
-            ["canopy", "attention", "PROJ-4", "ready_to_merge", "--detail", "PROJ-4 detail"],
-        ]
-        with overseer_does(*reworded):
-            assert main(["tick"]) == 0
-            assert len(messages(notified)) == 1
+    # Still open, even with a reworded detail: nothing new to say.
+    scenario.tick(raises("PROJ-3", "needs_reviewer", "reworded"), raises("PROJ-4", "ready_to_merge"))
+    assert len(messages(notified)) == 1
 
-    with overseer_records(("PROJ-4", "ready_to_merge"), waiting=("PROJ-3",)):
-        assert main(["tick"]) == 0
+    scenario.tick(*recorded(("PROJ-4", "ready_to_merge")), *waits("PROJ-3"))
     assert messages(notified)[1] == "canopy attention: 0 new, 1 resolved\n- PROJ-3 needs_reviewer\n" + listing
 
     # An item that comes back after going away is new again.
-    with overseer_records(("PROJ-3", "needs_reviewer"), ("PROJ-4", "ready_to_merge")):
-        assert main(["tick"]) == 0
+    scenario.tick(*both)
     assert messages(notified)[2].startswith("canopy attention: 1 new, 0 resolved\n+ PROJ-3 needs_reviewer")
-    assert sorted(str(r[0]) for r in conn.execute("SELECT ticket_key FROM notifications")) == ["PROJ-3", "PROJ-4"]
+    rows = scenario.conn.execute("SELECT ticket_key FROM notifications")
+    assert sorted(str(r[0]) for r in rows) == ["PROJ-3", "PROJ-4"]
 
 
-def test_failed_notify_is_retried_next_tick(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    notified: Path,
-    conn: sqlite3.Connection,
-) -> None:
-    with overseer_records(("PROJ-3", "needs_reviewer")):
-        with mock.patch.dict(os.environ, {"NOTIFY_EXIT": "1"}):
-            assert main(["tick"]) == 0  # a failed notification does not fail the tick
-        assert conn.execute("SELECT count(*) FROM notifications").fetchone()[0] == 0
-        log = (canopy_env.state_dir / "canopy.log").read_text()
-        assert "notify command failed" in log
+def test_failed_notify_is_retried_next_tick(scenario: Scenario, canopy_env: CanopyEnv, notified: Path) -> None:
+    needs_reviewer = recorded(("PROJ-3", "needs_reviewer"))
+    with mock.patch.dict(os.environ, {"NOTIFY_EXIT": "1"}):
+        scenario.tick(*needs_reviewer)  # a failed notification does not fail the tick
+    assert scenario.conn.execute("SELECT count(*) FROM notifications").fetchone()[0] == 0
+    assert "notify command failed" in (canopy_env.state_dir / "canopy.log").read_text()
 
-        assert main(["tick"]) == 0
+    scenario.tick(*needs_reviewer)
     assert [m.splitlines()[1] for m in messages(notified)] == ["+ PROJ-3 needs_reviewer: PROJ-3 detail"] * 2
-    assert conn.execute("SELECT count(*) FROM notifications").fetchone()[0] == 1
+    assert scenario.conn.execute("SELECT count(*) FROM notifications").fetchone()[0] == 1
 
 
 def test_a_failed_tick_leaves_the_list_and_notifies_nothing_new(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, notified: Path
+    scenario: Scenario, canopy_env: CanopyEnv, notified: Path
 ) -> None:
-    with overseer_records(("PROJ-3", "needs_reviewer")):
-        assert main(["tick"]) == 0
-        with overseer_does(result="gave up"):
-            assert main(["tick"]) == 1
+    scenario.tick(*recorded(("PROJ-3", "needs_reviewer")))
+    scenario.tick(result="gave up", code=1)
     assert "- PROJ-3, " in (canopy_env.state_dir / "attention.md").read_text()
     assert len(messages(notified)) == 1
 
 
 def test_a_tick_wide_skip_leaves_the_list_and_notifies_nothing(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    notified: Path,
-    conn: sqlite3.Connection,
-    capsys: pytest.CaptureFixture[str],
+    scenario: Scenario, canopy_env: CanopyEnv, notified: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    with overseer_records(("PROJ-3", "needs_reviewer")):
-        assert main(["tick", "--dry-run"]) == 0
-        skip = [["canopy", "decide", "skip", "--rationale", "mcp_unavailable: github"]]
-        with overseer_does(*skip):
-            capsys.readouterr()
-            assert main(["tick", "--dry-run"]) == 1
+    scenario.tick(*recorded(("PROJ-3", "needs_reviewer")), dry_run=True)
+    capsys.readouterr()
+    skipped = scenario.tick(skips_tick("mcp_unavailable: github"), dry_run=True, code=1)
     assert capsys.readouterr().out == "tick 2: skipped: dry run; overseer skipped the tick: mcp_unavailable: github\n"
 
-    assert conn.execute("SELECT status FROM ticks WHERE id = 2").fetchone()[0] == "skipped"
-    [still] = attention.current(conn)
-    assert (still.ticket_key, still.reason) == ("PROJ-3", "needs_reviewer")
+    assert skipped.tick.status == "skipped"
+    assert scenario.attention() == [("PROJ-3", "needs_reviewer")]
     assert "- PROJ-3, " in (canopy_env.state_dir / "attention.md").read_text()
     assert len(messages(notified)) == 1  # the first tick's; nothing resolved
 
     # The overseer sees the world again and still records the item: it was never gone, so it is not new.
-    with overseer_records(("PROJ-3", "needs_reviewer")):
-        assert main(["tick", "--dry-run"]) == 0
+    scenario.tick(*recorded(("PROJ-3", "needs_reviewer")), dry_run=True)
     assert len(messages(notified)) == 1
 
 

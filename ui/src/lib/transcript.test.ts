@@ -8,6 +8,7 @@ import {
     callLine,
     duration,
     elapsed,
+    endedOn,
     findQueryOf,
     hitsIn,
     outcome,
@@ -96,6 +97,40 @@ describe('tally and startOf', () => {
     it('starts at the first entry with a time', () => {
         expect(startOf(entries)).toBe('2026-10-08T10:31:00Z')
         expect(startOf([])).toBeNull()
+    })
+})
+
+const runtimeError = (message: string): TranscriptEntry => ({
+    kind: 'error',
+    at: '2026-10-08T10:33:00Z',
+    name: 'APIError',
+    message,
+    call: 2,
+})
+
+describe('endedOn', () => {
+    const refused = shell('canopy decide ABC-1 implement', 'Error: decide refused (capacity): every slot is taken')
+
+    it("is the last runtime error, its message's first line, over any failed call after it", () => {
+        const entries = [
+            runtimeError('first'),
+            tool('error', { output: 'ENOENT' }),
+            runtimeError('Rate limited: retry after 60s\n    at fetch (provider.ts:12)'),
+        ]
+        expect(endedOn(entries)).toEqual({ i: 2, entry: entries[2], line: 'Rate limited: retry after 60s' })
+        expect(endedOn([runtimeError('stopped'), tool('error', { output: 'ENOENT' })])?.i).toBe(0)
+    })
+
+    it('is else the last failed or refused tool call, with how it ended, else what it did', () => {
+        const failed = tool('error', { output: 'ENOENT: no such file\nat open' })
+        expect(endedOn([failed, tool('completed')])).toEqual({ i: 0, entry: failed, line: 'ENOENT: no such file' })
+        expect(endedOn([failed, refused])?.line).toBe('decide refused (capacity): every slot is taken')
+        expect(endedOn([tool('error', { title: 'Runs the tests' })])?.line).toBe('Runs the tests')
+    })
+
+    it('is null for a session that holds neither', () => {
+        expect(endedOn([tool('completed'), shell('ls', 'a\nb')])).toBeNull()
+        expect(endedOn([])).toBeNull()
     })
 })
 
