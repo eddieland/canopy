@@ -60,6 +60,8 @@ test('the memory page heads each tier with what reads it, and shows what a worke
         'lessons: recordingRecording only. Workers propose lessons and you may promote them; no run reads them.',
     )
     await expect(lessons.getByTestId('memory-lessons-count')).toHaveText('1')
+    // Recording, so the lesson in force reads as recorded: no run reads it.
+    await expect(lessons.getByTestId('memory-8').getByTestId('memory-stand')).toHaveText('recorded')
     // What every run would be served is folded until asked for.
     await expect(lessons.getByTestId('memory-digest')).toHaveCount(0)
     await lessons.getByRole('button', { name: 'Show what every run would be served at use' }).click()

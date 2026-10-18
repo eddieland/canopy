@@ -125,6 +125,14 @@ describe('memoryStand', () => {
         expect(memoryStand({ ...lesson, review_at: '2026-10-01T12:00:00Z', wrong_run_id: 44 }, now)).toBe('wrong')
     })
 
+    it('reads a memory in force under a tier that only records as recorded, never active, wrong, or due', () => {
+        const wrongAndDue = { ...lesson, review_at: '2026-10-01T12:00:00Z', wrong_run_id: 44 }
+        expect(memoryStand(lesson, now, 'record')).toBe('recorded')
+        expect(memoryStand(wrongAndDue, now, 'record')).toBe('recorded')
+        expect(memoryStand({ ...lesson, status: 'pending' }, now, 'record')).toBe('pending')
+        expect(memoryStand(lesson, now, 'use')).toBe('active')
+    })
+
     it('keeps the journal’s status for a memory out of force or waiting', () => {
         expect(memoryStand({ ...lesson, status: 'pending' }, now)).toBe('pending')
         expect(memoryStand({ ...lesson, status: 'invalid', wrong_run_id: 44 }, now)).toBe('invalid')
