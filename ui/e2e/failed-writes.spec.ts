@@ -59,7 +59,7 @@ function tops(ids: readonly string[]): number[] {
 }
 
 test('a refused Stop says why and moves nothing below the Work panel', async ({ page }) => {
-    // Panels rise into place as a page opens; with motion reduced they rest where they end, so nothing moves on its own.
+    // Panels rise into place as a page opens; with motion reduced they rest where they end, and nothing moves alone.
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await page.route('**/api/tickets/ABC-102/stop', (route) =>
         route.fulfill({ status: 409, json: { detail: { guard: 'not_started', reason: 'ABC-102 was not started' } } }),
