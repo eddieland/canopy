@@ -358,6 +358,9 @@ class TicketDetail(_Model):
     """The latest 20 decisions about it across ticks, newest first: why the loop did, or did not, work it."""
     cost: CostTotal
     """What every run of it and every review run naming it cost; not the overseer, whose ticks serve the workspace."""
+    drafts: list[Draft] = []
+    """Its own drafts (DESIGN §29), the comments its runs would have posted on it, the newest run's first; at most
+    10."""
 
 
 class PlanSummary(_Model):

@@ -391,6 +391,17 @@ export async function refreshThreads(client: QueryClient, url: string): Promise<
     ])
 }
 
+/**
+ * After a verb on a ticket's own drafts: read the ticket and the attention list again now, as after a PR's drafts
+ * (`refreshThreads`). The attention item stays until the next tick, as an answered one does.
+ */
+export async function refreshTicketDrafts(client: QueryClient, key: string): Promise<void> {
+    await Promise.all([
+        client.invalidateQueries({ queryKey: keys.ticket(key) }),
+        client.invalidateQueries({ queryKey: keys.attention }),
+    ])
+}
+
 /** After an action on a ticket: read it again now, rather than wait for the stream to say it changed. */
 export function refreshTicket(client: QueryClient, key: string): Promise<void> {
     return client.invalidateQueries({ queryKey: keys.ticket(key) })

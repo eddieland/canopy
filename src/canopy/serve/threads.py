@@ -10,18 +10,16 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from collections.abc import Set as AbstractSet
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal, cast
+from typing import TYPE_CHECKING, Literal
 
 from canopy.core import db, drafts, drafts_manage, records, review_diff
 from canopy.core.vocab import DraftKind, ReviewItem
+from canopy.serve.draft_views import draft
 from canopy.serve.reviews import diff_view
 from canopy.serve.schema import (
     Draft,
     DraftFailure,
-    DraftKindName,
     DraftsSent,
-    DraftStanceName,
-    DraftStatusName,
     PullRequestThreads,
     Thread,
     ThreadComment,
@@ -98,37 +96,6 @@ def known(conn: sqlite3.Connection, url: str) -> bool:
         (url, url),
     ).fetchone()
     return bool(found[0])
-
-
-def draft(conn: sqlite3.Connection, found: records.Draft) -> Draft:
-    """A draft as the API sends it: its text as it stands, named by its hash.
-
-    Returns:
-        The draft.
-    """
-    text = drafts.text_of(conn, found.id)
-    supersedes_edited = conn.execute(
-        "SELECT 1 FROM drafts d JOIN draft_versions v ON v.draft_id = d.id WHERE d.superseded_by = ? AND v.version > 1",
-        (found.id,),
-    ).fetchone()
-    return Draft(
-        run=found.run_id,
-        number=found.number,
-        ticket_key=found.ticket_key,
-        kind=cast("DraftKindName", found.kind.value),
-        status=cast("DraftStatusName", found.status.value),
-        stance=cast("DraftStanceName", found.stance.value) if found.stance is not None else None,
-        comment_id=found.comment_id,
-        thread_id=found.thread_id,
-        issue_url=found.issue_url,
-        why=found.why,
-        text=text.body,
-        hash=drafts_manage.hash_of(text.body),
-        edited=text.version > 1,
-        supersedes_edited=supersedes_edited is not None,
-        sent_url=found.sent_url,
-        created_at=db.parse_time(found.created_at),
-    )
 
 
 def sent(conn: sqlite3.Connection, outcome: drafts_manage.Sent) -> DraftsSent:

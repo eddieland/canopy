@@ -617,7 +617,8 @@ list, an empty state, or a skeleton by hand.
   plan's card (`PlanCard`, `bare`, its parts in the item's panel), with `Approve` and `Open plan`. Memory's items
   (`memory_proposal`, `lesson_review`, `lesson_wrong`): the proposals or lessons they name, with their verbs (above).
   Replies a run drafted (`drafts_waiting`): an outline `Read the drafts on org/repo#N`, a router link to the PR's page,
-  where they sit on their threads; a ticket's own draft names no PR and has none. An item about nothing the page shows
+  where they sit on their threads; for a ticket's own draft, which names no PR, its waiting drafts (`TicketDrafts`,
+  `bare`). An item about nothing the page shows
   whose detail names a `canopy` command to run (`repo_missing`): the command,
   `Copyable`, and nothing to answer. A ticket's item then shows what it is stuck at (below), its conversation, and the
   reply form; on the reasons above the ticket's own verbs (Start or Stop, Forget) are a quiet row under the thread,
@@ -1035,7 +1036,9 @@ list, an empty state, or a skeleton by hand.
   verbs, `sm` buttons each with the CLI's command on hover: `Send` (default) on a waiting draft, outline `Edit` and
   ghost `Drop` on one waiting or unchecked, ghost `Undo` on a dropped one, and a `LinkOut` to a sent one. `Edit` opens
   the text in a `Textarea` with its count against 4,000, `Save` disabled past it. What each verb did goes under it
-  (`Notice`), in `canopy draft`'s words.
+  (`Notice`), in `canopy draft`'s words. A ticket's own drafts (`TicketDrafts`) are a `Drafts for the ticket` panel
+  under the ticket page's grid, shown only when it has any, each card naming the issue it goes to in monospace, as
+  text and never a link, since a worker named it.
 - **Search** sits atop the nav on every page (`SearchBox`, a `SearchField`): a magnifier, the field, and `/` in a
   keycap, its shortcut from anywhere but a text field. While the field holds text, a ghost clear button (`X`, on the
   keycap's `bg-muted` when hovered) takes the keycap's place: it empties the field and keeps the focus there. An empty

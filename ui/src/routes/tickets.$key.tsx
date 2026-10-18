@@ -33,6 +33,7 @@ import { RunsTable } from '@/components/runs-table'
 import { StartTicket } from '@/components/start-ticket'
 import { Chip, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
+import { TicketDrafts } from '@/components/ticket-drafts'
 import { TicketLinks } from '@/components/ticket-links'
 import { WorkingNow } from '@/components/working-now'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
@@ -225,6 +226,8 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     )}
                 </Panel>
             </div>
+            {/* What its runs would have said on it, waiting on the operator to send (DESIGN §29). */}
+            <TicketDrafts ticketKey={ticket.key} drafts={detail.drafts} />
             {planned && planLeads === false && <PlanCard ticketKey={ticket.key} plans={plans} />}
             <TicketMemoryPanel ticketKey={ticket.key} />
         </>
