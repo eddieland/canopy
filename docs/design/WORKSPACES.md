@@ -320,7 +320,7 @@ ticket has one unit.
 A ticket's units are the repositories it has been dispatched to. Each dispatch names its units with `--repo`
 (repeatable, at least one), chosen by the overseer from the ticket, the summaries, and `MAP.md`. An
 `implement` over several repositories is a joint change: one worker, one PR per repository, each linking the others,
-for changes that cannot build or pass tests separately. `fix-ci` and `resume` normally name only the unit needing
+for changes that cannot build or pass tests separately. `resume` normally names only the unit needing
 work.
 
 A later `implement` naming a repository the ticket has no unit in adds one, also after another unit's PR merged: a
@@ -338,9 +338,9 @@ Guards (§8) change as follows:
 - `unknown_repo`: in a workspace, no `--repo`, or one not in the map or with no primary clone; for a split child, any
   repository but the one recorded, or more than one.
 - `bad_slug`: a later `implement` whose `--slug` names another branch than the ticket's.
-- `no_branch`: `fix-ci` and `resume` for a unit with no branch.
+- `no_branch`: `resume` for a unit with no branch.
 - `attempt_limit` counts per unit: a run counts against every unit it covers.
-- `cooldown`: from the end of the latest fix-ci run covering the unit.
+- `cooldown`: a `resume` for CI alone, from the end of the latest run covering the unit that worked on CI (§8).
 - `capacity` counts runs, not slots: a joint run over three repositories is one worker holding three slots.
 - `no_slot`: leases are all or nothing; if any lease fails, slots already leased are returned before the refusal is
   recorded.
@@ -417,7 +417,7 @@ authorizes each (TRUST_MODEL T1).
 The journal records each ticket's units beside its own phase, and the state block shows both; each run's leases, one
 per repository, with the pool that made each; and each split child, written only from a validated split result.
 Attention items carry an optional repository and are identified by ticket, repository, and reason, so two units at
-their fix-ci limit are two items.
+their resume limit are two items.
 
 ### Trust model changes
 

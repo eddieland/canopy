@@ -45,7 +45,7 @@ def ended(
     return run_id
 
 
-def test_a_fix_ci_worker_reads_what_the_implement_before_it_reported(
+def test_a_resume_worker_reads_what_the_implement_before_it_reported(
     canopy_env: CanopyEnv,
     git_pool: GitPool,
     treehouse_state: Path,
@@ -56,7 +56,7 @@ def test_a_fix_ci_worker_reads_what_the_implement_before_it_reported(
         implement = dispatch_and_run(conn, *WORK, runner=runner)
     assert NONE in prompt_of(canopy_env, int(implement["id"]))
 
-    assert dispatch_in_tick(conn, *LABEL, "--kind", "fix-ci", runner=runner).code == 0
+    assert dispatch_in_tick(conn, *LABEL, "--kind", "resume", "--reason", "ci", runner=runner).code == 0
     text = prompt_of(canopy_env, int(last_run(conn)["id"]))
     assert (
         f"## Earlier runs\n\nRun {implement['id']}, `implement`, ended `done` at {implement['ended_at']}.\n"

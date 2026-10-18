@@ -9,9 +9,9 @@ import type { Granted, Limit } from './types'
 
 const PR = 'https://github.com/acme/api/pull/7'
 
-const UNIT: Limit = { kind: 'fix-ci', repo: 'api', pr_url: PR, limit: 3, granted: 0, runs: 3 }
+const UNIT: Limit = { kind: 'resume', repo: 'api', pr_url: PR, limit: 3, granted: 0, runs: 3 }
 const REVIEWS: Limit = { kind: 'review', repo: null, pr_url: PR, limit: 2, granted: 0, runs: 2 }
-const GRANTED: Granted = { kind: 'fix-ci', limit: 4, repo: 'api', runs: 3 }
+const GRANTED: Granted = { kind: 'resume', limit: 4, repo: 'api', runs: 3 }
 
 // Every request the client makes, answered by the server stand-in below rather than sent.
 let sent: { method: string; url: URL; body: unknown }[] = []
@@ -39,7 +39,7 @@ describe('grantLimit', () => {
         expect(sent).toHaveLength(1)
         expect(sent[0]?.method).toBe('POST')
         expect(sent[0]?.url.pathname).toBe('/api/tickets/ABC-1/grants')
-        expect(sent[0]?.body).toEqual({ kind: 'fix-ci', repo: 'api' })
+        expect(sent[0]?.body).toEqual({ kind: 'resume', repo: 'api' })
     })
 
     it("grants a PR's review on the PR, whatever ticket it is shown on, as canopy grant URL review does", async () => {

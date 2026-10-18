@@ -122,11 +122,14 @@ Work through these in order and stop at the first that explains it.
    - `refused:<guard>`: the harness refused the dispatch. `unauthorized` (the overseer named no label from
      `tracker.labels`), `capacity` (all `capacity.max_workers` slots busy), `running` (a worker is already on it),
      `attempt_limit` (the kind's `policy.max_<kind>_attempts`, plus any `canopy grant`, is used up; no count
-     resets), `cooldown` (fix-ci waits `policy.fix_ci_cooldown_minutes` after the last one), `no_slot` (treehouse had
+     resets), `cooldown` (a `resume` for CI alone waits `policy.ci_cooldown_minutes` after the last run that worked on
+     CI), `bad_kind` (`fix-ci`, which a `resume --reason ci` replaced), `bad_reason` (a `resume` without `--reason`, or
+     a cursor without its reason), `no_slot` (treehouse had
      no free worktree, or the pool is at its declared size), `bad_slug`, `bad_base`, `no_branch` (nothing to continue
      in that repository yet), `unknown_repo` (no `--repo`, or a repository not in the map or not cloned), `bad_prompt` (the
      worker prompt did not render; an override may lack `{{LABELS}}`, or for a run over several repositories
-     `{{REPOSITORIES}}` and `{{PRS}}`), `spawn_failed`. Attempt limits and the fix-ci cooldown count per repository
+     `{{REPOSITORIES}}` and `{{PRS}}`; while an override of a retired fix-ci prompt exists, every `resume`, with the
+     `fix_ci_override` attention item), `spawn_failed`. Attempt limits and the CI cooldown count per repository
      of the ticket. A run that ends `failed` with a summary starting `not authorized:` is the worker finding
      the ticket closed or unlabeled; it changed nothing, but it spent one of the kind's attempts.
    - `dispatch:<kind>`: it was dispatched. In a dry-run tick the rationale starts with `dry run: not dispatched`.

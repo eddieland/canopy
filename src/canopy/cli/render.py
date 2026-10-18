@@ -18,6 +18,16 @@ if TYPE_CHECKING:
 SUMMARY_WIDTH = 160
 
 
+def run_kind(row: sqlite3.Row) -> str:
+    """A run's kind as a line shows it: a `resume` with its reasons, `resume (ci, review)` (DESIGN §8).
+
+    Returns:
+        The kind, followed by its reasons in parentheses when the run has any.
+    """
+    reasons = db.reasons_in(row)
+    return f"{row['kind']} ({', '.join(reasons)})" if reasons else str(row["kind"])
+
+
 def named(key: object, title: object) -> str:
     """A ticket as a line names it: `PROJ-1: <its title>`, or its key alone before the overseer names it.
 

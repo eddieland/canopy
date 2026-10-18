@@ -6,3 +6,8 @@ export function readable(word: string): string {
 
 /** Why a PR has no ticket, wherever its ticket would show (`None`): canopy reviews it, and does no work on it. */
 export const NO_TICKET = 'canopy only reviews it'
+
+/** A run's kind as a chip shows it: a `resume` with its reasons, `resume (ci, review)`, as `canopy status` has it. */
+export function runKind(run: { kind: string; reasons: readonly string[] }): string {
+    return run.reasons.length > 0 ? `${run.kind} (${run.reasons.join(', ')})` : run.kind
+}

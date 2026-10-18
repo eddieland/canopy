@@ -186,9 +186,7 @@ def test_shipped_worker_prompts_mark_and_recognize_worker_comments(canopy_env: C
     values = {**PROMPT_VALUES, "MARK_COMMENTS": "<mark them>", "WORKER_COMMENT": "<is marked>"}
     text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values)
     assert "<mark them>" in text
-    # A fix-ci worker reads checks, never a comment that could instruct it, so only the others need to recognize one.
-    if kind != "fix-ci":
-        assert "a comment that <is marked>" in text
+    assert "a comment that <is marked>" in text
 
 
 def with_pr_skill(env: CanopyEnv, skill: str) -> None:
@@ -232,10 +230,12 @@ def test_with_a_pr_skill_an_override_must_say_how_to_open_prs(canopy_env: Canopy
 def test_a_pr_skill_does_not_constrain_kinds_that_open_no_pr(canopy_env: CanopyEnv) -> None:
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
-    (overrides / "worker-fix-ci.md").write_text("Fix CI on {{KEY}} for {{LABELS}}\n")
+    (overrides / "worker-split.md").write_text("Split {{KEY}} for {{LABELS}} in {{REPOSITORIES}} as {{REQUEST}}\n")
     with_pr_skill(canopy_env, "acme-pr")
-    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "fix-ci", PROMPT_VALUES)
-    assert text == "Fix CI on PROJ-1 for `agent-ready-alice`\n"
+    text = prompts.render_worker(
+        load(canopy_env.root, canopy_env.user_file), "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT
+    )
+    assert text.startswith("Split PROJ-1 for `agent-ready-alice` in ")
 
 
 def with_trailer(env: CanopyEnv, name: str, email: str) -> None:
@@ -400,6 +400,25 @@ def test_ticket_set_accepts_every_phase_in_the_overseer_prompts_table() -> None:
 
 
 def test_every_run_kind_has_a_worker_prompt_and_every_kind_but_split_and_plan_a_private_one() -> None:
-    # A split never runs for a private ticket, and a plan's one prompt serves both (DESIGN §22, §25).
-    assert set(prompts.WORKER) == set(vocab.RunKind)
-    assert set(prompts.WORKER_PRIVATE) == set(vocab.RunKind) - {vocab.RunKind.SPLIT, vocab.RunKind.PLAN}
+    # A split never runs for a private ticket, and a plan's one prompt serves both (DESIGN §22, §25). `fix-ci` is
+    # dispatched no more, and its prompts went with it (DESIGN §8).
+    dispatched = set(vocab.RunKind) - {vocab.RunKind.FIX_CI}
+    assert set(prompts.WORKER) == dispatched
+    assert set(prompts.WORKER_PRIVATE) == dispatched - {vocab.RunKind.SPLIT, vocab.RunKind.PLAN}
+    shipped = {p.name for p in resources.prompts_dir().iterdir()}
+    assert shipped.isdisjoint(prompts.RETIRED_WORKER)
+
+
+def test_a_resume_names_each_of_its_reasons_in_the_vocabularys_order() -> None:
+    note = prompts.reasons_note(["review", "ci"], private=False)
+    assert note.splitlines() == [
+        '- `ci`: checks failed on the PR: fix them, as "Failed checks" below says.',
+        (
+            "- `review`: review comments, or canopy's review findings, to address, as \"canopy's review\" and "
+            '"Reviewers" below say.'
+        ),
+    ]
+    # A private ticket's reply is the operator's, in its conversation; every reason has its line.
+    assert "message id in the conversation above" in prompts.reasons_note(["reply"], private=True)
+    assert len(prompts.reasons_note(list(vocab.ResumeReason), private=False).splitlines()) == len(vocab.ResumeReason)
+    assert prompts.reasons_note([], private=False) == "None named: the context below says why."

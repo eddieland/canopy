@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Collection, Iterable, Sequence
 from typing import TYPE_CHECKING
 
 import click
@@ -12,7 +12,7 @@ import click
 from canopy.cli.common import CliError, OverseerCommand, open_context, require_tick
 from canopy.cli.params import COMMENT_ID, REPO, SLUG, TICKET_KEY, CursorType, TextType, truncate
 from canopy.core import db
-from canopy.core.vocab import RunKind
+from canopy.core.vocab import ResumeReason, RunKind
 from canopy.infra import logs
 from canopy.loop import attention, tick
 from canopy.reviews import findings
@@ -24,8 +24,12 @@ if TYPE_CHECKING:
 
 @click.command("dispatch", cls=OverseerCommand)
 @click.argument("key", type=TICKET_KEY)
+# `fix-ci` is taken only to be refused naming `resume --reason ci`, a refusal the overseer's decisions record.
 @click.option(
-    "--kind", required=True, type=click.Choice([str(k) for k in policy.DISPATCH_KINDS]), help="What the worker does."
+    "--kind",
+    required=True,
+    type=click.Choice([*(str(k) for k in policy.DISPATCH_KINDS), str(policy.RETIRED)]),
+    help="What the worker does.",
 )
 @click.option(
     "--label",
@@ -67,6 +71,15 @@ if TYPE_CHECKING:
     "journal; nothing of the review is on the PR.",
 )
 @click.option(
+    "--reason",
+    "reasons",
+    type=click.Choice([str(r) for r in ResumeReason]),
+    multiple=True,
+    help="resume only, and required for it: why it runs, once for each: ci (failed checks), review (review feedback "
+    "or a canopy review's findings), reply (an authorized reply or an operator message), conflict (with its base), "
+    "no_pr (a pushed branch with no PR), retarget (its blocker merged). A cursor the dispatch moves needs its reason.",
+)
+@click.option(
     "--context",
     type=TextType(),
     help="What the worker should read or do: links, comment ids, check names. Never quoted ticket or PR text.",
@@ -91,6 +104,7 @@ def cmd_dispatch(
     base: str | None,
     request: str | None,
     review_run: int | None,
+    reasons: tuple[str, ...],
     context: str | None,
     cursor_pairs: tuple[tuple[str, str], ...],
 ) -> int:
@@ -108,6 +122,7 @@ def cmd_dispatch(
     db.touch_ticket(ctx.conn, key, ctx.repo)
     dry_run = current.dry_run
     try:
+        dispatch.check_kind(kind)
         review = _review_findings(ctx.conn, key, kind, repos, review_run)
         # A dry run checks the same guards, so its plan holds the refusals a live tick would get (D036).
         if dry_run:
@@ -121,6 +136,8 @@ def cmd_dispatch(
                 base=base,
                 repos=repos,
                 request=request,
+                reasons=reasons,
+                cursors=_handles(cursor_pairs, review_run),
             )
             branch, queue_label, repo_names, starts = plan.branch, plan.label, plan.repos, plan.starts
             started = None
@@ -137,14 +154,16 @@ def cmd_dispatch(
                 repos=repos,
                 request=request,
                 review=review,
+                reasons=reasons,
+                cursors=_handles(cursor_pairs, review_run),
             )
             branch, queue_label, repo_names, starts = started.branch, started.label, started.repos, started.starts
     except dispatch.Refusal as r:
         db.record_decision(ctx.conn, tick_id, key, f"refused:{r.guard}", r.reason)
-        if r.guard == "attempt_limit":
-            # The overseer wants work the limit forbids: a human has to look (DESIGN §14). In a workspace of several,
-            # the item is about the unit at its limit.
-            db.record_decision(ctx.conn, tick_id, key, f"{attention.ACTION_PREFIX}attempt_limit", r.reason, repo=r.repo)
+        if r.attention is not None:
+            # The overseer wants work a guard forbids, and only a human can lift it: the attempt limit, or a retired
+            # prompt override (DESIGN §8, §14). In a workspace of several, the item is about the unit it holds.
+            db.record_decision(ctx.conn, tick_id, key, f"{attention.ACTION_PREFIX}{r.attention}", r.reason, repo=r.repo)
         log.info("dispatch refused", extra={"ticket": key, "kind": kind, "guard": r.guard, "reason": r.reason})
         raise CliError(f"dispatch refused ({r.guard}): {r.reason}; the refusal was recorded") from None
     # `base` passed the guards, so it is the branch this run is stacked on. `queue_label` is the configured spelling, or
@@ -156,6 +175,7 @@ def cmd_dispatch(
     work = _work(key, kind, branch, base, repo_names)
     requested = f"; request {request}" if request is not None else ""
     requested += f"; review run {review_run}" if review_run is not None else ""
+    requested += f"; {_for(reasons)}" if reasons else ""
     if started is None:
         extras = [
             *(f"cursor {name}={value}" for name, value in cursor_pairs),
@@ -173,6 +193,7 @@ def cmd_dispatch(
                     authorized,
                     f"request {request}" if request is not None else "",
                     f"review run {review_run}" if review_run is not None else "",
+                    _for(reasons) if reasons else "",
                     *extras,
                 ]
                 if e
@@ -207,6 +228,16 @@ def _work(key: str, kind: str, branch: str, base: str | None, repos: Sequence[st
     if kind == policy.PLAN:
         return f"plan {key} over {', '.join(repos)}"
     return f"{branch} on {base}" if base is not None else branch
+
+
+def _handles(cursor_pairs: Iterable[tuple[str, str]], review_run: int | None) -> frozenset[str]:
+    """What the dispatch handles, each needing its reason (DESIGN §8): the cursors it moves, and `review_run`."""
+    return frozenset(name for name, _ in cursor_pairs) | ({"review_run"} if review_run is not None else frozenset())
+
+
+def _for(reasons: Collection[str]) -> str:
+    """How a decision's rationale names a resume's reasons, in the vocabulary's order."""
+    return f"for {', '.join(r for r in ResumeReason if r in reasons)}"
 
 
 def _review_findings(

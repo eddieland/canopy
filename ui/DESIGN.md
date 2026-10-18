@@ -996,7 +996,7 @@ list, an empty state, or a skeleton by hand.
   Pull request panel, under the operator's review request. While something is stuck it is a block on the
   `status-failed` tint, the color its `attempt_limit` chip wears, so it stands out from the panel: a line in body text
   led by `At its limit.` in `status-failed`, then a row per limit whose runs have reached it, what it counts in
-  monospace (`fix-ci in web`, `reviews of web#88`, just `reviews` on the PR's own page), its runs against it in
+  monospace (`resume in web`, `reviews of web#88`, just `reviews` on the PR's own page), its runs against it in
   `status-failed` (`1 of 1 runs`, and `, N granted` past the policy's), and an outline `Allow one more` button at the
   row's end, the default size of every button in a panel's foot, as a ticket's actions are, the CLI's command on
   hover. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row

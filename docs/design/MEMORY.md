@@ -58,7 +58,7 @@ are not conditional, and a second database file would cost a second schema lifec
 
 ### The contract
 
-`{{MEMORY_CONTRACT}}` follows the result line of every `implement`, `fix-ci`, and `resume` prompt, public and private,
+`{{MEMORY_CONTRACT}}` follows the result line of every `implement` and `resume` prompt, public and private,
 since the literal JSON line cannot carry fields that come and go with the config. It asks for each field only while
 the tier that owns it allows it, so tiers at different modes need no rule of their own:
 
@@ -116,7 +116,7 @@ never cut or cleaned, so one bad entry costs only itself.
 
 ### Ticket notes in prompts
 
-At `use`, `{{TICKET_MEMORY}}` is in the `implement`, `fix-ci`, and `resume` prompts, public and private, beside
+At `use`, `{{TICKET_MEMORY}}` is in the `implement` and `resume` prompts, public and private, beside
 `{{PREVIOUS_RUNS}}`, and framed as it is: data to check against the branch and PR, kept off the tracker, the PRs, and
 commit messages. Each note shows its id and key, the run that wrote it and how it ended, how many runs ago, and the head
 it was written against, so a worker can judge whether it still holds. The section is capped at 3 KiB; past the cap the

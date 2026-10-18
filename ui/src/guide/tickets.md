@@ -62,8 +62,8 @@ The ticket's actions sit on its Work panel and on its attention item. Hover over
 ## Allowing one more run
 
 A ticket that has used every attempt of a kind shows a red **At its limit** block, with a row for each kind of run
-that's out of tries, such as "fix-ci in web: 2 of 2 runs", and **Allow one more**. This is `canopy grant KEY KIND`.
+that's out of tries, such as "resume in web: 6 of 6 runs", and **Allow one more**. This is `canopy grant KEY KIND`.
 One click is one more run; for several at once, use `canopy grant` with `--runs N`.
 
 A grant dispatches nothing by itself. It raises the limit, and the next tick decides whether to use it. If the last
-two `fix-ci` runs failed for the same reason, read their transcripts before you buy a third.
+two resumes for the same red check failed the same way, read their transcripts before you buy a third.

@@ -24,6 +24,7 @@ import { tickId } from '@/lib/ticks'
 import { readNothingText } from '@/lib/memory'
 import { RUN_TOKENS_TITLE, runTokens } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
+import { runKind } from '@/lib/words'
 import { None } from '@/components/none'
 
 // What every run's page shows, on its title's hover: its description is the run's state.
@@ -105,7 +106,7 @@ function RunPanel({ run }: { run: Run }) {
             </PanelHeader>
             <Fields>
                 {/* Private is the page's chip, beside its title: said once. */}
-                <TicketField ticketKey={run.ticket_key} title={run.ticket_title} kind={run.kind} />
+                <TicketField ticketKey={run.ticket_key} title={run.ticket_title} kind={runKind(run)} />
                 <Field label="branch" mono>
                     {run.branch === null ? <None /> : <Copyable text={run.branch} label="branch" />}
                 </Field>

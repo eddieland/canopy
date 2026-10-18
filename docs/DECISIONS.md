@@ -172,8 +172,9 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D030. Attempt limits and cooldowns are derived from `runs`, with no reset
 
-- An attempt is a `runs` row of that kind, however it ended. The overseer can run any `canopy` command, and a guard it
-  can reset is not a guard; a human raises a limit in config, or one unit's with `canopy grant` (DESIGN §22).
+- An attempt is a `runs` row of that kind, however it ended; a `fix-ci` row counts as a `resume` (DESIGN §8). The
+  overseer can run any `canopy` command, and a guard it can reset is not a guard; a human raises a limit in config, or
+  one unit's with `canopy grant` (DESIGN §22).
 - `--cursor` advances only once the worker starts, so a refused dispatch leaves its trigger for the next tick.
 - Revisit: if limits routinely hit healthy tickets; then count per PR.
 
@@ -351,7 +352,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 ## D093. Every public worker hears the operator's messages
 
-- `implement`, `fix-ci`, and `resume` carry `{{OPERATOR_MESSAGES}}`. An override without it is `bad_prompt` only once
+- `implement` and `resume` carry `{{OPERATOR_MESSAGES}}`. An override without it is `bad_prompt` only once
   the ticket has a message, so older overrides keep working.
 - Revisit: if overrides are rare enough to require the placeholder outright.
 
@@ -400,7 +401,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D116. A worker may push more than once in a run; it still never polls CI or retries a rejected push
 
 - A worker pushes again for anything it fixes after a push, in a new commit, never an amend. Settled by the operator.
-- Why: under "push once", a worker that found its own lint error after pushing left it for a `fix-ci` run, or
+- Why: under "push once", a worker that found its own lint error after pushing left it for a `resume` for CI, or
   for nobody when the check is not in CI. Extra pushes cost a CI run each; the run timeout still bounds them.
 - Unchanged: no CI polling, no retry loop on a rejected push, and the harness's own fallback push happens once.
 

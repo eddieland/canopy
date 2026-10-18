@@ -6,7 +6,7 @@ delete it. `canopy notice`, and the web UI through the same functions, set and c
 own ticks and runs (`conversation.check_operator`), since a notice reaches every later run's prompt. Its text is
 bounded when it is set, so no dispatch fails on a notice's size.
 
-`implement`, `fix-ci`, and `resume` workers, reviews, and chores hear the one in force (`for_prompt`); a split hears
+`implement` and `resume` workers, reviews, and chores hear the one in force (`for_prompt`); a split hears
 none. The overseer reads the recent ones (`recent`) to hold a failed check that ran while one was in force (§7).
 """
 

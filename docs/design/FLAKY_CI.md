@@ -1,21 +1,21 @@
 # Flaky CI
 
-Part of the canopy design, normative like all of it: triage of a CI failure before a fix-ci worker is sent. Sections are
-numbered across the whole design; the [README](README.md) has the map. Previous: [Conversations](CONVERSATIONS.md).
-Next: [Sandboxed runs](SANDBOXING.md).
+Part of the canopy design, normative like all of it: triage of a CI failure before a `resume` is sent to fix it.
+Sections are numbered across the whole design; the [README](README.md) has the map. Previous:
+[Conversations](CONVERSATIONS.md). Next: [Sandboxed runs](SANDBOXING.md).
 
 ## 23. Flaky CI (M25)
 
-Designed, not built, and deferred (ROADMAP M25): until M25 lands, §7's `ci_red` always dispatches `fix-ci`, and §7,
-§8, §12, and §13 describe canopy as it is. This section says what changes in each.
+Designed, not built, and deferred (ROADMAP M25): until M25 lands, §7's `ci_red` always dispatches a `resume` for `ci`,
+and §7, §8, §12, and §13 describe canopy as it is. This section says what changes in each.
 
-Some failures are not the change's: a test that fails one run in five, a runner that died, a package registry that
-timed out. A `fix-ci` worker sent to one changes code that is not broken, or reports `blocked`, and spends an attempt
-either way. A **triage** is a run that reads a new failure first and decides. Flaky: it reruns the failed jobs, and the
-PR goes back to `ci_running`. Real: the next tick dispatches `fix-ci` as before. A triage never edits, commits, or
-pushes, and holds no worktree. It is a run of its own, not part of `fix-ci` or the overseer's judgment, so the agent
-that can push never gets a rerun tool, flakes spend their own attempts rather than `fix-ci`'s, and the overseer reads no
-CI logs.
+Some failures are not the change's: a test that fails one run in five, a runner that died, a package registry that timed
+out. A `resume` sent to fix one changes code that is not broken, or reports `blocked`, and spends an attempt either way.
+A **triage** is a run that reads a new failure first and decides. Flaky: it reruns the failed jobs, and the PR goes back
+to `ci_running`. Real: the next tick dispatches the `resume` for `ci` as before. A triage never edits, commits, or
+pushes, and holds no worktree. It is a run of its own, not part of a `resume` or the overseer's judgment, so the agent
+that can push never gets a rerun tool, flakes spend their own attempts rather than the resume's, and the overseer reads
+no CI logs.
 
 ### Configuration
 
@@ -41,13 +41,13 @@ triage_skill = ""            # optional; the skill that says which of a reposito
 ### Off unless configured
 
 With `max_triage_ci_attempts` at 0 nothing changes: the state block has no triage fields, the overseer prompt's triage
-rows do not apply, `ci_red` dispatches `fix-ci`, and a `triage-ci` dispatch refuses as `triage_off`, with no attention
-item.
+rows do not apply, `ci_red` dispatches a `resume` for `ci`, and a `triage-ci` dispatch refuses as `triage_off`, with no
+attention item.
 
 ### Dispatch
 
 `canopy dispatch --kind triage-ci`, with the failed run as its `ci` cursor and the check in its context, runs §8's
-guards as for `fix-ci`, without `cooldown`, plus:
+guards as for a `resume`, without `cooldown`, plus:
 
 - `triage_off`: `policy.max_triage_ci_attempts` is 0.
 - `bad_request`: a `triage-ci` that names more than one unit, or a base. A triage reads one PR.
@@ -65,7 +65,7 @@ of this section relies on:
 - It checks authorization first, as every worker does (§8 step 3), and is `failed` with `not authorized:` otherwise.
 - It reports `flaky` only with evidence the change did not cause the failure: the skill names it, the job failed
   before any of the repository's code ran, or a test the diff does not touch also fails and passes on the base branch.
-  Anything it is unsure of is `real`: a `fix-ci` that finds nothing to fix costs less than a rerun that hides a
+  Anything it is unsure of is `real`: a `resume` that finds nothing to fix costs less than a rerun that hides a
   regression. A head commit a triage already reran is `real`: a check gets one rerun per commit.
 - It reruns only the failed jobs of the failed runs it judged, on the PR's head commit, once each, with
   `gh run rerun <id> --failed` or the tool the skill names. It starts, cancels, and touches nothing else, and does not
@@ -96,12 +96,13 @@ decided by the first that fits:
 | Situation | Action |
 |---|---|
 | failure newer than the `ci` cursor on a head commit no triage has rerun, and the unit under its triage limit | `dispatch triage-ci --cursor ci=<run>` |
-| the unit's latest run is a `triage-ci` that ended `done` with `real`, and no run since | `dispatch fix-ci`, its context pointing at the triage run |
-| failure newer than the `ci` cursor on a commit a triage reran, or the unit at its triage limit | `dispatch fix-ci --cursor ci=<run>`, as today |
+| the unit's latest run is a `triage-ci` that ended `done` with `real`, and no run since | `dispatch resume --reason ci`, its context pointing at the triage run |
+| failure newer than the `ci` cursor on a commit a triage reran, or the unit at its triage limit | `dispatch resume --reason ci --cursor ci=<run>`, as today |
 
 A rerun's checks are newer than the cursor, so a unit whose rerun is still running is `ci_running` and waits, and one
 whose rerun passes moves on as any green PR does. Triage takes `ci_red`'s place in step 4's priority order. The
-`fix-ci` cooldown and attempts count `fix-ci` runs only, so reruns spend neither.
+CI cooldown and the resume attempts count `resume` runs only, so reruns spend neither. A triage holds only the `ci`
+reason: a `resume` the unit needs for anything else goes without it while the failure waits on its triage.
 
 ### Agent definition
 
@@ -118,7 +119,7 @@ runtime config, allows exactly that tool, and points `triage_cmd` at it, as for 
 
 Workers lose what this section gives the triage: `canopy-worker` denies `gh run rerun*`, `gh run cancel*`,
 `gh run delete*`, and `gh workflow*` (today its bash allows them; only the MCP names are denied), so a triage is the
-only run that reruns CI. `gh run view` stays: reading a failure is `fix-ci`'s job. `canopy-worker-private` already
+only run that reruns CI. `gh run view` stays: reading a failure is a `resume`'s job. `canopy-worker-private` already
 denies all of `gh` but its reads of a PR and its CI, `gh run view` among them.
 
 ### Journal
@@ -133,7 +134,7 @@ Proposed, for M25's PR:
 
 - T1: the triage agent reads CI logs, among the easiest text to shape, and its verdict starts a write. A steered
   verdict can rerun failed jobs, at most `max_triage_ci_attempts` times per unit, or say `real`, which is today's
-  `fix-ci`. It cannot edit, commit, push, or comment.
+  `resume` for `ci`. It cannot edit, commit, push, or comment.
 - T3: `max_triage_ci_attempts`, never reset, the triage timeout, `max_workers`, and one run per ticket are controls in
   code. "Workers do not poll CI or retry" stands: a triage reruns once per dispatch and never waits for the result.
 - T6: residual: `gh run rerun` takes any run id in any repository the operator's `gh` reaches, so a steered triage can
@@ -148,7 +149,7 @@ Proposed, for M25's PR:
 
 ### Open
 
-- Whether the triage's verdict should reach the `fix-ci` prompt, rather than the worker reading the failure again.
+- Whether the triage's verdict should reach the `resume` prompt, rather than the worker reading the failure again.
   The overseer's context only points at the triage run (§8).
 - Whether a triage should comment on the PR saying what it reran and why, for its reviewers. That needs a comment tool
   the definition denies.

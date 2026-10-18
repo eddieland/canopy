@@ -158,15 +158,15 @@ def test_the_prompt_survives_quoting_in_the_template(prompt: str) -> None:
 def test_workspace_policy_never_loosens_the_defaults(tmp_path: Path, attempts: int, cooldown: int) -> None:
     (tmp_path / config.WORKSPACE_FILE_NAME).write_text(
         '[tracker]\nprovider = "jira"\nquery = "q"\n'
-        f"[policy]\nmax_fix_ci_attempts = {attempts}\nfix_ci_cooldown_minutes = {cooldown}\n"
+        f"[policy]\nmax_resume_attempts = {attempts}\nci_cooldown_minutes = {cooldown}\n"
         f"max_implement_attempts = {attempts}\n"
     )
     user = tmp_path / "config.toml"
     user.write_text('[tracker]\nlabels = ["mine"]\n')
     policy = config.load(tmp_path, user).policy
-    assert policy.max_fix_ci_attempts == min(attempts, 2)
+    assert policy.max_resume_attempts == min(attempts, 6)
     assert policy.max_implement_attempts == min(attempts, 2)
-    assert policy.fix_ci_cooldown_minutes == max(cooldown, 30)
+    assert policy.ci_cooldown_minutes == max(cooldown, 30)
 
 
 def test_every_config_key_declares_a_scope() -> None:

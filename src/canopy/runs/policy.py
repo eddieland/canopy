@@ -1,10 +1,12 @@
-"""Attempt limits and the fix-ci cooldown (DESIGN §8, §18, TRUST_MODEL T3).
+"""Attempt limits and the CI cooldown (DESIGN §8, §18, TRUST_MODEL T3).
 
 Both are derived from `runs` and `run_slots` (D030), per unit: a ticket's work in one repository. Every run dispatched
 for a ticket is an attempt of its kind in each repository it leased a slot in, whatever it ended as, and the counts
 never reset: a unit at its limit waits for a human, who raises the limit in config or grants that unit more runs of
-the kind with `canopy grant` (DESIGN §22). The fix-ci cooldown runs from the end of the latest fix-ci run that
-covered the unit. `dispatch.py` enforces these; the overseer's state block shows them.
+the kind with `canopy grant` (DESIGN §22). A `fix-ci` run, a kind no longer dispatched, counts as a `resume`, and so do
+its grants (M56). The CI cooldown holds a `resume` whose only reason is `ci`, from the end of the latest run that
+covered the unit and worked on CI: a `resume` with `ci` among its reasons, or an old `fix-ci`. `dispatch.py` enforces
+these; the overseer's state block shows them.
 
 A split is not a unit's work: it creates tickets and changes no repository (DESIGN §18). Nor is a plan, which writes
 down how the ticket will be done across every repository it touches (DESIGN §25). Their runs are counted per ticket,
@@ -16,12 +18,13 @@ from __future__ import annotations
 
 import sqlite3
 from collections.abc import Mapping
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, assert_never
 
 from canopy.core import conversation, db
-from canopy.core.vocab import RunKind
+from canopy.core.vocab import ResumeReason, RunKind
 
 if TYPE_CHECKING:
     from canopy.core.config import Config
@@ -30,8 +33,10 @@ if TYPE_CHECKING:
 Unit = tuple[str, str | None]
 
 # The kinds that work in a unit, and every kind `canopy dispatch` takes. Typed as str, since the counts below key on
-# `runs.kind` as read; a `click.Choice` takes them as `str(kind)`, since click matches an enum by its name.
-KINDS: tuple[str, ...] = (RunKind.IMPLEMENT, RunKind.FIX_CI, RunKind.RESUME)
+# `runs.kind` as read; a `click.Choice` takes them as `str(kind)`, since click matches an enum by its name. `fix-ci` is
+# none of them: its old runs and grants count as `resume`'s (`counted_as`).
+KINDS: tuple[str, ...] = (RunKind.IMPLEMENT, RunKind.RESUME)
+RETIRED = RunKind.FIX_CI
 SPLIT = RunKind.SPLIT
 PLAN = RunKind.PLAN
 # The kinds whose runs are the ticket's, not a unit's: they work on no branch, and their attempts count per ticket.
@@ -39,12 +44,17 @@ TICKET_KINDS: tuple[str, ...] = (SPLIT, PLAN)
 # The kinds counted per ticket that `canopy grant` takes: a split creates tickets in the tracker, so only config raises
 # its limit.
 TICKET_GRANT_KINDS: tuple[str, ...] = (PLAN,)
-DISPATCH_KINDS: tuple[str, ...] = tuple(RunKind)
+DISPATCH_KINDS: tuple[str, ...] = tuple(k for k in RunKind if k is not RETIRED)
 
 
 def limits(config: Config) -> dict[str, int]:
     """Return the most runs of each kind one unit may have, and for `split` and `plan`, one ticket."""
-    return {kind: _limit(config, kind) for kind in RunKind}
+    return {kind: _limit(config, RunKind(kind)) for kind in DISPATCH_KINDS}
+
+
+def counted_as(kind: str) -> str:
+    """Return the kind a run or grant of `kind` counts toward: an old `fix-ci`'s is `resume` (DESIGN §8)."""
+    return str(RunKind.RESUME) if kind == RETIRED else kind
 
 
 def _limit(config: Config, kind: RunKind) -> int:
@@ -52,9 +62,7 @@ def _limit(config: Config, kind: RunKind) -> int:
     match kind:
         case RunKind.IMPLEMENT:
             return p.max_implement_attempts
-        case RunKind.FIX_CI:
-            return p.max_fix_ci_attempts
-        case RunKind.RESUME:
+        case RunKind.FIX_CI | RunKind.RESUME:
             return p.max_resume_attempts
         case RunKind.SPLIT:
             return p.max_split_attempts
@@ -92,7 +100,7 @@ def attempts(conn: sqlite3.Connection, *, ticket: str | None = None) -> dict[Uni
         )
     for row in rows:
         counts_of = counts.setdefault(unit(str(row[0]), row[1]), dict.fromkeys(KINDS, 0))
-        counts_of[str(row[2])] += int(row[3])
+        counts_of[counted_as(str(row[2]))] += int(row[3])
     return counts
 
 
@@ -101,7 +109,9 @@ def grants(conn: sqlite3.Connection) -> dict[Unit, dict[str, int]]:
     granted: dict[Unit, dict[str, int]] = {}
     rows = conn.execute("SELECT ticket_key, repo, kind, sum(runs) FROM attempt_grants GROUP BY ticket_key, repo, kind")
     for row in rows:
-        granted.setdefault(unit(str(row[0]), str(row[1])), {})[str(row[2])] = int(row[3])
+        of_unit = granted.setdefault(unit(str(row[0]), str(row[1])), {})
+        kind = counted_as(str(row[2]))
+        of_unit[kind] = of_unit.get(kind, 0) + int(row[3])
     return granted
 
 
@@ -125,11 +135,16 @@ def grant(conn: sqlite3.Connection, config: Config, key: str, kind: str, *, repo
 
     Raises:
         Refused: `inside_run` inside one of canopy's own ticks or runs, `bad_kind` for a kind with no unit limit (a
-            split's is the ticket's, and only config raises it), `unknown` for a ticket canopy has no record of,
+            split's is the ticket's, and only config raises it) or for `fix-ci`, whose runs count as `resume`'s,
+            `unknown` for a ticket canopy has no record of,
             `unknown_repo` for a repository the ticket has had no runs in, or none named when it has had them in
             several.
     """
     conversation.check_operator()
+    if kind == RETIRED:
+        raise conversation.Refused(
+            "bad_kind", "a resume now fixes CI, and fix-ci runs count as resume runs: grant resume instead"
+        )
     if kind not in KINDS:
         raise conversation.Refused("bad_kind", f"{kind} is not one of {', '.join(KINDS)}")
     if db.get_ticket(conn, key) is None:
@@ -211,17 +226,21 @@ def unit_attempts(conn: sqlite3.Connection, key: str, repo: str | None) -> dict[
     return attempts(conn, ticket=key).get(unit(key, repo), dict.fromkeys(KINDS, 0))
 
 
-def fix_ci_cooldowns(conn: sqlite3.Connection, config: Config, now: datetime) -> dict[Unit, datetime]:
-    """Return, by unit, when fix-ci may next run, for units still inside the cooldown.
+def ci_cooldowns(conn: sqlite3.Connection, config: Config, now: datetime) -> dict[Unit, datetime]:
+    """Return, by unit, when a `resume` for CI alone may next run, for units still inside the cooldown.
+
+    A run worked on CI if it was a `resume` with `ci` among its reasons, or an old `fix-ci`.
 
     Returns:
-        Each unit whose last fix-ci run ended less than the cooldown before `now`, with when the cooldown ends.
+        Each unit whose last run that worked on CI ended less than the cooldown before `now`, with when it ends.
     """
-    window = timedelta(minutes=config.policy.fix_ci_cooldown_minutes)
+    window = timedelta(minutes=config.policy.ci_cooldown_minutes)
     until: dict[Unit, datetime] = {}
     rows = conn.execute(
         "SELECT r.ticket_key, s.repo, max(r.ended_at) FROM runs r JOIN run_slots s ON s.run_id = r.id "
-        "WHERE r.kind = 'fix-ci' AND r.ended_at IS NOT NULL GROUP BY r.ticket_key, s.repo"
+        "WHERE r.ended_at IS NOT NULL AND (r.kind = ? OR (r.kind = ? AND EXISTS "
+        "(SELECT 1 FROM run_reasons w WHERE w.run_id = r.id AND w.reason = ?))) GROUP BY r.ticket_key, s.repo",
+        (RETIRED, RunKind.RESUME, ResumeReason.CI),
     )
     for row in rows:
         ends = db.parse_time(str(row[2])) + window
@@ -232,14 +251,22 @@ def fix_ci_cooldowns(conn: sqlite3.Connection, config: Config, now: datetime) ->
 
 
 def blocked(
-    name: str, kind: str, *, counts: Mapping[str, int], limit: int, cooldown_until: datetime | None
+    name: str,
+    kind: str,
+    *,
+    counts: Mapping[str, int],
+    limit: int,
+    cooldown_until: datetime | None,
+    reasons: AbstractSet[str] = frozenset(),
 ) -> tuple[str, str] | None:
     """Return the guard and reason that stop a `kind` run for unit `name` now, or None if neither does.
 
-    `name` is how the reason names the unit: the ticket key, followed by its repository.
+    `name` is how the reason names the unit: the ticket key, followed by its repository. The CI cooldown holds only a
+    `resume` whose one reason is `ci`: one sent for anything else would run anyway, and fixes the build on the same
+    checkout (DESIGN §8).
     """
     if counts.get(kind, 0) >= limit:
         return "attempt_limit", f"{name} has had {counts.get(kind, 0)} {kind} runs and the limit is {limit}"
-    if kind == RunKind.FIX_CI and cooldown_until is not None:
-        return "cooldown", f"fix-ci for {name} may run again after {db.format_time(cooldown_until)}"
+    if kind == RunKind.RESUME and set(reasons) == {ResumeReason.CI} and cooldown_until is not None:
+        return "cooldown", f"a resume for CI alone in {name} may run again after {db.format_time(cooldown_until)}"
     return None

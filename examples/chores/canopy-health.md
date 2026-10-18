@@ -23,7 +23,7 @@ Read at most 10 failures whole. Start with the costliest kind of failure.
 1. **Failing ticks.** In `outcomes`, a live overseer status with `failed` true and 2 or more ticks in the window, or
    any `reconcile_failed` or `canopy_unavailable` tick at all: a finding with id `ticks/<status>`. Read the notes of
    its failures and one or two ticks with `canopy decisions` to find the common cause.
-2. **Failing runs.** A kind and sort (`implement`, `fix-ci`, a chore's name, `review`) with 2 or more runs in one failed
+2. **Failing runs.** A kind and sort (`implement`, `resume`, a chore's name, `review`) with 2 or more runs in one failed
    status, or failed runs that are a quarter or more of its runs: a finding with id `runs/<kind>/<what>/<status>`.
    Read their notes, and a run or two whole, for the common cause.
 3. **Refusals.** A guard that refused 3 or more times in the window: the overseer keeps asking for something the
@@ -41,9 +41,9 @@ Each finding's detail ends with one recommendation, and its title starts with wh
 - **Tune:** a setting in canopy's config, by its key, with the value you would try and why. These are the ones that
   exist: `runtime.overseer_timeout_minutes`, `runtime.worker_timeout_minutes`, `runtime.review_timeout_minutes`,
   `runtime.setup_timeout_minutes`, a chore's `timeout_minutes`, `every_minutes`, or `when`,
-  `policy.max_implement_attempts`, `policy.max_fix_ci_attempts`, `policy.max_resume_attempts`,
-  `policy.fix_ci_cooldown_minutes`, `capacity.max_workers`, `capacity.max_chores`, `capacity.max_reviews`,
-  `loop.interval_minutes`, `loop.idle_max_minutes`, and `tracker.query_every_minutes`. Name no other key.
+  `policy.max_implement_attempts`, `policy.max_resume_attempts`, `policy.ci_cooldown_minutes`, `capacity.max_workers`,
+  `capacity.max_chores`, `capacity.max_reviews`, `loop.interval_minutes`, `loop.idle_max_minutes`, and
+  `tracker.query_every_minutes`. Name no other key.
 - **Fix:** something outside canopy to set right: an MCP server that is down or not signed in, a missing tool on
   `PATH`, a repository setup step that fails, a chore prompt that cannot do what it asks.
 - **Feature:** something canopy does not do that would have prevented the failure or caught it sooner, said in a

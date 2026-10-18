@@ -30,11 +30,11 @@ type MessageKind = Annotated[
     Literal["report", "question", "reply", "comment"], Field(description="What a message is (DESIGN §22).")
 ]
 type GrantKind = Annotated[
-    Literal["implement", "fix-ci", "resume"],
+    Literal["implement", "resume"],
     Field(description="A kind of run a ticket's unit is limited in, which `canopy grant` raises (DESIGN §8, §22)."),
 ]
 type LimitKind = Annotated[
-    Literal["implement", "fix-ci", "resume", "review"],
+    Literal["implement", "resume", "review"],
     Field(description="What a limit counts: a unit's runs of one kind, or with `review` a PR's review runs."),
 ]
 type StartStatus = Annotated[
@@ -165,7 +165,9 @@ class Run(_Model):
     ticket_title: str | None = None
     """The ticket's title, as the overseer named it (DESIGN §13); None until it does."""
     kind: str
-    """implement | fix-ci | resume | split | plan"""
+    """implement | resume | split | plan, or fix-ci for a run from before a resume fixed CI (DESIGN §8)"""
+    reasons: list[str] = []
+    """Why a resume ran, as its dispatch named them: ci, review, reply, conflict, no_pr, retarget (DESIGN §8)."""
     status: str
     """The journal's status: running, done, blocked, failed, crashed, unpushed, unknown, timeout, stopped."""
     state: RunState

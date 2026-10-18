@@ -67,8 +67,7 @@ def test_a_grant_lets_a_unit_at_its_limit_run_again_and_every_run_still_counts(
     assert policy.grants(conn) == {(KEY, "repo"): {"implement": 3}}
     assert policy.unit_limits(config.load(canopy_env.root, canopy_env.user_file), policy.grants(conn)[KEY, "repo"]) == {
         "implement": 5,
-        "fix-ci": 2,
-        "resume": 3,
+        "resume": 6,
     }
 
     # The overseer's state block shows the unit's grants beside its attempts, so it dispatches past the policy's limit.
@@ -76,7 +75,7 @@ def test_a_grant_lets_a_unit_at_its_limit_run_again_and_every_run_still_counts(
         assert main(["tick"]) == 0
         [ticket] = state_block(agent_log)["tickets"]
         [unit] = ticket["units"]
-        assert unit["attempts"] == {"implement": 3, "fix-ci": 0, "resume": 0}
+        assert unit["attempts"] == {"implement": 3, "resume": 0}
         assert unit["granted"] == {"implement": 3}
 
 
@@ -132,6 +131,12 @@ def test_grant_refusals(
     # A split's limit is the ticket's, not a unit's: only config raises it.
     assert operator("grant", KEY, "split") == 2
     assert operator("grant", KEY, "resume", "--runs", "0") == 2
+    # A resume fixes CI now, and fix-ci runs count as resume runs (DESIGN §8).
+    assert operator("grant", KEY, "fix-ci") == 1
+    assert (
+        "grant refused (bad_kind): a resume now fixes CI, and fix-ci runs count as resume runs: grant resume instead"
+        in capsys.readouterr().err
+    )
     assert grants(conn) == []
 
 

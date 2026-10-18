@@ -118,7 +118,7 @@ def cmd_notice(click_ctx: click.Context, text: str | None, duration: str | None,
     """Tell every run from now on about a passing condition, such as a CI outage, until it lapses.
 
     Workers that build, fix CI, or resume, reviews, and chores hear it in their prompts, and the overseer holds a
-    failed check it explains rather than spending a fix-ci attempt on it. A run already running keeps the prompt it
+    failed check it explains rather than spending a resume attempt on it. A run already running keeps the prompt it
     started with. Setting a notice replaces the one in force. Without TEXT or --clear, prints the one in force.
     """
     if clear and (text is not None or duration is not None):
@@ -341,8 +341,12 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
 
 @click.command("grant")
 @click.argument("ref", metavar="REF")
+# `fix-ci` is taken only to be refused naming `resume`, whose limit its runs now count toward (DESIGN §8).
 @click.argument(
-    "kind", type=click.Choice([*(str(k) for k in (*policy.KINDS, *policy.TICKET_GRANT_KINDS)), grants.KIND])
+    "kind",
+    type=click.Choice(
+        [*(str(k) for k in (*policy.KINDS, *policy.TICKET_GRANT_KINDS)), grants.KIND, str(policy.RETIRED)]
+    ),
 )
 @click.option("--repo", type=REPO, help="The repository of the ticket's unit. Needed when it has had runs in several.")
 @click.option("--runs", type=click.IntRange(min=1), default=1, show_default=True, help="How many more runs to allow.")
