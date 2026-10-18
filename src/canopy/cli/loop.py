@@ -14,9 +14,11 @@ from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
 from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, run_kind, spent
 from canopy.core import chore_view, contract, conversation, db, memory, notice, pause, review_requests
+from canopy.core.vocab import ReplyMode
 from canopy.infra import hangup, keys, lock
 from canopy.loop import attention, repeat, reread, tick
 from canopy.notify import deliver
+from canopy.runs import drafted
 
 if TYPE_CHECKING:
     import sqlite3
@@ -124,6 +126,7 @@ def cmd_status(click_ctx: click.Context) -> int:
     readout = memory.readout(ctx.config.memory)
     if readout is not None:
         click.echo(f"{readout} ({memory.tiers(ctx.config.memory)})")
+    _print_replies(ctx)
 
     _print_attention(attention.listed(ctx))
     _print_started(ctx)
@@ -145,6 +148,18 @@ def _print_sinks(ctx: Context) -> None:
         last = f"last delivered {attention.age(s.last_delivery_at)} ago" if s.last_delivery_at else "never delivered"
         failing = f"; {s.failures} failed in a row: {s.last_error}" if s.failures else ""
         click.echo(f"  {s.name}  {last}; {s.waiting} events waiting{failing}")
+
+
+def _print_replies(ctx: Context) -> None:
+    """Say how workers' comments reach GitHub while they draft them, or while drafts wait (DESIGN §29)."""
+    waiting = drafted.waiting(ctx.conn)
+    mode = ctx.config.trust.review_replies
+    if mode is ReplyMode.POST and not waiting:
+        return
+    said = "workers draft their comments for you" if mode is ReplyMode.APPROVE else "workers post their comments"
+    count = sum(w.count for w in waiting)
+    tail = f"; {count} draft{'s' if count != 1 else ''} wait on you: `canopy draft list`" if waiting else ""
+    click.echo(f"Review replies: {mode}, {said}{tail}")
 
 
 def _print_attention(items: Sequence[attention.Item]) -> None:

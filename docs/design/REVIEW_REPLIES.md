@@ -32,15 +32,16 @@ review_replies = "approve"   # approve | post
 
 [connect.sources.github]     # unset: canopy's own two programs, as shown
 kind = "vcs"
-cmd = ["canopy-connect-github"]
-post_cmd = ["canopy-post-github"]
+cmd = "canopy-connect-github"
+post_cmd = "canopy-post-github"
 timeout_minutes = 2
 ```
 
 - `approve` drafts; `post` is how workers worked before this section, every prompt the same bytes, held by a snapshot.
   The default changes what workers do on upgrade, so the release notes say so, and `canopy status` names the setting
   and the drafts waiting.
-- A source is configured as ROADMAP M36's connectors are: argv with no shell, a timeout, private. This section defines
+- A source is configured as ROADMAP M36's connectors are: a command split into words as a sink's is (§20), run with
+  no shell, with a timeout, private. This section defines
   the `vcs` source's table and its `post_cmd`, and runs them only for drafts (The threads, read in code, below); M36
   grows the reader into the whole connector. Unset, the `vcs` source is canopy's own programs, so `approve` needs
   nothing configured.
@@ -80,9 +81,11 @@ approves work before it is pushed. Its result line gains `drafts`, parsed apart 
   shape included, since a sent reply is public: the refusal names the word, and text canopy refuses the operator posts
   on GitHub themselves. Under `post`,
   `drafts` a worker sends anyway are stored nowhere.
-- The prompts' "Reply on the PR to each comment you addressed", their PR and ticket comments, and their comment marks
-  render from `{{COMMENTING}}`, which under `post` is the text it replaced. Under `approve`, an override without it is
-  `bad_prompt` (§8, step 3): an older override would have its worker post in the operator's name.
+- The prompts' sentences on posting, "Reply on the PR to each comment you addressed" among them, with their PR and
+  ticket comments and their comment marks, render from placeholders that under `post` are the text they replaced, and
+  the contract above renders from `{{DRAFTS}}`, empty under `post`. Under `approve`, an override without `{{DRAFTS}}`
+  is `bad_prompt` (§8, step 3): an older override would have its worker post in the operator's name. A private
+  ticket's `implement` posts nothing anywhere, so it drafts nothing.
 
 The marks (D069) change use, not meaning. A comment carrying them is never authority, under either setting. Under
 `approve` they go on what still posts without the operator, a ticket comment with no tracker post command; under
@@ -101,10 +104,10 @@ draft can answer only a thread that exists.
   time; each thread's path, line, side, and whether it is outdated or resolved; and each comment's id, author login,
   time, and body, cut as a mirrored comment is (§22). The slots are already returned, so the read holds none.
 - A draft is unchecked until a whole read of its PR, one whose `end` line covers it. A `thread` draft whose comment that
-  read did not return is refused (`unknown_thread`), with a harness note on the run; a `pr` draft needs only the read.
-  A `ticket` draft needs none.
-- A read that fails, times out, or ends without its `end` line refuses nothing: the drafts stay unchecked, with a
-  harness note, `drafts_waiting` says the threads could not be read, and each tick's reconcile (§6, step 3) reads the
+  read did not return is refused (`unknown_thread`), recorded on the run as `_run`'s refusals are, and so is a second
+  draft of one run for the same thread; a `pr` draft needs only the read. A `ticket` draft needs none.
+- A read that fails, times out, or ends without its `end` line refuses nothing: the drafts stay unchecked, the failure
+  is logged, `drafts_waiting` says the threads could not be read, and each tick's reconcile (§6, step 3) reads the
   PR again until a read is whole. No unchecked draft can be sent, so an outage delays the replies and never drops them.
 - Once checked, a draft supersedes an unsent draft of an earlier run for the same thread, the same PR's comment, or
   the same ticket: shown struck, never sendable, and the page warns when the one superseded carried the operator's
@@ -124,10 +127,11 @@ approval does (§25). Every verb refuses as `inside_run` when `CANOPY_TICK_ID` o
   as a review's findings are (§21).
 - `canopy draft edit run:ID N --text TEXT` makes a new version of its text, kept beside the run's own. `canopy draft
   drop run:ID N...` dismisses drafts as a finding is dismissed, and `--undo` takes that back.
-- `canopy draft send run:ID N@HASH...` sends drafts, each with the hash of its text as the operator last saw it. In
-  order, it refuses:
+- `canopy draft send run:ID N@HASH...` sends drafts, each with the hash of its text as the operator last saw it. Every
+  check runs before anything posts, and any refusal posts nothing. It refuses:
+  - `unchecked`, `superseded`, `dropped`, `refused`: as above; `unconfirmed`, below.
   - `stale`: the draft's text is no longer that hash, since an edit in another tab or shell, as M41's config write is.
-  - `unchecked`, `superseded`, `dropped`: as above.
+    The hash is checked again as the send claims the draft, after the PR's read, and a claimed draft takes no edit.
   - `thread_changed`: a whole read of the PR, made now, shows a comment on the draft's thread newer than the draft's
     basis, at first the run's start, other than one the operator sent through canopy. The refusal names the new
     comments, the page shows them under the thread, and it moves the draft's basis to the newest of them, so sending
@@ -178,8 +182,10 @@ is, and the page sends one draft or several together. The attention item opens t
 `ui/DESIGN.md`'s.
 
 - The diff is the run's own: `_run`, under `approve`, takes it at the run's head once its pushes are verified (§8,
-  step 5), from its merge base with the base branch, as a review takes its commit's, and the server reads it with the
-  same bounded reader. When the PR's head has moved past it, the page says so.
+  step 5), from its merge base with the base branch, as a review takes its commit's, and keeps the commit beside it;
+  the server reads it with the same bounded reader. When the PR's head, as last read, is not that commit, the page
+  says so. The API is `GET /api/pull-request/threads`, and the drafts' verbs are `canopy draft`'s, through the same
+  functions.
 - A draft is a worker's text, written from coworkers' comments, and a thread is coworkers' text: both are rendered as
   text, never Markdown, every hidden character named, as memory's are (§28). GitHub renders the reply once it is sent.
 
@@ -204,8 +210,10 @@ is, and the page sends one draft or several together. The attention item opens t
 
 The host is the PR's own, read from its URL by the program, never by the harness, with the token `gh` holds for that
 host, read when the program runs, so GitHub Enterprise works as github.com does and the harness never holds a token
-(TRUST_MODEL T2). Lint bans importing it from the harness, as it bans the sink. Rejected: posting through an agent (the
-text it posts is the model's last word, not the operator's); the harness calling GitHub (D003).
+(TRUST_MODEL T2). A URL is a worker's word, so the program reads a token only for a host `gh` is logged in to, since
+`gh auth token` answers `GH_ENTERPRISE_TOKEN` for any host but github.com, and it follows no redirect, which would
+carry the token elsewhere. Lint bans importing it from the harness, as it bans the sink. Rejected: posting through an
+agent (the text it posts is the model's last word, not the operator's); the harness calling GitHub (D003).
 
 ### Agent definitions
 

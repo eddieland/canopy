@@ -86,6 +86,13 @@ Controls:
   prompt's. Jira's issue edit cannot change status. Label writes replace the whole set and are not atomic; the
   tracker skills read the set immediately before writing it.
 - Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
+- With `trust.review_replies = "approve"`, the default (DESIGN §29), a worker's draft is untrusted text, written from
+  coworkers' comments, until the operator sends it: every surface shows it as plain text with each hidden character
+  named, and its bounds refuse hidden characters and what looks like a secret. PR review threads join the journal
+  through canopy's own reader, read only: they decide which thread a draft answers and what the operator is shown,
+  never what an agent does. A draft names a PR of its own run's units, or it is refused. Editing, dropping, sending,
+  and settling a draft refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `reply` does: an agent that could
+  send a draft could post as the operator.
 - Review feedback from anyone not in `trust.trusted_reviewers` (private, empty by default) starts no run on its own
   (D089). The overseer records `untrusted_review` and keeps its `review` cursor before it until the operator answers in
   canopy, with `canopy reply` or the web UI; the `resume` worker addresses such a comment only as an operator message
@@ -220,11 +227,14 @@ Controls:
   Worker stdout goes to a log file under the workspace's `.canopy/`, readable only by the
   operator.
 - Listeners follow T8. No outbound calls from the harness except through the
-  configured commands. canopy ships one program that makes them, the Slack sink (DESIGN §20): it runs only as a sink
-  the operator configured, reads its webhook or bot token from an operator-only file of its own, and never from
-  canopy's config, argv, journal, or logs. Lint bans network modules in the harness (`urllib.request`,
-  `http.client`, `socket`) and any import of the sink, so the process that holds the journal and enforces the guards
-  never opens a connection or reads a sink's secret.
+  configured commands. canopy ships programs that make them, each a separate distribution it runs only as a command.
+  The Slack sink (DESIGN §20) runs only as a sink the operator configured, and reads its webhook or bot token from an
+  operator-only file of its own, never from canopy's config, argv, journal, or logs. The GitHub reader and poster,
+  `canopy-connect-github` and `canopy-post-github` (DESIGN §29), read the token `gh` holds for the host a PR's or an
+  issue's URL names, when they run, only once `gh` names that host as one it is logged in to, and send it only to that
+  host's API, following no redirect; canopy never reads it. Lint bans network
+  modules in the harness (`urllib.request`, `http.client`, `socket`) and any import of these programs, so the process
+  that holds the journal and enforces the guards never opens a connection or reads a token or a sink's secret.
 
 ### T3. Runaway agents (cost, capacity, infinite loops)
 
@@ -338,6 +348,11 @@ but must be distinguishable:
 - `decisions` and `runs` tables are a complete local audit log of what the
   loop did and why.
 - canopy's reviews post nothing (D114), so nothing a reviewer writes appears under the operator's name.
+- A reply the operator sends through canopy (DESIGN §29) carries no marks: it is their own words, posted word for
+  word as they last saw it, named by its hash, as one comment review that approves nothing and resolves no thread. The
+  journal records which run drafted it, whether the operator edited it, the channel, and the comment's id, by which
+  canopy knows it: the state block lists those ids, and neither the overseer nor a worker reads one as review feedback
+  or a go-ahead.
 - Every comment and reply a worker posts starts with `trust.comment_prefix` (`CANOPY:` by default) and ends with
   `trust.comment_suffix`, whichever are set (DESIGN §8, D069). The overseer and workers never read a comment carrying
   them as an authorized reply, a split request, or review feedback. The marks only take authority away, so forging
@@ -369,6 +384,11 @@ Controls:
   private. Residual: a worker reads the approved plan from a copy in its working directory, ignored by git, and can
   still commit it by name, which on a private ticket publishes the plan with its branch. The prompt forbids it, and
   push verification gives the run a harness note when a pushed branch holds the copy; nothing prevents it.
+- With `trust.review_replies = "approve"`, a worker's comments leave the machine only as the operator sent them: its
+  prompt says to post none and to draft each instead (DESIGN §29), and both worker definitions deny the GitHub
+  server's reply and review-comment tools and `gh pr comment` by name, as defense in depth; where a tracker source
+  posts the ticket's drafts, the issue-comment ones too. canopy posts what the operator sent through
+  `canopy-post-github` (T2), never through an agent.
 - A private ticket's worker (DESIGN §22) runs `canopy-worker-private`, whose definition canopy renders from the user
   config: every tool of the tracker's MCP server (`tracker.mcp_server`) is denied by a wildcard, then only
   `tracker.read_tools` are allowed by name, so a write tool missing from the list fails closed; the tracker CLIs canopy
@@ -533,18 +553,23 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 - It also serves a run's or tick's transcript (DESIGN §22): its session's events, read back from the run's log or
   the tick's output. That is more than the journal holds: whatever a tool read or printed, a file's contents or a
   command's output. Only the session the journal recorded is read, bounded, from a regular file opened without
-  following links; nothing else under the state directory is read but a tick's output below and the session's prompt.
+  following links; nothing else under the state directory is read but the output below and the session's prompt.
 - With a transcript it serves the session's prompt, the `<id>.prompt` canopy wrote beside the log before the agent
   started: what the agent command was given as `{prompt}`, a worker's or a chore's rendered prompt or a tick's state
   block. It quotes ticket text, comments, PRs, and the operator's messages, untrusted as the journal is, and names
   worktree paths. It is read the same way, at most 1 MiB, its control characters dropped, rendered as text.
-- It serves the end of a tick's output as written (DESIGN §22): at most its last 1 MiB, read the same way, its
-  control characters dropped, rendered as text. That adds what the transcript leaves out: the runtime's stderr,
-  which may name the operator's paths and config, and every field of the overseer's events. A run's log is never
+- It serves the end of a tick's output, or of a worker run's log, as written (DESIGN §22): at most its last 1 MiB,
+  read the same way, its control characters dropped, rendered as text. That adds what the transcript leaves out: the
+  runtime's stderr, which may name the operator's paths and config; every field of the agent's events; and a run's
+  setup commands' output, whatever the repository's `setup` commands print. A chore run's or review's log is never
   served this way.
 - It serves a ticket's plans (DESIGN §25): each plan's file as it stands, model-written from ticket text, read
   bounded from a regular file opened without following links, and drawn in the plan editor as text, its HTML and
   images kept as characters (D113).
+- It serves a PR's review threads and the drafts that answer them (DESIGN §29): what canopy's reader last read of the
+  PR, coworkers' text, and each draft, a worker's text, all rendered as text; and the diff a run under `approve` kept
+  at its pushed head beside its log, read as a review's diff is (below): bounded, from a regular file opened without
+  following links, never served as a file.
 - It serves canopy's reviews (DESIGN §21, M32): each review run's findings, and the diff of the commit it read, which
   `_review` writes beside the run's log. The diff is the PR's own text, by whoever wrote the PR, `review.query`'s
   other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened
@@ -559,8 +584,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, ask for, skip,
   or approve a ticket's plan as `canopy plan` does, promote a proposal or a ticket's note to a lesson, reject a
   proposal, renew a lesson, and forget a note's, a proposal's, or a lesson's text as `canopy memory promote`,
-  `reject`, `renew`, and `forget` do (DESIGN §28), ask the loop to read its config files again as SIGHUP does, and
-  ask it for a tick now as `t` at its terminal does.
+  `reject`, `renew`, and `forget` do (DESIGN §28), edit, drop, and send a run's drafts as `canopy draft edit`,
+  `drop`, and `send` do (DESIGN §29), ask the loop to read its config files again as SIGHUP does, and ask it for a
+  tick now as `t` at its terminal does.
   Beyond the CLI's verbs it writes two things, both the operator's own words on a plan (DESIGN §25): an edit of a
   plan's file, saved as the operator's own editor would, operator-only and never through a link, only over the
   ticket's current plan, never while a plan run for it is running, and never over a file that changed since the
@@ -578,7 +604,9 @@ reaches every run's prompt, every ticket's, until it lapses, at most seven days,
 outlives a new secret; the banner on every page and `canopy status` show it while it is
 in force. A lesson promoted that way reaches every worker's prompt while `memory.proposals` is `use`, as such a notice
 does, with no lapse: it outlives a new secret until the operator forgets it, and `canopy memory lessons` and the
-memory page list it, with where it came from. Binding to a private address rather than loopback relies on the network
+memory page list it, with where it came from. It can also edit a run's draft into text of its choosing and send it,
+which posts that text on GitHub as the operator, unmarked, on a PR or a ticket a run drafted for; the journal records
+the edit, the send, and the channel. Binding to a private address rather than loopback relies on the network
 for the rest. A local user on a
 shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port
 on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then
@@ -590,7 +618,8 @@ loop's terminal would.
 
 ## 6. What canopy must never do
 
-- Approve, merge, or close a PR, or submit a PR review of any kind (approve or request changes).
+- Approve, merge, or close a PR, or submit a PR review that approves or requests changes. The one review canopy
+  submits is a comment review of text the operator sent through canopy word for word (DESIGN §29).
 - Push to or edit a PR the loop is only reviewing.
 - Transition a ticket to Done.
 - Push to any branch outside `trust.branch_prefix`, except the head branch of an open, non-fork PR the operator

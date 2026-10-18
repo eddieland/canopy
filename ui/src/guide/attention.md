@@ -44,6 +44,9 @@ Under its head, an item leads with whatever its reason asks of you, so the thing
 - **A plan to approve** (`plan review`): the plan's card, the same one the ticket's page shows: which plan it is, who
   wrote it, how many comments are open, **Approve**, and **Open plan**. Approve right there if you've already read it;
   open it if you haven't, which is the honest option more often than anyone admits. See [Plans](plans).
+- **Replies waiting on you** (`drafts waiting`): a button to the PR's page, where each reply a run drafted sits on the
+  thread it answers, or for a comment on the ticket itself, the draft right here, with **Send**. See
+  [Pull requests](pull-requests#replying-to-your-coworkers-reviews).
 - **A command to run**, like a missing repository's `canopy workspace sync`: the command, with a button to copy it.
   There's nothing to answer here; the item leaves once the command has fixed its cause.
 

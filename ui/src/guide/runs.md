@@ -36,6 +36,11 @@ scroll than click.
 
 The session id in the transcript's header opens the same session in the runtime's own tools: `opencode export ID`.
 
+Under the transcript, **Output** is the run's log as written: its setup commands' output, then the worker's stdout and
+stderr, and how it exited. The transcript shows only the session's events, so a run that died in `pnpm install`, or
+crashed before its first event, has an empty transcript and its whole story here. **Show output** opens it at its end,
+where the errors live.
+
 ## Context
 
 Above the transcript, a bar for each model call shows how much it was sent. Each call carries everything before it, so

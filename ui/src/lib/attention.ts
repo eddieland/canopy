@@ -21,8 +21,8 @@ const FAILED = new Set([
 ])
 
 // Reasons that wait on the operator's own answer: a private ticket's question or a planner's, an untrusted review's
-// go-ahead (D089), or a plan to approve (DESIGN §25).
-const WAITING = new Set(['awaiting_reply', 'untrusted_review', 'plan_review'])
+// go-ahead (D089), a plan to approve (DESIGN §25), or the replies a run drafted (DESIGN §29).
+const WAITING = new Set(['awaiting_reply', 'untrusted_review', 'plan_review', 'drafts_waiting'])
 
 // Reasons for a PR that is done for now and waits on someone else: a reviewer, or the merge (DESIGN §7). Nothing is
 // stuck while one is open, so they never count as blocking.
@@ -113,11 +113,11 @@ export function breakdownText(parts: readonly BreakdownPart[]): string {
 /**
  * What an item's reason asks of the operator, which picks the first block of its detail, under its head (ui/DESIGN.md,
  * "The attention detail"): the ticket's latest run, for a run that broke; the PR, for one waiting on someone else; the
- * reply, for an answer; the plan's card, for a plan; the proposals or lessons memory's items name; the command to run,
- * for an item about nothing canopy shows that names one. `ticket` is any other ticket's item, which leads with the
- * ticket's own actions; `none`, the rest.
+ * reply, for an answer; the plan's card, for a plan; the proposals or lessons memory's items name; the PR's threads,
+ * for the replies a run drafted; the command to run, for an item about nothing canopy shows that names one. `ticket`
+ * is any other ticket's item, which leads with the ticket's own actions; `none`, the rest.
  */
-export type Ask = 'run' | 'pull-request' | 'reply' | 'plan' | 'memory' | 'command' | 'ticket' | 'none'
+export type Ask = 'run' | 'pull-request' | 'reply' | 'plan' | 'memory' | 'drafts' | 'command' | 'ticket' | 'none'
 
 /** The item's `Ask`. A chore's item and a PR's own are `none`: their detail is the chore's notes, or the PR's limit. */
 export function ask(item: AttentionItem): Ask {
@@ -129,6 +129,9 @@ export function ask(item: AttentionItem): Ask {
     }
     if (RUN_BROKE.has(item.reason)) {
         return 'run'
+    }
+    if (item.reason === 'drafts_waiting') {
+        return 'drafts'
     }
     if (PARKED.has(item.reason)) {
         return 'pull-request'

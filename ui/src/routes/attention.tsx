@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { GitPullRequest } from 'lucide-react'
+import { GitPullRequest, MessageSquareReply } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
@@ -13,13 +13,12 @@ import {
     ticketQuery,
     ticketsQuery,
 } from '@/api/queries'
-import type { AttentionItem, Run, Unit } from '@/api/types'
+import type { AttentionItem, Draft, Run, Unit } from '@/api/types'
 import { AllClear } from '@/components/all-clear'
 import { Age } from '@/components/age'
 import { ChoreFindingText } from '@/components/chore-finding'
 import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
-import { Conversation } from '@/components/conversation'
 import { Copyable } from '@/components/copy-button'
 import { Counters } from '@/components/counters'
 import { useDismissFinding } from '@/components/dismiss-finding'
@@ -35,11 +34,13 @@ import { InlineCode } from '@/components/rich-text'
 import { RunsTable } from '@/components/runs-table'
 import { Chip, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
+import { TicketDrafts } from '@/components/ticket-drafts'
+import { TicketThread } from '@/components/ticket-thread'
 import { TicketLink } from '@/components/ticket-link'
 import { LinkOutButton } from '@/components/ticket-links'
 import { TicketTitle } from '@/components/ticket-title'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { WorkingNow } from '@/components/working-now'
 import { useUntrustedReview } from '@/hooks/use-untrusted-review'
 import { answered } from '@/lib/acknowledged'
 import { ask, bySeverity, commandOf, pullRequestOf, severity, shownDetail } from '@/lib/attention'
@@ -47,7 +48,8 @@ import type { Ask, Severity } from '@/lib/attention'
 import { settled, withLeaving } from '@/lib/leaving'
 import type { Listed } from '@/lib/leaving'
 import { onGitHub } from '@/lib/links'
-import { ordered, useListOrder } from '@/lib/list-order'
+import { sinceForget } from '@/lib/forgotten'
+import { useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
 import { phaseLabel, phaseWord } from '@/lib/phase'
 import { pullRequestLabel } from '@/lib/pull-request-label'
@@ -490,6 +492,7 @@ function Thread({ item, ticketKey, asks }: { item: AttentionItem; ticketKey: str
         <>
             {asks === 'run' && <LatestRun runs={data.runs} />}
             {asks === 'pull-request' && <PullRequestAction item={item} units={data.units} />}
+            {asks === 'drafts' && <DraftsAction item={item} ticketKey={ticket.key} drafts={data.drafts} />}
             {/* What holds it up sits before its conversation, where it is read first (DESIGN.md, the detail
                 skeleton). */}
             {leads && actions}
@@ -505,19 +508,12 @@ function Thread({ item, ticketKey, asks }: { item: AttentionItem; ticketKey: str
                     <Chip>{ticket.private ? 'private' : 'public'}</Chip>
                     {messages.length > 1 && <OrderToggle list="conversation" />}
                     <span className="readout text-xs text-muted-foreground">
-                        <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} /> · {messages.length}
+                        <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} /> · {sinceForget(data).length}
                     </span>
                 </span>
             </PanelHeader>
             <ThreadScroll key={ticket.key} label="Conversation" end={order === 'oldest' ? 'bottom' : 'top'}>
-                {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
-                {order === 'newest' && <WorkingNow ticketKey={ticket.key} />}
-                {messages.length === 0 ? (
-                    <Empty>no messages yet: what you and its workers say shows here</Empty>
-                ) : (
-                    <Conversation messages={ordered('conversation', order, messages)} waiting={ticket.awaiting} />
-                )}
-                {order === 'oldest' && <WorkingNow ticketKey={ticket.key} />}
+                <TicketThread detail={data} order={order} />
             </ThreadScroll>
             <ReplyForm
                 key={ticket.key}
@@ -542,6 +538,28 @@ function LatestRun({ runs }: { runs: Run[] }) {
     return (
         <div className="border-b" data-testid="attention-run">
             <RunsTable runs={[latest]} ticket={false} />
+        </div>
+    )
+}
+
+/**
+ * Replies a run drafted (DESIGN §29): for a PR, its page, where each sits on its thread to read, edit, drop, or send;
+ * for the ticket itself, the ticket's own drafts that wait, here, with their verbs.
+ */
+function DraftsAction({ item, ticketKey, drafts }: { item: AttentionItem; ticketKey: string; drafts: Draft[] }) {
+    const url = pullRequestOf(item)
+    if (url === null) {
+        const open = drafts.filter((d) => d.status === 'waiting')
+        return <TicketDrafts ticketKey={ticketKey} drafts={open} bare className="border-b" />
+    }
+    return (
+        <div className="flex flex-wrap items-center gap-2 border-b p-3" data-testid="attention-drafts">
+            <Button asChild variant="outline">
+                <Link to="/pull-requests/pr" search={{ url }}>
+                    <MessageSquareReply />
+                    Read the drafts on {pullRequestLabel(url)}
+                </Link>
+            </Button>
         </div>
     )
 }

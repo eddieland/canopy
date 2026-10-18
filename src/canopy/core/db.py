@@ -46,6 +46,8 @@ CURSOR_COLUMNS: Mapping[str, str] = {**TICKET_CURSORS, **UNIT_CURSORS}
 # written once below over a table from this closed set: claimed by its process's pid, its agent's pid recorded, its
 # report, and its close. A table name in SQL comes from here, never from input.
 type RunTable = Literal["runs", "chore_runs", "review_runs"]
+# The rows whose agent's progress `set_progress` records as it prints; a worker run's is `set_run_progress`.
+type ProgressTable = Literal["ticks", "chore_runs"]
 RUN_TABLES: tuple[RunTable, ...] = ("runs", "chore_runs", "review_runs")
 # What each run table's rows are called in a message, and the column it keeps its agent's pid in: the leader of the
 # process group the run's own process starts, which outlives that process if it dies.
@@ -557,11 +559,14 @@ def recently_done(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
 
 # The run lifecycle (DESIGN §6, §8): what every table of detached runs shares
 
-# A run with its ticket's title as `ticket_title`, and a `resume`'s reasons as `reasons`, comma-separated (read them
-# with `reasons_in`), for display (DESIGN §8, §13). Every query a page or `canopy status` shows runs from starts here.
+# A run with its ticket's title as `ticket_title`, a `resume`'s reasons as `reasons`, comma-separated (read them with
+# `reasons_in`), and whether the operator stopped its ticket as `ticket_stopped`, for display (DESIGN §8, §13, §22).
+# Every query a page or `canopy status` shows runs from starts here.
 _RUNS = (
     "SELECT r.*, t.title AS ticket_title, "
-    "(SELECT group_concat(w.reason, ',') FROM run_reasons w WHERE w.run_id = r.id) AS reasons "
+    "(SELECT group_concat(w.reason, ',') FROM run_reasons w WHERE w.run_id = r.id) AS reasons, "
+    "EXISTS (SELECT 1 FROM starts s WHERE s.subject_kind = 'ticket' AND s.subject_id = r.ticket_key "
+    "AND s.status = 'stopped') AS ticket_stopped "
     "FROM runs r LEFT JOIN tickets t ON t.key = r.ticket_key"
 )
 # What a run table's rows are read as: a run with its ticket's title, for display, and any other run as it is.
@@ -880,9 +885,30 @@ def set_run_progress(
             )
 
 
-def set_tick_session(conn: sqlite3.Connection, tick_id: int, session_id: str) -> None:
-    """Record a tick's overseer session while it runs, before what it cost is known (§6, §13)."""
-    conn.execute("UPDATE ticks SET session_id = ? WHERE id = ?", (session_id, tick_id))
+def set_progress(
+    conn: sqlite3.Connection,
+    table: ProgressTable,
+    row_id: int,
+    session_id: str,
+    *,
+    usage: Usage | None = None,
+) -> None:
+    """Record what a running tick's overseer or chore run's agent has reported so far (§6, §19).
+
+    Its session always, and what it has spent so far when `usage` is given. Nothing changes for one not running.
+    """
+    with transaction(conn):
+        conn.execute(
+            f"UPDATE {table} SET session_id = ? WHERE id = ? AND status = 'running'",  # noqa: S608
+            (session_id, row_id),
+        )
+        if usage is not None:
+            conn.execute(
+                f"UPDATE {table} SET cost_usd = ?, tokens_input = ?, tokens_output = ?, "  # noqa: S608
+                "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ?, tokens_peak_context = ?, "
+                "tokens_first_call = ?, tokens_first_cache_write = ? WHERE id = ? AND status = 'running'",
+                (*_spent(usage), row_id),
+            )
 
 
 def usage_of(row: sqlite3.Row | records.Row) -> Usage | None:
@@ -938,7 +964,7 @@ def _set_report(
 
 
 def _spent(usage: Usage) -> tuple[float, int, int, int, int, int, int | None, int | None, int | None]:
-    """`usage` as the cost and token columns hold it, in the order `_set_report` and `set_run_progress` write them.
+    """`usage` as the cost and token columns hold it, in the order `_set_report` and the progress setters write them.
 
     Returns:
         The cost, each kind of token, the peak context, and the first call's tokens and cache write.
@@ -1689,11 +1715,12 @@ def latest_message_of(conn: sqlite3.Connection, subject_kind: str, subject_id: s
     return None if row[0] is None else int(row[0])
 
 
-def forget_ticket(conn: sqlite3.Connection, key: str) -> None:
+def forget_ticket(conn: sqlite3.Connection, key: str, *, channel: str, branch: str | None, prs: Iterable[str]) -> None:
     """Clear what the journal knows of a ticket's branch, PRs, and phases, and mark where its loop view begins.
 
-    Call inside a transaction. Runs, messages, the start record, and the cursors stay (DESIGN §22). A waiting or
-    approved plan is superseded, so a ticket planned under `policy.plan = "approve"` is planned again; its file stays.
+    Call inside a transaction. Runs, messages, the start record, and the cursors stay (DESIGN §22). The forget is
+    recorded with the `branch` and `prs` it dropped, beside every earlier one. A waiting or approved plan is
+    superseded, so a ticket planned under `policy.plan = "approve"` is planned again; its file stays.
     """
     conn.execute(
         "UPDATE tickets SET branch = NULL, phase = NULL, needs_human_since = NULL, done = 0, forgotten_at = ?, "
@@ -1702,11 +1729,44 @@ def forget_ticket(conn: sqlite3.Connection, key: str) -> None:
         "WHERE key = ?",
         (now(), key, SUBJECT_TICKET, key, key),
     )
+    conn.execute(
+        "INSERT INTO forgets (ticket_key, at, channel, run_id, message_id, branch, prs) "
+        "SELECT key, forgotten_at, ?, forgotten_run_id, forgotten_message_id, ?, ? FROM tickets WHERE key = ?",
+        (channel, branch, json.dumps(list(prs)), key),
+    )
     conn.execute("DELETE FROM ticket_units WHERE ticket_key = ?", (key,))
     conn.execute(
         "UPDATE plans SET status = ? WHERE ticket_key = ? AND status != ?",
         (PlanStatus.SUPERSEDED, key, PlanStatus.SUPERSEDED),
     )
+
+
+def forgets_of(conn: sqlite3.Connection, key: str) -> list[records.Forget]:
+    """Return each time the operator forgot ticket `key`'s work, oldest first; the last is the one its row holds."""
+    return records.fetch_all(conn, records.Forget, "SELECT * FROM forgets WHERE ticket_key = ? ORDER BY id", (key,))
+
+
+def worked_since_forget(conn: sqlite3.Connection, ticket: records.Ticket) -> bool:
+    """Return whether anything has happened to a forgotten ticket since its latest forget, or True if it was never one.
+
+    Work is a run, a message, a branch, a unit, or the done mark: what another forget would have something to drop.
+    """
+    if ticket.forgotten_at is None or ticket.branch is not None or ticket.done:
+        return True
+    row = conn.execute(
+        "SELECT EXISTS (SELECT 1 FROM runs WHERE ticket_key = ? AND id > ?) "
+        "OR EXISTS (SELECT 1 FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ?) "
+        "OR EXISTS (SELECT 1 FROM ticket_units WHERE ticket_key = ?)",
+        (
+            ticket.key,
+            ticket.forgotten_run_id or 0,
+            SUBJECT_TICKET,
+            ticket.key,
+            ticket.forgotten_message_id or 0,
+            ticket.key,
+        ),
+    ).fetchone()
+    return bool(row[0])
 
 
 def forgotten_message_id(conn: sqlite3.Connection, key: str) -> int:

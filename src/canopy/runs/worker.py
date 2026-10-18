@@ -35,18 +35,21 @@ from canopy.core import (
     conversation,
     db,
     definitions,
+    drafts,
     hostgit,
     memory,
     outbox,
     plans,
     pools,
+    replies,
+    review_diff,
     transcript,
 )
 from canopy.core.config import render_command, setup_words
-from canopy.core.vocab import PoolKind, RunKind, RunStatus
+from canopy.core.vocab import PoolKind, ReplyMode, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
-from canopy.runs import desks, dispatch, policy, tidy
+from canopy.runs import desks, dispatch, drafted, policy, tidy
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -184,6 +187,8 @@ class Outcome:
     # What the worker sent of agent memory, and the commit its branch was at when it ended (DESIGN §28).
     memory: memory.Fields | None = None
     head: str | None = None
+    # The comments it drafted in place of posting them (DESIGN §29).
+    drafts: drafts.Fields | None = None
 
     def result_json(self) -> str:
         """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11)."""
@@ -247,12 +252,36 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             _release(ctx, run, slots, log)
             _record_prs(ctx, run, outcome)
             stored = outcome.result_json()
-            remember = functools.partial(memory.record_run, ctx.conn, run_id, outcome.memory, head=outcome.head)
+            remember = functools.partial(_record_reported, ctx, run_id, outcome)
             if not conversation.close_run(ctx.conn, ctx.config, run, outcome.status, stored, then=remember):
                 log.warning("run was already closed; its outcome is not recorded", extra=fields)
             procs.drop_lifelock(Path(run["log_path"]))
             log.info("run finished", extra={**fields, "status": outcome.status})
+            _check_drafts(ctx, run_id, stop, log)
     return outcome
+
+
+def _check_drafts(ctx: Context, run_id: int, stop: stopping.StopOnSignal, log: logs.TickAdapter) -> None:
+    """Read the PRs the run's drafts answer, after the run is closed: its slots are returned and it holds no capacity.
+
+    A failure here is logged, never raised: the run is closed, and the tick's reconcile reads the PRs again. So a stop
+    signal is heard again for the read, which it cuts short, rather than waiting out the reader's timeout.
+    """
+    try:
+        stop.armed = True
+        drafted.after_run(ctx, run_id, log)
+    except stopping.Stopped:
+        log.info("drafts not checked: the run was stopped", extra={"run_id": run_id})
+    except Exception:
+        log.exception("drafts not checked", extra={"run_id": run_id})
+    finally:
+        stop.armed = False
+
+
+def _record_reported(ctx: Context, run_id: int, outcome: Outcome) -> None:
+    """Write what the run reported beside its result, in the transaction that closes it: memory (§28), drafts (§29)."""
+    memory.record_run(ctx.conn, run_id, outcome.memory, head=outcome.head)
+    drafts.record_run(ctx.conn, run_id, outcome.drafts)
 
 
 type _Doer = Callable[[Context, sqlite3.Row, Sequence[_Slot], TextIO, logs.TickAdapter], Outcome]
@@ -624,6 +653,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     parsed = parse_result(text)
     # Memory's fields are read only from a valid result line, and never stored with the result (DESIGN §28).
     remembered = memory.parse(text) if parsed is not None else None
+    drafted = drafts.parse(text) if parsed is not None else None
     if parsed is not None:
         parsed = parsed.for_repos([s.repo for s in slots])
     if result.timed_out:
@@ -637,7 +667,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     if rewritten:
         # The slot's git directory may be one the worker made: canopy runs no git in any slot of this run.
         notes = [f"{s.git.where}the worker rewrote {path}; nothing was checked or pushed" for s, path in rewritten]
-        return Outcome(RunStatus.CRASHED, parsed, "; ".join(notes), memory=remembered)
+        return Outcome(RunStatus.CRASHED, parsed, "; ".join(notes), memory=remembered, drafts=drafted)
     objects = _objects(ctx, run)
     if tidy.used(objects):
         # A sandboxed worker's commits are only in the run's object directory (DESIGN §8).
@@ -653,8 +683,41 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     if unpushed:
         status, note = RunStatus.UNPUSHED, "; ".join(unpushed)
     committed = [found for slot in slots if copy is not None and (found := _committed_copy(slot, branch))]
+    _keep_diffs(ctx, run, slots, log)
     head = _heads(slots, log) if remembered is not None and remembered.notes else None
-    return Outcome(status, parsed, "; ".join(n for n in [note, *committed] if n), memory=remembered, head=head)
+    notes = "; ".join(n for n in [note, *committed] if n)
+    return Outcome(status, parsed, notes, memory=remembered, head=head, drafts=drafted)
+
+
+def _keep_diffs(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], log: logs.TickAdapter) -> None:
+    """Keep each slot's diff, for a run whose drafts the PR's page shows on it: one rendered under `approve`."""
+    rendered = replies.run_replies(ctx.conn, int(run["id"]))
+    if rendered is not None and rendered.mode is ReplyMode.APPROVE:
+        for slot in slots:
+            _keep_diff(slot, Path(run["log_path"]), log)
+
+
+def _keep_diff(slot: _Slot, log_path: Path, log: logs.TickAdapter) -> None:
+    """Keep the slot's diff at the run's head, from where it leaves its base, for the PR's page (DESIGN §29).
+
+    Best effort, as a review's is (§21, The diff): the run does not need it, so any failure, git's or the disk's, is
+    logged and the page shows the threads without a diff. The head is written before the diff, so a diff is never kept
+    without the commit it was taken at.
+    """
+    fields = {"repo": slot.repo, "base": slot.base}
+    try:
+        head = slot.git.result("rev-parse", "HEAD")
+        found = slot.git.result("merge-base", f"refs/remotes/origin/{slot.base}", "HEAD") if head.ok else head
+        sha = head.stdout.strip()
+        diff = slot.git.result(*review_diff.diff_args(found.stdout.strip(), sha)) if found.ok else found
+        if not diff.ok:
+            log.warning("run diff not kept", extra={**fields, "error": diff.stderr[:500]})
+            return
+        path = review_diff.run_path_for(log_path, slot.repo)
+        review_diff.keep_head(path, sha)
+        review_diff.keep(path, diff.stdout)
+    except (_SetupError, OSError) as e:
+        log.warning("run diff not kept", extra={**fields, "error": str(e)})
 
 
 def _heads(slots: Sequence[_Slot], log: logs.TickAdapter) -> str | None:

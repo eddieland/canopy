@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import { ApiError } from '@/api/client'
+import { draft } from '@/api/mocks'
 
 import {
     dismissedText,
+    draftDroppedText,
+    draftEditedText,
+    draftsSentText,
     failedText,
     forgotText,
     grantedText,
@@ -182,6 +186,26 @@ describe('outcomes', () => {
         )
     })
 
+    it('say what a verb on a draft did, as canopy draft does', () => {
+        expect(draftEditedText(draft({ hash: 'abc123def456' }))).toBe(
+            "Run 45's draft 1 is your text now, hash abc123def456.",
+        )
+        expect(draftDroppedText(draft({ status: 'dropped' }))).toBe("Run 45's draft 1 is dropped.")
+        const url = 'https://github.com/acme/web/pull/88#discussion_r1'
+        expect(
+            draftsSentText({
+                posted: [draft({ status: 'sent', sent_url: url })],
+                already: [draft({ number: 2, status: 'sent', sent_url: null })],
+                failed: [{ draft: draft({ number: 3 }), why: 'the post failed: 502' }],
+                unconfirmed: [draft({ number: 4, status: 'unconfirmed' })],
+            }),
+        ).toBe(
+            `Sent run 45's draft 1: ${url}. Run 45's draft 2 was sent already. ` +
+                "Run 45's draft 3 was not sent: the post failed: 502. Run 45's draft 4 may have been posted: the " +
+                'post ended without saying. A read of its PR settles it; canopy sends it no other time.',
+        )
+    })
+
     it('say whether a reply was new', () => {
         expect(repliedText('A-1', { message_id: 9, answers: 5, new: true })).toBe(
             'Recorded message 9 on A-1, answering message 5. The next tick reads it.',
@@ -221,6 +245,7 @@ describe('outcomes', () => {
             head: null,
             created_at: '2026-10-08T12:00:00Z',
             use_count: 0,
+            used_by: [] as number[],
             last_used_at: null,
             review_at: '2027-01-06T12:00:00Z',
             wrong_at: null,

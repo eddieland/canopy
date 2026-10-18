@@ -54,14 +54,14 @@ export function shortSha(sha: string): string {
     return sha.slice(0, 7)
 }
 
-/** Where a review's findings sit in its diff: by file and line, on a file's header, or nowhere in the diff. */
-export interface Placed {
-    /** File index, then line, to the findings anchored on that line, in the review's order. */
-    lines: Map<number, Map<number, Numbered[]>>
-    /** File index to the findings about that file whose line the diff does not show, or that name no line. */
-    files: Map<number, Numbered[]>
-    /** The findings about no file in the diff, or every finding when there is no diff. */
-    elsewhere: Numbered[]
+/** Where cards sit on a diff: by file and line, on a file's header, or nowhere in the diff. */
+export interface Placed<T> {
+    /** File index, then line, to the cards anchored on that line, in their order. */
+    lines: Map<number, Map<number, T[]>>
+    /** File index to the cards about that file whose line the diff does not show, or that name no line. */
+    files: Map<number, T[]>
+    /** The cards about no file in the diff, or every card when there is no diff. */
+    elsewhere: T[]
 }
 
 /** A finding with its number in the review, from 1, which its card and the findings list both show. */
@@ -72,22 +72,38 @@ export interface Numbered {
     finding: ReviewFinding
 }
 
-/** Sorts a review's findings onto the diff: by file and line, onto a file's header, or elsewhere. */
-export function placeFindings(findings: ReviewFinding[], hasDiff: boolean): Placed {
-    const placed: Placed = { lines: new Map(), files: new Map(), elsewhere: [] }
-    findings.forEach((finding, i) => {
-        const numbered = { n: i + 1, finding }
-        if (!hasDiff || finding.file === null) {
-            placed.elsewhere.push(numbered)
-        } else if (finding.line === null) {
-            placed.files.set(finding.file, [...(placed.files.get(finding.file) ?? []), numbered])
+/**
+ * Sorts cards onto a diff by where each one is: its file's index and its new-side line, or a null file for none in the
+ * diff and a null line for one the diff does not show. Every card is elsewhere when there is no diff.
+ */
+export function place<T>(
+    items: T[],
+    at: (item: T) => { file: number | null; line: number | null },
+    hasDiff: boolean,
+): Placed<T> {
+    const placed: Placed<T> = { lines: new Map(), files: new Map(), elsewhere: [] }
+    for (const item of items) {
+        const { file, line } = at(item)
+        if (!hasDiff || file === null) {
+            placed.elsewhere.push(item)
+        } else if (line === null) {
+            placed.files.set(file, [...(placed.files.get(file) ?? []), item])
         } else {
-            const byLine = placed.lines.get(finding.file) ?? new Map<number, Numbered[]>()
-            byLine.set(finding.line, [...(byLine.get(finding.line) ?? []), numbered])
-            placed.lines.set(finding.file, byLine)
+            const byLine = placed.lines.get(file) ?? new Map<number, T[]>()
+            byLine.set(line, [...(byLine.get(line) ?? []), item])
+            placed.lines.set(file, byLine)
         }
-    })
+    }
     return placed
+}
+
+/** Sorts a review's findings onto the diff: by file and line, onto a file's header, or elsewhere. */
+export function placeFindings(findings: ReviewFinding[], hasDiff: boolean): Placed<Numbered> {
+    return place(
+        findings.map((finding, i) => ({ n: i + 1, finding })),
+        ({ finding }) => finding,
+        hasDiff,
+    )
 }
 
 /** The element id a finding's card has on the page, which the findings list links to. */

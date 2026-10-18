@@ -17,6 +17,7 @@ export const keys = {
     run: (id: number) => ['run', id] as const,
     // A run's and a tick's transcripts: read again only when the stream says the run's status or the tick changed.
     runTranscript: (id: number) => ['transcript', 'run', id] as const,
+    runOutput: (id: number) => ['transcript', 'run', id, 'output'] as const,
     tickTranscript: (id: number) => ['transcript', 'tick', id] as const,
     // Under its transcript's key, so the invalidation that marks the transcript stale marks the output too.
     tickOutput: (id: number) => ['transcript', 'tick', id, 'output'] as const,
@@ -46,6 +47,8 @@ export const keys = {
     // The PRs list and each PR's page share a prefix, so one invalidation marks both stale.
     pullRequests: ['pull-requests'] as const,
     pullRequest: (url: string) => ['pull-requests', url] as const,
+    // Under the PR's key, so what marks its page stale marks its threads stale too.
+    pullRequestThreads: (url: string) => ['pull-requests', url, 'threads'] as const,
     loop: ['loop'] as const,
     // Agent memory: every tier's, read again at each tick; a ticket's under its ticket's key, so the stream's
     // `ticket.changed` marks it stale with the ticket; a run's, read again when the run's status changes.
@@ -134,6 +137,17 @@ export function tickOutputQuery(id: number) {
         queryKey: keys.tickOutput(id),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/ticks/{tick_id}/output', { params: { path: { tick_id: id } }, signal })),
+        placeholderData: undefined,
+        staleTime: Number.POSITIVE_INFINITY,
+    })
+}
+
+/** The end of a run's log as written, its setup commands' output and stderr included. Stale when its transcript is. */
+export function runOutputQuery(id: number) {
+    return queryOptions({
+        queryKey: keys.runOutput(id),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/runs/{run_id}/output', { params: { path: { run_id: id } }, signal })),
         placeholderData: undefined,
         staleTime: Number.POSITIVE_INFINITY,
     })
@@ -318,6 +332,19 @@ export function pullRequestQuery(url: string) {
         queryKey: keys.pullRequest(url),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/pull-request', { params: { query: { url } }, signal })),
+        placeholderData: undefined,
+    })
+}
+
+/**
+ * A PR's review threads on the diff its latest run kept, with every draft for it (DESIGN §29): what canopy's reader
+ * last read, never live from GitHub. A 404 is a PR canopy has read no threads of and holds no draft for.
+ */
+export function pullRequestThreadsQuery(url: string) {
+    return queryOptions({
+        queryKey: keys.pullRequestThreads(url),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/pull-request/threads', { params: { query: { url } }, signal })),
         placeholderData: undefined,
     })
 }

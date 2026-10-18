@@ -35,6 +35,7 @@ in order:
      its slot, and mark it `crashed` (§21). This runs before the worker runs' reconcile, and a running review's lease
      is never returned as stale.
    - Each pending memory proposal written more than 14 days ago expires, in every mode (§28).
+   - Each PR a draft waits on is read, and its drafts checked against what a whole read returned (§29).
    - `capacity = max_workers - (running runs + running review runs)`: a review holds a slot.
    - If `treehouse status` or a return fails, close the tick as `reconcile_failed` and stop; the overseer does not run.
    - Record on the tick the newest journal message and the time: everything up to that point was there for this tick
@@ -78,10 +79,11 @@ in order:
 
    Then run the overseer with `overseer_cmd`, cwd the workspace root (§18), timeout `overseer_timeout_minutes`, and
    `CANOPY_TICK_ID` set. `canopy dispatch`, `decide`, `queried`, `attention`, and `mirror` refuse if it is unset or
-   names a tick that is not running (D020). Its output goes to `<state_dir>/ticks/<tick id>.log`, readable only by the
-   operator, never to the journal. Its session is recorded as soon as it prints one, and session and cost (§13) again
-   when it ends. It succeeded if it exited 0 and a line of its final message (§13), trimmed of whitespace and
-   backticks, is exactly `CANOPY_TICK_DONE`; otherwise the tick closes as `overseer_failed`. Text around that line is
+   names a tick that is not running (D020). Its output goes to `<state_dir>/ticks/<tick id>.log` as it prints it, its
+   stderr after once it ends, readable only by the operator, never to the journal. Its session is recorded as soon as
+   it prints one, what it has spent at each model call's end, and session and cost (§13) again when it ends. It
+   succeeded if it exited 0 and a line of its final message (§13), trimmed of whitespace and backticks, is exactly
+   `CANOPY_TICK_DONE`; otherwise the tick closes as `overseer_failed`. Text around that line is
    allowed, since models summarize and a tick lost on its summary is lost to the attention list (MEASUREMENTS
    2026-10-12, F2). The check is on the final message because it catches a run that exits 0 short of the last step (a
    refused tool call, a cut-off session); the token is a word no model writes by chance. A successful run that recorded
@@ -151,8 +153,8 @@ messages and slots, a review's slot); a new kind joins that set rather than copy
 4. Print the tick's status, summary, decisions other than waits, attention items added and resolved, running workers,
    and what the overseer cost when the runtime reported it (§13), and the wait that follows.
 5. Wait, measured from the end of the tick, for `--every`, else `loop.interval_minutes`, whatever the tick's status,
-   lengthened after idle ticks and ended at a gate (Idle pacing, below). Pacing does not read tick cost (ROADMAP M13,
-   deferred). An operator message recorded since the tick began, such as a `canopy reply`, ends the wait early (§22);
+   lengthened after idle ticks and ended at a gate (Idle pacing, below). Pacing does not read tick cost (ROADMAP,
+   Deferred). An operator message recorded since the tick began, such as a `canopy reply`, ends the wait early (§22);
    so does a run ending (below). The wait never ends sooner than `loop.min_gap_minutes` (private, default 1) after the
    tick began, whatever ended it, which bounds how often the overseer runs: a burst of messages, runs ending one after
    another, or a gate opening just after a tick would otherwise run ticks back to back. On a terminal, pressing `t`
@@ -585,8 +587,9 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
    the object directory. A slot that cannot be tidied is not returned, and the directory is kept for the operator.
    SIGKILL cannot be trapped; reconcile tidies and returns that run's slots from what step 2 recorded.
 7. Close the run with its end time, status, and result, and in the same transaction record its messages about its ticket
-   (§22), and what it wrote of agent memory while a tier was on (§28): a `report` (its summary, else the harness's note,
-   else the status, with each PR on a line), and for a `blocked` run its `question`. A git failure before or after the
+   (§22), what it wrote of agent memory while a tier was on (§28), and its drafts under `approve` (§29): a `report`
+   (its summary, else the harness's note, else the status, with each PR on a line), and for a `blocked` run its
+   `question`. A git failure before or after the
    worker is `crashed`. The stored result is the validated one, text fields cut at 2000 characters, plus a `harness`
    note saying why the status differs from what the worker reported. `prs` is kept to the run's repositories; each plain
    `https://` URL becomes its unit's PR, for display and the next run's prompt, and its title in `pr_titles`, if any,
@@ -637,7 +640,9 @@ Worker obligations, stated in every worker prompt:
   <noreply@canopy.invalid>` by default, with the name and address from `trust.commit_trailer_name` and
   `trust.commit_trailer_email` (§12, TRUST_MODEL T5). With `trust.commit_trailer` off, add none.
 - Mark every comment and reply it posts, on the ticket or a PR: start it with `trust.comment_prefix` (`CANOPY:` by
-  default) and end it with `trust.comment_suffix` (empty by default), each when it is set (D069). Below.
+  default) and end it with `trust.comment_suffix` (empty by default), each when it is set (D069). Below. Under
+  `trust.review_replies = "approve"` it posts none on a PR, and on the ticket only without a tracker source that
+  posts: it drafts each in its result's `drafts` instead, for the operator to send (§29).
 - Open each PR through the GitHub MCP, or, with `runtime.pr_skill` set, only with that skill (below).
 - Comment on the ticket describing what was done and linking every PR. In a joint run, each PR's body links its sibling
   PRs and says which merges first.

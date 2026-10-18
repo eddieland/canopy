@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import signal
 import sqlite3
 import time
@@ -12,6 +13,7 @@ from unittest import mock
 
 import pytest
 from pydantic import ValidationError
+from syrupy.assertion import SnapshotAssertion
 
 from canopy.chores import execute, start
 from canopy.cli.main import main
@@ -52,6 +54,8 @@ FINDING = {
     "link": "https://ci.example.test/job/checkout/90",
 }
 OK = {"status": "ok", "summary": "one flaky test", "findings": [FINDING]}
+# A time the journal records, as `db.now` writes it.
+TIMES = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z")
 
 
 @pytest.fixture
@@ -162,6 +166,27 @@ def test_the_run_object_carries_the_notice_in_force(canopy_env: CanopyEnv, chore
     backdate(conn, 180)
     run_inline(conn, OK)
     assert json_block((runs / "2.prompt").read_text())["notice"] == "CI is down."
+
+
+def test_the_chore_prompt(
+    canopy_env: CanopyEnv, chores: Path, agent_log: Path, markdown_snapshot: SnapshotAssertion
+) -> None:
+    """A chore's prompt, whole, at its first run and at one after it, so a change to the `## Run` section the harness
+    writes is a diff in review (DESIGN §19).
+
+    The second run has a previous run, an open finding, a note from the operator, and a notice. Each time the journal
+    records shows as `TIME`.
+    """
+    conn = canopy_env.journal()
+    runs = canopy_env.state_dir / "chore-runs" / "build-health"
+    run_inline(conn, OK)
+    assert main(["reply", "chore:build-health", "Leave out the docs site: it is never deployed."]) == 0
+    assert main(["notice", "CI is down."]) == 0
+    backdate(conn, 180)
+    run_inline(conn, OK)
+    first, later = (TIMES.sub("TIME", (runs / f"{n}.prompt").read_text()) for n in (1, 2))
+    assert first == markdown_snapshot(name="first-run")
+    assert later == markdown_snapshot(name="a-later-run")
 
 
 def test_chore_guards(canopy_env: CanopyEnv, chores: Path) -> None:

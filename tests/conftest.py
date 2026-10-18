@@ -84,6 +84,20 @@ def treehouse_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
 
 
 @pytest.fixture
+def github_state(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
+    """The fake GitHub programs on PATH, holding nothing until the test writes the yielded state file.
+
+    `canopy-connect-github` reads it and `canopy-post-github` writes it; each appends what it was asked to
+    `github.jsonl` beside it. See tests/fakes/github for its keys.
+    """
+    state = tmp_path / "github.json"
+    with mock.patch.dict(
+        os.environ, {"FAKE_GITHUB_STATE": str(state), "FAKE_GITHUB_LOG": str(tmp_path / "github.jsonl")}
+    ):
+        yield state
+
+
+@pytest.fixture
 def agent_log(fakes_on_path: Path, tmp_path: Path) -> Iterator[Path]:
     """Fake agent on PATH with default behavior. Yields the file each run appends its argv and cwd to.
 

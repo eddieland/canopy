@@ -183,8 +183,8 @@ def check_operator(environ: Mapping[str, str] | None = None) -> None:
             raise Refused(
                 "inside_run",
                 f"{name} is set: this runs inside one of canopy's own ticks or runs, and only the operator starts, "
-                "stops, replies, forgets, grants attempts, plans, dismisses or sends findings, pauses, resumes, or "
-                "collects garbage",
+                "stops, replies, forgets, grants attempts, plans, dismisses or sends findings, edits or sends drafts, "
+                "pauses, resumes, or collects garbage",
             )
 
 
@@ -531,21 +531,22 @@ class Forgot:
     prs: list[str]
 
 
-def forget(conn: sqlite3.Connection, ref: Ref, *, dispatch_lock: Path) -> Forgot:
+def forget(conn: sqlite3.Connection, ref: Ref, *, channel: str, dispatch_lock: Path) -> Forgot:
     """Forget a ticket's work, so its next `implement` starts over on a new branch (DESIGN §22).
 
     Clears its branch, units, phases, and done flag, and marks where the loop's view of it begins: the overseer's state
     block and the attention list skip its earlier runs, and its waiting question, new operator messages, and a private
     worker's conversation skip its earlier messages. The runs stay, so attempt limits still count them (D030), and the
-    cursors stay, so what was handled stays handled. It holds the dispatch lock, so a dispatch that read the old branch
-    cannot record it again afterwards.
+    cursors stay, so what was handled stays handled. Each forget is recorded, from `channel`, with what it dropped. It
+    holds the dispatch lock, so a dispatch that read the old branch cannot record it again afterwards.
 
     Returns:
         The ticket's branch and its units' PRs, as the journal had them before they were cleared.
 
     Raises:
         Refused: `unsupported` for a subject that is not a ticket, `unknown` for a ticket canopy has no record of,
-            `running` while a run works it, `split` for a ticket a split made children of.
+            `running` while a run works it, `split` for a ticket a split made children of, `already_forgotten` for
+            one with nothing new since its last forget.
     """
     check_verb(ref, "forget")
     with lock.hold(dispatch_lock, wait=True), db.transaction(conn):
@@ -566,8 +567,13 @@ def forget(conn: sqlite3.Connection, ref: Ref, *, dispatch_lock: Path) -> Forgot
                 f"a split made {', '.join(children)} from {ref}; they are tickets of their own, and forgetting {ref} "
                 "would not undo them",
             )
+        if not db.worked_since_forget(conn, ticket):
+            raise Refused(
+                "already_forgotten",
+                f"{ref} has had no run, message, branch, or PR since you forgot it, so there is nothing new to forget",
+            )
         prs = [str(u["pr_url"]) for u in db.units(conn, ref.id) if u["pr_url"]]
-        db.forget_ticket(conn, ref.id)
+        db.forget_ticket(conn, ref.id, channel=channel, branch=ticket.branch, prs=prs)
         # Its notes are about work that is gone, as its earlier runs' reports are (DESIGN §28, Retention).
         memory.end_ticket_notes(conn, ref.id, "forgotten work")
     return Forgot(branch=ticket.branch, prs=prs)

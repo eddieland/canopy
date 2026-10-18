@@ -116,18 +116,14 @@ transition the ticket directly or through closing keywords. {{COMMIT_ATTRIBUTION
 The tracker is {{TRACKER_PROVIDER}}; if a skill named
 `tracker-{{TRACKER_PROVIDER}}` is available, load it before reading the ticket, and skip any of its steps that write to
 it. If a repository you changed has no PR yet, open one against its base branch listed above, with the ticket key in
-the title. {{OPEN_PR}} Reply on the PR to each review comment you addressed, briefly, and post nothing else
-but the edit to a PR's body below, when one is needed.
-{{MARK_COMMENTS}} You post as the operator, so that is how canopy knows the reply is yours and never reads it back as
-review feedback. Time limit {{TIMEOUT_MINUTES}} minutes.
+the title. {{OPEN_PR}} {{PRIVATE_PR_REPLIES}} Time limit {{TIMEOUT_MINUTES}} minutes.
 
 Each shell command starts in {{SLOT}}, whatever an earlier one changed directory to, and a `cd` is checked against
 where its command starts, even after another `cd` in the same command: `cd app && cd ../lib` is refused as leaving
 {{SLOT}}. To work in a directory inside it, set the command's working directory to it, or `cd` by its path from
 {{SLOT}}.
 
-If a review comment asks for a change you believe is wrong, make the case in a PR reply and do not make the change;
-report `blocked` with the disagreement as the question so the operator can settle it.
+{{PRIVATE_DECLINE}}
 
 If you are blocked again, report `blocked` with your question in `question`. Do not post it anywhere.
 
@@ -142,4 +138,4 @@ body you wrote.
 
 Last line of stdout, exactly one JSON object:
 
-{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"pr_titles":{{PR_TITLES}},"summary":"<what you addressed>","question":"<only when blocked>"}{{MEMORY_CONTRACT}}
+{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"pr_titles":{{PR_TITLES}},"summary":"<what you addressed>","question":"<only when blocked>"}{{MEMORY_CONTRACT}}{{DRAFTS}}

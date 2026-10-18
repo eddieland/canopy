@@ -96,6 +96,9 @@ comment_suffix = ""
 # Set if your repositories refuse merge commits: workers then rebase onto a base branch instead of merging it in, and
 # push the result with --force-with-lease to their own branch, never any other force (TRUST_MODEL T1).
 # rebase = false
+# How replies to review comments, and every other comment a worker would post, reach GitHub (DESIGN §29): "post" has
+# workers post them, marked; "approve" has them draft each one for you to read, edit, and send as your own words.
+# review_replies = "post"
 
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"
@@ -121,6 +124,19 @@ cmd = ""
 # events = ["attention", "loop", "runs"]
 # digest_every_minutes = 240
 # batch_minutes = 15                            # at most one message per 15 minutes, unless something needs you
+
+# Optional: the programs canopy reads GitHub with and posts your approved replies through (DESIGN §29). Unset, the
+# vcs source is canopy's own, which use the token `gh` holds for each PR's host. A tracker source with a post_cmd
+# lets canopy post a ticket's drafts too, as for GitHub Issues.
+# [connect.sources.github]
+# kind = "vcs"
+# cmd = "canopy-connect-github"
+# post_cmd = "canopy-post-github"
+# timeout_minutes = 2
+#
+# [connect.sources.issues]
+# kind = "tracker"
+# post_cmd = "canopy-post-github"
 
 # Optional: recurring chores the overseer runs when due (DESIGN §19). The prompt is your own file. A chore that runs
 # your own tools sets `cmd` to an agent of yours, defined in ~/.config/opencode/agent/, that allows exactly those tools.

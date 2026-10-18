@@ -615,8 +615,11 @@ list, an empty state, or a skeleton by hand.
   form is the action, and a question's head names it, `Waits on your answer to message 5, asked 3m ago`, rather than
   saying it, since the conversation holds it, marked `waiting on you` (One home per fact). A plan (`plan_review`): the
   plan's card (`PlanCard`, `bare`, its parts in the item's panel), with `Approve` and `Open plan`. Memory's items
-  (`memory_proposal`, `lesson_review`, `lesson_wrong`): the proposals or lessons they name, with their verbs (above). An
-  item about nothing the page shows whose detail names a `canopy` command to run (`repo_missing`): the command,
+  (`memory_proposal`, `lesson_review`, `lesson_wrong`): the proposals or lessons they name, with their verbs (above).
+  Replies a run drafted (`drafts_waiting`): an outline `Read the drafts on org/repo#N`, a router link to the PR's page,
+  where they sit on their threads; for a ticket's own draft, which names no PR, its waiting drafts (`TicketDrafts`,
+  `bare`). An item about nothing the page shows
+  whose detail names a `canopy` command to run (`repo_missing`): the command,
   `Copyable`, and nothing to answer. A ticket's item then shows what it is stuck at (below), its conversation, and the
   reply form; on the reasons above the ticket's own verbs (Start or Stop, Forget) are a quiet row under the thread,
   Start and Stop as ghost buttons, and on any other reason they lead, under the head, as they foot a ticket page's Work
@@ -634,7 +637,11 @@ list, an empty state, or a skeleton by hand.
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
   wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
   accent's tint for the operator's own words, which sit on the right. A bubble's corner nearest its side is square.
-  The question still open carries a `waiting on you` chip in `status-blocked`.
+  The question still open carries a `waiting on you` chip in `status-blocked`. A forgotten ticket's conversation
+  (`TicketThread`) shows what came after the latest forget. At the oldest end, each forget heads the attempt it ended:
+  a muted line saying when and how, with the branch and PRs it dropped under it, and that attempt's messages folded
+  under `Show N earlier messages`, a `Disclosure`, and dimmed, since the loop no longer reads them. Only the latest
+  says the loop reads what came after. The panel's count is of the messages after the latest forget.
   Bodies keep their line breaks (`whitespace-pre-wrap`) and are always text, but for their URLs (below). An operator
   message no `ok` tick has read carries a `waiting for the next tick` chip in `status-running`
   (`src/lib/acknowledged.ts`), and an `awaiting_reply` item it answered an `answered` chip, with a line saying it leaves
@@ -709,8 +716,10 @@ list, an empty state, or a skeleton by hand.
   its row: it turns By call and the search off, opens the row if it is a tool call, scrolls it to the window's middle,
   focuses it, and sets it on the accent's tint at 14%. A session of one call has the line alone: one bar says nothing
   the line does not. By call, each call's line has its step after its input, `30.2k in (+4.3k) · 1.8k out`.
-- **A tick's output** (`TickOutputPanel`) is the overseer's file as written, under the tick's transcript: one muted line
-  naming the file until `Show output`, a `Disclosure` in the header, opens it. Open, it is one monospace block, its
+- **A tick's output** (`TickOutputPanel`, `src/components/raw-output.tsx`) is the overseer's file as written, under the
+  tick's transcript, and **a run's output** (`RunOutputPanel`) its log the same way, under the run's: one muted line
+  naming the file (a run's says `the run's log`, whose path the Run panel shows) until `Show output`, a `Disclosure` in
+  the header, opens it. Open, it is one monospace block, its
   lines wrapped anywhere (JSON events have no spaces to break at), scrolling inside the panel (`PanelScroll`) and opened
   at its end, where stderr is; the file's size is in the header, and a cut says so above the block. A line that parses
   as a JSON object or array (the runtime's events) is colored as written, never reformatted (`src/lib/json-lines.ts`,
@@ -718,7 +727,8 @@ list, an empty state, or a skeleton by hand.
   plain. A transcript's block is colored the same way when the whole of it is JSON. A Pretty `Toggle` in the header (a
   mode, raised while on) lays each JSON line out over several, two spaces a level, by the space between its tokens
   alone, so every value stays as written; it reopens the block at its end. Each tick's panel keeps its own choice, off
-  until turned on, across reloads (`src/lib/pretty-output.ts`), as a list keeps its order.
+  until turned on, across reloads (`src/lib/pretty-output.ts`), as a list keeps its order; a run's keeps it for the
+  page alone.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
   `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` (at `text-xs`) and
@@ -984,7 +994,16 @@ list, an empty state, or a skeleton by hand.
   rest, and says so in a muted line above the first file. Each run of lines it leaves out is a fold, a row on
   `surface-raised/50` with a ghost `xs` button, `Show 60 hidden lines`, or `Show 500 of 13,029 hidden lines` past a
   step, which draws the next 500; a fold only adds, as rich text's `show N more lines` does, so it is a plain button,
-  not a `Disclosure`. A finding's
+  not a `Disclosure`. The panels take any card anchored at a line (`DiffPanels`, a card renderer and a `place`d list),
+  so a PR's threads sit on a run's diff as findings do on a review's (A PR's threads, below). A file's panel folds away
+  whole on `Hide diff`, a `Disclosure` at its header's end, to its header and a muted line counting what it hides
+  (`9 lines and 1 finding folded away`). Above the first file, an outline `xs` button names the file types shown
+  (`All file types`, `.ts only`, `2 of 3 file types`) and opens a `DropdownMenu` of them, each a checkbox item with its
+  count of files, every one ticked at first; unticking one hides its files, the menu staying open so several flip in
+  one go, and a muted line beside the button counts the files hidden, with `Show every type` under them to tick them
+  all again. A file the filter hides keeps its fold and the lines opened in it. A link from a review's findings list to
+  a card ticks its file's type and opens its panel, each time it is followed, so a link never lands on nothing. A
+  finding's
   card (`FindingCard`) sits right under the line it names, or under its file's header when the diff does not show the
   line, or in a Not in the diff panel: its number, its severity as a chip (`blocking` in `status-failed`, `major` in
   `status-blocked`, as the attention list's reasons; `minor` plain), its title, its location, and its detail as rich
@@ -1008,9 +1027,33 @@ list, an empty state, or a skeleton by hand.
   free column with its title: a column of its own, beside where the PR stands, would not fit a 1280px window. Its
   page: the PR's name (`org/repo#123`) as the title with its phase as a chip, a link out under it as a ticket's page
   has (`LinkOutButton`), saying where it goes (`on GitHub`) rather than repeating the title, then panels for its
-  fields and total cost, with a grant of another review in its foot when it is at its review limit, its reviews
-  (`ReviewsTable`), the runs that pushed to it (`RunsTable`), and its decisions. The journal keeps no PR's own title,
+  fields and total cost, with a grant of another review in its foot when it is at its review limit, its review threads
+  when canopy has read them or holds a draft for it (below), its reviews (`ReviewsTable`), the runs that pushed to it
+  (`RunsTable`), and its decisions. The journal keeps no PR's own title,
   so the page has none to show.
+- **A PR's threads** (`ReviewThreads`, DESIGN §29) are its coworkers' review threads, as canopy's reader last read
+  them, on the diff the latest run kept, with the replies runs drafted under them. The PR's detail says up front
+  whether there are any (`threads`), so their place is held (`PanelLoading`) before they arrive. A `Review threads`
+  panel leads: what `trust.review_replies` means for them in a line, when the PR was read and at which head, a
+  `head-moved` line in `status-blocked` when the PR's head is past the kept diff's commit, the drafts for the review's
+  body, and in its foot `Send N waiting`, which sends every waiting draft as one comment review, its command on hover,
+  with a muted line saying it approves nothing and resolves no thread. Then the diff (`DiffPanels`), each thread's card
+  (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a
+  `Not in the diff` panel for the rest (`Threads` when no run kept a diff), and `Not on a thread` for drafts no read has
+  placed. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each comment's author, a
+  `bot` chip, `sent by you` on one the operator sent, its age, a `LinkOut` to it, and its body as `MemoryText`, plain
+  and every hidden character named, never Markdown or a link. A draft's card (`DraftCard`, `surface`, a
+  `status-blocked/40` border while it waits) heads with `Draft`, `run:N` and its number, its status as a chip
+  (`DRAFT_TONE`: waiting and unconfirmed in `status-blocked`, refused in `status-failed`, sending as running, the rest
+  plain), the run's stance as a muted word, `your text` once edited, and its hash at the end in muted monospace, the one
+  a send carries; then the harness's reason for a status other than waiting, a `status-blocked` warning when it
+  replaced a draft the operator edited, and its text as `MemoryText`, struck and muted once superseded or dropped. Its
+  verbs, `sm` buttons each with the CLI's command on hover: `Send` (default) on a waiting draft, outline `Edit` and
+  ghost `Drop` on one waiting or unchecked, ghost `Undo` on a dropped one, and a `LinkOut` to a sent one. `Edit` opens
+  the text in a `Textarea` with its count against 4,000, `Save` disabled past it. What each verb did goes under it
+  (`Notice`), in `canopy draft`'s words. A ticket's own drafts (`TicketDrafts`) are a `Drafts for the ticket` panel
+  under the ticket page's grid, shown only when it has any, each card naming the issue it goes to in monospace, as
+  text and never a link, since a worker named it.
 - **Search** sits atop the nav on every page (`SearchBox`, a `SearchField`): a magnifier, the field, and `/` in a
   keycap, its shortcut from anywhere but a text field. While the field holds text, a ghost clear button (`X`, on the
   keycap's `bg-muted` when hovered) takes the keycap's place: it empties the field and keeps the focus there. An empty

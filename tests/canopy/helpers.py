@@ -20,7 +20,7 @@ from unittest import mock
 from rich.console import Console
 
 from canopy.cli.main import main
-from canopy.core import config, db, plans, records, workspace
+from canopy.core import config, db, plans, records, replies, workspace
 from canopy.core.context import Context
 from canopy.core.vocab import TickStatus
 from canopy.infra import logs, procs, resources
@@ -35,6 +35,8 @@ IMPLEMENT = ("--label", LABEL, "--kind", "implement")
 # An `implement` on the branch WORKER_DONE names.
 WORK = (*IMPLEMENT, "--slug", "work")
 WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "pr": "https://example.test/pr/1", "summary": "did it"})
+# The PR `run_drafting`'s worker opens.
+DRAFTS_PR = "https://github.com/acme/api/pull/7"
 # What a blocked worker asks (`blocked_result`).
 QUESTION = "Should the button be red or blue?"
 # The last line an overseer prints when it has finished its tick.
@@ -71,6 +73,8 @@ PROMPT_VALUES = {
     "REVIEW_FINDINGS": "None.",
     "PLAN": "None.",
     "REASONS": "- `review`: review comments to address.",
+    # How comments reach GitHub under `trust.review_replies = "post"`, the text the prompts held before (DESIGN §29).
+    **replies.posted_values("In every comment and reply you post, start it with `CANOPY:` and a space.", "needs-human"),
 }
 
 
@@ -419,6 +423,51 @@ def approve_policy(env: CanopyEnv) -> None:
 def with_memory(canopy_env: CanopyEnv, ticket_notes: str = "off", proposals: str = "off") -> None:
     """Set agent memory's tiers (DESIGN §28) in the workspace's private file, which holds nothing else in the tests."""
     canopy_env.write_private(f'[memory]\nticket_notes = "{ticket_notes}"\nproposals = "{proposals}"\n')
+
+
+def approving(canopy_env: CanopyEnv, extra: str = "") -> None:
+    """Set `trust.review_replies = "approve"` (DESIGN §29) in the private file, with `extra` after it."""
+    canopy_env.write_private(f'[trust]\nreview_replies = "approve"\n{extra}')
+
+
+def posting(canopy_env: CanopyEnv) -> None:
+    """Set `trust.review_replies = "post"` in the private file: workers post their own comments, marked, as before."""
+    canopy_env.write_private('[trust]\nreview_replies = "post"\n')
+
+
+def all_drafts(conn: sqlite3.Connection) -> list[records.Draft]:
+    """Every draft in the journal, in the order they were written."""
+    return records.fetch_all(conn, records.Draft, "SELECT * FROM drafts ORDER BY id")
+
+
+def run_drafting(conn: sqlite3.Connection, entries: object, *args: str, pr: str = DRAFTS_PR) -> sqlite3.Row:
+    """Run KEY's next run, an `implement` on its `work` branch unless `args` says otherwise, its worker opening `pr` in
+    `repo` and sending `entries` as its drafts."""
+    return run_with(conn, *(args or WORK), prs={"repo": pr}, drafts=entries)
+
+
+def comment(n: int, thread: str = "PRRT_1", author: str = "alice", body: str = "Rename this.") -> dict[str, Any]:
+    """A review comment line, as the reader prints it without `kind` and `pr`."""
+    where = {"id": thread, "path": "src/app.py", "line": 12, "side": "right", "outdated": False, "resolved": False}
+    return {"item": "comment", "id": n, "author": author, "bot": False, "time": "2026-10-18T10:00:00Z", "body": body,
+            "url": f"{DRAFTS_PR}#discussion_r{n}", "review": 101, "thread": where}  # fmt: skip
+
+
+def github_has(state: Path, *reviews: dict[str, Any], **more: object) -> None:
+    """Make the fake GitHub hold `DRAFTS_PR` with `reviews`, and the other state keys given."""
+    state.write_text(json.dumps({"prs": {DRAFTS_PR: {"reviews": list(reviews)}}, **more}))
+
+
+def thread(n: int, did: str = "changed", text: str = "Renamed.") -> dict[str, object]:
+    """A worker's draft replying on the thread of review comment `n` of `DRAFTS_PR`."""
+    return {"on": "thread", "pr": DRAFTS_PR, "comment": n, "did": did, "text": text}
+
+
+def reads(state: Path, program: str = "connect") -> list[dict[str, Any]]:
+    """What the fake GitHub's `program` was asked, each run in order."""
+    log = state.parent / "github.jsonl"
+    lines: list[str] = log.read_text().splitlines() if log.exists() else []
+    return [json.loads(line)["request"] for line in lines if json.loads(line)["program"] == program]
 
 
 def memories(conn: sqlite3.Connection) -> list[records.Memory]:

@@ -155,27 +155,16 @@ Next: the closing line does not say a signal stopped it; a small follow-up, not 
 
 ## M13. Spend-paced loop
 
-D042's pacing rule, fed by what ticks cost. Needs M12. Sketch only; the design comes first.
+Every agent run canopy starts records its cost in dollars and tokens: worker, split, chore, and review runs and each
+tick's overseer (with M15's session ids). The loop's per-tick block, `canopy tick`, `canopy status`, `canopy decisions`,
+and the web UI's attention page (the last 24 hours and 30 days) and chores pages show it.
 
-- Record what each overseer run and each worker run cost, in tokens and dollars, in the journal next to its tick or
-  run. Worker, split, chore, and review runs and each tick's overseer do.
-- A spend budget in the user config, and a pacing rule that lengthens the wait when recent ticks cost more and returns
-  to `loop.interval_minutes` when they cost less. Idle ticks are M21's: the loop waits the longer of the two rules,
-  within M21's gate deadlines.
-- Spend in the loop's per-tick block and in `canopy status`.
-- Open: what the budget's unit is (per day, per tick, or both); whether a worker's cost counts against the tick that
-  dispatched it. How the runtime reports cost is settled: OpenCode's JSON events on stdout.
-
-Accept: written with the design, before work starts.
-
-Status: deferred 2026-10-15. The operator judged the budget and the pacing rule unneeded once M36 to M39 make the
-journal the source of truth for the world, so the overseer runs only when the journal leaves it something to judge.
-Taken in part before that (2026-10-07, 2026-10-08, and 2026-10-13), with M15's session ids: worker, split, chore, and
-review runs and each tick's overseer record their cost in dollars and tokens, so every agent run canopy starts is in
-the spend, and the loop's per-tick block, `canopy tick`, `canopy status`, `canopy decisions`, and the web UI's
-attention page (the last 24 hours and 30 days) show it, and its chores pages each chore's. A tick's cost is its
-overseer's alone, so a worker's is not counted against the tick that dispatched it. An `overseer_cmd`, `review_cmd`,
-or chore `cmd` in a user file from before needs `--format json` added.
+Status: done 2026-10-18.
+Learned: closed on the operator's request with the cost recording in and the spend budget and pacing rule unbuilt; the
+operator judged them unneeded once M36 to M39 run the overseer only when the journal leaves it something to judge. A
+tick's cost is its overseer's alone, so a worker's is not counted against the tick that dispatched it. An
+`overseer_cmd`, `review_cmd`, or chore `cmd` in a user file from before needs `--format json` added.
+Next: the budget and the pacing rule move to the deferred list, with the trigger that would bring them back.
 
 ## M14. PR-scoped work
 
@@ -496,7 +485,7 @@ Learned: closed on the operator's request before the day-long live check, which 
 command and the route makes them agree by construction, so the check is against the journal. The open questions
 settled small: the rail's two counters stay and open the page, and `--json` is in, for a re-measurement to start from.
 Next: a re-measurement (MEASUREMENTS) can take idle share and `woken_by` from `canopy spend --json` rather than an
-analysis session; M13's budget can read the same breakdown.
+analysis session; a spend budget, if one is built (Deferred), can read the same breakdown.
 
 ## M34. A cacheable overseer prompt
 
@@ -1399,7 +1388,9 @@ out: `canopy memory search` over an FTS5 index of every memory (migration 0038) 
 checking FTS5. Memory at density (asked for by the operator, 2026-10-17): the lessons digest keeps the lessons last
 promoted, renewed, or used rather than the first by key, `lesson_review` and `lesson_wrong` name ten and count the rest,
 an index on scope and status (migration 0039), and the memory page lists tickets with notes in force, opening each to
-its notes, with every list scrolling in its panel and a memory its digest leaves out saying so. Every stage's checks, at
+its notes, with every list scrolling in its panel and a memory its digest leaves out saying so. Where memory was used
+(asked for by the operator, 2026-10-18): each run's citations journaled per memory (migration 0044), a memory naming
+the latest runs that relied on it, and a run's page marking what it relied on and found wrong. Every stage's checks, at
 `record` and at `use`, are still the operator's.
 
 ## M51. The loop, detached
@@ -1575,7 +1566,32 @@ names a review comment by the id in its URL and canopy finds the thread; a ticke
 operator configured a `tracker` source with a `post_cmd`, since the harness never branches on `tracker.provider`; the
 `vcs` source defaults to canopy's own programs, so `approve` needs nothing configured; `thread_changed` counts comments
 since the run started, and a refusal moves that basis; and a post whose outcome is unknown is `unconfirmed` until a
-read settles it, so a draft is posted at most once. Nothing is built yet.
+read settles it, so a draft is posted at most once. Built: `packages/canopy-github`, the reader and the poster, tested
+against a stand-in for GitHub's GraphQL API, and TRUST_MODEL T2's line for them; `trust.review_replies` (`post`
+until sending is built, then `approve`) and `[connect.sources]`; and migration 0043's tables, `observed_prs`,
+`observed_reviews`, `drafts`, `draft_versions`, and `run_replies`, with their row types. Workers draft under
+`approve`: the prompts' posting sentences as placeholders (every prompt the same bytes under `post`, held by the
+memory snapshots), `{{DRAFTS}}` required under `approve`, and `_run` writing a run's drafts under their bounds, each
+refused alone, a PR's waiting `unchecked`. Threads read in code: `core/observe.py` runs the `vcs` source's reader and
+records each PR it read whole into `observed_prs` and `observed_reviews`; `_run` reads its PRs once the run is closed
+and each tick's reconcile reads every PR a draft waits on, checking each draft (`unknown_thread`, one a thread a run)
+and superseding the unsent drafts of earlier runs; `drafts_waiting` for the operator alone; and fakes of both GitHub
+programs in `tests/fakes/github`. Sending from the CLI: `core/drafts_manage.py` and `canopy draft list`, `show`,
+`edit`, `drop`, `send`, and `settle`, each refusing `inside_run`; a send checks every draft and reads each PR again
+whole before anything posts, refusing `stale` and `thread_changed`, claims its drafts, posts one PR's as one review,
+and records each comment's id; a post that ends unsure is `unconfirmed` until a read settles it by its pending
+review's id, or the operator a ticket's; and `canopy status` names the setting and the drafts waiting. Read back by
+id: the state block's `operator_sent` per unit, the overseer prompt's section on it, and the `resume` prompt naming
+what was sent on its PRs; the worker definitions under `approve` deny the GitHub server's comment tools and `gh pr
+comment` by name; TRUST_MODEL T1, T5, T6, and §6, D003, D069, and AGENTS.md's GitHub-client line; and `approve` is the
+default. The web API: `_run` keeps each repository's diff at its pushed head under `approve`, with the commit, through
+the diff code moved down to `core`; `GET /api/pull-request/threads` serves a PR's threads on that diff with every draft,
+and edit, drop, and send take the CLI's functions; and TRUST_MODEL T8 for both. The PR's page: its threads on that
+diff, each draft under its thread with Send, Edit, and Drop, a send of every waiting draft as one review, and a warning
+when the PR's head is past the diff; `drafts_waiting` opens it; the diff with cards on its lines takes any card
+(`DiffPanels`), M32's page keeping its look; and the mock journal's PR 88 carries a run's drafts, with canopy's GitHub
+programs answered in process, so a draft sent from `--mock` posts nowhere. A ticket's own drafts on its page and in
+its `drafts_waiting` item, each naming the issue it goes to. Left: the live acceptance above.
 
 ## M54. Plans before feedback runs
 
@@ -1771,8 +1787,8 @@ tests above pass and the design names `fix-ci` only as an old run's kind; the li
 
 ## Deferred, with the trigger that would unblock each
 
-- Spend-paced loop (M13): when, with M39 built, overseer spend per day still runs past what the operator will pay
-  (`canopy spend` shows it). The cost recording is in; the budget and the pacing rule are what remain.
+- Spend-paced loop (left out of M13): when, with M39 built, overseer spend per day still runs past what the operator
+  will pay (`canopy spend` shows it). M13's cost recording is in; a spend budget and a pacing rule are what remain.
 - PR-scoped work (M14): when the operator keeps fixing CI or answering review on their own hand-written PRs by hand,
   often enough to want canopy to do it.
 - Webhooks: when tick latency is measured as a real cost.
@@ -1786,5 +1802,6 @@ tests above pass and the design names `fix-ci` only as an old run's kind; the li
   push often enough to want it to follow the PR until it merges. DESIGN §21 (Review requests) says what it needs.
 - Workers against OpenCode's server (M15's last bullets): when the operator wants to prompt a running worker rather than
   read its transcript and answer it after. The listener follows TRUST_MODEL T8, and OpenCode's server authentication on
-  the pinned version is checked first. - Flaky CI triage (M25): when live use shows `resume` attempts for CI spent on
-  failures the change did not cause. The design (DESIGN §23) and the milestone's bullets stand as written.
+  the pinned version is checked first.
+- Flaky CI triage (M25): when live use shows `resume` attempts for CI spent on failures the change did not cause. The
+  design (DESIGN §23) and the milestone's bullets stand as written.

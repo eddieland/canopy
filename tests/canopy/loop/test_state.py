@@ -129,6 +129,13 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
         db.finish_run(conn, "runs", implement, RunStatus.DONE, None)
         db.set_unit(conn, "PROJ-1", root, "repo", phase="ci_failed", pr_url=PR, cursors={"ci": "5551"})
         decide(conn, earlier, "PROJ-1", "attention:needs_reviewer", "no reviewer is assigned", repo="repo")
+        # The operator sent a run's reply to a review comment through canopy: the block names it by id (DESIGN §29).
+        conn.execute(
+            "INSERT INTO drafts (run_id, number, ticket_key, kind, repo, pr_url, comment_id, stance, status, basis, "
+            "created_at, sent_at, sent_comment_id, sent_review_id, sent_url) VALUES "
+            "(?, 1, 'PROJ-1', 'thread', 'repo', ?, 501, 'changed', 'sent', 'x', 'x', 'x', 9001, 9000, 'u')",
+            (implement, PR),
+        )
     with clock("09:45"):
         fix = db.insert_run(
             conn,

@@ -489,3 +489,38 @@ def test_an_overseer_definition_without_its_marked_line_is_refused() -> None:
     bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
     with pytest.raises(definitions.DefinitionsError, match="no line"):
         definitions.render_overseer(bundled.replace(PROMPT_MARKER, ""), "# canopy overseer\n", None)
+
+
+@pytest.mark.parametrize(
+    ("agent", "tracker_posts", "issue_comments"),
+    [("canopy-worker", False, True), ("canopy-worker", True, False), (definitions.PRIVATE_WORKER, False, False)],
+)
+def test_under_approve_workers_lose_the_tools_that_comment(
+    canopy_env: CanopyEnv, agent: str, *, tracker_posts: bool, issue_comments: bool
+) -> None:
+    """Under `trust.review_replies = "approve"` a worker drafts its comments (DESIGN §29); denied by name in depth."""
+    path = f"agents/{agent}.md"
+    canopy_env.write_private('[trust]\nreview_replies = "post"\n')
+    before = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
+    assert _allowed(_rules_in(before), "github_add_reply_to_pull_request_comment")
+    # The private worker's bash already denies every `gh` command but those that read a PR.
+    assert _allowed(_rules_in(before, "bash"), "gh pr comment 7 --body x") is (agent == "canopy-worker")
+    tracker = '\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "canopy-post-github"\n'
+    canopy_env.write_private('[trust]\nreview_replies = "approve"\n' + (tracker if tracker_posts else ""))
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
+    tools, bash = _rules_in(rendered), _rules_in(rendered, "bash")
+    assert not _allowed(tools, "github_add_reply_to_pull_request_comment")
+    assert not _allowed(tools, "github_add_comment_to_pending_review")
+    assert not _allowed(bash, "gh pr comment 7 --body x")
+    assert _allowed(tools, "github_add_issue_comment") is issue_comments
+    assert _allowed(bash, "gh issue comment 1 --body x") is issue_comments
+    assert _allowed(tools, "github_create_pull_request")
+    assert _allowed(bash, "git push origin HEAD:refs/heads/agent/PROJ-1-x")
+
+
+def test_a_worker_definition_without_its_reply_lines_is_refused() -> None:
+    bundled = (resources.agents_dir() / "canopy-worker.md").read_text()
+    with pytest.raises(definitions.DefinitionsError, match="reply rules"):
+        definitions.render_replies(
+            bundled.replace("  # canopy: reply tools\n", ""), "canopy-worker", approve=False, ticket_comments=True
+        )
