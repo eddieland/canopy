@@ -152,6 +152,8 @@ def test_a_forgotten_ticket_is_granted_in_the_repository_its_runs_were_in(
     assert db.units(conn, KEY) == []
     assert operator("grant", KEY, "implement") == 0
     assert grants(conn) == [(KEY, "repo", "implement", 1)]
-    # Granted, the unit is no longer at its limit, so forgetting it again says nothing about one.
+    # Granted, the unit is no longer at its limit, so forgetting it again, once it has something new to drop, says
+    # nothing about one.
+    assert operator("reply", KEY, "Try the v2 client.") == 0
     assert operator("forget", KEY) == 0
     assert "its limit is" not in capsys.readouterr().out

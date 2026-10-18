@@ -128,7 +128,7 @@ def test_a_prs_own_title_is_the_latest_reported_one_printable_and_outlives_its_u
     with backend.open() as ctx:
         db.set_pr_title(ctx.conn, mock_reviews.PR_88, "ABC-099: debounce\x1b[2J\n the box")
         with db.transaction(ctx.conn):
-            db.forget_ticket(ctx.conn, "ABC-099")
+            db.forget_ticket(ctx.conn, "ABC-099", channel="cli", branch=None, prs=[])
     page = client(None, backend).get("/api/pull-request", params={"url": mock_reviews.PR_88}).json()
     assert page["pull_request"]["title"] == " ".join(
         conversation.printable("ABC-099: debounce\x1b[2J\n the box").split()

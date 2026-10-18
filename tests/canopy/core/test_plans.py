@@ -227,7 +227,7 @@ def test_forgetting_a_ticket_supersedes_its_plan_and_keeps_the_file(conn: sqlite
     run_id = proposed(conn, state_dir)
     plans.approve(conn, state_dir, KEY, channel="cli", dispatch_lock=state_dir / DISPATCH_LOCK)
     with db.transaction(conn):
-        db.forget_ticket(conn, KEY)
+        db.forget_ticket(conn, KEY, channel="cli", branch=None, prs=[])
     assert plans.current(conn, KEY) is None
     assert [p.status for p in plans.history(conn, KEY)] == [PlanStatus.SUPERSEDED]
     assert plans.path_for(state_dir, KEY, run_id).read_text() == PLAN
