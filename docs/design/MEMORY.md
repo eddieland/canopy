@@ -72,10 +72,16 @@ the tier that owns it allows it, so tiers at different modes need no rule of the
 - `memory_used` and `memory_wrong` while either tier is at `use`, citing only ids rendered into that run's prompt. A
   worker shown no memory has no key to drop and no id to cite.
 
+A note ends with its ticket (Retention), so the contract asks for one only about what is true of its ticket alone: what
+causes its problem, what was tried and failed, how to check it. What would hold for another ticket too, such as what the
+environment's tools or access cannot do, it sends to the proposals, or nowhere while proposals are off: filed as a note,
+a lesson is served to one ticket and forgotten when it is done. Rejected: note kinds for commands and environment
+quirks, which steered workers to file such lessons as notes.
+
 The contract gives each entry a shape, so notes and proposals read the same from run to run, for the next worker and
-for the operator who judges them. A note's key starts with its kind (`cause-`, `dead-end-`, `cmd-`, `env-`), so a later
-run that learns more about the same thing reuses the key and supersedes the note, rather than writing a second one
-beside it. Its text says what holds, the evidence a later run can check it by, and what to do next. The contract asks
+for the operator who judges them. A note's key starts with its kind (`cause-`, `dead-end-`, `check-`), so a later run
+that learns more about the same thing reuses the key and supersedes the note, rather than writing a second one beside
+it. Its text says what holds, the evidence a later run can check it by, and what to do next. The contract asks
 for nothing the summary, the branch, or its commits already say, since those reach the next run anyway. A proposal
 says what any worker should do, why, and when it applies, and only what the run itself showed and the repository's own
 docs do not say. The harness checks none of this shape: a text that departs from it is held to the bounds alone.
