@@ -46,6 +46,10 @@ const RETURNED_HINT =
 const EST_TOKENS_HINT =
     "The characters over 4, an estimate: the runtime does not say which of a model call's tokens a tool returned"
 
+// The column names of a table in a padded scrolling region. A sticky head sticks inside the region's padding, so the
+// rows scrolling under it would show in a strip above it: the region's top padding is the head's cells' instead.
+const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
+
 // Each kind of run in words, as `canopy spend` counts the runs that reported no cost.
 const KIND_LABEL = {
     overseer: 'overseer runs',
@@ -366,9 +370,9 @@ function Tickets({ tickets, days }: { tickets: SpendTicket[]; days: number }) {
         return <Empty size="panel">no ticket had a run in these {days} days</Empty>
     }
     return (
-        <PanelScroll label="Spend by ticket" className="max-h-96 p-3">
+        <PanelScroll label="Spend by ticket" className="max-h-96 px-3 pb-3">
             <table className="w-full border-collapse text-sm" data-testid="spend-ticket-table">
-                <thead className="sticky top-0 bg-surface">
+                <thead className={PADDED_HEAD}>
                     <tr className="text-right">
                         <th className="panel-label pb-1.5 text-left font-normal">ticket</th>
                         <th className="panel-label pb-1.5 font-normal">runs</th>
@@ -411,9 +415,9 @@ function PullRequests({ pullRequests, days }: { pullRequests: SpendPullRequest[]
         return <Empty size="panel">no run pushed to a PR, and none was reviewed, in these {days} days</Empty>
     }
     return (
-        <PanelScroll label="Spend by pull request" className="max-h-96 p-3">
+        <PanelScroll label="Spend by pull request" className="max-h-96 px-3 pb-3">
             <table className="w-full border-collapse text-sm" data-testid="spend-pull-request-table">
-                <thead className="sticky top-0 bg-surface">
+                <thead className={PADDED_HEAD}>
                     <tr className="text-right">
                         <th className="panel-label pb-1.5 text-left font-normal">pull request</th>
                         <th className="panel-label pb-1.5 pl-3 text-left font-normal">ticket</th>
@@ -463,9 +467,9 @@ function Tools({ tools, days }: { tools: SpendTool[]; days: number }) {
         return <Empty size="panel">no tool call recorded in these {days} days</Empty>
     }
     return (
-        <PanelScroll label="Spend by tool" className="max-h-96 p-3">
+        <PanelScroll label="Spend by tool" className="max-h-96 px-3 pb-3">
             <table className="w-full border-collapse text-sm" data-testid="spend-tool-table">
-                <thead className="sticky top-0 bg-surface">
+                <thead className={PADDED_HEAD}>
                     <tr className="text-right">
                         <th className="panel-label pb-1.5 text-left font-normal">tool</th>
                         <th className="panel-label pb-1.5 pl-3 text-left font-normal">kind</th>
