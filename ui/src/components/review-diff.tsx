@@ -1,10 +1,11 @@
-import { ChevronDown, ChevronsUpDown, ListFilter } from 'lucide-react'
+import { ChevronDown, ListFilter } from 'lucide-react'
 import { Fragment, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type { DiffFile, DiffLine, ReviewDiff } from '@/api/types'
 import { Disclosure } from '@/components/disclosure'
 import { useDismissReviewFinding } from '@/components/dismiss-finding'
+import { FoldButton } from '@/components/fold-button'
 import { Panel, PanelHeader } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { Chip } from '@/components/status'
@@ -368,10 +369,7 @@ function Fold({ span, onShow }: { span: Span; onShow: () => void }) {
         <tr className="border-y bg-surface-raised/50" data-testid="diff-fold">
             <td colSpan={4} className="px-1 py-0.5">
                 {/* At the panel's left edge, as a card is, while the lines scroll sideways. */}
-                <Button variant="ghost" size="xs" onClick={onShow} className="sticky left-1">
-                    <ChevronsUpDown />
-                    {foldLabel(span)}
-                </Button>
+                <FoldButton label={foldLabel(span)} onShow={onShow} className="sticky left-1" />
             </td>
         </tr>
     )

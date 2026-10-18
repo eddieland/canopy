@@ -6,11 +6,13 @@ import {
     byCall,
     contextShape,
     callLine,
+    drawnRows,
     duration,
     elapsed,
     endedOn,
     findQueryOf,
     hitsIn,
+    moreLabel,
     outcome,
     pretty,
     runTokens,
@@ -22,6 +24,7 @@ import {
     tally,
     tokenCount,
     tokensCell,
+    TRANSCRIPT_BUDGET,
     wroteTokens,
 } from './transcript'
 
@@ -395,5 +398,32 @@ describe('contextShape', () => {
         expect(contextShape([sent(1, 400)], prompt).calls[0]).toMatchObject({ carried: 0, added: 400 })
         expect(contextShape([text('hi', 1), step(1)], prompt).peak).toBeNull()
         expect(contextShape([text('before any call', null)], null).calls).toEqual([])
+    })
+})
+
+describe('drawnRows', () => {
+    const { page, step: more } = TRANSCRIPT_BUDGET
+
+    it('draws every row of a transcript within a page, and a page of a longer one', () => {
+        expect(drawnRows(12, 0, 0)).toBe(12)
+        expect(drawnRows(2000, 0, 0)).toBe(page)
+    })
+
+    it('draws the rows a fold asked for, never more than there are', () => {
+        expect(drawnRows(2000, page + more, 0)).toBe(page + more)
+        expect(drawnRows(page + 10, page + more, 0)).toBe(page + 10)
+    })
+
+    it('draws on through a row the page was asked to show, past the rows asked for', () => {
+        expect(drawnRows(2000, 0, 1500)).toBe(1500)
+        expect(drawnRows(2000, page + more, 10)).toBe(page + more)
+    })
+})
+
+describe('moreLabel', () => {
+    it("says how many rows or calls a fold holds back, and how many its step draws, in the diff's words", () => {
+        expect(moreLabel(1, 'rows')).toBe('Show 1 more row')
+        expect(moreLabel(60, 'calls')).toBe('Show 60 more calls')
+        expect(moreLabel(1800, 'rows')).toBe(`Show ${TRANSCRIPT_BUDGET.step} of 1,800 more rows`)
     })
 })

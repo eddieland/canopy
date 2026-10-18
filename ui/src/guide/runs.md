@@ -40,6 +40,13 @@ searches the transcript and opens the calls that match. **By call** groups the e
 one row that opens to the same input and output. **All open** opens every call at once, for when you'd rather
 scroll than click.
 
+A long session draws its first 100 rows, and a fold at the bottom, **Show 100 of 1,900 more rows**, draws the next
+100 a click. A long worker or overseer session can reach the server's limit of 2,000 entries, some 80,000 elements
+drawn whole, and the page felt every one of them on each key typed into Find. **Find lines** still searches every
+entry, drawn or not, so a search beats clicking the fold nineteen times; to start at the latest rows, flip the order
+to newest first. All open opens only the rows drawn, and following an addition in the chart, or the error a run
+ended on, draws down to its row first.
+
 The session id in the transcript's header opens the same session in the runtime's own tools: `opencode export ID`.
 
 Under the transcript, **Output** is the run's log as written: its setup commands' output, then the worker's stdout and
