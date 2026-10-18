@@ -90,7 +90,7 @@ class Fake:
                     return pull, review
         return None
 
-    def handle(self, document: str, variables: dict[str, Any]) -> Mapping[str, Any]:  # noqa: C901, PLR0911, PLR0912
+    def handle(self, document: str, variables: dict[str, Any]) -> Mapping[str, Any]:  # noqa: C901, PLR0911, PLR0912, PLR0915
         match = re.match(r"\s*(?:query|mutation)\s+(\w+)", document)
         assert match, document
         op = match.group(1)
@@ -126,7 +126,8 @@ class Fake:
                 return {"errors": [{"message": "User can only have one pending review per pull request"}]}
             review = Review(node=f"PRR_{self.new_id()}", id=self.next_id, author=self.viewer, state="PENDING", at=None)
             pull.reviews.append(review)
-            return {"data": {"addPullRequestReview": {"pullRequestReview": {"id": review.node}}}}
+            node = {"id": review.node, "fullDatabaseId": str(review.id)}
+            return {"data": {"addPullRequestReview": {"pullRequestReview": node}}}
         if op == "Reply":
             found = self.review_by_node(variables["review"])
             assert found is not None
@@ -444,7 +445,7 @@ def test_drafts_post_as_one_comment_review(github: tuple[Fake, str]) -> None:
     assert threads[1].comments[-1].body == "Kept it."
     assert [line["kind"] for line in lines] == ["as", "pending", "comment", "comment", "review", "end"]
     assert lines[0] == {"kind": "as", "login": "me"}
-    assert lines[1] == {"kind": "pending", "review": review.node}
+    assert lines[1] == {"kind": "pending", "review": review.node, "id": review.id}
     assert lines[2] == {
         "kind": "comment",
         "comment": 501,
