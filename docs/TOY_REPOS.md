@@ -7,7 +7,8 @@ Built so far, as of 2026-10-17: the `canopy-toys` org, its `kit`, and `toy-calc`
 
 ## Goals
 
-- Every scenario that needs a real repository (S6, S8 to S21, S36, S37) can run on demand from a known starting state.
+- Every scenario that needs a real repository (S6, S8 to S16, S18 to S21, S36, S37, S39) can run on demand from a
+  known starting state.
 - One command resets that state, so a scenario can be repeated.
 - A session costs cents in CI and a few dollars in model spend, and nothing runs while nobody is watching.
 - Nothing in the toy setup can reach real work: its own org, its own token, its own queue label.
@@ -38,8 +39,8 @@ Tiny and stdlib-only: nothing to install, so a slot needs no `setup_cmd` and CI 
 
 | Repository | What it is | Scenarios |
 | --- | --- | --- |
-| `toy-calc` | A Python CLI calculator: about five modules, `unittest` tests, a CHANGELOG | One repository: S8 to S12, S16 to S21, S36 |
-| `toy-api` | A JSON "orders" schema and its validator; owns the contract | Several repositories: S13 to S15, S37 |
+| `toy-calc` | A Python CLI calculator: about five modules, `unittest` tests, a CHANGELOG | One repository: S8 to S12, S16, S18 to S21, S36 |
+| `toy-api` | A JSON "orders" schema and its validator; owns the contract | Several repositories: S13 to S15, S39 |
 | `toy-web` | Renders orders from a vendored copy of `toy-api`'s schema, pinned by a version file | Several repositories, joint runs |
 | `toy-bazel` (optional) | One `py_binary` and its test under Bazel, with no CI | S7 |
 
@@ -133,7 +134,7 @@ blocked by. Each is small enough for a worker to finish in a few minutes.
 | S16 | Any issue the size of S8's, started with `canopy start` |
 | S18 | Any open toy PR, with a bot comment and an operator comment on it |
 | S19 to S21, S36 | Any toy PR, with `review.agent_prs` on |
-| S37 | An open PR in each of api and web, written by the operator as the coworker's |
+| S39 | An open PR in each of api and web, written by the operator as the coworker's |
 
 About fifteen in all. Nothing carries the queue label unless marked `autolabel`, so nothing starts until the operator
 labels it.
@@ -179,7 +180,7 @@ Issue numbers never repeat, so a reset pairs with a fresh toy workspace (remove 
 2. `toy-calc` alone: its template, CI, ruleset, bot workflow, about eight catalog issues, and the reset script. Prove
    it with S8 and S9, first `--dry-run`, then for real.
 3. `toy-api` and `toy-web`. Prove them with S13 and S14.
-4. The rest of the catalog (S10, S11, S12, S15, S18, S37), and the reset script's conflicting commit for S10.
+4. The rest of the catalog (S10, S11, S12, S15, S18, S39), and the reset script's conflicting commit for S10.
 5. In `SCENARIOS.md`, name the toy and issue for each scenario.
 6. `toy-bazel`, only if S7 is wanted.
 
