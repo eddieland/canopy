@@ -22,6 +22,8 @@ import { RowGrid, RowLine } from '@/components/rows'
 import { Chip, RunDot } from '@/components/status'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Toggle } from '@/components/ui/toggle'
+import { useTranscriptView } from '@/hooks/use-transcript-view'
+import type { TranscriptView } from '@/hooks/use-transcript-view'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { tokenize } from '@/lib/json-lines'
 import { rowLineFrom } from '@/lib/rows'
@@ -61,33 +63,28 @@ const NO_CALLS: readonly Call[] = []
  * did. In order, a search keeps the rows with a line that holds it, its matches marked, and opens a tool call whose
  * input or output holds it. All of it is agent output, rendered as text. `running` says the session has not ended:
  * its events reach the log as the runtime prints them, so it is what the agent has done so far. Its header names the
- * session, but for `session={false}`, on a page whose identity panel names it already.
+ * session, but for `session={false}`, on a page whose identity panel names it already. A page that shows a row from
+ * outside the panel passes the `view` it holds (`useTranscriptView`).
  */
 export function TranscriptPanel({
     transcript,
     running,
     session = true,
+    view,
 }: {
     transcript: Transcript | undefined
     running: boolean
     session?: boolean
+    view?: TranscriptView
 }) {
-    const [grouped, setGrouped] = useState(false)
-    const [typed, setTyped] = useState('')
+    const own = useTranscriptView()
+    const { grouped, setGrouped, typed, setTyped, target, show } = view ?? own
     // A long transcript is searched behind the field, so typing never waits on it.
     const deferred = useDeferredValue(typed)
     const entries = transcript?.entries ?? []
     const counts = tally(entries)
     const calls = byCall(entries)
     const shape = contextShape(entries, transcript?.prompt ?? null)
-    // The row the chart last showed, by its place in the log; each showing a round, so showing it again scrolls again.
-    const [target, setTarget] = useState<{ i: number; round: number } | null>(null)
-    // The chart shows a row in order and unsearched, where every row is.
-    const show = (i: number) => {
-        setGrouped(false)
-        setTyped('')
-        setTarget((t) => ({ i, round: (t?.round ?? 0) + 1 }))
-    }
     const callView = grouped && calls.calls.length > 0
     // The search is the events' in order: By call keeps its own, whole.
     const query = callView ? null : findQueryOf(deferred)
@@ -355,7 +352,7 @@ function Entry({
         }
         case 'error': {
             return (
-                <Row at={entry.at} start={start} className="bg-status-failed/8">
+                <Row at={entry.at} start={start} targeted={targeted} className={cn(!targeted && 'bg-status-failed/8')}>
                     <span className="font-mono text-xs text-status-failed">
                         <MarkedText text={entry.name} words={words} />
                     </span>
@@ -369,8 +366,8 @@ function Entry({
 }
 
 /**
- * An entry's line: when it was printed, from the session's first event, then the entry. The one the context chart
- * showed sits on the accent's tint, scrolled to and focused.
+ * An entry's line: when it was printed, from the session's first event, then the entry. The one last shown, by the
+ * context chart or the Run panel's `ended on`, sits on the accent's tint, scrolled to and focused.
  */
 function Row({
     at,
@@ -397,7 +394,7 @@ function Row({
     )
 }
 
-/** Scrolls the row the context chart showed to the middle of the window, and gives it the focus. */
+/** Scrolls the row last shown to the middle of the window, and gives it the focus. */
 function reveal(element: HTMLElement | null) {
     element?.scrollIntoView({ block: 'center' })
     element?.focus({ preventScroll: true })
