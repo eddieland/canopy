@@ -15,7 +15,16 @@ import { RowLine, ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
-import { lapsesText, leftOutText, memorySegments, memoryStand, reviewText, tierMode, usedText } from '@/lib/memory'
+import {
+    lapsesText,
+    leftOutText,
+    leftText,
+    memorySegments,
+    memoryStand,
+    reviewText,
+    tierMode,
+    usedText,
+} from '@/lib/memory'
 import type { MemoryStand, TierModes } from '@/lib/memory'
 import { memoryRef } from '@/lib/refs'
 import { RUN_TEXT } from '@/lib/run-state'
@@ -95,7 +104,8 @@ export function MemoryBand({ tier, name }: { tier: MemoryTier; name: string }) {
  * `below` adds what goes under a row, such as its verbs; `ownRun` leaves out the run whose page it is; `digest` is
  * what a run is served of the entries' tier, so a row in force that its cap leaves out says so; `cited` is what the
  * run whose page it is said of each, so a row it relied on or found wrong says so; `modes` is each tier's mode now, so
- * a memory in force under a tier that only records reads `recorded`, never `active`.
+ * a memory in force under a tier that only records reads `recorded`, never `active`; `lapses` is when each proposal
+ * lapses undecided, by its id, which its standing then says in place of `pending`, since every proposal is pending.
  */
 export function MemoryRows({
     entries,
@@ -106,6 +116,7 @@ export function MemoryRows({
     digest,
     cited,
     modes,
+    lapses,
 }: {
     entries: MemoryEntry[]
     ticket?: boolean
@@ -115,97 +126,107 @@ export function MemoryRows({
     digest?: MemoryDigest | null | undefined
     cited?: Pick<RunMemory, 'used' | 'wrong'>
     modes?: TierModes | undefined
+    lapses?: ReadonlyMap<number, string>
 }) {
     const now = useNow()
     const served = new Set(digest?.ids)
     return (
         <ul className="divide-y" data-testid="memory-rows">
-            {entries.map((entry) => (
-                <ListRow
-                    key={entry.id}
-                    kind={ticket ? 'memory-across' : 'memory'}
-                    className="group/copy"
-                    data-testid={`memory-${entry.id}`}
-                >
-                    <MemoryStanding entry={entry} now={now} mode={modes && tierMode(entry.scope, modes)} />
-                    {/* Copied, since Forget asks for it typed and the CLI's verbs take it. */}
-                    <span className="flex min-w-0 items-center gap-0.5">
-                        <span className="readout text-xs text-muted-foreground">{memoryRef(entry.id)}</span>
-                        <CopyButton text={memoryRef(entry.id)} label={memoryRef(entry.id)} reveal />
-                    </span>
-                    {ticket && (
-                        <span className="min-w-0">
-                            {entry.ticket_key !== null && <TicketLink ticketKey={entry.ticket_key} />}
+            {entries.map((entry) => {
+                const byRun = entry.run_id !== null && entry.run_id !== ownRun
+                return (
+                    <ListRow
+                        key={entry.id}
+                        kind={ticket ? 'memory-across' : 'memory'}
+                        className="group/copy"
+                        data-testid={`memory-${entry.id}`}
+                    >
+                        <MemoryStanding
+                            entry={entry}
+                            now={now}
+                            mode={modes && tierMode(entry.scope, modes)}
+                            lapses={lapses?.get(entry.id)}
+                        />
+                        {/* Copied, since Forget asks for it typed and the CLI's verbs take it. */}
+                        <span className="flex min-w-0 items-center gap-0.5">
+                            <span className="readout text-xs text-muted-foreground">{memoryRef(entry.id)}</span>
+                            <CopyButton text={memoryRef(entry.id)} label={memoryRef(entry.id)} reveal />
                         </span>
-                    )}
-                    <span className="flex min-w-0">
-                        {entry.repo !== null && <Chip className="min-w-0 shrink" word={entry.repo} />}
-                    </span>
-                    <span className="truncate font-mono text-xs" title={entry.key}>
-                        {entry.key}
-                    </span>
-                    <span
-                        className="truncate text-right text-xs text-muted-foreground"
-                        title={entry.last_used_at === null ? undefined : `last at ${localTime(entry.last_used_at)}`}
-                    >
-                        {usedText(entry)}
-                    </span>
-                    <Age at={entry.created_at} variant="ago" className="text-right" />
-                    <RowLine from="key" className="text-sm">
-                        {entry.text === null ? (
-                            <span className="text-muted-foreground">text deleted</span>
-                        ) : (
-                            <MemoryText text={entry.text} />
-                        )}
-                    </RowLine>
-                    <RowLine
-                        from="key"
-                        className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
-                    >
-                        {entry.run_id !== null && entry.run_id !== ownRun && (
-                            <span>
-                                by <RunLink id={entry.run_id} />
+                        {ticket && (
+                            <span className="min-w-0">
+                                {entry.ticket_key !== null && <TicketLink ticketKey={entry.ticket_key} />}
                             </span>
                         )}
-                        {facts?.get(entry.id)}
-                        {entry.head !== null && <span className="font-mono">at {entry.head}</span>}
-                        {entry.origin !== null && <Origin origin={entry.origin} />}
-                        {cited?.used.includes(entry.id) === true && <span>this run relied on it</span>}
-                        {cited?.wrong.includes(entry.id) === true && (
-                            <span className="text-status-failed">this run found it wrong</span>
-                        )}
-                        <UsedIn entry={entry} ownRun={ownRun} />
-                        {digest && entry.status === 'active' && !served.has(entry.id) && (
-                            <span>{leftOutText(digest.served)}</span>
-                        )}
-                        {entry.why !== null && <span>{entry.why}</span>}
-                        {entry.review_at !== null && entry.status === 'active' && (
-                            <span
-                                className={cn(
-                                    Date.parse(entry.review_at) <= now &&
-                                        (modes === undefined || modes.lessons === 'use') &&
-                                        'text-status-blocked',
-                                )}
-                                title={`at ${localTime(entry.review_at)}`}
-                            >
-                                {reviewText(entry.review_at, now)}
-                            </span>
-                        )}
-                        {entry.wrong_run_id !== null && (
-                            <span className="text-status-failed">
-                                reported wrong by <RunLink id={entry.wrong_run_id} />
-                                {entry.wrong_at !== null && (
-                                    <>
-                                        {' '}
-                                        <Age at={entry.wrong_at} variant="ago" className="text-status-failed" />
-                                    </>
-                                )}
-                            </span>
-                        )}
-                    </RowLine>
-                    {below?.get(entry.id)}
-                </ListRow>
-            ))}
+                        <span className="flex min-w-0">
+                            {entry.repo !== null && <Chip className="min-w-0 shrink" word={entry.repo} />}
+                        </span>
+                        <span className="truncate font-mono text-xs" title={entry.key}>
+                            {entry.key}
+                        </span>
+                        <span
+                            className="truncate text-right text-xs text-muted-foreground"
+                            title={entry.last_used_at === null ? undefined : `last at ${localTime(entry.last_used_at)}`}
+                        >
+                            {usedText(entry)}
+                        </span>
+                        <Age at={entry.created_at} variant="ago" className="text-right" />
+                        <RowLine from="key" className="text-sm">
+                            {entry.text === null ? (
+                                <span className="text-muted-foreground">text deleted</span>
+                            ) : (
+                                <MemoryText text={entry.text} />
+                            )}
+                        </RowLine>
+                        <RowLine
+                            from="key"
+                            className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
+                        >
+                            {/* The commit it was written against, on the run's hover, so the line stays one line. */}
+                            {byRun && entry.run_id !== null && (
+                                <span title={entry.head === null ? undefined : `written at ${entry.head}`}>
+                                    by <RunLink id={entry.run_id} />
+                                </span>
+                            )}
+                            {facts?.get(entry.id)}
+                            {!byRun && entry.head !== null && <span className="font-mono">at {entry.head}</span>}
+                            {entry.origin !== null && <Origin origin={entry.origin} />}
+                            {cited?.used.includes(entry.id) === true && <span>this run relied on it</span>}
+                            {cited?.wrong.includes(entry.id) === true && (
+                                <span className="text-status-failed">this run found it wrong</span>
+                            )}
+                            <UsedIn entry={entry} ownRun={ownRun} />
+                            {digest && entry.status === 'active' && !served.has(entry.id) && (
+                                <span>{leftOutText(digest.served)}</span>
+                            )}
+                            {entry.why !== null && <span>{entry.why}</span>}
+                            {entry.review_at !== null && entry.status === 'active' && (
+                                <span
+                                    className={cn(
+                                        Date.parse(entry.review_at) <= now &&
+                                            (modes === undefined || modes.lessons === 'use') &&
+                                            'text-status-blocked',
+                                    )}
+                                    title={`at ${localTime(entry.review_at)}`}
+                                >
+                                    {reviewText(entry.review_at, now)}
+                                </span>
+                            )}
+                            {entry.wrong_run_id !== null && (
+                                <span className="text-status-failed">
+                                    reported wrong by <RunLink id={entry.wrong_run_id} />
+                                    {entry.wrong_at !== null && (
+                                        <>
+                                            {' '}
+                                            <Age at={entry.wrong_at} variant="ago" className="text-status-failed" />
+                                        </>
+                                    )}
+                                </span>
+                            )}
+                        </RowLine>
+                        {below?.get(entry.id)}
+                    </ListRow>
+                )
+            })}
         </ul>
     )
 }
@@ -220,13 +241,32 @@ function MemoryStanding({
     entry,
     now,
     mode,
+    lapses,
 }: {
     entry: MemoryEntry
     now: number
     mode: MemoryTier['mode'] | undefined
+    lapses: string | undefined
 }) {
     const stand = memoryStand(entry, now, mode)
     const state = STAND_STATE[stand]
+    if (stand === 'pending' && lapses !== undefined) {
+        // In a list of proposals every row is pending: the time it has left says more, in amber in its last days.
+        const soon = Date.parse(lapses) - now < LAPSING_SOON_MS
+        return (
+            <span
+                className={cn(
+                    'flex min-w-0 items-center gap-1.5 font-mono text-xs',
+                    soon ? RUN_TEXT.blocked : 'text-muted-foreground',
+                )}
+                title={`waiting on you: ${lapsesText(lapses, now)}, at ${localTime(lapses)}`}
+                data-testid="memory-stand"
+            >
+                <RunDot state="blocked" />
+                <span className="truncate">{leftText(lapses, now)}</span>
+            </span>
+        )
+    }
     return (
         <span
             className={cn('flex min-w-0 items-center gap-1.5 font-mono text-xs', RUN_TEXT[state])}
@@ -318,12 +358,10 @@ export function MemoryDigestView({
 
 /**
  * What a proposal's line of provenance adds, after the run that wrote it (`MemoryRows`' `facts`): how its run ended,
- * whether its ticket is done, when it lapses undecided (in `status-blocked` in its last two days), and, for a private
- * ticket's run, a `private` chip that says why on hover.
+ * whether its ticket is done, and, for a private ticket's run, a `private` chip that says why on hover. When it lapses
+ * is its standing's (`MemoryRows`' `lapses`).
  */
 export function ProposalFacts({ proposal }: { proposal: MemoryProposal }) {
-    const now = useNow()
-    const soon = Date.parse(proposal.expires_at) - now < LAPSING_SOON_MS
     return (
         <>
             {proposal.run_kind !== null && (
@@ -332,13 +370,6 @@ export function ProposalFacts({ proposal }: { proposal: MemoryProposal }) {
                 </span>
             )}
             <span>{proposal.ticket_done ? 'ticket done' : 'ticket not done yet'}</span>
-            <span
-                className={cn(soon && 'text-status-blocked')}
-                title={`at ${localTime(proposal.expires_at)}`}
-                data-testid="proposal-lapses"
-            >
-                {lapsesText(proposal.expires_at, now)}
-            </span>
             {proposal.private && (
                 <span
                     title="its run worked a private ticket: its text may hold what you kept off the tracker"

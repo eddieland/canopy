@@ -39,7 +39,12 @@ export function ProposalsWaiting({ ticketKey }: { ticketKey: string }) {
             {waiting.length === 0 ? (
                 <Empty>none of its proposals waits now: the item leaves at the next tick</Empty>
             ) : (
-                <MemoryRows entries={waiting.map((p) => p.entry)} facts={facts} below={below} />
+                <MemoryRows
+                    entries={waiting.map((p) => p.entry)}
+                    facts={facts}
+                    below={below}
+                    lapses={new Map(waiting.map((p) => [p.entry.id, p.expires_at]))}
+                />
             )}
             <MemorySaid said={said} className="border-t px-3 py-2" />
             <p className="border-t px-3 py-2 text-xs text-muted-foreground">

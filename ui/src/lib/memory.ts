@@ -134,6 +134,12 @@ export function lapsesText(expiresAt: string, now: number): string {
     return `lapses in ${age(new Date(now - left).toISOString(), now)}`
 }
 
+/** How long a proposal has left undecided, as its standing says it: `3d left`, or `lapsing` once that has passed. */
+export function leftText(expiresAt: string, now: number): string {
+    const left = Date.parse(expiresAt) - now
+    return left <= 0 ? 'lapsing' : `${age(new Date(now - left).toISOString(), now)} left`
+}
+
 /** What a run read, when it read nothing: nothing was served while recording, which is not an empty digest. */
 export function readNothingText(served: boolean): string {
     return served ? 'none' : 'none, recording only'

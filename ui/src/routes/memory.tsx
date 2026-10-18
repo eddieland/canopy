@@ -196,6 +196,7 @@ function Proposals({
                         ticket
                         facts={facts}
                         below={below}
+                        lapses={new Map(proposals.map((p) => [p.entry.id, p.expires_at]))}
                     />
                 </PanelScroll>
             )}
@@ -260,7 +261,8 @@ function Lessons({
                 <Empty>no lessons yet: promote a proposal above, or a ticket&apos;s note from its page</Empty>
             ) : (
                 <PanelScroll label="Lessons">
-                    <MemoryRows entries={lessons} digest={digest} below={below} modes={modes} />
+                    {/* The proposals' columns, the ticket's left empty, so key and text line up down the page. */}
+                    <MemoryRows entries={lessons} ticket digest={digest} below={below} modes={modes} />
                 </PanelScroll>
             )}
             {digest !== null && <ServedDigest digest={digest} />}
@@ -452,7 +454,7 @@ function TicketNotesRow({
                 <TicketTitle title={notes.title} />
                 <span className="truncate text-right text-xs text-muted-foreground">{ticketNotesUsedText(notes)}</span>
                 <Age at={notes.latest_at} variant="ago" className="text-right" />
-                <CollapsibleContent className={cn('-mx-3 -mb-2.5 border-t', rowLineFrom('key'))}>
+                <CollapsibleContent className={cn('-mx-3 -mb-2.5 border-t bg-surface-raised/40', rowLineFrom('key'))}>
                     <OpenNotes ticketKey={notes.ticket_key} onSaid={onSaid} modes={modes} />
                 </CollapsibleContent>
             </ListRow>

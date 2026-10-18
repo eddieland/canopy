@@ -85,7 +85,7 @@ describe('MemoryRows', () => {
         expect(within(row).getByText(NOTE.text ?? '')).toBeDefined()
         expect(within(row).getByText('used by 2 runs')).toBeDefined()
         expect(within(row).getByRole('link', { name: 'run:41' }).getAttribute('href')).toBe('/runs/41')
-        expect(within(row).getByText('at a1b2c3d')).toBeDefined()
+        expect(within(row).getByTitle('written at a1b2c3d')).toBeDefined()
         expect(within(row).queryByRole('link', { name: 'ABC-102' })).toBeNull()
     })
 
@@ -225,14 +225,35 @@ function proposal(left: number): MemoryProposal {
 }
 
 describe('ProposalFacts', () => {
-    it('says when a proposal lapses undecided, and marks one in its last days', async () => {
-        await renderRows(<ProposalFacts proposal={proposal(5 * 24 * HOUR + HOUR)} />)
-        expect(screen.getByTestId('proposal-lapses').textContent).toBe('lapses in 5d')
-        expect(screen.getByTestId('proposal-lapses').className).not.toContain('text-status-blocked')
+    it('says how a proposal’s run ended and whether its ticket is done, with private as a chip', async () => {
+        await renderRows(<ProposalFacts proposal={{ ...proposal(5 * 24 * HOUR), private: true }} />)
+        expect(screen.getByText(/ended/u).textContent).toBe('implement, ended done')
+        expect(screen.getByText('ticket not done yet')).toBeDefined()
+        expect(screen.getByText('private')).toBeDefined()
+    })
+})
 
+describe('MemoryRows lapses', () => {
+    it('leads a proposal with the time it has left in place of pending, in amber in its last days', async () => {
+        const later = proposal(5 * 24 * HOUR + HOUR)
+        const soon = { ...proposal(30 * HOUR), entry: { ...later.entry, id: 13 } }
+        const lapses = new Map([
+            [12, later.expires_at],
+            [13, soon.expires_at],
+        ])
+        await renderRows(<MemoryRows entries={[later.entry, soon.entry]} ticket lapses={lapses} />)
+        const [first, second] = screen.getAllByTestId('memory-stand')
+        expect(first?.textContent).toBe('5d left')
+        expect(first?.className).not.toContain('text-status-blocked')
+        expect(second?.textContent).toBe('1d left')
+        expect(second?.className).toContain('text-status-blocked')
+    })
+
+    it('puts the commit on the run’s hover, and shows it only where the run is left out', async () => {
+        await renderRows(<MemoryRows entries={[NOTE]} />)
+        expect(screen.getByTitle('written at a1b2c3d').textContent).toBe('by run:41')
         cleanup()
-        await renderRows(<ProposalFacts proposal={proposal(30 * HOUR)} />)
-        expect(screen.getByTestId('proposal-lapses').textContent).toBe('lapses in 1d')
-        expect(screen.getByTestId('proposal-lapses').className).toContain('text-status-blocked')
+        await renderRows(<MemoryRows entries={[NOTE]} ownRun={41} />)
+        expect(screen.getByText('at a1b2c3d')).toBeDefined()
     })
 })
