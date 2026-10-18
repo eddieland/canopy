@@ -185,6 +185,8 @@ so nothing a worker types is an error. It adds to what is pushed into the prompt
 - A digest names the command where it helps: the ticket's whenever it has notes, the lessons' when its cap left some
   out. A run told nothing of memory is told nothing of search, and with memory off every prompt stays the same bytes.
 - In the operator's shell it finds every memory that still has its text, proposals and every ticket's notes included.
+- Both worker definitions allow it, the one `canopy` command they do (§13). A sandboxed worker cannot run it: the
+  journal is in the part of `.canopy/` its policy denies (§24), so it has its digests.
 - The index holds no copy of a text: `forget` and `purge` leave no word of what they deleted in it. It needs SQLite
   built with FTS5, which every journal's migrations create and `make install-check` checks.
 - T1 is unchanged: a run reaches its own ticket's notes and the lessons a run in its repositories is served. A steered

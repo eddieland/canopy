@@ -45,8 +45,10 @@ permission:
     "gh pr close*": deny
     "gh issue close*": deny
     "gh api*": deny
-    # The loop's own tools belong to the harness and the overseer.
+    # The loop's own tools belong to the harness and the overseer, but for the search the memory digests name, which
+    # reads only what this run's prompt could be served (DESIGN §28) and writes nothing.
     "canopy *": deny
+    "canopy memory search *": allow
     "treehouse *": deny
     "sudo *": deny
   # MCP tools are permissioned by name, `<server>_<tool>`, and names differ by server, so these patterns are defense
