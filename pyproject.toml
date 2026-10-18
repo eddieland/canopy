@@ -129,7 +129,7 @@ dev = [
 line-length = 120
 target-version = "py312"
 # The fakes are extensionless executables; lint and format them as Python too.
-extend-include = ["tests/fakes/agent", "tests/fakes/srt", "tests/fakes/treehouse"]
+extend-include = ["tests/fakes/agent", "tests/fakes/github", "tests/fakes/srt", "tests/fakes/treehouse"]
 
 [tool.ruff.lint]
 # Every stable rule (D018). Opt out below with a reason, never by narrowing `select`. Preview rules stay off, except
@@ -265,6 +265,7 @@ project-includes = [
     "packages",
     "tests",
     "tests/fakes/agent",
+    "tests/fakes/github",
     "tests/fakes/srt",
     "tests/fakes/treehouse",
 ]

@@ -1574,7 +1574,11 @@ until sending is built, then `approve`) and `[connect.sources]`; and migration 0
 `observed_reviews`, `drafts`, `draft_versions`, and `run_replies`, with their row types. Workers draft under
 `approve`: the prompts' posting sentences as placeholders (every prompt the same bytes under `post`, held by the
 memory snapshots), `{{DRAFTS}}` required under `approve`, and `_run` writing a run's drafts under their bounds, each
-refused alone, a PR's waiting `unchecked`.
+refused alone, a PR's waiting `unchecked`. Threads read in code: `core/observe.py` runs the `vcs` source's reader and
+records each PR it read whole into `observed_prs` and `observed_reviews`; `_run` reads its PRs once the run is closed
+and each tick's reconcile reads every PR a draft waits on, checking each draft (`unknown_thread`, one a thread a run)
+and superseding the unsent drafts of earlier runs; `drafts_waiting` for the operator alone; and fakes of both GitHub
+programs in `tests/fakes/github`.
 
 ## M54. Plans before feedback runs
 

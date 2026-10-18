@@ -14,8 +14,9 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import assert_never
 
 from pydantic import BaseModel, ConfigDict, JsonValue
 
@@ -138,27 +139,7 @@ def _write(conn: sqlite3.Connection, writing: _Writing, number: int, entry: Json
     if kind is None:
         raise TextRefused("its `on` is not thread, pr, or ticket")
     text = check_text(entry.get("text"), MAX_DRAFT_CHARS, lines=True)
-    pr, comment, stance, issue = None, None, None, None
-    match kind:
-        case DraftKind.THREAD | DraftKind.PR:
-            pr = _pr(writing.prs, entry.get("pr"))
-            if kind is DraftKind.THREAD:
-                comment = _comment(entry.get("comment"))
-                did = entry.get("did")
-                stance = next((s for s in DraftStance if s == did), None)
-                if stance is None:
-                    raise TextRefused("its `did` is not changed, declined, or answered")
-            elif pr in writing.pr_comments:
-                raise TextRefused(f"a second draft for {pr}'s own comment; a PR takes one")
-            else:
-                writing.pr_comments.add(pr)
-        case DraftKind.TICKET:
-            if not writing.ticket_drafts:
-                raise TextRefused("no_post: this run was asked for no ticket's draft")
-            if writing.ticket:
-                raise TextRefused("a second draft for the ticket; a run takes one")
-            issue = _url(entry.get("url"))
-            writing.ticket = True
+    pr, comment, stance, issue = _target(writing, kind, entry)
     status = DraftStatus.WAITING if kind is DraftKind.TICKET else DraftStatus.UNCHECKED
     now = db.now()
     cursor = conn.execute(
@@ -183,6 +164,49 @@ def _write(conn: sqlite3.Connection, writing: _Writing, number: int, entry: Json
         "INSERT INTO draft_versions (draft_id, version, body, author, created_at) VALUES (?, 1, ?, ?, ?)",
         (cursor.lastrowid, text, DraftAuthor.WORKER, now),
     )
+    if kind is DraftKind.TICKET:
+        # A ticket's draft needs no read, so it supersedes the earlier ones as it is written.
+        written = get(conn, int(cursor.lastrowid or 0))
+        if written is not None:
+            _supersede(conn, written, "kind = 'ticket' AND ticket_key = ?", writing.ticket_key)
+
+
+def _target(
+    writing: _Writing, kind: DraftKind, entry: Mapping[str, JsonValue]
+) -> tuple[str | None, int | None, DraftStance | None, str | None]:
+    """Where an entry goes: a thread's or a PR's PR, a thread's comment and stance, or a ticket's issue.
+
+    Returns:
+        The PR, the comment, the stance, and the issue, each None where the kind has none.
+
+    Raises:
+        TextRefused: It names a PR not the run's, a comment or stance that is not one, a second of what a run takes
+            one of, or a ticket's draft the run was not asked for.
+    """
+    match kind:
+        case DraftKind.THREAD:
+            did = entry.get("did")
+            stance = next((s for s in DraftStance if s == did), None)
+            pr, comment = _pr(writing.prs, entry.get("pr")), _comment(entry.get("comment"))
+            if stance is None:
+                raise TextRefused("its `did` is not changed, declined, or answered")
+            return pr, comment, stance, None
+        case DraftKind.PR:
+            pr = _pr(writing.prs, entry.get("pr"))
+            if pr in writing.pr_comments:
+                raise TextRefused(f"a second draft for {pr}'s own comment; a PR takes one")
+            writing.pr_comments.add(pr)
+            return pr, None, None, None
+        case DraftKind.TICKET:
+            if not writing.ticket_drafts:
+                raise TextRefused("no_post: this run was asked for no ticket's draft")
+            if writing.ticket:
+                raise TextRefused("a second draft for the ticket; a run takes one")
+            issue = _url(entry.get("url"))
+            writing.ticket = True
+            return None, None, None, issue
+        case _:
+            assert_never(kind)
 
 
 def _pr(prs: Mapping[str, str], value: object) -> str:
@@ -206,6 +230,102 @@ def _url(value: object) -> str:
     ):
         raise TextRefused("its `url` is not the ticket's https:// URL")
     return value
+
+
+def unchecked_prs(conn: sqlite3.Connection) -> list[str]:
+    """Return the PRs with a draft that waits on a whole read, which each tick's reconcile reads again.
+
+    Returns:
+        The PRs' URLs, in order.
+    """
+    rows = conn.execute("SELECT DISTINCT pr_url FROM drafts WHERE status = ? ORDER BY pr_url", (DraftStatus.UNCHECKED,))
+    return [str(r["pr_url"]) for r in rows]
+
+
+def check(conn: sqlite3.Connection, whole: Collection[str]) -> list[records.Draft]:
+    """Check the unchecked drafts of the PRs read whole against what that read recorded (DESIGN §29).
+
+    A thread's draft names a review comment: found, the draft waits on the operator with the comment's thread; not
+    found, it is refused `unknown_thread`, recorded on its run as `_run`'s refusals are. A PR's draft needs only the
+    read. Once checked, a draft supersedes the unsent drafts of earlier runs for the same thread or the same PR's
+    comment, and a second one of the same run for the same thread is refused.
+
+    Returns:
+        The drafts checked, in the order checked, as they now stand.
+    """
+    if not whole:
+        return []
+    marks = ", ".join("?" * len(whole))
+    pending = records.fetch_all(
+        conn,
+        records.Draft,
+        f"SELECT * FROM drafts WHERE status = ? AND pr_url IN ({marks}) ORDER BY run_id, number",  # noqa: S608
+        (DraftStatus.UNCHECKED, *sorted(whole)),
+    )
+    now = db.now()
+    with db.transaction(conn):
+        for draft in pending:
+            _check_one(conn, draft, now)
+    return [present for d in pending if (present := get(conn, d.id)) is not None]
+
+
+def _check_one(conn: sqlite3.Connection, draft: records.Draft, now: str) -> None:
+    thread: str | None = None
+    if draft.kind is DraftKind.THREAD:
+        row = conn.execute(
+            "SELECT thread_id FROM observed_reviews WHERE pr_url = ? AND item = 'comment' AND id = ?",
+            (draft.pr_url, draft.comment_id),
+        ).fetchone()
+        if row is None:
+            _refuse(conn, draft, f"unknown_thread: {draft.pr_url} has no review comment {draft.comment_id}")
+            return
+        thread = str(row["thread_id"])
+        twin = conn.execute(
+            "SELECT number FROM drafts WHERE run_id = ? AND thread_id = ? AND id != ?", (draft.run_id, thread, draft.id)
+        ).fetchone()
+        if twin is not None:
+            _refuse(conn, draft, f"a second draft for the thread draft {twin['number']} answers; a thread takes one")
+            return
+    conn.execute(
+        "UPDATE drafts SET status = ?, thread_id = ?, checked_at = ? WHERE id = ?",
+        (DraftStatus.WAITING, thread, now, draft.id),
+    )
+    same = "thread_id = ?" if thread is not None else "kind = 'pr' AND pr_url = ?"
+    _supersede(conn, draft, same, thread if thread is not None else draft.pr_url)
+
+
+def _supersede(conn: sqlite3.Connection, draft: records.Draft, same: str, value: object) -> None:
+    """Supersede the unsent drafts of earlier runs that `draft` replaces: those where `same` holds for `value`."""
+    conn.execute(
+        f"UPDATE drafts SET status = ?, superseded_by = ?, why = ? WHERE {same} AND run_id < ? "  # noqa: S608
+        "AND status IN (?, ?)",
+        (
+            DraftStatus.SUPERSEDED,
+            draft.id,
+            f"superseded by run {draft.run_id}'s draft {draft.number}",
+            value,
+            draft.run_id,
+            DraftStatus.UNCHECKED,
+            DraftStatus.WAITING,
+        ),
+    )
+
+
+def _refuse(conn: sqlite3.Connection, draft: records.Draft, why: str) -> None:
+    conn.execute("UPDATE drafts SET status = ?, why = ? WHERE id = ?", (DraftStatus.REFUSED, why, draft.id))
+    rendered = run_replies(conn, draft.run_id)
+    if rendered is None:
+        return
+    refused = [*refused_of(rendered), Refused(draft.number, why)]
+    conn.execute(
+        "UPDATE run_replies SET refused = ? WHERE run_id = ?",
+        (json.dumps([r.as_json() for r in refused]), draft.run_id),
+    )
+
+
+def get(conn: sqlite3.Connection, draft_id: int) -> records.Draft | None:
+    """Return draft `draft_id`, or None."""
+    return records.fetch_one(conn, records.Draft, "SELECT * FROM drafts WHERE id = ?", (draft_id,))
 
 
 def of_run(conn: sqlite3.Connection, run_id: int) -> list[records.Draft]:

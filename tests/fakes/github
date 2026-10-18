@@ -1,0 +1,169 @@
+#!/usr/bin/env python3
+"""Fake canopy GitHub programs for tests: `canopy-connect-github` and `canopy-post-github` (DESIGN §29).
+
+Run under either name (the two are links to this file); each speaks the real program's contract on stdin and stdout,
+from a state file that stands in for GitHub. Configured through the environment:
+
+    FAKE_GITHUB_STATE   the state file, JSON. Missing, GitHub holds nothing: the reader reads no PR whole.
+    FAKE_GITHUB_LOG     if set, one JSON line {"program": "connect"|"post", "request": {...}} is appended per run.
+
+State keys, each optional:
+
+    prs         {URL: {"pr": {...}, "reviews": [...]}}: each PR's `pr` line fields and its `review` lines, without
+                `kind` and `pr`, which the reader adds. A `pr` line's fields default from the URL.
+    unread      [URL]: PRs the reader cannot read whole, which it leaves off its `end` line.
+    down        true: the reader prints nothing, not even its `end` line, and exits 1.
+    login       who the poster posts as. Default `me`.
+    post        how the next post ends: `ok` (the default), `refused` (nothing posted, `"submitted": false`),
+                `pending_left` (nothing posted, and its pending review left), or `unknown` (no `end` line). With
+                `unknown`, `posted: true` makes it post all the same, as a submit that reached GitHub would.
+    issues      [{"url": URL, "body": TEXT, "id": N}]: the comments the poster made on issues, appended as it posts.
+
+A post that posts adds each reply to the state as a `comment` review line by the poster, on the thread of the comment
+it answers, and the review as a `review` line, so the next read sees them.
+
+Stdlib only, no canopy imports: this runs as a separate process under whatever python3 is on PATH.
+"""
+
+import json
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+
+def main() -> int:
+    program = Path(sys.argv[0]).name.removeprefix("canopy-").removesuffix("-github")
+    if "--help" in sys.argv[1:]:
+        print(f"usage: canopy-{program}-github")
+        return 0
+    request = json.loads(sys.stdin.read())
+    log = os.environ.get("FAKE_GITHUB_LOG")
+    if log:
+        with Path(log).open("a") as f:
+            f.write(json.dumps({"program": program, "request": request}) + "\n")
+    path = Path(os.environ.get("FAKE_GITHUB_STATE", "/nonexistent"))
+    state = json.loads(path.read_text()) if path.is_file() else {}
+    if program == "connect":
+        return connect(state, request)
+    code = post(state, request)
+    if path.parent.is_dir():
+        path.write_text(json.dumps(state))
+    return code
+
+
+def emit(line: dict[str, object]) -> None:
+    print(json.dumps(line), flush=True)
+
+
+def connect(state: dict[str, Any], request: dict[str, Any]) -> int:
+    if state.get("down"):
+        print("canopy-connect-github: cannot reach GitHub", file=sys.stderr)
+        return 1
+    prs = state.get("prs", {})
+    whole = []
+    for url in request["prs"]:
+        if url not in prs or url in state.get("unread", []):
+            print(f"canopy-connect-github: cannot read {url}", file=sys.stderr)
+            continue
+        number = int(url.rsplit("/", 1)[1])
+        repository = "/".join(url.split("/")[3:5])
+        pr = {
+            "url": url,
+            "repository": repository,
+            "number": number,
+            "head_sha": "abc1234",
+            "base_ref": "main",
+            "state": "open",
+            "draft": False,
+            "mergeable": "mergeable",
+            "author": "me",
+            **prs[url].get("pr", {}),
+        }
+        emit({"kind": "pr", **pr})
+        for review in prs[url].get("reviews", []):
+            emit({"kind": "review", "pr": url, **review})
+        whole.append(url)
+    emit({"kind": "end", "prs": whole})
+    return 0 if len(whole) == len(request["prs"]) else 1
+
+
+def post(state: dict[str, Any], request: dict[str, Any]) -> int:
+    login = state.get("login", "me")
+    emit({"kind": "as", "login": login})
+    outcome = state.get("post", "ok")
+    if outcome == "refused":
+        emit({"kind": "end", "submitted": False})
+        return 1
+    if "issue" in request:
+        return post_issue(state, request, outcome)
+    pending = f"PRR_fake_{next_id(state)}"
+    emit({"kind": "pending", "review": pending})
+    if outcome == "pending_left":
+        emit({"kind": "end", "submitted": False, "pending": pending})
+        return 1
+    if outcome == "unknown" and not state.get("posted"):
+        return 1
+    url = request["pr"]
+    reviews = state.setdefault("prs", {}).setdefault(url, {}).setdefault("reviews", [])
+    review_id = next_id(state)
+    lines = []
+    for reply in request.get("replies", []):
+        answered = next(r for r in reviews if r.get("item") == "comment" and r["id"] == reply["comment"])
+        comment_id = next_id(state)
+        reviews.append(
+            {
+                "item": "comment",
+                "id": comment_id,
+                "author": login,
+                "bot": False,
+                "time": "2026-10-18T12:00:00Z",
+                "body": reply["text"],
+                "url": f"{url}#discussion_r{comment_id}",
+                "review": review_id,
+                "thread": answered["thread"],
+            }
+        )
+        discussion = f"{url}#discussion_r{comment_id}"
+        lines.append({"kind": "comment", "comment": reply["comment"], "id": comment_id, "url": discussion})
+    review_url = f"{url}#pullrequestreview-{review_id}"
+    reviews.append(
+        {
+            "item": "review",
+            "id": review_id,
+            "author": login,
+            "bot": False,
+            "state": "commented",
+            "time": "2026-10-18T12:00:00Z",
+            "body": request.get("body") or "",
+            "url": review_url,
+        }
+    )
+    if outcome == "unknown":
+        return 1
+    for line in lines:
+        emit(line)
+    emit({"kind": "review", "id": review_id, "url": review_url})
+    emit({"kind": "end", "submitted": True})
+    return 0
+
+
+def post_issue(state: dict[str, Any], request: dict[str, Any], outcome: str) -> int:
+    if outcome == "unknown" and not state.get("posted"):
+        return 1
+    comment = {"url": request["issue"], "body": request["body"], "id": next_id(state)}
+    state.setdefault("issues", []).append(comment)
+    if outcome == "unknown":
+        return 1
+    emit({"kind": "comment", "id": comment["id"], "url": f"{request['issue']}#issuecomment-{comment['id']}"})
+    emit({"kind": "end", "submitted": True})
+    return 0
+
+
+def next_id(state: dict[str, Any]) -> int:
+    state["next_id"] = state.get("next_id", 9000) + 1
+    return state["next_id"]
+
+
+if __name__ == "__main__":
+    sys.exit(main())

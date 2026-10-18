@@ -104,10 +104,10 @@ draft can answer only a thread that exists.
   time; each thread's path, line, side, and whether it is outdated or resolved; and each comment's id, author login,
   time, and body, cut as a mirrored comment is (§22). The slots are already returned, so the read holds none.
 - A draft is unchecked until a whole read of its PR, one whose `end` line covers it. A `thread` draft whose comment that
-  read did not return is refused (`unknown_thread`), with a harness note on the run; a `pr` draft needs only the read.
-  A `ticket` draft needs none.
-- A read that fails, times out, or ends without its `end` line refuses nothing: the drafts stay unchecked, with a
-  harness note, `drafts_waiting` says the threads could not be read, and each tick's reconcile (§6, step 3) reads the
+  read did not return is refused (`unknown_thread`), recorded on the run as `_run`'s refusals are, and so is a second
+  draft of one run for the same thread; a `pr` draft needs only the read. A `ticket` draft needs none.
+- A read that fails, times out, or ends without its `end` line refuses nothing: the drafts stay unchecked, the failure
+  is logged, `drafts_waiting` says the threads could not be read, and each tick's reconcile (§6, step 3) reads the
   PR again until a read is whole. No unchecked draft can be sent, so an outage delays the replies and never drops them.
 - Once checked, a draft supersedes an unsent draft of an earlier run for the same thread, the same PR's comment, or
   the same ticket: shown struck, never sendable, and the page warns when the one superseded carried the operator's

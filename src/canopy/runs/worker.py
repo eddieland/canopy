@@ -47,7 +47,7 @@ from canopy.core.config import render_command, setup_words
 from canopy.core.vocab import PoolKind, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
-from canopy.runs import desks, dispatch, policy, tidy
+from canopy.runs import desks, dispatch, drafted, policy, tidy
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -253,9 +253,21 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             remember = functools.partial(_record_reported, ctx, run_id, outcome)
             if not conversation.close_run(ctx.conn, ctx.config, run, outcome.status, stored, then=remember):
                 log.warning("run was already closed; its outcome is not recorded", extra=fields)
+            _check_drafts(ctx, run_id, log)
             procs.drop_lifelock(Path(run["log_path"]))
             log.info("run finished", extra={**fields, "status": outcome.status})
     return outcome
+
+
+def _check_drafts(ctx: Context, run_id: int, log: logs.TickAdapter) -> None:
+    """Read the PRs the run's drafts answer, after the run is closed: its slots are returned and it holds no capacity.
+
+    A failure here is logged, never raised: the run is closed, and the tick's reconcile reads the PRs again.
+    """
+    try:
+        drafted.after_run(ctx, run_id, log)
+    except Exception:
+        log.exception("drafts not checked", extra={"run_id": run_id})
 
 
 def _record_reported(ctx: Context, run_id: int, outcome: Outcome) -> None:
