@@ -1378,6 +1378,12 @@ class MemoryOverview(_Model):
     """What every run would be served of the lessons; None while proposals are off."""
     repos: list[str]
     """The workspace's repositories, by name: one a promoted lesson may be served to alone."""
+    past_proposals: list[MemoryEntry] = []
+    """With `history`, the proposals no longer pending, rejected, lapsed, promoted, or forgotten, the latest to leave
+    first, at most 50; else none."""
+    past_lessons: list[MemoryEntry] = []
+    """With `history`, the lessons no longer in force, replaced or forgotten, the latest to leave first, at most 50;
+    else none."""
 
 
 class TicketMemory(_Model):

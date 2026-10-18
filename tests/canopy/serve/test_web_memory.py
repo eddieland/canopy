@@ -301,3 +301,17 @@ def test_the_overview_names_the_workspaces_repositories_and_a_private_runs_memor
     # As written, a private run's words carry the CLI's warning; in the operator's own, they do not.
     assert c.post("/api/memory/6/promote", json={}, headers=WRITE).json()["private"] is True
     assert c.post("/api/memory/4/promote", json={"text": "Mine."}, headers=WRITE).json()["private"] is False
+
+
+def test_the_overview_sends_the_memorys_history_only_when_asked(backend: Backend) -> None:
+    c = client(None, backend)
+    plain = c.get("/api/memory").json()
+    assert (plain["past_proposals"], plain["past_lessons"]) == ([], [])
+    # The mock's lesson 8 was promoted from proposal 7, which promoting used up.
+    before = c.get("/api/memory", params={"history": "true"}).json()
+    assert [(m["id"], m["status"]) for m in before["past_proposals"]] == [(7, "superseded")]
+    # A proposal rejected now is the latest to leave, so it comes first.
+    c.post("/api/memory/5/reject", headers=WRITE)
+    after = c.get("/api/memory", params={"history": "true"}).json()
+    assert [(m["id"], m["status"]) for m in after["past_proposals"]] == [(5, "invalid"), (7, "superseded")]
+    assert after["past_lessons"] == []
