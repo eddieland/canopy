@@ -5,6 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { mockAttention, mockTickets } from '@/api/mocks'
 import { keys } from '@/api/queries'
+import type { TicketSummary } from '@/api/types'
+import { ToastContext } from '@/hooks/use-toast'
+import { setTicketToasts } from '@/lib/ticket-toasts'
+import type { NewToast } from '@/lib/toasts'
 import { FakeEventSource } from '@/test-utils'
 
 import { useLiveUpdates } from './use-live-updates'
@@ -18,13 +22,25 @@ beforeEach(() => {
 afterEach(() => {
     cleanup()
     vi.useRealTimers()
+    setTicketToasts([])
 })
 
-function live(client: QueryClient, enabled = true) {
+function live(
+    client: QueryClient,
+    enabled = true,
+    show: (toast: NewToast) => void = vi.fn<(toast: NewToast) => void>(),
+) {
     const wrapper = ({ children }: { children: ReactNode }) => (
-        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+        <QueryClientProvider client={client}>
+            <ToastContext value={show}>{children}</ToastContext>
+        </QueryClientProvider>
     )
     return renderHook(() => useLiveUpdates(enabled), { wrapper })
+}
+
+// The mock tickets, each in `phase`.
+function inPhase(phase: string): TicketSummary[] {
+    return mockTickets.map((ticket) => Object.assign(structuredClone(ticket), { phase }))
 }
 
 function latest(): FakeEventSource {
@@ -53,6 +69,25 @@ describe('useLiveUpdates', () => {
             latest().send('{"type":"tickets.updated","tickets":null}')
         })
         expect(client.getQueryData(keys.tickets)).toEqual(mockTickets)
+    })
+
+    it('shows a toast for a ticket moving into a state Settings turned on, and none for the first list', () => {
+        const show = vi.fn<(toast: NewToast) => void>()
+        setTicketToasts(['blocked'])
+        live(new QueryClient(), true, show)
+        act(() => {
+            latest().open()
+            latest().send(JSON.stringify({ type: 'tickets.updated', tickets: inPhase('running') }))
+        })
+        expect(show).not.toHaveBeenCalled()
+
+        act(() => {
+            latest().send(JSON.stringify({ type: 'tickets.updated', tickets: inPhase('ready') }))
+            latest().send(JSON.stringify({ type: 'tickets.updated', tickets: inPhase('blocked') }))
+        })
+        expect(show.mock.calls).toEqual([
+            [{ title: 'ABC-102: blocked', detail: 'Export reports as CSV', tone: 'moved' }],
+        ])
     })
 
     it("after a drop, reads the server's meta and the tickets shown again, not the lists the stream resends", () => {

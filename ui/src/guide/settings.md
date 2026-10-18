@@ -1,8 +1,9 @@
 # Settings
 
-A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, reloading your
-config, and the fun. It opens from the rail's foot, beside the guide. The theme, the send key, and the fun are kept in
-this browser; everything else canopy reads from its config files, as it always did.
+A handful of things you set from the browser: how the UI looks and sends, which ticket changes pop up a toast, a
+notice for every worker, reloading your config, and the fun. It opens from the rail's foot, beside the guide. The
+theme, the send key, the toasts, and the fun are kept in this browser; everything else canopy reads from its config
+files, as it always did.
 
 ## Theme
 
@@ -14,6 +15,18 @@ of the header flips it too.
 Which key sends a reply, a note, or a comment: **Enter**, **Ctrl+Enter** (⌘+Enter on a Mac), or **Button only**, if
 you've ever sent half a sentence to a worker and would rather not again. Shift+Enter always makes a new line. The key
 you pick shows on each send button.
+
+## Toasts
+
+A checkbox for each state a ticket can move into: its own phases, **ready** through **plan proposed**, and **done**.
+Check one, and whenever a ticket moves into it, a toast says so at the bottom of the window, whatever page you're on:
+`ABC-102: needs human`, with the ticket's title under it. Nothing is checked until you check it, so canopy stays quiet
+by default. Check **needs human** and a worker's question finds you wherever you're reading, instead of waiting for
+you to wander back to the list.
+
+The phases of a ticket's PRs, such as **ci red** or **approved**, are the PRs' own and aren't on the list. Each tab
+toasts for itself, so three open tabs means three toasts, and a tab only toasts changes it saw happen: open one after
+lunch and it won't recite the morning.
 
 ## Notice to workers
 

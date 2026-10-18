@@ -28,13 +28,17 @@ import { setRave, useRave } from '@/lib/rave'
 import { dropDrafts } from '@/lib/reply-draft'
 import { setSendKey, useSendKey } from '@/lib/send-key'
 import type { SendKey } from '@/lib/send-key'
+import { setTicketToasts, TICKET_TOAST_STATES, useTicketToasts, withState } from '@/lib/ticket-toasts'
 import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } from '@/lib/ticker-settings'
 import type { TickerSpeed } from '@/lib/ticker-settings'
+import { readable } from '@/lib/words'
 import type { ThemePreference } from '@/theme/store'
 import { switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
-/** What this browser keeps (the theme, the send key, the fun, the session), and reloading the loop's config. */
+/**
+ * What this browser keeps (the theme, the send key, the toasts, the fun, the session), and reloading the loop's config.
+ */
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
 })
@@ -75,8 +79,8 @@ function SettingsPage() {
     return (
         <>
             <PageHeader title="Settings">
-                The theme, the send key, and the fun are kept in this browser. Everything else canopy reads from its
-                config files.
+                The theme, the send key, the toasts, and the fun are kept in this browser. Everything else canopy reads
+                from its config files.
             </PageHeader>
             <Panel>
                 <PanelHeader label="Theme" />
@@ -101,6 +105,7 @@ function SettingsPage() {
                 </div>
             </Panel>
             <SendKeyPanel />
+            <ToastsPanel />
             <NoticePanel />
             <ConfigPanel />
             {/* Second to last: below what changes how canopy works, above signing out. */}
@@ -385,6 +390,39 @@ function SendKeyPanel() {
                         </ToggleGroupItem>
                     ))}
                 </ToggleGroup>
+            </div>
+        </Panel>
+    )
+}
+
+/** Which states a ticket moves into show a toast, one checkbox each: none until the operator checks one. */
+function ToastsPanel() {
+    const states = useTicketToasts()
+    return (
+        <Panel>
+            <PanelHeader label="Toasts" />
+            <div className="flex flex-col gap-3 p-3">
+                <p id="ticket-toasts" className="text-sm text-muted-foreground">
+                    A toast when a ticket moves into a state checked here, on whatever page you are on. A ticket&apos;s
+                    PRs have phases of their own, which these leave out.
+                </p>
+                <fieldset aria-labelledby="ticket-toasts" className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                    {TICKET_TOAST_STATES.map((state) => (
+                        <label
+                            key={state}
+                            className="inline-flex items-center gap-2 font-mono text-xs whitespace-nowrap"
+                        >
+                            <Checkbox
+                                checked={states.includes(state)}
+                                data-testid={`ticket-toast-${state}`}
+                                onCheckedChange={(checked) =>
+                                    setTicketToasts(withState(states, state, checked === true))
+                                }
+                            />
+                            {readable(state)}
+                        </label>
+                    ))}
+                </fieldset>
             </div>
         </Panel>
     )
