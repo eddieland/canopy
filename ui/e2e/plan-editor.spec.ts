@@ -155,7 +155,7 @@ test('the style menu shows each style as the plan sets it, and leaves the cursor
 })
 
 test('the table menu inserts a table where none is, and only there', async ({ page }) => {
-    await plan(page).locator('blockquote p').click()
+    await clickIn(plan(page).locator('blockquote p'))
     await page.keyboard.press('End')
     await page.keyboard.press('Enter')
     await page.keyboard.press('Enter')
@@ -348,7 +348,7 @@ test.describe('on half a monitor', () => {
 })
 
 test('Markdown pasted into the plan becomes the headings, lists, and marks it writes', async ({ page }) => {
-    await plan(page).locator('blockquote p').click()
+    await clickIn(plan(page).locator('blockquote p'))
     await page.keyboard.press('End')
     await page.keyboard.press('Enter')
     await page.keyboard.press('Enter')
@@ -380,7 +380,7 @@ test('inline Markdown pasted into a sentence stays in it, and prose or a Shift p
 })
 
 test('Markdown pasted into a code block stays code, as its characters', async ({ page }) => {
-    await plan(page).locator('blockquote p').click()
+    await clickIn(plan(page).locator('blockquote p'))
     await page.keyboard.press('End')
     await page.keyboard.press('Enter')
     await page.keyboard.press('Enter')
