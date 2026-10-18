@@ -66,6 +66,9 @@ posture in [docs/TRUST_MODEL.md](docs/TRUST_MODEL.md).
 
 ## Install (target: five steps, no more)
 
+Or let your own coding agent (Claude Code, OpenCode, ...) walk you through them in an interview, from making the
+workspace to a first dry tick, with the sandbox if you want it: [docs/QUICKSTART.md](docs/QUICKSTART.md).
+
 1. **Install treehouse** from source, at the commit canopy needs:
 
    ```sh
