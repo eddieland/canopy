@@ -63,6 +63,30 @@ test.describe('on half a monitor', () => {
         await expectSpendAxisWhole(page, 6)
     })
 
+    test("/spend?days=30 keeps the dearest day's total inside the chart when today is the dearest", async ({
+        page,
+    }) => {
+        await page.goto('spend?days=30')
+        await settled(page)
+        // The mock prices today alone, the last of 30 bars, each narrower than the total over it. Centered, a total of
+        // $1,234.56 would overhang the bar by more than the chart's padding, so on the last bar it is flush with the
+        // bar's outer edge, whatever its length.
+        const bar = page.getByTestId('spend-bar-2026-10-08')
+        const [chart, barBox, label] = await Promise.all([
+            page.getByTestId('spend-chart').boundingBox(),
+            bar.boundingBox(),
+            // The total's own box: the row holding it is only as wide as the bar.
+            bar.getByTestId('spend-peak').locator('span').boundingBox(),
+        ])
+        if (chart === null || barBox === null || label === null) {
+            throw new Error("the dearest day's total is not drawn")
+        }
+        expect(label.width).toBeGreaterThan(barBox.width)
+        expect(Math.abs(label.x + label.width - (barBox.x + barBox.width))).toBeLessThanOrEqual(1)
+        expect(label.x).toBeGreaterThanOrEqual(chart.x - 1)
+        expect(label.x + label.width).toBeLessThanOrEqual(chart.x + chart.width + 1)
+    })
+
     test('/ opens the rail in its search box, and a search sent closes it', async ({ page }) => {
         await page.goto('attention')
         await settled(page)

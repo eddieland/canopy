@@ -68,6 +68,14 @@ const AXIS_ALL = SPEND_WINDOWS[0]
 const AXIS_NAME_CHARS = 6
 const AXIS_GAP = 8
 
+// Where the dearest day's total sits over its bar (`peakAlign`), and the class that puts it there.
+type PeakAlign = 'start' | 'center' | 'end'
+const PEAK_JUSTIFY: Record<PeakAlign, string> = {
+    start: 'justify-start',
+    center: 'justify-center',
+    end: 'justify-end',
+}
+
 /**
  * What agent runs cost per UTC day, by kind, and what the overseer's ticks bought, as `canopy spend` prints it, beside
  * what it got done: the tickets marked done, and what each ticket's and PR's own runs cost. The window is `?days=`, a
@@ -368,7 +376,12 @@ function Chart({ days }: { days: SpendDay[] }) {
         <div ref={measure} aria-hidden className="flex flex-col gap-1.5 px-3" data-testid="spend-chart">
             <div className="flex h-48 items-end justify-center gap-1">
                 {days.map((day, i) => (
-                    <Bar key={day.day} day={day} top={top} peak={i === dearest} />
+                    <Bar
+                        key={day.day}
+                        day={day}
+                        top={top}
+                        peak={i === dearest ? peakAlign(i, days.length) : undefined}
+                    />
                 ))}
             </div>
             <div className="flex justify-center gap-1">
@@ -413,11 +426,22 @@ function axisRoom(chart: HTMLElement): AxisRoom | undefined {
 }
 
 /**
+ * Where the dearest day's total sits over its bar: centered, but flush with the bar's outer edge on the first and the
+ * last, since a total is wider than a narrow bar and the chart's padding is less than the half that would overhang.
+ */
+function peakAlign(i: number, count: number): PeakAlign {
+    if (count > 1 && i === 0) {
+        return 'start'
+    }
+    return count > 1 && i === count - 1 ? 'end' : 'center'
+}
+
+/**
  * One day's bar. Its segments stack bottom up, each its series' share of the day, at least 2px and 2px apart, the whole
  * as tall as the day's share of the chart's top; the dearest day's total sits over its bar. A day with no cost is a
  * stub on the baseline, so it reads as nothing spent rather than a column gone missing.
  */
-function Bar({ day, top, peak }: { day: SpendDay; top: number; peak: boolean }) {
+function Bar({ day, top, peak }: { day: SpendDay; top: number; peak: PeakAlign | undefined }) {
     const segments = SERIES.map((series) => ({ series, usd: seriesCost(day.costs, series.key) })).filter(
         ({ usd }) => usd > 0,
     )
@@ -450,13 +474,16 @@ function Bar({ day, top, peak }: { day: SpendDay; top: number; peak: boolean }) 
                     ))}
                 </span>
             )}
-            {peak && (
+            {peak !== undefined && (
                 <span
-                    className="readout absolute inset-x-0 flex justify-center pb-0.5 text-2xs whitespace-nowrap"
+                    className={cn(
+                        'readout absolute inset-x-0 flex pb-0.5 text-2xs whitespace-nowrap',
+                        PEAK_JUSTIFY[peak],
+                    )}
                     style={{ bottom: `${height}%` }}
                     data-testid="spend-peak"
                 >
-                    {costText(day.costs.total)}
+                    <span>{costText(day.costs.total)}</span>
                 </span>
             )}
         </div>

@@ -535,7 +535,8 @@ Patterns names what is its own.
 
 - **Bars from zero**, in fill tokens of their own (Tokens), never a state's color. The plot's top is the peak and a
   quarter more (`HEADROOM`), so the tallest bar stops short of the edge, and the peak's value sits over its bar as a
-  `readout`: the scale reads without hovering.
+  `readout`: the scale reads without hovering. Over the first or last bar it is flush with the bar's outer edge, since
+  it is wider than a narrow bar and would overhang the chart's padding.
 - **A bar's width is capped**, the row centered, so a sparse window draws narrow bars rather than slabs.
 - **Stacked segments are 2px apart**, the surface between them, and any segment with a value is 2px tall at least, so a
   sliver still shows; the top segment's corners are rounded.
