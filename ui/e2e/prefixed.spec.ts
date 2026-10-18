@@ -111,6 +111,7 @@ test("a chore's finding takes a note its next run reads, and is dismissed and li
     await page.goto('attention')
     await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'lodash-advisory' }).click()
     const detail = page.getByTestId('attention-detail')
+    await detail.getByRole('button', { name: 'Show a note for its next runs' }).click()
     const form = detail.getByRole('form', { name: 'Note' })
     await form.getByRole('textbox').fill('Leave out lodash-advisory until 2026-10-15: the upgrade is merging.')
     await form.getByRole('button', { name: 'Add note' }).click()

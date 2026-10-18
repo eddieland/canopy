@@ -9,7 +9,7 @@ import { ReplyForm } from './reply-form'
 import type { ReplyTarget } from './reply-form'
 
 const TICKET: ReplyTarget = { kind: 'ticket', key: 'ABC-1', isPublic: false }
-const CHORE: ReplyTarget = { kind: 'chore', name: 'deps' }
+const CHORE: ReplyTarget = { kind: 'chore', name: 'deps', noted: true }
 
 // Every reply the form sends, and what the server stand-in answers next: a failure, then the reply recorded. An error
 // is what fetch throws when no server answers.
@@ -100,8 +100,10 @@ describe('ReplyForm', () => {
         expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' }).value).toBe('Leave the docs alone')
     })
 
-    it('notes something to a chore, for its next runs', () => {
+    it('notes something to a chore, for its next runs, once its folded form is opened', () => {
         renderForm(CHORE)
+        expect(screen.queryByRole('form', { name: 'Note' })).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'Show a note for its next runs', expanded: false }))
         expect(screen.getByRole('form', { name: 'Note' })).toBeDefined()
         expect(screen.getByRole('textbox', { name: 'Note' })).toBeDefined()
         expect(screen.getByRole('button', { name: 'Add note' })).toBeDefined()
@@ -109,6 +111,7 @@ describe('ReplyForm', () => {
 
     it('says what a reply did in the CLI’s words, and clears the field for the next', async () => {
         renderForm(CHORE)
+        fireEvent.click(screen.getByRole('button', { name: 'Show a note for its next runs' }))
         type('Note', 'Leave lodash at 4')
         fireEvent.click(screen.getByRole('button', { name: 'Add note' }))
 
@@ -153,8 +156,9 @@ describe('ReplyForm', () => {
 
         renderForm(TICKET)
         expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' }).value).toBe('Use the v2 API')
+        // The chore keeps no draft of the ticket's, so its form stays folded.
         renderForm(CHORE)
-        expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Note' }).value).toBe('')
+        expect(screen.queryByRole('textbox', { name: 'Note' })).toBeNull()
         cleanup()
 
         renderForm(TICKET)

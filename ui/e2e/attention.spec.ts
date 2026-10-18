@@ -113,7 +113,7 @@ test('choosing an item shows its thread and keeps the choice in the URL', async 
     await expect(list.getByRole('link').filter({ hasText: 'awaiting reply' })).toHaveAttribute('aria-current', 'page')
 })
 
-test("a chore's finding opens the chore's notes and a form for another", async ({ page }) => {
+test("a chore's finding opens the chore's notes and a folded form for another", async ({ page }) => {
     await page.goto('attention')
     await settled(page)
     await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'lodash-advisory' }).click()
@@ -127,6 +127,8 @@ test("a chore's finding opens the chore's notes and a form for another", async (
     await expect(text.getByRole('link')).toHaveAttribute('href', 'https://github.com/advisories/GHSA-35jh-r3h4-6jhm')
     await expect(detail.getByTestId('message-8')).toContainText("Leave out the docs site's lockfile")
     await expect(detail.getByTestId('message-8')).not.toContainText('waiting for the next run')
+    await expect(detail.getByRole('form', { name: 'Note' })).toHaveCount(0)
+    await detail.getByRole('button', { name: 'Show a note for its next runs' }).click()
     await expect(detail.getByRole('form', { name: 'Note' })).toBeVisible()
     await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
 })

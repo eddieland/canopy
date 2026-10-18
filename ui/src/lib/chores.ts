@@ -20,9 +20,14 @@ export function choreRunState(status: string): RunState {
     return status === 'ok' ? 'done' : 'failed'
 }
 
+/** Whether a chore's config leaves its window at the default, no days and no hours: it may start any time. */
+export function startsAnyTime(chore: Pick<ChoreSummary, 'days' | 'hours'>): boolean {
+    return chore.days.length === 0 && chore.hours === null
+}
+
 /** When a chore may start, as `canopy chore run` names it when it refuses: `mon,tue 08:00-18:00 UTC`. */
 export function windowText(chore: Pick<ChoreSummary, 'days' | 'hours' | 'timezone'>): string {
-    if (chore.days.length === 0 && chore.hours === null) {
+    if (startsAnyTime(chore)) {
         return 'any time'
     }
     const days = chore.days.length > 0 ? chore.days.join(',') : 'every day'
@@ -45,6 +50,27 @@ export function choreLine(chore: Pick<ChoreSummary, 'running' | 'latest' | 'due_
     const last =
         chore.latest === null ? 'never run' : `last ${chore.latest.status} ${age(chore.latest.started_at, now)} ago`
     return `${last}, ${dueText(chore, now)}`
+}
+
+/**
+ * Whether a chore is healthy, as its page's description says it: where it stands, as `choreLine` says it, and while a
+ * run works, also how the last one ended, since the running one has not said yet; then its open findings when any,
+ * less those dismissed, with any its latest ok run found past its `max_findings`:
+ * `last ok 9d ago, due now · 1 open finding`, `running for 10m · last ok 2h ago`.
+ */
+export function choreHealth(
+    chore: Pick<ChoreSummary, 'running' | 'latest' | 'due_at' | 'findings' | 'more_findings'>,
+    now: number,
+): string {
+    const parts = [choreLine(chore, now)]
+    if (chore.running !== null && chore.latest !== null) {
+        parts.push(`last ${chore.latest.status} ${age(chore.latest.started_at, now)} ago`)
+    }
+    const { waiting } = countFindings(chore.findings)
+    if (waiting > 0 || chore.more_findings > 0) {
+        parts.push(withCounts(waiting === 1 ? '1 open finding' : `${waiting} open findings`, 0, chore.more_findings))
+    }
+    return parts.join(' · ')
 }
 
 /**

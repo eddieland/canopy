@@ -48,14 +48,23 @@ function shown(): string[] {
 }
 
 describe('ChoreNotes', () => {
-    it('says its runs follow the prompt file alone without notes, and offers no order for fewer than two', async () => {
+    it('folds the note form until asked, its box saying runs follow the prompt file alone without notes', async () => {
         const { unmount } = await renderNotes([])
-        expect(screen.getByText('no notes yet: its runs follow its prompt file alone')).toBeDefined()
+        expect(screen.queryByTestId('conversation')).toBeNull()
+        expect(screen.queryByRole('textbox', { name: 'Note' })).toBeNull()
         expect(screen.queryByRole('button', { name: /first/u })).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'Show a note for its next runs', expanded: false }))
+        const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Note' })
+        expect(field.placeholder).toMatch(/^No notes yet: its runs follow its prompt file alone\. /u)
         unmount()
 
         await renderNotes([READ])
         expect(screen.queryByRole('button', { name: /first/u })).toBeNull()
+        expect(screen.queryByRole('textbox', { name: 'Note' })).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'Show a note for its next runs' }))
+        expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Note' }).placeholder).toMatch(
+            /^Its next runs/u,
+        )
     })
 
     it('marks the notes no run has read yet, which the next run reads as an instruction', async () => {

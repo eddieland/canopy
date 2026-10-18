@@ -38,8 +38,13 @@ function Shortcut({ keys }: { keys: string }) {
     )
 }
 
-/** What a reply goes to: a ticket, public or private, or a chore, whose next runs read it as a note (DESIGN §19). */
-export type ReplyTarget = { kind: 'ticket'; key: string; isPublic: boolean } | { kind: 'chore'; name: string }
+/**
+ * What a reply goes to: a ticket, public or private, or a chore, whose next runs read it as a note (DESIGN §19), and
+ * which may have none yet (`noted` false), so its runs follow its prompt file alone.
+ */
+export type ReplyTarget =
+    | { kind: 'ticket'; key: string; isPublic: boolean }
+    | { kind: 'chore'; name: string; noted: boolean }
 
 /**
  * Answers a ticket, as `canopy reply` does, or notes something to a chore, as `canopy reply chore:NAME` does. The
@@ -49,9 +54,10 @@ export type ReplyTarget = { kind: 'ticket'; key: string; isPublic: boolean } | {
  * reply stays in canopy: it is how the operator says what to do about an untrusted reviewer's comments (D089).
  *
  * It is open where a reply is awaited: a question waiting (`waiting`), an untrusted review waiting on the go-ahead
- * (`untrusted`), any private ticket, whose workers hear the operator only here, and a chore. A public ticket with
- * nothing waiting gets a `Disclosure` instead, `Show a note for its next worker`, since a box there invites a reply
- * nothing waits on; it opens by itself once a reply is awaited, or a draft is kept, and stays open after.
+ * (`untrusted`), and any private ticket, whose workers hear the operator only here. A public ticket with nothing
+ * waiting gets a `Disclosure` instead, `Show a note for its next worker`, since a box there invites a reply nothing
+ * waits on; so does a chore, `Show a note for its next runs`, since nothing ever waits on a note. It opens by itself
+ * once a reply is awaited, or a draft is kept, and stays open after.
  */
 export function ReplyForm({
     target,
@@ -71,7 +77,7 @@ export function ReplyForm({
     const [body, setBody] = useState(draft?.body ?? '')
     const [submission, setSubmission] = useState(() => draft?.submission ?? newSubmission())
     const [said, setSaid] = useState<string | null>(null)
-    const awaited = target.kind === 'chore' || !target.isPublic || waiting !== null || untrusted
+    const awaited = target.kind === 'ticket' && (!target.isPublic || waiting !== null || untrusted)
     const [open, setOpen] = useState(() => awaited || Boolean(draft?.body))
     // Once awaited it stays open, so the reply that ends the wait does not fold away what it said.
     if (awaited && !open) {
@@ -117,6 +123,10 @@ export function ReplyForm({
     let placeholder = 'The next worker reads it as an instruction.'
     if (chore) {
         placeholder = 'Its next runs read it as an instruction, a later note winning, such as a finding to leave out.'
+        if (!target.noted) {
+            // With no notes the panel says nothing of them, so the box says what that means.
+            placeholder = `No notes yet: its runs follow its prompt file alone. ${placeholder}`
+        }
     } else if (target.isPublic) {
         // Only while one waits does the box ask about an untrusted review; a ticket with none has nothing to say of it.
         placeholder = untrusted
@@ -126,7 +136,13 @@ export function ReplyForm({
 
     return (
         <Collapsible open={open} onOpenChange={setOpen} className="border-t">
-            {!awaited && <Disclosure open={open} what="a note for its next worker" className="m-2" />}
+            {!awaited && (
+                <Disclosure
+                    open={open}
+                    what={chore ? 'a note for its next runs' : 'a note for its next worker'}
+                    className="m-2"
+                />
+            )}
             <CollapsibleContent asChild>
                 <form
                     onSubmit={submit}
