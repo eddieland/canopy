@@ -3,6 +3,18 @@ import { useEffect, useEffectEvent, useState } from 'react'
 /** Where a stream is: opening, open, reconnecting after a drop or a refusal, or closed because it is disabled. */
 export type StreamStatus = 'connecting' | 'open' | 'reconnecting' | 'closed'
 
+/** Where a stream is, and since when it has been down. */
+export interface StreamState {
+    /** Where it is. */
+    status: StreamStatus
+    /**
+     * When it last dropped, in epoch milliseconds, while it has not opened again since: the first drop, not the last
+     * retry, so how long it has been down counts from when it went. Null while it is open, opening for the first
+     * time, or closed.
+     */
+    downSince: number | null
+}
+
 /**
  * How long a stream may be down before useEventStream starts it over, doubling on each try up to RETRY_MAX_MS. A
  * browser retries on its own within a few seconds, but gives up for good on a refusal (a proxy's 502 while the loop
@@ -27,17 +39,17 @@ export interface EventStreamOptions<T> {
 }
 
 /**
- * Subscribes to a server-sent event stream for as long as the component is mounted, reports where it is, and tells the
- * caller when it is back after a drop so it can catch up. EventSource reconnects on its own; when it has not within
- * RETRY_FIRST_MS, this closes it and opens a new one, and it opens a new one at once when the device is back online,
- * or when the page is shown again after HIDDEN_MS or with the stream down.
+ * Subscribes to a server-sent event stream for as long as the component is mounted, reports where it is and since when
+ * it has been down, and tells the caller when it is back after a drop so it can catch up. EventSource reconnects on
+ * its own; when it has not within RETRY_FIRST_MS, this closes it and opens a new one, and it opens a new one at once
+ * when the device is back online, or when the page is shown again after HIDDEN_MS or with the stream down.
  *
  * For Query data, pair it with setQueryData in `onEvent` (see useLiveUpdates), never with polling.
  */
-export function useEventStream<T>(url: string, options: EventStreamOptions<T>): StreamStatus {
+export function useEventStream<T>(url: string, options: EventStreamOptions<T>): StreamState {
     const { enabled = true } = options
     // Keyed by URL, so a new URL reads as 'connecting' without a state reset inside the effect.
-    const [reported, setReported] = useState<{ url: string; status: StreamStatus } | null>(null)
+    const [reported, setReported] = useState<({ url: string } & StreamState) | null>(null)
     const onMessage = useEffectEvent((data: string) => {
         const event = options.parse(data)
         if (event !== null) {
@@ -55,6 +67,12 @@ export function useEventStream<T>(url: string, options: EventStreamOptions<T>): 
         let retry: ReturnType<typeof setTimeout> | null = null
         let delay = RETRY_FIRST_MS
         let hiddenAt: number | null = null
+        // When the stream went down, kept through every retry until it opens again.
+        let downAt: number | null = null
+        const down = () => {
+            downAt ??= Date.now()
+            setReported({ url, status: 'reconnecting', downSince: downAt })
+        }
 
         const stopRetry = () => {
             if (retry !== null) {
@@ -70,7 +88,8 @@ export function useEventStream<T>(url: string, options: EventStreamOptions<T>): 
             current.addEventListener('open', () => {
                 stopRetry()
                 delay = RETRY_FIRST_MS
-                setReported({ url, status: 'open' })
+                downAt = null
+                setReported({ url, status: 'open', downSince: null })
                 if (dropped) {
                     onReconnect()
                 }
@@ -79,7 +98,7 @@ export function useEventStream<T>(url: string, options: EventStreamOptions<T>): 
             current.addEventListener('message', (message: MessageEvent<string>) => onMessage(message.data))
             current.addEventListener('error', () => {
                 dropped = true
-                setReported({ url, status: 'reconnecting' })
+                down()
                 // One timer per drop: the browser's own retries fire `error` again while it waits.
                 if (retry !== null) {
                     return
@@ -91,7 +110,7 @@ export function useEventStream<T>(url: string, options: EventStreamOptions<T>): 
         const startOver = () => {
             dropped = true
             delay = RETRY_FIRST_MS
-            setReported({ url, status: 'reconnecting' })
+            down()
             connect()
         }
         const onVisibility = () => {
@@ -131,7 +150,9 @@ export function useEventStream<T>(url: string, options: EventStreamOptions<T>): 
     }, [url, enabled])
 
     if (!enabled) {
-        return 'closed'
+        return { status: 'closed', downSince: null }
     }
-    return reported?.url === url ? reported.status : 'connecting'
+    return reported?.url === url
+        ? { status: reported.status, downSince: reported.downSince }
+        : { status: 'connecting', downSince: null }
 }
