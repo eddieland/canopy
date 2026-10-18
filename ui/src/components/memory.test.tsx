@@ -65,6 +65,7 @@ const NOTE: MemoryEntry = {
     wrong_at: null,
     wrong_run_id: null,
     use_count: 2,
+    used_by: [43],
     last_used_at: '2026-10-08T11:30:00Z',
     promoted_from: null,
     private: false,
@@ -85,6 +86,26 @@ describe('MemoryRows', () => {
         expect(within(row).getByRole('link', { name: 'run:41' }).getAttribute('href')).toBe('/runs/41')
         expect(within(row).getByText('at a1b2c3d')).toBeDefined()
         expect(within(row).queryByRole('link', { name: 'ABC-102' })).toBeNull()
+    })
+
+    it('names the runs that relied on a memory, and counts those it cannot name', async () => {
+        await renderRows(<MemoryRows entries={[{ ...NOTE, use_count: 4, used_by: [43, 42] }]} />)
+        expect(screen.getByText(/^used in/u).textContent).toBe('used in run:43, run:42 and 2 more')
+        expect(screen.getByRole('link', { name: 'run:43' }).getAttribute('href')).toBe('/runs/43')
+
+        cleanup()
+        await renderRows(<MemoryRows entries={[{ ...NOTE, use_count: 0, last_used_at: null, used_by: [] }]} />)
+        expect(screen.queryByText(/^used in/u)).toBeNull()
+    })
+
+    it('marks what the run whose page it is relied on and found wrong, apart from the runs that used it', async () => {
+        const rows = [NOTE, { ...NOTE, id: 13, used_by: [] }, { ...NOTE, id: 14, used_by: [] }]
+        await renderRows(<MemoryRows entries={rows} ownRun={43} cited={{ used: [12], wrong: [13] }} />)
+        const [used, wrong, neither] = screen.getAllByRole('listitem')
+        expect(used && within(used).getByText('this run relied on it')).toBeDefined()
+        expect(used && within(used).queryByRole('link', { name: 'run:43' })).toBeNull()
+        expect(wrong && within(wrong).getByText('this run found it wrong')).toBeDefined()
+        expect(neither && within(neither).queryByText(/^this run/u)).toBeNull()
     })
 
     it('names each note’s ticket only in a list across tickets', async () => {

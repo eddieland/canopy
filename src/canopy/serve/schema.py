@@ -1261,6 +1261,9 @@ class MemoryEntry(_Model):
     """How many runs said they relied on it."""
     last_used_at: datetime | None
     """When a run last said so; None if none has: read by no run."""
+    used_by: list[int] = []
+    """The latest runs that said they relied on it, newest first, at most five. A run from before canopy named them
+    counts in `use_count` but is not here."""
     review_at: datetime | None
     """A lesson's next review."""
     wrong_at: datetime | None
@@ -1372,6 +1375,10 @@ class RunMemory(_Model):
     """What it wrote, in order."""
     read: list[MemoryEntry]
     """What was rendered into its prompt. Empty while recording: then nothing was served."""
+    used: list[int] = []
+    """The ids of what it read that it said it relied on, its `memory_used`."""
+    wrong: list[int] = []
+    """The ids of what it read that it said was wrong, its `memory_wrong`."""
     refused: list[MemoryRefusal]
     """What it sent that was not written."""
 

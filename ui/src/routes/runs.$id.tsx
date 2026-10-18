@@ -181,7 +181,11 @@ function RunMemoryPanel({ id }: { id: number }) {
             <h3 className="px-3 pt-2 panel-label">Wrote</h3>
             {data.wrote.length === 0 ? <Empty>none</Empty> : <MemoryRows entries={data.wrote} ownRun={id} />}
             <h3 className="border-t px-3 pt-2 panel-label">Read</h3>
-            {data.read.length === 0 ? <Empty>{readNothingText(served)}</Empty> : <MemoryRows entries={data.read} />}
+            {data.read.length === 0 ? (
+                <Empty>{readNothingText(served)}</Empty>
+            ) : (
+                <MemoryRows entries={data.read} ownRun={id} cited={data} />
+            )}
             {data.refused.length > 0 && (
                 <>
                     <h3 className="border-t px-3 pt-2 panel-label">Refused</h3>

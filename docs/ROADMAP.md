@@ -1392,7 +1392,9 @@ out: `canopy memory search` over an FTS5 index of every memory (migration 0038) 
 checking FTS5. Memory at density (asked for by the operator, 2026-10-17): the lessons digest keeps the lessons last
 promoted, renewed, or used rather than the first by key, `lesson_review` and `lesson_wrong` name ten and count the rest,
 an index on scope and status (migration 0039), and the memory page lists tickets with notes in force, opening each to
-its notes, with every list scrolling in its panel and a memory its digest leaves out saying so. Every stage's checks, at
+its notes, with every list scrolling in its panel and a memory its digest leaves out saying so. Where memory was used
+(asked for by the operator, 2026-10-18): each run's citations journaled per memory (migration 0044), a memory naming
+the latest runs that relied on it, and a run's page marking what it relied on and found wrong. Every stage's checks, at
 `record` and at `use`, are still the operator's.
 
 ## M51. The loop, detached

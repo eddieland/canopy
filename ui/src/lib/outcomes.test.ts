@@ -245,6 +245,7 @@ describe('outcomes', () => {
             head: null,
             created_at: '2026-10-08T12:00:00Z',
             use_count: 0,
+            used_by: [] as number[],
             last_used_at: null,
             review_at: '2027-01-06T12:00:00Z',
             wrong_at: null,
