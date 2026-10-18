@@ -142,9 +142,9 @@ A bare § is a section of the design (`design/`); other documents are named, as 
   notice (M35) reaches only runs rendered after it, and at the timeout what it has not committed goes with the slot.
   aide's PreToolUse hook hands a running subagent a halt, a pause, or an urgent message on its next tool call, and
   warns it in the last five minutes before a soft deadline
-  ([agent-signals.ts](https://github.com/jmylchreest/aide/blob/457e4e6/src/hooks/agent-signals.ts));
-  under OpenCode it adds context each turn through `experimental.chat.system.transform`. A warning before the kill
-  would let a worker push what it has.
+  ([agent-signals.ts](https://github.com/jmylchreest/aide/blob/457e4e6/src/hooks/agent-signals.ts)), under Claude
+  Code only: its OpenCode plugin has no such signal, and adds context each turn, for memory, through
+  `experimental.chat.system.transform`. A warning before the kill would let a worker push what it has (M57).
 - **Lessons mined from transcripts, without a model.** §28 leaves open a chore that drafts proposals from transcripts.
   aide's `reflect` makes a first pass with no model at session end: a shell command run four times in 30 minutes, past
   a list where repetition is normal (`git status`, `ls`), or a user's correction between two edits of one file, each
