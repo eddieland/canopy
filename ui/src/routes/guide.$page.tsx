@@ -10,8 +10,9 @@ import { cn } from '@/lib/utils'
 
 /**
  * A page of the guide (ui/DESIGN.md, "The guide"), laid out as a documentation site: the guide's pages by group on the
- * left, the page in the middle with Previous and Next at its foot, and its headings on the right. A page the guide has
- * none of is the 404.
+ * left, the page in the middle with Previous and Next at its foot, and its headings on the right. Each column comes in
+ * by the pane's width, not the window's, and only once the article keeps its whole measure beside it, so the article
+ * never narrows as the window widens. A page the guide has none of is the 404.
  */
 export const Route = createFileRoute('/guide/$page')({
     loader: ({ params }) => {
@@ -28,33 +29,39 @@ export const Route = createFileRoute('/guide/$page')({
 function GuidePageView() {
     const page = Route.useLoaderData()
     return (
-        <div
-            className={cn(
-                'mx-auto grid w-full max-w-7xl grid-cols-1 gap-x-12 gap-y-6',
-                'lg:grid-cols-[13rem_minmax(0,1fr)] xl:grid-cols-[13rem_minmax(0,1fr)_12rem]',
-            )}
-        >
-            <GuideSidebar page={page} />
-            <article className="flex max-w-3xl min-w-0 flex-col gap-8" data-testid="guide-page">
-                <PageHeader root={page.group} title={page.title} tab={`${page.title} · Guide`}>
-                    <GuideLines lines={page.lead} />
-                </PageHeader>
-                <GuideText blocks={page.body} page={page.slug} />
-                <PreviousNext page={page} />
-            </article>
-            <OnThisPage page={page} />
+        // The pane is the container, so the rail's width counts. The page list comes in when the pane holds it, its
+        // gap, and the article's whole 48rem (62.5rem); On this page when it holds that and 12rem and a gap more
+        // (76.5rem). A 1280px window gives the pane just over 62.5rem.
+        <div className="@container" data-testid="guide">
+            <div
+                className={cn(
+                    'mx-auto grid w-full max-w-7xl grid-cols-1 gap-x-8 gap-y-6',
+                    '@min-[62.5rem]:grid-cols-[12.5rem_minmax(0,1fr)]',
+                    '@min-[76.5rem]:grid-cols-[12.5rem_minmax(0,1fr)_12rem]',
+                )}
+            >
+                <GuideSidebar page={page} />
+                <article className="flex max-w-3xl min-w-0 flex-col gap-8" data-testid="guide-page">
+                    <PageHeader root={page.group} title={page.title} tab={`${page.title} · Guide`}>
+                        <GuideLines lines={page.lead} />
+                    </PageHeader>
+                    <GuideText blocks={page.body} page={page.slug} />
+                    <PreviousNext page={page} />
+                </article>
+                <OnThisPage page={page} />
+            </div>
         </div>
     )
 }
 
 /**
- * The guide's pages, by group, this one marked. Beside the page from `lg`, sticking as it scrolls; under it, a toggle
- * above the page that opens the same list.
+ * The guide's pages, by group, this one marked. Beside the page once the pane has room for it and the article's whole
+ * measure, sticking as it scrolls; short of that, a toggle above the page that opens the same list.
  */
 function GuideSidebar({ page }: { page: GuidePage }) {
     return (
         <>
-            <Collapsible className="rounded-md border lg:hidden">
+            <Collapsible className="rounded-md border @min-[62.5rem]:hidden">
                 <CollapsibleTrigger
                     className={cn(
                         'group flex w-full items-center justify-between px-3 py-2 text-sm font-medium',
@@ -71,7 +78,7 @@ function GuideSidebar({ page }: { page: GuidePage }) {
                     <GuideTree page={page} />
                 </CollapsibleContent>
             </Collapsible>
-            <aside className="hidden self-start lg:sticky lg:top-0 lg:block">
+            <aside className="sticky top-0 hidden self-start @min-[62.5rem]:block">
                 <GuideTree page={page} />
             </aside>
         </>
@@ -110,13 +117,13 @@ function GuideTree({ page }: { page: GuidePage }) {
     )
 }
 
-/** The page's `##` headings, from `xl`, beside it and sticking as it scrolls. */
+/** The page's `##` headings, beside it once the pane has room for them too, sticking as it scrolls. */
 function OnThisPage({ page }: { page: GuidePage }) {
     if (page.headings.length === 0) {
         return null
     }
     return (
-        <nav aria-label="On this page" className="hidden self-start xl:sticky xl:top-0 xl:flex xl:flex-col xl:gap-2">
+        <nav aria-label="On this page" className="sticky top-0 hidden flex-col gap-2 self-start @min-[76.5rem]:flex">
             <h2 className="text-sm font-semibold">On this page</h2>
             <ul className="flex flex-col gap-1">
                 {page.headings.map((heading) => (
