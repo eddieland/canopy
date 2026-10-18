@@ -200,6 +200,8 @@ split_cmd    = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent
     --thinking --title={title} {prompt}'''
 plan_cmd     = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json
     --thinking --title={title} {prompt}'''
+worker_cmd_prefix = ""  # optional; words before every command a worker run starts, such as a sandbox wrapper (§24)
+worker_cmd_suffix = ""  # optional; words after them
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 pr_skill = ""           # optional; the skill workers open PRs with instead of the GitHub MCP (§8)
@@ -308,7 +310,7 @@ Rules:
   workspace file if there is none. It never writes the user file, never overwrites a file, and installs nothing else
   (§13). No file gets a key whose default serves: a default written into a file is pinned there, and a later canopy's
   never reaches it. It warns about copies of canopy's agent definitions in the OpenCode config, which stop runs (§13),
-  and, unless `worker_cmd` is already sandboxed, prints a sandboxed one to add: the sandbox is opt-in (§24).
+  and, unless `worker_cmd` is already sandboxed, prints a `worker_cmd_prefix` to add: the sandbox is opt-in (§24).
 - `canopy sandbox setup` needs no workspace. It copies the sandbox's policy templates to `<user config dir>/sandbox/`
   (0700), never over one that is there; installs the `srt` version the wrapper's lockfile pins, with npm's install
   scripts off; and checks what it cannot install because it needs root: on Linux bubblewrap (0.5.0 or later, able to
@@ -330,6 +332,12 @@ is a config error that prints the line to write instead. The check cannot tell w
 custom template, such as a sandbox wrapper's, must still set `OPENCODE_CONFIG_DIR` to it, or OpenCode runs its default
 agent, which allows everything (D040). `env` in the default templates is the ordinary program, not a shell.
 `notify.cmd` is split the same way, gets its input on stdin, and must not contain `{prompt}`.
+
+`runtime.worker_cmd_prefix` and `worker_cmd_suffix` go before and after each command a worker run starts:
+`worker_cmd`, `private_worker_cmd`, `split_cmd`, and `plan_cmd`, all four from one key, so a sandbox wrapper (§24) or a
+model option cannot miss one. Each is split on its own and may name `{definitions_dir}` and `{title}`, but not
+`{prompt}`, which stays the template's to place. Empty, the default, adds nothing. The overseer's, a chore's, and the
+reviewer's templates are not wrapped: each takes a different sandbox role, or none.
 
 Overrides in `prompt_overrides` replace files of the same name in `prompts/`. An overseer override goes into the
 overseer's definition in a snapshot of its own (§13), so a change to it reaches the next tick, and one canopy cannot
