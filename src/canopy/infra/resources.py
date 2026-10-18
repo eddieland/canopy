@@ -66,11 +66,11 @@ def ui_built_before_source(served: Path) -> datetime | None:
     """
     if served != _SOURCE / "ui" / "dist":
         return None
+    # A file can go between the scan and its stat (an editor's swap file, a branch switch): a hint never stops the loop.
     try:
         built = (served / "index.html").stat().st_mtime
+        if not any(p.is_file() and p.stat().st_mtime > built for p in (_SOURCE / "ui" / "src").rglob("*")):
+            return None
     except OSError:
-        return None
-    sources = (_SOURCE / "ui" / "src").rglob("*")
-    if not any(p.is_file() and p.stat().st_mtime > built for p in sources):
         return None
     return datetime.fromtimestamp(built, tz=UTC).astimezone()
