@@ -72,10 +72,12 @@ CREATE TABLE drafts (
     superseded_by    INTEGER REFERENCES drafts(id),
     created_at       TEXT NOT NULL,
     checked_at       TEXT,
-    -- A send's claim: when it began, the version it sends, and the pending review the post reported, if any.
-    send_started_at  TEXT,
-    send_version     INTEGER,
-    pending_review   TEXT,
+    -- A send's claim: when it began, the version it sends, and the pending review the post reported, if any, by its
+    -- node id, which a later post deletes it by, and its id, which a later read settles an unconfirmed send by.
+    send_started_at    TEXT,
+    send_version       INTEGER,
+    pending_review     TEXT,
+    pending_review_id  INTEGER,
     -- What a sent draft became on GitHub, and through which channel the operator sent it.
     sent_at          TEXT,
     sent_comment_id  INTEGER,

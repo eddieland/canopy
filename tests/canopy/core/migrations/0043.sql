@@ -1,4 +1,4 @@
--- sha256 of 0043_review_replies.sql: a369d72386905422abdb4b058494740c1f5a54a5b5a1a79ba58f2c4d8634de84
+-- sha256 of 0043_review_replies.sql: 1b033e3cb09d87e6efa91a4e725ccd860b5dc675a1671c57d2ddd3ddba7977ad
 
 INSERT INTO observed_prs (url, repository, number, head_sha, base_ref, state, draft, mergeable, author, observed_at)
 VALUES ('https://e.test/pr/7', 'acme/api', 7, 'abc1234', 'main', 'open', 0, 'mergeable', 'me', 'x');

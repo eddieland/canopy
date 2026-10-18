@@ -471,6 +471,7 @@ class Draft(Row):
     send_started_at: str | None
     send_version: int | None
     pending_review: str | None
+    pending_review_id: int | None
     sent_at: str | None
     sent_comment_id: int | None
     sent_review_id: int | None
