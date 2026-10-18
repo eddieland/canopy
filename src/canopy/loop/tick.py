@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, assert_never
 
 from canopy.chores import reconcile as chore_reconcile
 from canopy.core import (
@@ -58,20 +58,6 @@ type Woken = Literal["message", "starts", "grant", "notice", "run", "key", "web"
 # What started a tick the loop ran, recorded on its row (`ticks.woken_by`): the loop starting, a wait that ran its
 # length, one a gate shortened, or what ended one early.
 type WokenBy = Woken | Literal["start", "timer", "gate"]
-# How the overseer's session title says what started its tick (DESIGN §13); a tick run by hand has no `WokenBy`.
-_WOKEN_TITLES: dict[WokenBy | None, str] = {
-    None: "by hand",
-    "start": "loop start",
-    "timer": "timer",
-    "gate": "gate",
-    "message": "message",
-    "starts": "start or stop",
-    "grant": "grant",
-    "notice": "notice",
-    "run": "run ended",
-    "key": "asked",
-    "web": "asked",
-}
 
 
 @dataclass(frozen=True)
@@ -132,7 +118,25 @@ def session_title(tick_id: int, woken_by: WokenBy | None, *, tickets: int, runni
         f"{running} running" if running else "",
         f"{open_items} need{'s' if open_items == 1 else ''} you" if open_items else "",
     ]
-    return f"tick {tick_id} · {_WOKEN_TITLES[woken_by]} · {', '.join(f for f in faces if f) or 'nothing open'}"
+    return f"tick {tick_id} · {_woken_title(woken_by)} · {', '.join(f for f in faces if f) or 'nothing open'}"
+
+
+def _woken_title(woken_by: WokenBy | None) -> str:
+    match woken_by:
+        case None:
+            return "by hand"
+        case "start":
+            return "loop start"
+        case "timer" | "gate" | "message" | "grant" | "notice":
+            return woken_by
+        case "starts":
+            return "start or stop"
+        case "run":
+            return "run ended"
+        case "key" | "web":
+            return "asked"
+        case _:
+            assert_never(woken_by)
 
 
 def _render(

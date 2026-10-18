@@ -441,8 +441,9 @@ Every runtime template may name `{title}`, the run's session title, and the defa
 
 Ticks outnumber every other session, and their titles are fixed before the overseer decides anything, so a tick's says
 what it can know then. What started it is the loop's `ticks.woken_by` (§6): `timer`, `gate`, `run ended`, `message`,
-`asked`, and the rest, or `by hand` for `canopy tick`. What it faces is counted from its state block: the open tickets,
-the worker runs still running, and the attention list's items, or `nothing open`. A quiet stretch reads alike, tick
+`asked`, and the rest, or `by hand` for `canopy tick`. What it faces is counted as it starts: the open tickets and the
+worker runs still running, as its state block lists them, and the attention list's items (§14), the harness's own
+included, though the state block leaves those out; or `nothing open`. A quiet stretch reads alike, tick
 after tick, so the ticks something reached stand out.
 
 The title is read when the run starts, so a rename shows in canopy at once and in the runtime from the ticket's next
