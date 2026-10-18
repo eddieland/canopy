@@ -515,8 +515,8 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
 // The mock's lessons are recording (canopy/serve/mock.py, `_memory`): a promoted lesson is served to no run.
 test("a proposal is promoted in the operator's words and another rejected from the memory page", async ({ page }) => {
     await page.goto('memory')
-    const lessons = page.getByTestId('memory-lessons')
-    const proposal = lessons.getByTestId('memory-5')
+    const proposals = page.getByTestId('memory-proposals')
+    const proposal = proposals.getByTestId('memory-5')
     await proposal.getByRole('button', { name: 'Promote', exact: true }).click()
     const form = proposal.getByRole('form', { name: 'Promote memory:5' })
     await expect(form.getByTestId('promote-replaces')).toHaveText(
@@ -525,17 +525,17 @@ test("a proposal is promoted in the operator's words and another rejected from t
     await expect(form.getByRole('radio', { name: 'web' })).toHaveAttribute('aria-checked', 'true')
     await form.getByLabel('The lesson, in your words').fill("Run web's tests once, with `npm test -- --run`.")
     await form.getByRole('button', { name: 'Promote memory:5' }).click()
-    const said = lessons.getByRole('status')
+    const said = proposals.getByRole('status')
     await expect(said).toContainText('Proposal 5 is lesson')
     await expect(said).toContainText('It is recorded, not served: memory.proposals is record')
     await expect(proposal).toHaveCount(0)
-    const lesson = lessons.getByTestId('memory-rows').last().getByText("Run web's tests once")
+    const lesson = page.getByTestId('memory-lessons').getByText("Run web's tests once")
     await expect(lesson).toBeVisible()
 
-    await lessons.getByTestId('memory-6').getByRole('button', { name: 'Reject' }).click()
+    await proposals.getByTestId('memory-6').getByRole('button', { name: 'Reject' }).click()
     await expect(said).toHaveText('Proposal 6 is rejected.')
-    await expect(lessons.getByTestId('memory-6')).toHaveCount(0)
-    await expect(lessons.getByText('no proposals wait on you now')).toBeVisible()
+    await expect(proposals.getByTestId('memory-6')).toHaveCount(0)
+    await expect(proposals.getByText('all decided: no proposal waits on you')).toBeVisible()
 })
 
 test("a ticket's note is promoted from its page for one repository, and the lesson forgotten", async ({ page }) => {

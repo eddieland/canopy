@@ -224,8 +224,11 @@ Rules:
   a link in a note would be a worker's link read as canopy's, with each character that hides text named
   (`<U+200B>`) on a `status-failed` tint, so it is seen. A digest is the prompt's own text in monospace, labelled
   `would be served at use` while recording. A run's page lists what it wrote and read, and reads `none, recording
-  only` for a run that read nothing because its tier was recording. The memory page lists the tickets with notes in
-  force, a row each opening to its notes, which it reads only then; each list scrolls in its panel, and a row in force
+  only` for a run that read nothing because its tier was recording. The memory page leads with what waits on the
+  operator: a Proposals panel, counted in `status-blocked` while one waits as the nav counts them, and saying that none
+  reaches a run until promoted; then Lessons under the tier's band, the digest folded at its foot (`Show what every run
+  is served`); then Ticket notes, a row a ticket opening to its notes, which it reads only then, counted
+  `2 tickets · 3 notes`. Wide, the tickets sit beside the other two. Each list scrolls in its panel, and a row in force
   that its digest's cap leaves out says so in its second line, in the same words for served and recording that the
   digest's label keeps apart. The verbs on memory (`src/components/memory-actions.tsx`) sit in a line under a row,
   `xs` as a row's buttons are, and only while lessons are on: an outline `Promote` and a ghost `Reject` under a
@@ -237,9 +240,10 @@ Rules:
   lesson in force under its key that it would replace, as plain `MemoryText`, reserved while the lessons are read; the
   CLI's warning in `status-blocked` while the text is still a private ticket's run's own words; and `Promote memory:5`
   with a ghost `Cancel`. **Forget** asks for the lesson's ref typed out, as a ticket's Forget asks for its key. A row
-  can leave once its verb is done, so what it did is said once, in the CLI's words, under the panel's band, and only a
-  refusal stays under the row. On the attention list, a `memory_proposal` item lists its proposals with
-  `Promote as written`, which saves at once, and `Reject`; a `lesson_review`, its lessons due with `Renew` alone.
+  can leave once its verb is done, so what it did is said once, in the CLI's words, under the panel's header or band,
+  and only a refusal stays under the row; proposals all decided from the page say so in the accent. On the attention
+  list, a `memory_proposal` item lists its proposals with `Promote as written`, which saves at once, and `Reject`; a
+  `lesson_review`, its lessons due with `Renew` alone.
 - **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
   (`NewerBuild`): a ghost button on the accent's tint at 14%, its label in the accent, the action to take without a
   fill that outshouts the ghost buttons beside it, saying on hover why and that unsent text is lost. It never

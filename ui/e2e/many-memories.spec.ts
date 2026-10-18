@@ -32,10 +32,10 @@ test('the memory page lists a row a ticket, scrolls each list, and opens notes o
 
     const notes = page.getByTestId('memory-notes')
     await expect(notes.getByTestId(/^memory-ticket-/u)).toHaveCount(TICKETS)
-    await expect(notes.getByTestId('memory-notes-count')).toHaveText(String(TICKETS * 3))
-    // Each list scrolls in its own region, so the lessons stand within a window or two of the page's top.
+    await expect(notes.getByTestId('memory-notes-count')).toHaveText(`${TICKETS} tickets · ${TICKETS * 3} notes`)
+    // Each list scrolls in its own region, so the tickets stand within a window or two of the page's top.
     const lessons = page.getByTestId('memory-lessons')
-    const top = await lessons.evaluate((el) => el.getBoundingClientRect().top)
+    const top = await notes.evaluate((el) => el.getBoundingClientRect().top)
     expect(top).toBeLessThan(2000)
     expect(opened).toEqual([])
 
@@ -46,7 +46,7 @@ test('the memory page lists a row a ticket, scrolls each list, and opens notes o
     expect(opened).toEqual(['ABC-100'])
 
     // Every lesson listed, and each the digest's cap leaves out says so; recording, it would be left out at use.
-    const promoted = lessons.getByRole('region', { name: 'Lessons you promoted' })
+    const promoted = lessons.getByRole('region', { name: 'Lessons' })
     await expect(promoted.getByTestId(/^memory-\d+$/u)).toHaveCount(LESSONS)
     await expect(promoted.getByText('would be left out at use, past its cap')).toHaveCount(LESSONS - SERVED)
 })

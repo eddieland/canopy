@@ -56,18 +56,21 @@ for each tier's mode, and click it for the memory page. With both off, memory sh
 
 ## The memory page
 
-[Memory](/memory), in the nav, has a panel for each tier. Each opens with a band that says the tier's mode and what
-reads it, in words: `ticket notes: recording` beside "Recording only. Workers write these notes; no run reads them."
-Recorded memory and memory in use never share a label, so you never mistake one for the other.
+[Memory](/memory), in the nav, puts what waits on you first: the proposals, then your lessons, then the tickets with
+notes. The lessons and the notes each open with a band that says the tier's mode and what reads it, in words:
+`ticket notes: recording` beside "Recording only. Workers write these notes; no run reads them." Recorded memory and
+memory in use never share a label, so you never mistake one for the other.
 
+- **Proposals** are what workers suggested, oldest first, each with where it came from: its run's kind and how it
+  ended, and whether its ticket is done, and Promote and Reject under it. None reaches a run until you promote it. The
+  nav counts them beside **Memory** on every page, and so does the panel, so a proposal doesn't quietly expire at 14
+  days because you never came looking. Clear the lot and the panel says so.
+- **Lessons** are the ones you promoted, each with Renew and Forget, the ones a run reported wrong first, then by review
+  date, so what needs you heads the list. Under them, folded until you open it, is the exact text every run is served
+  from your lessons, or would be served at use while recording.
 - **Ticket notes** lists the tickets with notes in force, one row each with how many and how runs used them. Open a
-  row for its notes. A busy workspace has thousands, so the page reads a ticket's notes only once you ask.
-- **Lessons** lists the proposals waiting on you first, each with where it came from: its run's kind and how it ended,
-  and whether its ticket is done, and Promote and Reject under it. The nav counts them beside **Memory** on every page,
-  so a proposal doesn't quietly expire at 14 days because you never came looking. Then the lessons you promoted, each
-  with Renew and Forget, the ones a run reported wrong first, then by review
-  date, so what needs you heads the list. Under them is the exact text every run is served from your lessons, labelled
-  `served to every run`, or `would be served at use` while recording.
+  row for its notes. A busy workspace has thousands, so the page reads a ticket's notes only once you ask. On a wide
+  screen this panel sits beside the other two.
 
 ## Reading a memory
 
@@ -116,7 +119,7 @@ None of them shows while lessons are off.
   is often clearest once its PR has merged. The note stays its ticket's.
 - **Reject** ends a proposal. Nothing asks twice: nothing is lost that a worker can't propose again.
 
-What it did shows under the panel's band, in the CLI's words, including that a lesson promoted while recording is
+What it did shows at the top of its panel, in the CLI's words, including that a lesson promoted while recording is
 recorded and read by no run. Promoting a private ticket's run's words as they stand warns you, before you save and
 after: its text may hold what you kept off the tracker. At most 20 proposals wait at once, and one nobody reviews
 expires after 14 days, so the queue can't bury you.
