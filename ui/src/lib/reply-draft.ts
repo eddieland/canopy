@@ -1,8 +1,10 @@
 // A reply not yet sent, kept per ticket or chore in sessionStorage, so it outlives the reply form: a 401 swaps the
 // whole page for the sign-in page, and signing in again brings the form back with the reply still in it. Its
 // submission id is kept with it, so sending it again after an uncertain result still records nothing new
-// (DESIGN §22). It lives as long as the tab and never reaches another; without storage the form still works, and only
-// forgets.
+// (DESIGN §22). It lives as long as the tab and never reaches another, or until the operator signs out; without
+// storage the form still works, and only forgets.
+
+const PREFIX = 'canopy-reply:'
 
 /** A reply as the form holds it: what is written, and the submission id it is sent with. */
 export interface Draft {
@@ -14,7 +16,7 @@ export interface Draft {
 
 /** Where sessionStorage keeps the draft of a reply to `subject`, `ticket:ABC-1` or `chore:deps`. */
 export function draftKey(subject: string): string {
-    return `canopy-reply:${subject}`
+    return `${PREFIX}${subject}`
 }
 
 /** The draft kept under `key`, or null when there is none, storage is unavailable, or what is kept is not a draft. */
@@ -38,6 +40,22 @@ export function keepDraft(key: string, draft: Draft): void {
         }
     } catch {
         // Not kept, but the form still holds it while it is on the page.
+    }
+}
+
+/** Drops every draft in this tab, as signing out does, so the next person to sign in at it sees none of them. */
+export function dropDrafts(): void {
+    try {
+        const stored = Array.from({ length: globalThis.sessionStorage.length }, (_, i) =>
+            globalThis.sessionStorage.key(i),
+        )
+        for (const key of stored) {
+            if (key?.startsWith(PREFIX)) {
+                globalThis.sessionStorage.removeItem(key)
+            }
+        }
+    } catch {
+        // Nothing was kept without storage.
     }
 }
 

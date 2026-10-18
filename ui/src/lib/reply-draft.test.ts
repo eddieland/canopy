@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { draftKey, keepDraft, parseDraft, readDraft } from './reply-draft'
+import { draftKey, dropDrafts, keepDraft, parseDraft, readDraft } from './reply-draft'
 
 afterEach(() => {
     sessionStorage.clear()
@@ -16,6 +16,16 @@ describe('reply drafts', () => {
         keepDraft(key, { body: '', submission: 's-1' })
         expect(readDraft(key)).toBeNull()
         expect(sessionStorage).toHaveLength(0)
+    })
+
+    it('drops every draft on signing out, and nothing else the tab keeps', () => {
+        keepDraft(draftKey('ticket:ABC-1'), { body: 'Use the v2 API', submission: 's-1' })
+        keepDraft(draftKey('chore:deps'), { body: 'Leave lodash at 4', submission: 's-2' })
+        sessionStorage.setItem('other', 'kept')
+        dropDrafts()
+        expect(readDraft(draftKey('ticket:ABC-1'))).toBeNull()
+        expect(readDraft(draftKey('chore:deps'))).toBeNull()
+        expect(sessionStorage.getItem('other')).toBe('kept')
     })
 
     it('reads nothing that is not a draft', () => {

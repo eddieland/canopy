@@ -35,6 +35,8 @@ export function failedText(error: unknown): string {
             ? `canopy answered ${error.status}: nothing was done`
             : `canopy failed (${error.status}): it may not have been done`
     }
+    // fetch rejects with a bare TypeError when no answer comes, so a TypeError from a bug in the page reads the same:
+    // fetch gives nothing narrower to tell them apart by.
     if (error instanceof TypeError || (error instanceof DOMException && error.name === 'AbortError')) {
         return 'canopy did not answer: is `canopy loop` running?'
     }

@@ -1048,4 +1048,5 @@ list, an empty state, or a skeleton by hand.
   Signed out by a 401 to an action, the card says under its heading, in `status-failed`, that the action was not sent
   (`unsentQuery`). A reply being written outlives the page that held it: the reply form keeps what is written, with its
   submission id, in `sessionStorage` per ticket or chore until a reply is recorded (`src/lib/reply-draft.ts`), so after
-  signing in again it is still in the box.
+  signing in again it is still in the box. Signing out on Settings drops every draft in the tab, so the next person to
+  sign in at it sees none.
