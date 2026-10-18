@@ -1,7 +1,7 @@
 # Prior art
 
 A survey of open-source projects that overlap with canopy, and what their issue trackers show they learned the hard
-way. Surveyed 2026-09-29. Why canopy is built anyway is D050.
+way. Surveyed 2026-09-29, and aide 2026-10-18. Why canopy is built anyway is D050.
 
 The canopy statuses below are as of that date and are not kept current. Check the code before acting on one.
 
@@ -24,6 +24,13 @@ A bare § is a section of the design (`design/`); other documents are named, as 
   cron dispatcher starts one agent process per task, in a git worktree for coding tasks. Unlike canopy: tasks live on
   Hermes' board, not the team's tracker, and there is no CI or review follow-up. A Symphony-style tracker loop is a
   proposal ([#404](https://github.com/NousResearch/hermes-agent/issues/404)).
+- **[aide](https://github.com/jmylchreest/aide)**: a plugin for Claude Code, OpenCode, and Codex CLI (MIT,
+  February 2026): a Go binary, an MCP server over its own store, behind TypeScript hooks. It works inside the
+  operator's own session: memories and decisions injected at its start, a code index, static-analysis findings, and a
+  `swarm` skill with which the session spawns subagents, each in a git worktree through design, test, implement,
+  verify, and docs stages. Unlike canopy: no tracker, loop, PRs, or CI follow-up; the orchestrator is the operator's
+  interactive session; agents write memory and decisions through its CLI. Read from its code and commit history at
+  [457e4e6](https://github.com/jmylchreest/aide/commit/457e4e6) (2026-10-12).
 
 ## Lessons canopy's design already answers
 
@@ -51,6 +58,13 @@ A bare § is a section of the design (`design/`); other documents are named, as 
   [#5424](https://github.com/Untrivial-ai/agent-orchestrator/issues/5424),
   [#2827](https://github.com/Untrivial-ai/agent-orchestrator/issues/2827)). canopy: `review_failed`
   (§21); review comments are classified, never filtered by author.
+- **Usage read per message, or summed from snapshots, is wrong.** aide found that a Claude transcript's output count
+  can be a placeholder written as a response starts ([#78](https://github.com/jmylchreest/aide/pull/78)),
+  that OpenCode's message-level usage can omit earlier steps, and that cumulative snapshots must never be summed; it
+  now keeps unknown apart from zero
+  ([model usage](https://github.com/jmylchreest/aide/blob/457e4e6/docs/docs/reference/model-usage.md)).
+  canopy: cost is summed from each model call's `step_finish` (§13), and a step it cannot read makes the run report no
+  cost rather than too little.
 
 ## Gaps
 
@@ -124,6 +138,25 @@ A bare § is a section of the design (`design/`); other documents are named, as 
 - **Spend per run.** A looping agent-orchestrator worker used 45M tokens in 45 minutes, canopy's default worker timeout
   ([#6032](https://github.com/Untrivial-ai/agent-orchestrator/issues/6032)). Symphony counts absolute totals, not
   deltas, and has an open PR to persist them ([#60](https://github.com/openai/symphony/pull/60)). Input for M13.
+- **A running worker hears nothing after its prompt.** It is told `{{TIMEOUT_MINUTES}}` once and has no clock, a
+  notice (M35) reaches only runs rendered after it, and at the timeout what it has not committed goes with the slot.
+  aide's PreToolUse hook hands a running subagent a halt, a pause, or an urgent message on its next tool call, and
+  warns it in the last five minutes before a soft deadline
+  ([agent-signals.ts](https://github.com/jmylchreest/aide/blob/457e4e6/src/hooks/agent-signals.ts));
+  under OpenCode it adds context each turn through `experimental.chat.system.transform`. A warning before the kill
+  would let a worker push what it has.
+- **Lessons mined from transcripts, without a model.** §28 leaves open a chore that drafts proposals from transcripts.
+  aide's `reflect` makes a first pass with no model at session end: a shell command run four times in 30 minutes, past
+  a list where repetition is normal (`git status`, `ls`), or a user's correction between two edits of one file, each
+  becomes a draft marked for rewriting and held for the user's approval
+  ([pkg/instinct](https://github.com/jmylchreest/aide/blob/457e4e6/aide/pkg/instinct)). canopy already rolls each
+  run's tool calls up by tool, errors included (§13), so such a pass stays in the deterministic core. aide cannot see a
+  failed native tool under OpenCode, whose plugin API has no failure hook; canopy reads the failure from the event
+  stream.
+- **The token split is OpenCode's, and OpenCode has changed it.** canopy's new tokens add `output` and `reasoning`
+  (`core/agent_output.py`). In OpenCode 1.19.3 `output` already leaves reasoning out (`session.ts`:
+  `output: outputTokens - reasoningTokens`), so the sum holds; aide found the overlap differed in earlier releases and
+  keeps OpenCode's raw output apart. Nothing checks it on an upgrade, and D021 revisits only on a major version.
 - **A runtime point release can hang headless agents on a permission prompt**
   ([agent-orchestrator #4810](https://github.com/Untrivial-ai/agent-orchestrator/issues/4810)). D021 revisits only on an
   OpenCode major version.
@@ -136,7 +169,17 @@ A bare § is a section of the design (`design/`); other documents are named, as 
   the ticket to `Merging`; TRUST_MODEL §6 forbids agents merging at all. canopy's own guard is layered: the prompts, a
   `gh pr merge` deny in canopy's agent permissions, and branch protection, which governs. The deny is defense in depth
   (TRUST_MODEL T4, T7): it names only the `gh` CLI, not MCP merge tools, and a repository that gets past the shadowing
-  check can add bash rules after it.
+  check can add bash rules after it. aide's `swarm` must end in `worktree-resolve`, which merges each story's branch
+  locally.
+- **Agent-written memory every later session reads.** aide's swarm agents record decisions and memories with its CLI,
+  and both are injected into every later session; `AIDE_SHARE_AUTO_IMPORT` imports teammates' records committed under
+  `.aide/shared/` at session start. §28 lets workers only propose, and TRUST_MODEL T7 keeps what configures agents out
+  of the repository. aide's own later `reflect` holds its proposals for the user's approval.
+- **A hook that refuses to let a session stop.** aide's persistence hook blocks a stop while the session's todo list has
+  items open, up to 20 times
+  ([persistence-logic.ts](https://github.com/jmylchreest/aide/blob/457e4e6/src/core/persistence-logic.ts)).
+  A canopy worker ends when it says it is done, the harness checks what it pushed (§8), and another try is a new run
+  that D030 counts.
 - **Long-lived sessions fed events, or a service installed with the OS** (D042). agent-orchestrator's own reverted
   re-engagement is the evidence. Listeners are allowed since D055, on loopback or a private network behind the
   operator's secret (TRUST_MODEL T8), for the operator's own input; events are still not pushed into sessions
