@@ -11,13 +11,14 @@ from typing import TextIO
 from unittest import mock
 
 import pytest
+from pydantic import ValidationError
 
 from canopy.chores import execute, start
 from canopy.cli.main import main
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
 from canopy.core import db, definitions, workspace
-from canopy.core.config import load
+from canopy.core.config import Chore, load
 from canopy.core.context import Context
 from canopy.core.vocab import ChoreRunStatus, TickStatus
 from canopy.infra import lock, procs
@@ -226,6 +227,9 @@ def test_wait_names_a_configured_chore(canopy_env: CanopyEnv, chores: Path, caps
         {"status": "ok", "findings": [{**FINDING, "id": "has space"}]},
         {"status": "ok", "findings": [{**FINDING, "link": "http://plain.test"}]},
         {"status": "ok", "findings": [{**FINDING, "id": f"f{i}"} for i in range(21)]},
+        {"status": "ok", "more_findings": -1},
+        {"status": "ok", "more_findings": "3"},
+        {"status": "ok", "more_findings": result.MAX_MORE_FINDINGS + 1},
     ],
 )
 def test_an_invalid_result_is_unknown_and_records_no_findings(
@@ -245,6 +249,59 @@ def test_long_text_is_cut_to_its_limits() -> None:
     assert len(parsed.findings[0].title) == 200
     assert "\n" not in parsed.findings[0].title
     assert len(parsed.findings[0].detail) == 2000
+
+
+@pytest.mark.parametrize("limit", [0, result.MAX_FINDINGS + 1])
+def test_max_findings_is_from_1_to_the_contracts_bound(limit: int) -> None:
+    with pytest.raises(ValidationError, match="max_findings"):
+        Chore.model_validate({"prompt": "~/chores/x.md", "every_minutes": 60, "max_findings": limit})
+
+
+def test_a_chore_lists_at_most_its_max_findings_and_counts_the_rest(
+    canopy_env: CanopyEnv,
+    chores: Path,
+    treehouse_state: Path,
+    agent_log: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A guard in code: a run keeps the first `max_findings` it lists, and counts the rest with those it left out."""
+    canopy_env.user_file.write_text(
+        canopy_env.user_file.read_text().replace("every_minutes = 120", "every_minutes = 120\nmax_findings = 2")
+    )
+    listed = [{**FINDING, "id": f"f{i}", "title": f"finding {i}"} for i in range(3)]
+    conn = canopy_env.journal()
+    run_id = run_inline(conn, {"status": "ok", "summary": "busy", "findings": listed, "more_findings": 4})
+    parsed = present(result.stored(present(db.get_chore_run(conn, run_id)).result_json))
+    assert [f.id for f in parsed.findings] == ["f0", "f1"]
+    assert parsed.more_findings == 5
+    [agent] = agent_runs(agent_log)
+    prompt = agent["argv"][3]
+    assert json_block(prompt)["max_findings"] == 2
+    assert "List at most `max_findings` findings" in prompt
+
+    tick()
+    page = (canopy_env.state_dir / "attention.md").read_text()
+    assert "(f1)\n- 5 more findings not listed, past the chore's max_findings\n" in page
+    assert "finding 2" not in page
+    capsys.readouterr()
+    assert main(["show", "chore:build-health"]) == 0
+    assert "\nOpen findings (2):\n" in (out := capsys.readouterr().out)
+    assert "(f1)" not in out
+    assert "\n  5 more findings not listed, past the chore's max_findings\n" in out
+    assert main(["status"]) == 0
+    assert "; 5 more findings not listed, past the chore's max_findings\n" in capsys.readouterr().out
+
+
+def test_a_chore_within_its_max_findings_is_kept_as_it_reported() -> None:
+    parsed = present(result.parse(json.dumps({**OK, "more_findings": 3})))
+    assert result.capped(parsed, 1) is parsed
+    assert result.capped(parsed, 20) is parsed
+    assert result.capped(parsed, 1).more_findings == 3
+    nothing = present(result.parse(json.dumps({"status": "ok", "findings": [FINDING]})))
+    assert result.capped(nothing, 1).more_findings == 0
+    assert attention.render([], datetime.now(UTC), {"chore:x": 0}).startswith(
+        "# canopy attention\n\nNothing needs you."
+    )
 
 
 def tick(*, dry_run: bool = False) -> None:

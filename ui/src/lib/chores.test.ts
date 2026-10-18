@@ -10,6 +10,7 @@ import {
     dueText,
     findingsReadout,
     findingsText,
+    listedText,
     runsText,
     windowText,
 } from './chores'
@@ -61,6 +62,15 @@ describe('chores', () => {
         expect(findingsText([dismissed, dismissed])).toBe('0 open findings · 2 dismissed')
         expect(findingsReadout(deps.findings)).toBe('1')
         expect(findingsReadout([dismissed, waiting, dismissed])).toBe('1 · 2 dismissed')
+    })
+
+    it('count the findings a run found past its max_findings as not listed', () => {
+        const waiting = { dismissed: false }
+        const dismissed = { dismissed: true }
+        expect(findingsText([waiting, dismissed], 12)).toBe('1 open finding · 1 dismissed · 12 not listed')
+        expect(findingsReadout([waiting], 3)).toBe('1 · 3 not listed')
+        expect(listedText(5, 7)).toBe('5 findings · 7 not listed')
+        expect(listedText(1, 0)).toBe('1 finding')
     })
 
     it('mark a note no run has read: one after the latest run started', () => {

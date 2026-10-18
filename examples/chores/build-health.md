@@ -30,7 +30,8 @@ Report each problem once, under the first of these that fits it.
   of an entry in `open_findings` for a problem that is still there, and leave out one that is gone.
 - A title is one line a person can act on: what is broken and where. The detail says what you saw, briefly. The link
   is the failed run or job, an `https://` URL.
-- At most 20 findings. With more, keep red default branches first, then shared failures, flaky checks, and queues.
+- At most `max_findings` findings. With more, keep red default branches first, then shared failures, flaky checks,
+  and queues.
 - No findings, with status `ok`, means the builds are healthy. Say so in the summary in a sentence.
 - If you could not read a repository's runs at all (the MCP server is missing, or refuses), report status `failed`
   and say which repository and why in the summary, rather than an `ok` that checked nothing.

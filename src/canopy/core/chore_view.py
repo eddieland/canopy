@@ -6,6 +6,7 @@ history, and nothing about it reaches the overseer, the attention list, or notif
 
 from __future__ import annotations
 
+import functools
 import sqlite3
 import threading
 from collections.abc import Callable, Iterable, Iterator, Mapping
@@ -130,14 +131,7 @@ class ChoreState:
             Each finding, with when the unbroken sequence of `ok` runs reporting it started, and whether it is
             dismissed; none before an `ok` run.
         """
-        latest = next(
-            (
-                (r, parsed)
-                for r in self.runs
-                if r.status is ChoreRunStatus.OK and (parsed := result.stored(r.result_json))
-            ),
-            None,
-        )
+        latest = self._latest_ok
         if latest is None:
             return []
         run, parsed = latest
@@ -148,6 +142,27 @@ class ChoreState:
             dismissed = at is not None and db.parse_time(at) >= db.parse_time(since[f.id])
             found.append(OpenFinding(self.name, f, since[f.id], dismissed=dismissed))
         return found
+
+    def more_findings(self) -> int:
+        """How many more findings the latest `ok` run had than it listed, under the chore's `max_findings`.
+
+        Returns:
+            The count it reported or canopy cut, 0 before an `ok` run.
+        """
+        latest = self._latest_ok
+        return latest[1].more_findings if latest is not None else 0
+
+    @functools.cached_property
+    def _latest_ok(self) -> tuple[records.ChoreRun, result.ChoreResult] | None:
+        # Read once: `findings` and `more_findings` both want it, on every journal commit the web UI sees.
+        return next(
+            (
+                (r, parsed)
+                for r in self.runs
+                if r.status is ChoreRunStatus.OK and (parsed := result.stored(r.result_json))
+            ),
+            None,
+        )
 
     def _since(self, latest: records.ChoreRun, parsed: result.ChoreResult) -> dict[str, str]:
         """When the unbroken sequence of `ok` runs reporting each of the latest `ok` run's findings started.

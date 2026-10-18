@@ -68,12 +68,16 @@ describe('pullRequestDescription', () => {
 
 describe('choreRunDescription', () => {
     it('counts the findings of a run that ended ok', () => {
-        expect(choreRunDescription({ status: 'ok' }, 2)).toBe('ok · 2 findings')
-        expect(choreRunDescription({ status: 'ok' }, 0)).toBe('ok · no findings')
+        expect(choreRunDescription({ status: 'ok', more_findings: 0 }, 2)).toBe('ok · 2 findings')
+        expect(choreRunDescription({ status: 'ok', more_findings: 0 }, 0)).toBe('ok · no findings')
+    })
+
+    it('says how many more a run found than it listed, past its max_findings', () => {
+        expect(choreRunDescription({ status: 'ok', more_findings: 7 }, 5)).toBe('ok · 5 findings · 7 not listed')
     })
 
     it('says only how a run ended that reported nothing', () => {
-        expect(choreRunDescription({ status: 'timeout' }, 0)).toBe('timeout')
+        expect(choreRunDescription({ status: 'timeout', more_findings: 0 }, 0)).toBe('timeout')
     })
 })
 

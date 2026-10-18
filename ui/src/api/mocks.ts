@@ -101,6 +101,7 @@ export const mockChores: ChoreSummary[] = [
             ended_at: '2026-10-08T08:07:00Z',
             summary: "One advisory touches web's lockfile.",
             findings: 1,
+            more_findings: 0,
             session_id: 'ses_chore2',
             cost_usd: 0.26,
             new_tokens: 11960,
@@ -118,6 +119,7 @@ export const mockChores: ChoreSummary[] = [
                 dismissed: false,
             },
         ],
+        more_findings: 0,
         latest_note_id: 8,
         spend: {
             day: { hours: 24, runs: 2, priced: 2, cost_usd: 0.47, mean_usd: 0.235, p99_usd: 0.26, max_usd: 0.26 },

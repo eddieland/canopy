@@ -466,6 +466,8 @@ class ChoreRun(_Model):
     """The harness's note or the agent's summary, line breaks kept, cut at 300 characters."""
     findings: int = 0
     """How many findings an `ok` run reported."""
+    more_findings: int = 0
+    """How many more an `ok` run found than it listed, past its chore's `max_findings`."""
     session_id: str | None = None
     """The runtime's session, for opening its transcript with the runtime's own tools."""
     cost_usd: float | None = None
@@ -552,6 +554,8 @@ class ChoreSummary(_Model):
     """The earliest time the harness lets a new run start; None, or a time already past, means now."""
     findings: list[ChoreFinding] = []
     """Its open findings."""
+    more_findings: int = 0
+    """How many more its latest `ok` run found than it listed, past its `max_findings`: only counted, never recorded."""
     latest_note_id: int | None = None
     """The newest of the operator's notes to it, so a new note changes the list the stream sends."""
     spend: ChoreSpend
