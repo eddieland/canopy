@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-import type { MemoryDigest, MemoryEntry, MemoryProposal, MemoryTier } from '@/api/types'
+import type { MemoryDigest, MemoryEntry, MemoryProposal, MemoryTier, RunMemory } from '@/api/types'
 import { Age } from '@/components/age'
 import { RowLine, ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
@@ -55,7 +55,8 @@ export function MemoryBand({ tier, name }: { tier: MemoryTier; name: string }) {
  * Memories, one row each: where it stands, id, key, how runs used it, and when it was written; then what it says,
  * plain, and where it came from. `ticket` names each note's ticket, for a list across tickets; `below` adds what goes
  * under a row, by its id, such as a proposal's provenance; `ownRun` leaves out the run whose page it is; `digest` is
- * what a run is served of the entries' tier, so a row in force that its cap leaves out says so.
+ * what a run is served of the entries' tier, so a row in force that its cap leaves out says so; `cited` is what the
+ * run whose page it is said of each, so a row it relied on or found wrong says so.
  */
 export function MemoryRows({
     entries,
@@ -63,12 +64,14 @@ export function MemoryRows({
     below,
     ownRun,
     digest,
+    cited,
 }: {
     entries: MemoryEntry[]
     ticket?: boolean
     below?: ReadonlyMap<number, ReactNode>
     ownRun?: number
     digest?: MemoryDigest | null | undefined
+    cited?: Pick<RunMemory, 'used' | 'wrong'>
 }) {
     const served = new Set(digest?.ids)
     return (
@@ -105,6 +108,11 @@ export function MemoryRows({
                             </span>
                         )}
                         {entry.head !== null && <span className="font-mono">at {entry.head}</span>}
+                        {cited?.used.includes(entry.id) === true && <span>this run relied on it</span>}
+                        {cited?.wrong.includes(entry.id) === true && (
+                            <span className="text-status-failed">this run found it wrong</span>
+                        )}
+                        <UsedIn entry={entry} ownRun={ownRun} />
                         {digest && entry.status === 'active' && !served.has(entry.id) && (
                             <span>{leftOutText(digest.served)}</span>
                         )}
@@ -124,6 +132,30 @@ export function MemoryRows({
                 </ListRow>
             ))}
         </ul>
+    )
+}
+
+/**
+ * The latest runs that relied on a memory, each a link to its page, and how many more did: those the use count holds
+ * past the few named, and runs from before canopy named them. The run whose page it is is left out.
+ */
+function UsedIn({ entry, ownRun }: { entry: MemoryEntry; ownRun: number | undefined }) {
+    const runs = entry.used_by.filter((id) => id !== ownRun)
+    if (runs.length === 0) {
+        return null
+    }
+    const more = entry.use_count - entry.used_by.length
+    return (
+        <span>
+            used in{' '}
+            {runs.map((id, i) => (
+                <span key={id}>
+                    {i > 0 && ', '}
+                    <RunLink id={id} />
+                </span>
+            ))}
+            {more > 0 && ` and ${more} more`}
+        </span>
     )
 }
 

@@ -980,7 +980,7 @@ def _memory(conn: sqlite3.Connection) -> None:
             db.format_time(T0 + timedelta(days=90)),
         ),
     )
-    conn.execute("INSERT INTO memory_reads (run_id, memory_id) VALUES (40, 1)")
+    conn.execute("INSERT INTO memory_reads (run_id, memory_id, cited) VALUES (40, 1, 'used')")
 
 
 def _chore_fixtures(conn: sqlite3.Connection, root: Path) -> None:

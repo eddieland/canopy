@@ -236,6 +236,11 @@ it, what a run wrote and read, and what it would be served, with the operator's 
 is `ui/DESIGN.md`'s. While `memory.proposals` is on, the web UI's nav counts the proposals waiting beside the memory
 page, on every page, so a queue that expires in 14 days is not found only by visiting it.
 
+The journal keeps what each run said of each memory rendered into its prompt, relied on or wrong, not only the count,
+so where a memory was used shows both ways: a memory names the latest runs that relied on it, five at most, and counts
+the rest, those from before the journal named them among them; a run's page marks, among what it read, what it relied
+on and what it reported wrong.
+
 A busy workspace holds thousands of notes and hundreds of lessons, so the memory page lists the tickets with notes in
 force, one row each with its count, and reads a ticket's notes only when the operator opens its row; the lessons come
 reported wrong first, then by review date, so what calls for the operator heads the list. Wherever a list shows a

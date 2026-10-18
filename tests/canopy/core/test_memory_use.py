@@ -9,7 +9,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import memory
-from canopy.core.vocab import MemoryStatus
+from canopy.core.vocab import MemoryCited, MemoryStatus
 from tests.canopy.helpers import (
     KEY,
     WORK,
@@ -101,6 +101,26 @@ def test_a_run_renews_drops_and_retires_only_what_it_was_shown(canopy_env: Canop
     assert by_id[cause.id].why == f"wrong, says run {last_run(conn)['id']}"
     # Another ticket's note was never in this run's prompt: nothing it sent touches it.
     assert by_id[theirs.id] == theirs
+    # What it said of each is kept by run, so each memory names the runs that relied on it.
+    run_id = int(last_run(conn)["id"])
+    assert memory.citations(conn, run_id) == {lint.id: MemoryCited.USED, cause.id: MemoryCited.WRONG}
+    assert (memory.used_by(conn, lint.id), memory.used_by(conn, cause.id)) == ([run_id], [])
+
+
+def test_a_memory_names_the_latest_runs_that_relied_on_it_newest_first(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection
+) -> None:
+    with_memory(canopy_env, ticket_notes="use")
+    run_with(conn, *WORK, notes=[{"key": "lint", "text": NOTE}])
+    [note] = memories(conn)
+    # A resume for review, which no cooldown holds back, so one may follow another.
+    resume = (*FIX_CI[:-1], "review")
+    relied = [int(run_with(conn, *resume, memory_used=[note.id])["id"]) for _ in range(3)]
+    # Shown it, and cited it in neither list: read, but not among those that relied on it.
+    quiet = int(run_with(conn, *resume)["id"])
+    assert memory.citations(conn, quiet) == {}
+    assert memory.used_by(conn, note.id) == relied[::-1]
+    assert memory.used_by(conn, note.id, limit=2) == relied[:0:-1]
 
 
 def test_a_note_written_at_use_supersedes_by_key(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:

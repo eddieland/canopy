@@ -29,6 +29,7 @@ from canopy.core.vocab import (
     DraftStance,
     DraftStatus,
     MemoryAuthor,
+    MemoryCited,
     MemoryMode,
     MemoryScope,
     MemoryStatus,
@@ -376,6 +377,8 @@ class MemoryRead(Row):
 
     run_id: int
     memory_id: int
+    # What the run said of it; None when it cited it in neither list, and for every read from before runs were named.
+    cited: MemoryCited | None
 
 
 @dataclass(frozen=True)

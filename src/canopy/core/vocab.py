@@ -210,6 +210,15 @@ class MemoryStatus(StrEnum):
     INVALID = "invalid"
 
 
+class MemoryCited(StrEnum):
+    """What a run said of a memory rendered into its prompt, `memory_reads.cited` (DESIGN §28)."""
+
+    # In its `memory_used`: it relied on it.
+    USED = "used"
+    # In its `memory_wrong`: it found it wrong.
+    WRONG = "wrong"
+
+
 class MemoryAuthor(StrEnum):
     """Who wrote a memory, `memories.author` (DESIGN §28): a worker a note or a proposal, the operator a lesson."""
 

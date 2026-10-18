@@ -24,7 +24,7 @@ from pydantic import BaseModel, ConfigDict, JsonValue
 
 from canopy.core import contract, db, records
 from canopy.core.memory_text import TextRefused, check_key, check_text, normalized, visible
-from canopy.core.vocab import MemoryAuthor, MemoryMode, MemoryScope, MemoryStatus, RunKind
+from canopy.core.vocab import MemoryAuthor, MemoryCited, MemoryMode, MemoryScope, MemoryStatus, RunKind
 from canopy.infra import logs
 
 if TYPE_CHECKING:
@@ -52,6 +52,8 @@ PROPOSAL_DAYS = 14
 REVIEW_DAYS = 90
 # The lessons in a prompt, in UTF-8 bytes; past it the rest are left out, in key order, and counted.
 MAX_LESSONS_DIGEST = 2 * 1024
+# The runs a memory names as having relied on it, the latest first; its use count counts every one.
+USED_BY_SHOWN = 5
 # The attention reasons memory raises (DESIGN §14, §28): the harness's, and the operator's alone.
 PROPOSAL_REASON = "memory_proposal"
 REVIEW_REASON = "lesson_review"
@@ -380,6 +382,8 @@ def record_run(conn: sqlite3.Connection, run_id: int, fields: Fields | None, *, 
             m for m in _cited(writing, "memory_used", fields.memory_used, shown) if m.id not in {w.id for w in wrong}
         ]
         _mark_used(conn, used)
+        _mark_cited(conn, run_id, MemoryCited.WRONG, wrong)
+        _mark_cited(conn, run_id, MemoryCited.USED, used)
         if writing.modes.ticket_notes is MemoryMode.USE:
             _drop_notes(conn, writing, fields.drop_notes, shown.values())
     if writing.modes.ticket_notes is not MemoryMode.OFF:
@@ -437,6 +441,14 @@ def _mark_used(conn: sqlite3.Connection, used: Sequence[records.Memory]) -> None
             "review_at = CASE WHEN scope = ? THEN max(coalesce(review_at, ''), ?) ELSE review_at END WHERE id = ?",
             (stamp, MemoryScope.LESSON, review, m.id),
         )
+
+
+def _mark_cited(conn: sqlite3.Connection, run_id: int, cited: MemoryCited, memories: Sequence[records.Memory]) -> None:
+    # Beside the count, so a memory names the runs that relied on it, and a run's page what it relied on.
+    conn.executemany(
+        "UPDATE memory_reads SET cited = ? WHERE run_id = ? AND memory_id = ?",
+        [(cited, run_id, m.id) for m in memories],
+    )
 
 
 def _drop_notes(conn: sqlite3.Connection, writing: _Writing, value: JsonValue, shown: Iterable[records.Memory]) -> None:
@@ -689,6 +701,29 @@ def read_by(conn: sqlite3.Connection, run_id: int) -> list[records.Memory]:
         "SELECT m.* FROM memories m JOIN memory_reads r ON r.memory_id = m.id WHERE r.run_id = ? ORDER BY m.id",
         (run_id,),
     )
+
+
+def citations(conn: sqlite3.Connection, run_id: int) -> dict[int, MemoryCited]:
+    """Return what run `run_id` said of each memory rendered into its prompt, by id; one it did not cite is left out."""
+    reads = records.fetch_all(
+        conn,
+        records.MemoryRead,
+        "SELECT * FROM memory_reads WHERE run_id = ? AND cited IS NOT NULL ORDER BY memory_id",
+        (run_id,),
+    )
+    return {r.memory_id: r.cited for r in reads if r.cited is not None}
+
+
+def used_by(conn: sqlite3.Connection, memory_id: int, *, limit: int = USED_BY_SHOWN) -> list[int]:
+    """Return the latest runs that said they relied on memory `memory_id`, newest first, at most `limit`.
+
+    A run from before canopy named them is counted in the memory's `use_count` but is not among them.
+    """
+    rows = conn.execute(
+        "SELECT run_id FROM memory_reads WHERE memory_id = ? AND cited = ? ORDER BY run_id DESC LIMIT ?",
+        (memory_id, MemoryCited.USED, limit),
+    )
+    return [int(r["run_id"]) for r in rows]
 
 
 def refused_of(rendered: records.RunMemory) -> list[Refused]:
