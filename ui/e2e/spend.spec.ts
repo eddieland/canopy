@@ -1,6 +1,9 @@
 import { expect, test } from '@playwright/test'
 
-import { settled, signIn } from './helpers.ts'
+import { expectSpendAxisWhole, settled, signIn } from './helpers.ts'
+
+/** A spend breakdown's costs, by name. */
+type Costs = Record<string, number | null>
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -149,3 +152,133 @@ test('the tools whose calls returned the most, by kind, the most first', async (
     await expect(tools.nth(1).getByRole('rowheader')).toHaveText('bash')
     await expect(tools.nth(1).getByRole('cell')).toHaveText(['workers', '119', '11', '279.0k', '69.8k'])
 })
+
+test.describe('on a wide monitor', () => {
+    test.use({ viewport: { width: 1440, height: 900 } })
+
+    test('30 days name every fifth day whole, centered under its bar, and a week every day', async ({ page }) => {
+        await page.goto('spend?days=30')
+        await settled(page)
+        await expectSpendAxisWhole(page, 6)
+        await page.getByTestId('spend-window-7').click()
+        await expect(page.getByTestId('spend-chart').getByTestId(/^spend-bar-/u)).toHaveCount(7)
+        await expectSpendAxisWhole(page, 7)
+    })
+})
+
+test("the dearest day's total is over its bar, which stops short of the chart's top", async ({ page }) => {
+    await page.goto('spend?days=30')
+    await settled(page)
+    // The mock prices today alone: its total is the dearest.
+    const total = await page.getByTestId('spend-day-2026-10-08').locator('td').nth(6).textContent()
+    const peak = page.getByTestId('spend-bar-2026-10-08').getByTestId('spend-peak')
+    await expect(peak).toHaveText(total ?? '')
+    await expect(peak).toHaveText(/^\$\d+\.\d\d$/u)
+    await expect(page.getByTestId('spend-peak')).toHaveCount(1)
+
+    const [bar, label, top] = await Promise.all([
+        page.getByTestId('spend-bar-2026-10-08').boundingBox(),
+        peak.boundingBox(),
+        page.getByTestId('spend-bar-2026-10-08').getByTestId('spend-segment-reviews').boundingBox(),
+    ])
+    if (bar === null || label === null || top === null) {
+        throw new Error("the dearest day's bar is not drawn")
+    }
+    // A fifth of the plot is headroom: the label sits in it, inside the plot, and the bar's top under the label.
+    expect(label.y).toBeGreaterThanOrEqual(bar.y)
+    expect(top.y).toBeGreaterThanOrEqual(label.y + label.height - 1)
+    expect(top.y - bar.y).toBeGreaterThanOrEqual(bar.height * 0.2 - 1)
+})
+
+test('a week of one priced day draws one narrow bar, its segments apart, and the days without cost as stubs', async ({
+    page,
+}) => {
+    await page.goto('spend')
+    await settled(page)
+    const chart = page.getByTestId('spend-chart')
+    const bar = chart.getByTestId('spend-bar-2026-10-08')
+    // The cap, 3rem: the one priced day of the week is no slab.
+    expect((await bar.boundingBox())?.width ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(48.5)
+    // The other six days are a 1px stub each, on the baseline the priced bar stands on.
+    const stubs = chart.getByTestId('spend-stub')
+    await expect(stubs).toHaveCount(6)
+    const barBottom = await bar.evaluate((el) => el.getBoundingClientRect().bottom)
+    for (const stub of await stubs.all()) {
+        const box = await stub.boundingBox()
+        expect(box?.height).toBe(1)
+        expect(Math.abs((box?.y ?? 0) + (box?.height ?? 0) - barBottom)).toBeLessThanOrEqual(1)
+    }
+
+    // Every series with a cost that day is at least 2px tall, idle's few cents included, and 2px from the next.
+    const segments = (
+        await bar.getByTestId(/^spend-segment-/u).evaluateAll((elements) =>
+            elements.map((el) => {
+                const box = el.getBoundingClientRect()
+                return { top: box.top, bottom: box.bottom }
+            }),
+        )
+    ).toSorted((a, b) => a.top - b.top)
+    expect(segments).toHaveLength(5)
+    for (const [i, segment] of segments.entries()) {
+        expect(segment.bottom - segment.top).toBeGreaterThanOrEqual(1.99)
+        const below = segments[i + 1]
+        if (below !== undefined) {
+            expect(Math.abs(below.top - segment.bottom - 2)).toBeLessThanOrEqual(1)
+        }
+    }
+})
+
+test('a window where nothing reported a cost says so once in By day, and claims nothing in Totals', async ({
+    page,
+}) => {
+    // The mock's own window, with every cost and count taken out of it.
+    await page.route('**/api/spend/breakdown*', async (route) => {
+        const response = await route.fetch()
+        const found = (await response.json()) as Record<string, unknown> & {
+            per_day: { costs: Costs; done: number }[]
+            totals: Costs
+            ticks: { ticks: number; cost_usd: number | null }[]
+            unpriced: { runs: number; unpriced: number }[]
+        }
+        for (const day of found.per_day) {
+            day.costs = nothing(day.costs)
+            day.done = 0
+        }
+        for (const group of found.ticks) {
+            group.ticks = 0
+            group.cost_usd = null
+        }
+        for (const kind of found.unpriced) {
+            kind.runs = 0
+            kind.unpriced = 0
+        }
+        const json = {
+            ...found,
+            totals: nothing(found.totals),
+            woken: [],
+            idle_share: null,
+            idle_ticks: [],
+            tickets: [],
+            pull_requests: [],
+            tools: [],
+            done: 0,
+            per_done: null,
+        }
+        await route.fulfill({ response, json })
+    })
+    await page.goto('spend')
+    await settled(page)
+    const byDay = page.getByTestId('spend-by-day')
+    await expect(byDay.getByText('no run reported a cost in these 7 days')).toBeVisible()
+    await expect(byDay.getByTestId('spend-chart')).toHaveCount(0)
+    await expect(byDay.getByTestId('spend-legend')).toHaveCount(0)
+    await expect(byDay.getByTestId('spend-table')).toHaveCount(0)
+    await expect(page.getByTestId('spend-idle-share')).toHaveCount(0)
+    await expect(page.getByTestId('spend-ticks').getByText('no tick ended in these 7 days')).toBeVisible()
+    await expect(page.getByTestId('spend-groups')).toHaveCount(0)
+})
+
+/** The same costs, every one unreported. */
+function nothing(costs: Costs): Costs {
+    return Object.fromEntries(Object.keys(costs).map((key) => [key, null]))
+}

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
-import { FULL_RAIL, NOW, ROUTES, settled, signIn, windowWidth } from './helpers.ts'
+import { expectSpendAxisWhole, FULL_RAIL, NOW, ROUTES, settled, signIn, windowWidth } from './helpers.ts'
 
 // Half of a second monitor, where the UI often sits: the rail a strip of icons.
 const HALF = { width: 820, height: 900 }
@@ -57,6 +57,12 @@ test.describe('on half a monitor', () => {
         await expect(sheet).toHaveCount(0)
     })
 
+    test('/spend?days=30 names its days whole, centered under their bars', async ({ page }) => {
+        await page.goto('spend?days=30')
+        await settled(page)
+        await expectSpendAxisWhole(page, 6)
+    })
+
     test('/ opens the rail in its search box, and a search sent closes it', async ({ page }) => {
         await page.goto('attention')
         await settled(page)
@@ -69,6 +75,33 @@ test.describe('on half a monitor', () => {
         await expect(page.getByRole('dialog', { name: 'Rail' })).toHaveCount(0)
     })
 })
+
+for (const width of [HALF.width, 1024]) {
+    test.describe(`${width}px wide`, () => {
+        test.use({ viewport: { width, height: 900 } })
+
+        for (const days of [7, 30]) {
+            test(`the By day table keeps 0.75rem between its columns over ${days} days`, async ({ page }) => {
+                await page.goto(`spend?days=${days}`)
+                await settled(page)
+                const gaps = await page.getByTestId('spend-table').evaluate((table) =>
+                    [...table.querySelectorAll('tr')].flatMap((row) => {
+                        const cells = [...row.children].map((cell) => {
+                            // The text's own box, not the cell's: a right-aligned figure sits at its cell's far edge.
+                            const range = document.createRange()
+                            range.selectNodeContents(cell)
+                            return range.getBoundingClientRect()
+                        })
+                        return cells.slice(1).map((cell, i) => cell.left - (cells[i]?.right ?? 0))
+                    }),
+                )
+                expect(gaps.length).toBeGreaterThan(0)
+                // 0.75rem, less a pixel for where the text lands.
+                expect(Math.min(...gaps)).toBeGreaterThanOrEqual(11)
+            })
+        }
+    })
+}
 
 test("the worktrees counters stand four across or two by two, by the pane's width, never three and one", async ({
     page,

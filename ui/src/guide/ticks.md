@@ -48,7 +48,11 @@ its end, where the errors are, since that's usually why you're reading it.
 runs. Beside them are the tickets the loop marked done in that window, and what each cost on average, the overseer and
 chores included.
 
-**By day** stacks each UTC day's spend by the same split, with a table under it. Then:
+**By day** stacks each UTC day's spend by the same split, with a table under it. The dearest day has its total printed
+over its bar, so you can read the scale without hovering; hover any bar for that day's figures. A day that cost nothing
+is a flat line on the baseline, not a gap. Idle ticks sit at the bottom of each bar, and at real prices they're a
+sliver beside a worker's run, so read their trend from the table. A window where nothing reported a cost says so in
+one line rather than draw you an empty chart. Then:
 
 - **By ticket** and **By pull request**: what each one's own runs cost. The overseer isn't shared out among them.
 - **By tool**: which tools put the most into the runs' context, by the characters their calls returned. Every later
