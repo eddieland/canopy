@@ -195,8 +195,10 @@ If code and the design disagree, the design doc wins until a decision entry says
   `scenario` fixture (`scenario_helpers.py`): `scenario.tick(dispatches(kind=RunKind.RESUME, ...), worker=pushes())`
   checks the tick's exit and waits for the runs it started, and `scenario.run(...)` runs one without the overseer. The
   overseer is played whole: `scenario.tick(queried=["PROJ-9"], code=1)` is a tick that leaves a duty undone, and
-  `result=` and `exit_code=` one it fails. A step the verbs do not cover is written with the helpers above, in the same
-  test; a verb two tests need goes there.
+  `result=` and `exit_code=` one it fails. A run comes back as a `Ran`, with its `reasons` and its worker's `prompt`;
+  `scenario.refuses(...)` is a dispatch canopy turns down, as the decisions it made instead, and
+  `scenario.time_passes(minutes=31)` moves the journal's times into the past, never an `UPDATE` of one table's times.
+  A step the verbs do not cover is written with the helpers above, in the same test; a verb two tests need goes there.
 - A test opens a journal through `canopy_env.journal()`, or the `journals` fixture for one outside a workspace, never
   `db.connect` directly: those close it when the test ends. A connection, file, or pipe left open raises a
   ResourceWarning, which fails the test like any other warning.

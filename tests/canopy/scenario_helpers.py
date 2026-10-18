@@ -3,13 +3,29 @@
 A scenario test reads the way an entry in docs/SCENARIOS.md does: the overseer ticks and decides, workers run and push,
 the operator replies, and the test checks what canopy did. The `scenario` fixture's `Scenario` tells the story; the
 functions below it are the moves in it, the overseer's (`dispatches`, `raises`, `sets_phase`, `skips_tick`, and `waits`
-from `helpers.py`) and a worker's (`pushes`, `asks`, or any `*_does` helper). Each is a helper of `helpers.py` with the
-plumbing folded in: a tick's exit code checked, the runs it started waited for, a dispatch's flags spelled as keywords.
+from `helpers.py`) and a worker's (`pushes`, `asks`, `fails`, or any `*_does` helper). Each is a helper of `helpers.py`
+with the plumbing folded in: a tick's exit code checked, the runs it started waited for, a dispatch's flags spelled as
+keywords.
 
     def test_a_red_check_resumes_the_branch(scenario: Scenario, git_pool: GitPool) -> None:
         scenario.run(worker=pushes())
         ticked = scenario.tick(dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI]), worker=pushes())
         assert ticked.actions == ["queried", "dispatch:resume"]
+        [run] = ticked.runs
+        assert run.reasons == (ResumeReason.CI,)
+        assert "This is attempt 1 of 6." in run.prompt
+
+A dispatch canopy turns down is a move too, and so is the clock: `refuses` says what canopy decided instead of running
+it, and `time_passes` moves every time the journal recorded into the past, so a cooldown or a schedule sees it gone by:
+
+    def test_a_second_resume_for_ci_waits_out_the_cooldown(scenario: Scenario, git_pool: GitPool) -> None:
+        scenario.run(worker=pushes())
+        fix = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.CI])
+        scenario.run(fix, worker=pushes())
+        [(action, _)] = scenario.refuses(fix)
+        assert action == "refused:cooldown"
+        scenario.time_passes(hours=1)
+        scenario.run(fix, worker=pushes())
 
 The overseer is played whole, not only its commands: what its query found (`queried=`), the line it ends on
 (`result=`), and how it runs (`exit_code=`, `says=`, ...), so a tick it fails, or a duty it leaves undone, is a story
@@ -28,12 +44,13 @@ import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager, ExitStack
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Unpack
 
 from canopy.cli.main import main
 from canopy.core import db, records
-from canopy.core.vocab import Phase, ResumeReason, RunKind, TickStatus
+from canopy.core.vocab import Phase, ResumeReason, RunKind, RunStatus, TickStatus
 from canopy.loop import attention
 from tests.canopy.helpers import (
     BRANCH,
@@ -47,6 +64,7 @@ from tests.canopy.helpers import (
     blocked_result,
     canopy,
     commit_and_push,
+    decisions,
     in_tick,
     last_run,
     last_tick,
@@ -65,12 +83,56 @@ type Worker = AbstractContextManager[None]
 
 
 @dataclass(frozen=True)
+class Ran:
+    """A worker run as it ended: its row, why it ran if it is a resume, and the prompt its worker was given."""
+
+    row: sqlite3.Row
+    reasons: tuple[ResumeReason, ...]
+    prompt_file: Path
+
+    @property
+    def id(self) -> int:
+        """The run's id."""
+        return int(self.row["id"])
+
+    @property
+    def kind(self) -> RunKind:
+        """What the run was dispatched to do."""
+        return RunKind(self.row["kind"])
+
+    @property
+    def status(self) -> RunStatus:
+        """How the run ended."""
+        return RunStatus(self.row["status"])
+
+    @property
+    def branch(self) -> str | None:
+        """The branch the run worked on."""
+        branch: str | None = self.row["branch"]
+        return branch
+
+    @property
+    def ended_at(self) -> datetime:
+        """When the run ended."""
+        return db.parse_time(str(self.row["ended_at"]))
+
+    @property
+    def prompt(self) -> str:
+        """The prompt the run's worker was given."""
+        return self.prompt_file.read_text()
+
+    def __str__(self) -> str:
+        """The run in a line, for a failed step's message."""
+        return f"run {self.id}, {self.kind} of {self.row['ticket_key']}: {self.status}"
+
+
+@dataclass(frozen=True)
 class Ticked:
     """What a tick did: its row, its decisions in the order it recorded them, and the worker runs it started, ended."""
 
     tick: records.Tick
     decisions: list[records.Decision]
-    runs: list[sqlite3.Row]
+    runs: list[Ran]
 
     @property
     def actions(self) -> list[str]:
@@ -81,7 +143,7 @@ class Ticked:
         """How the tick ended and what it decided, for a failed step's message."""
         lines = [f"{self.tick.status}: {self.tick.summary}"]
         lines += [f"  {d.ticket_key or '-'} {d.action}: {d.rationale}" for d in self.decisions]
-        lines += [f"  run {r['id']}, {r['kind']} of {r['ticket_key']}: {r['status']}" for r in self.runs]
+        lines += [f"  {r}" for r in self.runs]
         return "\n".join(lines)
 
 
@@ -123,12 +185,12 @@ class Scenario:
             tick = last_tick(self.conn)
             started = self.conn.execute("SELECT id FROM runs WHERE tick_id = ? ORDER BY id", (tick.id,)).fetchall()
             # A run is detached from the tick, so the worker's script must last until it ends.
-            runs = [wait_for_run(self.conn, int(r["id"])) for r in started]
+            runs = [self._ran(wait_for_run(self.conn, int(r["id"]))) for r in started]
         ticked = Ticked(present(db.get_tick(self.conn, tick.id)), db.decisions_for_tick(self.conn, tick.id), runs)
         assert exited == code, f"tick {tick.id} exited {exited}, not {code}: {ticked}"
         return ticked
 
-    def run(self, command: list[str] | None = None, *, worker: Worker | None = None) -> sqlite3.Row:
+    def run(self, command: list[str] | None = None, *, worker: Worker | None = None) -> Ran:
         """Dispatch `command`, a `dispatches(...)`, KEY's `implement` if None, in a tick of its own, and run it in this
         process, its worker doing `worker`.
 
@@ -148,7 +210,39 @@ class Scenario:
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(last_run(self.conn)["id"])
                 assert main(["_run", str(run_id)], runner=runner) == 0
-        return present(db.get_run(self.conn, run_id))
+        return self._ran(present(db.get_run(self.conn, run_id)))
+
+    def refuses(self, command: list[str], *, dry_run: bool = False) -> list[tuple[str, str]]:
+        """Dispatch `command`, a `dispatches(...)`, in a tick of its own, which canopy must refuse, starting no run.
+
+        Returns:
+            The tick's decisions, as (action, rationale): the refusal, and the attention it raised, if any.
+        """
+        assert command[:2] == ["canopy", "dispatch"], command
+        with in_tick(self.conn, dry_run=dry_run, ends_ok=True) as tick_id:
+            exited = main(command[1:], runner=InlineRunner())
+        made = decisions(self.conn, tick_id)
+        assert exited == 1, f"dispatch exited {exited}, not refused: {made}"
+        started = self.conn.execute("SELECT count(*) FROM runs WHERE tick_id = ?", (tick_id,)).fetchone()[0]
+        assert started == 0, made
+        return made
+
+    def time_passes(self, *, hours: float = 0, minutes: float = 0) -> None:
+        """Move every time the journal recorded, in a column of its own, `hours` and `minutes` into the past.
+
+        A cooldown, an attempt's age, a schedule, or a deadline then sees that much time gone by; times inside a JSON
+        field stay as they are.
+        """
+        seconds = timedelta(hours=hours, minutes=minutes).total_seconds()
+        assert seconds > 0, "time only passes forward"
+        tables = self.conn.execute(
+            "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "
+            "AND sql NOT LIKE 'CREATE VIRTUAL%'"
+        ).fetchall()
+        for (table,) in tables:
+            for column in self.conn.execute("SELECT name FROM pragma_table_info(?)", (table,)).fetchall():
+                if column[0].endswith(("_at", "_since", "_until")):
+                    _shift(self.conn, table, column[0], f"-{seconds} seconds")
 
     def operator(self, *args: str) -> None:
         """Run one of the operator's commands, `canopy ARGS`, from their shell; it must succeed."""
@@ -171,6 +265,11 @@ class Scenario:
         [found] = [t for t in self.state()["tickets"] if t["key"] == key]
         ticket: dict[str, Any] = found
         return ticket
+
+    def _ran(self, row: sqlite3.Row) -> Ran:
+        run_id = int(row["id"])
+        reasons = db.run_reasons(self.conn, [run_id]).get(run_id, ())
+        return Ran(row, reasons, self.env.state_dir / "runs" / f"{run_id}.prompt")
 
 
 # What the overseer does in a tick: each is the command it runs, for `Scenario.tick`.
@@ -232,5 +331,17 @@ def asks(question: str = QUESTION) -> Worker:
     return worker_does(result=json.dumps(blocked_result() | {"question": question}))
 
 
+def fails(summary: str = "could not build") -> Worker:
+    """The worker pushes nothing and reports it failed, saying `summary`."""
+    return worker_does(result=json.dumps({"status": "failed", "summary": summary}))
+
+
 def _option(name: str, value: str | None) -> list[str]:
     return [name, value] if value is not None else []
+
+
+def _shift(conn: sqlite3.Connection, table: str, column: str, modifier: str) -> None:
+    # The names come from the journal's own schema; strftime writes the shape `db.format_time` does, and a value it
+    # cannot read as a time is left alone.
+    moved = f"strftime('%Y-%m-%dT%H:%M:%fZ', {column}, ?)"
+    conn.execute(f'UPDATE "{table}" SET {column} = {moved} WHERE {moved} IS NOT NULL', (modifier, modifier))  # noqa: S608
