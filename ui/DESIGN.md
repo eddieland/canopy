@@ -976,7 +976,7 @@ list, an empty state, or a skeleton by hand.
   hover. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
   leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
-  does not own (DESIGN §21). The pull requests page leads with a `Review a PR` panel above the list: a line saying
+  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list: a line saying
   nothing is posted on the PR, the PR's URL in a monospace field, and a `Review` button beside it, the form's submit,
   with the CLI's command on hover. It takes no repository: the overseer finds the PR's (DESIGN §21). A PR with an open
   request wears a `requested` chip after its review in the list. On a PR's page the request is a line in the foot of its

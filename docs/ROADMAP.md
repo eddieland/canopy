@@ -797,7 +797,7 @@ Status: not started.
 ## M42. Other people's PRs, reviewed on request
 
 A review request is a journal fact the operator makes for a PR the loop does not own, by its URL alone, with `canopy
-start URL --review` or the web UI's pull requests page, and ends with `canopy stop URL`; it authorizes one review of
+start URL --review` or the web UI's reviews page, and ends with `canopy stop URL`; it authorizes one review of
 that PR at its head, as `review.query` would, and turns reviews on by itself. The overseer reads each one through MCP,
 finds its repository by the map's clone URL, which the state block now carries, and reviews its head, or ends it with
 `canopy review end` once the PR merged or closed first or is in none of the workspace's repositories; the harness ends

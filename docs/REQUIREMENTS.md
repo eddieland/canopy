@@ -221,7 +221,7 @@ chooses a prompt, or moves the listener, stays an edit to the file. Today the we
 
 ### R17. Review a coworker's PR on request, once or for as long as it is open
 
-Built in part (M42): `canopy start URL --review`, or the web UI's pull requests page, has canopy review a
+Built in part (M42): `canopy start URL --review`, or the web UI's reviews page, has canopy review a
 PR once, at its head (§21, Review requests); the live check is SCENARIOS S39. Watching one, reviewed again at each new
 commit until it merges, is deferred (ROADMAP's deferred list): the operator judged it more than MVP needs. Written down
 2026-10-14. The operator should be able to hand canopy someone else's PR to review: once, at its current commit, or
