@@ -116,7 +116,7 @@ writes on the host.
 
 A chore's default `cwd` is inside `.canopy/`, so its policy re-allows that one directory: read-only by default, since a
 chore's only output is its result line, and writable for a chore whose own tooling writes there. The rest of `.canopy/`
-stays denied.
+stays denied, the journal with it, so `canopy chore history` (§19) fails in a sandboxed chore.
 
 A review starts in its directory, which the policy re-allows reading, and reads the checkout through the link there: the
 checkout and its git directories are readable and none of them writable, since the reviewer writes nothing (§21) and

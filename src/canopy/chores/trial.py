@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.chores import execute, start
+from canopy.chores import execute, history, start
 from canopy.core import agent_output, conversation, db, notice, outbox
 from canopy.core import chore_view as view
 from canopy.core.vocab import ChoreRunStatus
@@ -27,10 +27,6 @@ if TYPE_CHECKING:
     from canopy.core import records
     from canopy.core.config import Chore
     from canopy.core.context import Context
-
-# What an unrecorded try's agent sees as CANOPY_RUN_ID, so the operator's commands refuse inside it (DESIGN §22). A
-# recorded one's is `chore-<run id>`, as any chore run's.
-RUN_ID = "chore-try"
 
 
 class TrialError(Exception):
@@ -187,7 +183,12 @@ def run_unrecorded(ctx: Context, prepared: Prepared) -> execute.Outcome:
     done = ctx.runner.run(
         prepared.argv,
         cwd=prepared.cwd,
-        env={conversation.RUN_ID_ENV: RUN_ID},
+        # What its agent sees as CANOPY_RUN_ID, so the operator's commands refuse inside it (DESIGN §22), and names the
+        # chore, whose history it reads with no run row to find it from. A recorded try's is `chore-<run id>`.
+        env={
+            conversation.RUN_ID_ENV: f"{history.TRY_PREFIX}{prepared.name}",
+            history.WORKSPACE_ENV: str(ctx.ws.root.absolute()),
+        },
         timeout=prepared.chore.timeout_minutes * 60,
     )
     return execute.outcome_of(done, agent_output.read(done.stdout), prepared.chore)
