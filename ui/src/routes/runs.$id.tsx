@@ -16,6 +16,7 @@ import { RunDoing } from '@/components/run-doing'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TicketField } from '@/components/ticket-field'
 import { Timestamp } from '@/components/timestamp'
+import { RunOutputPanel } from '@/components/raw-output'
 import { TranscriptPanel } from '@/components/transcript'
 import { runDescription } from '@/lib/descriptions'
 import { runRef } from '@/lib/refs'
@@ -77,7 +78,8 @@ function Loaded({ id }: { id: number }) {
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <RunPanel run={data} />
-                <TranscriptPanel transcript={transcript} running={data.state === 'running'} live />
+                <TranscriptPanel transcript={transcript} running={data.state === 'running'} />
+                <RunOutputPanel id={data.id} />
                 <RunMemoryPanel id={data.id} />
             </div>
         </>

@@ -353,10 +353,11 @@ def test_a_tick_records_and_prints_what_its_overseer_cost(
         assert capsys.readouterr().out.rstrip().endswith("(cost $0.25, 3.5k tokens, 5.5k peak context)")
 
 
-def test_a_running_tick_shows_its_overseer_session(
+def test_a_running_tick_shows_its_overseer_session_spend_and_output_so_far(
     canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
 ) -> None:
-    """The session is on the tick from the overseer's first event, so a page or `canopy decisions` shows it mid-tick."""
+    """What the overseer has printed is on the tick and in its log as it prints it, so a page or `canopy decisions`
+    shows it mid-tick: its session, what its finished model calls cost, and its output (DESIGN §6, §22)."""
     with_events(canopy_env, "canopy-overseer")
     with overseer_does(canopy("decisions"), session="ses_o1"):
         assert main(["tick", "--dry-run"]) == 0
@@ -367,7 +368,13 @@ def test_a_running_tick_shows_its_overseer_session(
         queried, decisions = commands
         assert queried["argv"] == ["canopy", "queried"]
         assert "Tick 1: running (dry run)" in decisions["stdout"]
-        assert "overseer session ses_o1\n" in decisions["stdout"]  # no cost yet: the overseer has not ended
+        # The first of its two model calls has ended, before it ran its commands.
+        assert "overseer session ses_o1  $0.12, 1.7k tokens, 5.5k peak context\n" in decisions["stdout"]
+        assert "overseer output: " in decisions["stdout"]
+    # Its log holds the events as printed, then its stderr once it ended.
+    output = (canopy_env.root / ".canopy" / "ticks" / "1.log").read_text()
+    assert '"sessionID": "ses_o1"' in output
+    assert output.rstrip().endswith("--- stderr ---")
 
 
 def test_a_tick_whose_overseer_reports_nothing_records_no_cost(

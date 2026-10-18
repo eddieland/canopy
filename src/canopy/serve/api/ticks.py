@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import TickId, not_found
-from canopy.serve.schema import LastTick, Tick, TickDetail, TickOutput, Transcript
+from canopy.serve.schema import LastTick, RawOutput, Tick, TickDetail, Transcript
 
 TAG = "ticks"
 router = APIRouter(tags=[TAG])
@@ -63,7 +63,7 @@ def tick_transcript(tick_id: TickId, backend: BackendDep) -> Transcript:
     summary="Get a tick's output",
     responses=not_found("tick"),
 )
-def tick_output(tick_id: TickId, backend: BackendDep) -> TickOutput:
+def tick_output(tick_id: TickId, backend: BackendDep) -> RawOutput:
     """The end of the overseer's output as written, stderr included: agent output, untrusted and bounded."""
     with backend.open() as ctx:
         found = views.tick_raw_output(ctx, tick_id)

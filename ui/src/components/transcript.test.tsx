@@ -139,37 +139,22 @@ describe('TranscriptPanel', () => {
 
     it.each([
         [
-            'a live worker before its first event',
+            'a running session before its first event',
             'read',
             true,
-            true,
-            'no events yet: they show here as the worker prints them',
+            'no events yet: they show here as the agent prints them',
         ],
+        ['a running session with no log yet', 'no_log', true, 'no events yet: they show here as the agent prints them'],
         [
             'a template that prints no events',
             'no_session',
             false,
-            false,
             'the runtime reported no session: a template without --format json prints no events',
         ],
-        ['a running session with no log yet', 'no_log', true, false, 'the session’s events reach the log when it ends'],
-        [
-            'an ended session whose log is gone',
-            'no_log',
-            false,
-            false,
-            'its log is gone, or is not a file canopy reads',
-        ],
-        [
-            'a running session read before it ends',
-            'read',
-            true,
-            false,
-            'the session’s events reach the log when it ends',
-        ],
-        ['an ended session with no events', 'read', false, false, 'the log holds none of the session’s events'],
-    ] as const)('says why it is empty for %s', (_, status, running, live, words) => {
-        render(<TranscriptPanel transcript={transcript({ status, entries: [] })} running={running} live={live} />)
+        ['an ended session whose log is gone', 'no_log', false, 'its log is gone, or is not a file canopy reads'],
+        ['an ended session with no events', 'read', false, 'the log holds none of the session’s events'],
+    ] as const)('says why it is empty for %s', (_, status, running, words) => {
+        render(<TranscriptPanel transcript={transcript({ status, entries: [] })} running={running} />)
         expect(screen.getByText(words)).toBeDefined()
         expect(screen.queryByRole('searchbox')).toBeNull()
     })

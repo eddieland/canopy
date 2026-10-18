@@ -712,8 +712,10 @@ list, an empty state, or a skeleton by hand.
   its row: it turns By call and the search off, opens the row if it is a tool call, scrolls it to the window's middle,
   focuses it, and sets it on the accent's tint at 14%. A session of one call has the line alone: one bar says nothing
   the line does not. By call, each call's line has its step after its input, `30.2k in (+4.3k) · 1.8k out`.
-- **A tick's output** (`TickOutputPanel`) is the overseer's file as written, under the tick's transcript: one muted line
-  naming the file until `Show output`, a `Disclosure` in the header, opens it. Open, it is one monospace block, its
+- **A tick's output** (`TickOutputPanel`, `src/components/raw-output.tsx`) is the overseer's file as written, under the
+  tick's transcript, and **a run's output** (`RunOutputPanel`) its log the same way, under the run's: one muted line
+  naming the file (a run's says `the run's log`, whose path the Run panel shows) until `Show output`, a `Disclosure` in
+  the header, opens it. Open, it is one monospace block, its
   lines wrapped anywhere (JSON events have no spaces to break at), scrolling inside the panel (`PanelScroll`) and opened
   at its end, where stderr is; the file's size is in the header, and a cut says so above the block. A line that parses
   as a JSON object or array (the runtime's events) is colored as written, never reformatted (`src/lib/json-lines.ts`,
@@ -721,7 +723,8 @@ list, an empty state, or a skeleton by hand.
   plain. A transcript's block is colored the same way when the whole of it is JSON. A Pretty `Toggle` in the header (a
   mode, raised while on) lays each JSON line out over several, two spaces a level, by the space between its tokens
   alone, so every value stays as written; it reopens the block at its end. Each tick's panel keeps its own choice, off
-  until turned on, across reloads (`src/lib/pretty-output.ts`), as a list keeps its order.
+  until turned on, across reloads (`src/lib/pretty-output.ts`), as a list keeps its order; a run's keeps it for the
+  page alone.
 - **Rich text** (`RichText`, `src/lib/rich-text.ts`) lays out what an agent wrote, a run's, chore run's, or tick's
   summary and a decision's rationale: line breaks kept, `-` and `1.` lists (nested by indent), `#` headings as a
   `font-medium` line, fenced code as a `surface-raised` block that scrolls sideways, and `code` (at `text-xs`) and

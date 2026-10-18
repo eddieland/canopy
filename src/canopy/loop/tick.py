@@ -8,7 +8,18 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
 from canopy.chores import reconcile as chore_reconcile
-from canopy.core import agent_output, chore_view, conversation, db, definitions, drafts, notice, plans, pools
+from canopy.core import (
+    agent_output,
+    chore_view,
+    conversation,
+    db,
+    definitions,
+    drafts,
+    notice,
+    plans,
+    pools,
+    progress,
+)
 from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.core.vocab import TickStatus
@@ -303,9 +314,10 @@ def _run_overseer(
 ) -> tuple[str | None, agent_output.Usage | None]:
     """Run `overseer_cmd` with the state block `block` as its `{prompt}`.
 
-    Output goes to `<state_dir>/ticks/<id>.log`, and the block to `<id>.prompt` beside it first, for the transcript's
-    first model call (DESIGN §22). The session is recorded on the tick at the first event that names it, so a running
-    tick shows it; the session and cost again when the overseer ends, failed or not.
+    Output goes to `<state_dir>/ticks/<id>.log` as the overseer prints it, its stderr after it once it ends, and the
+    block to `<id>.prompt` beside it first, for the transcript's first model call (DESIGN §22). What its events report
+    so far is recorded on the tick as they come, so a running tick shows its session and spend; the session and cost
+    again when the overseer ends, failed or not.
 
     Returns:
         Why it failed, None on success, and what it cost if the runtime reported it.
@@ -327,20 +339,23 @@ def _run_overseer(
     out_dir = ctx.state_dir / "ticks"
     out_dir.mkdir(parents=True, exist_ok=True)
     logs.write_private(out_dir / f"{tick_id}.prompt", block)
-    try:
-        result = ctx.runner.run(
-            argv,
-            cwd=ctx.repo_root,
-            env={TICK_ID_ENV: str(tick_id)},
-            timeout=timeout_minutes * 60,
-            on_line=_SessionWatch(ctx, tick_id, log),
-        )
-    except procs.ProcError as e:
-        log.exception("overseer could not start", extra={"error": str(e)})
-        return str(e), None
-
     out_path = out_dir / f"{tick_id}.log"
-    logs.write_private(out_path, f"{result.stdout}\n--- stderr ---\n{result.stderr}")
+    with logs.open_private(out_path) as out:
+        watch = progress.Progress(ctx.conn, "ticks", tick_id, out, log, agent="overseer", fields={})
+        try:
+            result = ctx.runner.run(
+                argv,
+                cwd=ctx.repo_root,
+                env={TICK_ID_ENV: str(tick_id)},
+                timeout=timeout_minutes * 60,
+                on_line=watch,
+            )
+        except procs.ProcError as e:
+            # It printed nothing, so it keeps no output, as a tick whose overseer never ran keeps none.
+            out_path.unlink(missing_ok=True)
+            log.exception("overseer could not start", extra={"error": str(e)})
+            return str(e), None
+        out.write(f"\n--- stderr ---\n{result.stderr}")
 
     output = agent_output.read(result.stdout)
     db.set_tick_report(
@@ -356,27 +371,6 @@ def _run_overseer(
         return None, output.usage
     log.error("overseer failed", extra={"reason": failure, "output": str(out_path), "dry_run": dry_run})
     return failure, output.usage
-
-
-class _SessionWatch:
-    """Records the overseer's session on the tick at the first line of its output that names one (DESIGN §6)."""
-
-    def __init__(self, ctx: Context, tick_id: int, log: logs.TickAdapter) -> None:
-        self.ctx = ctx
-        self.tick_id = tick_id
-        self.log = log
-        self.seen = False
-
-    def __call__(self, line: str) -> None:
-        if self.seen:
-            return
-        event = agent_output.parse_event(line)
-        session = agent_output.session_of(event) if event is not None else None
-        if session is None:
-            return
-        self.seen = True
-        db.set_tick_session(self.ctx.conn, self.tick_id, session)
-        self.log.info("overseer session started", extra={"session_id": session})
 
 
 def _done(message: str) -> bool:

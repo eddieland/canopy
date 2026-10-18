@@ -119,7 +119,8 @@ runs start under the dispatch lock.
 A chore run starts detached, as a worker does (§8 step 4), drops `CANOPY_TICK_ID`, and runs the command in `cwd` with
 the timeout. No lease, branch, or push, so nothing to return or verify. Its log and prompt are in
 `<state_dir>/chore-runs/<name>/`, not in its working directory, which a sandbox lets it write (§24): its own log and
-prompt are not its to read back or rewrite.
+prompt are not its to read back or rewrite. Its output reaches its log as it prints it, and its session and what it
+has spent so far reach its row, as a worker's do (§8).
 
 The prompt is the operator's file plus a `## Run` section canopy generates: the time, the overseer's context, the
 operator's notes (below) and notice to workers (§8), the latest run, the open findings so ids can be reused,

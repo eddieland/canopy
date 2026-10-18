@@ -144,7 +144,7 @@ export type TranscriptTokens = Schemas['TranscriptTokens']
 /** The message canopy gave the runtime to start a session: its first model call's input, as far as any file says. */
 export type TranscriptPrompt = Schemas['TranscriptPrompt']
 /** The end of a tick's overseer output as written, stdout then stderr: what the transcript leaves out too. */
-export type TickOutput = Schemas['TickOutput']
+export type RawOutput = Schemas['RawOutput']
 /** A search: the words it looked for, its hits by source and newest first, and the sources that had more. */
 export type SearchResults = Schemas['SearchResults']
 /** One row holding every word of a search, and where it opens. */
