@@ -633,6 +633,9 @@ How it serves, true of every page:
 - A page open across an upgrade keeps its old build, whose lazily loaded pages may no longer be served, so the server
   reports the build on disk and the page offers a Reload while the two differ. It never reloads on its own: the
   operator may be typing.
+- From a source checkout, with no bundled build, it serves the checkout's `ui/dist`, which a pull leaves behind its
+  source until `make ui-build`. When a file under `ui/src` is newer than the build, the loop's header and log say so,
+  with the build's time; it still serves the build. An installed canopy bundles its own and is never behind.
 - Every response refuses framing and MIME sniffing and sends no Referer. `index.html` carries a CSP that allows only
   this origin, plus the inline theme script by its hash, computed from the file served.
 - The Host header must name a loopback host or the bind address, on any route: that stops DNS rebinding. An `Origin`

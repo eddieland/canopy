@@ -761,7 +761,8 @@ def _header(
         grid.add_row("stops", f"after {max_ticks} tick{'' if max_ticks == 1 else 's'}")
     grid.add_row("log", Text(str(ctx.state_dir / logs.LOG_FILE_NAME)))
     if serving is not None:
-        grid.add_row("web UI", Text(serving.note, style="" if serving.server is not None else "yellow"))
+        warn = serving.server is None or serving.behind
+        grid.add_row("web UI", Text(serving.note, style="yellow" if warn else ""))
     if (held := pause.paused(ctx.conn)) is not None:
         since = f"since {_local_time(held.since)} ({held.channel}); no tick until resumed"
         grid.add_row("paused", Text(since, style="yellow"))

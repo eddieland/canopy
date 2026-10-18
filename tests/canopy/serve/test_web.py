@@ -3,10 +3,12 @@ its pages read what `canopy show` and `canopy status` print, and `canopy loop` s
 
 import dataclasses
 import json
+import os
 import socket  # noqa: TID251  (a test asks the OS for a free port; canopy itself opens no socket)
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from unittest import mock
 
 import httpx2
 import pytest
@@ -723,6 +725,40 @@ def test_without_a_secret_the_loop_serves_nothing_and_says_how_to_make_one(
     assert statuses == {"ok": 1}
     assert "not served: there is no listener secret at" in out.getvalue()
     assert "canopy secret" in out.getvalue()
+
+
+def test_a_checkouts_loop_says_its_ui_was_built_before_a_change_to_its_source(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, tmp_path: Path
+) -> None:
+    serve_on(canopy_env, free_port())
+    secret.create(secret.path(), rotate=False)
+    # A checkout with the real one's migrations and agent files, and a UI built before its source last changed.
+    checkout = tmp_path / "checkout"
+    (checkout / "ui" / "dist").mkdir(parents=True)
+    for shared in ("migrations", ".agents"):
+        (checkout / shared).symlink_to(resources._SOURCE / shared)  # noqa: SLF001  (the checkout canopy runs from)
+    (checkout / "ui" / "dist" / "index.html").write_text("<html><head></head></html>", encoding="utf-8")
+    os.utime(checkout / "ui" / "dist" / "index.html", (1_700_000_000, 1_700_000_000))
+    (checkout / "ui" / "src").mkdir()
+    (checkout / "ui" / "src" / "main.tsx").write_text("export {}\n", encoding="utf-8")
+    term, out = console()
+    with (
+        mock.patch.object(resources, "_BUNDLED", tmp_path / "no-bundle"),
+        mock.patch.object(resources, "_SOURCE", checkout),
+        overseer_does(),
+    ):
+        statuses = repeat.run(
+            context(canopy_env),
+            dry_run=True,
+            interval_minutes=1,
+            max_ticks=1,
+            console=term,
+            stop=repeat.Stop(),
+            serve=True,
+        )
+    assert statuses == {"ok": 1}
+    built = datetime.fromtimestamp(1_700_000_000, tz=UTC).astimezone()
+    assert f"the UI was built {built:%Y-%m-%d %H:%M}, before a change to ui/src: make ui-build" in out.getvalue()
 
 
 @pytest.mark.parametrize(

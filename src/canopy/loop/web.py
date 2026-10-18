@@ -40,6 +40,8 @@ class Serving:
     url: str | None = None
     server: WebServer | None = None
     backend: Backend | None = None
+    # A checkout's build older than its source, which the header warns of though the server started.
+    behind: bool = False
 
 
 def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload, asked: tick_now.TickNow) -> Serving:
@@ -67,8 +69,14 @@ def start(ctx: Context, log: logs.TickAdapter, reload: reread.Reload, asked: tic
     server.start()
     url = options.url()
     log.info("web UI served", extra={"url": url})
-    built = "" if options.ui_dir is not None else "; the UI is not built into this installation"
-    return Serving(f"{url}  sign in with the secret `canopy secret` prints{built}", url, server, served)
+    note = f"{url}  sign in with the secret `canopy secret` prints"
+    if options.ui_dir is None:
+        return Serving(f"{note}; the UI is not built into this installation", url, server, served)
+    if (built := resources.ui_built_before_source(options.ui_dir)) is not None:
+        log.warning("web UI built before its source", extra={"ui_dir": str(options.ui_dir), "built": built.isoformat()})
+        behind = f"; the UI was built {built:%Y-%m-%d %H:%M}, before a change to ui/src: make ui-build"
+        return Serving(f"{note}{behind}", url, server, served, behind=True)
+    return Serving(note, url, server, served)
 
 
 def backend(ctx: Context, reload: reread.Reload, asked: tick_now.TickNow) -> Backend:
