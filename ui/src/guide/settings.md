@@ -43,7 +43,7 @@ Off by default, and none of it does anything useful, by design.
   a new one, picked at random like the ticker's headlines, or **Don't show me tips again** to turn it off.
 - **The hat shop**: every dollar canopy spends is a dollar towards Sprig's hats. All sales are final.
 
-The switch in the panel's header does exactly what you'd fear.
+The switch in the panel's header does exactly what you'd fear. Sprig, if it's on, brought glow sticks.
 
 ## Session
 

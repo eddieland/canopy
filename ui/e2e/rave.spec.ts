@@ -53,3 +53,33 @@ test('under reduced motion the rave holds still, the lights off', async ({ page 
     expect(await animation(rave)).toBe('none')
     await expect(rave.locator('.rave-dark')).toHaveCSS('opacity', '0.6')
 })
+
+test.describe('with Sprig on', () => {
+    // Tall enough that the rail has room for Sprig under the mock's three working runs.
+    test.use({ viewport: { width: 1280, height: 1200 } })
+
+    test('Sprig dances to it, waving its glow sticks, and holds still under reduced motion', async ({ page }) => {
+        await page.addInitScript(() => globalThis.localStorage.setItem('canopy-buddy', 'on'))
+        await page.goto('settings')
+        await settled(page)
+        const sprig = page.getByTestId('buddy')
+        const sticks = sprig.getByTestId('buddy-glow-sticks')
+        await expect(sticks).toHaveCount(0)
+
+        await page.getByRole('switch', { name: 'Lightswitch rave' }).click()
+        await expect(sticks).toBeVisible()
+        const animations = () =>
+            sprig.evaluate((buddy) =>
+                [buddy.querySelector('[data-testid="buddy-body"]'), buddy.querySelector('.animate-buddy-wave')].map(
+                    (drawn) => (drawn === null ? null : getComputedStyle(drawn).animationName),
+                ),
+            )
+        expect(await animations()).toEqual(['buddy-dance', 'buddy-wave'])
+
+        await page.emulateMedia({ reducedMotion: 'reduce' })
+        expect(await animations()).toEqual(['none', 'none'])
+
+        await page.getByRole('switch', { name: 'Lightswitch rave' }).click()
+        await expect(sticks).toHaveCount(0)
+    })
+})

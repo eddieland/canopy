@@ -5,10 +5,11 @@ import type { CSSProperties } from 'react'
 
 import { HatDrawing } from '@/components/hat'
 import { useFits } from '@/hooks/use-fits'
-import { nextTip, setBuddy } from '@/lib/buddy'
+import { nextTip, setBuddy, tipsFor } from '@/lib/buddy'
 import type { View } from '@/lib/buddy'
 import { useWardrobe } from '@/lib/hats'
 import type { HatId } from '@/lib/hats'
+import { onRaveStart, useRave } from '@/lib/rave'
 import { cn } from '@/lib/utils'
 import type { FileRoutesById } from '@/routeTree.gen'
 
@@ -26,6 +27,8 @@ type Room = 'roomy' | 'tight'
 interface Offer {
     /** The view it was offered on, which it is about. */
     view: View | undefined
+    /** Whether it was offered while the lightswitch rave was on, which it is then about instead. */
+    rave: boolean
     /** How many tips came before it, since the page loaded: a new count pops a new bubble in. */
     n: number
     /** What it says: picked at random as it is offered (`nextTip`), and kept, so it never changes under the reader. */
@@ -44,6 +47,10 @@ interface Offer {
  * shown on another. The tip closes with its button, or by itself after a while, and the next comes a few minutes after
  * that. Settings turns Sprig off, and so does the tip's "Don't show me tips again".
  *
+ * While the lightswitch rave is on (src/components/shell/rave.tsx), Sprig dances on its beat and talks of nothing else
+ * (`RAVE`): the lights going off offers a tip about them at once, a tip from before the rave is hidden, and so is a
+ * rave tip once the lights come back on.
+ *
  * It has a slot of its own in the rail's column, between what the rail holds and its footer: the slot is the room
  * left under the rail's blocks, and Sprig stands at its foot. A slot with room for Sprig and its bubble covers
  * nothing. A shorter one, as a laptop's window leaves, still shows Sprig if it can stand over the foot of the spend
@@ -53,19 +60,34 @@ interface Offer {
  */
 export function Buddy() {
     const view = viewOf(useRouterState({ select: (state) => state.matches.at(-1)?.routeId }))
+    const rave = useRave() === 'on'
     // Closed until the first is offered, the bubble holding a tip's room meanwhile.
-    const [offer, setOffer] = useState<Offer>(() => ({ view, n: 0, tip: nextTip(view, ''), open: false, asked: false }))
+    const [offer, setOffer] = useState<Offer>(() => ({
+        view,
+        rave,
+        n: 0,
+        tip: nextTip(tipsFor(view, rave), ''),
+        open: false,
+        asked: false,
+    }))
     const [slot, room] = useFits(roomFor)
     const { worn } = useWardrobe()
-    // Offers the next tip, about the view on screen, never the one just offered.
-    const offerNext = (asked: boolean) =>
-        setOffer({ view, n: offer.n + 1, tip: nextTip(view, offer.tip), open: true, asked })
-    const another = () => offerNext(true)
+    // Offers the next tip, about the view on screen or the rave, never the one just offered.
+    const offerNext = (asked: boolean, raving: boolean) =>
+        setOffer({
+            view,
+            rave: raving,
+            n: offer.n + 1,
+            tip: nextTip(tipsFor(view, raving), offer.tip),
+            open: true,
+            asked,
+        })
+    const another = () => offerNext(true, rave)
     // Offers the next tip unasked, when the time comes, if the bubble would cover nothing and the tab is in sight to
-    // read it.
-    const offerUnasked = useEffectEvent(() => {
+    // read it. A rave just started is on before Sprig renders it, so it is said.
+    const offerUnasked = useEffectEvent((raving: boolean = rave) => {
         if (room === 'roomy' && document.visibilityState === 'visible') {
-            offerNext(false)
+            offerNext(false, raving)
         }
     })
     const close = () => setOffer((last) => ({ ...last, open: false }))
@@ -85,7 +107,9 @@ export function Buddy() {
         wait()
         return () => globalThis.clearTimeout(timer)
     }, [offer.open])
-    const shown = offer.open && offer.view === view && (room === 'roomy' || offer.asked)
+    // The lights going off is worth a word at once: not a page loading with them off, only the switch flipped since.
+    useEffect(() => onRaveStart(() => offerUnasked(true)), [])
+    const shown = offer.open && offer.view === view && offer.rave === rave && (room === 'roomy' || offer.asked)
     // A new tip opens a new bubble: the key remounts it, popping it in, and raises Sprig's brows. Closed, the bubble
     // keeps the last tip's room, whatever the page, so Sprig does not move. Sprig, and a bubble shown in a tight slot,
     // rise out of the slot over the blocks above: positioned, so they paint over them.
@@ -118,7 +142,7 @@ export function Buddy() {
                         'outline-none focus-visible:ring-2 focus-visible:ring-ring motion-safe:hover:-translate-y-0.5',
                     )}
                 >
-                    <Figure cue={offer.n} hat={worn} />
+                    <Figure cue={offer.n} hat={worn} rave={rave} />
                 </button>
             </aside>
         </div>
@@ -228,10 +252,11 @@ function Bubble({
 /**
  * Sprig itself: a paperclip's bent wire, a sprig of leaf on top, the hat it wears (bought in Settings), googly eyes
  * under brows that rise with each new tip, and a keyboard in front of its foot, to help vibe code on. The eyes blink
- * now and then and look toward the pointer, and the keys are typed on in bursts, but under reduced motion, which keeps
- * them still.
+ * now and then and look toward the pointer, and the keys are typed on in bursts. While the lightswitch rave is on,
+ * all of it but the keyboard dances on its foot, on the lights' beat, waving a glow stick each side. Under reduced
+ * motion all of it holds still.
  */
-function Figure({ cue, hat }: { cue: number; hat: HatId | null }) {
+function Figure({ cue, hat, rave }: { cue: number; hat: HatId | null; rave: boolean }) {
     const figure = useRef<SVGSVGElement>(null)
     useEffect(() => {
         const svg = figure.current
@@ -256,56 +281,88 @@ function Figure({ cue, hat }: { cue: number; hat: HatId | null }) {
     }, [])
     return (
         <svg ref={figure} viewBox="0 -6 48 92" className="h-24 w-[3.25rem] overflow-visible" aria-hidden>
-            <path
-                d="M24 12 C24 8 25 5 28 3"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                className="text-buddy-leaf"
-            />
-            <path
-                d="M28 3 C30 -3 38 -4 43 -1 C40 4 33 7 28 3 Z"
-                fill="currentColor"
-                fillOpacity="0.85"
-                className="text-buddy-leaf"
-            />
-            <path
-                d="M18 66 V32 a6 6 0 0 1 12 0 V72 a10 10 0 0 1 -20 0 V26 a14 14 0 0 1 28 0 V62"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="3"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-muted-foreground"
-            />
+            {/* Drawn before the keyboard, which stays put in front of its foot while it dances. */}
+            <g data-testid="buddy-body" className={cn(rave && 'animate-buddy-dance')}>
+                <path
+                    d="M24 12 C24 8 25 5 28 3"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    className="text-buddy-leaf"
+                />
+                <path
+                    d="M28 3 C30 -3 38 -4 43 -1 C40 4 33 7 28 3 Z"
+                    fill="currentColor"
+                    fillOpacity="0.85"
+                    className="text-buddy-leaf"
+                />
+                <path
+                    d="M18 66 V32 a6 6 0 0 1 12 0 V72 a10 10 0 0 1 -20 0 V26 a14 14 0 0 1 28 0 V62"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-muted-foreground"
+                />
+                {rave ? <GlowSticks /> : null}
+                {hat === null ? null : <HatDrawing id={hat} />}
+                <g key={cue} className="animate-buddy-brows text-foreground">
+                    <path
+                        d="M10 25 Q15 21 20 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                    />
+                    <path
+                        d="M28 24 Q33 21 38 25"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.6"
+                        strokeLinecap="round"
+                    />
+                </g>
+                <g className="animate-buddy-blink">
+                    {[15, 33].map((cx) => (
+                        <g key={cx} data-eye>
+                            <circle cx={cx} cy="33" r="6.5" className="fill-buddy-eye stroke-buddy-pupil" />
+                            <circle data-pupil cx={cx} cy="34" r="2.8" className="fill-buddy-pupil" />
+                        </g>
+                    ))}
+                </g>
+            </g>
             <Keyboard />
-            {hat === null ? null : <HatDrawing id={hat} />}
-            <g key={cue} className="animate-buddy-brows text-foreground">
-                <path
-                    d="M10 25 Q15 21 20 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                />
-                <path
-                    d="M28 24 Q33 21 38 25"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.6"
-                    strokeLinecap="round"
-                />
-            </g>
-            <g className="animate-buddy-blink">
-                {[15, 33].map((cx) => (
-                    <g key={cx} data-eye>
-                        <circle cx={cx} cy="33" r="6.5" className="fill-buddy-eye stroke-buddy-pupil" />
-                        <circle data-pupil cx={cx} cy="34" r="2.8" className="fill-buddy-pupil" />
-                    </g>
-                ))}
-            </g>
         </svg>
+    )
+}
+
+/**
+ * Sprig's glow sticks, out while the lightswitch rave is on: one each side of the wire, held where it touches them and
+ * raised outwards, a bright core in a soft glow of its color. Both turn the same way from their grips, in time with
+ * the lights, so as one sweeps out the other comes in.
+ */
+const STICKS = [
+    { d: 'M8 50 L0 38', grip: 'bottom right', color: 'text-flair-green' },
+    { d: 'M40 50 L48 38', grip: 'bottom left', color: 'text-flair-purple' },
+] as const
+
+/** The glow sticks Sprig waves at the rave (`STICKS`). */
+function GlowSticks() {
+    return (
+        <g data-testid="buddy-glow-sticks">
+            {STICKS.map((stick) => (
+                <g
+                    key={stick.grip}
+                    className={cn('animate-buddy-wave', stick.color)}
+                    style={{ '--grip': stick.grip } as CSSProperties}
+                >
+                    <path d={stick.d} stroke="currentColor" strokeWidth="5" strokeOpacity="0.3" strokeLinecap="round" />
+                    <path d={stick.d} stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                </g>
+            ))}
+        </g>
     )
 }
 
