@@ -719,6 +719,67 @@ outage there outlives it or is forgotten.
 Open: whether a notice should name repositories, so an outage in one repository's CI does not reach runs in another.
 Every notice reaches every run until real use shows the need.
 
+### One resume for what comes back to a PR (M56)
+
+Designed, not built (ROADMAP M56). Until M56 lands, `ci_red` dispatches `fix-ci`, and every section that names
+`fix-ci`, §7 and §8 above among them, describes canopy as it is. This section says what changes.
+
+A PR with a red check and a new review comment takes two runs today, a `fix-ci` and a `resume`, each with its own
+prompt, attempt limit, and cooldown, and each checking out and pushing the same branch. Everything that comes back to a
+PR becomes one kind of run: a `resume`, which on one checkout and one push does whatever the unit needs, from fixing
+the build to answering its reviewers. With M54, that makes a round of feedback one plan as well as one run.
+
+- **Reasons.** Every `resume` names why it runs with `--reason`, once for each:
+
+  | Reason | Sent for | Its cursors |
+  | --- | --- | --- |
+  | `ci` | `ci_red`: failed checks, which the context names with their runs | `ci` |
+  | `review` | `changes_requested` and `review_findings`: review feedback, or a canopy review's findings (`--review-run`) | `review` |
+  | `reply` | `human_replied`: an authorized reply or an operator message, a go-ahead on untrusted feedback among them | `comment`, `message` |
+  | `conflict` | `conflicted`: the PR conflicts with its base | none |
+  | `no_pr` | `pushed_no_pr`: the branch is pushed and has no PR | none |
+  | `retarget` | the PR's blocker merged, so the PR targets the repository's base branch again (§10) | none |
+
+  The reasons are recorded on the run, and `canopy status` and the web UI show them beside its kind, so a run sent for
+  a red build still reads as one. They are named rather than read off the cursors, since three of them have no cursor
+  and the cooldown below must tell a run for CI alone.
+- **One run for a round.** When a tick finds more than one reason on a unit, the unit's phase is the first in §7's
+  table, and its one `resume` carries every reason, each with its cursors. A failed check a notice holds is no reason
+  (Notices to workers, above): a `resume` sent for anything else on the unit leaves that check, and the `ci` cursor,
+  alone. Joint runs are as before: a run that moves a unit's cursor names one repository.
+- **Guards.** Beside step 1's, in their order:
+  - `bad_kind`, first: `--kind fix-ci`, naming `resume --reason ci`. The value stays in the run kinds only so old runs
+    read.
+  - `bad_reason`, after `bad_request`: a `resume` with no `--reason`; a `--reason` on any other kind; or a cursor
+    without its reason, from the table. A reason needs no cursor, since a `ci` after a triage (§23) follows the cursor
+    the triage moved.
+  - `cooldown`: a `resume` whose only reason is `ci`, less than `policy.ci_cooldown_minutes` (default 30) after the
+    latest run covering a named unit that worked on CI ended: a `resume` with `ci` among its reasons, or an old
+    `fix-ci`. A `resume` with any other reason is not held: it would run anyway, and fixing the build on the same
+    checkout costs no attempt of its own. The cooldown's end stays a gate the loop's wait ends at (§6).
+  - `notice_changed` refuses a `resume` with `ci` among its reasons, as it refused `fix-ci`.
+- **One limit.** `policy.max_resume_attempts`, default 6, bounds every `resume` of a unit whatever its reasons, and
+  every old `fix-ci` run counts among them (D030: derived from `runs`, never reset). Six is more than the two limits
+  together (2 and 3), since one run now does what two did; the operator chose one limit (2026-10-17), accepting that a
+  PR that keeps going red can spend the attempts its reviewers would have had. A unit's `fix-ci` grants count toward it
+  as its `resume` grants do, so nothing is migrated: a unit within the old defaults, at most 5 runs together, is
+  within 6, and one past them had grants that carry over. `canopy grant KEY fix-ci` is refused naming `resume`. The
+  state block's `resume` count and limit are those sums, and `fix-ci` leaves its kinds; spend (§11) and run lists show
+  an old `fix-ci` run under its own kind.
+- **Removed keys.** `policy.max_fix_ci_attempts`, whose error says to raise `max_resume_attempts`, and
+  `policy.fix_ci_cooldown_minutes`, whose error names `ci_cooldown_minutes` (§12).
+- **One prompt.** `worker-resume.md` and its private variant gain fix-ci's section on reading a failed check and its
+  log, CI logs being untrusted text, under the reason `ci`. `{{REASONS}}` names the run's reasons, and the worker
+  works the sections they name; an override without it still renders, since the context names the work too. The
+  `fix-ci` prompts go. While the operator's prompt overrides hold `worker-fix-ci.md` or `worker-fix-ci-private.md`,
+  every `resume` is `bad_prompt`, naming the file and saying to merge what it adds into the resume override and remove
+  it, so the operator's CI instructions are never dropped silently. A `resume` for CI alone gets the approved plan's
+  copy (§25), as every `resume` does: PLANNING's open question on `fix-ci` closes with the kind.
+
+Rejected: a cooldown after every run that worked on CI, whatever the next one is for (it would hold feedback a reviewer
+waits on, behind a build the same run can fix); a limit per reason (the operator chose one); reasons read from the
+context's text (the harness reads no prose, and the cooldown is a guard in code).
+
 ## 9. Aggressive release
 
 - Slots are held only for the duration of `_run`.
