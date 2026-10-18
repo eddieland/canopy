@@ -14,11 +14,16 @@ The title is the PR's own, as the worker that opened it or canopy's last review 
 changes rather than what the ticket asked for. Until one is reported, a loop PR shows its ticket's title. Titles are
 read when canopy looks at the PR, not live: rename one on GitHub and canopy catches up at its next run or review.
 
-A PR's page gathers what canopy knows of it: its ticket, repository, and branch, what it has cost, its coworkers'
-review threads when canopy has read them (below), canopy's reviews of it, the runs that pushed to it, and the
-decisions that named it. When a PR has used every review it's allowed, its page
-shows **At its limit**, with **Allow one more**, as `canopy grant URL review`. The limit is
-`policy.max_reviews_per_pr`, three by default.
+A PR's page answers two questions: what has canopy done here, and where does it stand? The line under the title
+answers the second: the latest review and its verdict (`review:4 3 findings, 1 major`, or `not reviewed`),
+`at its review limit` while it is, and the run working it now. A PR no ticket owns adds `canopy only reviews it`, once.
+
+Below that sits what canopy knows of it: its ticket and branch, what it has cost, its coworkers' review threads when
+canopy has read them (below), canopy's reviews of it, the runs that pushed to it, and the decisions that named it. A
+list with nothing in it is just its header and a `0`; hover the count for why. A PR canopy only reviews has no Runs
+panel at all: runs belong to a ticket, and an empty panel promising some would only be lying politely. When a PR
+has used every review it's allowed, its page shows **At its limit**, with **Allow one more**, as
+`canopy grant URL review`. The limit is `policy.max_reviews_per_pr`, three by default.
 
 ## Replying to your coworkers' reviews
 

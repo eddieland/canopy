@@ -12,7 +12,7 @@ import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
 import { Field, Fields } from '@/components/fields'
 import { GrantLimits } from '@/components/grant-limits'
-import { OrderToggle } from '@/components/order-toggle'
+import { ListPanel } from '@/components/list-panel'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll } from '@/components/panel'
 import { ReviewRequestStatus } from '@/components/review-request'
 import { ReviewThreads } from '@/components/review-threads'
@@ -33,7 +33,7 @@ interface PullRequestSearch {
 // What every PR's page shows, on its title's hover: its description is the PR's state.
 const HELP =
     'What canopy knows of this PR: its ticket when it has one, its review threads and the replies drafted to them, ' +
-    "canopy's reviews of it, the runs that pushed to it, and the decisions naming it."
+    "canopy's reviews of it, its ticket's runs that pushed to it, and the decisions naming it."
 
 /**
  * One PR: what it is, its review threads with the replies its runs drafted, canopy's reviews of it, the runs that
@@ -114,22 +114,19 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                     </nav>
                 }
             >
-                {pullRequestDescription(pr, reviews.length)}
+                {pullRequestDescription(pr, reviewLimit)}
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
-                <Panel>
+                <Panel data-testid="pull-request-fields">
                     <PanelHeader label="Pull request">
                         <span className="text-xs text-muted-foreground">
                             active <Age at={pr.active_at} variant="ago" />
                         </span>
                     </PanelHeader>
                     <Fields>
-                        <TicketField ticketKey={pr.ticket_key} title={pr.ticket_title} />
-                        {pr.repo && (
-                            <Field label="repository" mono>
-                                {pr.repo}
-                            </Field>
-                        )}
+                        {/* Why it has none is its description's: `canopy only reviews it`, said once. Its repository
+                            is its title's (`acme/api#12`). */}
+                        <TicketField ticketKey={pr.ticket_key} title={pr.ticket_title} why={false} />
                         {pr.branch && (
                             <Field label="branch" mono>
                                 <Copyable text={pr.branch} label="branch" />
@@ -152,53 +149,44 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                 {/* Its threads, which the drafts_waiting item opens, when canopy has read them or holds a draft: the
                     detail says so up front, so the page reserves their place before they arrive. */}
                 {detail.threads && <ReviewThreads url={pr.url} />}
-                <Panel data-testid="pull-request-reviews">
-                    <PanelHeader label="Reviews">
-                        <span className="flex items-center gap-2">
-                            {reviews.length > 1 && <OrderToggle list="pr-reviews" />}
-                            <span className="readout text-xs text-muted-foreground">{reviews.length}</span>
-                        </span>
-                    </PanelHeader>
-                    {reviews.length === 0 ? (
-                        <Empty>no reviews yet: canopy has not reviewed it</Empty>
-                    ) : (
-                        <ReviewsTable reviews={ordered('pr-reviews', reviewsOrder, reviews)} pr={false} />
-                    )}
-                </Panel>
-                <Panel data-testid="pull-request-runs">
-                    <PanelHeader label="Runs">
-                        <span className="flex items-center gap-2">
-                            {runs.length > 1 && <OrderToggle list="pr-runs" />}
-                            <span className="readout text-xs text-muted-foreground">{runs.length}</span>
-                        </span>
-                    </PanelHeader>
-                    {runs.length === 0 ? (
-                        <Empty>no runs yet: none of its ticket&apos;s runs has pushed to it</Empty>
-                    ) : (
+                <ListPanel
+                    label="Reviews"
+                    count={reviews.length}
+                    list="pr-reviews"
+                    empty="no reviews yet: canopy has not reviewed it"
+                    data-testid="pull-request-reviews"
+                >
+                    <ReviewsTable reviews={ordered('pr-reviews', reviewsOrder, reviews)} pr={false} />
+                </ListPanel>
+                {/* Runs are a ticket's, so a PR canopy only reviews can never have one: it has no list to show. */}
+                {pr.ticket_key !== null && (
+                    <ListPanel
+                        label="Runs"
+                        count={runs.length}
+                        list="pr-runs"
+                        empty="no runs yet: none of its ticket's runs has pushed to it"
+                        data-testid="pull-request-runs"
+                    >
                         <PanelScroll label="Runs">
                             <RunsTable runs={ordered('pr-runs', runsOrder, runs)} ticket={false} ownPr={pr.url} />
                         </PanelScroll>
-                    )}
-                </Panel>
-                <Panel data-testid="pull-request-decisions">
-                    <PanelHeader label="Decisions">
-                        <span className="flex items-center gap-2">
-                            {decisions.length > 1 && <OrderToggle list="pr-decisions" />}
-                            <span className="readout text-xs text-muted-foreground">{decisions.length}</span>
-                        </span>
-                    </PanelHeader>
-                    {decisions.length === 0 ? (
-                        <Empty>no decisions yet: no tick has named it</Empty>
-                    ) : (
-                        <PanelScroll label="Decisions">
-                            <Decisions
-                                decisions={ordered('pr-decisions', decisionsOrder, decisions)}
-                                byTick
-                                ownPr={pr.url}
-                            />
-                        </PanelScroll>
-                    )}
-                </Panel>
+                    </ListPanel>
+                )}
+                <ListPanel
+                    label="Decisions"
+                    count={decisions.length}
+                    list="pr-decisions"
+                    empty="no decisions yet: no tick has named it"
+                    data-testid="pull-request-decisions"
+                >
+                    <PanelScroll label="Decisions">
+                        <Decisions
+                            decisions={ordered('pr-decisions', decisionsOrder, decisions)}
+                            byTick
+                            ownPr={pr.url}
+                        />
+                    </PanelScroll>
+                </ListPanel>
             </div>
         </>
     )

@@ -37,4 +37,9 @@ describe('TicketField', () => {
         expect(screen.queryByRole('link')).toBeNull()
         expect(screen.getByRole('definition').textContent).toBe('none: canopy only reviews it')
     })
+
+    it('leaves the reason to a page that already says it', async () => {
+        await renderField(<TicketField ticketKey={null} title={null} why={false} />)
+        expect(screen.getByRole('definition').textContent).toBe('none')
+    })
 })

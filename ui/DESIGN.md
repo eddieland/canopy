@@ -306,10 +306,10 @@ Rules:
   `acme/web#88 Debounce search input`, a review's `review:4 acme/web#88` then its ticket's title. With no subject (a
   tick, a chore run, a PR canopy only reviews, a ticket untitled yet), the reference alone is the title. Its
   description is that subject's state, a line of facts (`src/lib/descriptions.ts`): `done · implement · ABC-099`,
-  `ABC-099 · 2 reviews`, `ok · 5 decisions · woken by timer`, a chore's `choreLine`, so no two pages of a kind say
-  the same thing there. What every page of its kind shows, the same each time, is its `help`, on the title's hover,
-  as the nav's items say what their pages hold. A ticket is named one way in every identity panel that names one
-  (`TicketField`: its key, a run's kind as a chip, its title).
+  `review:4 3 findings, 1 major`, `ok · 5 decisions · woken by timer`, a chore's `choreLine`, so no two pages of a
+  kind say the same thing there. What every page of its kind shows, the same each time, is its `help`, on the title's
+  hover, as the nav's items say what their pages hold. A ticket is named one way in every identity panel that names
+  one (`TicketField`: its key, a run's kind as a chip, its title).
   A tick's page steps to its neighbours from the right of its title's row (`PageHeader`'s `controls`, `TickSteps`):
   two ghost `xs` links, `‹ tick:40` and `tick:42 ›`, through every tick by id, dry runs included, found by query so a
   gap is stepped over. At an end the button stays, disabled, saying on hover there is none, so the pair never shifts;
@@ -326,10 +326,13 @@ Rules:
   thread has its main content there instead: a run's transcript, a chore's open findings and runs, a chore run's
   findings and transcript, a tick's decisions, a review's findings and diff, a PR's reviews. A chore's notes are a
   thread nothing waits on, written now and then, so they follow its main content, with its spend. Then the supporting
-  lists: runs, decisions, spend. So on a half-width second monitor a ticket's reply is reached before its runs and
-  decisions, and the attention detail, the other place a ticket is answered, reads in the same order: the item, then
-  what its reason asks for first (below, "The attention detail"), any limit it is stuck at, then its conversation and
-  the reply. An action over a whole list
+  lists: runs, decisions, spend. Each is a `ListPanel` (`src/components/list-panel.tsx`), its name and its count in
+  its header; an empty one collapses to that header, `0` and nothing under it, why on the count's hover, so a list that
+  has not filled takes a line rather than a panel, and a list that can never fill on its page (a ticketless PR's runs)
+  is left out rather than shown empty. That is the rule for every detail page's lists. So on a half-width second
+  monitor a ticket's reply is reached before its runs and decisions, and the attention detail, the other place a
+  ticket is answered, reads in the same order: the item, then what its reason asks for first (below, "The attention
+  detail"), any limit it is stuck at, then its conversation and the reply. An action over a whole list
   sits in that list's panel header, as a transcript's All open does: the worktrees' Read again heads their one Pools
   panel, a section per pool in it. A ticket's plan is on a page of its own, `/tickets/$key/plan`, under the ticket in
   the trail; the ticket's page has its card (`PlanCard`), and a `plan_review` item shows it too: the plan's reference
@@ -482,7 +485,8 @@ side.
   kind of their own (`own-review`, `own-run`). A run names the PRs it pushed to under its row, so on a PR's page
   `ownPr` leaves that PR out of them, as it does from `Decisions`.
 - **`Empty`** (`src/components/panel.tsx`): what a list or page says when it has nothing to show, in muted text, in two
-  sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
+  sizes: `row`, where a panel's list would be, as its one row (but a detail page's supporting list, which collapses
+  to its header, `ListPanel`); `panel`, a page's main panel, centered with room
   around it, as one sentence whatever links or commands it holds. Its words are `no X yet` and one clause on why or
   what to do (`no runs yet: the overseer starts one when it is due`); `now` for what comes and goes rather than `yet`
   (`no open findings now`). A config key or a command in it is `code` (`capacity.max_chores`); a next step the UI can
@@ -494,7 +498,9 @@ side.
   its place's own type, never a sentence of its own. With a reason, the reason follows a colon; in a column too narrow
   for it (`brief`), the reason is on hover. One phrase per concept: a summary, a branch, a PR, a session, or a tick's
   output that was never recorded is `none`; a PR canopy only reviews has as its ticket `none: canopy only reviews it`
-  (`NO_TICKET` in `src/lib/words.ts`). A list with no rows is an `Empty`, not a `None`.
+  (`NO_TICKET` in `src/lib/words.ts`), but on its own page, whose description says why (`TicketField`'s `why`). A
+  list with no rows is an `Empty`, not a `None`, and on a detail page its panel collapses to its header instead
+  (`ListPanel`).
 - **`Input`**, **`Textarea`**, and **`SearchField`** (`src/components/input.tsx`): every text field, on
   `surface-raised` with a hairline and the accent's focus ring. An `Input` is one height everywhere, `h-9`, a form's,
   beside its default buttons; a number is an `Input` too. A field to search or filter with is a `SearchField`: a
@@ -1130,11 +1136,15 @@ side.
   ticket and title (or `none: canopy only reviews it`, `None`) in the free column, and its age. The ticket shares the
   free column with its title: a column of its own, beside where the PR stands, would not fit a 1280px window. Its
   page: the PR's name (`org/repo#123`) as the title with its phase as a chip, a link out under it as a ticket's page
-  has (`LinkOutButton`), saying where it goes (`on GitHub`) rather than repeating the title, then panels for its
-  fields and total cost, with a grant of another review in its foot when it is at its review limit, its review threads
-  when canopy has read them or holds a draft for it (below), its reviews (`ReviewsTable`), the runs that pushed to it
-  (`RunsTable`), and its decisions. The journal keeps no PR's own title,
-  so the page has none to show.
+  has (`LinkOutButton`), saying where it goes (`on GitHub`) rather than repeating the title. Its description is where
+  it stands, as its row says it: its latest review and that review's verdict (`review:4 3 findings, 1 major`, or
+  `not reviewed`), `at its review limit` while it is, the run working it now (`run:41 running`), and
+  `canopy only reviews it` for a PR no ticket owns, said there alone: its ticket field is a bare `none`. Its ticket
+  and review count are not in it, since its ticket field and its Reviews header say them. Then panels for its fields
+  (its ticket, branch, and total cost; its repository is its title's) with a grant of another review in its foot when
+  it is at its review limit, its review threads when canopy has read them or holds a draft for it (below), its
+  reviews (`ReviewsTable`), the runs that pushed to it (`RunsTable`), and its decisions. Runs are a ticket's, so a PR
+  canopy only reviews has no Runs panel at all.
 - **A PR's threads** (`ReviewThreads`, DESIGN §29) are its coworkers' review threads, as canopy's reader last read
   them, on the diff the latest run kept, with the replies runs drafted under them. The PR's detail says up front
   whether there are any (`threads`), so their place is held (`PanelLoading`) before they arrive. A `Review threads`

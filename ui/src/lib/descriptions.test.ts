@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ReviewSummary } from '@/api/types'
+import type { Limit, ReviewSummary } from '@/api/types'
 
 import {
     choreRunDescription,
@@ -48,15 +48,60 @@ describe('reviewDescription', () => {
 })
 
 describe('pullRequestDescription', () => {
-    it('names its ticket, its reviews, and the run working it', () => {
-        expect(pullRequestDescription({ ticket_key: 'ABC-099', running_run: 41 }, 2)).toBe(
-            'ABC-099 · 2 reviews · run:41 running',
+    const LIMIT: Limit = {
+        kind: 'review',
+        repo: 'web',
+        pr_url: REVIEW.pr_url,
+        runs: 1,
+        granted: 0,
+        limit: 2,
+    }
+
+    it('leads with its latest review and that review’s verdict, and leaves out its ticket and review count', () => {
+        const pr = { ticket_key: 'ABC-099', running_run: null, latest_review: REVIEW }
+        expect(pullRequestDescription(pr, LIMIT)).toBe('review:4 3 findings, 1 major')
+        expect(pullRequestDescription({ ...pr, latest_review: { ...REVIEW, verdict: 'clean' } }, LIMIT)).toBe(
+            'review:4 clean',
         )
     })
 
-    it('says why a PR has no ticket', () => {
-        expect(pullRequestDescription({ ticket_key: null, running_run: null }, 1)).toBe(
-            'canopy only reviews it · 1 review',
+    it('says a review still running is reviewing, and one that reported no verdict so', () => {
+        const pr = { ticket_key: 'ABC-103', running_run: null }
+        const running = { ...REVIEW, id: 5, status: 'running', state: 'running', verdict: null } as const
+        expect(pullRequestDescription({ ...pr, latest_review: running }, LIMIT)).toBe('review:5 reviewing')
+        const failed = { ...REVIEW, id: 3, status: 'crashed', state: 'failed', verdict: null } as const
+        expect(pullRequestDescription({ ...pr, latest_review: failed }, LIMIT)).toBe('review:3 no verdict')
+    })
+
+    it('says a PR canopy has not reviewed is not reviewed', () => {
+        expect(pullRequestDescription({ ticket_key: 'ABC-099', running_run: null, latest_review: null }, null)).toBe(
+            'not reviewed',
+        )
+    })
+
+    it('says a PR at its review limit is, while it is', () => {
+        const pr = { ticket_key: 'ABC-099', running_run: null, latest_review: REVIEW }
+        expect(pullRequestDescription(pr, { ...LIMIT, runs: 2 })).toBe(
+            'review:4 3 findings, 1 major · at its review limit',
+        )
+        expect(pullRequestDescription(pr, { ...LIMIT, runs: 2, granted: 1, limit: 3 })).toBe(
+            'review:4 3 findings, 1 major',
+        )
+    })
+
+    it('names the run working it now', () => {
+        expect(pullRequestDescription({ ticket_key: 'ABC-099', running_run: 41, latest_review: REVIEW }, LIMIT)).toBe(
+            'review:4 3 findings, 1 major · run:41 running',
+        )
+    })
+
+    it('says why a PR has no ticket, once, since its ticket field leaves the reason out', () => {
+        const clean = { ...REVIEW, id: 2, ticket_key: null, verdict: 'clean', findings: 0, worst: null } as const
+        expect(pullRequestDescription({ ticket_key: null, running_run: null, latest_review: clean }, LIMIT)).toBe(
+            'review:2 clean · canopy only reviews it',
+        )
+        expect(pullRequestDescription({ ticket_key: null, running_run: null, latest_review: null }, null)).toBe(
+            'not reviewed · canopy only reviews it',
         )
     })
 })
