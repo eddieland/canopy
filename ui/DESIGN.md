@@ -123,7 +123,8 @@ Rules:
   arbitrary sizes (`text-[0.625rem]`).
 - **An icon is the size of the text it sits with**: 16px (`size-4`) beside `text-sm` and in a button of the default or
   `sm` size, which sets it; 12px (`size-3`) beside `text-xs` or smaller, in an `xs` or `icon-xs` button and a segmented
-  control, which set it too, and as a link out in a row. Nothing between, but a checkbox's tick, which fills its box.
+  control, which set it too, and as a link out in a row. Nothing between, but a checkbox's tick, which fills its box,
+  and nothing larger, but the page header's guide book (22px, `size-5.5`), which sits with the title.
 
 ## Shape and space
 
@@ -307,7 +308,8 @@ Rules:
   there is no title to qualify, a ticket's attention item, its `private` or `public` chip heads its conversation.
 - **A book at the header's top right** opens the guide's page about the page shown, at the heading about it when it has
   one (a run's page at `runs#a-runs-page`), named `The guide: Runs and worktrees` on hover and to a screen reader: a
-  ghost `icon-sm` button, so it is there when wanted and quiet when not. Which page each route opens is `PAGE_GUIDES`
+  book with a bookmark (`BookMarked`) at 22px in a ghost `icon` button, sized to the title beside it rather than the
+  body text, so it is there when wanted and quiet when not. Which page each route opens is `PAGE_GUIDES`
   in `src/lib/guide.ts`, keyed by route id, so a new route fails the type check until it names one. The guide's own
   pages, and the 404, have none.
 - **The tab** names the page too: `PageHeader` renders a `<title>` (`pageTitle` in `src/lib/page-title.ts`), which

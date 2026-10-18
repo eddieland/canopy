@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useMatchRoute, useRouterState } from '@tanstack/react-router'
-import { BookOpen, ChevronRight, RotateCw } from 'lucide-react'
+import { BookMarked, ChevronRight, RotateCw } from 'lucide-react'
 import { Children } from 'react'
 import type { ComponentProps, ReactNode } from 'react'
 
@@ -158,7 +158,7 @@ function GuideBook() {
     }
     const name = `The guide: ${guide.page.title}`
     return (
-        <Button asChild variant="ghost" size="icon-sm" className="-mt-1 -mr-1.5">
+        <Button asChild variant="ghost" size="icon" className="-mt-1 -mr-2">
             <Link
                 to="/guide/$page"
                 params={{ page: guide.page.slug }}
@@ -167,7 +167,7 @@ function GuideBook() {
                 aria-label={name}
                 data-testid="page-guide"
             >
-                <BookOpen aria-hidden />
+                <BookMarked aria-hidden className="size-5.5" />
             </Link>
         </Button>
     )
