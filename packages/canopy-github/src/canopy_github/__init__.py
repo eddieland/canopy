@@ -17,7 +17,10 @@ import urllib.error
 import urllib.request
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
-from typing import TextIO
+from typing import IO, TYPE_CHECKING, TextIO, override
+
+if TYPE_CHECKING:
+    from email.message import Message
 
 TIMEOUT_SECONDS = 30
 # How much of a comment's or review's body is printed. canopy bounds what it records again.
@@ -106,32 +109,63 @@ def endpoint(host: str) -> str:
 
 
 def gh_token(host: str) -> str:
-    """The token `gh` holds for `host`, read now. It is never printed.
+    """The token `gh` holds for `host`, read now, once `gh` names `host` as one it is logged in to. It is never printed.
+
+    `gh auth token` alone is not enough: with `GH_ENTERPRISE_TOKEN` set, it answers that token for any host but
+    github.com, so a PR's URL naming a host of its writer's choosing would be sent it (TRUST_MODEL T2).
 
     Returns:
         The token.
 
     Raises:
-        InputError: `gh` is not installed, or holds no token for `host`.
+        InputError: `gh` is not installed, is not logged in to `host`, or holds no token for it.
     """
-    argv = ["gh", "auth", "token", "--hostname", host]
+    status = _gh(["auth", "status", "--json", "hosts", "--hostname", host], host)
     try:
-        done = subprocess.run(argv, capture_output=True, text=True, timeout=TIMEOUT_SECONDS, check=False)  # noqa: S603
-    except (OSError, subprocess.TimeoutExpired) as e:
-        raise InputError(f"cannot run gh to read the token for {host}: {e}") from e
+        hosts: object = json.loads(status.stdout).get("hosts")
+    except (json.JSONDecodeError, AttributeError) as e:
+        raise InputError(f"cannot read the hosts gh is logged in to: {status.stderr.strip()[:_MAX_REPLY]}") from e
+    if status.returncode != 0 or not isinstance(hosts, dict) or host not in hosts:
+        raise InputError(f"gh is not logged in to {host}; run: gh auth login --hostname {host}")
+    done = _gh(["auth", "token", "--hostname", host], host)
     token = done.stdout.strip()
     if done.returncode != 0 or not token or any(c.isspace() or not c.isprintable() for c in token):
         raise InputError(f"gh holds no token for {host}; run: gh auth login --hostname {host}")
     return token
 
 
+def _gh(args: list[str], host: str) -> subprocess.CompletedProcess[str]:
+    argv = ["gh", *args]
+    try:
+        return subprocess.run(argv, capture_output=True, text=True, timeout=TIMEOUT_SECONDS, check=False)  # noqa: S603
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise InputError(f"cannot run gh to read the token for {host}: {e}") from e
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Follows no redirect: urllib would carry the request's headers, the token among them, to wherever it pointed."""
+
+    @override
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: IO[bytes],
+        code: int,
+        msg: str,
+        headers: Message,
+        newurl: str,
+    ) -> None:
+        return None
+
+
 class Client:
-    """GitHub's GraphQL API at one endpoint, with one token."""
+    """GitHub's GraphQL API at one endpoint, with one token, sent to that endpoint alone: a redirect is refused."""
 
     def __init__(self, url: str, token: str) -> None:
         """Talk to the endpoint at `url` with `token`."""
         self._url = url
         self._token = token
+        self._opener = urllib.request.build_opener(_NoRedirect())
 
     def query(self, document: str, variables: Mapping[str, object]) -> Mapping[str, object]:
         """Send one query or mutation.
@@ -151,7 +185,7 @@ class Client:
         }
         request = urllib.request.Request(self._url, data=payload, headers=headers, method="POST")  # noqa: S310
         try:
-            with urllib.request.urlopen(request, timeout=TIMEOUT_SECONDS) as response:  # noqa: S310
+            with self._opener.open(request, timeout=TIMEOUT_SECONDS) as response:
                 reply = response.read().decode(errors="replace")
         except urllib.error.HTTPError as e:
             text = e.read().decode(errors="replace")[:_MAX_REPLY]

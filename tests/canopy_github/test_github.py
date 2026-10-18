@@ -63,11 +63,15 @@ class Pull:
 
 @dataclass
 class Fake:
-    """GitHub's state, and what each operation should do: `fail` maps an operation to `refuse` or `500`."""
+    """GitHub's state, and what each operation should do.
+
+    `fail` maps an operation to `refuse`, `500`, or `lost`: carried out, but answered with a 502.
+    """
 
     pulls: dict[tuple[str, str, int], Pull] = field(default_factory=dict)
     issues: dict[tuple[str, str, int], str] = field(default_factory=dict)
     issue_comments: list[tuple[str, str]] = field(default_factory=list)
+    # The login the token is for; empty for a reply that has none.
     viewer: str = "me"
     fail: dict[str, str] = field(default_factory=dict)
     seen: list[tuple[str, str, dict[str, Any]]] = field(default_factory=list)
@@ -109,7 +113,16 @@ class Fake:
             comments = page([self.comment_node(c) for c in thread.comments], variables["after"])
             return {"data": {"node": {"comments": comments}}}
         if op == "Viewer":
-            return {"data": {"viewer": {"login": self.viewer}}}
+            return {"data": {"viewer": {"login": self.viewer or None}}}
+        if op == "PendingReviews":
+            pull = self.pulls[variables["owner"], variables["name"], variables["number"]]
+            # GitHub shows a pending review to its author alone.
+            nodes = [
+                {"id": r.node, "author": {"login": r.author}}
+                for r in pull.reviews
+                if r.state == "PENDING" and r.author == self.viewer
+            ]
+            return {"data": {"repository": {"pullRequest": {"reviews": {"nodes": nodes}}}}}
         if op == "IssueId":
             node = self.issues.get((variables["owner"], variables["name"], variables["number"]))
             return {"data": {"repository": {"issue": None if node is None else {"id": node}}}}
@@ -231,7 +244,9 @@ class _Api(BaseHTTPRequestHandler):
         op = re.match(r"\s*(?:query|mutation)\s+(\w+)", request["query"])
         assert op
         _Api.fake.seen.append((op.group(1), self.headers["Authorization"], request["variables"]))
-        if _Api.fake.fail.get(op.group(1)) == "500":
+        if _Api.fake.fail.get(op.group(1)) == "lost":
+            _Api.fake.handle(request["query"], request["variables"])
+        if _Api.fake.fail.get(op.group(1)) in {"500", "lost"}:
             self.send_response(502)
             self.end_headers()
             self.wfile.write(b"bad gateway")
@@ -247,6 +262,49 @@ class _Api(BaseHTTPRequestHandler):
     @override
     def log_message(self, format: str, *args: Any) -> None:
         del format, args
+
+
+class _Redirect(BaseHTTPRequestHandler):
+    to: ClassVar[str]
+
+    def do_POST(self) -> None:
+        self.send_response(302)
+        self.send_header("Location", _Redirect.to)
+        self.end_headers()
+
+    @override
+    def log_message(self, format: str, *args: Any) -> None:
+        del format, args
+
+
+class _Listener(BaseHTTPRequestHandler):
+    heard: ClassVar[list[str | None]] = []
+
+    def do_GET(self) -> None:
+        _Listener.heard.append(self.headers["Authorization"])
+        self.send_response(200)
+        self.end_headers()
+
+    def do_POST(self) -> None:
+        self.do_GET()
+
+    @override
+    def log_message(self, format: str, *args: Any) -> None:
+        del format, args
+
+
+@contextlib.contextmanager
+def serving(handler: type[BaseHTTPRequestHandler]) -> Generator[str]:
+    """Serve `handler` on a local port until the block ends. Yields its URL."""
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{server.server_address[1]}/graphql"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
 
 
 @pytest.fixture
@@ -271,15 +329,8 @@ def github() -> Generator[tuple[Fake, str]]:
     )
     fake.issues["acme", "api", 12] = "I_12"
     _Api.fake = fake
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Api)
-    thread = threading.Thread(target=server.serve_forever, kwargs={"poll_interval": 0.01}, daemon=True)
-    thread.start()
-    try:
-        yield fake, f"http://127.0.0.1:{server.server_address[1]}/graphql"
-    finally:
-        server.shutdown()
-        server.server_close()
-        thread.join()
+    with serving(_Api) as url:
+        yield fake, url
 
 
 def read(url: str, request: object, hosts: list[str] | None = None) -> tuple[int, list[dict[str, Any]], str]:
@@ -408,15 +459,42 @@ def test_endpoints_are_github_coms_api_host_or_the_servers_own() -> None:
     assert canopy_github.endpoint("ghe.example.com") == "https://ghe.example.com/api/graphql"
 
 
+# A `gh` logged in to ghe.example.com alone, that answers a token for any host, as it does for every host but
+# github.com while GH_ENTERPRISE_TOKEN is set.
+_GH = """#!/bin/sh
+case "$*" in
+  "auth status --json hosts --hostname ghe.example.com") echo '{"hosts":{"ghe.example.com":[]}}' ;;
+  "auth status --json hosts --hostname "*) echo '{"hosts":{}}' ;;
+  "auth token --hostname ghe.example.com") echo tok-ghe ;;
+  "auth token --hostname "*) echo tok-enterprise ;;
+  *) exit 1 ;;
+esac
+"""
+
+
 def test_the_token_is_the_one_gh_holds_for_the_host(tmp_path: Path) -> None:
-    executable(
-        tmp_path / "gh",
-        '#!/bin/sh\n[ "$*" = "auth token --hostname ghe.example.com" ] && echo tok-ghe && exit 0\nexit 1\n',
-    )
+    executable(tmp_path / "gh", _GH)
     with mock.patch.dict(os.environ, {"PATH": f"{tmp_path}:{os.environ['PATH']}"}):
         assert canopy_github.gh_token("ghe.example.com") == "tok-ghe"
-        with pytest.raises(canopy_github.InputError, match=re.escape("run: gh auth login --hostname github.com")):
-            canopy_github.gh_token("github.com")
+
+
+def test_no_token_is_read_for_a_host_gh_is_not_logged_in_to(tmp_path: Path) -> None:
+    executable(tmp_path / "gh", _GH)
+    with (
+        mock.patch.dict(os.environ, {"PATH": f"{tmp_path}:{os.environ['PATH']}"}),
+        pytest.raises(canopy_github.InputError, match=re.escape("run: gh auth login --hostname attacker.example")),
+    ):
+        canopy_github.gh_token("attacker.example")
+
+
+def test_a_redirect_is_refused_and_the_token_does_not_follow_it() -> None:
+    _Listener.heard.clear()
+    with serving(_Listener) as listener, serving(_Redirect) as url:
+        _Redirect.to = listener
+        with pytest.raises(canopy_github.GitHubError, match="HTTP 302") as refused:
+            canopy_github.Client(url, "t").query("query Viewer { viewer { login } }", {})
+    assert refused.value.certain
+    assert not _Listener.heard
 
 
 def test_the_token_goes_only_in_the_header(github: tuple[Fake, str]) -> None:
@@ -471,7 +549,7 @@ def test_a_reply_to_a_comment_the_pr_has_no_thread_for_posts_nothing(github: tup
     assert code == 2
     assert "no review thread with comment 999" in err
     assert "AddReview" not in fake.ops()
-    assert lines == [{"kind": "as", "login": "me"}]
+    assert lines == [{"kind": "as", "login": "me"}, {"kind": "end", "submitted": False}]
 
 
 def test_a_pending_review_of_the_posters_own_fails_the_post_and_posts_nothing(github: tuple[Fake, str]) -> None:
@@ -511,6 +589,26 @@ def test_a_submit_that_may_have_reached_github_prints_no_end(github: tuple[Fake,
     assert "Delete" not in fake.ops()
 
 
+def test_a_pending_review_opened_without_a_reply_is_deleted(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.fail["AddReview"] = "lost"
+    code, lines, _ = send(url, {"pr": PR, "replies": [{"comment": 501, "text": "Renamed."}]})
+    assert code == 1
+    assert lines[-1] == {"kind": "end", "submitted": False}
+    assert [r.state for r in fake.pulls["acme", "api", 7].reviews] == ["COMMENTED"]
+    assert "Reply" not in fake.ops()
+
+
+def test_a_reply_with_no_login_posts_nothing(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.viewer = ""
+    code, lines, err = send(url, {"pr": PR, "delete_pending": "PRR_9", "body": "Fixed CI."})
+    assert code == 1
+    assert "no viewer's login" in err
+    assert lines == [{"kind": "end", "submitted": False}]
+    assert fake.ops() == ["Viewer"]
+
+
 def test_a_failure_before_the_review_is_opened_posted_nothing(github: tuple[Fake, str]) -> None:
     fake, url = github
     fake.fail["Threads"] = "500"
@@ -547,11 +645,12 @@ def test_a_pending_review_already_gone_is_passed_over(github: tuple[Fake, str]) 
 def test_only_the_posters_own_pending_review_is_deleted(github: tuple[Fake, str], review: Review, message: str) -> None:
     fake, url = github
     fake.pulls["acme", "api", 7].reviews.append(review)
-    code, _, err = send(url, {"pr": PR, "delete_pending": "PRR_9", "body": "Fixed CI."})
+    code, lines, err = send(url, {"pr": PR, "delete_pending": "PRR_9", "body": "Fixed CI."})
     assert code == 2
     assert message in err
     assert "Delete" not in fake.ops()
     assert "AddReview" not in fake.ops()
+    assert lines[-1] == {"kind": "end", "submitted": False}
 
 
 def test_a_tickets_draft_posts_one_issue_comment(github: tuple[Fake, str]) -> None:

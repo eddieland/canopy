@@ -11,7 +11,8 @@ On stdout, one JSON line each: `as`, the login it posts as; for a PR, `pending`,
 id, once it has one; once it is submitted, `comment` for each reply (the comment it answered, the new comment's id and
 URL) and `review` (its id and URL); for an issue, `comment`; last, `end`, saying whether it submitted.
 `"submitted": false` is printed only when nothing was posted, with `pending` naming a pending review it could not
-delete. No `end` line means the outcome is unknown: the submit may have reached GitHub.
+delete; a pending review GitHub may have opened without saying so is looked for and deleted. No `end` line means the
+outcome is unknown: the submit may have reached GitHub.
 
 It never approves, requests changes, resolves a thread, or deletes a review but the pending one it is handed.
 
@@ -64,6 +65,13 @@ query PullRequestId($owner: String!, $name: String!, $number: Int!) {
 _ISSUE_ID = """
 query IssueId($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) { issue(number: $number) { id } }
+}
+"""
+_PENDING = """
+query PendingReviews($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) { reviews(states: [PENDING], first: 10) { nodes { id author { login } } } }
+  }
 }
 """
 _REVIEW = """
@@ -177,13 +185,15 @@ def run(
         print(f"canopy-post-github: {e}", file=sys.stderr)  # noqa: T201
         return 2
     try:
-        login = text(obj(client.query(_VIEWER, {}).get("viewer"), "viewer").get("login"))
+        login = _id(obj(client.query(_VIEWER, {}).get("viewer"), "viewer").get("login"), "viewer's login")
         out.line({"kind": "as", "login": login})
         if isinstance(request, Review):
             post_review(client, request, login, out)
         else:
             post_comment(client, request, out)
     except InputError as e:
+        # Refused before anything was opened, so nothing was posted.
+        out.line({"kind": "end", "submitted": False})
         print(f"canopy-post-github: {e}", file=sys.stderr)  # noqa: T201
         return 2
     except GitHubError as e:
@@ -246,7 +256,7 @@ def _text(value: object, what: str) -> str:
     return value
 
 
-def post_review(client: Client, review: Review, login: str | None, out: Out) -> None:
+def post_review(client: Client, review: Review, login: str, out: Out) -> None:
     """Post `review`'s drafts as one comment review, printing as the module says.
 
     Raises:
@@ -260,12 +270,18 @@ def post_review(client: Client, review: Review, login: str | None, out: Out) -> 
     if missing:
         raise InputError(f"{pr.url} has no review thread with comment {', '.join(map(str, missing))}")
     variables = {"owner": pr.owner, "name": pr.name, "number": pr.number}
-    pr_id = text(obj(_repository(client, _PR_ID, variables).get("pullRequest"), "pullRequest").get("id"))
+    pr_id = _id(obj(_repository(client, _PR_ID, variables).get("pullRequest"), "pullRequest").get("id"), "PR's id")
     if review.delete_pending is not None:
         _delete_left(client, review.delete_pending, pr_id, login)
-    added = obj(client.query(_ADD_REVIEW, {"pr": pr_id}).get("addPullRequestReview"), "addPullRequestReview")
-    opened = obj(added.get("pullRequestReview"), "pullRequestReview")
-    pending = text(opened.get("id"))
+    try:
+        added = obj(client.query(_ADD_REVIEW, {"pr": pr_id}).get("addPullRequestReview"), "addPullRequestReview")
+        opened = obj(added.get("pullRequestReview"), "pullRequestReview")
+        pending = _id(opened.get("id"), "pending review's id")
+    except GitHubError as e:
+        if not e.certain:
+            # GitHub may have opened it, and the next post could open no other while it stands.
+            _abandon_unseen(client, pr, login, out)
+        raise
     out.line({"kind": "pending", "review": pending, "id": number(opened.get("fullDatabaseId"))})
     posted: list[Mapping[str, object]] = []
     try:
@@ -294,11 +310,26 @@ def post_review(client: Client, review: Review, login: str | None, out: Out) -> 
     out.line({"kind": "end", "submitted": True})
 
 
+def _id(value: object, what: str) -> str:
+    """`value` as an id GitHub sent, so a reply missing one is never passed on as null.
+
+    Returns:
+        The id.
+
+    Raises:
+        GitHubError: There is none, so GitHub's reply is not the shape asked for.
+    """
+    found = text(value)
+    if not found:
+        raise GitHubError(f"GitHub's reply has no {what}", certain=False)
+    return found
+
+
 def _repository(client: Client, document: str, variables: Mapping[str, object]) -> Mapping[str, object]:
     return obj(client.query(document, variables).get("repository"), "repository")
 
 
-def _delete_left(client: Client, review_id: str, pr_id: str | None, login: str | None) -> None:
+def _delete_left(client: Client, review_id: str, pr_id: str, login: str) -> None:
     """Delete the pending review an earlier post left, if it is still that: pending, on this PR, the poster's own.
 
     Raises:
@@ -324,7 +355,23 @@ def _delete_left(client: Client, review_id: str, pr_id: str | None, login: str |
     client.query(_DELETE, {"review": review_id})
 
 
-def _abandon(client: Client, pending: str | None, out: Out) -> None:
+def _abandon_unseen(client: Client, pr: Ref, login: str, out: Out) -> None:
+    """Delete the poster's own pending review on `pr`, which GitHub may have opened without saying so."""
+    variables = {"owner": pr.owner, "name": pr.name, "number": pr.number}
+    try:
+        found = obj(_repository(client, _PENDING, variables).get("pullRequest"), "pullRequest")
+    except GitHubError:
+        return
+    for node in items(obj(found.get("reviews"), "reviews").get("nodes")):
+        author = node.get("author")
+        by = text(author.get("login")) if isinstance(author, dict) else None
+        pending = text(node.get("id"))
+        if by == login and pending:
+            _abandon(client, pending, out)
+            return
+
+
+def _abandon(client: Client, pending: str, out: Out) -> None:
     try:
         client.query(_DELETE, {"review": pending})
     except GitHubError:
