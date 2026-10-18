@@ -31,6 +31,7 @@ const ENTRY: MemoryEntry = {
     wrong_at: null,
     wrong_run_id: null,
     promoted_from: null,
+    origin: null,
     private: false,
 }
 
@@ -41,6 +42,7 @@ function proposal(entry: Partial<MemoryEntry>): MemoryProposal {
         run_status: 'done',
         private: false,
         ticket_done: true,
+        expires_at: '2026-10-22T10:00:00Z',
     }
 }
 

@@ -188,7 +188,7 @@ export const ROW_COLUMNS = {
      */
     memory: [
         ['state', '6rem'],
-        ['id', '5rem'],
+        ['id', '6rem'],
         ['key', FREE],
         ['use', '11rem', 1],
         ['age', AGE, 2],
