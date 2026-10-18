@@ -356,6 +356,11 @@ class TicketDetail(_Model):
     """Its latest runs, newest first."""
     messages: list[Message]
     """Its conversation: the latest 100 messages, oldest first."""
+    forgotten_at: datetime | None = None
+    """When the operator last forgot its work (DESIGN §22); None if never."""
+    forgotten_message_id: int | None = None
+    """The newest message from before that forget, or None: the messages up to it are history the loop no longer
+    reads, kept for the operator."""
     decisions: list[Decision]
     """The latest 20 decisions about it across ticks, newest first: why the loop did, or did not, work it."""
     cost: CostTotal

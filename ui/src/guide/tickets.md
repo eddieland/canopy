@@ -61,10 +61,11 @@ The ticket's actions sit on its Work panel and on its attention item. Hover over
   worktrees, as `canopy stop KEY --now`. The run ends `stopped` and still counts toward the ticket's limits. Use it
   when a worker is plainly lost; the meter runs while you watch.
 - **Forget**, as `canopy forget KEY`: canopy drops what it knows of the ticket's branch, PRs, and phase, so its next
-  implement starts over on a new branch. Type the key to confirm. Its runs and conversation stay, and so do its
-  attempt counts. Closing its PRs and deleting its branch on origin is yours to do, and until you do, the overseer
-  will find them again and the ticket can't start over. canopy refuses while a run is on it, and for a ticket a split
-  made children from.
+  implement starts over on a new branch. Type the key to confirm. Its runs and attempt counts stay. So does its
+  conversation, but the loop stops reading the old part, and so does the page: those messages fold away under a line
+  saying when you forgot it, with **Show N earlier messages** for when you want the history back. Closing its PRs
+  and deleting its branch on origin is yours to do, and until you do, the overseer will find them again and the
+  ticket can't start over. canopy refuses while a run is on it, and for a ticket a split made children from.
 
 ## Allowing one more run
 

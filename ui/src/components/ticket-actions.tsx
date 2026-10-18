@@ -143,8 +143,9 @@ function ForgetChallenge({
         >
             <p className="text-xs text-foreground">
                 canopy drops what it knows of {ticketKey}&apos;s branch, PRs, and phase, and its next implement starts
-                over on a new branch. Its runs and conversation stay, and its runs still count toward the attempt
-                limits. Closing its PRs and deleting its branch on origin stay yours. This cannot be undone here.
+                over on a new branch. Its runs stay, and still count toward the attempt limits. Its conversation stays
+                too, folded away on its page, since no worker reads it again. Closing its PRs and deleting its branch on
+                origin stay yours. This cannot be undone here.
             </p>
             <label className="panel-label" htmlFor="forget-confirm">
                 Type {ticketKey} to confirm

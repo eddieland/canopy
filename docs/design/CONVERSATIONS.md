@@ -190,7 +190,8 @@ private, from the operator's shell or the web UI's Forget (below), and:
   (D030); a ticket at its implement limit needs `canopy grant` (below) or the limit raised in config, and `forget` says
   so. The comment and mirror cursors stay, so tracker comments already handled stay handled. The message cursor stays,
   and the boundary overrules it. The start record stays: a started ticket stays started, a stopped one stopped. `show`
-  prints the whole history and when the work was forgotten.
+  prints the whole history and when the work was forgotten. The web UI shows the conversation as the loop reads it: the
+  messages from before the forget fold away under a line saying when, and open on asking.
 - holds the dispatch lock, which a dispatch holds from its plan through its run's insert, so a dispatch that read the
   old branch cannot record it again after `forget` commits.
 - touches nothing outside the journal. The old PR and the branch on origin are the operator's to close and delete, and

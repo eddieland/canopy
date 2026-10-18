@@ -220,6 +220,13 @@ test('forget asks for the key typed out, then forgets the branch and PR', async 
     )
     await expect(challenge).toHaveCount(0)
     await expect(page.locator('dt:text-is("branch") + dd')).toHaveText('none')
+    // Its conversation reads as the loop's does now: what came before folds away, kept for the asking.
+    const thread = page.getByTestId('ticket-conversation')
+    const earlier = thread.getByText('Remove it: the mobile app moved to v2 last week.')
+    await expect(thread.getByText(/^no messages since its work was forgotten/u)).toBeVisible()
+    await expect(earlier).toHaveCount(0)
+    await thread.getByRole('button', { name: 'Show 3 earlier messages' }).click()
+    await expect(earlier).toBeVisible()
 })
 
 test('starting a ticket from the list opens it, private', async ({ page }) => {
