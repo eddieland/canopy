@@ -57,6 +57,13 @@ who can add your queue label, whose replies may resume blocked work (`trust.auth
 may send a worker back to a PR (`trust.trusted_reviewers`). Anyone else's review waits on [Attention](attention) for
 your word.
 
+Except for one text, which can't be data: the ticket. Its description is the task, the one thing a worker is there
+to do, so nothing in canopy can tell an honest request from one written to turn your agent against you. Whoever writes
+your tickets steers your agents, under your credentials. So never point canopy at a tracker where people you don't
+trust can file tickets, such as the issues of a public GitHub repository. Reading a ticket before you label it doesn't
+save you either: its author can edit it afterwards, and every run reads it fresh. The queue label decides which
+tickets get worked, not who wrote them.
+
 The aim is to keep the worst case at a branch nobody merged. No agent has web tools, canopy loads its agent
 definitions from its own copy rather than the repository being worked on, and workers can run in an OS sandbox if you
 set one up. The full argument, written to be handed to a security reviewer, is the

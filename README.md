@@ -110,8 +110,10 @@ workspace to a first dry tick, with the sandbox if you want it: [docs/QUICKSTART
    - writes the workspace's `canopy-workspace.toml`;
    - clones the repository under `repos/`.
 
-   Then set `tracker.query` in `canopy-workspace.toml`. canopy writes nothing into your repositories and installs
-   nothing else: agent runs load its agent definitions and skills from its own directory (D016, D040).
+   Then set `tracker.query` in `canopy-workspace.toml`. Point it only at a tracker where everyone who can file a
+   ticket is someone you trust, never at a public repository's issues: a ticket is the task, so its author steers your
+   agents, with your credentials. canopy writes nothing into your repositories and installs nothing else: agent runs
+   load its agent definitions and skills from its own directory (D016, D040).
 
 5. **Run it.** Add your label (`agent-ready-<you>` by default) to a ticket, then run
    `canopy loop --dry-run --ticks 1` in the workspace and read the plan.
