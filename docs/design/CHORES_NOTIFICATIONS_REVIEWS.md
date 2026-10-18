@@ -655,7 +655,7 @@ PR, reviewing each new commit until it merges, is deferred as more than MVP need
   ends `reviewed` when a review of the PR ends `done`, or when `canopy review run` refuses `reviewed` for it (an
   existing review answers it); `merged`, `closed`, or `unknown_repo` when the overseer finds the PR merged, closed, or
   in none of the workspace's cloned repositories before a review; and `stopped` when the operator ends it.
-- `canopy start URL --review`, or the web UI's pull requests page, makes one; `canopy stop URL` ends it, a review
+- `canopy start URL --review`, or the web UI's reviews page, makes one; `canopy stop URL` ends it, a review
   already running finishing. `start` on a PR without `--review` is refused `unsupported`, so a missing flag never turns
   a review into work on someone else's branch.
 - Both refuse as `inside_run` when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `start`, `reply`, and `grant` do: a
