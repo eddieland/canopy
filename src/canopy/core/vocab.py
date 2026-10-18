@@ -1,4 +1,4 @@
-"""The journal's closed vocabularies: run, tick, start, and plan statuses, run kinds and reasons, phases, and pools.
+"""The journal's closed vocabularies: run, tick, start, plan, and draft statuses, run kinds and reasons, and more.
 
 Each is a `StrEnum`, so a member is the string the journal stores and compares equal to it, and a misspelled one is a
 type error rather than a silent wrong decision. Code that branches on one matches it with `typing.assert_never` in the
@@ -215,3 +215,82 @@ class MemoryAuthor(StrEnum):
 
     WORKER = "worker"
     OPERATOR = "operator"
+
+
+class ReplyMode(StrEnum):
+    """`trust.review_replies`, and what a run was rendered under, `run_replies.mode` (DESIGN §29)."""
+
+    # Workers draft every comment they would post; the operator sends them.
+    APPROVE = "approve"
+    # Workers post their own comments, marked.
+    POST = "post"
+
+
+class DraftKind(StrEnum):
+    """Where a draft goes, `drafts.kind` (DESIGN §29)."""
+
+    # A reply on a PR's review thread.
+    THREAD = "thread"
+    # A PR's one top-level comment: the body of the review its drafts are sent as.
+    PR = "pr"
+    # A comment on the ticket's issue.
+    TICKET = "ticket"
+
+
+class DraftStance(StrEnum):
+    """What a thread's draft says the run did about it, `drafts.stance` (DESIGN §29)."""
+
+    CHANGED = "changed"
+    DECLINED = "declined"
+    ANSWERED = "answered"
+
+
+class DraftStatus(StrEnum):
+    """Where a draft stands, `drafts.status` (DESIGN §29)."""
+
+    # Waiting on a whole read of its PR before it can be sent.
+    UNCHECKED = "unchecked"
+    # Checked, and the operator's to send, edit, or drop.
+    WAITING = "waiting"
+    # The read did not return the thread it names, or its PR is not the run's.
+    REFUSED = "refused"
+    # A later run's draft for the same thread, PR, or ticket replaced it.
+    SUPERSEDED = "superseded"
+    DROPPED = "dropped"
+    # Claimed by a send that is posting it now.
+    SENDING = "sending"
+    # A send ended without saying whether it posted; a read, or the operator, settles it.
+    UNCONFIRMED = "unconfirmed"
+    SENT = "sent"
+
+
+class DraftAuthor(StrEnum):
+    """Who wrote a version of a draft's text, `draft_versions.author`: the run its first, the operator any later."""
+
+    WORKER = "worker"
+    OPERATOR = "operator"
+
+
+class PrState(StrEnum):
+    """A PR's state as canopy's reader last saw it, `observed_prs.state` (DESIGN §29)."""
+
+    OPEN = "open"
+    MERGED = "merged"
+    CLOSED = "closed"
+
+
+class ReviewItem(StrEnum):
+    """What an observed review row is, `observed_reviews.item` (DESIGN §29)."""
+
+    REVIEW = "review"
+    COMMENT = "comment"
+
+
+class ReviewState(StrEnum):
+    """A review's state as GitHub reports it, `observed_reviews.state` (DESIGN §29)."""
+
+    PENDING = "pending"
+    COMMENTED = "commented"
+    APPROVED = "approved"
+    CHANGES_REQUESTED = "changes_requested"
+    DISMISSED = "dismissed"
