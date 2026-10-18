@@ -744,15 +744,17 @@ the build to answering its reviewers. With M54, that makes a round of feedback o
   a red build still reads as one. They are named rather than read off the cursors, since three of them have no cursor
   and the cooldown below must tell a run for CI alone.
 - **One run for a round.** When a tick finds more than one reason on a unit, the unit's phase is the first in §7's
-  table, and its one `resume` carries every reason, each with its cursors. A failed check a notice holds is no reason
-  (Notices to workers, above): a `resume` sent for anything else on the unit leaves that check, and the `ci` cursor,
-  alone. Joint runs are as before: a run that moves a unit's cursor names one repository.
+  table, and its one `resume` carries every reason, each with its cursors. `retarget` has no row there: the overseer
+  reads that the blocker merged (§10), the harness cannot (D003), and the unit's phase is whatever its PR's state makes
+  it, so a stacked PR that is also red gets one `resume` with `ci` and `retarget`. A failed check a notice holds is no
+  reason (Notices to workers, above): a `resume` sent for anything else on the unit leaves that check, and the `ci`
+  cursor, alone. Joint runs are as before: a run that moves a unit's cursor names one repository.
 - **Guards.** Beside step 1's, in their order:
   - `bad_kind`, first: `--kind fix-ci`, naming `resume --reason ci`. The value stays in the run kinds only so old runs
     read.
-  - `bad_reason`, after `bad_request`: a `resume` with no `--reason`; a `--reason` on any other kind; or a cursor
-    without its reason, from the table. A reason needs no cursor, since a `ci` after a triage (§23) follows the cursor
-    the triage moved.
+  - `bad_reason`, after `bad_request`: a `resume` with no `--reason`; a `--reason` on any other kind; a cursor
+    without its reason, from the table; or `retarget` with `--base`, since `--base` says the blocker is still open. A
+    reason needs no cursor, since a `ci` after a triage (§23) follows the cursor the triage moved.
   - `cooldown`: a `resume` whose only reason is `ci`, less than `policy.ci_cooldown_minutes` (default 30) after the
     latest run covering a named unit that worked on CI ended: a `resume` with `ci` among its reasons, or an old
     `fix-ci`. A `resume` with any other reason is not held: it would run anyway, and fixing the build on the same
@@ -769,12 +771,15 @@ the build to answering its reviewers. With M54, that makes a round of feedback o
 - **Removed keys.** `policy.max_fix_ci_attempts`, whose error says to raise `max_resume_attempts`, and
   `policy.fix_ci_cooldown_minutes`, whose error names `ci_cooldown_minutes` (§12).
 - **One prompt.** `worker-resume.md` and its private variant gain fix-ci's section on reading a failed check and its
-  log, CI logs being untrusted text, under the reason `ci`. `{{REASONS}}` names the run's reasons, and the worker
-  works the sections they name; an override without it still renders, since the context names the work too. The
-  `fix-ci` prompts go. While the operator's prompt overrides hold `worker-fix-ci.md` or `worker-fix-ci-private.md`,
-  every `resume` is `bad_prompt`, naming the file and saying to merge what it adds into the resume override and remove
-  it, so the operator's CI instructions are never dropped silently. A `resume` for CI alone gets the approved plan's
-  copy (§25), as every `resume` does: PLANNING's open question on `fix-ci` closes with the kind.
+  log, CI logs being untrusted text, under the reason `ci`. `{{REASONS}}` names the run's reasons, and the worker works
+  the sections they name. An override without it still renders: step 3 refuses an override that drops a check or an
+  operator instruction, and the reasons are neither, since the context names the same work. The `fix-ci` prompts go.
+  While the operator's prompt overrides hold `worker-fix-ci.md` or `worker-fix-ci-private.md`, every `resume` is
+  `bad_prompt` when its prompt renders (step 3, after every guard), naming the file and saying to merge what it adds
+  into the resume override and remove it, so the operator's CI instructions are never dropped silently. That stops every
+  `resume`, not only CI's, so the refusal also records a `fix_ci_override` attention item (§14) on the unit, as an
+  `attempt_limit` refusal records its own, and a held unit never looks idle. A `resume` for CI alone gets the approved
+  plan's copy (§25), as every `resume` does: PLANNING's open question on `fix-ci` closes with the kind.
 
 Rejected: a cooldown after every run that worked on CI, whatever the next one is for (it would hold feedback a reviewer
 waits on, behind a build the same run can fix); a limit per reason (the operator chose one); reasons read from the

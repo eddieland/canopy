@@ -1700,7 +1700,7 @@ REQUIREMENTS R4, DESIGN §7 and §8, TRUST_MODEL T3, D030. Needs M3. Asked for b
 should be a part of `resume`, one kind of worker for everything that comes back to a PR, so that a round of feedback is
 one run and, with M54, one plan. Today a PR with a red check and a new review comment takes two runs, each with its own
 prompt, cooldown, and attempt limit, and each pushing to the same branch. Designed in DESIGN §8 (One resume for what
-comes back to a PR), which the PR that builds it folds into §7, §8, and the other sections that name `fix-ci`.
+comes back to a PR), which the PR that builds it folds into §7, §8, §10, and the other sections that name `fix-ci`.
 
 - **One kind.** `ci_red` dispatches `resume --reason ci`, with the failed checks named in its context as fix-ci's are
   today. When the same tick sees review feedback, a reply, or a conflict on the unit, one `resume` takes all of it,
@@ -1714,7 +1714,7 @@ comes back to a PR), which the PR that builds it folds into §7, §8, and the ot
 - **One prompt.** `worker-resume.md` and its private variant gain fix-ci's section on reading a failed check and its
   log, under the reason `ci`, and `{{REASONS}}` names the run's; `worker-fix-ci.md` and its private variant go. While
   a prompt override of either fix-ci file exists, every `resume` is `bad_prompt`, naming the file and what to merge
-  into the resume override.
+  into the resume override, and records a `fix_ci_override` attention item on the unit.
 - **One limit, higher.** `policy.max_resume_attempts` bounds every `resume` of a unit, whatever it was for, an old
   `fix-ci` run counted among them (D030: derived from `runs`, no reset), with its default raised to 6, more than today's
   two limits together (2 and 3), since one run now does what two did. The operator chose one simpler limit (2026-10-17),
@@ -1737,10 +1737,11 @@ comes back to a PR), which the PR that builds it folds into §7, §8, and the ot
   gets the approved plan's copy (M44), as every `resume` does.
 - TRUST_MODEL T3: one `resume` limit per unit in place of two, and the cooldown on CI-only runs.
 - Tests with the fakes: a red check dispatches `resume --reason ci` with the checks named; a red check and a review
-  comment in one tick make one run with both reasons; `--kind fix-ci` refused; each `bad_reason`; the one limit
-  counting old `fix-ci` runs and every `resume`, with `fix-ci` grants; `canopy grant KEY fix-ci` refused; the removed
-  keys' errors; a `fix-ci` prompt override refusing every `resume`; the cooldown holding a CI-only `resume` after a
-  `resume` with `ci` or an old `fix-ci`, and not one with review feedback; the overseer's state block, a snapshot.
+  comment in one tick make one run with both reasons; `--kind fix-ci` refused; each `bad_reason`; the one limit counting
+  old `fix-ci` runs and every `resume`, with `fix-ci` grants; `canopy grant KEY fix-ci` refused; the removed keys'
+  errors; a `fix-ci` prompt override refusing every `resume`, with its attention item; the cooldown holding a CI-only
+  `resume` after a `resume` with `ci` or an old `fix-ci`, and not one with review feedback; the overseer's state block,
+  a snapshot.
 
 Accept: the tests above pass, and the design names `fix-ci` only as an old run's kind. Live: on one of the loop's PRs
 with a red check and a new review comment from a trusted reviewer, the next tick sends one `resume` with reasons `ci`
