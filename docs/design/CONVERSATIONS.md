@@ -524,6 +524,10 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   call's reasoning shows only with OpenCode's `--thinking`, which every default template passes, so a transcript says
   why a call made the tool calls it did, not only that it made them; a provider that redacts its reasoning shows none.
   A subagent's calls are its own session's (§13), so a `task` call shows as one tool call with its answer.
+- A run or chore run that ended `failed`, `crashed`, or `unknown` names in its Run panel what its session ended on:
+  the transcript's last runtime error, else its last failed or refused tool call, which shows its row. Why it ended is
+  most of why its page is opened, and the transcript has it last. Not a `timeout`, `unpushed`, or `stopped` run: the
+  clock, a branch, or the operator ended those, and a last error would only look like the cause.
 - OpenCode reports a shell call completed whatever its exit, so the UI marks a canopy command refused, with its
   guard, by reading canopy's own `Error: <verb> refused (<guard>)` line from its output; no other command's.
 - Not on the event stream, since a log can be large: the UI reads a transcript again when the stream moves its run's
