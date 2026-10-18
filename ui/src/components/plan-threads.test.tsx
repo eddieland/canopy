@@ -117,15 +117,15 @@ describe('PlanThreads', () => {
         const lost = [thread('x', 'step one'), thread('y', 'step two')]
         const props = renderList({ threads: lost })
         expect(screen.getByText('2 on passages gone from the plan')).toBeDefined()
-        fireEvent.click(screen.getByRole('button', { name: 'Resolve all 2' }))
+        fireEvent.click(screen.getByRole('button', { name: 'resolve all 2' }))
         expect(props.onResolveGone).toHaveBeenCalledOnce()
         cleanup()
 
         renderList({ threads: lost.slice(0, 1) })
-        expect(screen.queryByRole('button', { name: /Resolve all/u })).toBeNull()
+        expect(screen.queryByRole('button', { name: /resolve all/u })).toBeNull()
         cleanup()
         renderList({ threads: lost, editable: false })
-        expect(screen.queryByRole('button', { name: /Resolve all/u })).toBeNull()
+        expect(screen.queryByRole('button', { name: /resolve all/u })).toBeNull()
     })
 
     it('leaves out the thread shown at its passage instead', () => {
@@ -154,13 +154,13 @@ describe('PlanThreads', () => {
 })
 
 describe('ThreadCard', () => {
-    it('offers Reply on the open card, or one whose passage is gone, and nothing to do when read only', () => {
+    it('offers reply on the open card, or one whose passage is gone, and nothing to do when read only', () => {
         renderCard({ active: false })
-        expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull()
-        expect(screen.getByRole('button', { name: 'Resolve' })).toBeDefined()
+        expect(screen.queryByRole('button', { name: 'reply' })).toBeNull()
+        expect(screen.getByRole('button', { name: 'resolve' })).toBeDefined()
         cleanup()
         renderCard({ active: false, lost: true })
-        expect(screen.getByRole('button', { name: 'Reply' })).toBeDefined()
+        expect(screen.getByRole('button', { name: 'reply' })).toBeDefined()
         cleanup()
         renderCard({ editable: false })
         expect(screen.queryAllByRole('button').map((button) => button.textContent)).toEqual(['the cache'])
@@ -180,33 +180,38 @@ describe('ThreadCard', () => {
         expect(screen.queryByRole('button', { name: 'the cache' })).toBeNull()
     })
 
+    it('says each of its actions in words, as a row does, never by an icon alone', () => {
+        renderCard({ thread: thread('t1', 'the cache', { replies: [{ id: 'r1', body: 'Agreed.', at: AT }] }) })
+        const words = screen.getAllByRole('button').map((button) => button.textContent)
+        expect(words).toEqual(['the cache', 'resolve', 'delete', 'edit', 'edit', 'reply'])
+    })
+
     it('resolves an open thread, and reopens a resolved one', () => {
         const did = renderCard()
-        fireEvent.click(screen.getByRole('button', { name: 'Resolve' }))
+        fireEvent.click(screen.getByRole('button', { name: 'resolve' }))
         expect(did.onResolve).toHaveBeenCalledWith('t1', true)
         cleanup()
         const resolved = renderCard({ thread: thread('t1', 'the cache', { resolved: true }), active: false })
-        fireEvent.click(screen.getByRole('button', { name: 'Reopen' }))
+        fireEvent.click(screen.getByRole('button', { name: 'reopen' }))
         expect(resolved.onResolve).toHaveBeenCalledWith('t1', false)
         expect(screen.queryByRole('button', { name: 'Edit comment' })).toBeNull()
     })
 
-    it('asks before deleting, its focus on Keep, and gives the focus back to Delete when kept', () => {
+    it('asks before deleting, its focus on Keep, and gives the focus back to delete when kept', () => {
         const replies = [{ id: 'r1', body: 'Agreed.', at: AT }]
         const did = renderCard({ thread: thread('t1', 'the cache', { replies }) })
-        fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
+        fireEvent.click(screen.getByRole('button', { name: 'delete' }))
         expect(screen.getByRole('group', { name: 'Delete this comment and its replies?' })).toBeDefined()
         const keep = screen.getByRole('button', { name: 'Keep' })
         expect(document.activeElement).toBe(keep)
 
         fireEvent.keyDown(keep, { key: 'Escape' })
         expect(screen.queryByRole('button', { name: 'Keep' })).toBeNull()
-        expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Delete' }))
+        expect(document.activeElement).toBe(screen.getByRole('button', { name: 'delete' }))
         expect(did.onDelete).not.toHaveBeenCalled()
 
+        fireEvent.click(screen.getByRole('button', { name: 'delete' }))
         fireEvent.click(screen.getByRole('button', { name: 'Delete' }))
-        const confirm = screen.getAllByRole('button', { name: 'Delete' })
-        fireEvent.click(confirm.at(-1) as HTMLElement)
         expect(did.onDelete).toHaveBeenCalledWith('t1')
     })
 
@@ -235,7 +240,7 @@ describe('ThreadCard', () => {
 
     it('replies on the send key, and keeps the words when Escape leaves the reply for the plan', () => {
         const did = renderCard()
-        fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
+        fireEvent.click(screen.getByRole('button', { name: 'reply' }))
         expect(document.activeElement).toBe(field('Reply'))
 
         fireEvent.change(field('Reply'), { target: { value: 'Half a thought' } })
@@ -270,11 +275,11 @@ describe('AskForChanges', () => {
         const { rerender } = render(<AskForChanges threads={[]} starts={starts} edited={false} onAsk={onAsk} />)
         const ask = screen.getByRole<HTMLButtonElement>('button', { name: 'Ask for changes' })
         expect(ask.disabled).toBe(true)
-        expect(screen.getByText('0 open comments go with it')).toBeDefined()
+        expect(screen.queryByText(/go(es)? with Ask for changes/u)).toBeNull()
 
         const threads = [thread('a', 'the cache')]
-        rerender(<AskForChanges threads={threads} starts={starts} edited onAsk={onAsk} />)
-        expect(screen.getByText('1 open comment goes with it')).toBeDefined()
+        rerender(<AskForChanges threads={threads} starts={starts} edited note="Approving sends none." onAsk={onAsk} />)
+        expect(screen.getByText('1 open comment goes with Ask for changes. Approving sends none.')).toBeDefined()
         const note = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'On the whole plan' })
         fireEvent.change(note, { target: { value: 'Keep it short.' } })
         fireEvent.click(ask)
@@ -287,7 +292,7 @@ describe('AskForChanges', () => {
         const long = [thread('a', 'the cache', { body: 'x'.repeat(4000) })]
         render(<AskForChanges threads={long} starts={starts} edited={false} onAsk={onAsk} />)
         const over = changeRequest(long, starts).length - 4000
-        expect(screen.getByText(`${over} characters over a reply's bound: resolve or shorten some`)).toBeDefined()
+        expect(screen.getByText(`${over} characters over a reply's bound: resolve or shorten some.`)).toBeDefined()
         expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Ask for changes' }).disabled).toBe(true)
     })
 })

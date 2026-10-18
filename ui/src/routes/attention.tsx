@@ -1,11 +1,17 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { FileText } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { ApiError } from '@/api/client'
-import { attentionQuery, choreQuery, pullRequestQuery, ticketQuery, ticketsQuery } from '@/api/queries'
+import {
+    attentionQuery,
+    choreQuery,
+    pullRequestQuery,
+    ticketPlansQuery,
+    ticketQuery,
+    ticketsQuery,
+} from '@/api/queries'
 import type { AttentionItem } from '@/api/types'
 import { AllClear } from '@/components/all-clear'
 import { Age } from '@/components/age'
@@ -18,6 +24,7 @@ import { useDismissFinding } from '@/components/dismiss-finding'
 import { GrantLimits } from '@/components/grant-limits'
 import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
+import { PlanCard } from '@/components/plan-card'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton, ThreadScroll } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReplyForm } from '@/components/reply-form'
@@ -26,7 +33,6 @@ import { Chip, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
-import { Button } from '@/components/ui/button'
 import { WorkingNow } from '@/components/working-now'
 import { answered } from '@/lib/acknowledged'
 import { bySeverity, severity } from '@/lib/attention'
@@ -235,9 +241,10 @@ function Answered() {
 }
 
 /**
- * The selected item: the ticket's actions and a grant for each limit it is stuck at, then its conversation and the
- * reply form; a chore's notes and the form for another, and for a finding the button to dismiss it; a PR's review
- * limit and its grant, for an item about a PR no ticket owns; or for an item about none of them, what it says.
+ * The selected item: for a plan waiting on the operator, its card first; the ticket's actions and a grant for each
+ * limit it is stuck at, then its conversation and the reply form; a chore's notes and the form for another, and for a
+ * finding the button to dismiss it; a PR's review limit and its grant, for an item about a PR no ticket owns; or for
+ * an item about none of them, what it says.
  */
 function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
     return (
@@ -245,8 +252,9 @@ function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
             {item.finding && item.chore !== null ? (
                 <FindingHead item={item} chore={item.chore} done={done} />
             ) : (
-                <Head item={item} done={done} action={<OpenPlan item={item} />} />
+                <Head item={item} done={done} />
             )}
+            {item.reason === 'plan_review' && item.ticket_key !== null && <PlanReview ticketKey={item.ticket_key} />}
             {item.ticket_key !== null && <Thread ticketKey={item.ticket_key} />}
             {item.chore !== null && <ChoreThread name={item.chore} />}
             {item.pr !== null && <PullRequestLimits url={item.pr} />}
@@ -255,19 +263,20 @@ function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
     )
 }
 
-/** For a plan waiting on the operator, the link to its page, where it is read and decided (DESIGN §25); else none. */
-function OpenPlan({ item }: { item: AttentionItem }) {
-    if (item.reason !== 'plan_review' || item.ticket_key === null) {
-        return null
+/**
+ * A plan waiting on the operator: its card, as the ticket's page shows it (`PlanCard`), with Approve and the link to
+ * its page, where it is read, commented on, and sent back (DESIGN §25). It is what the item asks for, so it comes
+ * before the ticket's actions and conversation.
+ */
+function PlanReview({ ticketKey }: { ticketKey: string }) {
+    const { data, error } = useQuery(ticketPlansQuery(ticketKey))
+    if (error instanceof ApiError) {
+        return <Notice error={error} className="border-b p-3" />
     }
-    return (
-        <Button asChild size="sm">
-            <Link to="/tickets/$key/plan" params={{ key: item.ticket_key }}>
-                <FileText />
-                Open plan
-            </Link>
-        </Button>
-    )
+    if (data === undefined) {
+        return <PanelSkeleton rows={2} className="min-h-44 border-b" />
+    }
+    return <PlanCard ticketKey={ticketKey} plans={data} bare />
 }
 
 /**

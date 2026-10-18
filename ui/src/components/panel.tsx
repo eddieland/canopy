@@ -183,6 +183,29 @@ export function PanelHeader({
 }
 
 /**
+ * A panel's foot: its actions, under a hairline, then the line that says what they will do or what one did. A `sticky`
+ * foot is the mirror of a sticky `PanelHeader`: it stays at the bottom of the page while its panel scrolls over it, as
+ * a document's actions do, so a long plan is decided from where it is read. What the keyboard moves to, and what the
+ * page scrolls into view, stops above it (`scroll-padding-bottom` on `.page-scroll` in src/index.css).
+ */
+export function PanelFooter({ sticky = false, className, ...props }: ComponentProps<'div'> & { sticky?: boolean }) {
+    return (
+        <div
+            data-sticky-foot={sticky ? '' : undefined}
+            className={cn(
+                'flex flex-col gap-2 border-t p-3',
+                // Inside the panel's border, so a radius a pixel smaller than the panel's.
+                'last:rounded-b-[calc(var(--radius-md)-1px)]',
+                // Over the panel's own content, so opaque.
+                sticky && 'sticky bottom-0 z-10 bg-surface',
+                className,
+            )}
+            {...props}
+        />
+    )
+}
+
+/**
  * A panel's list that grows without bound (decisions, runs, findings): past a fixed height it scrolls inside the panel,
  * so the panels under it stay in reach. A focusable region, so the keyboard scrolls it too; `label` names it.
  */

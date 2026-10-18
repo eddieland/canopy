@@ -88,6 +88,11 @@
     }
 }
 
+/* A panel's sticky foot (`PanelFooter`) covers the page's foot: what the page scrolls into view stops above it. */
+.page-scroll:has([data-sticky-foot]) {
+    scroll-padding-bottom: 8rem;
+}
+
 /* A panel body that scrolls past its height (PanelScroll): thin, not to crowd the rows; its color is the root's. */
 @utility panel-scroll {
     overflow-y: auto;
@@ -829,10 +834,15 @@
         /* A commented passage, on the accent's tint; the one open, or being commented on, deeper and underlined. */
         & .plan-comment {
             /* Clear of the sticky toolbar when a comment shows its passage: TOOLBAR_CLEARANCE in plan-editor.tsx. */
-            @apply cursor-pointer scroll-mt-12 rounded-xs bg-accent/14;
+            @apply cursor-pointer scroll-mt-20 rounded-xs bg-accent/14;
         }
         & .plan-comment-active {
             @apply bg-accent/28 underline decoration-accent decoration-2 underline-offset-4;
+        }
+        /* While what changed is marked (`.plan-changes` on the editor), a passage at rest drops its tint, so a word */
+        /* never wears a comment's tint and a change's at once; the open one keeps its own. */
+        .plan-changes & .plan-comment:not(.plan-comment-active) {
+            @apply bg-transparent;
         }
         /* What changed since the plan this one replaces (src/lib/plan-diff.ts): the words added on the diff's added */
         /* tint, those removed struck through on its removed tint, where they were. */
