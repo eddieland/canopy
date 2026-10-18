@@ -15,11 +15,11 @@ import click
 
 from canopy.cli.common import CliError, Group, open_context
 from canopy.cli.params import REPO, TICKET_KEY
-from canopy.core import conversation, db, memory, records
+from canopy.core import conversation, db, memory, memory_manage, records
 from canopy.core.memory_text import visible
 from canopy.core.vocab import MemoryMode, MemoryScope, MemoryStatus
 from canopy.infra import logs
-from canopy.memory import manage, search
+from canopy.memory import search
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -113,7 +113,7 @@ def cmd_forget(click_ctx: click.Context, memory_id: int) -> int:
     try:
         conversation.check_operator()
         ctx = open_context(click_ctx)
-        found, scrubbed = manage.forget(ctx.conn, memory_id)
+        found, scrubbed = memory_manage.forget(ctx.conn, memory_id)
     except conversation.Refused as r:
         raise CliError(f"forget refused ({r.guard}): {r.reason}") from None
     logs.for_tick(None).info("memory forgotten", extra={"memory": memory_id, "scope": found.scope})
@@ -134,7 +134,7 @@ def cmd_purge(click_ctx: click.Context, key: str | None, run_id: int | None, *, 
     try:
         conversation.check_operator()
         ctx = open_context(click_ctx)
-        scrubbed = manage.purge(ctx.conn, ticket=key, run=run_id, every=every)
+        scrubbed = memory_manage.purge(ctx.conn, ticket=key, run=run_id, every=every)
     except conversation.Refused as r:
         raise CliError(f"purge refused ({r.guard}): {r.reason}") from None
     what = f"ticket {key}'s runs" if key is not None else f"run {run_id}" if run_id is not None else "every memory"
@@ -157,7 +157,7 @@ def cmd_proposals(click_ctx: click.Context) -> int:
         click.echo("\nNo proposals wait on you.")
     for p in waiting:
         click.echo(f"\n{_provenance(ctx, p)}\n      {visible(p.body or '')}")
-        if p.run_id is not None and _private(ctx, p.run_id):
+        if memory_manage.from_private_run(ctx.conn, p):
             click.echo(
                 "      Warning: from a private ticket's run: its text may hold what you kept off the tracker. Promote "
                 "it only in words fit for every worker."
@@ -209,10 +209,8 @@ def cmd_promote(click_ctx: click.Context, memory_id: int, text: str | None, repo
     try:
         conversation.check_operator()
         ctx = open_context(click_ctx)
-        if repo is not None and ctx.ws.repo(repo) is None:
-            names = ", ".join(r.name for r in ctx.ws.repos) or "none yet"
-            raise CliError(f"promote refused: {repo!r} is not a repository in this workspace ({names})")
-        promoted = manage.promote(ctx.conn, ctx.config, memory_id, text=text, repo=repo)
+        repos = [r.name for r in ctx.ws.repos]
+        promoted = memory_manage.promote(ctx.conn, ctx.config, memory_id, text=text, repo=repo, repos=repos)
     except conversation.Refused as r:
         raise CliError(f"promote refused ({r.guard}): {r.reason}") from None
     lesson, source = promoted.lesson, promoted.source
@@ -224,7 +222,7 @@ def cmd_promote(click_ctx: click.Context, memory_id: int, text: str | None, repo
     )
     if promoted.superseded is not None:
         click.echo(f"It replaces lesson {promoted.superseded}, which was under the same key.")
-    if text is None and source.run_id is not None and _private(ctx, source.run_id):
+    if promoted.private:
         click.echo(
             "Warning: its text is from a private ticket's run, and may hold what you kept off the tracker. If it is "
             "not fit for every worker, forget the lesson and promote it again with --text."
@@ -244,7 +242,7 @@ def cmd_reject(click_ctx: click.Context, proposal_id: int) -> int:
     try:
         conversation.check_operator()
         ctx = open_context(click_ctx)
-        manage.reject(ctx.conn, ctx.config, proposal_id)
+        memory_manage.reject(ctx.conn, ctx.config, proposal_id)
     except conversation.Refused as r:
         raise CliError(f"reject refused ({r.guard}): {r.reason}") from None
     logs.for_tick(None).info("proposal rejected", extra={"proposal": proposal_id})
@@ -260,7 +258,7 @@ def cmd_renew(click_ctx: click.Context, lesson_id: int) -> int:
     try:
         conversation.check_operator()
         ctx = open_context(click_ctx)
-        due = manage.renew(ctx.conn, ctx.config, lesson_id)
+        due = memory_manage.renew(ctx.conn, ctx.config, lesson_id)
     except conversation.Refused as r:
         raise CliError(f"renew refused ({r.guard}): {r.reason}") from None
     logs.for_tick(None).info("lesson renewed", extra={"lesson": lesson_id})
@@ -284,11 +282,6 @@ def _origin(ctx: Context, lesson: records.Memory) -> str:
         return ""
     of = f" of {source.ticket_key}" if source.scope is MemoryScope.TICKET else ""
     return f" from {_kind(source.scope).lower()} {source.id}{of}"
-
-
-def _private(ctx: Context, run_id: int) -> bool:
-    run = db.get_run(ctx.conn, run_id)
-    return run is not None and bool(run["private"])
 
 
 def _search_run(ctx: Context, run_env: str, text: str, limit: int) -> int:
@@ -430,7 +423,7 @@ def _rendered(rendered: records.RunMemory) -> str:
     )
 
 
-def _print_checkpoint(scrubbed: manage.Scrubbed) -> None:
+def _print_checkpoint(scrubbed: memory_manage.Scrubbed) -> None:
     if not scrubbed.checkpointed:
         click.echo(
             "A reader held the journal's write-ahead log open, so the deleted text may stay in the log until SQLite's "

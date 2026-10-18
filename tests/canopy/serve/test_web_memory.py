@@ -1,15 +1,19 @@
-"""Agent memory in the web API (DESIGN §28, ROADMAP M50): each tier's mode in words, and what it holds, read only."""
+"""Agent memory in the web API (DESIGN §28, ROADMAP M50 and M52): each tier's mode in words, what it holds, and the
+operator's verbs on it, which are `canopy memory`'s."""
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING
+
+import pytest
 
 from canopy.core import db
 from canopy.core.vocab import RunKind
 from canopy.infra import resources
-from tests.canopy.helpers import BRANCH, KEY, context, in_tick, with_memory
-from tests.canopy.web_helpers import at, client, signed_in_client
+from tests.canopy.helpers import BRANCH, KEY, context, in_run, in_tick, with_memory
+from tests.canopy.web_helpers import ORIGIN, at, client, refused, signed_in_client
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -124,3 +128,131 @@ def test_the_overview_lists_lessons_reported_wrong_first_then_by_review_date(can
     )
     c, _ = signed_in_client(ctx)
     assert [lesson["id"] for lesson in c.get("/api/memory").json()["lessons"]] == [3, 2, 1]
+
+
+# A write to the mock needs no session, but an Origin naming the server (guard.py).
+WRITE = {"origin": ORIGIN}
+
+
+def test_promote_makes_a_proposal_a_lesson_recorded_and_served_to_no_run(backend: Backend) -> None:
+    c = client(None, backend)
+    promoted = c.post("/api/memory/5/promote", json={}, headers=WRITE).json()
+    lesson = promoted["lesson"]
+    # As written: the proposal's text and repository, the operator's now.
+    assert (lesson["scope"], lesson["key"], lesson["repo"], lesson["promoted_from"]) == (
+        "lesson",
+        "web-tests",
+        "web",
+        5,
+    )
+    assert lesson["text"] == promoted["source"]["text"]
+    assert (promoted["source"]["status"], promoted["superseded"], promoted["served"]) == ("pending", None, False)
+    overview = c.get("/api/memory").json()
+    assert [p["entry"]["id"] for p in overview["proposals"]] == [6]
+    assert lesson["id"] in [m["id"] for m in overview["lessons"]]
+
+
+def test_promote_takes_the_operators_words_and_repository_and_supersedes_under_the_key(backend: Backend) -> None:
+    c = client(None, backend)
+    # A note's lesson is every repository's unless one is named; a superseded note's text still teaches.
+    first = c.post("/api/memory/1/promote", json={}, headers=WRITE).json()
+    assert (first["lesson"]["repo"], first["source"]["scope"]) == (None, "ticket")
+    words = "  Wait on the payment iframe's load event in checkout.spec.ts. "
+    again = c.post("/api/memory/2/promote", json={"text": words, "repo": "mobile"}, headers=WRITE).json()
+    assert (again["lesson"]["text"], again["lesson"]["repo"]) == (words.strip(), "mobile")
+    assert again["superseded"] == first["lesson"]["id"]
+    # The notes stay their ticket's.
+    notes = c.get("/api/tickets/ABC-100/memory").json()["notes"]
+    assert {n["id"]: n["status"] for n in notes}[2] == "active"
+
+
+@pytest.mark.parametrize(
+    ("memory_id", "body", "guard"),
+    [
+        (999, {}, "unknown: no proposal or note has id 999"),
+        (8, {}, "unknown: no proposal or note has id 8"),
+        (7, {}, "not_pending: proposal 7 is superseded: promoted to lesson 8"),
+        (4, {"repo": "nowhere"}, "unknown_repo: 'nowhere' is not a repository in this workspace (api, mobile, web)"),
+        (4, {"text": "x" * 601}, "bad_text"),
+        # As written, the note's hand-written zero-width space is refused, as the CLI refuses it.
+        (3, {}, "bad_text"),
+        (4, {"text": "bad\u202etext"}, "bad_text"),
+    ],
+)
+def test_promote_is_refused_as_the_cli_refuses_it(
+    backend: Backend, memory_id: int, body: dict[str, str], guard: str
+) -> None:
+    c = client(None, backend)
+    assert refused(c.post(f"/api/memory/{memory_id}/promote", json=body, headers=WRITE)).startswith(guard)
+    assert len(c.get("/api/memory").json()["lessons"]) == 1
+
+
+def test_reject_ends_a_proposal_once(backend: Backend) -> None:
+    c = client(None, backend)
+    assert c.post("/api/memory/6/reject", headers=WRITE).json() == {"id": 6}
+    assert [p["entry"]["id"] for p in c.get("/api/memory").json()["proposals"]] == [5]
+    assert refused(c.post("/api/memory/6/reject", headers=WRITE)) == "not_pending: proposal 6 is invalid: rejected"
+    assert refused(c.post("/api/memory/6/promote", json={}, headers=WRITE)).startswith("not_pending")
+    assert refused(c.post("/api/memory/2/reject", headers=WRITE)) == "unknown: no proposal has id 2"
+
+
+def test_renew_pushes_a_lessons_review_out(backend: Backend) -> None:
+    c = client(None, backend)
+    renewed = c.post("/api/memory/8/renew", headers=WRITE).json()
+    due = datetime.fromisoformat(renewed["review_at"])
+    assert renewed["id"] == 8
+    assert abs(due - (datetime.now(UTC) + timedelta(days=90))) < timedelta(minutes=5)
+    assert refused(c.post("/api/memory/5/renew", headers=WRITE)) == "unknown: no lesson in force has id 5"
+
+
+def test_forget_needs_the_ref_typed_and_then_deletes_the_text(backend: Backend) -> None:
+    c = client(None, backend)
+
+    def text_of(memory_id: int) -> str | None:
+        notes = c.get("/api/tickets/ABC-100/memory").json()["notes"]
+        return {n["id"]: n["text"] for n in notes}[memory_id]
+
+    # The challenge is checked before anything is read: a wrong or missing ref forgets nothing.
+    for typed in ("2", "memory:20", "Memory:2"):
+        assert refused(c.post("/api/memory/2/forget", json={"confirm": typed}, headers=WRITE)) == (
+            "not_confirmed: type memory:2 to confirm forgetting its text"
+        )
+    assert c.post("/api/memory/2/forget", json={}, headers=WRITE).status_code == 422
+    assert text_of(2) is not None
+    forgot = c.post("/api/memory/2/forget", json={"confirm": "memory:2"}, headers=WRITE).json()
+    assert (forgot["id"], forgot["scope"], forgot["key"]) == (2, "ticket", "flaky-checkout")
+    assert text_of(2) is None
+    assert refused(c.post("/api/memory/2/forget", json={"confirm": "memory:2"}, headers=WRITE)).startswith("forgotten")
+    assert refused(c.post("/api/memory/2/promote", json={}, headers=WRITE)).startswith("forgotten")
+    assert refused(c.post("/api/memory/99/forget", json={"confirm": "memory:99"}, headers=WRITE)) == (
+        "unknown: no memory has id 99"
+    )
+    # Forgetting a lesson retires it.
+    assert c.post("/api/memory/8/forget", json={"confirm": "memory:8"}, headers=WRITE).json()["scope"] == "lesson"
+    assert c.get("/api/memory").json()["lessons"] == []
+
+
+@pytest.mark.parametrize(
+    ("verb", "body"), [("promote", {}), ("reject", None), ("renew", None), ("forget", {"confirm": "memory:6"})]
+)
+def test_every_verb_is_refused_inside_a_run(backend: Backend, verb: str, body: dict[str, str] | None) -> None:
+    c = client(None, backend)
+    before = c.get("/api/memory").json()
+    memory_id = 8 if verb == "renew" else 6
+    with in_run(7):
+        response = c.post(f"/api/memory/{memory_id}/{verb}", json=body, headers=WRITE)
+    assert refused(response).startswith("inside_run")
+    assert c.get("/api/memory").json() == before
+
+
+def test_with_proposals_off_promote_reject_and_renew_are_refused(canopy_env: CanopyEnv) -> None:
+    with_memory(canopy_env, ticket_notes="record")
+    c, headers = signed_in_client(migrated(canopy_env))
+    for verb, body in (("promote", {}), ("reject", None), ("renew", None)):
+        assert refused(c.post(f"/api/memory/1/{verb}", json=body, headers=headers)).startswith("off: memory.proposals")
+
+
+def test_the_overview_names_the_workspaces_repositories_and_a_private_runs_memory(backend: Backend) -> None:
+    overview = client(None, backend).get("/api/memory").json()
+    assert overview["repos"] == ["api", "mobile", "web"]
+    assert [(p["entry"]["id"], p["entry"]["private"]) for p in overview["proposals"]] == [(5, False), (6, True)]
