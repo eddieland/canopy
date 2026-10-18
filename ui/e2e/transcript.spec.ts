@@ -248,15 +248,18 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
     await tools.nth(1).locator('summary').click()
     await expect(tools.nth(1).locator('pre').last()).toContainText('{\n  "state": "pending",')
 
-    // A model call's line says what it was sent and wrote, as By call does; it opens to its tokens by kind, and All
-    // open opens only the tool calls.
+    // A model call's line says what it was sent and wrote, as By call does; it opens to its tokens by kind and to
+    // what By call shows of it, its body built only once opened, and All open opens only the tool calls.
     const call = transcript.getByTestId('transcript-step')
     await expect(call).toHaveCount(1)
-    await expect(call.locator('summary')).toContainText('9.3k in · 1.2k out')
+    await expect(call.locator('summary').first()).toContainText('model call 1')
+    await expect(call.locator('summary').first()).toContainText('9.3k in · 1.2k out')
     const split = call.locator('dl')
-    await expect(split).toBeHidden()
-    await call.locator('summary').click()
+    await expect(call.getByTestId('transcript-call-body')).toHaveCount(0)
+    await call.locator('summary').first().click()
     await expect(split).toHaveText('input2.3kcache read6.5kcache write512output930reasoning310')
+    await expect(call.getByRole('region', { name: 'call 1 input' })).toContainText('which no file records')
+    await expect(call.getByRole('region', { name: 'call 1 output' }).getByTestId('transcript-tool')).toHaveCount(4)
     await transcript.getByRole('button', { name: 'All open' }).click()
     await expect(transcript.locator('details[open]')).toHaveCount(4)
     await expect(split).toBeHidden()

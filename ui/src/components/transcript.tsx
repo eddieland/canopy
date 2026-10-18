@@ -50,6 +50,8 @@ import { cn } from '@/lib/utils'
 
 // What a row marks with no search: one stable value, as a default prop must be.
 const NO_WORDS: readonly string[] = []
+// The calls a row inside a call is given: none, since it holds no model call's line.
+const NO_CALLS: readonly Call[] = []
 
 /**
  * A session's transcript (DESIGN §22): the agent's text, each tool call (what it did and how it ended on its line,
@@ -235,6 +237,8 @@ export function TranscriptPanel({
                                         open={open}
                                         words={words}
                                         targeted={targeted}
+                                        calls={calls.calls}
+                                        prompt={transcript.prompt}
                                     />
                                 )
                             })}
@@ -311,18 +315,26 @@ function Find({
     )
 }
 
+/**
+ * One event's row. In order, `calls` and `prompt` are the session's, so a model call's line opens to what that call
+ * was sent and what it did; inside a call, which holds no model call's line, they are left out.
+ */
 function Entry({
     entry,
     start,
     open,
     words = NO_WORDS,
     targeted = false,
+    calls = NO_CALLS,
+    prompt = null,
 }: {
     entry: TranscriptEntry
     start: string | null
     open: boolean
     words?: readonly string[]
     targeted?: boolean
+    calls?: readonly Call[]
+    prompt?: TranscriptPrompt | null
 }) {
     switch (entry.kind) {
         case 'text': {
@@ -345,7 +357,8 @@ function Entry({
             return <Tool entry={entry} start={start} open={open} words={words} targeted={targeted} />
         }
         case 'step': {
-            return <ModelCall entry={entry} start={start} />
+            const call = calls.find((c) => c.n === entry.call) ?? null
+            return <ModelCall entry={entry} start={start} call={call} prompt={prompt} />
         }
         case 'error': {
             return (
@@ -487,14 +500,26 @@ function Tool({
 }
 
 /**
- * A model call's end: one muted line, its reason, its tokens in and out as By call says them, and its cost, that opens
- * to its tokens by kind. What it wrote and ran are the rows above it; what it was sent, the runtime does not print.
+ * A model call's end: one muted line, its number, its reason, its tokens in and out as By call says them, and its
+ * cost, that opens to its tokens by kind and then to what the call was sent and what it did, as By call shows them.
+ * The body is built only once opened, as By call's is: a long session's calls would hold every output twice.
  */
-function ModelCall({ entry, start }: { entry: TranscriptStep; start: string | null }) {
+function ModelCall({
+    entry,
+    start,
+    call,
+    prompt,
+}: {
+    entry: TranscriptStep
+    start: string | null
+    call: Call | null
+    prompt: TranscriptPrompt | null
+}) {
+    const [open, setOpen] = useState(false)
     const line = (
         <>
             <When at={entry.at} start={start} />
-            <span>model call</span>
+            <span>model call{entry.call === null ? '' : ` ${entry.call}`}</span>
             {/* Every call but the last ends in tool calls: only another reason says something. */}
             {entry.reason && entry.reason !== 'tool-calls' && <Chip word={entry.reason} />}
             <span className="readout ml-auto">
@@ -506,7 +531,8 @@ function ModelCall({ entry, start }: { entry: TranscriptStep; start: string | nu
         </>
     )
     const muted = 'flex items-center gap-3 px-3 py-1 font-mono text-xs text-muted-foreground'
-    if (entry.split === null) {
+    const split = entry.split
+    if (split === null && call === null) {
         return (
             <li className={muted}>
                 {line}
@@ -514,10 +540,9 @@ function ModelCall({ entry, start }: { entry: TranscriptStep; start: string | nu
             </li>
         )
     }
-    const split = entry.split
     return (
         <li data-testid="transcript-step">
-            <details className="group">
+            <details className="group" onToggle={(e) => setOpen(e.currentTarget.open)}>
                 <summary
                     className={cn(
                         muted,
@@ -533,18 +558,21 @@ function ModelCall({ entry, start }: { entry: TranscriptStep; start: string | nu
                         )}
                     />
                 </summary>
-                <RowGrid kind="transcript" className="pb-2">
-                    <dl className={cn(rowLineFrom('text'), 'flex flex-wrap gap-x-6 gap-y-1 font-mono text-xs')}>
-                        {TOKEN_KINDS.map(([key, label]) => (
-                            <div key={key} className="flex items-baseline gap-2">
-                                <dt className="panel-label">{label}</dt>
-                                <dd className="readout" title={`${split[key]} tokens`}>
-                                    {tokenCount(split[key])}
-                                </dd>
-                            </div>
-                        ))}
-                    </dl>
-                </RowGrid>
+                {open && split !== null && (
+                    <RowGrid kind="transcript" className="pb-2">
+                        <dl className={cn(rowLineFrom('text'), 'flex flex-wrap gap-x-6 gap-y-1 font-mono text-xs')}>
+                            {TOKEN_KINDS.map(([key, label]) => (
+                                <div key={key} className="flex items-baseline gap-2">
+                                    <dt className="panel-label">{label}</dt>
+                                    <dd className="readout" title={`${split[key]} tokens`}>
+                                        {tokenCount(split[key])}
+                                    </dd>
+                                </div>
+                            ))}
+                        </dl>
+                    </RowGrid>
+                )}
+                {open && call !== null && <CallBody call={call} prompt={prompt} start={start} split={split} />}
             </details>
         </li>
     )
