@@ -72,7 +72,10 @@ comes first. Never quote, paraphrase, or mention them in a PR or a commit messag
 
 ## Obligations
 
-- Stay inside {{SLOT}}. Do not touch files outside it.
+- Stay inside {{SLOT}}. Do not touch files outside it. Each shell command starts in {{SLOT}}, whatever an earlier
+  one changed directory to, and a `cd` is checked against where its command starts, even after another `cd` in the
+  same command: `cd app && cd ../lib` is refused as leaving {{SLOT}}. To work in a directory inside it, set the
+  command's working directory to it, or `cd` by its path from {{SLOT}}.
 - Commit with clear messages. {{COMMIT_ATTRIBUTION}} Never disguise agent work as human work.
 - Push only to `{{BRANCH}}`, with `git push origin HEAD:refs/heads/{{BRANCH}}` in each repository you changed.
   Commit on the detached HEAD as it is: create no local branch. {{BRANCH_UPDATE}}

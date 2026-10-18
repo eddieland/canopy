@@ -357,9 +357,12 @@ Agent definitions ship in `agents/`; agent runs load them from a directory canop
   workspace (`external_directory: deny`), and one command per bash call: an `ask`, such as a `cd` out of the
   workspace, ends the run under `opencode run` (D021) and loses every decision it had not recorded, where a `deny`
   costs only the call. MCP: the tracker, GitHub.
-- `canopy-worker`: edit and bash within the worktree. MCP: the tracker (ticket comments, and labels through its issue
-  edit tool), GitHub (open/update PR, read reviews and checks); merge, review submission, closing, transition, ticket
-  creation, delete, fork, API file and branch writes, and other agents or workflow runs denied by name (D084).
+- `canopy-worker`: edit and bash within the worktree. OpenCode checks a `cd` against where its command starts, never
+  where an earlier `cd` left it, so `cd app && cd ../lib` reads as leaving the worktree and is refused; the worker
+  prompts say so, and to name a directory by its path from the worktree. MCP: the tracker (ticket comments, and labels
+  through its issue edit tool), GitHub (open/update PR, read reviews and checks); merge, review submission, closing,
+  transition, ticket creation, delete, fork, API file and branch writes, and other agents or workflow runs denied by
+  name (D084).
 - `canopy-reviewer`: no edits, shell, or subagents; reads only through the link to its checkout. MCP: read
   tools only; commenting anywhere, submitting a review, pushing, writing files, labels, and edits denied by name
   (§21).

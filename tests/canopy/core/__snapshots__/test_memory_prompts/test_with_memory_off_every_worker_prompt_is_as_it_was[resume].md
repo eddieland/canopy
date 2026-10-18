@@ -136,6 +136,11 @@ When `reply` is among the reasons above, remove the `needs-human` label from the
 ticket after reading it. Change labels with the tracker's MCP tool for editing the ticket, changing nothing but its
 labels. Time limit 45 minutes.
 
+Each shell command starts in /pool/1/repo, whatever an earlier one changed directory to, and a `cd` is checked against
+where its command starts, even after another `cd` in the same command: `cd app && cd ../lib` is refused as leaving
+/pool/1/repo. To work in a directory inside it, set the command's working directory to it, or `cd` by its path from
+/pool/1/repo.
+
 If a review comment asks for a change you believe is wrong, make the case in a
 PR reply and do not make the change; report `blocked` with the disagreement as
 the question so a human can settle it.
