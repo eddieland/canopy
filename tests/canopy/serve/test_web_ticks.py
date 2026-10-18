@@ -4,8 +4,11 @@ decisions across ticks. Reads only."""
 import pytest
 
 from canopy.core import db
+from canopy.core.context import Context
 from canopy.loop import attention
+from canopy.serve import views
 from canopy.serve.backend import Backend
+from tests.canopy.helpers import present
 from tests.canopy.web_helpers import client
 
 
@@ -53,6 +56,22 @@ def test_a_tick_page_is_what_canopy_decisions_prints(backend: Backend) -> None:
 
     first = c.get("/api/ticks/1").json()["decisions"]
     assert [d["subject"] for d in first] == ["ABC-102", "ABC-100 (web)", "ABC-099 (web)", "chore:deps", "api"]
+
+
+def test_a_tick_page_names_the_ticks_either_side_dry_runs_included_and_steps_over_a_gap(ctx: Context) -> None:
+    first, dry, gone, last = (db.start_tick(ctx.conn, dry_run=n == 1) for n in range(4))
+    ctx.conn.execute("DELETE FROM ticks WHERE id = ?", (gone,))
+
+    def neighbours(tick_id: int) -> tuple[int | None, int | None]:
+        detail = present(views.tick_detail(ctx, tick_id))
+        return detail.previous_id, detail.next_id
+
+    assert neighbours(first) == (None, dry)
+    assert neighbours(dry) == (first, last)
+    assert neighbours(last) == (dry, None)
+    # The newest names the next tick once it starts, which the stream's tick invalidation reads again.
+    after = db.start_tick(ctx.conn, dry_run=False)
+    assert neighbours(last) == (dry, after)
 
 
 def test_no_such_tick_is_a_404_and_a_tick_id_is_a_positive_integer(backend: Backend) -> None:

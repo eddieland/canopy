@@ -316,17 +316,21 @@ def tick_detail(ctx: Context, tick_id: int) -> TickDetail | None:
     """One tick and its decisions, as `canopy decisions ID` prints them, or None if there is no such tick.
 
     Returns:
-        The tick, its decisions, and its output's path from the workspace root, None when the file is missing.
+        The tick, its decisions, its output's path from the workspace root, None when the file is missing, and the
+        ids of the ticks either side of it.
     """
     row = db.get_tick(ctx.conn, tick_id)
     if row is None:
         return None
     rows = db.decisions_for_tick(ctx.conn, tick_id)
     output = tick_output(ctx, tick_id)
+    previous_id, next_id = db.tick_neighbours(ctx.conn, tick_id)
     return TickDetail(
         tick=tick_of(row, len(rows)),
         decisions=[decision(d) for d in rows],
         output_path=shown_path(str(output), ctx.workspace.root) if output.exists() else None,
+        previous_id=previous_id,
+        next_id=next_id,
     )
 
 

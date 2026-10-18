@@ -990,6 +990,10 @@ class TickDetail(_Model):
     output_path: str | None = None
     """Where the overseer's stdout and stderr are, from the workspace root, if the file exists. Its session's events
     are served as the tick's transcript, and its end as the tick's output (DESIGN §22)."""
+    previous_id: int | None = None
+    """The tick before it, dry runs included, or None on the first."""
+    next_id: int | None = None
+    """The tick after it, dry runs included, or None on the newest, until the next one starts."""
 
 
 class TranscriptText(_Model):

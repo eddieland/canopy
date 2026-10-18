@@ -467,7 +467,8 @@ prompt changes (§6), and "why has the loop not picked this up" is answered wher
 
 - The ticks list is the latest 50, each with its overseer's session, cost, tokens, and peak context as a run's (§13).
   A tick's page is the tick, its decisions in the order they were recorded, where its output file is
-  (`.canopy/ticks/<id>.log`), its session's transcript, and the file's end (The tick's output, below).
+  (`.canopy/ticks/<id>.log`), its session's transcript, and the file's end (The tick's output, below). It steps to
+  the tick before and after it by id, dry runs included, the next found by query, so a gap is stepped over.
 - A decision names its subject as `canopy decisions` does: a ticket, a unit as its ticket and repository
   (`ABC-1 (web)`), a repository, `chore:NAME`, `pr:URL` for a PR no ticket owns, or `-` for the whole tick.
 - A rationale is the overseer's text: untrusted, its control characters dropped and its line breaks kept, where

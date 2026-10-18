@@ -25,6 +25,11 @@ canopy that ran it, and the path of its output. The version is the one to check 
 a release you thought you'd upgraded past. The line under the title says what woke it: the timer, your reply, a run
 ending, **Tick now**, and so on.
 
+The buttons at the right of the title step to the tick before and after this one, dry runs included, so the ticks
+around an old one are a click away rather than an edit to the URL. At either end the button stays, greyed out; on the
+newest tick, the next one's button comes alive when the next tick starts. For the latest tick itself, the header's
+readout is the shortcut.
+
 **Decisions** lists what the overseer decided, in the order it decided, each with its subject, its action, and the
 overseer's reasons in its own words. A `refused` action, in red, names the guard that held it back; an `attention`
 action, in amber, is an item it put on your list. When you want to know why a ticket sat still, its refusals are

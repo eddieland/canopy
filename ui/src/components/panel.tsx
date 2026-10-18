@@ -40,6 +40,7 @@ export function PageHeader({
     parents,
     root,
     chips,
+    controls,
     links,
     children,
 }: {
@@ -63,6 +64,8 @@ export function PageHeader({
     root?: string
     /** `Chip`s beside the title that qualify the page, such as `private`. */
     chips?: ReactNode
+    /** Controls at the right of the title's row, such as a tick's steps to the ticks either side of it. */
+    controls?: ReactNode
     /** The page subject's links out, under the description, such as a ticket's `TicketLinks`. */
     links?: ReactNode
     /** One line of description. */
@@ -135,6 +138,7 @@ export function PageHeader({
                         )}
                     </h1>
                     {chips}
+                    {controls !== undefined && <div className="ml-auto">{controls}</div>}
                 </div>
                 {!isBlank(children) && (
                     // Balanced, so a two-line description splits evenly rather than leaving a word or two on its last

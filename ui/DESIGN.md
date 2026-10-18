@@ -268,6 +268,10 @@ Rules:
   the same thing there. What every page of its kind shows, the same each time, is its `help`, on the title's hover,
   as the nav's items say what their pages hold. A ticket is named one way in every identity panel that names one
   (`TicketField`: its key, a run's kind as a chip, its title).
+  A tick's page steps to its neighbours from the right of its title's row (`PageHeader`'s `controls`, `TickSteps`):
+  two ghost `xs` links, `‹ tick:40` and `tick:42 ›`, through every tick by id, dry runs included, found by query so a
+  gap is stepped over. At an end the button stays, disabled, saying on hover there is none, so the pair never shifts;
+  there is no button to the latest, which the header's readout links to.
 - **One home per fact.** What a page says, it says once. Its subject's own name is its title, so the lists under it
   leave it out: on a ticket's page its runs leave out the ticket (`ticket={false}`); on a PR's page its runs and
   decisions leave out the PR (`ownPr`), and so does its review limit (`reviews`). A PR's phase is its title's chip, not

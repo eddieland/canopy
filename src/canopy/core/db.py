@@ -430,6 +430,17 @@ def get_tick(conn: sqlite3.Connection, tick_id: int) -> records.Tick | None:
     return records.fetch_one(conn, records.Tick, "SELECT * FROM ticks WHERE id = ?", (tick_id,))
 
 
+def tick_neighbours(conn: sqlite3.Connection, tick_id: int) -> tuple[int | None, int | None]:
+    """Return the ids of the ticks just before and just after `tick_id`, dry runs included, each None at an end.
+
+    Returns:
+        The previous tick's id and the next one's, found by query rather than by counting, so a gap is stepped over.
+    """
+    before = conn.execute("SELECT max(id) FROM ticks WHERE id < ?", (tick_id,)).fetchone()[0]
+    after = conn.execute("SELECT min(id) FROM ticks WHERE id > ?", (tick_id,)).fetchone()[0]
+    return before, after
+
+
 def last_tick(conn: sqlite3.Connection) -> records.Tick | None:
     """Return the most recent tick row, or None."""
     return records.fetch_one(conn, records.Tick, "SELECT * FROM ticks ORDER BY id DESC LIMIT 1")
