@@ -88,6 +88,10 @@ def test_each_slot_shows_what_holds_it_and_what_runs_in_it(ctx: Context, treehou
     assert "reconcile returns it" in by_name["3"]["note"]
     assert "workspace sync" in by_name["4"]["note"]
     assert by_name["5"]["note"] is None
+    # A dirty slot says what it blocks and what clears it; an idle or broken one has nothing to add.
+    assert "never reused" in by_name["7"]["note"]
+    assert "discard them in the slot" in by_name["7"]["note"]
+    assert (by_name["6"]["note"], by_name["8"]["note"]) == (None, None)
     assert (by_name["6"]["branch"], by_name["6"]["detached"], by_name["6"]["holder"]) == (None, True, None)
 
 

@@ -586,7 +586,9 @@ review the journal shows running), `held` (leased or in use by anything else: th
 uncommitted changes), `idle` (available), and `broken` (damaged, unverified, or a status canopy does not know). A pool
 with no clone, or whose treehouse fails, shows why in its place; the other pools still show. Branch and process names
 are shown as text with control characters dropped, and at most 20 processes per slot. A pool holding more slots than
-its declared size (`capacity`, §18) says so, and that `canopy workspace sync` removes idle ones.
+its declared size (`capacity`, §18) says so, and that `canopy workspace sync` removes idle ones. A dirty slot says
+what it blocks, since the pool never reuses it and counts it busy (§18), and that discarding its changes clears it:
+no canopy command does, since they may be someone's work.
 
 The pools are read at once, so a workspace of many repositories waits on its slowest pool rather than on all of them
 in turn. `treehouse status` changes no lease, but it takes the pool's state lock and may rewrite the pool's state file

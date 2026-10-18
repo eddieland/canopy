@@ -1,4 +1,6 @@
 import type { Pool, Worktree, WorktreeState } from '@/api/types'
+import { counted } from '@/lib/descriptions'
+import { age } from '@/lib/time'
 
 // Full class names, written out, so Tailwind finds them. One entry per state; the types make a missing one an error.
 // An idle slot is a hollow ring: nothing holds it, and no status color claims it.
@@ -19,6 +21,57 @@ export const WORKTREE_TEXT: Record<WorktreeState, string> = {
     dirty: 'text-status-blocked',
     idle: 'text-muted-foreground',
     broken: 'text-status-failed',
+}
+
+/**
+ * The worktrees page's description, its state: how many pools and slots, and how long ago the pools were read, as
+ * `3 pools · 7 slots · read 4s ago`. `readAt` is when, in milliseconds.
+ */
+export function poolsLine(pools: readonly Pool[], readAt: number, now: number): string {
+    const slots = pools.reduce((n, p) => n + p.worktrees.length, 0)
+    const read = `read ${age(new Date(readAt).toISOString(), now)} ago`
+    return [counted(pools.length, 'pool'), counted(slots, 'slot'), read].join(' · ')
+}
+
+/** What the Needs a look counter counts, and its line. */
+export interface NeedsLook {
+    /** Dirty slots, broken slots, and pools that could not be read, together. */
+    count: number
+    /** Its parts in words, each only when there is one, as `1 dirty · 1 pool unread`, or `nothing`. */
+    text: string
+}
+
+/**
+ * Every slot and pool that needs a look: a dirty slot, which the pool never reuses and counts as busy; a broken one;
+ * and a pool that could not be read, whose slots nobody knows.
+ */
+export function needsLook(pools: readonly Pool[]): NeedsLook {
+    const slots = pools.flatMap((p) => p.worktrees)
+    const dirty = slots.filter((w) => w.state === 'dirty').length
+    const broken = slots.filter((w) => w.state === 'broken').length
+    const unread = pools.filter((p) => p.error !== null).length
+    const parts = [
+        [dirty, 'dirty'],
+        [broken, 'broken'],
+        [unread, unread === 1 ? 'pool unread' : 'pools unread'],
+    ] as const
+    return { count: dirty + broken + unread, text: joined(parts) }
+}
+
+/**
+ * What holds the held slots, most first: each lease's holder as the pool names it, and `in use` for a slot with no
+ * lease but a process in it, as `1 in use · 1 canopy-sync`, or `nothing`.
+ */
+export function heldBy(slots: readonly Worktree[]): string {
+    const counts = new Map<string, number>()
+    for (const w of slots) {
+        if (w.state === 'held') {
+            const holder = w.holder ?? 'in use'
+            counts.set(holder, (counts.get(holder) ?? 0) + 1)
+        }
+    }
+    // A stable sort: holders of as many slots keep the order of their first slot.
+    return joined([...counts].map(([holder, n]) => [n, holder] as const).toSorted(([a], [b]) => b - a))
 }
 
 /**
@@ -73,6 +126,11 @@ export function poolShown(pool: Pool, state: WorktreeState | undefined): boolean
         return true
     }
     return pool.worktrees.some((w) => w.state === state) || (state === 'broken' && pool.error !== null)
+}
+
+function joined(parts: readonly (readonly [number, string])[]): string {
+    const shown = parts.filter(([n]) => n > 0)
+    return shown.length === 0 ? 'nothing' : shown.map(([n, label]) => `${n} ${label}`).join(' · ')
 }
 
 function folded(worktrees: readonly Worktree[]): SlotGroup[] {

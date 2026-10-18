@@ -355,7 +355,11 @@ test('the worktrees page shows each pool of the workspace and what holds each sl
     await expect(web.getByTestId('worktree-3')).toContainText('detached')
     // An idle slot is its state and number alone.
     await expect(web.getByTestId('worktree-4')).toHaveText('idle#4')
-    await expect(web.getByTestId('worktree-5')).toHaveAttribute('data-state', 'dirty')
+    // A dirty slot says what it blocks and what clears it.
+    const dirty = web.getByTestId('worktree-5')
+    await expect(dirty).toHaveAttribute('data-state', 'dirty')
+    await expect(dirty).toContainText('never reused while it has changes, and counts as busy')
+    await expect(dirty).toContainText('discard them in the slot')
 
     // Run 43 holds a slot in two pools; each names it.
     const mobile = page.getByTestId('pool-mobile')
@@ -529,8 +533,14 @@ test('the worktrees page counts every pool, and each pool shows its slots at a g
     // no clone.
     await expect(page.getByTestId('counter-working')).toContainText('3')
     await expect(page.getByTestId('counter-held')).toContainText('1')
-    await expect(page.getByTestId('counter-needs')).toContainText('1 dirty · 0 broken · 1 pool unread')
+    // The shell's slot has no lease: a process holds it.
+    await expect(page.getByTestId('counter-held')).toContainText('1 in use')
+    // The dirty slot and the unread pool both count, and the line names only what there is: its label, the value 2,
+    // then the line.
+    await expect(page.getByTestId('counter-needs')).toHaveText('Needs a look21 dirty · 1 pool unread')
     await expect(page.getByTestId('counter-free')).toContainText('of 7 slots')
+    // The description is the pools' state: how many, and how fresh the read is.
+    await expect(page.getByText(/^3 pools · 7 slots · read \d+[smhd] ago$/u)).toBeVisible()
     const strip = page.getByTestId('pool-web').getByTestId('slot-strip').locator('[data-state]')
     await expect(strip).toHaveCount(5)
     await expect(strip.nth(4)).toHaveAttribute('data-state', 'dirty')
