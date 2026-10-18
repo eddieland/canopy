@@ -421,6 +421,9 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     const actions = page.getByTestId('plan-actions')
     // What an action did shows under it, in the bar at the foot of the plan.
     const said = page.getByTestId('plan-bar').getByRole('status')
+    // Where the plan stands: its chip in the Plan panel's header, and the rest in the page's description.
+    const panel = page.getByTestId('ticket-plan')
+    const state = page.locator('header', { has: page.getByRole('heading', { level: 1 }) })
     await expect(plan(page).getByRole('heading', { level: 1 })).toHaveText('Schedule report exports')
 
     // An edit is marked unsaved until ⌘S (Ctrl+S) saves it, as a document's is.
@@ -448,7 +451,7 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     await ask.getByRole('button', { name: /Ask for changes/u }).click()
     await expect(said).toContainText('the next tick asks the planner for a new plan')
     // The page says so until a planner reads it, and another request is asking again.
-    await expect(page.getByTestId('plan-status')).toContainText('You asked for changes')
+    await expect(state).toContainText('You asked for changes')
     await expect(ask.getByRole('button', { name: 'Ask again' })).toBeVisible()
 
     // An edit, saved and approved in one: the approval takes the file as saved.
@@ -457,13 +460,13 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     await page.keyboard.type(', weekly too')
     await actions.getByRole('button', { name: 'Save and approve' }).click()
     await expect(said).toContainText('Plan 2 of ABC-105 is approved as its file stands now.')
-    await expect(page.getByTestId('plan-status')).toContainText('approved')
-    await expect(page.getByTestId('plan-status')).toContainText('edited since the planner wrote it')
+    await expect(panel).toContainText('approved')
+    await expect(state).toContainText('edited since the planner wrote it')
 
     // Skip supersedes it: no plan waits, and the ticket's own word now says so.
     await actions.getByRole('button', { name: 'Skip the plan' }).click()
-    await expect(page.getByTestId('plan-status')).toContainText('Plan not needed, by your word, skip.')
-    await expect(page.getByTestId('plan-status')).toContainText('superseded')
+    await expect(state).toContainText('Its ticket needs no plan now.')
+    await expect(panel).toContainText('superseded')
     await expect(page.getByTestId('plan-actions')).toHaveCount(0)
 
     // The ticket's page has the request in its conversation, and the plan's card says where the plan stands.

@@ -280,8 +280,9 @@ canopy ships `canopy-planner` in the definitions directory (§13):
   with `Approve`, `Ask for changes`, and `Skip`, and earlier plans read only. A plan is a long document with comments
   in a margin beside it, which wants the page's width, and a page is linked to and left with Back. The ticket's page
   has the plan's card instead, which says where it stands, which plan it is, the run that wrote it and when, and how
-  many comments are open, and links to the plan's page; it edits and decides nothing, so the ticket's page never loads
-  the editor. A `plan_review` item links to the plan's page too. A waiting or approved plan is editable while no plan
+  many comments are open, approves it while it can be approved, and links to the plan's page; it edits nothing, so
+  the ticket's page never loads the editor. A `plan_review` item on the attention list shows the same card, so a plan
+  is approved from where it is listed as waiting. A waiting or approved plan is editable while no plan
   run for the ticket is running, and `Approve` or `Ask for changes` saves an unsaved edit first, so the approval takes
   what the operator sees and the planner reads it. `Approve`, `Skip`, and asking for a plan go through the same code
   as `canopy plan`, with the same refusals; `Ask for changes` is a reply. Leaving the page, by a link or by closing

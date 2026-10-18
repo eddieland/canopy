@@ -259,11 +259,14 @@ Rules:
   ticket's actions and any limit it is stuck at, then its conversation and the reply. An action over a whole list
   sits in that list's panel header, as a transcript's All open does: the worktrees' Read again heads their one Pools
   panel, a section per pool in it. A ticket's plan is on a page of its own, `/tickets/$key/plan`, under the ticket in
-  the trail; the ticket's page has its card (`PlanCard`): the plan's reference and status chip in its header, the run
-  that wrote it and its open comments as fields, and `Open plan` in its foot, primary while the plan waits on the
-  operator. A ticket whose plan waits on the operator (proposed, no planner running) leads with the card, above its
-  Work panel, since the plan is what they came to answer; otherwise the card follows the lists. Where it sits is
-  settled as the page opens, so a plan approved meanwhile leaves its card where it was read.
+  the trail; the ticket's page has its card (`PlanCard`), and a `plan_review` item shows it too: the plan's reference
+  and status chip in its header (`PlanChip`: `waiting on you` in `status-blocked` while the plan waits on the
+  operator, as everything that waits on them reads; else its status; with no plan, `needed` or `not needed`, its
+  reason on hover, and only then), the run that wrote it and its open comments as fields, and in its foot `Approve`,
+  the primary, while the plan can be approved, then `Open plan`, outlined, and a line on what comes next or what
+  approving leaves out. A ticket whose plan waits on the operator (proposed, no planner running) leads with the card,
+  above its Work panel, since the plan is what they came to answer; otherwise the card follows the lists. Where it sits
+  is settled as the page opens, so a plan approved meanwhile leaves its card where it was read.
 - **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
   section's name in its color, then the pages between it and this one. On the section's own list the name is plain
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no
@@ -512,6 +515,12 @@ list, an empty state, or a skeleton by hand.
   that refetches it. A 404 or a 409 is the page's own state, handled before it. The query client retries a read once,
   so a failure shows within about two seconds, and nothing refetches it after but the button or the stream. A page of
   many panels over one read (Spend) shows it once, in its first panel, and leaves out the rest.
+- **`PanelFooter`** (`src/components/panel.tsx`): a panel's foot, the mirror of its `PanelHeader`: its actions under a
+  hairline, default-size buttons in a line, then the line that says what they will do, then what one did (`Notice`,
+  with `reserve`).
+  A `sticky` foot stays at the bottom of the page while its panel scrolls over it, as a sticky header stays at its
+  top, opaque on `surface`; the page's scroll padding (`.page-scroll` in `src/index.css`) keeps what Tab moves to and
+  what is scrolled into view above it. A bar of actions never floats in a box of its own: it is its panel's foot.
 - **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel: its column heads in
   `panel-label` type, its row heads in plain text, its figures right-aligned readouts. Its panel's header repeats none
   of its rows.
@@ -647,25 +656,25 @@ list, an empty state, or a skeleton by hand.
 - **The attention list is an inbox**: one list, most severe first, beside the selected item. Severity
   (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
   `attempt_limit`, `chore_failed`, and the review reasons), then what waits on the operator's answer (`awaiting_reply`,
-  `untrusted_review`), then every other reason, then chores' findings; within each, the item open longest first. A
-  row reads as an inbox's: its reason, subject, and age, then its ticket's title (`TicketTitle`, semibold) when it is
-  about a ticket, as a message's subject, then its detail, muted, as the preview; the selected item's head puts the
-  title, semibold, after the key. A
-  reason chip takes `status-failed` or `status-blocked` for the first two, plain otherwise. A finding's reason is its
-  id, the agent's text, so its chip says `finding` and the id follows its chore in muted monospace. An item's detail
-  is the harness's line, with its `code` spans set as code and nothing else read (`InlineCode`), but for a GitHub PR's
-  address, which is a `PullRequestLink` (its name alone in a row, which is a link already), so a detail names a PR as
-  the rest of the page does. The harness names a run in it as `canopy show` reads one, `run:40`. The list is
-  Attention, as the page and its counter are; what waits on the operator's answer is `waiting on you` wherever it
-  shows: the counter, a question's chip in a conversation, the tickets list, and the rail. The selection is
-  `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows, under the item, the ticket's
-  actions and what it is stuck at (below), then its conversation and the reply form, as a ticket's page orders them;
-  an item about a PR no ticket owns, its review limit; a chore's item (a finding or `chore_failed`) shows the chore's
-  notes and the note form, and a finding a ghost `dismiss` beside its age (`useDismissFinding`) and, in place of its
-  detail, the finding as its chore's page has it (`ChoreFindingText`): the title whole, then what it says of itself,
-  then its link on its own line, where the item's detail runs title and link together; an item about neither
-  shows its detail and nothing to answer. The page keeps no list of the runs working now: the rail's, on every page,
-  is the one, so one count of them shows at a time.
+  `untrusted_review`, `plan_review`), then every other reason, then chores' findings; within each, the item open longest
+  first. A row reads as an inbox's: its reason, subject, and age, then its ticket's title (`TicketTitle`, semibold) when
+  it is about a ticket, as a message's subject, then its detail, muted, as the preview; the selected item's head puts
+  the title, semibold, after the key. A reason chip takes `status-failed` or `status-blocked` for the first two, plain
+  otherwise. A finding's reason is its id, the agent's text, so its chip says `finding` and the id follows its chore in
+  muted monospace. An item's detail is the harness's line, with its `code` spans set as code and nothing else read
+  (`InlineCode`), but for a GitHub PR's address, which is a `PullRequestLink` (its name alone in a row, which is a link
+  already), so a detail names a PR as the rest of the page does. The harness names a run in it as `canopy show` reads
+  one, `run:40`. The list is Attention, as the page and its counter are; what waits on the operator's answer is `waiting
+  on you` wherever it shows: the counter, a question's chip in a conversation, the tickets list, and the rail. The
+  selection is `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows, under the item, the
+  ticket's actions and what it is stuck at (below), then its conversation and the reply form, as a ticket's page orders
+  them; a `plan_review` item first shows the plan's card (`PlanCard`, `bare`, its parts in the item's panel), with
+  `Approve` and `Open plan`, since the plan is what it asks for; an item about a PR no ticket owns, its review limit; a
+  chore's item (a finding or `chore_failed`) shows the chore's notes and the note form, and a finding a ghost `dismiss`
+  beside its age (`useDismissFinding`) and, in place of its detail, the finding as its chore's page has it
+  (`ChoreFindingText`): the title whole, then what it says of itself, then its link on its own line, where the item's
+  detail runs title and link together; an item about neither shows its detail and nothing to answer. The page keeps no
+  list of the runs working now: the rail's, on every page, is the one, so one count of them shows at a time.
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
   wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
   accent's tint for the operator's own words, which sit on the right. A bubble's corner nearest its side is square.
@@ -786,7 +795,7 @@ list, an empty state, or a skeleton by hand.
   never asks. Closing the tab asks too, in the browser's own words. A question about one item, such as deleting a
   comment, asks in that item's place instead.
 - **A plan in its editor** (`PlanEditor`, `src/components/plan-editor.tsx`; docs/design/PLANNING.md §25): the plan in a
-  `Plan` panel, its toolbar in the panel's header, and the comments in a `Comments` panel beside it, 20rem wide, once
+  `Plan` panel, and the comments in a `Comments` panel beside it, 20rem wide, once
   the page gives both 60rem (a container query, so the rail's width counts), and under it, as a list, below that. Under
   the plan, the comment being written, and a thread opened by a click on its passage, float over the plan under that
   passage instead, a card 24rem wide on `surface` with a hairline border, so the page never goes down to the list and
@@ -813,44 +822,48 @@ list, an empty state, or a skeleton by hand.
   columns, as a plan's Files table is), and inside one adds a row above or below or a column left or right, and deletes
   a row, a column, or the table; what the cursor's place does not allow is disabled, and an action leaves the cursor in
   the plan. An empty plan shows its prompt in `muted-foreground` where its first line starts:
-  `Write the plan here, or paste its Markdown.` The plan's header, with the toolbar, is `sticky`, and what the editor
-  scrolls into view (the cursor as it types, a passage a comment shows) stops 48px below it. A selection also shows a
+  `Write the plan here, or paste its Markdown.` The plan's header says where the plan stands, at its right: its chip
+  (`PlanChip`, `waiting on you` while it waits) and its age, then after a hairline its mode, as a transcript's are:
+  with the plan this one replaces, `Changes since plan 1`, a `Toggle` that marks what changed since it over the plan
+  (the words added on `diff-add` at 18%, those removed struck through on `diff-del` at 14%, where they were, as `ins`
+  and `del`), pressed as a waiting plan opens, since that is when it is read for what changed; while pressed, how many
+  changes it marks (`12 changes`, a removal and what replaced it one) and ghost `icon-xs` buttons that step the cursor
+  to the change before or after it, round to the other end, the plan scrolling to it. While the changes are marked, a
+  commented passage drops its tint, so no word wears a comment's and a change's at once; the open one keeps its own.
+  The toolbar takes the header's second line, under the label. The header is `sticky`, and what the editor scrolls
+  into view (the cursor as it types, a passage a comment shows) stops 80px below it. A selection also shows a
   `Comment` bubble over it. A commented passage sits on the accent's tint at 14%; the open one, or the one being
   commented on, at 28% and underlined in the accent; the cursor in a passage, by a click or the keyboard, opens its
   thread, and so does a click anywhere on its card, or Tab into it, which leaves the plan where it is; the cursor
   leaving it, or Escape, closes it. A thread is its passage quoted (two lines, a hairline in the accent at its left, the
   whole on hover; a button that shows it in the plan), the comment and its replies as text with their ages, and its
-  actions: `Resolve` (`Reopen`) and `Delete`, ghost `icon-xs` buttons at the right of its quote, and a ghost `xs`
-  `Reply` under the open card alone, or one whose passage is gone, so the rest stay short and near their passages, as a
-  shared document's do. While the thread is open, the comment and each reply carry an `Edit` beside their age, in
-  `text-2xs`, which turns it into the comment form in place, holding its words, with `Save`; the actions hide while it
-  is open. `Delete` asks first, in the actions' place, since nothing brings a thread back:
-  `Delete this comment and its replies?` in muted `text-xs`, then `Keep`, which takes the focus, and `Delete` in
-  `destructive`; Escape keeps it too, and the focus goes back to `Delete`; the open thread sits on the accent's tint, as
-  a selected row does. A thread whose passage is gone carries a `passage gone` chip and stays in the list, last; two or
-  more such follow a line that counts them, with `Resolve all 3`, since a new plan rewrites what it was asked to change
-  and the comments on it lose their passages together. Resolved threads fold under a `Disclosure` (`Show 2 resolved`). A
-  comment or reply form sends on the key Settings names, as a reply does; Escape drops one that holds nothing new, and
-  puts one with the operator's words aside, open with them, so one key never loses what was typed (`Cancel` drops it). A
-  form takes the cursor when it opens, after any words it holds; once a comment is sent, resolved, deleted, put aside,
-  or cancelled, the cursor goes back to the plan after its passage, as a shared document's does, rather than to the top
-  of the page. `Comment` again, on new words, moves an empty comment to them; one half written stays on its passage, and
-  the cursor goes back to it, so its words are never lost or carried to other words. Under the plan and its comments, a
-  bar of actions sticks to the bottom of the page while the plan scrolls, as a document's do, so a long plan is approved
-  or sent back from where it is read: with the plan this one replaces, `Changes since plan 1` first, a pressed `Toggle`
-  that marks what changed since it over the plan (the words added on `diff-add` at 18%, those removed struck through on
-  `diff-del` at 14%, where they were, as `ins` and `del`), pressed as a waiting plan opens, since that is when it is
-  read for what changed; while pressed, how many changes it marks (`12 changes`, a removal and what replaced it one)
-  and ghost `icon-xs` buttons that step the cursor to the change before or after it, round to the other end, the plan
-  scrolling to it; then the caller's own actions (a ticket's `Approve`, `Save`,
-  and `Skip the plan`), then `Ask for changes`, a note on the whole plan, one line that grows as it is written, how many
-  open comments go with it, or how far over a reply's bound the request is, and the button (the request says the plan
-  was edited, when it was); what the caller's actions will do, or what one did, goes on a line under them. The editor
-  keeps what it scrolls into view clear of the bar too. Until plans reach a ticket's page (M44), the editor is on
-  `/plan-editor`, over a sample plan on mock data only, with what the planner would read and the plan's Markdown under
-  it. The bar's main action is the one its comments call for: while any are open, `Ask for changes` is filled and a
-  ticket's `Approve` outlined, and the line under them says approving sends none of them, since the implement reads
-  the plan alone; with none open, `Approve` is filled and `Ask for changes` outlined.
+  actions, in words, ghost `xs` buttons in muted text as a finding's `dismiss` is, never an icon alone: `resolve`
+  (`reopen`) and `delete` at the right of its quote, and `reply` under the open card alone, or one whose passage is
+  gone, so the rest stay short and near their passages, as a shared document's do. While the thread is open, the
+  comment and each reply carry an `edit` beside their age, which turns it into the comment form in place, holding its
+  words, with `Save`; the actions hide while it is open. `delete` asks first, in the actions' place, since nothing
+  brings a thread back: `Delete this comment and its replies?` in muted `text-xs`, then `Keep`, which takes the focus,
+  and `Delete` in `destructive`; Escape keeps it too, and the focus goes back to `delete`; the open thread sits on the
+  accent's tint, as a selected row does. A thread whose passage is gone carries a `passage gone` chip and stays in the
+  list, last; two or more such follow a line that counts them, with `resolve all 3`, since a new plan rewrites what it
+  was asked to change and the comments on it lose their passages together. Resolved threads fold under a `Disclosure`
+  (`Show 2 resolved`). A comment or reply form sends on the key Settings names, as a reply does; Escape drops one that
+  holds nothing new, and puts one with the operator's words aside, open with them, so one key never loses what was typed
+  (`Cancel` drops it). A form takes the cursor when it opens, after any words it holds; once a comment is sent,
+  resolved, deleted, put aside, or cancelled, the cursor goes back to the plan after its passage, as a shared document's
+  does, rather than to the top of the page. `Comment` again, on new words, moves an empty comment to them; one half
+  written stays on its passage, and the cursor goes back to it, so its words are never lost or carried to other words.
+  The plan's actions are its panel's sticky foot (`PanelFooter`), which stays at the bottom of the page while the plan
+  scrolls, as a document's do, so a long plan is approved or sent back from where it is read: the caller's own actions
+  (a ticket's `Approve`, the foot's one primary, then `Save`, outlined, and `Skip the plan`, ghost), then a note on the
+  whole plan, one line that takes the rest of the line and a line of its own, the foot's whole width, while it is
+  focused or holds words, and `Ask for changes`, outlined (the request says the plan was edited, when it was). The line
+  under them says how many open comments go with Ask for changes, or how far over a reply's bound the request is, then
+  what the caller says of its own actions: on a ticket's plan, that approving sends none of the open comments, since the
+  implement reads the plan alone, or that an approved plan's edit is approved again. What `Approve` takes is on its
+  hover. What an action did goes under that line. At 820px the foot is two lines at rest. The editor keeps what it
+  scrolls into view 128px clear of the foot. Until plans reach a ticket's page (M44), the editor is on `/plan-editor`,
+  over a sample plan on mock data only, with what the planner would read and the plan's Markdown under it.
 - **A chore** is a line in `canopy status`'s words (`choreLine`: `running for 10m`, `last ok 4h ago, due in 1h`) in
   its latest run's state color, then how often it may start and its window (`cadenceText`: `every 360 minutes`, as
   the config and the CLI say it; `windowText`), its open findings less those dismissed, then how many were dismissed

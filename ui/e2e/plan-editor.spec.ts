@@ -326,8 +326,9 @@ test.describe('on a wide monitor', () => {
     })
 })
 
-// The narrowest window the UI is laid out for (e2e/narrow.spec.ts): the toolbar's header must still fit on one line
-// there, within the 48px the editor keeps clear under it (TOOLBAR_CLEARANCE in src/components/plan-editor.tsx).
+// The narrowest window the UI is laid out for (e2e/narrow.spec.ts): the toolbar's header, its label's line and the
+// toolbar's under it, must still fit there within the 80px the editor keeps clear under it (TOOLBAR_CLEARANCE in
+// src/components/plan-editor.tsx).
 test.describe('on half a monitor', () => {
     test.use({ viewport: { width: 820, height: 900 } })
 
@@ -338,7 +339,7 @@ test.describe('on half a monitor', () => {
         const card = comments(page).filter({ hasText: 'proxy in front' })
         await card.scrollIntoViewIfNeeded()
         const stuck = await header.boundingBox()
-        expect(stuck?.height).toBeLessThan(48)
+        expect(stuck?.height).toBeLessThan(80)
         const passage = plan(page).locator('[data-thread=sample-1]')
         await card.getByRole('button', { name: "streams the report's rows" }).click()
         await expect(passage).toBeInViewport()
@@ -420,31 +421,31 @@ test.describe('copying out of the plan', () => {
     })
 })
 
-test('a card carries Resolve and Delete in its header, and Reply only while it is the open one', async ({ page }) => {
+test('a card carries resolve and delete in its header, and reply only while it is the open one', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'name the ticket' })
-    await expect(thread.getByRole('button', { name: 'Resolve' })).toBeVisible()
-    await expect(thread.getByRole('button', { name: 'Delete' })).toBeVisible()
-    await expect(thread.getByRole('button', { name: 'Reply', exact: true })).toHaveCount(0)
+    await expect(thread.getByRole('button', { name: 'resolve', exact: true })).toBeVisible()
+    await expect(thread.getByRole('button', { name: 'delete', exact: true })).toBeVisible()
+    await expect(thread.getByRole('button', { name: 'reply', exact: true })).toHaveCount(0)
     await thread.getByText('Keep this out').click()
-    await expect(thread.getByRole('button', { name: 'Reply', exact: true })).toBeVisible()
-    // One whose passage is gone cannot be opened from the plan, so it keeps its Reply.
+    await expect(thread.getByRole('button', { name: 'reply', exact: true })).toBeVisible()
+    // One whose passage is gone cannot be opened from the plan, so it keeps its reply.
     const lost = comments(page).filter({ hasText: 'passage gone' })
-    await expect(lost.getByRole('button', { name: 'Reply', exact: true })).toBeVisible()
+    await expect(lost.getByRole('button', { name: 'reply', exact: true })).toBeVisible()
 })
 
 test('comments whose passages are gone are resolved together, once there is more than one', async ({ page }) => {
-    await expect(page.getByRole('button', { name: /^Resolve all/u })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /^resolve all/u })).toHaveCount(0)
     await select(page, 'Scheduling exports.')
     await page.keyboard.press('Backspace')
     await expect(comments(page).filter({ hasText: 'passage gone' })).toHaveCount(2)
-    await page.getByRole('button', { name: 'Resolve all 2' }).click()
+    await page.getByRole('button', { name: 'resolve all 2' }).click()
     await expect(comments(page)).toHaveCount(1)
     await expect(page.getByRole('button', { name: 'Show 3 resolved' })).toBeVisible()
 })
 
 test('resolving a thread folds it away and takes its highlight off the plan', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'name the ticket' })
-    await thread.getByRole('button', { name: 'Resolve' }).click()
+    await thread.getByRole('button', { name: 'resolve', exact: true }).click()
     await expect(comments(page)).toHaveCount(2)
     await expect(page.locator('.plan-doc [data-thread=sample-2]')).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Show 2 resolved' })).toBeVisible()
@@ -452,17 +453,17 @@ test('resolving a thread folds it away and takes its highlight off the plan', as
 
 test('deleting a comment asks first, in its place, and Keep or Escape keeps it', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'proxy in front' })
-    await thread.getByRole('button', { name: 'Delete' }).click()
+    await thread.getByRole('button', { name: 'delete', exact: true }).click()
     const confirm = thread.getByRole('group', { name: 'Delete this comment and its replies?' })
     await expect(confirm.getByRole('button', { name: 'Keep' })).toBeFocused()
     await page.keyboard.press('Escape')
     await expect(confirm).toBeHidden()
-    // Kept, the focus goes back to the Delete that asked, each time.
-    await expect(thread.getByRole('button', { name: 'Delete' })).toBeFocused()
+    // Kept, the focus goes back to the delete that asked, each time.
+    await expect(thread.getByRole('button', { name: 'delete', exact: true })).toBeFocused()
     await page.keyboard.press('Enter')
     await confirm.getByRole('button', { name: 'Keep' }).click()
-    await expect(thread.getByRole('button', { name: 'Delete' })).toBeFocused()
-    await thread.getByRole('button', { name: 'Delete' }).click()
+    await expect(thread.getByRole('button', { name: 'delete', exact: true })).toBeFocused()
+    await thread.getByRole('button', { name: 'delete', exact: true }).click()
     await confirm.getByRole('button', { name: 'Delete' }).click()
     await expect(thread).toHaveCount(0)
     await expect(plan(page).locator('[data-thread=sample-1]')).toHaveCount(0)
@@ -527,21 +528,20 @@ test('the changes are counted, and Next and Previous step the cursor to each, ro
     page,
 }) => {
     await page.getByRole('button', { name: 'Changes since plan 1' }).click()
-    const bar = page.getByTestId('plan-bar')
-    await expect(bar.getByText(/^\d+ changes$/u)).toBeVisible()
+    await expect(page.getByText(/^\d+ changes$/u)).toBeVisible()
     // From the top, the one before is the last.
-    await bar.getByRole('button', { name: 'Previous change' }).click()
+    await page.getByRole('button', { name: 'Previous change' }).click()
     await expect(plan(page)).toBeFocused()
     await expect(plan(page).locator('ins, del').last()).toBeInViewport()
     // And the one after the last is the first.
-    await bar.getByRole('button', { name: 'Next change' }).click()
+    await page.getByRole('button', { name: 'Next change' }).click()
     await expect(plan(page).locator('ins, del').first()).toBeInViewport()
 })
 
 test('Ask for changes sends the open comments, each on its passage, with the note', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'proxy in front' })
     await thread.getByText('Does the proxy').click()
-    await thread.getByRole('button', { name: 'Reply', exact: true }).click()
+    await thread.getByRole('button', { name: 'reply', exact: true }).click()
     const reply = page.getByRole('form', { name: 'Reply' })
     await reply.getByRole('textbox').fill('And a test that reads the first row before the last is written.')
     await reply.getByRole('button', { name: 'Reply' }).click()
@@ -672,7 +672,7 @@ test('Escape puts a half-written comment aside with its words, and the cursor go
 test('a reply half written is kept on Escape too, and an edit with nothing changed closes on it', async ({ page }) => {
     const thread = comments(page).filter({ hasText: 'proxy in front' })
     await thread.getByText('Does the proxy').click()
-    await thread.getByRole('button', { name: 'Reply', exact: true }).click()
+    await thread.getByRole('button', { name: 'reply', exact: true }).click()
     await page.keyboard.type('Ask ops.')
     await page.keyboard.press('Escape')
     await expect(plan(page)).toBeFocused()
@@ -692,7 +692,10 @@ test('once a comment is sent or resolved, the cursor is back in the plan after i
     await expect(plan(page)).toBeFocused()
     await page.keyboard.type(' (XLSX)')
     await expect(plan(page).locator('li').filter({ hasText: "Excel's own format (XLSX), which" })).toBeVisible()
-    await comments(page).filter({ hasText: 'name the ticket' }).getByRole('button', { name: 'Resolve' }).click()
+    await comments(page)
+        .filter({ hasText: 'name the ticket' })
+        .getByRole('button', { name: 'resolve', exact: true })
+        .click()
     await expect(plan(page)).toBeFocused()
 })
 

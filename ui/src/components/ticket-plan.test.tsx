@@ -8,7 +8,9 @@ import { api } from '@/api/client'
 import { keys } from '@/api/queries'
 import type { PlanFile, PlanSummary, PlanThreadView, TicketPlans } from '@/api/types'
 
-import { TicketPlan } from './ticket-plan'
+import { renderRouted } from '@/test-utils'
+
+import { PlanState, TicketPlan } from './ticket-plan'
 
 const EARLIER: PlanSummary = {
     id: 1,
@@ -167,44 +169,69 @@ function writes(): string[] {
     return sent.map((request) => `${request.method} ${request.path}`)
 }
 
+// What the plan's page says of where the plan stands, as its description.
+async function state(plans: Partial<TicketPlans>): Promise<string | null> {
+    const { container } = await renderRouted(<PlanState plans={{ ...PLANS, ...plans }} />)
+    return container.textContent
+}
+
 describe('TicketPlan', () => {
-    describe('its status line', () => {
-        it('says why the ticket needs a plan, and its newest plan’s status', () => {
-            renderPlan()
-            const status = screen.getByTestId('plan-status')
-            expect(status.textContent).toMatch(
-                /^Plan needed, by policy\.plan approve\.proposedplan 2, written \S+ ago$/u,
+    describe('where it stands', () => {
+        it('says the plan waits on you, in its panel’s header, and never that a waiting plan is not needed', () => {
+            renderPlan({ needed: false, policy: 'off' })
+            expect(screen.getByText('waiting on you')).toBeDefined()
+            expect(screen.queryByText(/proposed|needed/u)).toBeNull()
+        })
+
+        it('says what the line under the actions says of the comments still open', () => {
+            renderPlan({ threads: [THREAD, { ...THREAD, id: 10 }] })
+            expect(
+                screen.getByText(
+                    '2 open comments go with Ask for changes. Approving sends none of them: the implement reads the ' +
+                        'plan alone.',
+                ),
+            ).toBeDefined()
+        })
+
+        it('says a planner comes next while there is no plan, and which run writes one', () => {
+            const { unmount } = renderPlan({ newest: null, plans: [] })
+            expect(screen.getByText('no plan yet: the next tick dispatches a planner')).toBeDefined()
+            unmount()
+
+            renderPlan({ newest: null, plans: [], planning: 51 })
+            expect(screen.getByText('no plan yet: run 51 is writing one')).toBeDefined()
+        })
+    })
+
+    describe('PlanState', () => {
+        it('says who wrote a waiting plan, and that it waits on you', async () => {
+            expect(await state({})).toBe(
+                'Written by run:50. It waits on you: read it, comment, then approve it or ask for changes.',
             )
         })
 
-        it('says when the operator’s own word decides, and what was approved, edited, and changed since', () => {
+        it('says what was approved, and how, and what changed in the file since', async () => {
             const approved = { ...PLAN, status: 'approved' as const, approved_at: '2026-10-08T11:30:00Z' }
-            renderPlan({
-                setting: 'plan',
-                newest: {
-                    ...NEWEST,
-                    plan: { ...approved, approved_channel: 'web' },
-                    edited: true,
-                    changed_since_approval: true,
-                },
-            })
-            expect(screen.getByTestId('plan-status').textContent).toMatch(
+            const newest = { ...NEWEST, plan: { ...approved, approved_channel: 'web' }, edited: true }
+            expect(await state({ newest: { ...newest, changed_since_approval: true } })).toMatch(
                 new RegExp(
-                    '^Plan needed, by your word, plan\\.approvedplan 2, written \\S+ ago, approved \\S+ ago via web, ' +
-                        'edited since the planner wrote it, changed since it was approved$',
+                    '^Written by run:50, approved \\S+ ago via web, edited since the planner wrote it, changed since ' +
+                        'it was approved\\. $',
                     'u',
                 ),
             )
         })
 
-        it('says a planner comes next while there is no plan, and which run writes one', () => {
-            const { unmount } = renderPlan({ newest: null, plans: [] })
-            expect(screen.getByText('None yet: the next tick dispatches a planner.')).toBeDefined()
-            unmount()
+        it('says which run writes the next plan, or that you asked for one', async () => {
+            expect(await state({ planning: 51 })).toBe('Written by run:50. Run 51 is writing a new plan.')
+            cleanup()
+            expect(await state({ changes_asked: '2026-10-08T11:40:00Z' })).toMatch(
+                /^Written by run:50\. You asked for changes \S+ ago: the next tick asks the planner for a new plan\.$/u,
+            )
+        })
 
-            renderPlan({ newest: null, plans: [], planning: 51 })
-            expect(screen.getByText('Run 51 is writing a new plan.')).toBeDefined()
-            expect(screen.queryByText(/^None yet/u)).toBeNull()
+        it('says nothing with no plan, whose panel says what comes', async () => {
+            expect(await state({ newest: null, plans: [] })).toBe('')
         })
     })
 
@@ -247,7 +274,7 @@ describe('TicketPlan', () => {
     it('keeps the plan read only while a planner writes a new one', () => {
         renderPlan({ planning: 51 })
         expect(screen.getByRole('textbox', { name: 'Plan' }).getAttribute('contenteditable')).toBe('false')
-        expect(screen.getByText('Run 51 is writing a new plan.')).toBeDefined()
+        expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
     })
 
     it('says an edit is unsaved, and saves it over the file as read, refused if the file changed', async () => {
@@ -320,7 +347,7 @@ describe('TicketPlan', () => {
     it('saves a change to a comment as it is made', async () => {
         renderPlan({ threads: [THREAD] })
         const card = screen.getByRole('article', { name: 'Comment on “CSV writer”' })
-        fireEvent.click(within(card).getByRole('button', { name: 'Resolve' }))
+        fireEvent.click(within(card).getByRole('button', { name: 'resolve' }))
         await waitFor(() => {
             expect(sent).toEqual([
                 { method: 'PATCH', path: '/api/tickets/ABC-1/plan-threads/9', body: { resolved: true } },
@@ -340,7 +367,7 @@ describe('TicketPlan', () => {
         fireEvent.submit(draft)
 
         const card = await screen.findByRole('article', { name: 'Comment on “CSV writer”' })
-        fireEvent.click(within(card).getByRole('button', { name: 'Resolve' }))
+        fireEvent.click(within(card).getByRole('button', { name: 'resolve' }))
         release()
         await waitFor(() => {
             expect(writes()).toEqual([

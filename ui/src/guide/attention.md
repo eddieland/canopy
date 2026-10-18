@@ -35,6 +35,10 @@ An item about a ticket shows its full detail, the ticket's actions (**Start priv
 [Tickets](tickets#acting-on-a-ticket)), and the ticket's conversation with a box to reply in. When the ticket is at an
 attempt limit, a red block says so, with **Allow one more** for each kind of run that's out of tries.
 
+A `plan review` item leads with the plan's card, the same one the ticket's page shows: which plan it is, who wrote
+it, how many comments are open, **Approve**, and **Open plan**. Approve right there if you've already read it; open it
+if you haven't, which is the honest option more often than anyone admits. See [Plans](plans).
+
 An item about a PR no ticket owns, such as one canopy only reviews, offers **Allow one more** when the PR is at its
 review limit. An item about nothing in particular, like a repository that's missing, has nothing to answer here: it
 leaves when you fix its cause.

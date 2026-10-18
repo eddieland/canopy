@@ -1,6 +1,6 @@
-import { Check, MessageSquarePlus, Reply, RotateCcw, Send, Trash2 } from 'lucide-react'
+import { MessageSquarePlus, Send, Trash2 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
-import type { KeyboardEvent, Ref, SubmitEvent } from 'react'
+import type { KeyboardEvent, ReactNode, Ref, SubmitEvent } from 'react'
 
 import { Age } from '@/components/age'
 import { Textarea } from '@/components/input'
@@ -137,9 +137,8 @@ export function PlanThreads({
                 // together: once read, they are resolved together, rather than one by one.
                 <div className="flex items-center justify-between gap-2 border-t px-3 py-1.5">
                     <span className="text-xs text-muted-foreground">{lost.length} on passages gone from the plan</span>
-                    <Button variant="ghost" size="xs" onClick={onResolveGone}>
-                        <Check aria-hidden />
-                        Resolve all {lost.length}
+                    <Button variant="ghost" size="xs" className="-my-1 text-muted-foreground" onClick={onResolveGone}>
+                        resolve all {lost.length}
                     </Button>
                 </div>
             )}
@@ -168,13 +167,17 @@ export function PlanThreads({
 /**
  * Asks the planner for a new plan, as M44's Ask for changes does: the open threads, each on its passage, and a note on
  * the whole plan, as one message (`changeRequest`). Disabled with nothing to ask, and over a reply's bound, which it
- * says rather than cut the message.
+ * says rather than cut the message. It sits in a plan's foot, in the line of the caller's actions: its form lays out
+ * nothing of its own, so the note field and the button take their places in that line, and the note takes a line of
+ * its own while it is focused or holds words. How many open comments go with it, then the caller's `note`, take the
+ * line under them.
  */
 export function AskForChanges({
     threads,
     starts,
     edited,
     asked = false,
+    note: said,
     onAsk,
 }: {
     /** The plan's threads. */
@@ -185,6 +188,8 @@ export function AskForChanges({
     edited: boolean
     /** Whether they asked already and no planner has read it, so another request is asking again. */
     asked?: boolean
+    /** What the caller says of its own actions, after how many comments go with this one, on the line under them. */
+    note?: ReactNode
     /** Sends the message. */
     onAsk: (message: string) => void
 }) {
@@ -202,12 +207,13 @@ export function AskForChanges({
         }
     }
 
+    const told = over
+        ? `${message.length - MAX_REQUEST} characters over a reply's bound: resolve or shorten some.`
+        : open > 0 && `${open} open ${open === 1 ? 'comment goes' : 'comments go'} with Ask for changes.`
+
     return (
-        <form
-            onSubmit={send}
-            aria-label="Ask for changes"
-            className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2"
-        >
+        // `contents`, so its field and button are items of the caller's line, beside its own actions.
+        <form onSubmit={send} aria-label="Ask for changes" className="contents">
             <Textarea
                 name="note"
                 aria-label="On the whole plan"
@@ -216,18 +222,24 @@ export function AskForChanges({
                 maxLength={MAX_REQUEST}
                 onChange={(event) => setNote(event.target.value)}
                 placeholder="A note on the whole plan, optional"
-                className="field-sizing-content max-h-32 min-h-8 min-w-48 flex-1 resize-none py-1"
+                className={cn(
+                    'field-sizing-content max-h-32 min-h-8 min-w-32 flex-1 resize-none py-1',
+                    // Empty in the actions' line, one line, its prompt cut to fit rather than grow the line taller.
+                    'placeholder-shown:truncate',
+                    // Being written, it takes the line under the actions, the whole width of the foot.
+                    'focus:order-1 focus:basis-full',
+                    note !== '' && 'order-1 basis-full',
+                )}
             />
-            <span className="text-xs text-muted-foreground">
-                {over
-                    ? `${message.length - MAX_REQUEST} characters over a reply's bound: resolve or shorten some`
-                    : `${open} open ${open === 1 ? 'comment goes' : 'comments go'} with it`}
-            </span>
-            {/* The main action while comments are open, as the caller's own Approve steps back; outlined otherwise. */}
-            <Button type="submit" variant={open > 0 ? 'default' : 'outline'} disabled={!message || over}>
+            <Button type="submit" variant="outline" disabled={!message || over}>
                 <Send aria-hidden />
                 {asked ? 'Ask again' : 'Ask for changes'}
             </Button>
+            {(told !== false || said !== undefined) && (
+                <p className="order-2 basis-full text-xs text-muted-foreground">
+                    {told} {said}
+                </p>
+            )}
         </form>
     )
 }
@@ -352,28 +364,28 @@ export function ThreadCard({
                 {lost && <Chip className="mt-0.5">passage gone</Chip>}
                 {thread.resolved && <Chip className="mt-0.5">resolved</Chip>}
                 {idle && (
-                    <div className="-my-0.5 -mr-1.5 flex shrink-0 items-center">
+                    // A row's own actions, in words, as a finding's `dismiss` is: an icon alone would say less, and a
+                    // tick reads as accepted rather than resolved.
+                    <div className="-my-1 -mr-2 flex shrink-0 items-center">
                         <Button
                             variant="ghost"
-                            size="icon-xs"
-                            aria-label={thread.resolved ? 'Reopen' : 'Resolve'}
-                            title={thread.resolved ? 'Reopen' : 'Resolve'}
+                            size="xs"
+                            className="text-muted-foreground"
                             onClick={() => onResolve(thread.id, !thread.resolved)}
                         >
-                            {thread.resolved ? <RotateCcw aria-hidden /> : <Check aria-hidden />}
+                            {thread.resolved ? 'reopen' : 'resolve'}
                         </Button>
                         <Button
                             ref={deleteAction}
                             variant="ghost"
-                            size="icon-xs"
-                            aria-label="Delete"
-                            title="Delete"
+                            size="xs"
+                            className="text-muted-foreground"
                             onClick={() => {
                                 setKept(false)
                                 setDeleting(true)
                             }}
                         >
-                            <Trash2 aria-hidden />
+                            delete
                         </Button>
                     </div>
                 )}
@@ -455,9 +467,13 @@ export function ThreadCard({
             )}
             {canReply && (
                 <div className="-ml-2">
-                    <Button variant="ghost" size="xs" onClick={() => setReplying(true)}>
-                        <Reply aria-hidden />
-                        Reply
+                    <Button
+                        variant="ghost"
+                        size="xs"
+                        className="text-muted-foreground"
+                        onClick={() => setReplying(true)}
+                    >
+                        reply
                     </Button>
                 </div>
             )}
@@ -523,7 +539,7 @@ function Quote({ text, onClick }: { text: string; onClick?: (() => void) | undef
     )
 }
 
-// What a comment or a reply says, and when; with `onEdit`, its own Edit beside its age, so the card's actions stay on
+// What a comment or a reply says, and when; with `onEdit`, its own `edit` beside its age, so the card's actions stay on
 // one line.
 function Said({
     body,
@@ -544,14 +560,15 @@ function Said({
             <div className="flex items-center gap-1">
                 <Age at={at} variant="ago" className="text-2xs" />
                 {onEdit !== undefined && (
+                    // In line with the age, no taller than its line.
                     <Button
                         variant="ghost"
                         size="xs"
-                        className="h-5 px-1 text-2xs"
+                        className="-my-1 text-muted-foreground"
                         aria-label={`Edit ${what}`}
                         onClick={onEdit}
                     >
-                        Edit
+                        edit
                     </Button>
                 )}
             </div>
