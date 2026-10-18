@@ -554,18 +554,20 @@ its characters over four, never more than that call was sent; the rest is the ru
 entry with a tokenizer. The tokenizer is the model's, which canopy does not know and the runtime does not report, and a
 step's sum is already exact; a closer split is not worth a dependency per provider.
 
-The tick's output: the transcript keeps only the overseer's session, so what the runtime printed on stderr, and any
-line that is not one of its events, sent the operator back to the file, most of all for a tick whose overseer failed.
+The output: the transcript keeps only the agent's session, so what the runtime printed on stderr, a run's setup
+commands' output, and any line that is not one of its events sent the operator back to the file, most of all for a
+tick whose overseer failed or a run that failed before its first event.
 
-- The server reads the end of the tick's output file as written, on each request: its stdout, the `--- stderr ---`
-  line the tick writes, and its stderr (§6). The same checks as a transcript's, at most its last 1 MiB from the first
-  whole line in it, control characters dropped and line breaks kept. It says the file's size and whether it was cut,
-  or `no_output` when there is none (the tick kept none, or its overseer has not started); a running tick's holds
-  what its overseer has printed so far, its stderr once it ends. Its end, since that is where a failed
-  tick says why, and the transcript has the session from its start.
+- The server reads the end of a tick's output file or a worker run's log as written, on each request: a tick's
+  stdout, the `--- stderr ---` line the tick writes, and its stderr (§6); a run's setup commands' output and its
+  worker's stdout, stderr, and exit, each under the line `_run` writes (§8). The same checks as a transcript's, at most
+  its last 1 MiB from the first whole line in it, control characters dropped and line breaks kept. It says the file's
+  size and whether it was cut, or `no_output` when there is none (the tick kept none, or its overseer has not
+  started); a running one's holds what it has printed so far, its stderr once it ends. Its end, since that is where a
+  failed tick or run says why, and the transcript has the session from its start.
 - Everything in it is agent output, rendered as text.
-- A tick's output only. A run's log is the worker's and its setup commands' (§8), and stays its transcript (above)
-  until the operator asks for the rest.
+- A tick's and a worker run's only. A chore run's log is its agent's alone (§19), so its transcript says all of it
+  but stderr, and a review's adds its diff, which its page shows (§21).
 
 The worktrees page: for each repository in the workspace, its pool's slots as `treehouse status --json` reports them,
 read when the page asks. A lease is matched to a running run or review by its lease id, as reconcile matches them, so a

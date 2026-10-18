@@ -818,6 +818,26 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/runs/{run_id}/output": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a run's output
+         * @description The end of the run's log as written, its setup commands' and its stderr included: untrusted and bounded.
+         */
+        get: operations["getRunOutput"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/runs/{run_id}/transcript": {
         parameters: {
             query?: never;
@@ -3431,6 +3451,42 @@ export type components = {
             url: string;
         };
         /**
+         * RawOutput
+         * @description The end of a tick's output or a run's log as written, the lines its transcript leaves out included (DESIGN §22).
+         *
+         *     A tick's is its overseer's stdout, a `--- stderr ---` line, and its stderr; a run's, its setup commands' output and
+         *     its worker's stdout, stderr, and exit, each under a `--- ... ---` line canopy writes. Agent output: untrusted,
+         *     rendered as text, its control characters dropped. `truncated` says the file holds more than its last `text`, which
+         *     starts at a whole line; `size` is the whole file's, in bytes.
+         */
+        RawOutput: {
+            /**
+             * Size
+             * @description The whole file's size, in bytes.
+             * @default 0
+             */
+            size: number;
+            /**
+             * Status
+             * @description `read`: the file was read; a running tick's or run's holds what it has printed so far. `no_output`: it is
+             *     missing (none kept, or its agent has not started), a symlink, or not a regular file.
+             * @enum {string}
+             */
+            status: "read" | "no_output";
+            /**
+             * Text
+             * @description The end of the file, starting at a whole line.
+             * @default
+             */
+            text: string;
+            /**
+             * Truncated
+             * @description The file holds more than `text`.
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /**
          * Refusal
          * @description A guard refused the operator's action: which guard, and why, as the CLI says it.
          */
@@ -5001,40 +5057,6 @@ export type components = {
              * @enum {string}
              */
             type: "tickets.updated";
-        };
-        /**
-         * TickOutput
-         * @description The end of a tick's overseer output as written: its stdout, a `--- stderr ---` line, its stderr (DESIGN §22).
-         *
-         *     Agent output: untrusted, rendered as text, its control characters dropped. `truncated` says the file holds more
-         *     than its last `text`, which starts at a whole line; `size` is the whole file's, in bytes.
-         */
-        TickOutput: {
-            /**
-             * Size
-             * @description The whole file's size, in bytes.
-             * @default 0
-             */
-            size: number;
-            /**
-             * Status
-             * @description `read`: the file was read; a running tick's holds what its overseer has printed so far. `no_output`: it is
-             *     missing (none kept, or its overseer has not started), a symlink, or not a regular file.
-             * @enum {string}
-             */
-            status: "read" | "no_output";
-            /**
-             * Text
-             * @description The end of the file, starting at a whole line.
-             * @default
-             */
-            text: string;
-            /**
-             * Truncated
-             * @description The file holds more than `text`.
-             * @default false
-             */
-            truncated: boolean;
         };
         /**
          * TickUpdated
@@ -8505,6 +8527,92 @@ export interface operations {
             };
         };
     };
+    getRunOutput: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The run's id, as `run:ID` names it. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RawOutput"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such run. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     getRunTranscript: {
         parameters: {
             query?: never;
@@ -10644,7 +10752,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TickOutput"];
+                    "application/json": components["schemas"]["RawOutput"];
                 };
             };
             /** @description No valid session: sign in with the listener secret. */

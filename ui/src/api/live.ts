@@ -28,8 +28,8 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             if (before !== undefined && statuses(before) !== statuses(event.runs)) {
                 void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
             }
-            // A run a page holds is written whole; its transcript is read again when its log has more in it: its
-            // worker's events reach the log as it prints them, and a new tool call or model call moves the run's row.
+            // A run a page holds is written whole; its transcript and output are read again when its log has more in
+            // it: its worker's events reach the log as it prints them, and a new tool call or model call moves its row.
             for (const run of event.runs) {
                 const shown = client.getQueryData<Run>(keys.run(run.id))
                 if (shown === undefined) {

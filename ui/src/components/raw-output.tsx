@@ -1,9 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
+import type { QueryKey, UseQueryOptions } from '@tanstack/react-query'
 import { Braces } from 'lucide-react'
 import { Fragment, useState } from 'react'
 
-import { tickOutputQuery } from '@/api/queries'
-import type { TickOutput } from '@/api/types'
+import { runOutputQuery, tickOutputQuery } from '@/api/queries'
+import type { RawOutput } from '@/api/types'
 import { Disclosure } from '@/components/disclosure'
 import { JsonTokens } from '@/components/json-text'
 import { Empty, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
@@ -15,18 +16,77 @@ import { byteSize } from '@/lib/ticks'
 
 /**
  * A tick's overseer output as written (DESIGN §22): its stdout, a `--- stderr ---` line, and its stderr, the lines
- * the transcript leaves out included. Hidden until the operator shows it, so a tick's page reads the file only when
- * asked; it opens at its end, where stderr is. All of it is agent output, rendered as text. Its JSON is one line an
- * event, as written, until the operator turns on pretty, which each tick's panel remembers (src/lib/pretty-output.ts).
- * `path` is where the file is, or null when the tick kept none.
+ * the transcript leaves out included. Its JSON is one line an event, as written, until the operator turns on pretty,
+ * which each tick's panel remembers (src/lib/pretty-output.ts). `path` is where the file is, or null when the tick kept
+ * none: its overseer has not started, or never ran.
  */
 export function TickOutputPanel({ id, path, running }: { id: number; path: string | null; running: boolean }) {
-    const [shown, setShown] = useState(false)
-    const { data } = useQuery({ ...tickOutputQuery(id), enabled: shown && path !== null })
     const pretty = usePrettyOutput(id)
     return (
+        <OutputPanel
+            query={tickOutputQuery(id)}
+            file={path}
+            none={running ? 'no output yet: the overseer has not started' : 'no output kept'}
+            whose="the overseer"
+            written="stdout, then stderr"
+            pretty={pretty}
+            onPretty={(on) => setPrettyOutput(id, on)}
+            testId="tick-output"
+        />
+    )
+}
+
+/**
+ * A run's log as written (DESIGN §22): its setup commands' output, then its worker's stdout, stderr, and exit, each
+ * under a `--- ... ---` line canopy writes, so a run that failed before its first event says why. Pretty is the page's
+ * alone, not remembered: a tick's panel is the one read again and again.
+ */
+export function RunOutputPanel({ id }: { id: number }) {
+    const [pretty, setPretty] = useState(false)
+    return (
+        <OutputPanel
+            query={runOutputQuery(id)}
+            // Its path is the Run panel's log field, with its copy button: named once.
+            file="the run’s log"
+            none="no log kept"
+            whose="the run"
+            written="its setup commands’ output, then the worker’s stdout and stderr"
+            pretty={pretty}
+            onPretty={setPretty}
+            testId="run-output"
+        />
+    )
+}
+
+/**
+ * The end of a file of agent output as written, hidden until the operator shows it, so a page reads the file only when
+ * asked; it opens at its end, where stderr is. All of it is agent output, rendered as text. `file` names it while
+ * hidden, or is null when there is none to show.
+ */
+function OutputPanel<K extends QueryKey>({
+    query,
+    file,
+    none,
+    whose,
+    written,
+    pretty,
+    onPretty,
+    testId,
+}: {
+    query: UseQueryOptions<RawOutput, Error, RawOutput, K>
+    file: string | null
+    none: string
+    whose: string
+    written: string
+    pretty: boolean
+    onPretty: (on: boolean) => void
+    testId: string
+}) {
+    const [shown, setShown] = useState(false)
+    const { data } = useQuery({ ...query, enabled: shown && file !== null })
+    return (
         <Collapsible asChild open={shown} onOpenChange={setShown}>
-            <Panel data-testid="tick-output">
+            <Panel data-testid={testId}>
                 <PanelHeader label="Output">
                     <span className="flex items-center gap-3">
                         {shown && data?.status === 'read' && (
@@ -36,7 +96,7 @@ export function TickOutputPanel({ id, path, running }: { id: number; path: strin
                             <Toggle
                                 size="xs"
                                 pressed={pretty}
-                                onPressedChange={(on) => setPrettyOutput(id, on)}
+                                onPressedChange={onPretty}
                                 title={
                                     pretty ? 'Show each event on one line, as written' : 'Lay each event out, indented'
                                 }
@@ -45,21 +105,23 @@ export function TickOutputPanel({ id, path, running }: { id: number; path: strin
                                 Pretty
                             </Toggle>
                         )}
-                        {path !== null && <Disclosure open={shown} what="output" />}
+                        {file !== null && <Disclosure open={shown} what="output" />}
                     </span>
                 </PanelHeader>
-                {path === null ? (
-                    <Empty>
-                        {running ? 'no output yet: the overseer’s is written when it ends' : 'no output kept'}
-                    </Empty>
+                {file === null ? (
+                    <Empty>{none}</Empty>
                 ) : (
                     <>
                         <CollapsibleContent>
-                            {data === undefined ? <PanelSkeleton /> : <Body output={data} pretty={pretty} />}
+                            {data === undefined ? (
+                                <PanelSkeleton />
+                            ) : (
+                                <Body output={data} pretty={pretty} whose={whose} testId={testId} />
+                            )}
                         </CollapsibleContent>
                         {!shown && (
                             <p className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                                <span className="break-all">{path}</span> as written: stdout, then stderr
+                                <span className="break-all">{file}</span> as written: {written}
                             </p>
                         )}
                     </>
@@ -69,12 +131,22 @@ export function TickOutputPanel({ id, path, running }: { id: number; path: strin
     )
 }
 
-function Body({ output, pretty }: { output: TickOutput; pretty: boolean }) {
+function Body({
+    output,
+    pretty,
+    whose,
+    testId,
+}: {
+    output: RawOutput
+    pretty: boolean
+    whose: string
+    testId: string
+}) {
     if (output.status === 'no_output') {
         return <Empty>its output is gone, or is not a file canopy reads</Empty>
     }
     if (output.text === '') {
-        return <Empty>empty: the overseer wrote nothing</Empty>
+        return <Empty>empty: {whose} wrote nothing</Empty>
     }
     return (
         <>
@@ -84,7 +156,7 @@ function Body({ output, pretty }: { output: TickOutput; pretty: boolean }) {
                 </p>
             )}
             <PanelScroll
-                label="the overseer's output"
+                label={`${whose}'s output`}
                 // Open at the end, where stderr and the session's last events are, and again on a switch to or from
                 // pretty: it moves every line, so the place the operator had scrolled to is gone.
                 key={pretty ? 'pretty' : 'compact'}
@@ -93,7 +165,7 @@ function Body({ output, pretty }: { output: TickOutput; pretty: boolean }) {
                         el.scrollTop = el.scrollHeight
                     }
                 }}
-                data-testid="tick-output-text"
+                data-testid={`${testId}-text`}
             >
                 <pre className="p-3 font-mono text-xs break-all whitespace-pre-wrap">
                     {jsonLines(output.text, pretty).map((tokens, i) => (

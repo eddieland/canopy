@@ -270,9 +270,10 @@ def test_with_a_secret_the_app_loads_but_every_api_route_needs_a_session(ui: Pat
     assert c.get("/api/session").json() == {"signed_in": False, "token": None}
     paths = ("/api/meta", "/api/attention", "/api/runs", "/api/tickets", "/api/tickets/ABC-102", "/api/events")
     # A transcript is agent output from a file, and a review's diff the PR's text: as much the operator's as the rest.
-    files = ("/api/runs/39", "/api/runs/39/transcript", "/api/ticks/2/transcript", "/api/reviews", "/api/reviews/4")
+    files = ("/api/runs/39", "/api/runs/39/transcript", "/api/runs/40/output", "/api/ticks/2/transcript")
+    reviews = ("/api/reviews", "/api/reviews/4")
     chores = ("/api/chores/deps/runs/2", "/api/chores/deps/runs/2/transcript")
-    for path in (*paths, *files, *chores):
+    for path in (*paths, *files, *reviews, *chores):
         assert c.get(path).status_code == 401, path
     assert c.post("/api/tickets/ABC-102/start", headers={"origin": ORIGIN}).status_code == 401
 
@@ -852,6 +853,7 @@ def test_openapi_names_the_stream_event_and_every_route(capsys: pytest.CaptureFi
         "/api/runs",
         "/api/runs/{run_id}",
         "/api/runs/{run_id}/transcript",
+        "/api/runs/{run_id}/output",
         "/api/runs/{run_id}/memory",
         "/api/memory",
         "/api/memory/{memory_id}/promote",

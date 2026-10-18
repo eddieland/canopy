@@ -24,7 +24,7 @@ def test_a_run_page_is_the_run_as_the_runs_list_shows_it(backend: Backend) -> No
 
 def test_no_such_run_is_a_404_and_a_run_id_is_a_positive_integer(backend: Backend) -> None:
     c = client(None, backend)
-    for path in ("/api/runs/99", "/api/runs/99/transcript"):
+    for path in ("/api/runs/99", "/api/runs/99/transcript", "/api/runs/99/output"):
         missing = c.get(path)
         assert (missing.status_code, missing.json()["detail"]) == (404, "no run 99")
     assert c.get("/api/runs/0/transcript").status_code == 422
@@ -178,6 +178,21 @@ def test_a_ticks_output_is_the_end_of_its_file_as_written_stderr_included(backen
     missing = c.get("/api/ticks/99/output")
     assert (missing.status_code, missing.json()["detail"]) == (404, "no tick 99")
     assert c.get("/api/ticks/0/output").status_code == 422
+
+
+def test_a_runs_output_is_the_end_of_its_log_as_written_setup_and_stderr_included(backend: Backend) -> None:
+    c = client(None, backend)
+    found = c.get("/api/runs/40/output").json()
+    with backend.open() as ctx:
+        written = (ctx.state_dir / "runs" / "40.log").read_text()
+    assert found == {"status": "read", "text": written, "size": len(written.encode()), "truncated": False}
+    # What the transcript leaves out: its setup command's output, and the runtime's own lines on stderr.
+    assert found["text"].startswith("--- setup web stdout ---\n")
+    assert "--- worker stderr ---\nERROR " in found["text"]
+    transcript_text = json.dumps(c.get("/api/runs/40/transcript").json())
+    assert "Packages: +412" not in transcript_text
+    assert "rate limited: retry after" not in transcript_text
+    assert c.get("/api/runs/0/output").status_code == 422
 
 
 def test_a_chore_runs_page_is_its_row_and_the_whole_of_what_it_reported(backend: Backend) -> None:

@@ -171,6 +171,25 @@ test("a failed run's transcript ends in the runtime's error, and a running one's
     await expect(tools.last()).toContainText('npm test -- login')
 })
 
+test("a run's output is its log as written: what its setup commands and the runtime printed, read when shown", async ({
+    page,
+}) => {
+    await page.goto('runs/40')
+    await settled(page)
+    const output = page.getByTestId('run-output')
+    await expect(output).toContainText('the run’s log as written: its setup commands’ output')
+    await expect(output.getByTestId('run-output-text')).toHaveCount(0)
+
+    await output.getByRole('button', { name: 'Show output' }).click()
+    const text = output.getByTestId('run-output-text')
+    await expect(text).toContainText('--- setup web stdout ---')
+    await expect(text).toContainText('Packages: +412')
+    await expect(text).toContainText('error=rate limited: retry after 30s')
+    await expect(text).toContainText('--- worker exit 1 ---')
+    // None of which is the session's: the transcript leaves it out.
+    await expect(page.getByTestId('transcript-entries')).not.toContainText('Packages: +412')
+})
+
 test("a transcript's chart names what grew each call's context, and shows the largest addition's row", async ({
     page,
 }) => {
