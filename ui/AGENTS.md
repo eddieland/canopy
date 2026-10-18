@@ -25,8 +25,8 @@ memory, and do not upgrade in passing.
 - Shiki for a review's diff alone (D121): only `src/lib/highlight.ts` and `src/lib/languages.ts`, its grammars,
   import it, and only on demand, each grammar its own chunk.
 - jsdiff (`diff`) for a plan's word diff alone: only `src/lib/plan-diff.ts` imports it.
-- oxlint (with the React Compiler's rules and eslint-plugin-jsdoc's, and type-aware rules through oxlint-tsgolint)
-  and oxfmt, Vitest, Playwright.
+- oxlint (with the React Compiler's rules, eslint-plugin-jsdoc's, eslint-plugin-playwright's on `e2e/`, and
+  type-aware rules through oxlint-tsgolint) and oxfmt, Vitest, Playwright.
 
 Add a library as the repository's `AGENTS.md` says, when it clearly beats the code we would write instead, and pin it
 exactly like the rest. One that only a few files need is held to them, as Tiptap (D120) and Shiki (D121) are.
@@ -149,6 +149,9 @@ change to the rest; a write goes through `canopy.core.conversation`, never SQL o
   that fail the comparison, so a change subtle enough to pass within the threshold (a token's small shift) leaves the
   old images in place: run it with `update` set to `all` (`-f update=all`) to rewrite every one.
   `npx playwright test --update-snapshots=changed` does the same locally, on a machine whose rendering may not match.
+- On CI, Playwright runs a failed test once more, and one that passes then still fails the run, named flaky in the
+  report: fix it, as a broken one is. The lint holds `e2e/` to eslint-plugin-playwright's recommended rules, which
+  refuse most of what makes a browser test flaky.
 - Playwright hides scrollbars in headless Chromium, so those screenshots never show one. `e2e/scrollbars.spec.ts`
   keeps them, for what a scrollbar is part of: a long list scrolling in its panel.
 
