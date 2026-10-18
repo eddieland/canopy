@@ -32,6 +32,8 @@ export const LISTS = {
     'tick-decisions': 'oldest',
     /** The tickets page, by latest activity. */
     tickets: 'newest',
+    /** The memory page's proposals, oldest first: the nearest to lapsing undecided. */
+    'memory-proposals': 'oldest',
     /** The pull requests page, by latest activity. */
     'pull-requests': 'newest',
     /** The reviews page. */

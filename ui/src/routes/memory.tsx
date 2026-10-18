@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, Link } from '@tanstack/react-router'
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { memoryQuery, ticketMemoryQuery } from '@/api/queries'
 import type {
@@ -14,17 +15,40 @@ import type {
 } from '@/api/types'
 import { Age } from '@/components/age'
 import { Disclosure } from '@/components/disclosure'
+import { SearchField } from '@/components/input'
 import { MemoryBand, MemoryDigestView, MemoryRows, ProposalFacts } from '@/components/memory'
 import { LessonActions, MemorySaid, NoteActions, ProposalActions } from '@/components/memory-actions'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { OrderToggle } from '@/components/order-toggle'
 import { ListRow } from '@/components/rows'
+import { RunDot } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import { ordered, useListOrder } from '@/lib/list-order'
 import { ticketNotesUsedText } from '@/lib/memory'
 import type { TierModes } from '@/lib/memory'
+import {
+    MEMORY_QUERY_MAX,
+    MEMORY_SHOWS,
+    memoryQueryOf,
+    memoryRepoOf,
+    memoryShowOf,
+    memoryShown,
+    shownCount,
+    ticketNotesShown,
+} from '@/lib/memory-filter'
+import type { MemoryFilter, MemoryShow } from '@/lib/memory-filter'
 import { rowLineFrom } from '@/lib/rows'
+import { useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
+
+/** The memory page's search params, each optional, so a link to the page names none. */
+interface MemorySearch {
+    q?: string | undefined
+    repo?: string | undefined
+    show?: MemoryShow | undefined
+}
 
 /**
  * Agent memory (DESIGN §28), what waits on the operator first: the proposals, then the lessons under the band that says
@@ -32,8 +56,16 @@ import { cn } from '@/lib/utils'
  * a busy workspace's thousands of notes and hundreds of lessons keep the page in reach. A proposal is promoted or
  * rejected, and a lesson renewed or forgotten, from its row, as `canopy memory` does, while `memory.proposals` is on
  * (ROADMAP M52). What every run is served of the lessons is folded under them, since it is the prompt's, not a queue.
+ * `?q=` keeps what holds every word, `?repo=` the proposals and lessons for a repository's runs, and `?show=` the
+ * lessons that stand so, over what the page already read.
  */
 export const Route = createFileRoute('/memory')({
+    // Typed search params, as the tickets page's: every key returned, undefined when the page does not offer it.
+    validateSearch: (search: Record<string, unknown>): MemorySearch => ({
+        q: memoryQueryOf(search['q']),
+        repo: memoryRepoOf(search['repo']),
+        show: memoryShowOf(search['show']),
+    }),
     component: MemoryPage,
 })
 
@@ -67,20 +99,44 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
     const { tickets, proposals, lessons, lessons_digest: digest } = overview
     const acting = state.lessons.mode !== 'off'
     const modes = { ticket_notes: state.ticket_notes.mode, lessons: state.lessons.mode }
+    const search = Route.useSearch()
+    const filter: MemoryFilter = { q: search.q, repo: search.repo, show: search.show }
+    const now = useNow()
+    const shownProposals = proposals.filter((p) => memoryShown(p.entry, { ...filter, show: undefined }, now, modes))
+    const shownLessons = lessons.filter((m) => memoryShown(m, filter, now, modes))
+    const shownTickets = tickets.filter((t) => ticketNotesShown(t, filter.q))
     return (
-        // Wide, the queue keeps the width and the tickets with notes sit beside it, in the narrow order's last place.
-        <div
-            className={cn(
-                'stagger flex flex-col gap-6',
-                '2xl:grid 2xl:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] 2xl:items-start',
-            )}
-        >
-            <div className="flex flex-col gap-6">
-                <Proposals proposals={proposals} acting={acting} />
-                <Lessons lessons={lessons} digest={digest} tier={state.lessons} acting={acting} modes={modes} />
+        <>
+            <FilterBar repos={overview.repos} />
+            {/* Wide, the queue keeps the width and the tickets with notes sit beside it, last as when narrow. */}
+            <div
+                className={cn(
+                    'stagger flex flex-col gap-6',
+                    '2xl:grid 2xl:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] 2xl:items-start',
+                )}
+            >
+                <div className="flex flex-col gap-6">
+                    <Proposals proposals={shownProposals} total={proposals.length} filter={filter} acting={acting} />
+                    <Lessons
+                        lessons={shownLessons}
+                        total={lessons.length}
+                        filter={filter}
+                        digest={digest}
+                        tier={state.lessons}
+                        acting={acting}
+                        modes={modes}
+                    />
+                </div>
+                <TicketNotesPanel
+                    tickets={shownTickets}
+                    total={tickets.length}
+                    filter={filter}
+                    tier={state.ticket_notes}
+                    acting={acting}
+                    modes={modes}
+                />
             </div>
-            <TicketNotesPanel tickets={tickets} tier={state.ticket_notes} acting={acting} modes={modes} />
-        </div>
+        </>
     )
 }
 
@@ -89,7 +145,19 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
  * until it is promoted, at any mode, so the panel says that rather than the tier's band, which heads the lessons. Its
  * count wears `status-blocked` while one waits, as the nav's does.
  */
-function Proposals({ proposals, acting }: { proposals: MemoryProposal[]; acting: boolean }) {
+function Proposals({
+    proposals,
+    total,
+    filter,
+    acting,
+}: {
+    proposals: MemoryProposal[]
+    total: number
+    filter: MemoryFilter
+    acting: boolean
+}) {
+    const order = useListOrder('memory-proposals')
+    const filtered = filter.q !== undefined || filter.repo !== undefined
     // What a verb did: its row leaves the list once it is done, so it is said under the panel's header.
     const [said, setSaid] = useState<string | null>(null)
     const facts = new Map(proposals.map((p) => [p.entry.id, <ProposalFacts key={p.entry.id} proposal={p} />]))
@@ -100,28 +168,35 @@ function Proposals({ proposals, acting }: { proposals: MemoryProposal[]; acting:
     return (
         <Panel data-testid="memory-proposals">
             <PanelHeader label="Proposals">
-                <span
-                    className={cn(
-                        'readout text-xs',
-                        proposals.length > 0 ? 'text-status-blocked' : 'text-muted-foreground',
-                    )}
-                    data-testid="memory-proposals-count"
-                >
-                    {proposals.length}
+                <span className="flex items-center gap-x-3">
+                    {proposals.length > 1 && <OrderToggle list="memory-proposals" />}
+                    <span
+                        className={cn('readout text-xs', total > 0 ? 'text-status-blocked' : 'text-muted-foreground')}
+                        data-testid="memory-proposals-count"
+                    >
+                        {shownCount(proposals.length, total, filtered)}
+                    </span>
                 </span>
             </PanelHeader>
             <p className="border-b px-3 py-2 text-sm text-muted-foreground">
                 What workers proposed. None reaches a run until you promote it.
             </p>
             <MemorySaid said={said} className="border-b px-3 py-2" />
-            {proposals.length === 0 ? (
+            {proposals.length === 0 && total > 0 ? (
+                <Empty>no proposals{filterWords(filter)}</Empty>
+            ) : proposals.length === 0 ? (
                 // Cleared from this page just now: the one queue memory has is empty, and that is worth a word.
                 <Empty className={cn(said !== null && 'text-accent')}>
                     {said === null ? 'no proposals wait on you now' : 'all decided: no proposal waits on you'}
                 </Empty>
             ) : (
                 <PanelScroll label="Proposals">
-                    <MemoryRows entries={proposals.map((p) => p.entry)} ticket facts={facts} below={below} />
+                    <MemoryRows
+                        entries={ordered('memory-proposals', order, proposals).map((p) => p.entry)}
+                        ticket
+                        facts={facts}
+                        below={below}
+                    />
                 </PanelScroll>
             )}
         </Panel>
@@ -134,12 +209,16 @@ function Proposals({ proposals, acting }: { proposals: MemoryProposal[]; acting:
  */
 function Lessons({
     lessons,
+    total,
+    filter,
     digest,
     tier,
     acting,
     modes,
 }: {
     lessons: MemoryEntry[]
+    total: number
+    filter: MemoryFilter
     digest: MemoryDigest | null
     tier: MemoryTier
     acting: boolean
@@ -152,13 +231,32 @@ function Lessons({
     return (
         <Panel data-testid="memory-lessons">
             <PanelHeader label="Lessons">
-                <span className="readout text-xs text-muted-foreground" data-testid="memory-lessons-count">
-                    {lessons.length}
+                <span className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                    {modes.lessons === 'use' && (
+                        <nav aria-label="Filter lessons by where they stand" className="flex items-center gap-1">
+                            <FilterLink change={{ show: undefined }} selected={filter.show === undefined}>
+                                all
+                            </FilterLink>
+                            {MEMORY_SHOWS.map((s) => (
+                                <FilterLink key={s} change={{ show: s }} selected={filter.show === s}>
+                                    <RunDot state={s === 'wrong' ? 'failed' : 'blocked'} />
+                                    {s}
+                                </FilterLink>
+                            ))}
+                        </nav>
+                    )}
+                    <span className="readout text-xs text-muted-foreground" data-testid="memory-lessons-count">
+                        {shownCount(lessons.length, total, isFiltered(filter))}
+                    </span>
                 </span>
             </PanelHeader>
             <MemoryBand tier={tier} name="lessons" />
             <MemorySaid said={said} className="border-b px-3 py-2" />
-            {lessons.length === 0 ? (
+            {lessons.length === 0 && total > 0 ? (
+                <Empty>
+                    no {filter.show === undefined ? '' : `${filter.show} `}lessons{filterWords(filter)}
+                </Empty>
+            ) : lessons.length === 0 ? (
                 <Empty>no lessons yet: promote a proposal above, or a ticket&apos;s note from its page</Empty>
             ) : (
                 <PanelScroll label="Lessons">
@@ -191,28 +289,37 @@ function ServedDigest({ digest }: { digest: MemoryDigest }) {
  */
 function TicketNotesPanel({
     tickets,
+    total,
+    filter,
     tier,
     acting,
     modes,
 }: {
     tickets: TicketNotes[]
+    total: number
+    filter: MemoryFilter
     tier: MemoryTier
     acting: boolean
     modes: TierModes
 }) {
     const [said, setSaid] = useState<string | null>(null)
     const notes = tickets.reduce((sum, t) => sum + t.count, 0)
+    const ticketsWord = total === 1 ? 'ticket' : 'tickets'
+    const notesWord = notes === 1 ? 'note' : 'notes'
+    const shown = shownCount(tickets.length, total, filter.q !== undefined)
+    const ticketsCount = `${shown} ${ticketsWord} · ${notes} ${notesWord}`
     return (
         <Panel data-testid="memory-notes">
             <PanelHeader label="Ticket notes">
                 <span className="readout text-xs text-muted-foreground" data-testid="memory-notes-count">
-                    {tickets.length} {tickets.length === 1 ? 'ticket' : 'tickets'} · {notes}{' '}
-                    {notes === 1 ? 'note' : 'notes'}
+                    {ticketsCount}
                 </span>
             </PanelHeader>
             <MemoryBand tier={tier} name="ticket notes" />
             <MemorySaid said={said} className="border-b px-3 py-2" />
-            {tickets.length === 0 ? (
+            {tickets.length === 0 && total > 0 ? (
+                <Empty>no ticket with notes has “{filter.q?.trim()}” in its key or title</Empty>
+            ) : tickets.length === 0 ? (
                 <Empty>no notes in force now: a ticket&apos;s runs write them as they end</Empty>
             ) : (
                 <PanelScroll label="Ticket notes">
@@ -230,6 +337,92 @@ function TicketNotesPanel({
             )}
         </Panel>
     )
+}
+
+/**
+ * The page's filter, over every panel: a field for words, kept in `?q=` as the tickets page keeps its own, narrowing
+ * as the operator types and replacing the history entry; and a chip for each repository, kept in `?repo=`.
+ */
+function FilterBar({ repos }: { repos: string[] }) {
+    const filter = Route.useSearch()
+    const navigate = Route.useNavigate()
+    const [value, setValue] = useState(filter.q ?? '')
+    // What `?q=` was when the field last looked, so a change from outside it shows there.
+    const [seen, setSeen] = useState(filter.q)
+    if (filter.q !== seen) {
+        setSeen(filter.q)
+        setValue(filter.q ?? '')
+    }
+
+    function find(text: string) {
+        const q = memoryQueryOf(text)
+        setValue(text)
+        setSeen(q)
+        void navigate({ search: (prev) => ({ ...prev, q }), replace: true })
+    }
+
+    return (
+        <search className="flex flex-wrap items-center gap-x-3 gap-y-2" data-testid="memory-filter">
+            <SearchField
+                aria-label="Filter memory by key, text, ticket, or repository"
+                placeholder="Filter by key, text, ticket, or repository"
+                maxLength={MEMORY_QUERY_MAX}
+                value={value}
+                onChange={(event) => find(event.target.value)}
+                onKeyDown={(event) => {
+                    if (event.key === 'Escape') {
+                        event.currentTarget.blur()
+                    }
+                }}
+                onClear={() => find('')}
+                clearLabel="Clear the filter"
+                className="min-w-64 flex-1 basis-80"
+            />
+            {repos.length > 1 && (
+                <nav aria-label="Filter by repository" className="flex flex-wrap items-center gap-1">
+                    <FilterLink change={{ repo: undefined }} selected={filter.repo === undefined}>
+                        every repository
+                    </FilterLink>
+                    {repos.map((r) => (
+                        <FilterLink key={r} change={{ repo: r }} selected={filter.repo === r}>
+                            {r}
+                        </FilterLink>
+                    ))}
+                </nav>
+            )}
+        </search>
+    )
+}
+
+/** A filter chip, selected when the validated search matches it; following it changes only what `change` names. */
+function FilterLink({ change, selected, children }: { change: MemorySearch; selected: boolean; children: ReactNode }) {
+    const search = Route.useSearch()
+    return (
+        <Link
+            to="/memory"
+            search={{ ...search, ...change }}
+            data-selected={selected}
+            className={cn(
+                'flex h-6 items-center gap-1.5 rounded-sm px-2 font-mono text-xs text-muted-foreground',
+                'hover:bg-surface-raised hover:text-foreground',
+                'data-[selected=true]:bg-accent/16 data-[selected=true]:text-foreground',
+            )}
+        >
+            {children}
+        </Link>
+    )
+}
+
+/** Whether any filter is set. */
+function isFiltered(filter: MemoryFilter): boolean {
+    return filter.q !== undefined || filter.repo !== undefined || filter.show !== undefined
+}
+
+/** What a panel's empty list says of the filter that left nothing: ` with “billing” for web`. */
+function filterWords(filter: MemoryFilter): string {
+    const q = filter.q === undefined ? '' : ` with “${filter.q.trim()}”`
+    const repo = filter.repo === undefined ? '' : ` for ${filter.repo}`
+    return `${q}${repo}`
 }
 
 /**

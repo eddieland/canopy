@@ -228,34 +228,39 @@ Rules:
   counted in `status-blocked` while one waits as the nav counts them, and saying that none reaches a run until promoted;
   then Lessons under the tier's band, the digest folded at its foot (`Show what every run is served`); then Ticket
   notes, a row a ticket opening to its notes, which it reads only then, counted `2 tickets · 3 notes`. Wide, the tickets
-  sit beside the other two. Each list scrolls in its panel, and a row in force that its digest's cap leaves out says so
-  in its second line, in the same words for served and recording that the digest's label keeps apart. The verbs on
-  memory (`src/components/memory-actions.tsx`) sit in a line under a row, `xs` as a row's buttons are, and only while
-  lessons are on: an outline `Promote`, a ghost `As written` that promotes at once, and a ghost `Reject` under a
-  proposal, `Promote` under a ticket's note that keeps its text, on the memory page as on its ticket's, and `Renew`
-  under a lesson, outlined once it is `due` or `wrong` and a muted ghost before, since only then does it ask for a
-  decision; each ends its line with a ghost `Forget`, muted at rest, the rarest verb and one that cannot be undone, and
-  in `status-failed` while its row is hovered or it has the focus, but on an attention item. A memory's row leads with
-  its standing, a dot and its word in a run state's color (`memoryStand`): `wrong` (failed) and `due` (blocked) for a
-  lesson that calls for the operator, `pending` (blocked), `active` (done), `superseded` or `invalid` (stopped), and
-  `recorded` (stopped) for one in force under a tier that only records, which no run reads, so a row never reads as in
-  force under a `recording` band; then its ref, its ticket in a list across tickets, its repository's chip, each in a
-  fixed column, the key in the free column, and its use only once a run relied on it. Under the text, one line says
-  where it came from, a proposal's run's end, ticket, lapse, and `private` chip (`ProposalFacts`) among it. A ticket's
-  row on the memory page carries its title (`TicketTitle`). A row's ref copies (`CopyButton`, shown on the row's hover),
-  since Forget asks for it typed. A proposal says when it lapses undecided (`lapses in 3d`), in `status-blocked` in its
-  last two days; a lesson names what it was promoted from, as the CLI does, and when a run reported it wrong.
-  **Promote** opens its form in place of that line, on the surface with a hairline: the lesson's words in a field,
-  starting as the source's own, with their count against the bound in the readout at its corner (in `status-failed` past
-  it, when the button is disabled); the repositories whose runs read it as a segmented control, `every repository` first
-  for a source that names none; a muted line naming the lesson in force under its key that it would replace, as plain
-  `MemoryText`, reserved while the lessons are read; the CLI's warning in `status-blocked` while the text is still a
-  private ticket's run's own words; and `Promote memory:5` with a ghost `Cancel`. **Forget** asks for the memory's ref
-  typed out, in the same form as a ticket's Forget asks for its key (`ForgetForm`). A row can leave once its verb is
-  done, so what it did is said once, in the CLI's words, under the panel's header or band, and only a refusal stays
-  under the row; proposals all decided from the page say so in the accent. On the attention list, a `memory_proposal`
-  item lists its proposals with `Promote as written`, which saves at once, and `Reject`; a `lesson_review`, its lessons
-  due with `Renew` alone.
+  sit beside the other two. Over all three, a filter field and a chip for each repository narrow the page (`?q=`,
+  `?repo=`, `src/lib/memory-filter.ts`), as the tickets filters do: a word in a memory's key, text, ticket, or
+  repository, or a ticket's key or title; a lesson for every repository is kept under any repository's chip. While
+  lessons are in use, the Lessons header has `all`, `due`, and `wrong` chips with their dots (`?show=`). A filtered
+  count says `2 of 7`, and an empty result says which filter left nothing. The proposals flip with an `OrderToggle`,
+  oldest first by default, which is the nearest to lapsing. Each list scrolls in its panel, and a row in force that its
+  digest's cap leaves out says so in its second line, in the same words for served and recording that the digest's label
+  keeps apart. The verbs on memory (`src/components/memory-actions.tsx`) sit in a line under a row, `xs` as a row's
+  buttons are, and only while lessons are on: an outline `Promote`, a ghost `As written` that promotes at once, and a
+  ghost `Reject` under a proposal, `Promote` under a ticket's note that keeps its text, on the memory page as on its
+  ticket's, and `Renew` under a lesson, outlined once it is `due` or `wrong` and a muted ghost before, since only then
+  does it ask for a decision; each ends its line with a ghost `Forget`, muted at rest, the rarest verb and one that
+  cannot be undone, and in `status-failed` while its row is hovered or it has the focus, but on an attention item. A
+  memory's row leads with its standing, a dot and its word in a run state's color (`memoryStand`): `wrong` (failed) and
+  `due` (blocked) for a lesson that calls for the operator, `pending` (blocked), `active` (done), `superseded` or
+  `invalid` (stopped), and `recorded` (stopped) for one in force under a tier that only records, which no run reads, so
+  a row never reads as in force under a `recording` band; then its ref, its ticket in a list across tickets, its
+  repository's chip, each in a fixed column, the key in the free column, and its use only once a run relied on it. Under
+  the text, one line says where it came from, a proposal's run's end, ticket, lapse, and `private` chip
+  (`ProposalFacts`) among it. A ticket's row on the memory page carries its title (`TicketTitle`). A row's ref copies
+  (`CopyButton`, shown on the row's hover), since Forget asks for it typed. A proposal says when it lapses undecided
+  (`lapses in 3d`), in `status-blocked` in its last two days; a lesson names what it was promoted from, as the CLI does,
+  and when a run reported it wrong. **Promote** opens its form in place of that line, on the surface with a hairline:
+  the lesson's words in a field, starting as the source's own, with their count against the bound in the readout at its
+  corner (in `status-failed` past it, when the button is disabled); the repositories whose runs read it as a segmented
+  control, `every repository` first for a source that names none; a muted line naming the lesson in force under its key
+  that it would replace, as plain `MemoryText`, reserved while the lessons are read; the CLI's warning in
+  `status-blocked` while the text is still a private ticket's run's own words; and `Promote memory:5` with a ghost
+  `Cancel`. **Forget** asks for the memory's ref typed out, in the same form as a ticket's Forget asks for its key
+  (`ForgetForm`). A row can leave once its verb is done, so what it did is said once, in the CLI's words, under the
+  panel's header or band, and only a refusal stays under the row; proposals all decided from the page say so in the
+  accent. On the attention list, a `memory_proposal` item lists its proposals with `Promote as written`, which saves at
+  once, and `Reject`; a `lesson_review`, its lessons due with `Renew` alone.
 - **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
   (`NewerBuild`): a ghost button on the accent's tint at 14%, its label in the accent, the action to take without a
   fill that outshouts the ghost buttons beside it, saying on hover why and that unsent text is lost. It never
