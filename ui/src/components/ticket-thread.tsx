@@ -29,7 +29,7 @@ export function TicketThread({ detail, order }: { detail: TicketDetail; order: O
     const ended = ordered('conversation', order, attempts(detail))
     const latest = forgets.at(-1)
     const folds = ended.map((attempt) => (
-        <Forgotten key={attempt.forget.at} attempt={attempt} order={order} latest={attempt.forget === latest} />
+        <Forgotten key={attempt.number} attempt={attempt} order={order} latest={attempt.forget === latest} />
     ))
     let body
     if (current.length > 0) {
