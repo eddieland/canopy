@@ -39,6 +39,7 @@ describe('rowTemplate', () => {
             ticket: ['run', 'key'],
             'pull-request': ['state', 'pr'],
             memory: ['state', 'id'],
+            'memory-across': ['state', 'id'],
         }
         for (const [kind, lead] of Object.entries(kinds)) {
             expect(ROW_COLUMNS[kind as RowKind].slice(0, 2).map(([name]) => name)).toEqual(lead)

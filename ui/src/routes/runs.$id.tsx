@@ -188,7 +188,7 @@ function RunMemoryPanel({ id }: { id: number }) {
         <Panel data-testid="run-memory">
             <PanelHeader label="Memory">
                 <span className="readout text-xs text-muted-foreground">
-                    ticket notes {words(rendered.ticket_notes)}, lessons {words(rendered.lessons)}
+                    ticket notes: {words(rendered.ticket_notes)}, lessons: {words(rendered.lessons)}
                 </span>
             </PanelHeader>
             <h3 className="px-3 pt-2 panel-label">Wrote</h3>
@@ -219,7 +219,7 @@ function RunMemoryPanel({ id }: { id: number }) {
     )
 }
 
-/** A tier's mode for a run, in the CLI's words. */
+/** A tier's mode for a run, in the words the header's readout and each tier's band use. */
 function words(mode: 'off' | 'record' | 'use'): string {
     return mode === 'use' ? 'in use' : mode === 'record' ? 'recording' : 'off'
 }

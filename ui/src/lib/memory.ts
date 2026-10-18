@@ -48,12 +48,44 @@ export function visibleText(text: string): string {
         .join('')
 }
 
-/** How runs used a memory: `read by no run`, or its use count and when it was last used. */
-export function usedText(entry: Pick<MemoryEntry, 'use_count' | 'last_used_at'>): string {
+/** How runs used a memory, `used by 3 runs`, or nothing while no run has relied on it: a row says what happened. */
+export function usedText(entry: Pick<MemoryEntry, 'use_count' | 'last_used_at'>): string | null {
     if (entry.use_count === 0 || entry.last_used_at === null) {
-        return 'read by no run'
+        return null
     }
     return `used by ${entry.use_count} run${entry.use_count === 1 ? '' : 's'}`
+}
+
+/**
+ * Where a memory stands, in the words a row leads with: its status, but a lesson in force that a run reported wrong is
+ * `wrong`, and one past its review date `due`, since each calls for the operator.
+ */
+export type MemoryStand = MemoryEntry['status'] | 'wrong' | 'due'
+
+/** Where `entry` stands at `now`, as `MemoryStand` says: wrong before due, since a wrong lesson misleads every run. */
+export function memoryStand(
+    entry: Pick<MemoryEntry, 'status' | 'wrong_run_id' | 'review_at'>,
+    now: number,
+): MemoryStand {
+    if (entry.status !== 'active') {
+        return entry.status
+    }
+    if (entry.wrong_run_id !== null) {
+        return 'wrong'
+    }
+    if (entry.review_at !== null && Date.parse(entry.review_at) <= now) {
+        return 'due'
+    }
+    return 'active'
+}
+
+/** When a lesson comes up for review: `review in 82d`, or once that has passed `review overdue 3d`. */
+export function reviewText(reviewAt: string, now: number): string {
+    const left = Date.parse(reviewAt) - now
+    if (left > 0) {
+        return `review in ${age(new Date(now - left).toISOString(), now)}`
+    }
+    return `review overdue ${age(reviewAt, now)}`
 }
 
 /**
@@ -64,9 +96,9 @@ export function leftOutText(served: boolean): string {
     return served ? 'left out of the prompt, past its cap' : 'would be left out at use, past its cap'
 }
 
-/** How runs used a ticket's notes in force: `read by no run`, or how many of them a run relied on. */
-export function ticketNotesUsedText({ count, used }: { count: number; used: number }): string {
-    return used === 0 ? 'read by no run' : `${used} of ${count} used by runs`
+/** How many of a ticket's notes in force a run relied on, `3 of 4 used by runs`, or nothing while none was. */
+export function ticketNotesUsedText({ count, used }: { count: number; used: number }): string | null {
+    return used === 0 ? null : `${used} of ${count} used by runs`
 }
 
 /**

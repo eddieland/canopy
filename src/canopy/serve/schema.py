@@ -1359,6 +1359,8 @@ class TicketNotes(_Model):
     """How many of those a run said it relied on."""
     latest_at: datetime
     """When the newest of them was written."""
+    title: str | None
+    """The ticket's title, as the overseer named it; None while it has named none."""
 
 
 class MemoryOverview(_Model):

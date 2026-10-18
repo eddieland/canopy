@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Fragment, useState } from 'react'
+import { useState } from 'react'
 
 import { ApiError } from '@/api/client'
 import { memoryQuery } from '@/api/queries'
-import { MemoryRows, ProposalProvenance } from '@/components/memory'
+import { MemoryRows, ProposalFacts } from '@/components/memory'
 import { LessonActions, MemorySaid, ProposalActions } from '@/components/memory-actions'
 import { Notice } from '@/components/notice'
 import { Empty, PanelSkeleton } from '@/components/panel'
@@ -27,13 +27,11 @@ export function ProposalsWaiting({ ticketKey }: { ticketKey: string }) {
         return <PanelSkeleton rows={2} className="min-h-32 border-b" />
     }
     const waiting = data.proposals.filter((p) => p.entry.ticket_key === ticketKey)
+    const facts = new Map(waiting.map((p) => [p.entry.id, <ProposalFacts key={p.entry.id} proposal={p} />]))
     const below = new Map(
         waiting.map((p) => [
             p.entry.id,
-            <Fragment key={p.entry.id}>
-                <ProposalProvenance proposal={p} />
-                <ProposalActions proposal={p.entry} asWritten forget={false} onSaid={setSaid} />
-            </Fragment>,
+            <ProposalActions key={p.entry.id} proposal={p.entry} asWritten forget={false} onSaid={setSaid} />,
         ]),
     )
     return (
@@ -41,7 +39,7 @@ export function ProposalsWaiting({ ticketKey }: { ticketKey: string }) {
             {waiting.length === 0 ? (
                 <Empty>none of its proposals waits now: the item leaves at the next tick</Empty>
             ) : (
-                <MemoryRows entries={waiting.map((p) => p.entry)} below={below} />
+                <MemoryRows entries={waiting.map((p) => p.entry)} facts={facts} below={below} />
             )}
             <MemorySaid said={said} className="border-t px-3 py-2" />
             <p className="border-t px-3 py-2 text-xs text-muted-foreground">

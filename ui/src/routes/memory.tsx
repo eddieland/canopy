@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute } from '@tanstack/react-router'
-import { Fragment, useState } from 'react'
+import { useState } from 'react'
 
 import { memoryQuery, ticketMemoryQuery } from '@/api/queries'
 import type {
@@ -14,11 +14,12 @@ import type {
 } from '@/api/types'
 import { Age } from '@/components/age'
 import { Disclosure } from '@/components/disclosure'
-import { MemoryBand, MemoryDigestView, MemoryRows, ProposalProvenance } from '@/components/memory'
+import { MemoryBand, MemoryDigestView, MemoryRows, ProposalFacts } from '@/components/memory'
 import { LessonActions, MemorySaid, NoteActions, ProposalActions } from '@/components/memory-actions'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { ListRow } from '@/components/rows'
 import { TicketLink } from '@/components/ticket-link'
+import { TicketTitle } from '@/components/ticket-title'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ticketNotesUsedText } from '@/lib/memory'
 import { rowLineFrom } from '@/lib/rows'
@@ -89,14 +90,10 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
 function Proposals({ proposals, acting }: { proposals: MemoryProposal[]; acting: boolean }) {
     // What a verb did: its row leaves the list once it is done, so it is said under the panel's header.
     const [said, setSaid] = useState<string | null>(null)
+    const facts = new Map(proposals.map((p) => [p.entry.id, <ProposalFacts key={p.entry.id} proposal={p} />]))
+    const acted = acting ? proposals : []
     const below = new Map(
-        proposals.map((p) => [
-            p.entry.id,
-            <Fragment key={p.entry.id}>
-                <ProposalProvenance proposal={p} />
-                {acting && <ProposalActions proposal={p.entry} onSaid={setSaid} />}
-            </Fragment>,
-        ]),
+        acted.map((p) => [p.entry.id, <ProposalActions key={p.entry.id} proposal={p.entry} onSaid={setSaid} />]),
     )
     return (
         <Panel data-testid="memory-proposals">
@@ -122,7 +119,7 @@ function Proposals({ proposals, acting }: { proposals: MemoryProposal[]; acting:
                 </Empty>
             ) : (
                 <PanelScroll label="Proposals">
-                    <MemoryRows entries={proposals.map((p) => p.entry)} ticket below={below} />
+                    <MemoryRows entries={proposals.map((p) => p.entry)} ticket facts={facts} below={below} />
                 </PanelScroll>
             )}
         </Panel>
@@ -217,9 +214,9 @@ function TicketNotesPanel({ tickets, tier, acting }: { tickets: TicketNotes[]; t
 }
 
 /**
- * A ticket with notes in force: its key, how many, how runs used them, and when the newest was written. Its notes open
- * under it, read only once opened (closed, the content is not mounted), so a workspace of many tickets sends their
- * counts and not every note.
+ * A ticket with notes in force: its key, how many, its title, how runs used them, and when the newest was written.
+ * Its notes open under it, read only once opened (closed, the content is not mounted), so a workspace of many tickets
+ * sends their counts and not every note.
  */
 function TicketNotesRow({ notes, onSaid }: { notes: TicketNotes; onSaid: ((said: string) => void) | undefined }) {
     const [open, setOpen] = useState(false)
@@ -232,7 +229,8 @@ function TicketNotesRow({ notes, onSaid }: { notes: TicketNotes; onSaid: ((said:
                     {/* No taller than a line of text, its chevron in line with the key beside it. */}
                     <Disclosure open={open} what={what} className="-my-1 -ml-2" />
                 </span>
-                <span className="truncate text-xs text-muted-foreground">{ticketNotesUsedText(notes)}</span>
+                <TicketTitle title={notes.title} />
+                <span className="truncate text-right text-xs text-muted-foreground">{ticketNotesUsedText(notes)}</span>
                 <Age at={notes.latest_at} variant="ago" className="text-right" />
                 <CollapsibleContent className={cn('-mx-3 -mb-2.5 border-t', rowLineFrom('key'))}>
                     <OpenNotes ticketKey={notes.ticket_key} onSaid={onSaid} />

@@ -325,7 +325,10 @@ def test_ticket_notes_counts_each_tickets_notes_in_force_the_newest_first(conn: 
     conn.execute("UPDATE memories SET use_count = 2 WHERE id = ?", (used,))
     conn.execute("UPDATE memories SET status = 'superseded' WHERE id = ?", (replaced,))
     # Another ticket's, written after: its row comes first.
-    conn.execute("INSERT INTO tickets (key, repo, first_seen_at, last_seen_at) VALUES ('PROJ-2', 'repo', 'x', 'x')")
+    conn.execute(
+        "INSERT INTO tickets (key, repo, title, first_seen_at, last_seen_at) "
+        "VALUES ('PROJ-2', 'repo', 'Later', 'x', 'x')"
+    )
     conn.execute(
         "INSERT INTO memories (scope, ticket_key, key, body, status, author, run_id, created_at) "
         "SELECT 'ticket', 'PROJ-2', 'later', 'A later note.', 'active', 'worker', run_id, 'y' "
@@ -333,7 +336,7 @@ def test_ticket_notes_counts_each_tickets_notes_in_force_the_newest_first(conn: 
         (used,),
     )
     assert memory.ticket_notes(conn) == [
-        memory.TicketNotes("PROJ-2", count=1, used=0, latest_at="y"),
+        memory.TicketNotes("PROJ-2", count=1, used=0, latest_at="y", title="Later"),
         memory.TicketNotes(KEY, count=2, used=1, latest_at="x"),
     ]
 

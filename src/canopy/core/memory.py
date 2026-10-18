@@ -633,12 +633,13 @@ def notes(conn: sqlite3.Connection, key: str | None = None, *, every: bool = Fal
 
 @dataclass(frozen=True)
 class TicketNotes:
-    """One ticket's notes in force, counted: how many, how many a run relied on, and when the newest was written."""
+    """One ticket's notes in force, counted, and the ticket's title, None while the overseer has named none."""
 
     ticket_key: str
     count: int
     used: int
     latest_at: str
+    title: str | None = None
 
 
 def ticket_notes(conn: sqlite3.Connection) -> list[TicketNotes]:
@@ -648,11 +649,12 @@ def ticket_notes(conn: sqlite3.Connection) -> list[TicketNotes]:
         The tickets, the one whose newest note in force was written last first.
     """
     rows = conn.execute(
-        "SELECT ticket_key, count(*) AS n, sum(use_count > 0) AS used, max(created_at) AS latest FROM memories "
-        "WHERE scope = ? AND status = ? GROUP BY ticket_key ORDER BY latest DESC, ticket_key",
+        "SELECT m.ticket_key, count(*) AS n, sum(m.use_count > 0) AS used, max(m.created_at) AS latest, t.title "
+        "FROM memories m LEFT JOIN tickets t ON t.key = m.ticket_key "
+        "WHERE m.scope = ? AND m.status = ? GROUP BY m.ticket_key ORDER BY latest DESC, m.ticket_key",
         (MemoryScope.TICKET, MemoryStatus.ACTIVE),
     )
-    return [TicketNotes(str(r["ticket_key"]), int(r["n"]), int(r["used"]), str(r["latest"])) for r in rows]
+    return [TicketNotes(str(r["ticket_key"]), int(r["n"]), int(r["used"]), str(r["latest"]), r["title"]) for r in rows]
 
 
 def pending_proposals(conn: sqlite3.Connection) -> list[records.Memory]:

@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { MemoryEntry, MemoryProposal } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
-import { MemoryBand, MemoryDigestView, MemoryRows, MemoryText, ProposalProvenance } from './memory'
+import { MemoryBand, MemoryDigestView, MemoryRows, MemoryText, ProposalFacts } from './memory'
 
 afterEach(() => {
     cleanup()
@@ -144,23 +144,26 @@ describe('MemoryRows', () => {
         expect(screen.getByText(/^reported wrong by/u).textContent).toMatch(/^reported wrong by run:44 \S+ ago$/u)
     })
 
-    it('says a deleted text was deleted, and a memory no run has read so', async () => {
+    it('says a deleted text was deleted, and nothing of use for a memory no run relied on', async () => {
         await renderRows(<MemoryRows entries={[{ ...NOTE, text: null, use_count: 0, last_used_at: null }]} />)
         expect(screen.getByText('text deleted')).toBeDefined()
-        expect(screen.getByText('read by no run')).toBeDefined()
+        expect(screen.queryByText(/used by|read by/u)).toBeNull()
     })
 
-    it('says why a memory stands as it does, and when it is up for review', async () => {
-        const pending = {
-            ...NOTE,
-            status: 'pending' as const,
-            why: 'proposed from 3 notes',
-            review_at: NOTE.created_at,
-        }
+    it('says why a memory stands as it does, on hover and in its line', async () => {
+        const pending = { ...NOTE, status: 'pending' as const, why: 'proposed from 3 notes' }
         await renderRows(<MemoryRows entries={[pending]} />)
         expect(screen.getByTitle('proposed from 3 notes').textContent).toBe('pending')
         expect(screen.getByText('proposed from 3 notes')).toBeDefined()
-        expect(screen.getByText(/^review at/u).textContent).toMatch(/^review at \S/u)
+    })
+
+    it('leads a lesson past its review date with due, and one a run reported wrong with wrong', async () => {
+        const due = { ...NOTE, scope: 'lesson' as const, review_at: '2026-10-01T12:00:00Z' }
+        await renderRows(<MemoryRows entries={[due, { ...due, id: 13, wrong_run_id: 44 }]} />)
+        const [first, second] = screen.getAllByTestId('memory-stand')
+        expect(first?.textContent).toBe('due')
+        expect(second?.textContent).toBe('wrong')
+        expect(screen.getAllByText(/^review overdue \S+$/u)).toHaveLength(2)
     })
 
     it('says which memories in force the digest’s cap leaves out, telling served from recording', async () => {
@@ -215,14 +218,14 @@ function proposal(left: number): MemoryProposal {
     }
 }
 
-describe('ProposalProvenance', () => {
+describe('ProposalFacts', () => {
     it('says when a proposal lapses undecided, and marks one in its last days', async () => {
-        await renderRows(<ProposalProvenance proposal={proposal(5 * 24 * HOUR + HOUR)} />)
+        await renderRows(<ProposalFacts proposal={proposal(5 * 24 * HOUR + HOUR)} />)
         expect(screen.getByTestId('proposal-lapses').textContent).toBe('lapses in 5d')
         expect(screen.getByTestId('proposal-lapses').className).not.toContain('text-status-blocked')
 
         cleanup()
-        await renderRows(<ProposalProvenance proposal={proposal(30 * HOUR)} />)
+        await renderRows(<ProposalFacts proposal={proposal(30 * HOUR)} />)
         expect(screen.getByTestId('proposal-lapses').textContent).toBe('lapses in 1d')
         expect(screen.getByTestId('proposal-lapses').className).toContain('text-status-blocked')
     })
