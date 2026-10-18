@@ -8,31 +8,29 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from canopy.core import drafts, records, replies
+from canopy.core import drafts, replies
 from canopy.core.vocab import DraftKind, DraftStance, DraftStatus, ReplyMode
-from tests.canopy.helpers import KEY, WORK, dispatch_in_tick, dispatch_refused, present, prompt_of, run_with
+from tests.canopy.helpers import (
+    DRAFTS_PR,
+    KEY,
+    WORK,
+    all_drafts,
+    approving,
+    dispatch_in_tick,
+    dispatch_refused,
+    present,
+    prompt_of,
+    run_drafting,
+)
 
 if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
-PR = "https://github.com/acme/api/pull/7"
+PR = DRAFTS_PR
 ISSUE = "https://github.com/acme/api/issues/1"
 REPLY = "Renamed it.\n\n```python\nretries = 3\n```"
 THREAD = {"on": "thread", "pr": PR, "comment": 501, "did": "changed", "text": REPLY}
 TRACKER_POSTS = '\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "canopy-post-github"\n'
-
-
-def approving(env: CanopyEnv, extra: str = "") -> None:
-    env.write_private(f'[trust]\nreview_replies = "approve"\n{extra}')
-
-
-def all_drafts(conn: sqlite3.Connection) -> list[records.Draft]:
-    return records.fetch_all(conn, records.Draft, "SELECT * FROM drafts ORDER BY id")
-
-
-def run_drafting(conn: sqlite3.Connection, entries: object) -> sqlite3.Row:
-    """An implement whose worker opens PR and sends `entries` as its drafts."""
-    return run_with(conn, *WORK, prs={"repo": PR}, drafts=entries)
 
 
 def refused(conn: sqlite3.Connection, run: sqlite3.Row) -> list[tuple[int, str]]:

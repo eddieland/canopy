@@ -35,6 +35,7 @@ in order:
      its slot, and mark it `crashed` (§21). This runs before the worker runs' reconcile, and a running review's lease
      is never returned as stale.
    - Each pending memory proposal written more than 14 days ago expires, in every mode (§28).
+   - Each PR a draft waits on is read, and its drafts checked against what a whole read returned (§29).
    - `capacity = max_workers - (running runs + running review runs)`: a review holds a slot.
    - If `treehouse status` or a return fails, close the tick as `reconcile_failed` and stop; the overseer does not run.
    - Record on the tick the newest journal message and the time: everything up to that point was there for this tick

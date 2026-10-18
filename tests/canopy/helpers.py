@@ -35,6 +35,8 @@ IMPLEMENT = ("--label", LABEL, "--kind", "implement")
 # An `implement` on the branch WORKER_DONE names.
 WORK = (*IMPLEMENT, "--slug", "work")
 WORKER_DONE = json.dumps({"status": "done", "branch": BRANCH, "pr": "https://example.test/pr/1", "summary": "did it"})
+# The PR `run_drafting`'s worker opens.
+DRAFTS_PR = "https://github.com/acme/api/pull/7"
 # What a blocked worker asks (`blocked_result`).
 QUESTION = "Should the button be red or blue?"
 # The last line an overseer prints when it has finished its tick.
@@ -421,6 +423,22 @@ def approve_policy(env: CanopyEnv) -> None:
 def with_memory(canopy_env: CanopyEnv, ticket_notes: str = "off", proposals: str = "off") -> None:
     """Set agent memory's tiers (DESIGN §28) in the workspace's private file, which holds nothing else in the tests."""
     canopy_env.write_private(f'[memory]\nticket_notes = "{ticket_notes}"\nproposals = "{proposals}"\n')
+
+
+def approving(canopy_env: CanopyEnv, extra: str = "") -> None:
+    """Set `trust.review_replies = "approve"` (DESIGN §29) in the private file, with `extra` after it."""
+    canopy_env.write_private(f'[trust]\nreview_replies = "approve"\n{extra}')
+
+
+def all_drafts(conn: sqlite3.Connection) -> list[records.Draft]:
+    """Every draft in the journal, in the order they were written."""
+    return records.fetch_all(conn, records.Draft, "SELECT * FROM drafts ORDER BY id")
+
+
+def run_drafting(conn: sqlite3.Connection, entries: object, *args: str, pr: str = DRAFTS_PR) -> sqlite3.Row:
+    """Run KEY's next run, an `implement` on its `work` branch unless `args` says otherwise, its worker opening `pr` in
+    `repo` and sending `entries` as its drafts."""
+    return run_with(conn, *(args or WORK), prs={"repo": pr}, drafts=entries)
 
 
 def memories(conn: sqlite3.Connection) -> list[records.Memory]:
