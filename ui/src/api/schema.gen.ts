@@ -4887,16 +4887,12 @@ export type components = {
              */
             drafts: components["schemas"]["Draft"][];
             /**
-             * Forgotten At
-             * @description When the operator last forgot its work (DESIGN §22); None if never.
+             * Forgets
+             * @description Each time the operator forgot its work (DESIGN §22), oldest first. The messages up to the latest one's are
+             *     history the loop no longer reads, kept for the operator.
+             * @default []
              */
-            forgotten_at: string | null;
-            /**
-             * Forgotten Message Id
-             * @description The newest message from before that forget, or None: the messages up to it are history the loop no longer
-             *     reads, kept for the operator.
-             */
-            forgotten_message_id: number | null;
+            forgets: components["schemas"]["TicketForget"][];
             /**
              * Limits
              * @description Each kind's limit in each repository it has had runs in, then the review limit of each of its units' PRs canopy
@@ -4921,6 +4917,43 @@ export type components = {
              * @description Its work in each repository.
              */
             units: components["schemas"]["Unit"][];
+        };
+        /**
+         * TicketForget
+         * @description One time the operator forgot a ticket's work (DESIGN §22), and what it dropped.
+         */
+        TicketForget: {
+            /**
+             * At
+             * Format: date-time
+             * @description When.
+             */
+            at: string;
+            /**
+             * Branch
+             * @description The branch it dropped, the operator's to delete.
+             */
+            branch: string | null;
+            /**
+             * Channel
+             * @description How: `cli` or `web`. None, with `prs`, for a forget made before canopy recorded them.
+             */
+            channel: string | null;
+            /**
+             * Message Id
+             * @description The ticket's newest message then, if it had one: the messages up to it are from before the forget.
+             */
+            message_id: number | null;
+            /**
+             * Prs
+             * @description The URLs of the PRs it dropped, the operator's to close; None when not recorded.
+             */
+            prs: string[] | null;
+            /**
+             * Run Id
+             * @description The ticket's newest run then, if it had one.
+             */
+            run_id: number | null;
         };
         /**
          * TicketMemory

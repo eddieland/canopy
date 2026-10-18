@@ -209,7 +209,7 @@ def test_forget_from_the_web_needs_the_key_typed_and_then_forgets_as_canopy_forg
 
     ctx.conn.execute("UPDATE runs SET status = 'done', ended_at = started_at WHERE id = ?", (run_id,))
     ctx.conn.commit()
-    assert c.get(f"/api/tickets/{KEY}").json()["forgotten_at"] is None
+    assert c.get(f"/api/tickets/{KEY}").json()["forgets"] == []
     before = conversation.reply(ctx.conn, conversation.Ref(conversation.TICKET, KEY), "try again", channel="web")
     forgot = c.post(f"/api/tickets/{KEY}/forget", json={"confirm": KEY}, headers=headers)
     assert forgot.json() == {"branch": f"agent/{KEY}-work", "prs": [pr]}
@@ -217,11 +217,21 @@ def test_forget_from_the_web_needs_the_key_typed_and_then_forgets_as_canopy_forg
     assert (ticket.branch, ticket.phase, ticket.forgotten_run_id) == (None, None, run_id)
     assert db.units(ctx.conn, KEY) == []
     assert db.get_run(ctx.conn, run_id) is not None
-    # The page keeps the conversation, and says where the forget falls in it.
+    # The page keeps the conversation, and says where the forget falls in it and what it dropped.
     detail = c.get(f"/api/tickets/{KEY}").json()
-    assert detail["forgotten_at"] is not None
-    assert detail["forgotten_message_id"] == before.message_id
+    [forget] = detail["forgets"]
+    assert {k: v for k, v in forget.items() if k != "at"} == {
+        "channel": "web",
+        "run_id": run_id,
+        "message_id": before.message_id,
+        "branch": f"agent/{KEY}-work",
+        "prs": [pr],
+    }
     assert [m["id"] for m in detail["messages"]] == [before.message_id]
+    # Nothing has happened since, so there is nothing new to forget.
+    assert refused(c.post(f"/api/tickets/{KEY}/forget", json={"confirm": KEY}, headers=headers)).startswith(
+        "already_forgotten"
+    )
 
 
 def ended_run(ctx: Context, key: str, kind: str) -> int:

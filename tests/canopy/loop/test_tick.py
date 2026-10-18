@@ -159,7 +159,7 @@ def test_the_state_block_names_the_tickets_marked_done_lately(
         db.finish_tick(conn, tick_id, TickStatus.OK, "")
     # Forgotten, then marked done again with no decision of its own: the earlier one does not count.
     with db.transaction(conn):
-        db.forget_ticket(conn, "PROJ-7")
+        db.forget_ticket(conn, "PROJ-7", channel="cli", branch=None, prs=[])
     db.set_ticket(conn, "PROJ-7", repo, done=True)
     long_ago = db.format_time(datetime.now(UTC) - timedelta(days=tick.RECENTLY_DONE_DAYS + 1))
     with db.transaction(conn):

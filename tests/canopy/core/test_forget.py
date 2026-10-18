@@ -95,6 +95,23 @@ def test_a_forgotten_ticket_starts_over_on_a_new_branch_and_its_runs_still_count
         assert dispatch_in_tick(conn, *LABEL, "--kind", "implement", "--slug", "third", runner=runner).code == 1
         assert "dispatch refused (attempt_limit)" in capsys.readouterr().err
 
+    # Each forget is kept, with what it dropped; the ticket's own row holds the latest.
+    first, second = db.forgets_of(conn, KEY)
+    assert [(f.channel, f.branch, json.loads(present(f.prs))) for f in (first, second)] == [
+        ("cli", OLD, [OLD_PR]),
+        ("cli", NEW, [NEW_PR]),
+    ]
+    assert first.run_id is not None
+    assert second.run_id == present(db.get_ticket(conn, KEY)).forgotten_run_id
+    assert main(["show", KEY]) == 0
+    shown = capsys.readouterr().out
+    assert f"via cli, dropping branch {OLD}, {OLD_PR}" in shown
+    assert f"via cli, dropping branch {NEW}, {NEW_PR}" in shown
+    # A third forget with nothing new since the second would drop nothing, so it is refused and recorded nowhere.
+    assert operator("forget", KEY) == 1
+    assert "forget refused (already_forgotten)" in capsys.readouterr().err
+    assert len(db.forgets_of(conn, KEY)) == 2
+
 
 def test_forgetting_a_private_ticket_leaves_its_old_question_waiting_on_nothing(
     canopy_env: CanopyEnv,

@@ -1,14 +1,16 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
 
-import type { Message, TicketDetail } from '@/api/types'
+import type { TicketDetail, TicketForget } from '@/api/types'
 import { Age } from '@/components/age'
 import { Conversation } from '@/components/conversation'
 import type { Pending } from '@/components/conversation'
 import { Disclosure } from '@/components/disclosure'
 import { Empty } from '@/components/panel'
+import { PullRequestLink } from '@/components/pull-request-link'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { WorkingNow } from '@/components/working-now'
-import { sinceForget } from '@/lib/forgotten'
+import { attempts, sinceForget } from '@/lib/forgotten'
+import type { Attempt } from '@/lib/forgotten'
 import { ordered } from '@/lib/list-order'
 import type { Order } from '@/lib/list-order'
 
@@ -16,22 +18,23 @@ import type { Order } from '@/lib/list-order'
 const HISTORY: Pending = { label: '', title: '', test: () => false }
 
 /**
- * A ticket's conversation inside its `ThreadScroll`, in the operator's order, ending on the run working it now. The
- * messages from before its work was forgotten fold away at the oldest end, under a line saying when, so the thread
- * reads as the loop does; `Show N earlier messages` opens them, for the history they still are.
+ * A ticket's conversation inside its `ThreadScroll`, in the operator's order, ending on the run working it now. Each
+ * time its work was forgotten heads the attempt it ended, at the oldest end: when, how, and the branch and PRs it
+ * dropped, with that attempt's messages folded under it, so the thread reads as the loop does; `Show N earlier
+ * messages` opens them, for the history they still are.
  */
 export function TicketThread({ detail, order }: { detail: TicketDetail; order: Order }) {
-    const { ticket, messages, forgotten_at: forgottenAt } = detail
+    const { ticket, forgets } = detail
     const current = sinceForget(detail)
-    const earlier = messages.slice(0, messages.length - current.length)
-    const fold =
-        forgottenAt !== null && earlier.length > 0 ? (
-            <Forgotten at={forgottenAt} earlier={ordered('conversation', order, earlier)} />
-        ) : null
+    const ended = ordered('conversation', order, attempts(detail))
+    const latest = forgets.at(-1)
+    const folds = ended.map((attempt) => (
+        <Forgotten key={attempt.number} attempt={attempt} order={order} latest={attempt.forget === latest} />
+    ))
     let body
     if (current.length > 0) {
         body = <Conversation messages={ordered('conversation', order, current)} waiting={ticket.awaiting} />
-    } else if (fold === null) {
+    } else if (latest === undefined) {
         body = <Empty>no messages yet: what you and its workers say shows here</Empty>
     } else {
         body = <Empty>no messages since its work was forgotten: what you and its workers say next shows here</Empty>
@@ -40,29 +43,59 @@ export function TicketThread({ detail, order }: { detail: TicketDetail; order: O
         <>
             {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
             {order === 'newest' && <WorkingNow ticketKey={ticket.key} />}
-            {order === 'oldest' && fold}
+            {order === 'oldest' && folds}
             {body}
-            {order === 'newest' && fold}
+            {order === 'newest' && folds}
             {order === 'oldest' && <WorkingNow ticketKey={ticket.key} />}
         </>
     )
 }
 
-/** The line where a ticket's work was forgotten, and the messages from before it, folded under it until opened. */
-function Forgotten({ at, earlier }: { at: string; earlier: Message[] }) {
+/** One forget, heading the messages of the attempt it ended, folded under it until opened. */
+function Forgotten({ attempt, order, latest }: { attempt: Attempt; order: Order; latest: boolean }) {
     const [open, setOpen] = useState(false)
-    const what = `${earlier.length} earlier ${earlier.length === 1 ? 'message' : 'messages'}`
+    const { forget, messages } = attempt
+    const what = `${messages.length} earlier ${messages.length === 1 ? 'message' : 'messages'}`
     return (
         <Collapsible open={open} onOpenChange={setOpen} data-testid="forgotten">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 pt-3 text-xs text-muted-foreground">
                 <span>
-                    work forgotten <Age at={at} variant="ago" />: the loop reads only what came after
+                    work forgotten <Age at={forget.at} variant="ago" />
+                    {forget.channel === null ? '' : ` via ${forget.channel}`}
+                    {latest ? ': the loop reads only what came after' : ''}
                 </span>
-                <Disclosure open={open} what={what} className="ml-auto" />
+                {messages.length > 0 && <Disclosure open={open} what={what} className="ml-auto" />}
+                <Dropped forget={forget} />
             </div>
             <CollapsibleContent className="opacity-70">
-                <Conversation messages={earlier} pending={HISTORY} />
+                <Conversation messages={ordered('conversation', order, messages)} pending={HISTORY} />
             </CollapsibleContent>
         </Collapsible>
+    )
+}
+
+/** The branch and PRs a forget dropped, which are the operator's to delete and close; nothing for one unrecorded. */
+function Dropped({ forget }: { forget: TicketForget }) {
+    const prs = forget.prs ?? []
+    if (forget.branch === null && prs.length === 0) {
+        return null
+    }
+    // Words between them, so the line reads as one sentence, to a screen reader too.
+    return (
+        <span className="basis-full">
+            dropped
+            {forget.branch !== null && (
+                <>
+                    {' branch '}
+                    <span className="font-mono">{forget.branch}</span>
+                </>
+            )}
+            {prs.map((url, index) => (
+                <Fragment key={url}>
+                    {index > 0 || forget.branch !== null ? ', ' : ' '}
+                    <PullRequestLink url={url} />
+                </Fragment>
+            ))}
+        </span>
     )
 }

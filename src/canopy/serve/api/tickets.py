@@ -117,7 +117,7 @@ def forget(key: TicketKey, body: ForgetRequest, backend: BackendDep) -> Forgot:
         raise RefusedError(conversation.Refused("not_confirmed", f"type {ref} to confirm forgetting its work"))
     with backend.open() as ctx:
         try:
-            forgot = conversation.forget(ctx.conn, ref, dispatch_lock=ctx.dispatch_lock_path)
+            forgot = conversation.forget(ctx.conn, ref, channel=WEB, dispatch_lock=ctx.dispatch_lock_path)
         except conversation.Refused as r:
             raise RefusedError(r) from None
     _log.info("ticket forgotten", extra={"ticket": ref.id, "branch": forgot.branch, "prs": forgot.prs, "channel": WEB})

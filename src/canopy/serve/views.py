@@ -6,6 +6,7 @@ message bodies as `canopy show` drops them, run summaries are cut to one line, a
 
 from __future__ import annotations
 
+import json
 import math
 from datetime import datetime, timedelta
 from itertools import starmap
@@ -73,6 +74,7 @@ from canopy.serve.schema import (
     Tick,
     TickDetail,
     TicketDetail,
+    TicketForget,
     TicketSummary,
     Transcript,
     TranscriptEntry,
@@ -699,11 +701,26 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         + [limit(found, repo=repo) for repo, found in reviews],
         runs=[run(r, ctx.workspace.root) for r in db.runs_of(ctx.conn, key, TICKET_RUNS)],
         messages=[message(m) for m in db.messages_of(ctx.conn, conversation.TICKET, key, TICKET_MESSAGES)],
-        forgotten_at=db.parse_time(str(row["forgotten_at"])) if row["forgotten_at"] else None,
-        forgotten_message_id=int(row["forgotten_message_id"]) if row["forgotten_message_id"] is not None else None,
+        forgets=[forget(f) for f in db.forgets_of(ctx.conn, key)],
         decisions=[decision(d) for d in db.decisions_about(ctx.conn, key, TICKET_DECISIONS)],
         cost=_ticket_cost(ctx.conn, key),
         drafts=draft_views.of_ticket(ctx.conn, key),
+    )
+
+
+def forget(found: records.Forget) -> TicketForget:
+    """One forget of a ticket, as the API sends it.
+
+    Returns:
+        The forget, its PRs decoded from the journal's JSON.
+    """
+    return TicketForget(
+        at=db.parse_time(found.at),
+        channel=found.channel,
+        run_id=found.run_id,
+        message_id=found.message_id,
+        branch=found.branch,
+        prs=json.loads(found.prs) if found.prs is not None else None,
     )
 
 

@@ -177,21 +177,24 @@ list and runs; there is no separate `list`.
 private, from the operator's shell or the web UI's Forget (below), and:
 
 - refuses `unknown` for a ticket the journal has no row for, `running` while a run works it (wait for it, or end a
-  started ticket's with `canopy stop --now`), and `split` for a ticket a split made children of: they are tickets of
-  their own, and forgetting the parent would not undo them.
+  started ticket's with `canopy stop --now`), `split` for a ticket a split made children of: they are tickets of
+  their own, and forgetting the parent would not undo them, and `already_forgotten` for a ticket with no run,
+  message, branch, unit, or done mark since its last forget, which would have nothing to drop.
 - clears the ticket's branch, phase, when it began needing a human, and done flag, and deletes its units, with their
   branches, PRs, phases, and review and ci cursors. The next `implement` names a new branch with its `--slug`; from
   then on `bad_slug` (§8) binds to that one.
-- records when the ticket was forgotten, with its newest run and message ids, and the loop's reads skip what came
-  before them: `last_run` in the state block, the run reasons on the attention list (§14), a private ticket's waiting
-  question (`awaiting_reply`) and new operator messages, and a private worker's `{{CONVERSATION}}`. A reply after it
-  answers nothing. A forgotten ticket reads to the overseer as one never dispatched, so its prompt is unchanged.
+- records the forget as an event, kept for good: when, from which channel, the ticket's newest run and message then,
+  and the branch and PRs it dropped. A ticket forgotten again has a forget for each attempt, and the ticket's row
+  holds the latest, the boundary every read of the loop's view uses. The loop's reads skip what came before it:
+  `last_run` in the state block, the run reasons on the attention list (§14), a private ticket's waiting question
+  (`awaiting_reply`) and new operator messages, and a private worker's `{{CONVERSATION}}`. A reply after it answers
+  nothing. A forgotten ticket reads to the overseer as one never dispatched, so its prompt is unchanged.
 - keeps the rest. Its runs stay, so the attempt limits and the CI cooldown count every run, before and after
   (D030); a ticket at its implement limit needs `canopy grant` (below) or the limit raised in config, and `forget` says
   so. The comment and mirror cursors stay, so tracker comments already handled stay handled. The message cursor stays,
   and the boundary overrules it. The start record stays: a started ticket stays started, a stopped one stopped. `show`
-  prints the whole history and when the work was forgotten. The web UI shows the conversation as the loop reads it: the
-  messages from before the forget fold away under a line saying when, and open on asking.
+  prints the whole history and each forget, with what it dropped. The web UI shows the conversation as the loop reads
+  it: each forget heads the messages of the attempt it ended, folded away until asked for.
 - holds the dispatch lock, which a dispatch holds from its plan through its run's insert, so a dispatch that read the
   old branch cannot record it again after `forget` commits.
 - touches nothing outside the journal. The old PR and the branch on origin are the operator's to close and delete, and

@@ -19,6 +19,8 @@ export type RunState = Schemas['RunState']
 export type TicketSummary = Schemas['TicketSummary']
 /** One ticket: what `canopy show` prints, and the latest decisions about it. */
 export type TicketDetail = Schemas['TicketDetail']
+/** One time the operator forgot a ticket's work (DESIGN §22), and the branch and PRs it dropped. */
+export type TicketForget = Schemas['TicketForget']
 /** What a ticket's or a PR's agent runs cost in all (DESIGN §13), and how many runs and reviews that counts. */
 export type CostTotal = Schemas['CostTotal']
 /** A ticket's plans: whether it needs one, its newest as the file stands, every plan, and the operator's comments. */

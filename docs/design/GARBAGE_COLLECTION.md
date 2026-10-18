@@ -40,8 +40,8 @@ maintenance (§18) and nothing runs maintenance in its place.
 - **A record a guard counts:** runs, their slots, review runs, attempt and review grants, and dismissals. Attempt
   limits and the review limit count over all time, and a guard that history can reset is not a guard (D030, D086).
   They are small; the bytes are in their files.
-- **A tick, ticket, message, or unit.** Ticks are what runs, decisions, chore runs, and review runs point to;
-  tickets, messages, and units are the conversation (§22) and its cursors.
+- **A tick, ticket, message, unit, or forget.** Ticks are what runs, decisions, chore runs, and review runs point to;
+  tickets, messages, and units are the conversation (§22) and its cursors, and forgets its history.
 - **The overseer's own decisions.** They are the audit log and the prompt-evaluation corpus (§11). Only the attention
   items the harness raises are pruned.
 - **Records the design keeps, or a reader needs whole:** starts, notices, and ended review requests (§11, §21); chore
