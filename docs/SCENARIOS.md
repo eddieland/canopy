@@ -129,7 +129,7 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   review or the message on the PR or the ticket.
 - **S39. A coworker's PR, reviewed on request** (M42). With no `review.query` and `review.agent_prs` off, ask for one
   coworker's open PR to be reviewed from the CLI (`canopy start URL --review`), and another, in a second repository of
-  the workspace, from the web UI's pull requests page. Expect each reviewed at its head, in its own repository, and
+  the workspace, from the web UI's reviews page. Expect each reviewed at its head, in its own repository, and
   its request to end `reviewed` (`canopy show URL`). Ask for one more on a PR that then merges before the next tick,
   and one on a PR in a repository the workspace does not have: expect the overseer's `canopy review end` to end them
   `merged` and `unknown_repo`. Nothing is posted on any PR.

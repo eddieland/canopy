@@ -73,9 +73,10 @@ one: the reviewer is wrong often enough that you'll want to read a few before it
 
 ## Asking for a review
 
-To have canopy review a PR the loop doesn't own, such as a coworker's, paste its URL into **Review a PR** on the pull
-requests page and press **Review**. This is `canopy start URL --review`. The next tick reviews the PR once, at its
-latest commit, in whichever of your repositories holds it, and the request ends with that review. The PR's page shows
+To have canopy review a PR the loop doesn't own, such as a coworker's, paste its URL into **Review a PR** on the
+[reviews page](#the-reviews-page) and press **Review**. This is `canopy start URL --review`. The next tick reviews the
+PR once, at its latest commit, in whichever of your repositories holds it, and the request ends with that review.
+Until then the PR waits on the [pull requests page](#the-pull-requests-page) wearing `requested`, and its page shows
 the open request, with **Stop** to withdraw it.
 
 The review stays in canopy, like every other. Whether you pass any of it on to your coworker, and in what tone, is

@@ -8,7 +8,6 @@ import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReviewLink } from '@/components/review-link'
-import { ReviewRequestForm } from '@/components/review-request'
 import { ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip, RunDot } from '@/components/status'
@@ -35,10 +34,6 @@ function PullRequestsPage() {
                 activity first. A PR&apos;s page has its ticket, the runs that pushed to it, canopy&apos;s reviews of
                 it, and what the loop decided.
             </PageHeader>
-            <Panel>
-                <PanelHeader label="Review a PR" />
-                <ReviewRequestForm />
-            </Panel>
             <Panel>
                 <PanelHeader label="Pull requests">
                     <span className="flex items-center gap-2">

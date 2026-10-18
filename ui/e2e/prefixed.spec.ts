@@ -417,11 +417,11 @@ test('a long conversation scrolled away from its end stays put as a message arri
     await page.unrouteAll({ behavior: 'ignoreErrors' })
 })
 
-test("a coworker's PR is requested from the pull requests page and stopped from its own, as the CLI does", async ({
+test("a coworker's PR is requested from the reviews page and stopped from its own, as the CLI does", async ({
     page,
 }) => {
     const pr = 'https://github.com/acme/web/pull/120'
-    await page.goto('pull-requests')
+    await page.goto('reviews')
     const form = page.getByTestId('review-request-form')
     // One of the loop's own PRs is refused, as `canopy start URL --review` refuses it.
     await form.getByLabel('PR URL').fill('https://github.com/acme/web/pull/88')
@@ -434,6 +434,8 @@ test("a coworker's PR is requested from the pull requests page and stopped from 
     await expect(form.getByRole('status')).toHaveText(
         `${pr} is requested for review. The next tick reviews its head, once.`,
     )
+    // The request waits on the pull requests page until the next tick reviews it.
+    await page.goto('pull-requests')
     const row = page.getByTestId('pull-requests').getByTestId('pull-request').filter({ hasText: 'acme/web#120' })
     await expect(row).toContainText('requested')
 

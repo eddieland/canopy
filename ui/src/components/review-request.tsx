@@ -12,7 +12,7 @@ import { reviewRequestedText, reviewStoppedText } from '@/lib/outcomes'
 import { cn } from '@/lib/utils'
 
 /**
- * `canopy start URL --review` from the pull requests page (DESIGN §21, §22): a PR the loop does not own, by its URL.
+ * `canopy start URL --review` from the reviews page (DESIGN §21, §22): a PR the loop does not own, by its URL.
  * canopy reviews it once, at its head, in whichever of the workspace's repositories it is in. Nothing is posted on the
  * PR, and nothing is reviewed now: the next tick does it.
  */
