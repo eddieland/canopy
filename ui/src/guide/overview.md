@@ -3,6 +3,14 @@
 Everything the loop is doing, on one screen, so you can stop tailing `canopy.log` and squinting. `canopy loop` serves
 it at `http://127.0.0.1:8765/`, unless `serve.bind` or `serve.port` in your config says otherwise.
 
+## Only trusted tickets
+
+Never point canopy at a tracker where someone you don't trust can file tickets, such as the issues of a public GitHub
+repository. A ticket is the task: a worker does what it says, with your credentials, so whoever writes your tickets
+steers your agents. Your queue label decides which tickets get worked, not who wrote them, and a ticket's author can
+edit it after you label it. [Philosophy](philosophy#agents-are-untrusted) has the rest of the argument. This is the one
+paragraph in the guide to read even if you read nothing else.
+
 ## Reading this guide
 
 The guide comes in four parts, in the order you'll need them.
