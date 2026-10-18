@@ -75,11 +75,12 @@ export function workingOn(runs: Run[], ticketKey: string): Run[] {
 /**
  * The runs the rail lists, at most `limit`: those running first, then those waiting on the operator's answer, each
  * oldest first, so the work in progress leads and holds the slots. `more` counts the ones left out. Only each ticket's
- * latest run counts: a blocked run a later one followed waits on nothing.
+ * latest run counts: a blocked run a later one followed waits on nothing, and neither does one whose ticket the
+ * operator stopped, as the attention list sets it aside.
  */
 export function railRuns(runs: Run[], limit: number): { shown: Run[]; more: number } {
     const working = latestRuns(runs)
-        .filter((r) => r.state === 'blocked' || r.state === 'running')
+        .filter((r) => r.state === 'running' || (r.state === 'blocked' && !r.ticket_stopped))
         .toSorted((a, b) => {
             const order = rank(a) - rank(b)
             return order === 0 ? a.started_at.localeCompare(b.started_at) : order

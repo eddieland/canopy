@@ -100,6 +100,8 @@ list and runs; there is no separate `list`.
   removed.
 - `stop` marks the start record stopped rather than deleting it. A stopped ticket stays private and is dispatched by
   nothing, whatever labels it carries, until `canopy start` again: a queue label left on it never turns it public.
+  A question its last run asked then waits on nothing: the attention list and the web UI's runs working now leave it
+  out, though a run still working the ticket stays listed until it finishes.
 - The start record is the authorization. Only the operator's commands write it, and, under `tracker.private`, a
   labeled ticket's first dispatch, short of T1's residual (below).
 - A started ticket is private even when it also carries a queue label, or gains one later. The harness chooses the
