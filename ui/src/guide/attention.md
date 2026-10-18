@@ -31,13 +31,25 @@ count there: they're news, not blockers.
 Click an item to open it beside the list. The first one open is the worst item about a ticket. The address keeps the
 item you picked, so a link to it opens the same item.
 
-An item about a ticket shows its full detail, the ticket's actions (**Start privately**, **Stop**, **Forget**; see
-[Tickets](tickets#acting-on-a-ticket)), and the ticket's conversation with a box to reply in. When the ticket is at an
-attempt limit, a red block says so, with **Allow one more** for each kind of run that's out of tries.
+Under its head, an item leads with whatever its reason asks of you, so the thing to do is the first thing you see:
 
-A `plan review` item leads with the plan's card, the same one the ticket's page shows: which plan it is, who wrote
-it, how many comments are open, **Approve**, and **Open plan**. Approve right there if you've already read it; open it
-if you haven't, which is the honest option more often than anyone admits. See [Plans](plans).
+- **A run that broke** (`worker failed`, `crashed`, `unpushed`, `unknown result`, `attempt limit`): the ticket's latest
+  run, with what it said, its cost, and `run:N` to open its page. When the ticket is out of tries, a red block under it
+  says so, with **Allow one more** for each kind of run that's at its limit. Read why it failed, grant another go, and
+  never leave the page.
+- **A PR waiting on someone else** (`needs reviewer`, `ready to merge`): a button that opens the PR on GitHub, since the
+  next move happens there, and someone other than canopy makes it. canopy never merges, however long the PR sits.
+- **A wait on your answer** (`awaiting reply`, `untrusted review`): the reply box is the action. A question's head
+  says which message waits and since when; the question itself is in the conversation, marked `waiting on you`.
+- **A plan to approve** (`plan review`): the plan's card, the same one the ticket's page shows: which plan it is, who
+  wrote it, how many comments are open, **Approve**, and **Open plan**. Approve right there if you've already read it;
+  open it if you haven't, which is the honest option more often than anyone admits. See [Plans](plans).
+- **A command to run**, like a missing repository's `canopy workspace sync`: the command, with a button to copy it.
+  There's nothing to answer here; the item leaves once the command has fixed its cause.
+
+An item about a ticket then shows the ticket's conversation and, where a reply is awaited, a box to reply in. The
+ticket's own actions (**Start privately**, **Stop**, **Forget**; see [Tickets](tickets#acting-on-a-ticket)) sit quietly
+under it all. On a reason that asks for none of the above, they come first instead.
 
 Memory's items carry what they're about. A `memory proposal` lists the proposals from the done ticket's runs, each with
 **Promote as written** and **Reject**; a `lesson review` lists the lessons due, each with **Renew**; a `lesson wrong`
@@ -45,8 +57,7 @@ points you to the memory page, where the lesson a run doubted heads the list. Se
 [Memory](memory#keeping-lessons-honest).
 
 An item about a PR no ticket owns, such as one canopy only reviews, offers **Allow one more** when the PR is at its
-review limit. An item about nothing in particular, like a repository that's missing, has nothing to answer here: it
-leaves when you fix its cause.
+review limit. An item about nothing in particular has nothing to answer here: it leaves when you fix its cause.
 
 ## Replying
 
@@ -56,7 +67,11 @@ comment on the tracker can be written by anyone who can reach the ticket, and ca
 question the ticket waits on is marked `waiting on you`, and while a run works the ticket, a live row at the newest
 end shows its latest tool call and what it has cost so far.
 
-Type in the box under it and press **Reply**, or your send key (Enter, unless you changed it in
+The box under it is open wherever a reply is awaited: a question waiting, an untrusted review waiting on your
+go-ahead, or any private ticket. A public ticket with nothing waiting keeps it folded behind **Show a note for its next
+worker**, because an open box tempts you to answer something nobody asked. Open it when you do have a note.
+
+Type in the box and press **Reply**, or your send key (Enter, unless you changed it in
 [Settings](settings#replies); Shift+Enter always makes a new line). This is `canopy reply KEY`. A reply answers the
 question the ticket waits on, and can say anything else a worker should know: what to try, what to leave alone, that
 the flaky test is flaky. A reply holds up to 4000 characters; a longer one is refused, not cut.
