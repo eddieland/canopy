@@ -2,6 +2,7 @@
 note the operator writes there, which the chore's next prompt carries as `canopy reply chore:NAME`'s does."""
 
 import dataclasses
+import json
 from collections.abc import Collection
 from typing import Any
 
@@ -51,6 +52,18 @@ def test_the_chores_list_is_each_configured_chore_as_canopy_status_lists_it(back
         "dismissed": False,
     }
     assert deps["latest_note_id"] == 8
+
+
+def test_a_chore_and_its_run_say_how_many_findings_it_did_not_list(backend: Backend) -> None:
+    with backend.open() as ctx:
+        ctx.conn.execute(
+            "INSERT INTO chore_runs (tick_id, chore, started_at, ended_at, status, result_json, log_path) "
+            "VALUES (1, 'deps', ?, ?, 'ok', ?, 'x.log')",
+            (mock.at(-10), mock.at(-5), json.dumps({"status": "ok", "findings": [], "more_findings": 7})),
+        )
+    page = client(None, backend).get("/api/chores/deps").json()
+    assert (page["chore"]["more_findings"], page["chore"]["findings"]) == (7, [])
+    assert (page["runs"][0]["more_findings"], page["runs"][1]["more_findings"]) == (7, 0)
 
 
 def test_each_chore_carries_what_its_runs_cost_in_the_last_day_and_the_last_30_days(backend: Backend) -> None:

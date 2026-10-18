@@ -23,9 +23,11 @@ export function pullRequestDescription(pr: Pick<PullRequest, 'ticket_key' | 'run
     return line(pr.ticket_key ?? NO_TICKET, counted(reviews, 'review'), running)
 }
 
-/** A chore run's page: how it ended and, for one that ended `ok`, how many findings it reported. */
-export function choreRunDescription(run: Pick<ChoreRun, 'status'>, findings: number): string {
-    return line(readable(run.status), run.status === 'ok' ? counted(findings, 'finding') : null)
+/** A chore run's page: how it ended and, for one that ended `ok`, how many findings it listed and how many more not. */
+export function choreRunDescription(run: Pick<ChoreRun, 'status' | 'more_findings'>, findings: number): string {
+    const ok = run.status === 'ok'
+    const more = ok && run.more_findings > 0 ? `${run.more_findings} not listed` : null
+    return line(readable(run.status), ok ? counted(findings, 'finding') : null, more)
 }
 
 /** A tick's page: how it ended, how many decisions it recorded, and what woke the loop for it. */

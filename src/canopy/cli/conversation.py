@@ -730,6 +730,7 @@ def _show_chore(ctx: Context, name: str) -> None:
         click.echo(f"  {session}{spent(latest)}")
         click.echo(f"  log {latest.log_path}")
     findings = state.findings()
+    more = state.more_findings()
     click.echo(f"\nOpen findings ({len(findings)}):")
     for f in findings:
         title = one_line(f.finding.title)
@@ -739,7 +740,9 @@ def _show_chore(ctx: Context, name: str) -> None:
             + (f"  {f.finding.link}" if f.finding.link else "")
             + mark
         )
-    if not findings:
+    if more:
+        click.echo(f"  {attention.more_text(more)}")
+    elif not findings:
         click.echo("  none")
     notes = db.messages_of(ctx.conn, conversation.CHORE, name, conversation.CHORE_NOTES)
     if notes:

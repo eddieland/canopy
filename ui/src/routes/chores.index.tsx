@@ -68,7 +68,7 @@ function Row({ chore }: { chore: ChoreSummary }) {
                 className={cn('text-right font-mono text-xs', waiting ? 'text-foreground' : 'text-muted-foreground')}
                 data-testid="chore-findings"
             >
-                {findingsText(chore.findings)}
+                {findingsText(chore.findings, chore.more_findings)}
             </span>
             <RowLine
                 from="state"

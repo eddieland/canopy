@@ -97,7 +97,7 @@ Say what the change would save, in dollars or tokens a week, when the figures le
 - A title is one line: the kind of recommendation, then what costs (`Disable: sentry for workers, unused in 41 runs`).
   The detail gives the figures it rests on and the recommendation. Leave out the link: this workspace's pages have no
   `https://` address.
-- At most 20 findings. With more, keep those that would save the most first.
+- At most `max_findings` findings. With more, keep those that would save the most first.
 - No findings, with status `ok`, means nothing stands out. Say so in the summary in a sentence, with the week's total
   spend, its tickets done, and its spend per ticket done.
 - If a `canopy` command fails or is refused, report status `failed` with the command and its error in the summary,

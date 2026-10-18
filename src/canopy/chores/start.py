@@ -239,6 +239,7 @@ def render(
         "open_findings": [
             {"id": f.finding.id, "title": f.finding.title, "link": f.finding.link} for f in state.findings()
         ],
+        "max_findings": state.chore.max_findings,
         "result_contract": result.CONTRACT,
     }
     return "\n".join(
@@ -253,7 +254,9 @@ def render(
             "this chore, newest last: follow them as you follow the text above, and a later note wins over an earlier",
             "one. `notice`, when not null, is the operator's notice about a passing condition outside the work, such",
             "as a CI outage: a failure it explains is not a finding. Your last line of stdout must be one JSON",
-            "object in the shape of `result_contract`, with at most 20 findings, and nothing after it.",
+            "object in the shape of `result_contract`, and nothing after it. List at most `max_findings` findings,",
+            "the ones that most need the operator first; when there are more, count the ones you left out in",
+            "`more_findings`. canopy keeps only the first `max_findings` and counts the rest.",
             "",
             "```json",
             json.dumps(run, indent=2),

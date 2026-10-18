@@ -45,7 +45,7 @@ from pydantic import (
     model_validator,
 )
 
-from canopy.core import contract, hostgit
+from canopy.core import chore_result, contract, hostgit
 from canopy.core.vocab import MemoryMode, PoolKind
 from canopy.infra import procs
 
@@ -860,6 +860,8 @@ class Chore(Section):
     days: Annotated[tuple[ChoreDay, ...], AfterValidator(_days)] = ()
     hours: Annotated[StrictStr, AfterValidator(_chore_hours)] | None = None
     timezone: Annotated[StrictStr, AfterValidator(_time_zone)] | None = None
+    # The most findings a run lists, the most important first; the rest it only counts (DESIGN §19).
+    max_findings: Annotated[StrictInt, Field(ge=1, le=chore_result.MAX_FINDINGS)] = chore_result.MAX_FINDINGS
     timeout_minutes: Minutes = 15
     cwd: UserPath | None = None
     # The workspaces it runs in, by name; empty means every workspace whose loop reads this file.

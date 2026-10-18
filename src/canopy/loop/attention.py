@@ -18,7 +18,7 @@ After every tick, `publish` rewrites `<state_dir>/attention.md` and hands the li
 from __future__ import annotations
 
 import sqlite3
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, NotRequired, TypedDict, assert_never
@@ -306,15 +306,23 @@ def awaiting_detail(waiting: conversation.Awaiting) -> str:
     return f"{text[:1800]}; answer with `canopy reply {waiting.key}`"
 
 
-def render(items: Sequence[Item], now: datetime) -> str:
-    """Return `attention.md`: the items grouped by reason, one line each with key, age, and detail."""
+def render(items: Sequence[Item], now: datetime, more: Mapping[str, int] | None = None) -> str:
+    """Return `attention.md`: the items grouped by reason, one line each with key, age, and detail.
+
+    `more` holds, by `chore:<name>`, how many findings a chore's latest `ok` run found past its `max_findings` and did
+    not list (DESIGN §19), said in the chore's section after the ones it did.
+    """
+    more = {chore: n for chore, n in (more or {}).items() if n > 0}
     stamp = now.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
     lines = ["# canopy attention", ""]
     if not items:
+        # A count of findings not listed is no item: the list still needs nothing, and says so above it.
         lines += [f"Nothing needs you. Updated {stamp}.", ""]
-        return "\n".join(lines)
-    count = f"{len(items)} item{'s' if len(items) != 1 else ''}"
-    lines += [f"{count}, updated {stamp}. An item leaves this list when its cause is gone.", ""]
+        if not more:
+            return "\n".join(lines)
+    else:
+        count = f"{len(items)} item{'s' if len(items) != 1 else ''}"
+        lines += [f"{count}, updated {stamp}. An item leaves this list when its cause is gone.", ""]
     reasons = [i for i in items if not i.finding]
     for reason in sorted({i.reason for i in reasons}):
         lines += [f"## {reason}", ""]
@@ -322,11 +330,22 @@ def render(items: Sequence[Item], now: datetime) -> str:
         lines.append("")
     # A section per chore after the ticket items: one line per finding, with its title, age, and link (DESIGN §19).
     findings = [i for i in items if i.finding]
-    for chore in sorted({i.subject for i in findings}):
+    for chore in sorted({i.subject for i in findings} | set(more)):
         lines += [f"## {chore}", ""]
         lines += [f"- {one_line(i.detail)}, {age(i.since, now)} ({i.reason})" for i in findings if i.subject == chore]
+        if chore in more:
+            lines.append(f"- {more_text(more[chore])}")
         lines.append("")
     return "\n".join(lines)
+
+
+def more_text(count: int) -> str:
+    """Say that a chore found `count` findings past its `max_findings` and did not list them (DESIGN §19).
+
+    Returns:
+        The sentence `attention.md`, `canopy status`, and `canopy show` say it in.
+    """
+    return f"{count} more finding{'s' if count != 1 else ''} not listed, past the chore's max_findings"
 
 
 def publish(ctx: Context, log: logs.TickAdapter) -> None:
@@ -355,9 +374,13 @@ def write(ctx: Context, log: logs.TickAdapter) -> list[Item]:
         The list as written.
     """
     items = listed(ctx)
+    more = {
+        f"{CHORE_PREFIX}{state.name}": state.more_findings()
+        for state in chore_view.states(ctx.conn, ctx.config, ctx.workspace, starts=ctx.finding_starts)
+    }
     path = ctx.state_dir / FILE_NAME
     try:
-        logs.write_private(path, render(items, datetime.now(UTC)))
+        logs.write_private(path, render(items, datetime.now(UTC), more))
     except OSError as e:
         log.error("could not write the attention list", extra={"path": str(path), "error": str(e)})  # noqa: TRY400
     return items

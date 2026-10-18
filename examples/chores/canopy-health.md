@@ -56,7 +56,7 @@ Each finding's detail ends with one recommendation, and its title starts with wh
 - A title is one line: the kind of recommendation, then what is failing (`Tune: implement runs time out (4 of 9)`).
   The detail says how often, what it cost, the cause as you read it, and the recommendation. Leave out the link: this
   workspace's pages have no `https://` address.
-- At most 20 findings. With more, keep the costliest first.
+- At most `max_findings` findings. With more, keep the costliest first.
 - No findings, with status `ok`, means nothing recurs. Say so in the summary in a sentence, with how many ticks and
   runs you looked at and how many failed.
 - If a `canopy` command fails or is refused, report status `failed` with the command and its error in the summary,

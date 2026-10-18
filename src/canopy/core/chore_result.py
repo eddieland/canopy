@@ -1,7 +1,8 @@
 """A chore's result contract (DESIGN §19): the last line of its agent's stdout, validated before anything reads it.
 
 A chore reads text from people outside the operator's queue, so everything it reports is untrusted and bounded. A
-result that does not validate is `unknown`, and none of its findings are recorded.
+result that does not validate is `unknown`, and none of its findings are recorded. One that lists more findings than its
+chore's `max_findings` keeps the first ones and counts the rest in `more_findings` (`capped`).
 """
 
 from __future__ import annotations
@@ -9,7 +10,7 @@ from __future__ import annotations
 import re
 from typing import Annotated, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictStr
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, StrictStr
 
 from canopy.core import contract
 from canopy.core.contract import bounded, one_line
@@ -20,6 +21,8 @@ MAX_TITLE = 200
 MAX_ID = 200
 MAX_LINK = 500
 MAX_FINDINGS = 20
+# How many findings a run may say it left out. A count, so bounded only to keep nonsense out.
+MAX_MORE_FINDINGS = 100_000
 # Stable across runs for the same problem, so it identifies the finding on the attention list and in notifications.
 FINDING_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:/-]*")
 
@@ -56,6 +59,27 @@ class ChoreResult(BaseModel):
     status: Literal["ok", "failed"]
     summary: Annotated[StrictStr, bounded(MAX_SUMMARY)] = ""
     findings: Annotated[list[Finding], Field(max_length=MAX_FINDINGS), AfterValidator(_unique_ids)] = []
+    # How many more findings it had than it listed, the least important ones, left out to stay under `max_findings`.
+    more_findings: Annotated[StrictInt, Field(ge=0, le=MAX_MORE_FINDINGS)] = 0
+
+
+def capped(parsed: ChoreResult, limit: int) -> ChoreResult:
+    """Return `parsed` with at most `limit` findings: its first ones, the rest counted in `more_findings`.
+
+    The chore is asked to list the most important first, so the ones kept are those it would keep.
+
+    Returns:
+        `parsed` itself when it is within `limit`, else a copy cut to it.
+    """
+    extra = len(parsed.findings) - limit
+    if extra <= 0:
+        return parsed
+    return parsed.model_copy(
+        update={
+            "findings": parsed.findings[:limit],
+            "more_findings": min(parsed.more_findings + extra, MAX_MORE_FINDINGS),
+        }
+    )
 
 
 def parse(stdout: str) -> ChoreResult | None:
@@ -78,5 +102,5 @@ def stored(result_json: object) -> ChoreResult | None:
 
 CONTRACT = (
     '{"status":"ok|failed","summary":"one paragraph",'
-    '"findings":[{"id":"stable/id","title":"one line","detail":"a paragraph","link":"https://..."}]}'
+    '"findings":[{"id":"stable/id","title":"one line","detail":"a paragraph","link":"https://..."}],"more_findings":0}'
 )
