@@ -137,6 +137,7 @@ overrides default to `prompts/` there too.
 | `trust.comment_prefix`, `trust.comment_suffix` | private | they silence the comments that carry them (§8) |
 | `trust.commit_trailer`, `trust.commit_trailer_name`, `trust.commit_trailer_email` | private | whether and whom the operator's commits credit (§8) |
 | `trust.rebase` | private | lets workers replace a branch's history (§8, TRUST_MODEL T1) |
+| `trust.review_replies` | private | decides what is said in the operator's name (§29) |
 | `capacity.*` | private | the operator's machine and spend |
 | `pools.backend` | private | which program makes worktrees on the operator's machine (§18) |
 | `loop.*` | private | how often the overseer runs: the operator's spend |
@@ -147,6 +148,7 @@ overrides default to `prompts/` there too.
 | `review.*` | private | `review.query` authorizes reading other people's PRs, and runs an agent on them (§21) |
 | `serve.*` | private | a listener on the operator's machine, and where (§22, TRUST_MODEL T8) |
 | `memory.*` | private | what workers may write into later runs' prompts (§28, TRUST_MODEL T7) |
+| `connect.*` | private | commands run with the operator's credentials, that post as them (§29) |
 
 Whoever controls a shared workspace file (anyone who can push to the repository holding it) must not run commands,
 choose prompts, spend money, or authorize anyone; those keys are private (TRUST_MODEL T7).
@@ -219,6 +221,7 @@ commit_trailer = true                            # a worker adds this trailer wh
 commit_trailer_name = "canopy worker"            # a worker's commits are co-authored by this (§8)
 commit_trailer_email = "noreply@canopy.invalid"  # at this address
 rebase = false               # true: workers rebase and push with a lease, never merge a base in (§8)
+review_replies = "post"      # or "approve": workers draft their comments for the operator to send (§29)
 
 [paths]
 prompt_overrides = "~/.config/canopy/prompts"
@@ -231,6 +234,12 @@ cmd = ""   # optional; receives the attention diff on stdin: the sink `default` 
 [notify.sinks.desktop]         # optional; any number up to 5 (§20)
 cmd = "canopy-notify-desktop"
 events = ["attention", "loop", "runs"]
+
+[connect.sources.github]   # optional; unset, the vcs source is canopy's own GitHub programs (§29)
+kind = "vcs"
+cmd = "canopy-connect-github"
+post_cmd = "canopy-post-github"
+timeout_minutes = 2
 
 [serve]                 # the web UI `canopy loop` serves (§22)
 enabled = true

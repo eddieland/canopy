@@ -46,7 +46,7 @@ from pydantic import (
 )
 
 from canopy.core import chore_result, contract, hostgit
-from canopy.core.vocab import MemoryMode, PoolKind
+from canopy.core.vocab import MemoryMode, PoolKind, ReplyMode
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -487,6 +487,10 @@ class Trust(Section):
     # (TRUST_MODEL T1, D056), for repositories that refuse merge commits. Private: a shared file must not let
     # workers replace a branch's history.
     rebase: Annotated[StrictBool, Scope.PRIVATE] = False
+    # Whether workers draft the comments they would post, for the operator to send, or post them, marked (DESIGN
+    # §29). Private: a shared file must not decide what is said in the operator's name. `post` until the operator can
+    # send drafts (ROADMAP M53); then `approve`.
+    review_replies: Annotated[ReplyMode, Scope.PRIVATE] = ReplyMode.POST
 
     @model_validator(mode="after")
     def _one_comment_mark(self) -> Trust:
@@ -823,6 +827,81 @@ class Notify(Section):
         return any(group in sink.events for sink in self.all_sinks().values())
 
 
+# A source's name is a table name, as a sink's is (ROADMAP M36).
+SOURCE_NAME_RE = SINK_NAME_RE
+# The commands a `vcs` source runs when none is configured: canopy's own GitHub programs (DESIGN §29).
+GITHUB_READER = "canopy-connect-github"
+GITHUB_POSTER = "canopy-post-github"
+
+
+def _source_name(value: str) -> str:
+    if not SOURCE_NAME_RE.fullmatch(value):
+        raise ValueError(f"source name {value!r} must match {SOURCE_NAME_RE.pattern}")
+    return value
+
+
+class Source(Section):
+    """One `[connect.sources.<name>]` table: the programs that read one source and post to it (DESIGN §29).
+
+    Each command is split into argv with shell word rules, as a sink's is, and runs with no shell. The request arrives
+    on stdin, so neither takes a placeholder.
+    """
+
+    kind: Literal["vcs", "tracker"]
+    # Reads the source: for `vcs`, a PR's reviews and threads. Empty for a source canopy only posts to.
+    cmd: NotifyCommand = ""
+    # Posts what the operator approved: for `vcs`, a PR's drafts; for `tracker`, a ticket's.
+    post_cmd: NotifyCommand = ""
+    timeout_minutes: Minutes = 2
+
+    @model_validator(mode="after")
+    def _a_command(self) -> Source:
+        if not notify_words(self.cmd) and not notify_words(self.post_cmd):
+            raise ValueError("set cmd, post_cmd, or both")
+        if self.kind == "vcs" and not notify_words(self.cmd):
+            raise ValueError("a vcs source needs cmd: drafts are checked against what it reads")
+        return self
+
+
+SourceName = Annotated[str, AfterValidator(_source_name)]
+
+
+class Connect(Section):
+    """The `[connect]` table: the programs canopy reads the world with and posts through (DESIGN §29, ROADMAP M36).
+
+    Private: each runs a command on the operator's machine with the operator's credentials (TRUST_MODEL T7).
+    """
+
+    sources: Annotated[dict[SourceName, Source], Scope.PRIVATE] = {}
+
+    @model_validator(mode="after")
+    def _one_per_kind(self) -> Connect:
+        kinds = [source.kind for source in self.sources.values()]
+        if len(kinds) != len(set(kinds)):
+            raise ValueError("at most one source of each kind, vcs and tracker")
+        return self
+
+    def vcs(self) -> Source:
+        """The `vcs` source: the operator's, or canopy's own GitHub reader and poster.
+
+        Returns:
+            The source.
+        """
+        found = self._of("vcs")
+        return found or Source(kind="vcs", cmd=GITHUB_READER, post_cmd=GITHUB_POSTER)
+
+    def tracker(self) -> Source | None:
+        """The `tracker` source, if the operator configured one; canopy configures none of its own.
+
+        Returns:
+            The source, or None.
+        """
+        return self._of("tracker")
+
+    def _of(self, kind: str) -> Source | None:
+        return next((source for source in self.sources.values() if source.kind == kind), None)
+
+
 CHORE_DAYS = ("mon", "tue", "wed", "thu", "fri", "sat", "sun")  # by `datetime.weekday()`
 ChoreDay = Literal["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 _HOURS_RE = re.compile(r"([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-4]):([0-5]\d)")
@@ -912,6 +991,7 @@ class Config(Section):
     serve: Serve
     memory: Memory
     retention: Retention
+    connect: Connect
     # Tables of tables, keyed by name; private as a whole (TABLE_SECTIONS).
     chores: Annotated[dict[ChoreName, Chore], Scope.PRIVATE] = {}
 
@@ -935,6 +1015,7 @@ SECTIONS: dict[str, type[Section]] = {
     "serve": Serve,
     "memory": Memory,
     "retention": Retention,
+    "connect": Connect,
 }
 
 

@@ -454,6 +454,55 @@ def test_the_workspace_file_cannot_shorten_retention(canopy_env: CanopyEnv) -> N
         load(canopy_env.root, canopy_env.user_file)
 
 
+def test_review_replies_and_the_vcs_source_default_to_posting_and_canopys_own_programs(canopy_env: CanopyEnv) -> None:
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert cfg.trust.review_replies == "post"
+    assert cfg.connect.vcs() == config.Source(kind="vcs", cmd="canopy-connect-github", post_cmd="canopy-post-github")
+    assert cfg.connect.tracker() is None
+
+
+def test_review_replies_and_sources_are_set_in_the_operators_files(canopy_env: CanopyEnv) -> None:
+    canopy_env.append_user(
+        '\n[trust]\nreview_replies = "approve"\n\n[connect.sources.ghe]\nkind = "vcs"\n'
+        'cmd = "ghe-read --host ghe.example.com"\ntimeout_minutes = 5\n'
+        '\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "canopy-post-github"\n'
+    )
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert cfg.trust.review_replies == "approve"
+    assert cfg.connect.vcs() == config.Source(kind="vcs", cmd="ghe-read --host ghe.example.com", timeout_minutes=5)
+    assert cfg.connect.tracker() == config.Source(kind="tracker", post_cmd="canopy-post-github")
+
+
+@pytest.mark.parametrize(
+    ("toml", "message"),
+    [
+        ('[trust]\nreview_replies = "draft"\n', r"trust\.review_replies"),
+        ('[connect.sources.a]\nkind = "vcs"\npost_cmd = "post"\n', "a vcs source needs cmd"),
+        ('[connect.sources.a]\nkind = "tracker"\n', "set cmd, post_cmd, or both"),
+        ('[connect.sources.a]\nkind = "vcs"\ncmd = "read {prompt}"\n', "must not contain {prompt}"),
+        ('[connect.sources.a]\nkind = "mail"\ncmd = "read"\n', r"connect\.sources\[a\]\[kind\]"),
+        ('[connect.sources.A]\nkind = "vcs"\ncmd = "read"\n', "source name 'A' must match"),
+        (
+            '[connect.sources.a]\nkind = "vcs"\ncmd = "r"\n[connect.sources.b]\nkind = "vcs"\ncmd = "s"\n',
+            "at most one source of each kind",
+        ),
+    ],
+)
+def test_review_replies_and_sources_are_checked(canopy_env: CanopyEnv, toml: str, message: str) -> None:
+    canopy_env.append_user("\n" + toml)
+    with pytest.raises(ConfigError, match=message):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+@pytest.mark.parametrize(
+    "toml", ['[trust]\nreview_replies = "post"\n', '[connect.sources.a]\nkind = "vcs"\ncmd = "r"\n']
+)
+def test_the_workspace_file_cannot_say_how_replies_go_or_what_reads_github(canopy_env: CanopyEnv, toml: str) -> None:
+    canopy_env.append_shared("\n" + toml)
+    with pytest.raises(ConfigError, match="is private and cannot be set in the workspace file"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
 def test_a_private_file_and_no_user_file_runs(canopy_env: CanopyEnv) -> None:
     canopy_env.user_file.unlink()
     canopy_env.write_private(user_toml())

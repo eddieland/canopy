@@ -1569,7 +1569,10 @@ operator configured a `tracker` source with a `post_cmd`, since the harness neve
 `vcs` source defaults to canopy's own programs, so `approve` needs nothing configured; `thread_changed` counts comments
 since the run started, and a refusal moves that basis; and a post whose outcome is unknown is `unconfirmed` until a
 read settles it, so a draft is posted at most once. Built: `packages/canopy-github`, the reader and the poster, tested
-against a stand-in for GitHub's GraphQL API, and TRUST_MODEL T2's line for them; nothing runs them yet.
+against a stand-in for GitHub's GraphQL API, and TRUST_MODEL T2's line for them; `trust.review_replies` (`post`
+until sending is built, then `approve`) and `[connect.sources]`; and migration 0043's tables, `observed_prs`,
+`observed_reviews`, `drafts`, `draft_versions`, and `run_replies`, with their row types. Nothing reads or writes
+them yet.
 
 ## M54. Plans before feedback runs
 
