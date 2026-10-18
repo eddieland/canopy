@@ -304,6 +304,15 @@ def test_a_chore_within_its_max_findings_is_kept_as_it_reported() -> None:
     )
 
 
+def test_findings_not_listed_are_no_item_on_the_attention_list() -> None:
+    """Every listed finding dismissed, or none listed: nothing needs the operator, and the count still says so."""
+    page = attention.render([], datetime(2026, 10, 18, tzinfo=UTC), {"chore:x": 3})
+    assert page == (
+        "# canopy attention\n\nNothing needs you. Updated 2026-10-18 00:00 UTC.\n\n"
+        "## chore:x\n\n- 3 more findings not listed, past the chore's max_findings\n"
+    )
+
+
 def tick(*, dry_run: bool = False) -> None:
     with overseer_does():
         assert main(["tick", *(["--dry-run"] if dry_run else [])]) == 0

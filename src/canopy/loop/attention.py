@@ -315,11 +315,14 @@ def render(items: Sequence[Item], now: datetime, more: Mapping[str, int] | None 
     more = {chore: n for chore, n in (more or {}).items() if n > 0}
     stamp = now.astimezone(UTC).strftime("%Y-%m-%d %H:%M UTC")
     lines = ["# canopy attention", ""]
-    if not items and not more:
+    if not items:
+        # A count of findings not listed is no item: the list still needs nothing, and says so above it.
         lines += [f"Nothing needs you. Updated {stamp}.", ""]
-        return "\n".join(lines)
-    count = f"{len(items)} item{'s' if len(items) != 1 else ''}"
-    lines += [f"{count}, updated {stamp}. An item leaves this list when its cause is gone.", ""]
+        if not more:
+            return "\n".join(lines)
+    else:
+        count = f"{len(items)} item{'s' if len(items) != 1 else ''}"
+        lines += [f"{count}, updated {stamp}. An item leaves this list when its cause is gone.", ""]
     reasons = [i for i in items if not i.finding]
     for reason in sorted({i.reason for i in reasons}):
         lines += [f"## {reason}", ""]
