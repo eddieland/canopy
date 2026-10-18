@@ -1588,7 +1588,11 @@ what was sent on its PRs; the worker definitions under `approve` deny the GitHub
 comment` by name; TRUST_MODEL T1, T5, T6, and §6, D003, D069, and AGENTS.md's GitHub-client line; and `approve` is the
 default. The web API: `_run` keeps each repository's diff at its pushed head under `approve`, with the commit, through
 the diff code moved down to `core`; `GET /api/pull-request/threads` serves a PR's threads on that diff with every draft,
-and edit, drop, and send take the CLI's functions; and TRUST_MODEL T8 for both.
+and edit, drop, and send take the CLI's functions; and TRUST_MODEL T8 for both. The PR's page: its threads on that
+diff, each draft under its thread with Send, Edit, and Drop, a send of every waiting draft as one review, and a warning
+when the PR's head is past the diff; `drafts_waiting` opens it; the diff with cards on its lines takes any card
+(`DiffPanels`), M32's page keeping its look; and the mock journal's PR 88 carries a run's drafts, with canopy's GitHub
+programs answered in process, so a draft sent from `--mock` posts nowhere. Left: a ticket's draft on the ticket's page.
 
 ## M54. Plans before feedback runs
 

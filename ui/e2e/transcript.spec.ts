@@ -9,7 +9,8 @@ test.beforeEach(async ({ page }) => {
 test("a run's id opens its page, and its transcript opens each tool call to its input and output, as text", async ({
     page,
 }) => {
-    await page.goto('runs')
+    // ABC-099's page, since the runs page shows its latest run, 45.
+    await page.goto('tickets/ABC-099')
     await settled(page)
     await page.getByTestId('run-39').getByRole('link', { name: 'run:39' }).click()
     await expect(page).toHaveURL(/\/runs\/39$/u)

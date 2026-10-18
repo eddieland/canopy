@@ -11,18 +11,25 @@ test('the list is most severe first, and the most severe ticket opens beside it'
     await settled(page)
     const rows = page.getByTestId('attention-list').getByRole('link')
     // Broken work, what waits on the operator, the rest by how long it has been open, then a chore's finding.
-    await expect(rows).toHaveCount(5)
-    const reasons = ['worker failed', 'awaiting reply', 'repo missing', 'needs reviewer', 'lodash-advisory']
+    await expect(rows).toHaveCount(6)
+    const reasons = [
+        'worker failed',
+        'drafts waiting',
+        'awaiting reply',
+        'repo missing',
+        'needs reviewer',
+        'lodash-advisory',
+    ]
     for (const [index, reason] of reasons.entries()) {
         await expect(rows.nth(index)).toContainText(reason)
     }
     // A reason reads as words, and keeps the CLI's spelling on hover.
     await expect(rows.first().getByTitle('worker_failed')).toHaveText('worker failed')
     // A finding's id is the agent's text: its chip says `finding`, and the id sits beside its chore.
-    await expect(rows.nth(4).getByText('finding', { exact: true })).toBeVisible()
+    await expect(rows.nth(5).getByText('finding', { exact: true })).toBeVisible()
     // An item about a ticket names it by its title too; a repository's has none to name.
     await expect(rows.first()).toContainText('Fix the flaky checkout test')
-    await expect(rows.nth(2).getByText('untitled')).toHaveCount(0)
+    await expect(rows.nth(3).getByText('untitled')).toHaveCount(0)
 
     await expect(rows.first()).toHaveAttribute('aria-current', 'page')
     const detail = page.getByTestId('attention-detail')
@@ -52,6 +59,20 @@ test("a broken run's item leads with the run, and grants another try without lea
     const field = detail.getByRole('form', { name: 'Reply' }).getByRole('textbox')
     await expect(field).toHaveAttribute('placeholder', /next worker reads it/u)
     await expect(field).not.toHaveAttribute('placeholder', /untrusted/u)
+})
+
+test("replies a run drafted lead to the PR's page, where each waits on its thread", async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'drafts waiting' }).click()
+    const detail = page.getByTestId('attention-detail')
+    await detail.getByTestId('attention-drafts').getByRole('link', { name: 'Read the drafts on acme/web#88' }).click()
+    await expect(page).toHaveURL(/\/pull-requests\/pr\?url=/u)
+    // Each thread at its line, answered or not, and the review's body above the diff.
+    await expect(page.getByTestId('review-thread')).toHaveCount(3)
+    await expect(page.getByTestId('pr-drafts').getByTestId('draft')).toHaveCount(1)
+    await expect(page.getByTestId('draft').and(page.locator('[data-status=waiting]'))).toHaveCount(3)
+    await expect(page.getByRole('button', { name: 'Send 3 waiting' })).toBeVisible()
 })
 
 test("a PR waiting on a reviewer leads with its link out, the detail's one stop for the PR", async ({ page }) => {
@@ -132,22 +153,22 @@ test('the counters show the loop at a glance, and the nav counts the list by sev
     await expect(page.getByTestId('counter-running')).toContainText('2')
     await expect(page.getByTestId('counter-waiting')).toContainText('1')
     await expect(page.getByTestId('counter-waiting')).toContainText('oldest')
-    await expect(page.getByTestId('counter-attention')).toContainText('5')
-    await expect(page.getByTestId('counter-attention')).toContainText('1 broken, 1 waiting on you, 3 other')
+    await expect(page.getByTestId('counter-attention')).toContainText('6')
+    await expect(page.getByTestId('counter-attention')).toContainText('1 broken, 2 waiting on you, 3 other')
 
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: /Runs/u }).click()
     await expect(page.getByTestId('nav-attention-failed')).toHaveText('1')
-    await expect(page.getByTestId('nav-attention-waiting')).toHaveText('1')
+    await expect(page.getByTestId('nav-attention-waiting')).toHaveText('2')
     await expect(page.getByTestId('nav-attention-other')).toHaveText('3')
     // Told apart by color, so said in words too: on hover, and in the link's name.
     await expect(page.getByTestId('nav-attention-count')).toHaveAttribute(
         'title',
-        '1 broken, 1 waiting on you, 3 other',
+        '1 broken, 2 waiting on you, 3 other',
     )
     await expect(
         page
             .getByRole('navigation', { name: 'Main' })
-            .getByRole('link', { name: /1 broken, 1 waiting on you, 3 other/u }),
+            .getByRole('link', { name: /1 broken, 2 waiting on you, 3 other/u }),
     ).toHaveCount(1)
     await expect(page.getByTestId('counters')).toHaveCount(0)
 })

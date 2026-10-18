@@ -13,6 +13,7 @@ from collections.abc import Collection, Sequence
 from typing import TYPE_CHECKING
 
 from canopy.core import contract, conversation, db, review_requests
+from canopy.serve import threads
 from canopy.serve.reviews import summary
 from canopy.serve.schema import CostTotal, PullRequest, PullRequestDetail, ReviewRequest
 from canopy.serve.views import decision, limit, run
@@ -66,6 +67,7 @@ def pull_request(backend: Backend, ctx: Context, url: str) -> PullRequestDetail 
         reviews=[summary(r) for r in reviews],
         decisions=[decision(d) for d in decisions],
         cost=_cost(runs, reviews),
+        threads=threads.known(ctx.conn, url),
     )
 
 

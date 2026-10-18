@@ -1,6 +1,15 @@
 // Typed fixtures for unit tests, a few of the rows canopy/serve/mock.py seeds its journal with. The dev server and the
 // end-to-end tests get the whole seeded journal from `python -m canopy.serve --mock`.
-import type { AttentionItem, ChoreSummary, Run, SearchHit, TicketSummary } from './types'
+import type {
+    AttentionItem,
+    ChoreSummary,
+    Draft,
+    PullRequestThreads,
+    ReviewThread,
+    Run,
+    SearchHit,
+    TicketSummary,
+} from './types'
 
 /** Two runs: one running, one blocked on a question. */
 export const mockRuns: Run[] = [
@@ -142,6 +151,73 @@ export function hit(fields: Partial<SearchHit> = {}): SearchHit {
         run_id: 39,
         tick_id: null,
         label: 'report',
+        ...fields,
+    }
+}
+
+/** Run 45's draft 1 on PR 88, waiting: a reply to alice's thread, `fields` over it. */
+export function draft(fields: Partial<Draft> = {}): Draft {
+    return {
+        run: 45,
+        number: 1,
+        ticket_key: 'ABC-099',
+        kind: 'thread',
+        status: 'waiting',
+        stance: 'changed',
+        comment_id: 2468013579,
+        thread_id: 'PRRT_1',
+        issue_url: null,
+        why: null,
+        text: 'Moved it into a `finally`.',
+        hash: 'cb496d375e04',
+        edited: false,
+        supersedes_edited: false,
+        sent_url: null,
+        created_at: '2026-10-08T11:38:00Z',
+        ...fields,
+    }
+}
+
+/** alice's thread on PR 88, at useSearch.ts:16 on the diff's second file, `fields` over it. */
+export function reviewThread(fields: Partial<ReviewThread> = {}): ReviewThread {
+    return {
+        id: 'PRRT_1',
+        path: 'src/search/useSearch.ts',
+        line: 16,
+        side: 'right',
+        outdated: false,
+        resolved: false,
+        file: 1,
+        diff_line: 16,
+        comments: [
+            {
+                id: 2468013579,
+                author: 'alice',
+                bot: false,
+                created_at: '2026-10-08T11:12:00Z',
+                body: 'Can it move into a `finally`?',
+                url: 'https://github.com/acme/web/pull/88#discussion_r2468013579',
+                operator_sent: false,
+            },
+        ],
+        drafts: [draft()],
+        ...fields,
+    }
+}
+
+/** PR 88's threads as the reader last read them, with no diff kept, `fields` over them. */
+export function pullRequestThreads(fields: Partial<PullRequestThreads> = {}): PullRequestThreads {
+    return {
+        url: 'https://github.com/acme/web/pull/88',
+        review_replies: 'approve',
+        read_at: '2026-10-08T11:42:00Z',
+        head_sha: `e3a7d915${'9'.repeat(32)}`,
+        diff_run: null,
+        diff_head: null,
+        diff: null,
+        threads: [reviewThread()],
+        pr_drafts: [],
+        unplaced: [],
         ...fields,
     }
 }

@@ -1922,6 +1922,9 @@ class PullRequestDetail(_Model):
     """The latest 20 decisions naming it, across ticks, newest first."""
     cost: CostTotal
     """What every run it lists cost, not only the 20 shown, and every review run of it."""
+    threads: bool = False
+    """Whether canopy has read its review threads or holds a draft for it (DESIGN §29): what
+    `GET /pull-request/threads` serves."""
 
 
 class AttentionUpdated(_Model):
