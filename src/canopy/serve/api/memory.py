@@ -98,6 +98,7 @@ def promote(memory_id: MemoryId, body: PromoteRequest, backend: BackendDep) -> M
             source=memory_views.entry(ctx, source),
             superseded=promoted.superseded,
             served=promoted.served,
+            private=promoted.private,
         )
 
 

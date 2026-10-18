@@ -1385,6 +1385,9 @@ class MemoryPromoted(_Model):
     """The lesson under the same key it replaced, if there was one."""
     served: bool
     """Whether runs are served lessons now, `memory.proposals` at `use`; False while recording."""
+    private: bool
+    """Whether its text is still a private ticket's run's own words, which may hold what the operator kept off the
+    tracker: the warning `canopy memory promote` gives."""
 
 
 class MemoryRejected(_Model):

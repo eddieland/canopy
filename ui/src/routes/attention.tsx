@@ -28,6 +28,7 @@ import { PlanCard } from '@/components/plan-card'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton, ThreadScroll } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { ReplyForm } from '@/components/reply-form'
+import { LessonsDue, LessonsWrong, ProposalsWaiting } from '@/components/memory-attention'
 import { InlineCode } from '@/components/rich-text'
 import { Chip, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
@@ -240,11 +241,14 @@ function Answered() {
     return <Chip tone="running">answered</Chip>
 }
 
+// The reasons agent memory raises (DESIGN §28), each with what to act on under its head.
+const MEMORY_REASONS = new Set(['memory_proposal', 'lesson_review', 'lesson_wrong'])
+
 /**
- * The selected item: for a plan waiting on the operator, its card first; the ticket's actions and a grant for each
- * limit it is stuck at, then its conversation and the reply form; a chore's notes and the form for another, and for a
- * finding the button to dismiss it; a PR's review limit and its grant, for an item about a PR no ticket owns; or for
- * an item about none of them, what it says.
+ * The selected item: for a plan waiting on the operator, its card first, and for memory's items the proposals or
+ * lessons they name; the ticket's actions and a grant for each limit it is stuck at, then its conversation and the
+ * reply form; a chore's notes and the form for another, and for a finding the button to dismiss it; a PR's review
+ * limit and its grant, for an item about a PR no ticket owns; or for an item about none of them, what it says.
  */
 function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
     return (
@@ -255,10 +259,18 @@ function Detail({ item, done }: { item: AttentionItem; done: boolean }) {
                 <Head item={item} done={done} />
             )}
             {item.reason === 'plan_review' && item.ticket_key !== null && <PlanReview ticketKey={item.ticket_key} />}
+            {item.reason === 'memory_proposal' && item.ticket_key !== null && (
+                <ProposalsWaiting ticketKey={item.ticket_key} />
+            )}
+            {item.reason === 'lesson_review' && <LessonsDue />}
+            {item.reason === 'lesson_wrong' && <LessonsWrong />}
             {item.ticket_key !== null && <Thread ticketKey={item.ticket_key} />}
             {item.chore !== null && <ChoreThread name={item.chore} />}
             {item.pr !== null && <PullRequestLimits url={item.pr} />}
-            {item.ticket_key === null && item.chore === null && item.pr === null && <NothingToAnswer />}
+            {item.ticket_key === null &&
+                item.chore === null &&
+                item.pr === null &&
+                !MEMORY_REASONS.has(item.reason) && <NothingToAnswer />}
         </Panel>
     )
 }

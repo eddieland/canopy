@@ -67,6 +67,7 @@ const NOTE: MemoryEntry = {
     use_count: 2,
     last_used_at: '2026-10-08T11:30:00Z',
     promoted_from: null,
+    private: false,
     created_at: '2026-10-08T10:00:00Z',
 }
 

@@ -13,6 +13,7 @@ import { Decisions } from '@/components/decisions'
 import { Field, Fields } from '@/components/fields'
 import { GrantLimits } from '@/components/grant-limits'
 import { MemoryBand, MemoryDigestView, MemoryRows } from '@/components/memory'
+import { MemorySaid, NoteActions } from '@/components/memory-actions'
 import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
 import { PlanCard } from '@/components/plan-card'
@@ -227,27 +228,38 @@ function Ticket({ detail }: { detail: TicketDetail }) {
     )
 }
 
-/** The ticket's notes (DESIGN §28), under the band that says what reads them; none while ticket notes are off. */
+/**
+ * The ticket's notes (DESIGN §28), under the band that says what reads them; none while ticket notes are off. While
+ * proposals are on, each note that keeps its text is promoted to a lesson from its row, done or invalidated ones too.
+ */
 function TicketMemoryPanel({ ticketKey }: { ticketKey: string }) {
-    const tier = useQuery(loopQuery).data?.memory?.ticket_notes
+    const memory = useQuery(loopQuery).data?.memory
+    const tier = memory?.ticket_notes
     const on = tier !== undefined && tier.mode !== 'off'
     const { data } = useQuery({ ...ticketMemoryQuery(ticketKey), enabled: on })
+    // What a promote did, under the band, as the memory page says it.
+    const [said, setSaid] = useState<string | null>(null)
     if (!on) {
         return null
     }
+    const promoting = memory !== undefined && memory !== null && memory.lessons.mode !== 'off'
+    const below = new Map(
+        promoting ? (data?.notes ?? []).map((n) => [n.id, <NoteActions key={n.id} note={n} onSaid={setSaid} />]) : [],
+    )
     return (
         <Panel data-testid="ticket-memory">
             <PanelHeader label="Memory">
                 <span className="readout text-xs text-muted-foreground">{data?.notes.length ?? ''}</span>
             </PanelHeader>
             <MemoryBand tier={tier} name="ticket notes" />
+            <MemorySaid said={said} className="border-b px-3 py-2" />
             {data === undefined ? (
                 <PanelSkeleton rows={1} />
             ) : data.notes.length === 0 ? (
                 <Empty>no notes yet: its runs write them as they end</Empty>
             ) : (
                 <PanelScroll label="Memory">
-                    <MemoryRows entries={data.notes} digest={data.digest} />
+                    <MemoryRows entries={data.notes} digest={data.digest} below={below} />
                 </PanelScroll>
             )}
             {data?.digest && <MemoryDigestView digest={data.digest} served="served to its next run" />}

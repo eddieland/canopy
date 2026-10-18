@@ -361,6 +361,96 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/memory/{memory_id}/forget": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Forget a memory
+         * @description `canopy memory forget ID`: delete a note's, a proposal's, or a lesson's text, leaving its row. A lesson retires.
+         *
+         *     Cannot be undone: `confirm` must be the memory's ref, `memory:ID`, or it is refused `not_confirmed` before anything
+         *     is read. Else refused `unknown`, or `forgotten` for one whose text is already gone, as the CLI refuses it.
+         */
+        post: operations["forgetMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/{memory_id}/promote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Promote a memory to a lesson
+         * @description `canopy memory promote ID [--text TEXT] [--repo NAME]`: a pending proposal, or a ticket's note, as a lesson.
+         *
+         *     It supersedes the lesson in force under the same key. Refused as the CLI refuses it: `off` while proposals are off,
+         *     `unknown`, `not_pending`, `forgotten`, `unknown_repo`, and `bad_text`.
+         */
+        post: operations["promoteMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/{memory_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reject a proposal
+         * @description `canopy memory reject ID`: the proposal ends, and no lesson is made of it.
+         *
+         *     Refused `off`, `unknown`, or `not_pending`, as the CLI refuses it.
+         */
+        post: operations["rejectMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/{memory_id}/renew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Renew a lesson
+         * @description `canopy memory renew ID`: the lesson comes up for review again later, and a run's report it is wrong is cleared.
+         *
+         *     Refused `off`, or `unknown` for an id no lesson in force has, as the CLI refuses it.
+         */
+        post: operations["renewMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/meta": {
         parameters: {
             query?: never;
@@ -2091,8 +2181,15 @@ export type components = {
              */
             last_used_at: string | null;
             /**
+             * Private
+             * @description Whether the run that wrote it worked a private ticket: its text may hold what the operator kept off the
+             *     tracker.
+             * @default false
+             */
+            private: boolean;
+            /**
              * Promoted From
-             * @description A lesson's proposal.
+             * @description A lesson's proposal, or the note it was promoted from.
              */
             promoted_from: number | null;
             /**
@@ -2146,6 +2243,41 @@ export type components = {
             wrong_run_id: number | null;
         };
         /**
+         * MemoryForgetRequest
+         * @description A forget, and the memory's ref as the operator typed it: the challenge, checked again in code (DESIGN §22).
+         */
+        MemoryForgetRequest: {
+            /**
+             * Confirm
+             * @description The memory's ref, `memory:42`, typed by the operator; anything else is refused `not_confirmed`.
+             */
+            confirm: string;
+        };
+        /**
+         * MemoryForgotten
+         * @description A memory whose text a forget deleted: its row stays, without the text. A forgotten lesson is retired.
+         */
+        MemoryForgotten: {
+            /**
+             * Checkpointed
+             * @description Whether the journal's write-ahead log was checkpointed after; False while a reader held it open, when the text
+             *     may stay in the log until SQLite's next checkpoint.
+             */
+            checkpointed: boolean;
+            /**
+             * Id
+             * @description The memory's id.
+             */
+            id: number;
+            /**
+             * Key
+             * @description Its key.
+             */
+            key: string;
+            /** @description What it was. */
+            scope: components["schemas"]["MemoryScopeName"];
+        };
+        /**
          * @description A memory tier's mode (DESIGN §28): `record` writes and serves nothing; `use` serves too.
          * @enum {string}
          */
@@ -2167,6 +2299,11 @@ export type components = {
              * @description The proposals waiting on the operator, oldest first.
              */
             proposals: components["schemas"]["MemoryProposal"][];
+            /**
+             * Repos
+             * @description The workspace's repositories, by name: one a promoted lesson may be served to alone.
+             */
+            repos: string[];
             /** @description The tiers; None while both are off. */
             state: components["schemas"]["MemoryState"] | null;
             /**
@@ -2174,6 +2311,32 @@ export type components = {
              * @description Every ticket with notes in force, counted, the one with the newest note first.
              */
             tickets: components["schemas"]["TicketNotes"][];
+        };
+        /**
+         * MemoryPromoted
+         * @description What a promote made: the lesson, what it came from, the lesson it superseded, and whether runs read it now.
+         */
+        MemoryPromoted: {
+            /** @description The new lesson, the operator's. */
+            lesson: components["schemas"]["MemoryEntry"];
+            /**
+             * Private
+             * @description Whether its text is still a private ticket's run's own words, which may hold what the operator kept off the
+             *     tracker: the warning `canopy memory promote` gives.
+             */
+            private: boolean;
+            /**
+             * Served
+             * @description Whether runs are served lessons now, `memory.proposals` at `use`; False while recording.
+             */
+            served: boolean;
+            /** @description The proposal or note it came from, as it was. */
+            source: components["schemas"]["MemoryEntry"];
+            /**
+             * Superseded
+             * @description The lesson under the same key it replaced, if there was one.
+             */
+            superseded: number | null;
         };
         /**
          * MemoryProposal
@@ -2223,6 +2386,34 @@ export type components = {
              * @description Why it was refused.
              */
             why: string;
+        };
+        /**
+         * MemoryRejected
+         * @description A proposal the operator rejected: no lesson is made of it.
+         */
+        MemoryRejected: {
+            /**
+             * Id
+             * @description The proposal's id.
+             */
+            id: number;
+        };
+        /**
+         * MemoryRenewed
+         * @description A lesson the operator renewed: it comes up for review again later, and a run's report it is wrong is cleared.
+         */
+        MemoryRenewed: {
+            /**
+             * Id
+             * @description The lesson's id.
+             */
+            id: number;
+            /**
+             * Review At
+             * Format: date-time
+             * @description When it is next due for review.
+             */
+            review_at: string;
         };
         /**
          * @description What a memory is: a ticket's note, a worker's proposal, or the operator's lesson.
@@ -2788,6 +2979,22 @@ export type components = {
              * @description Its process id.
              */
             pid: number;
+        };
+        /**
+         * PromoteRequest
+         * @description A promote, as `canopy memory promote ID [--text TEXT] [--repo NAME]` takes it (DESIGN §28).
+         */
+        PromoteRequest: {
+            /**
+             * Repo
+             * @description The one repository whose runs are served the lesson; None keeps a proposal's, and a note's every one.
+             */
+            repo?: string | null;
+            /**
+             * Text
+             * @description The lesson in the operator's words; None keeps the source's own. Bounded again in code, as the CLI's is.
+             */
+            text?: string | null;
         };
         /**
          * PullRequest
@@ -6073,6 +6280,358 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    forgetMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The memory's id, as `memory:ID` names it. */
+                memory_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemoryForgetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryForgotten"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    promoteMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The memory's id, as `memory:ID` names it. */
+                memory_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PromoteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryPromoted"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rejectMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The memory's id, as `memory:ID` names it. */
+                memory_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryRejected"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    renewMemory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The memory's id, as `memory:ID` names it. */
+                memory_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryRenewed"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
             /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */

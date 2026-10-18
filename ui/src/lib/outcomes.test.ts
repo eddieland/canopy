@@ -7,10 +7,14 @@ import {
     failedText,
     forgotText,
     grantedText,
+    memoryForgottenText,
     notedText,
     planText,
     noticeSetText,
+    promotedText,
+    rejectedText,
     reloadedText,
+    renewedText,
     repliedText,
     reviewDismissedText,
     reviewRequestedText,
@@ -201,5 +205,47 @@ describe('outcomes', () => {
         expect(planText('PROJ-1', { action: 'request', plan: null, superseded: null, already: false })).toContain(
             'PROJ-1 is planned first',
         )
+    })
+
+    it('says what a verb on memory did, as `canopy memory` does', () => {
+        const lesson = {
+            id: 9,
+            scope: 'lesson',
+            ticket_key: null,
+            repo: 'web',
+            key: 'web-tests',
+            text: 'Run the tests once.',
+            status: 'active',
+            why: null,
+            run_id: null,
+            head: null,
+            created_at: '2026-10-08T12:00:00Z',
+            use_count: 0,
+            last_used_at: null,
+            review_at: '2027-01-06T12:00:00Z',
+            wrong_at: null,
+            wrong_run_id: null,
+            promoted_from: 2,
+            private: false,
+        } as const
+        const note = { ...lesson, id: 2, scope: 'ticket', ticket_key: 'ABC-1', repo: null, review_at: null } as const
+        const due = new Date('2027-01-06T12:00:00Z').toLocaleString()
+        expect(promotedText({ lesson, source: note, superseded: null, served: true, private: false })).toBe(
+            `Note 2 is lesson 9 (\`web-tests\`) for web, due for review at ${due}. Every run dispatched from now on ` +
+                'reads it.',
+        )
+        const recorded = promotedText({ lesson, source: note, superseded: 8, served: false, private: true })
+        expect(recorded).toContain('It replaces lesson 8, under the same key.')
+        expect(recorded).toContain("Warning: its text is from a private ticket's run")
+        expect(recorded).toMatch(
+            /It is recorded, not served: memory\.proposals is record, so no run reads it until it is use\.$/u,
+        )
+        expect(rejectedText(5)).toBe('Proposal 5 is rejected.')
+        expect(renewedText({ id: 9, review_at: '2027-01-06T12:00:00Z' })).toBe(
+            `Lesson 9 is renewed: due for review at ${due}.`,
+        )
+        const forgot = { id: 9, scope: 'lesson', key: 'web-tests', checkpointed: true } as const
+        expect(memoryForgottenText(forgot)).toBe('Memory 9 (lesson `web-tests`) is forgotten: its text is deleted.')
+        expect(memoryForgottenText({ ...forgot, checkpointed: false })).toContain('may stay in the log')
     })
 })

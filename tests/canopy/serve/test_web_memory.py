@@ -248,7 +248,8 @@ def test_every_verb_is_refused_inside_a_run(backend: Backend, verb: str, body: d
 def test_with_proposals_off_promote_reject_and_renew_are_refused(canopy_env: CanopyEnv) -> None:
     with_memory(canopy_env, ticket_notes="record")
     c, headers = signed_in_client(migrated(canopy_env))
-    for verb, body in (("promote", {}), ("reject", None), ("renew", None)):
+    calls: list[tuple[str, dict[str, str] | None]] = [("promote", {}), ("reject", None), ("renew", None)]
+    for verb, body in calls:
         assert refused(c.post(f"/api/memory/1/{verb}", json=body, headers=headers)).startswith("off: memory.proposals")
 
 
@@ -256,3 +257,7 @@ def test_the_overview_names_the_workspaces_repositories_and_a_private_runs_memor
     overview = client(None, backend).get("/api/memory").json()
     assert overview["repos"] == ["api", "mobile", "web"]
     assert [(p["entry"]["id"], p["entry"]["private"]) for p in overview["proposals"]] == [(5, False), (6, True)]
+    c = client(None, backend)
+    # As written, a private run's words carry the CLI's warning; in the operator's own, they do not.
+    assert c.post("/api/memory/6/promote", json={}, headers=WRITE).json()["private"] is True
+    assert c.post("/api/memory/4/promote", json={"text": "Mine."}, headers=WRITE).json()["private"] is False

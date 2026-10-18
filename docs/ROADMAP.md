@@ -1433,14 +1433,17 @@ a shell. Today the web UI reads memory and writes none, and T8's list of web wri
   proposal no longer pending, on a note whose text is gone, on text past the bound, and with proposals off; Forget
   refused without the ref typed exactly; Vitest for the forms, Playwright for promoting from the memory and ticket
   pages.
-- Open: whether a ticket's memory carries the lessons in force, so its form can name the one it would supersede, or the
-  form asks the server when it opens.
+- Settled (2026-10-18): the form asks the server when it opens, reading the memory overview, which gains the
+  workspace's repositories, rather than every ticket's memory carrying the lessons in force.
 
 Accept: the tests above pass. Live: with proposals at `record`, the operator promotes a done ticket's note in their own
 words from its page and rejects a proposal from the attention list; `canopy memory lessons` shows the lesson, named as
 from that note, and `canopy memory proposals` no longer lists the rejected one.
 
-Status: not started.
+Status: in progress. Built 2026-10-18, its tests passing: `canopy.core.memory_manage`, which the CLI's repository check
+and private-run warning moved into with it; the four verbs under `/api/memory/{id}`; the forms on the memory page, a
+ticket's Memory panel, and the attention list's three items; T8, DESIGN §22 and §28, `ui/DESIGN.md`, and the guide.
+The live check is the operator's.
 
 ## M53. Review replies the operator sends
 

@@ -151,7 +151,7 @@ canopy (harness, Python)
   chores/      the operator's recurring chores (§19)
   notify/      notification sinks (§20)
   reviews/     adversarial reviews of PRs (§21)
-  memory/      agent memory's feature (§28): the operator's verbs on it, proposals' expiry, its attention items
+  memory/      agent memory's feature (§28): proposals' expiry, its attention items, and search
   serve/       the web UI's server (§22, D079); the only package that imports fastapi, starlette, uvicorn, or anyio
   setup/       canopy init, the sandbox's setup, and workspace sync (§18, §24)
   core/        what every feature shares: config, the Context, the journal and its typed rows, vocabularies, contracts,
