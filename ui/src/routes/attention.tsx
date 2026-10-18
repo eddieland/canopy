@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { createFileRoute, Link } from '@tanstack/react-router'
-import { GitPullRequest } from 'lucide-react'
+import { GitPullRequest, MessageSquareReply } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
@@ -38,6 +38,7 @@ import { TicketActions } from '@/components/ticket-actions'
 import { TicketLink } from '@/components/ticket-link'
 import { LinkOutButton } from '@/components/ticket-links'
 import { TicketTitle } from '@/components/ticket-title'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { WorkingNow } from '@/components/working-now'
 import { useUntrustedReview } from '@/hooks/use-untrusted-review'
@@ -490,6 +491,7 @@ function Thread({ item, ticketKey, asks }: { item: AttentionItem; ticketKey: str
         <>
             {asks === 'run' && <LatestRun runs={data.runs} />}
             {asks === 'pull-request' && <PullRequestAction item={item} units={data.units} />}
+            {asks === 'drafts' && <DraftsAction item={item} />}
             {/* What holds it up sits before its conversation, where it is read first (DESIGN.md, the detail
                 skeleton). */}
             {leads && actions}
@@ -542,6 +544,27 @@ function LatestRun({ runs }: { runs: Run[] }) {
     return (
         <div className="border-b" data-testid="attention-run">
             <RunsTable runs={[latest]} ticket={false} />
+        </div>
+    )
+}
+
+/**
+ * Replies a run drafted for a PR: its page, where each sits on its thread to read, edit, drop, or send (DESIGN §29).
+ * A ticket's own draft names no PR, and has no action here.
+ */
+function DraftsAction({ item }: { item: AttentionItem }) {
+    const url = pullRequestOf(item)
+    if (url === null) {
+        return null
+    }
+    return (
+        <div className="flex flex-wrap items-center gap-2 border-b p-3" data-testid="attention-drafts">
+            <Button asChild variant="outline">
+                <Link to="/pull-requests/pr" search={{ url }}>
+                    <MessageSquareReply />
+                    Read the drafts on {pullRequestLabel(url)}
+                </Link>
+            </Button>
         </div>
     )
 }

@@ -14,10 +14,43 @@ The title is the PR's own, as the worker that opened it or canopy's last review 
 changes rather than what the ticket asked for. Until one is reported, a loop PR shows its ticket's title. Titles are
 read when canopy looks at the PR, not live: rename one on GitHub and canopy catches up at its next run or review.
 
-A PR's page gathers what canopy knows of it: its ticket, repository, and branch, what it has cost, canopy's reviews of
-it, the runs that pushed to it, and the decisions that named it. When a PR has used every review it's allowed, its page
+A PR's page gathers what canopy knows of it: its ticket, repository, and branch, what it has cost, its coworkers'
+review threads when canopy has read them (below), canopy's reviews of it, the runs that pushed to it, and the
+decisions that named it. When a PR has used every review it's allowed, its page
 shows **At its limit**, with **Allow one more**, as `canopy grant URL review`. The limit is
 `policy.max_reviews_per_pr`, three by default.
+
+## Replying to your coworkers' reviews
+
+When a coworker reviews one of the loop's PRs, the worker that answers them doesn't post its replies. It drafts them,
+and you send the ones worth sending, as your own words. That's `trust.review_replies = "approve"`, the default. Set it
+to `"post"` in your own config and workers post their replies themselves, each starting with `CANOPY:` so nobody
+mistakes them for you.
+
+The PR's page shows its review threads on the diff the latest run pushed, each at its line, with the run's draft under
+the thread it answers. canopy reads the threads itself, so what you see is what GitHub holds, not the worker's
+recollection of it. A thread on a line that's since changed sits under its file, marked `outdated`. If the PR has moved
+on past the diff the page shows, a warning above the diff says so.
+
+Each waiting draft has three buttons:
+
+- **Send** posts it, word for word, under your name, with no mark: you approved it, so it's yours. It's
+  `canopy draft send`.
+- **Edit** opens the text to rewrite. Your version is kept beside the run's, and **Send** then posts yours.
+- **Drop** means nobody sends it. **Undo** takes that back.
+
+**Send N waiting**, at the top, sends every waiting draft together. Either way, one PR's drafts go as one comment
+review, so your coworker gets one notification rather than a burst. canopy never approves, requests changes, or
+resolves a thread: whether the conversation is over stays the reviewer's call.
+
+canopy is careful about what it posts. A send carries the hash of the text you saw, so if the draft changed in another
+tab, it's refused `stale` rather than sending words you never read. If a coworker commented on the thread since the
+run, the send is refused `thread_changed` and the page shows the new comment: read it, then send again if your reply
+still holds. A newer run's draft for the same thread replaces an unsent one, and if you'd edited the old one, the new
+card warns you that your edits didn't come along. A draft is never posted twice; one whose post ended without saying
+whether it worked reads `unconfirmed` until canopy's next read of the PR settles it.
+
+The [attention list](attention) holds a `drafts waiting` item while any draft for the PR waits on you.
 
 ## When canopy reviews
 

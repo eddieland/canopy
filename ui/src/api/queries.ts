@@ -46,6 +46,8 @@ export const keys = {
     // The PRs list and each PR's page share a prefix, so one invalidation marks both stale.
     pullRequests: ['pull-requests'] as const,
     pullRequest: (url: string) => ['pull-requests', url] as const,
+    // Under the PR's key, so what marks its page stale marks its threads stale too.
+    pullRequestThreads: (url: string) => ['pull-requests', url, 'threads'] as const,
     loop: ['loop'] as const,
     // Agent memory: every tier's, read again at each tick; a ticket's under its ticket's key, so the stream's
     // `ticket.changed` marks it stale with the ticket; a run's, read again when the run's status changes.
@@ -318,6 +320,19 @@ export function pullRequestQuery(url: string) {
         queryKey: keys.pullRequest(url),
         queryFn: async ({ signal }) =>
             unwrap(await api.GET('/api/pull-request', { params: { query: { url } }, signal })),
+        placeholderData: undefined,
+    })
+}
+
+/**
+ * A PR's review threads on the diff its latest run kept, with every draft for it (DESIGN §29): what canopy's reader
+ * last read, never live from GitHub. A 404 is a PR canopy has read no threads of and holds no draft for.
+ */
+export function pullRequestThreadsQuery(url: string) {
+    return queryOptions({
+        queryKey: keys.pullRequestThreads(url),
+        queryFn: async ({ signal }) =>
+            unwrap(await api.GET('/api/pull-request/threads', { params: { query: { url } }, signal })),
         placeholderData: undefined,
     })
 }

@@ -15,9 +15,9 @@ test('the root redirects to the attention list', async ({ page }) => {
 test('the tab names the page, after what blocks on the operator', async ({ page }) => {
     await page.goto('attention')
     await settled(page)
-    // The mock's five items less the PR that waits on a reviewer and the chore's finding, which block nothing.
-    await expect(page.getByTestId(/^attention-item-/u)).toHaveCount(5)
-    const count = 3
+    // The mock's six items less the PR that waits on a reviewer and the chore's finding, which block nothing.
+    await expect(page.getByTestId(/^attention-item-/u)).toHaveCount(6)
+    const count = 4
     await expect(page).toHaveTitle(`(${count}) Attention · canopy`)
 
     const nav = page.getByRole('navigation', { name: 'Main' })
@@ -501,7 +501,8 @@ test('a long list scrolls inside its panel, so the panels under it stay in reach
 test("a run's summary keeps its lines and lists, its first four shown until the toggle opens the rest", async ({
     page,
 }) => {
-    await page.goto('runs')
+    // ABC-099's page, since the runs page shows its latest run, 45.
+    await page.goto('tickets/ABC-099')
     await settled(page)
     const run = page.getByTestId('run-39')
     await expect(run.getByRole('listitem')).toHaveCount(3)

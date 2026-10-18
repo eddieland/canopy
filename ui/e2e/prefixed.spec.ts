@@ -345,6 +345,26 @@ test("a PR at its review limit is granted one more review from its ticket's atte
     await expect(page.getByTestId('grant-limits')).toHaveCount(0)
 })
 
+test("a run's drafted reply is edited and sent from the PR's page, as canopy draft sends it", async ({ page }) => {
+    await page.goto('pull-requests/pr?url=https%3A%2F%2Fgithub.com%2Facme%2Fweb%2Fpull%2F88')
+    const reply = page.getByTestId('review-thread').filter({ hasText: 'Can it move into a' }).getByTestId('draft')
+    await reply.getByRole('button', { name: 'Edit' }).click()
+    const text = `Moved it into a finally. ${crypto.randomUUID()}`
+    await reply.getByRole('textbox', { name: 'In your words' }).fill(text)
+    await reply.getByRole('button', { name: 'Save' }).click()
+    await expect(reply.getByRole('status')).toContainText("Run 45's draft 1 is your text now")
+    await expect(reply).toContainText(text)
+    await expect(reply.getByText('your text', { exact: true })).toBeVisible()
+    // The mock answers for canopy's GitHub programs: the send posts nowhere, and reads as sent.
+    await reply.getByRole('button', { name: 'Send' }).click()
+    await expect(reply.getByRole('status')).toHaveText(
+        /^Sent run 45's draft 1: https:\/\/github\.com\/acme\/web\/pull\/88#discussion_r\d+\.$/u,
+    )
+    await expect(reply).toHaveAttribute('data-status', 'sent')
+    await expect(reply.getByRole('button')).toHaveCount(0)
+    await expect(reply.getByRole('link', { name: 'The reply on its host' })).toBeVisible()
+})
+
 test('a long conversation scrolled away from its end stays put as a message arrives', async ({ page }) => {
     // Thirty copies of its first messages, then any added since, so the reply arrives at the end of a long thread.
     // The first ones kept, and new ones told apart by id: the server sends only the latest 100, so after many runs a

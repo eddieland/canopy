@@ -257,7 +257,10 @@ and the user file is optional (§12).
 
 ### R20. Read every reply to a coworker's review before it is sent, in place on the PR
 
-Gap (M53). Written down 2026-10-17. A `resume` worker answers review comments on the PR as the operator, and the
+Built (M53, DESIGN §29): under `trust.review_replies = "approve"`, the default, workers draft their replies, canopy reads
+the threads itself, and the operator edits, drops, or sends each draft on its thread on the PR's page, or with
+`canopy draft`, posted unmarked as one comment review by canopy's own GitHub program. Written down 2026-10-17.
+A `resume` worker answers review comments on the PR as the operator, and the
 operator first sees what it said when their coworkers do. They want the worker to plan its replies and canopy to show
 them each one on its thread, in place on the PR's diff, to edit, drop, or send. A reply the operator sends is their
 own words, so it should not start with `CANOPY:`; the marks stay for what workers post themselves (D069). Reading the

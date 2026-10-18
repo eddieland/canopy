@@ -111,6 +111,9 @@ class Backend:
     # Rewrite `attention.md` after a write that changes the list without a tick, such as a dismissal. The mock's
     # writes nothing.
     write_attention: Callable[[Context], object] = field(default=lambda _ctx: None)
+    # The process runner each Context gets. The mock's answers for canopy's GitHub programs from its own journal, so a
+    # draft sent from the mock posts nowhere.
+    runner: Callable[[], procs.Runner] = field(default=procs.SubprocessRunner)
     # Held while `config` and `workspace` are read or replaced, so a request never gets one of each.
     _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False, compare=False)
     # When chores' findings started, as the last read found them, handed to every Context opened, so a request or a
@@ -133,7 +136,7 @@ class Backend:
             yield Context(
                 config=cfg,
                 conn=conn,
-                runner=procs.SubprocessRunner(),
+                runner=self.runner(),
                 ws=ws,
                 finding_starts=self._finding_starts,
             )

@@ -6,6 +6,8 @@ import type {
     ChoreTried,
     ConfigReload,
     Dismissed,
+    Draft,
+    DraftsSent,
     Forgot,
     Granted,
     Limit,
@@ -34,10 +36,11 @@ import type {
 /**
  * The operator's actions: sign in and out, the CLI's verbs on a ticket, a note to a chore, trying a chore, dismissing
  * a finding, sending a review's findings to a worker, granting a run past a limit, asking for a PR to be reviewed,
- * pausing the loop, asking it for a tick now, a notice to workers, and the verbs on agent memory. Each goes through
- * the same function on the server as `canopy start`, `stop`, `reply`, `forget`, `chore try`, `dismiss`, `send`,
- * `grant`, `start URL --review`, `stop URL`, `pause`, `resume`, `notice`, and `memory promote`, `reject`, `renew`, and
- * `forget`, or as `t` at the loop's terminal, with the same guards; a refusal is an ApiError naming its guard.
+ * pausing the loop, asking it for a tick now, a notice to workers, the verbs on agent memory, and those on a run's
+ * drafts. Each goes through the same function on the server as `canopy start`, `stop`, `reply`, `forget`,
+ * `chore try`, `dismiss`, `send`, `grant`, `start URL --review`, `stop URL`, `pause`, `resume`, `notice`,
+ * `memory promote`, `reject`, `renew`, and `forget`, and `draft edit`, `drop`, and `send`, or as `t` at the loop's
+ * terminal, with the same guards; a refusal is an ApiError naming its guard.
  */
 
 /** Signs this browser in with the listener secret. The secret is sent here once and never kept in the page. */
@@ -228,6 +231,41 @@ export async function sendReviewFindings(run: number, findings: number[], submis
     )
 }
 
+/**
+ * `canopy draft edit run:ID N --text TEXT`: the operator's text for the run's draft number `number`, kept as a new
+ * version beside the run's own, held to the bounds a draft is.
+ */
+export async function editDraft(run: number, number: number, text: string): Promise<Draft> {
+    return unwrap(
+        await api.POST('/api/runs/{run_id}/drafts/{number}/edit', {
+            params: { path: { run_id: run, number } },
+            body: { text },
+        }),
+    )
+}
+
+/** `canopy draft drop run:ID N`: nobody sends the draft. With `undo`, `--undo`: it waits on the operator again. */
+export async function dropDraft(run: number, number: number, undo: boolean): Promise<Draft> {
+    return unwrap(
+        await api.POST('/api/runs/{run_id}/drafts/{number}/drop', {
+            params: { path: { run_id: run, number } },
+            body: { undo },
+        }),
+    )
+}
+
+/**
+ * `canopy draft send`: the drafts as the operator's own words, each named by the hash of the text the page showed, so
+ * what posts is what was read. One PR's go as one comment review; any refusal posts nothing.
+ */
+export async function sendDrafts(drafts: Pick<Draft, 'run' | 'number' | 'hash'>[]): Promise<DraftsSent> {
+    return unwrap(
+        await api.POST('/api/drafts/send', {
+            body: { drafts: drafts.map(({ run, number, hash }) => ({ run, number, hash })) },
+        }),
+    )
+}
+
 /** `canopy pause`: the loop starts no tick until it is resumed. A tick already running finishes. */
 export async function pauseLoop(): Promise<PauseChanged> {
     return unwrap(await api.POST('/api/loop/pause'))
@@ -340,6 +378,17 @@ export async function refreshLimits(client: QueryClient, ticketKey: string | nul
 /** After a review request is made or stopped: read the PRs list and every PR's page again; the stream sends neither. */
 export function refreshPullRequests(client: QueryClient): Promise<void> {
     return client.invalidateQueries({ queryKey: keys.pullRequests })
+}
+
+/**
+ * After a verb on a PR's drafts: read its threads and the attention list again now; the stream sends neither. The
+ * attention item stays until the next tick, as an answered one does.
+ */
+export async function refreshThreads(client: QueryClient, url: string): Promise<void> {
+    await Promise.all([
+        client.invalidateQueries({ queryKey: keys.pullRequestThreads(url) }),
+        client.invalidateQueries({ queryKey: keys.attention }),
+    ])
 }
 
 /** After an action on a ticket: read it again now, rather than wait for the stream to say it changed. */
