@@ -82,6 +82,9 @@ not go in the middle of the sequence.
   - [27. The overseer's tools (M48)](OVERSEER_TOOLS.md#27-the-overseers-tools-m48)
 - [Agent memory](MEMORY.md): what workers record of what they learn, who reads it, and who decides.
   - [28. Agent memory (M50)](MEMORY.md#28-agent-memory-m50)
+- [Review replies](REVIEW_REPLIES.md): replies to coworkers' review comments that workers draft and the operator
+  sends.
+  - [29. Review replies the operator sends (M53)](REVIEW_REPLIES.md#29-review-replies-the-operator-sends-m53)
 
 ## 1. Problem
 
