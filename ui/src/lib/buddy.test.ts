@@ -3,7 +3,17 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { breakStorage, otherTab, otherTabClears } from '@/test-utils'
 
-import { ANYWHERE, DEFAULT, parseBuddy, TIPS, tipFor } from './buddy'
+import {
+    ANYWHERE,
+    DEFAULT,
+    OFFERED_KEY,
+    parseBuddy,
+    parseOffered,
+    readOffered,
+    storeOffered,
+    TIPS,
+    tipFor,
+} from './buddy'
 import type { View } from './buddy'
 
 const DAY = 86_400_000
@@ -21,6 +31,33 @@ describe('parseBuddy', () => {
         expect(parseBuddy('on')).toBe('on')
         expect(parseBuddy('off')).toBe('off')
         expect(parseBuddy('maybe')).toBe('off')
+    })
+})
+
+describe('parseOffered', () => {
+    it('reads a count, and none for anything else', () => {
+        expect(parseOffered(null)).toBe(0)
+        expect(parseOffered('12')).toBe(12)
+        expect(parseOffered('-1')).toBe(0)
+        expect(parseOffered('1.5')).toBe(0)
+        expect(parseOffered('lots')).toBe(0)
+    })
+})
+
+describe('readOffered', () => {
+    beforeEach(() => localStorage.clear())
+
+    it('reads the count stored, none before one is', () => {
+        expect(readOffered()).toBe(0)
+        storeOffered(7)
+        expect(localStorage.getItem(OFFERED_KEY)).toBe('7')
+        expect(readOffered()).toBe(7)
+    })
+
+    it('is none where storage is unavailable, and storing there does not throw', () => {
+        breakStorage()
+        storeOffered(3)
+        expect(readOffered()).toBe(0)
     })
 })
 

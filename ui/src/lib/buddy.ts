@@ -7,7 +7,8 @@ import { useSyncExternalStore } from 'react'
  * with "Tip:", so Sprig's jokes open with anything else. They come in several voices, mixed in each list so that no
  * voice follows itself: the paperclip's "It looks like you're...", an "Unhelpful tip:", a "Did you know?" or "Fun
  * fact:" that is not one, a "Hot take:", a "Dear diary," entry, a haiku, a riddle. It is off until Settings turns it
- * on, which is kept in localStorage like the theme, and synced across tabs.
+ * on, which is kept in localStorage like the theme, and synced across tabs. How many tips it has offered is kept there
+ * too, so a page loaded again picks up where the last left off rather than offering the same tips over.
  */
 
 /** Whether Sprig shows. */
@@ -18,9 +19,18 @@ export const STORAGE_KEY = 'canopy-buddy'
 /** The setting until the operator turns Sprig on: off. */
 export const DEFAULT: BuddySetting = 'off'
 
+/** Where localStorage keeps how many tips Sprig has offered in this browser, over every page load. */
+export const OFFERED_KEY = 'canopy-buddy-offered'
+
 /** The setting as stored, or the default for anything it does not recognize. */
 export function parseBuddy(raw: string | null): BuddySetting {
     return raw === 'on' || raw === 'off' ? raw : DEFAULT
+}
+
+/** The count of tips offered as stored, or none for anything that is not a count. */
+export function parseOffered(raw: string | null): number {
+    const n = Number(raw)
+    return Number.isSafeInteger(n) && n >= 0 ? n : 0
 }
 
 /**
@@ -304,4 +314,22 @@ export function setBuddy(next: BuddySetting): void {
         // Not persisted, but still applied for this page.
     }
     announce(next)
+}
+
+/** How many tips Sprig has offered in this browser: none where storage is unavailable. */
+export function readOffered(): number {
+    try {
+        return parseOffered(globalThis.localStorage.getItem(OFFERED_KEY))
+    } catch {
+        return 0
+    }
+}
+
+/** Stores how many tips Sprig has offered, for the next page load to go on from. */
+export function storeOffered(n: number): void {
+    try {
+        globalThis.localStorage.setItem(OFFERED_KEY, String(n))
+    } catch {
+        // Not persisted: the next page load starts over.
+    }
 }

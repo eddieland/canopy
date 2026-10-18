@@ -338,7 +338,8 @@ Sprig:
   once, too often to be funny: the operator asked for the timer. A tip is about the view it was offered on, so another
   view hides it, a list filtered another way does not, and it closes on time all the same. Clicking Sprig, or the
   bubble's Another tip, offers the next at once; the bubble closes with its button or 20 seconds after it opened, and
-  "Don't show me tips again" turns Sprig off.
+  "Don't show me tips again" turns Sprig off. This browser keeps count of the tips offered, so a page loaded again goes
+  on from there: a click after a reload offers a new tip, not the one the last visit opened on.
 - Its place is the rail's column, between the blocks and the footer: the room left there is its slot, and it stands at
   the slot's foot. A slot with room for Sprig and its bubble (with the mock's three working runs, a window about 1100px
   tall) covers nothing. A laptop's window never leaves that much, and the operator would rather see Sprig standing over

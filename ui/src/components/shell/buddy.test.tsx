@@ -66,6 +66,18 @@ describe('Buddy', () => {
         expect(shown(tipFor('/attention', 2, NOW))).not.toBeNull()
     })
 
+    it('goes on from the last page load, rather than offering the same tips over', async () => {
+        await renderBuddy('/attention')
+        fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
+        cleanup()
+
+        await renderBuddy('/attention')
+        expect(shown(tipFor('/attention', 2, NOW))).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
+        expect(shown(tipFor('/attention', 3, NOW))).not.toBeNull()
+    })
+
     it('keeps a tip to the page it was offered on, and offers the next about the page turned to', async () => {
         const router = await renderBuddy('/attention')
         fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
