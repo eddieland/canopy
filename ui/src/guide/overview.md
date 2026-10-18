@@ -60,6 +60,10 @@ The bar across the top of every page. From the left:
 
 - **The logo.** While the page hears the loop over its stream, the dot beside `canopy` breathes; while a tick runs, an
   arc sweeps its ring. If the dot stops breathing, the page has stopped hearing from the loop.
+- **The stream**, in a word beside the name: `LIVE`, `OPENING`, `RETRYING` just after a drop, or `DOWN · 2M` once it
+  has been down a while. Before it, a boxed `mock` when the server runs over a sample journal
+  (`python -m canopy.serve --mock`) instead of your workspace's. No loop runs behind that one, and nothing you do there
+  reaches a ticket.
 - **The ticker**, if you turned it on in [Settings](settings#fun). Joke headlines, and the odd real tip. It stops under
   the pointer, for the ones worth reading twice.
 - **Reload**, only when canopy now serves a newer build of the UI than the page you have open. Reloading loses what
@@ -71,10 +75,7 @@ The bar across the top of every page. From the left:
   while paused. It doesn't unpause anything; a pause stays a pause. While a tick is running, the button waits for it
   to finish.
 - **The readouts.** The last tick, as `tick:12 · 3m ago`, with its status when it didn't end ok; it opens the tick.
-  `memory: recording` or `memory: in use` while agent memory is on, which opens the memory page. And the stream:
-  `LIVE`, `OPENING`, `RETRYING` just after a drop, or `DOWN · 2M` once it has been down a while.
-- **The mock flag**, a boxed `mock`, when the server runs over a sample journal (`python -m canopy.serve --mock`)
-  instead of your workspace's. No loop runs behind it, and nothing you do there reaches a ticket.
+  `memory: recording` or `memory: in use` while agent memory is on, which opens the memory page.
 
 While a notice to workers is in force, a banner above every page shows it until it lapses, with **Clear** to end it
 sooner. You set one on [Settings](settings#notice-to-workers).
