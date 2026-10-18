@@ -12,7 +12,7 @@ import { TICK_TONE } from '@/lib/ticks'
 import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
-// Each no longer than `down · 59m`, the width the readout keeps (`w-[10ch]`), so a drop moves nothing beside it.
+// The stream's state, in a word.
 const STREAM_LABEL: Record<StreamStatus, string> = {
     connecting: 'opening',
     open: 'live',
@@ -21,46 +21,48 @@ const STREAM_LABEL: Record<StreamStatus, string> = {
 }
 
 /**
- * The header's readouts: the latest tick, agent memory while a tier is on, the stream's state, and `mock` over fixture
- * data. The counters are the attention page's.
+ * The header's readouts: the latest tick, and agent memory while a tier is on. The counters are the attention page's.
  */
-export function LiveReadouts({ stream }: { stream: StreamStatus }) {
-    const meta = useQuery(metaQuery)
+export function LiveReadouts() {
     const last = useQuery(tickQuery)
     const memory = useQuery(loopQuery).data?.memory ?? null
-    const down = useLoopDown()
-    // Down past the first retry's wait, it says for how long, in the color of what waits on the operator.
-    const since = down.offline && down.since !== null ? new Date(down.since).toISOString() : null
     return (
         // Inset as far as a ghost button's label, so the rules either side sit midway between their neighbors.
         <div className="flex items-center gap-4 px-2.5" data-testid="live-readouts">
             {last.data?.tick && <LastTick tick={last.data.tick} />}
             {memory !== null && <MemoryReadout memory={memory} />}
-            <span
-                className={cn(
-                    'readout inline-flex items-center gap-1.5 text-2xs uppercase',
-                    since === null
-                        ? stream === 'open'
-                            ? 'text-accent'
-                            : 'text-muted-foreground'
-                        : 'text-status-blocked',
-                )}
-                title={since === null ? undefined : `Down since ${localTime(since)}: the loop isn't answering.`}
-                data-testid="stream-status"
-                data-status={since === null ? stream : 'down'}
-            >
-                {meta.data?.mock && <span className="rounded-sm border px-1 text-muted-foreground">mock</span>}
-                <span className="inline-block w-[10ch] text-right whitespace-nowrap">
-                    {since === null ? (
-                        STREAM_LABEL[stream]
-                    ) : (
-                        <>
-                            down · <Age at={since} className="text-2xs text-inherit" />
-                        </>
-                    )}
-                </span>
-            </span>
         </div>
+    )
+}
+
+/**
+ * The stream's state beside the name, and `mock` over fixture data. It sits at the left, before the ticker, so its
+ * word hugs its text and a drop moves nothing: the ticker's window gives way, not the actions or the readouts.
+ */
+export function StreamReadout({ stream }: { stream: StreamStatus }) {
+    const meta = useQuery(metaQuery)
+    const down = useLoopDown()
+    // Down past the first retry's wait, it says for how long, in the color of what waits on the operator.
+    const since = down.offline && down.since !== null ? new Date(down.since).toISOString() : null
+    return (
+        <span
+            className={cn(
+                'readout inline-flex items-center gap-1.5 text-2xs whitespace-nowrap uppercase',
+                since === null ? (stream === 'open' ? 'text-accent' : 'text-muted-foreground') : 'text-status-blocked',
+            )}
+            title={since === null ? undefined : `Down since ${localTime(since)}: the loop isn't answering.`}
+            data-testid="stream-status"
+            data-status={since === null ? stream : 'down'}
+        >
+            {meta.data?.mock && <span className="rounded-sm border px-1 text-muted-foreground">mock</span>}
+            {since === null ? (
+                STREAM_LABEL[stream]
+            ) : (
+                <span>
+                    down · <Age at={since} className="text-2xs text-inherit" />
+                </span>
+            )}
+        </span>
     )
 }
 

@@ -8,7 +8,7 @@ import type { StreamStatus } from '@/hooks/use-event-stream'
 import { StreamContext } from '@/hooks/use-loop-down'
 import { renderRouted } from '@/test-utils'
 
-import { LiveReadouts } from './live-readouts'
+import { LiveReadouts, StreamReadout } from './live-readouts'
 
 const META: Meta = {
     branch_urls: {},
@@ -78,7 +78,8 @@ function renderReadouts(
     client.setQueryData<LoopState>(keys.loop, { memory, notice: null, paused: null })
     return renderRouted(
         <StreamContext value={{ status: stream, downSince }}>
-            <LiveReadouts stream={stream} />
+            <StreamReadout stream={stream} />
+            <LiveReadouts />
         </StreamContext>,
         { client },
     )

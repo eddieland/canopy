@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils'
 import { useTheme } from '@/theme/use-theme'
 
 import { Buddy } from './buddy'
-import { LiveReadouts } from './live-readouts'
+import { LiveReadouts, StreamReadout } from './live-readouts'
 import { LoopDownBand } from './loop-down-band'
 import { LoopPause } from './loop-pause'
 import { Mark } from './mark'
@@ -112,6 +112,7 @@ export function AppShell() {
                         <div className="flex items-center gap-2.5">
                             <LiveMark stream={stream.status} />
                             <span className="font-mono text-sm font-medium tracking-tight">canopy</span>
+                            <StreamReadout stream={stream.status} />
                         </div>
                         <Ticker />
                         {/* Three groups, the actions, the readouts, and the theme, a rule between each. */}
@@ -120,7 +121,7 @@ export function AppShell() {
                             <LoopPause />
                             <TickNow />
                             <Rule />
-                            <LiveReadouts stream={stream.status} />
+                            <LiveReadouts />
                             <Rule />
                             <ThemeToggle />
                         </div>
