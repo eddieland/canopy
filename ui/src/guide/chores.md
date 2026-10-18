@@ -43,6 +43,14 @@ A finding you've read and don't want to see again has **dismiss**, here and on i
 finding off the attention list until the chore stops reporting it; if the finding clears and later comes back, it's
 listed again. **undo**, here, lists it again now. This is `canopy dismiss chore:NAME ID`.
 
+## Capping the findings
+
+A chore that reports forty findings has told you nothing you'll read. Set `max_findings = 5` in its `[chores.NAME]`
+table and each run lists the five that matter most and only counts the rest. The count shows as `not listed` beside
+**Open findings**, on each run, and in `attention.md`, so a short list never passes for the whole one. canopy keeps the
+first five of a longer list itself, so say in the prompt which kind comes first. A dismissed finding still takes one of
+the five; to make room, write the chore a note to leave it out.
+
 ## Notes to a chore
 
 A note is an instruction to the chore's next runs, such as a finding to leave out or a place to look harder. Write one

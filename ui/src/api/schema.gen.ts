@@ -1362,6 +1362,12 @@ export type components = {
              */
             log_path: string;
             /**
+             * More Findings
+             * @description How many more an `ok` run found than it listed, past its chore's `max_findings`.
+             * @default 0
+             */
+            more_findings: number;
+            /**
              * New Tokens
              * @description The tokens the runtime reported its model took in or wrote anew, every kind but cache reads; None when it
              *     reported nothing.
@@ -1545,6 +1551,12 @@ export type components = {
              * @description The newest of the operator's notes to it, so a new note changes the list the stream sends.
              */
             latest_note_id: number | null;
+            /**
+             * More Findings
+             * @description How many more its latest `ok` run found than it listed, past its `max_findings`: only counted, never recorded.
+             * @default 0
+             */
+            more_findings: number;
             /**
              * Name
              * @description The chore's name, as `chore:NAME` names it.

@@ -64,20 +64,37 @@ export function runsText(window: Pick<ChoreSpendWindow, 'runs' | 'priced'>): str
 
 /**
  * A chore's findings as its line in the list counts them: those still waiting on the operator, then how many the
- * operator dismissed, as `canopy status` counts them (DESIGN §19): `1 open finding · 2 dismissed`. A dismissed one is
- * still reported, only off the attention list, so counting it as open would leave a chore whose findings were all
- * dismissed looking as if they waited.
+ * operator dismissed, as `canopy status` counts them (DESIGN §19), then the `more` its latest ok run found past its
+ * `max_findings` and did not list: `1 open finding · 2 dismissed · 12 not listed`. A dismissed one is still reported,
+ * only off the attention list, so counting it as open would leave a chore whose findings were all dismissed looking as
+ * if they waited.
  */
-export function findingsText(findings: readonly Pick<ChoreFinding, 'dismissed'>[]): string {
+export function findingsText(findings: readonly Pick<ChoreFinding, 'dismissed'>[], more = 0): string {
     const { waiting, dismissed } = countFindings(findings)
-    const open = waiting === 1 ? '1 open finding' : `${waiting} open findings`
-    return dismissed > 0 ? `${open} · ${dismissed} dismissed` : open
+    return withCounts(waiting === 1 ? '1 open finding' : `${waiting} open findings`, dismissed, more)
 }
 
-/** The same count as `findingsText`, for the chore page's findings panel, whose label names them: `0 · 2 dismissed`. */
-export function findingsReadout(findings: readonly Pick<ChoreFinding, 'dismissed'>[]): string {
+/**
+ * The same count as `findingsText`, for the chore page's findings panel, whose label names them:
+ * `0 · 2 dismissed · 12 not listed`.
+ */
+export function findingsReadout(findings: readonly Pick<ChoreFinding, 'dismissed'>[], more = 0): string {
     const { waiting, dismissed } = countFindings(findings)
-    return dismissed > 0 ? `${waiting} · ${dismissed} dismissed` : String(waiting)
+    return withCounts(String(waiting), dismissed, more)
+}
+
+/**
+ * How many findings a chore run listed, then how many more it found past its `max_findings`:
+ * `20 findings · 7 not listed`.
+ */
+export function listedText(findings: number, more: number): string {
+    return withCounts(findings === 1 ? '1 finding' : `${findings} findings`, 0, more)
+}
+
+function withCounts(head: string, dismissed: number, more: number): string {
+    return [head, dismissed > 0 ? `${dismissed} dismissed` : null, more > 0 ? `${more} not listed` : null]
+        .filter((part) => part !== null)
+        .join(' · ')
 }
 
 function countFindings(findings: readonly Pick<ChoreFinding, 'dismissed'>[]): { waiting: number; dismissed: number } {

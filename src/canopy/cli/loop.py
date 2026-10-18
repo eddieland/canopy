@@ -245,7 +245,7 @@ def _print_recent_runs(ctx: Context) -> None:
 
 
 def _print_chores(ctx: Context) -> None:
-    """A line per configured chore, with how many findings the operator dismissed; nothing when there are none (§19)."""
+    """A line per configured chore, with how many findings are dismissed or not listed; nothing without chores (§19)."""
     states = chore_view.states(ctx.conn, ctx.config, ctx.workspace)
     if not states:
         return
@@ -255,6 +255,8 @@ def _print_chores(ctx: Context) -> None:
     for state in states:
         dismissed = sum(f.dismissed for f in state.findings())
         note = f"; {dismissed} finding{'s' if dismissed != 1 else ''} dismissed" if dismissed else ""
+        more = state.more_findings()
+        note += f"; {attention.more_text(more)}" if more else ""
         click.echo(f"  {state.name}  {chore_line(state, now)}{note}")
 
 

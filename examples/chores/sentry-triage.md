@@ -55,8 +55,8 @@ Never ask `sentry issue view` for its `event`: the latest event's request can ho
 - Title: `<short id> [<fatal|escalating|regressed|new>] <the issue's title>`, cut to one line.
 - Detail: `count` events and `userCount` users, first and last seen, and the culprit (function or route). No more.
 - Link: the issue's `https://` URL in Sentry.
-- At most 20 findings. With more, keep fatal first, then escalating, regressed, and new, and within each the most users
-  affected first. Say in the summary how many you left out.
+- At most `max_findings` findings. With more, keep fatal first, then escalating, regressed, and new, and within each
+  the most users affected first.
 - No findings, with status `ok`, means nothing in Sentry needs a human this morning. Say so in the summary in a sentence,
   with how many issues you looked at.
 - If you could not list a project at all (`sentry` is missing, not signed in, or does not know the project), report

@@ -133,7 +133,8 @@ def outcome_of(done: procs.Result, output: agent_output.AgentOutput, chore: Chor
     if parsed is None:
         note = "the chore's last line was not a valid result; its findings are not recorded"
         return Outcome(ChoreRunStatus.UNKNOWN, None, note, printed)
-    return Outcome(ChoreRunStatus(parsed.status), parsed, printed=printed)
+    # A guard in code: the prompt asks for at most `max_findings`, and a chore that lists more has the rest counted.
+    return Outcome(ChoreRunStatus(parsed.status), result.capped(parsed, chore.max_findings), printed=printed)
 
 
 def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapter) -> Outcome:

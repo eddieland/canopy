@@ -18,7 +18,7 @@ import { RichText, SUMMARY_LINES } from '@/components/rich-text'
 import { ListRow, RowLine } from '@/components/rows'
 import { RunDot, Word } from '@/components/status'
 import { TryChore } from '@/components/try-chore'
-import { cadenceText, choreLine, findingsReadout, runsText, windowText } from '@/lib/chores'
+import { cadenceText, choreLine, findingsReadout, listedText, runsText, windowText } from '@/lib/chores'
 import { costText } from '@/lib/cost-total'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { choreRef } from '@/lib/refs'
@@ -111,11 +111,15 @@ function Chore({ detail }: { detail: ChoreDetail }) {
                     <Panel data-testid="chore-findings">
                         <PanelHeader label="Open findings">
                             <span className="readout text-xs text-muted-foreground" data-testid="chore-findings-count">
-                                {findingsReadout(chore.findings)}
+                                {findingsReadout(chore.findings, chore.more_findings)}
                             </span>
                         </PanelHeader>
                         {chore.findings.length === 0 ? (
-                            <Empty>no open findings now: its latest ok run found nothing</Empty>
+                            <Empty>
+                                {chore.more_findings > 0
+                                    ? 'no open findings listed: its latest ok run counted some past its max_findings'
+                                    : 'no open findings now: its latest ok run found nothing'}
+                            </Empty>
                         ) : (
                             <PanelScroll label="Open findings">
                                 <ul className="divide-y">
@@ -170,7 +174,7 @@ function RunRow({ name, run }: { name: string; run: ChoreRun }) {
                 <ChoreRunLink name={name} id={run.id} className="min-w-28" />
                 {run.status === 'ok' && (
                     <span className="readout text-xs text-muted-foreground">
-                        {run.findings === 1 ? '1 finding' : `${run.findings} findings`}
+                        {listedText(run.findings, run.more_findings)}
                     </span>
                 )}
             </span>

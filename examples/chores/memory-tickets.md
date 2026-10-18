@@ -69,8 +69,8 @@ Each finding is one ticket the operator could file as it stands:
 - An id names the problem, not the run, so the same problem keeps the same id from one run to the next. Reuse the id
   of an entry in `open_findings` for a problem that is still there, and leave out one whose ticket now exists or whose
   memories are gone.
-- At most 20 findings. With more, keep `fix/` first, by how many tickets ran into it, then `graduate/`, by how many
-  runs used the lesson.
+- At most `max_findings` findings. With more, keep `fix/` first, by how many tickets ran into it, then `graduate/`, by
+  how many runs used the lesson.
 - No findings, with status `ok`, means nothing in memory calls for a ticket. Say so in the summary in a sentence, with
   how many notes, proposals, and lessons you read.
 - If a `canopy memory` command fails or is refused, or the tracker or GitHub cannot be searched, report status

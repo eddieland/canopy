@@ -809,6 +809,7 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
             )
             for f in state.findings()
         ],
+        more_findings=state.more_findings(),
         latest_note_id=db.latest_message_of(conn, conversation.CHORE, state.name),
         spend=ChoreSpend(
             day=_chore_spent(conn, state.name, now, SPEND_DAY_HOURS),
@@ -851,6 +852,7 @@ def chore_run(row: records.ChoreRun, root: Path) -> ChoreRun:
         ended_at=db.parse_time(row.ended_at) if row.ended_at else None,
         summary=said(row),
         findings=len(parsed.findings) if parsed is not None else 0,
+        more_findings=parsed.more_findings if parsed is not None else 0,
         session_id=row.session_id or None,
         cost_usd=row.cost_usd,
         new_tokens=new_tokens(row),

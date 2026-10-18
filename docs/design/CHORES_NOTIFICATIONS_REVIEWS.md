@@ -37,6 +37,7 @@ days = ["mon", "tue", "wed", "thu", "fri"]
 hours = "08:00-18:00"
 timezone = "America/New_York"
 when = "Skip it when the last run found nothing and nothing has merged to main since."
+max_findings = 5          # optional; default 20
 timeout_minutes = 20
 cwd = "~/src/build-tools"
 workspaces = ["acme"]     # optional; default every workspace
@@ -51,6 +52,10 @@ workspaces = ["acme"]     # optional; default every workspace
 - `when` (optional) is plain language for the overseer: when a run is worth it, pointless, or urgent; without it a
   chore runs whenever due. Being operator-written, it is an instruction; nothing a chore reads is. Clock times belong
   in `days` and `hours`, which cost no judgment and no `wait` decision every tick.
+- `max_findings` (optional, 1 to 20, default 20) is the most findings a run lists, so a chore that finds a lot puts
+  the few that matter most before the operator rather than all of them. The prompt asks for the most important first
+  and a count of the rest; a guard in code keeps the first `max_findings` of a longer list and adds the others to
+  that count. A dismissed finding still takes its place: a note is how to make room.
 - `timeout_minutes` defaults to 15. `cwd` defaults to a private directory per chore under the state directory. The
   shadowing check (§13) covers `cwd` and every directory above it: OpenCode config there that defines one of canopy's
   agents makes the run `crashed`.
@@ -114,19 +119,22 @@ the timeout. No lease, branch, or push, so nothing to return or verify. Its log 
 prompt are not its to read back or rewrite.
 
 The prompt is the operator's file plus a `## Run` section canopy generates: the time, the overseer's context, the
-operator's notes (below) and notice to workers (§8), the latest run, the open findings so ids can be reused, and the
-result contract. The notice is in canopy's section, which the operator's file cannot drop.
+operator's notes (below) and notice to workers (§8), the latest run, the open findings so ids can be reused,
+`max_findings`, and the result contract. The notice is in canopy's section, which the operator's file cannot drop.
 
 Result contract, one JSON line, last line of the agent's text (§13):
 
 ```json
 {"status":"ok|failed","summary":"one paragraph",
- "findings":[{"id":"flaky/checkout-service/test_retry","title":"one line","detail":"a paragraph","link":"https://..."}]}
+ "findings":[{"id":"flaky/checkout-service/test_retry","title":"one line","detail":"a paragraph","link":"https://..."}],
+ "more_findings":0}
 ```
 
 - `ok`: the check ran; no findings means nothing needs a human. `failed`: it could not check, and the summary says why.
 - A finding's `id` is stable across runs for the same problem and unique within a run. Text is cut to bounds, `link`
-  is absent or a plain `https://` URL, and at most 20 findings are kept.
+  is absent or a plain `https://` URL, and at most 20 findings are accepted.
+- `more_findings` (default 0) counts the findings the chore had past `max_findings` and left out. It is only a count:
+  what they were is in no journal row, so the operator who wants them raises `max_findings` or writes a note.
 - Validated with pydantic (D026). Anything else is `unknown`, with no findings recorded.
 
 Reconcile (§6 step 3) treats chore runs like worker runs: one whose process is gone has its agent killed and ends
@@ -189,6 +197,9 @@ result, and exits 0 only on `ok`.
   by a later `ok` run.
 - `attention.md` and `canopy status` list them per chore, `chore:<name>`, after the ticket items, each finding aged
   from the first of the unbroken `ok` runs reporting it. Notification follows §14, keyed by chore and finding id.
+- The latest `ok` run's `more_findings` is said after them, in `attention.md`, `canopy status`, `canopy show`, and the
+  web UI's chore pages, so a cut list never reads as the whole. It is not an item and is not notified: it has no id
+  to age or resolve by.
 
 ### Journal
 
