@@ -78,8 +78,9 @@ HARNESS_REASONS = frozenset(
         *memory.HARNESS_REASONS,
     }
 )
-# How far back to look when working out how long an item has been open.
-_HISTORY_TICKS = 1000
+# The window the list reads: how far back to look when working out how long an item has been open. Garbage
+# collection keeps every row of a tick inside it (DESIGN §26).
+HISTORY_TICKS = 1000
 FILE_NAME = "attention.md"
 # Kept importable from here: tests and the CLI name items through this module.
 __all__ = [
@@ -133,7 +134,7 @@ def current(conn: sqlite3.Connection) -> list[Item]:
         int(r[0])
         for r in conn.execute(
             "SELECT id FROM ticks WHERE status = 'ok' ORDER BY id DESC LIMIT ?",
-            (_HISTORY_TICKS,),
+            (HISTORY_TICKS,),
         )
     ]
     if not ticks:
