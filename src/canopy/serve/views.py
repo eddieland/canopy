@@ -52,6 +52,7 @@ from canopy.serve.schema import (
     NoticeChannel,
     Pause,
     PauseChannel,
+    RawOutput,
     Run,
     RunActivity,
     RunState,
@@ -73,7 +74,6 @@ from canopy.serve.schema import (
     TickDetail,
     TicketDetail,
     TicketSummary,
-    TickOutput,
     Transcript,
     TranscriptEntry,
     TranscriptError,
@@ -349,7 +349,7 @@ def tick_transcript(ctx: Context, tick_id: int) -> Transcript | None:
     return session_transcript(tick_output(ctx, tick_id), row.session_id)
 
 
-def tick_raw_output(ctx: Context, tick_id: int) -> TickOutput | None:
+def tick_raw_output(ctx: Context, tick_id: int) -> RawOutput | None:
     """The end of a tick's output as written, or None if there is no such tick.
 
     Returns:
@@ -357,10 +357,27 @@ def tick_raw_output(ctx: Context, tick_id: int) -> TickOutput | None:
     """
     if db.get_tick(ctx.conn, tick_id) is None:
         return None
-    found = transcript.tail(tick_output(ctx, tick_id))
+    return _raw_output(tick_output(ctx, tick_id))
+
+
+def run_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
+    """The end of a run's log as written, its setup commands' output and its worker's stderr included (DESIGN §22).
+
+    Returns:
+        The tail, without control characters, or a `no_output` status when the log is missing or not a regular file;
+        None if there is no such run.
+    """
+    row = db.get_run(ctx.conn, run_id)
+    if row is None:
+        return None
+    return _raw_output(Path(str(row["log_path"])))
+
+
+def _raw_output(path: Path) -> RawOutput:
+    found = transcript.tail(path)
     if found is None:
-        return TickOutput(status="no_output")
-    return TickOutput(status="read", text=found.text, size=found.size, truncated=found.truncated)
+        return RawOutput(status="no_output")
+    return RawOutput(status="read", text=found.text, size=found.size, truncated=found.truncated)
 
 
 def run_detail(ctx: Context, run_id: int) -> Run | None:

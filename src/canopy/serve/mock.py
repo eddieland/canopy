@@ -1253,6 +1253,18 @@ as a finding.
 
 None.
 """
+# Run 40's setup command, as `_run` writes it before the worker starts (DESIGN §8), and its runtime's stderr.
+_SETUP_40 = """\
+--- setup web stdout ---
+Lockfile is up to date, resolution step is skipped
+Packages: +412
+Done in 6.2s
+--- setup web stderr ---
+ WARN  deprecated inflight@1.0.6
+"""
+_RUN_STDERR_40 = """\
+ERROR 2026-10-08T09:41:12 +3m12s service=session error=rate limited: retry after 30s
+"""
 _TICK_STDERR = """\
 INFO  2026-10-08T11:00:00 +210ms service=default version=1.19.0 args=["run","--format","json"] opencode
 WARN  2026-10-08T11:00:01 +1043ms service=mcp key=jira error=timed out after 1000ms listing prompts
@@ -1448,7 +1460,7 @@ def _transcripts(state_dir: Path) -> None:
         _text(s2, -59.1, '{"status": "ok", "summary": "mock tick"}'),
         _step(s2, -59, 0.31, reason="stop"),
     ]
-    # The running chore run's log exists, as `canopy chores run` opens it, and holds no events until it ends.
+    # The running chore run's log exists, as `canopy chores run` opens it, and holds no events yet.
     none: list[str] = []
     written = (
         ("runs", "39", run_39),
@@ -1467,6 +1479,10 @@ def _transcripts(state_dir: Path) -> None:
         elif directory == "runs" and name in RUNNING_LOGS:
             # A running worker's stdout so far: no stderr or exit until it ends.
             text = f"--- worker stdout ---\n{stdout}\n"
+        elif directory == "runs" and name == "40":
+            # What only its output shows: its setup command's, and the runtime's own lines on stderr.
+            worker = f"--- worker stdout ---\n{stdout}\n--- worker stderr ---\n{_RUN_STDERR_40}--- worker exit 1 ---\n"
+            text = _SETUP_40 + worker
         elif directory == "runs":
             text = f"--- worker stdout ---\n{stdout}\n--- worker stderr ---\n\n--- worker exit 0 ---\n"
         elif directory.startswith("chore-runs/"):

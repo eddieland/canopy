@@ -1112,16 +1112,18 @@ class Transcript(_Model):
     """The session's prompt, kept beside the log, if canopy kept one and it could be read."""
 
 
-class TickOutput(_Model):
-    """The end of a tick's overseer output as written: its stdout, a `--- stderr ---` line, its stderr (DESIGN §22).
+class RawOutput(_Model):
+    """The end of a tick's output or a run's log as written, the lines its transcript leaves out included (DESIGN §22).
 
-    Agent output: untrusted, rendered as text, its control characters dropped. `truncated` says the file holds more
-    than its last `text`, which starts at a whole line; `size` is the whole file's, in bytes.
+    A tick's is its overseer's stdout, a `--- stderr ---` line, and its stderr; a run's, its setup commands' output and
+    its worker's stdout, stderr, and exit, each under a `--- ... ---` line canopy writes. Agent output: untrusted,
+    rendered as text, its control characters dropped. `truncated` says the file holds more than its last `text`, which
+    starts at a whole line; `size` is the whole file's, in bytes.
     """
 
     status: Literal["read", "no_output"]
-    """`read`: the file was read. `no_output`: it is missing (none kept, or the tick is still running), a symlink, or
-    not a regular file."""
+    """`read`: the file was read; a running tick's or run's holds what it has printed so far. `no_output`: it is
+    missing (none kept, or its agent has not started), a symlink, or not a regular file."""
     text: str = ""
     """The end of the file, starting at a whole line."""
     size: int = 0

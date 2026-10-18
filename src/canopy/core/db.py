@@ -46,6 +46,8 @@ CURSOR_COLUMNS: Mapping[str, str] = {**TICKET_CURSORS, **UNIT_CURSORS}
 # written once below over a table from this closed set: claimed by its process's pid, its agent's pid recorded, its
 # report, and its close. A table name in SQL comes from here, never from input.
 type RunTable = Literal["runs", "chore_runs", "review_runs"]
+# The rows whose agent's progress `set_progress` records as it prints; a worker run's is `set_run_progress`.
+type ProgressTable = Literal["ticks", "chore_runs"]
 RUN_TABLES: tuple[RunTable, ...] = ("runs", "chore_runs", "review_runs")
 # What each run table's rows are called in a message, and the column it keeps its agent's pid in: the leader of the
 # process group the run's own process starts, which outlives that process if it dies.
@@ -883,9 +885,30 @@ def set_run_progress(
             )
 
 
-def set_tick_session(conn: sqlite3.Connection, tick_id: int, session_id: str) -> None:
-    """Record a tick's overseer session while it runs, before what it cost is known (§6, §13)."""
-    conn.execute("UPDATE ticks SET session_id = ? WHERE id = ?", (session_id, tick_id))
+def set_progress(
+    conn: sqlite3.Connection,
+    table: ProgressTable,
+    row_id: int,
+    session_id: str,
+    *,
+    usage: Usage | None = None,
+) -> None:
+    """Record what a running tick's overseer or chore run's agent has reported so far (§6, §19).
+
+    Its session always, and what it has spent so far when `usage` is given. Nothing changes for one not running.
+    """
+    with transaction(conn):
+        conn.execute(
+            f"UPDATE {table} SET session_id = ? WHERE id = ? AND status = 'running'",  # noqa: S608
+            (session_id, row_id),
+        )
+        if usage is not None:
+            conn.execute(
+                f"UPDATE {table} SET cost_usd = ?, tokens_input = ?, tokens_output = ?, "  # noqa: S608
+                "tokens_reasoning = ?, tokens_cache_read = ?, tokens_cache_write = ?, tokens_peak_context = ?, "
+                "tokens_first_call = ?, tokens_first_cache_write = ? WHERE id = ? AND status = 'running'",
+                (*_spent(usage), row_id),
+            )
 
 
 def usage_of(row: sqlite3.Row | records.Row) -> Usage | None:
@@ -941,7 +964,7 @@ def _set_report(
 
 
 def _spent(usage: Usage) -> tuple[float, int, int, int, int, int, int | None, int | None, int | None]:
-    """`usage` as the cost and token columns hold it, in the order `_set_report` and `set_run_progress` write them.
+    """`usage` as the cost and token columns hold it, in the order `_set_report` and the progress setters write them.
 
     Returns:
         The cost, each kind of token, the peak context, and the first call's tokens and cache write.

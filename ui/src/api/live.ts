@@ -1,7 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query'
 
 import { keys } from './queries'
-import type { ChoreRunDetail, LastTick, Run, StreamEvent } from './types'
+import type { ChoreRun, ChoreRunDetail, LastTick, Run, StreamEvent, Tick } from './types'
 
 /**
  * Writes one stream event into the Query cache. A list arrives whole and replaces the cached one; a changed ticket is
@@ -28,8 +28,8 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             if (before !== undefined && statuses(before) !== statuses(event.runs)) {
                 void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
             }
-            // A run a page holds is written whole; its transcript is read again when its log has more in it: its
-            // worker's events reach the log as it prints them, and a new tool call or model call moves the run's row.
+            // A run a page holds is written whole; its transcript and output are read again when its log has more in
+            // it: its worker's events reach the log as it prints them, and a new tool call or model call moves its row.
             for (const run of event.runs) {
                 const shown = client.getQueryData<Run>(keys.run(run.id))
                 if (shown === undefined) {
@@ -55,14 +55,15 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
             void client.invalidateQueries({ queryKey: ['chore'], refetchType: 'active' })
             // A chore run that ended changes the spend page's counts of runs, even one that reported no cost.
             void client.invalidateQueries({ queryKey: ['spend', 'breakdown'], refetchType: 'active' })
-            // A chore run's page and transcript change only as it ends, when its status moves.
+            // A chore run's page and transcript are read again when its log has more in it: its agent's events reach
+            // the log as it prints them, and each model call's end moves its cost; its status moves as it ends.
             for (const chore of event.chores) {
                 for (const run of [chore.running, chore.latest]) {
                     if (!run) {
                         continue
                     }
                     const shown = client.getQueryData<ChoreRunDetail>(keys.choreRun(chore.name, run.id))
-                    if (shown === undefined || shown.run.status === run.status) {
+                    if (shown === undefined || choreLogged(shown.run) === choreLogged(run)) {
                         continue
                     }
                     void client.invalidateQueries({ queryKey: keys.choreRun(chore.name, run.id) })
@@ -86,8 +87,12 @@ export function applyStreamEvent(client: QueryClient, event: StreamEvent): void 
         case 'tick.updated': {
             const before = client.getQueryData<LastTick>(keys.tick)?.tick
             client.setQueryData(keys.tick, { tick: event.tick, acknowledged: event.acknowledged })
-            // Only the latest tick's output can still change, and only as it ends.
-            if (event.tick && (before?.id !== event.tick.id || before.status !== event.tick.status)) {
+            // Only the latest tick's output can still change: its overseer's events reach the log as it prints them,
+            // and each model call's end moves its cost, each decision its count, and its end its status.
+            if (
+                event.tick &&
+                (!before || before.id !== event.tick.id || tickLogged(before) !== tickLogged(event.tick))
+            ) {
                 void client.invalidateQueries({ queryKey: keys.tickTranscript(event.tick.id) })
             }
             // A tick started, ended, or recorded a decision: the ticks, a tick's page, and a ticket's decisions. A
@@ -120,6 +125,16 @@ function statuses(runs: Run[]): string {
  */
 function logged(run: Run): string {
     return `${run.status}:${run.activity?.at ?? ''}:${run.cost_usd ?? ''}`
+}
+
+/** What moves as a running chore run's log grows: its status, and its cost at each model call's end. */
+function choreLogged(run: ChoreRun): string {
+    return `${run.status}:${run.cost_usd ?? ''}`
+}
+
+/** What moves as a running tick's log grows: its status, its overseer's cost, and how many decisions it recorded. */
+function tickLogged(tick: Tick): string {
+    return `${tick.status}:${tick.cost_usd ?? ''}:${tick.decisions}`
 }
 
 /** Which running runs hold which worktrees, as one comparable string: a cost going up leaves it alone. */
