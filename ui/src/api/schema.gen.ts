@@ -3368,6 +3368,13 @@ export type components = {
              * @description Its ticket's runs that reported this PR, and any of its ticket's runs working now, newest first; at most 20.
              */
             runs: components["schemas"]["Run"][];
+            /**
+             * Threads
+             * @description Whether canopy has read its review threads or holds a draft for it (DESIGN §29): what
+             *     `GET /pull-request/threads` serves.
+             * @default false
+             */
+            threads: boolean;
         };
         /**
          * PullRequestThreads

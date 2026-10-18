@@ -1,0 +1,434 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Pencil, Send, Trash2, Undo2 } from 'lucide-react'
+import { useId, useState } from 'react'
+import type { SubmitEvent } from 'react'
+
+import { dropDraft, editDraft, refreshThreads, sendDrafts } from '@/api/mutations'
+import { pullRequestThreadsQuery } from '@/api/queries'
+import type { Draft, PullRequestThreads, ReviewThread } from '@/api/types'
+import { Age } from '@/components/age'
+import { Textarea } from '@/components/input'
+import { LinkOut } from '@/components/link-out-icon'
+import { MemoryText } from '@/components/memory'
+import { Notice } from '@/components/notice'
+import { Panel, PanelFooter, PanelHeader, PanelLoading } from '@/components/panel'
+import { DiffPanels } from '@/components/review-diff'
+import { RunLink } from '@/components/run-link'
+import { Chip, Word } from '@/components/status'
+import { Button } from '@/components/ui/button'
+import { DRAFT_TONE, MAX_DRAFT_CHARS, draftChars, movedHead, open, placeThreads, waiting } from '@/lib/drafts'
+import { draftDroppedText, draftEditedText, draftsSentText } from '@/lib/outcomes'
+import { shortSha } from '@/lib/reviews'
+import { cn } from '@/lib/utils'
+
+/**
+ * A PR's review threads on the diff its latest run kept, each draft under the thread it answers (DESIGN §29, On the
+ * PR's diff): what canopy's reader last read of the PR, never a worker's copy. A thread sits at its line, under its
+ * file when the diff does not show the line or it is outdated, or in a Not in the diff panel. Its comments and every
+ * draft are plain text, every hidden character named. A draft is edited, dropped, or sent where it sits; the head panel
+ * sends every waiting one together, as one comment review.
+ */
+export function ReviewThreads({ url }: { url: string }) {
+    const query = useQuery(pullRequestThreadsQuery(url))
+    const { data } = query
+    if (data === undefined) {
+        return (
+            <Panel>
+                <PanelHeader label="Review threads" />
+                <PanelLoading query={query} rows={3} className="min-h-40" />
+            </Panel>
+        )
+    }
+    const placed = placeThreads(data)
+    return (
+        <>
+            <RepliesPanel threads={data} />
+            {data.diff !== null && (
+                <DiffPanels
+                    diff={data.diff}
+                    placed={placed}
+                    renderCard={(t) => <ThreadCard key={t.id} thread={t} url={url} />}
+                />
+            )}
+            {placed.elsewhere.length > 0 && (
+                <Panel data-testid="threads-elsewhere">
+                    <PanelHeader label={data.diff === null ? 'Threads' : 'Not in the diff'}>
+                        <span className="readout text-xs text-muted-foreground">{placed.elsewhere.length}</span>
+                    </PanelHeader>
+                    <div className="flex flex-col gap-2 p-3">
+                        {placed.elsewhere.map((t) => (
+                            <ThreadCard key={t.id} thread={t} url={url} />
+                        ))}
+                    </div>
+                </Panel>
+            )}
+            {data.unplaced.length > 0 && (
+                <Panel data-testid="drafts-unplaced">
+                    <PanelHeader label="Not on a thread">
+                        <span className="readout text-xs text-muted-foreground">{data.unplaced.length}</span>
+                    </PanelHeader>
+                    <div className="flex flex-col gap-2 p-3">
+                        {data.unplaced.map((d) => (
+                            <DraftCard key={`${d.run}-${d.number}`} draft={d} url={url} />
+                        ))}
+                    </div>
+                </Panel>
+            )}
+        </>
+    )
+}
+
+/**
+ * The head of a PR's threads: how workers' comments reach GitHub now, when the reader last read the PR, a warning when
+ * its head is past the diff the page shows, the drafts for the review's body, and a send of every waiting draft.
+ */
+function RepliesPanel({ threads }: { threads: PullRequestThreads }) {
+    const client = useQueryClient()
+    const [said, setSaid] = useState<string | null>(null)
+    const sendable = waiting(threads)
+    const send = useMutation({
+        mutationFn: () => sendDrafts(sendable),
+        onSuccess: (sent) => {
+            setSaid(draftsSentText(sent))
+            void refreshThreads(client, threads.url)
+        },
+    })
+    const moved = movedHead(threads)
+    const count = threads.threads.length
+    return (
+        <Panel data-testid="review-replies">
+            <PanelHeader label="Review threads">
+                <span className="readout text-xs text-muted-foreground">
+                    {count} {count === 1 ? 'thread' : 'threads'}
+                </span>
+            </PanelHeader>
+            <div className="flex flex-col gap-2 p-3 text-sm">
+                <p className="text-muted-foreground">
+                    {threads.review_replies === 'approve' ? (
+                        <>
+                            Workers draft their replies, and nothing reaches the PR until you send it, as your own words
+                            and unmarked: <code className="font-mono text-xs">trust.review_replies</code> is approve.
+                        </>
+                    ) : (
+                        <>
+                            Workers post their own replies, marked:{' '}
+                            <code className="font-mono text-xs">trust.review_replies</code> is post. Drafts from runs
+                            under approve can still be sent.
+                        </>
+                    )}{' '}
+                    {threads.read_at === null ? (
+                        'canopy has not read its threads yet.'
+                    ) : (
+                        <>
+                            Read <Age at={threads.read_at} variant="ago" />
+                            {threads.head_sha !== null && (
+                                <>
+                                    {' '}
+                                    at <span className="font-mono text-xs">{shortSha(threads.head_sha)}</span>
+                                </>
+                            )}
+                            .
+                        </>
+                    )}
+                </p>
+                {moved !== null && threads.diff_run !== null && threads.diff_head !== null && (
+                    <p className="text-status-blocked" data-testid="head-moved">
+                        The PR&apos;s head is <span className="font-mono text-xs">{shortSha(moved)}</span>, past the
+                        diff run:{threads.diff_run} kept at{' '}
+                        <span className="font-mono text-xs">{shortSha(threads.diff_head)}</span>: a thread may sit on a
+                        line that has changed since.
+                    </p>
+                )}
+                {threads.diff === null && (
+                    <p className="text-muted-foreground">No run kept a diff of it, so its threads are listed whole.</p>
+                )}
+            </div>
+            {threads.pr_drafts.length > 0 && (
+                <div className="flex flex-col gap-2 border-t p-3" data-testid="pr-drafts">
+                    <span className="panel-label">The review&apos;s body</span>
+                    {threads.pr_drafts.map((d) => (
+                        <DraftCard key={`${d.run}-${d.number}`} draft={d} url={threads.url} />
+                    ))}
+                </div>
+            )}
+            {(sendable.length > 0 || said !== null || send.error !== null) && (
+                <PanelFooter>
+                    <span className="flex flex-wrap items-center gap-2">
+                        {sendable.length > 0 && (
+                            <Button
+                                onClick={() => send.mutate()}
+                                disabled={send.isPending}
+                                title={`canopy draft send ${sendRefs(sendable)}`}
+                            >
+                                <Send />
+                                Send {sendable.length} waiting
+                            </Button>
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                            As one comment review, in your name: it approves nothing and resolves no thread.
+                        </span>
+                    </span>
+                    <Notice error={send.error}>{said}</Notice>
+                </PanelFooter>
+            )}
+        </Panel>
+    )
+}
+
+// What `canopy draft send` takes for the drafts, run by run, for the button's hover.
+function sendRefs(drafts: Draft[]): string {
+    const runs = [...new Set(drafts.map((d) => d.run))]
+    return runs
+        .map((run) =>
+            [`run:${run}`, ...drafts.filter((d) => d.run === run).map((d) => `${d.number}@${d.hash}`)].join(' '),
+        )
+        .join(' ')
+}
+
+/**
+ * One review thread: where it is, whether GitHub says it is outdated or resolved, its comments as their authors wrote
+ * them, plain text, with a link to each on its host, then the drafts that answer it. One the operator sent wears `sent
+ * by you`. A thread no draft answers shows as it is.
+ */
+export function ThreadCard({ thread, url }: { thread: ReviewThread; url: string }) {
+    const where = thread.path === null ? null : thread.line === null ? thread.path : `${thread.path}:${thread.line}`
+    return (
+        <article className="rounded-md border bg-surface-raised p-3 text-sm" data-testid="review-thread">
+            <header className="flex flex-wrap items-center gap-2">
+                {where !== null && <span className="font-mono text-xs break-all text-muted-foreground">{where}</span>}
+                {thread.outdated && <Chip>outdated</Chip>}
+                {thread.resolved && <Chip>resolved</Chip>}
+            </header>
+            <ol className="mt-1.5 flex flex-col gap-2">
+                {thread.comments.map((c) => (
+                    <li key={c.id} className="flex flex-col gap-0.5" data-testid="thread-comment">
+                        <span className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground">{c.author ?? 'a deleted account'}</span>
+                            {c.bot && <Chip>bot</Chip>}
+                            {c.operator_sent && <Chip>sent by you</Chip>}
+                            {c.created_at !== null && <Age at={c.created_at} variant="ago" />}
+                            {c.url !== null && <LinkOut href={c.url} label="The comment on its host" />}
+                        </span>
+                        <MemoryText text={c.body} />
+                    </li>
+                ))}
+            </ol>
+            {thread.drafts.length > 0 && (
+                <div className="mt-2 flex flex-col gap-2">
+                    {thread.drafts.map((d) => (
+                        <DraftCard key={`${d.run}-${d.number}`} draft={d} url={url} />
+                    ))}
+                </div>
+            )}
+        </article>
+    )
+}
+
+/**
+ * One draft, a worker's text until the operator sends it: its run and number, where it stands, what the run did about
+ * its thread, and its text, plain, every hidden character named. A waiting draft has Send, Edit, and Drop; one no read
+ * has checked yet, Edit and Drop; a dropped one, Undo. Its hash, on hover, is the one a send carries, so what posts is
+ * the text shown. A draft superseded by this one that carried the operator's edits is named, since they are not
+ * carried over.
+ */
+export function DraftCard({ draft, url }: { draft: Draft; url: string }) {
+    const client = useQueryClient()
+    const [said, setSaid] = useState<string | null>(null)
+    const [editing, setEditing] = useState(false)
+    const refresh = () => void refreshThreads(client, url)
+    const send = useMutation({
+        mutationFn: () => sendDrafts([draft]),
+        onSuccess: (sent) => {
+            setSaid(draftsSentText(sent))
+            refresh()
+        },
+    })
+    const drop = useMutation({
+        mutationFn: (undo: boolean) => dropDraft(draft.run, draft.number, undo),
+        onSuccess: (dropped) => {
+            setSaid(draftDroppedText(dropped))
+            refresh()
+        },
+    })
+    const busy = send.isPending || drop.isPending
+    const ref = `run:${draft.run} ${draft.number}`
+    return (
+        <article
+            className={cn(
+                'rounded-md border bg-surface p-3 text-sm',
+                draft.status === 'waiting' && 'border-status-blocked/40',
+            )}
+            data-testid="draft"
+            data-status={draft.status}
+        >
+            <header className="flex flex-wrap items-center gap-2">
+                <span className="panel-label">Draft</span>
+                <span className="readout text-xs text-muted-foreground">
+                    <RunLink id={draft.run} /> {draft.number}
+                </span>
+                <Chip tone={DRAFT_TONE[draft.status]} word={draft.status} />
+                {draft.stance !== null && <Word word={draft.stance} className="text-xs text-muted-foreground" />}
+                {draft.edited && <Chip>your text</Chip>}
+                <span className="ml-auto font-mono text-2xs text-muted-foreground" title="The hash a send carries">
+                    {draft.hash}
+                </span>
+            </header>
+            {draft.why !== null && draft.status !== 'waiting' && (
+                <p className="mt-1 text-xs text-muted-foreground">{draft.why}</p>
+            )}
+            {draft.supersedes_edited && open(draft) && (
+                <p className="mt-1 text-xs text-status-blocked" data-testid="supersedes-edited">
+                    It replaces a draft you edited, and your edits are not carried over: read it before you send it.
+                </p>
+            )}
+            {editing ? (
+                <EditDraft
+                    draft={draft}
+                    onSaved={(text) => {
+                        setSaid(text)
+                        setEditing(false)
+                        refresh()
+                    }}
+                    onCancel={() => setEditing(false)}
+                />
+            ) : (
+                <MemoryText
+                    text={draft.text}
+                    className={cn(
+                        'mt-1.5 block',
+                        (draft.status === 'superseded' || draft.status === 'dropped') &&
+                            'text-muted-foreground line-through',
+                    )}
+                />
+            )}
+            {!editing && (open(draft) || draft.status === 'dropped' || draft.sent_url !== null) && (
+                <span className="mt-2 flex flex-wrap items-center gap-2">
+                    {draft.status === 'waiting' && (
+                        <Button
+                            size="sm"
+                            onClick={() => send.mutate()}
+                            disabled={busy}
+                            title={`canopy draft send run:${draft.run} ${draft.number}@${draft.hash}`}
+                        >
+                            <Send />
+                            Send
+                        </Button>
+                    )}
+                    {open(draft) && (
+                        <>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setEditing(true)}
+                                disabled={busy}
+                                title={`canopy draft edit ${ref} --text TEXT`}
+                            >
+                                <Pencil />
+                                Edit
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => drop.mutate(false)}
+                                disabled={busy}
+                                title={`canopy draft drop ${ref}`}
+                            >
+                                <Trash2 />
+                                Drop
+                            </Button>
+                        </>
+                    )}
+                    {draft.status === 'dropped' && (
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => drop.mutate(true)}
+                            disabled={busy}
+                            title={`canopy draft drop ${ref} --undo`}
+                        >
+                            <Undo2 />
+                            Undo
+                        </Button>
+                    )}
+                    {draft.sent_url !== null && <LinkOut href={draft.sent_url} label="The reply on its host" />}
+                    {draft.status === 'unchecked' && (
+                        <span className="text-xs text-muted-foreground">
+                            It is sent once canopy has read its thread.
+                        </span>
+                    )}
+                </span>
+            )}
+            <Notice error={send.error ?? drop.error} className="mt-1.5">
+                {said}
+            </Notice>
+        </article>
+    )
+}
+
+/**
+ * A draft's text in the operator's words, as `canopy draft edit`: plain text, held to the bound a draft is, kept as a
+ * new version beside the run's own.
+ */
+function EditDraft({
+    draft,
+    onSaved,
+    onCancel,
+}: {
+    draft: Draft
+    onSaved: (said: string) => void
+    onCancel: () => void
+}) {
+    const id = useId()
+    const [text, setText] = useState(draft.text)
+    const edit = useMutation({
+        mutationFn: () => editDraft(draft.run, draft.number, text),
+        onSuccess: (edited) => onSaved(draftEditedText(edited)),
+    })
+    const chars = draftChars(text)
+    const fits = text.trim() !== '' && chars <= MAX_DRAFT_CHARS
+
+    function submit(event: SubmitEvent<HTMLFormElement>) {
+        event.preventDefault()
+        if (fits) {
+            edit.mutate()
+        }
+    }
+
+    return (
+        <form
+            onSubmit={submit}
+            aria-label={`Edit run:${draft.run}'s draft ${draft.number}`}
+            className="mt-1.5 flex flex-col gap-2"
+        >
+            <span className="flex items-baseline justify-between gap-3">
+                <label className="panel-label" htmlFor={`${id}-text`}>
+                    In your words
+                </label>
+                <span
+                    className={cn(
+                        'readout text-xs text-muted-foreground',
+                        chars > MAX_DRAFT_CHARS && 'text-status-failed',
+                    )}
+                >
+                    {chars} of {MAX_DRAFT_CHARS}
+                </span>
+            </span>
+            <Textarea
+                id={`${id}-text`}
+                value={text}
+                onChange={(event) => setText(event.target.value)}
+                spellCheck
+                className="min-h-20"
+            />
+            <span className="flex flex-wrap items-center gap-2">
+                <Button type="submit" size="sm" disabled={edit.isPending || !fits}>
+                    Save
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={onCancel} disabled={edit.isPending}>
+                    Cancel
+                </Button>
+            </span>
+            <Notice error={edit.error} />
+        </form>
+    )
+}

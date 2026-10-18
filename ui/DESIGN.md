@@ -615,8 +615,10 @@ list, an empty state, or a skeleton by hand.
   form is the action, and a question's head names it, `Waits on your answer to message 5, asked 3m ago`, rather than
   saying it, since the conversation holds it, marked `waiting on you` (One home per fact). A plan (`plan_review`): the
   plan's card (`PlanCard`, `bare`, its parts in the item's panel), with `Approve` and `Open plan`. Memory's items
-  (`memory_proposal`, `lesson_review`, `lesson_wrong`): the proposals or lessons they name, with their verbs (above). An
-  item about nothing the page shows whose detail names a `canopy` command to run (`repo_missing`): the command,
+  (`memory_proposal`, `lesson_review`, `lesson_wrong`): the proposals or lessons they name, with their verbs (above).
+  Replies a run drafted (`drafts_waiting`): an outline `Read the drafts on org/repo#N`, a router link to the PR's page,
+  where they sit on their threads; a ticket's own draft names no PR and has none. An item about nothing the page shows
+  whose detail names a `canopy` command to run (`repo_missing`): the command,
   `Copyable`, and nothing to answer. A ticket's item then shows what it is stuck at (below), its conversation, and the
   reply form; on the reasons above the ticket's own verbs (Start or Stop, Forget) are a quiet row under the thread,
   Start and Stop as ghost buttons, and on any other reason they lead, under the head, as they foot a ticket page's Work
@@ -984,7 +986,8 @@ list, an empty state, or a skeleton by hand.
   rest, and says so in a muted line above the first file. Each run of lines it leaves out is a fold, a row on
   `surface-raised/50` with a ghost `xs` button, `Show 60 hidden lines`, or `Show 500 of 13,029 hidden lines` past a
   step, which draws the next 500; a fold only adds, as rich text's `show N more lines` does, so it is a plain button,
-  not a `Disclosure`. A finding's
+  not a `Disclosure`. The panels take any card anchored at a line (`DiffPanels`, a card renderer and a `place`d list),
+  so a PR's threads sit on a run's diff as findings do on a review's (A PR's threads, below). A finding's
   card (`FindingCard`) sits right under the line it names, or under its file's header when the diff does not show the
   line, or in a Not in the diff panel: its number, its severity as a chip (`blocking` in `status-failed`, `major` in
   `status-blocked`, as the attention list's reasons; `minor` plain), its title, its location, and its detail as rich
@@ -1008,9 +1011,31 @@ list, an empty state, or a skeleton by hand.
   free column with its title: a column of its own, beside where the PR stands, would not fit a 1280px window. Its
   page: the PR's name (`org/repo#123`) as the title with its phase as a chip, a link out under it as a ticket's page
   has (`LinkOutButton`), saying where it goes (`on GitHub`) rather than repeating the title, then panels for its
-  fields and total cost, with a grant of another review in its foot when it is at its review limit, its reviews
-  (`ReviewsTable`), the runs that pushed to it (`RunsTable`), and its decisions. The journal keeps no PR's own title,
+  fields and total cost, with a grant of another review in its foot when it is at its review limit, its review threads
+  when canopy has read them or holds a draft for it (below), its reviews (`ReviewsTable`), the runs that pushed to it
+  (`RunsTable`), and its decisions. The journal keeps no PR's own title,
   so the page has none to show.
+- **A PR's threads** (`ReviewThreads`, DESIGN §29) are its coworkers' review threads, as canopy's reader last read
+  them, on the diff the latest run kept, with the replies runs drafted under them. The PR's detail says up front
+  whether there are any (`threads`), so their place is held (`PanelLoading`) before they arrive. A `Review threads`
+  panel leads: what `trust.review_replies` means for them in a line, when the PR was read and at which head, a
+  `head-moved` line in `status-blocked` when the PR's head is past the kept diff's commit, the drafts for the review's
+  body, and in its foot `Send N waiting`, which sends every waiting draft as one comment review, its command on hover,
+  with a muted line saying it approves nothing and resolves no thread. Then the diff (`DiffPanels`), each thread's card
+  (`ThreadCard`, `surface-raised`) under its line, under its file's header when outdated or off the diff, and a
+  `Not in the diff` panel for the rest (`Threads` when no run kept a diff), and `Not on a thread` for drafts no read has
+  placed. A thread's card: where it is in muted monospace, `outdated` and `resolved` chips, each comment's author, a
+  `bot` chip, `sent by you` on one the operator sent, its age, a `LinkOut` to it, and its body as `MemoryText`, plain
+  and every hidden character named, never Markdown or a link. A draft's card (`DraftCard`, `surface`, a
+  `status-blocked/40` border while it waits) heads with `Draft`, `run:N` and its number, its status as a chip
+  (`DRAFT_TONE`: waiting and unconfirmed in `status-blocked`, refused in `status-failed`, sending as running, the rest
+  plain), the run's stance as a muted word, `your text` once edited, and its hash at the end in muted monospace, the one
+  a send carries; then the harness's reason for a status other than waiting, a `status-blocked` warning when it
+  replaced a draft the operator edited, and its text as `MemoryText`, struck and muted once superseded or dropped. Its
+  verbs, `sm` buttons each with the CLI's command on hover: `Send` (default) on a waiting draft, outline `Edit` and
+  ghost `Drop` on one waiting or unchecked, ghost `Undo` on a dropped one, and a `LinkOut` to a sent one. `Edit` opens
+  the text in a `Textarea` with its count against 4,000, `Save` disabled past it. What each verb did goes under it
+  (`Notice`), in `canopy draft`'s words.
 - **Search** sits atop the nav on every page (`SearchBox`, a `SearchField`): a magnifier, the field, and `/` in a
   keycap, its shortcut from anywhere but a text field. While the field holds text, a ghost clear button (`X`, on the
   keycap's `bg-muted` when hovered) takes the keycap's place: it empties the field and keeps the focus there. An empty

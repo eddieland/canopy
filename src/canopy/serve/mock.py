@@ -30,10 +30,11 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from canopy.core import chore_view, config, conversation, db, plans, pools, workspace
+from canopy.core.context import db_path
 from canopy.core.items import Item
 from canopy.core.vocab import RunKind, RunStatus
 from canopy.infra import logs, resources
-from canopy.serve import mock_reviews
+from canopy.serve import mock_drafts, mock_reviews
 from canopy.serve.backend import Backend, Granted, Limit, Reloading
 
 if TYPE_CHECKING:
@@ -130,6 +131,13 @@ ATTENTION: tuple[Item, ...] = (
         at(-70),
     ),
     Item("ABC-099", "needs_reviewer", "https://github.com/acme/web/pull/88 waits on a reviewer", at(-55)),
+    Item(
+        "ABC-099",
+        "drafts_waiting",
+        "3 drafts wait on you, for https://github.com/acme/web/pull/88",
+        at(-22),
+        repo="web",
+    ),
     Item(
         "ABC-102",
         "awaiting_reply",
@@ -255,6 +263,7 @@ def seed(directory: Path) -> Backend:
         mock=True,
         slots=slots,
         clock=lambda: T0,
+        runner=lambda: mock_drafts.GitHub(db_path(ws)),
     )
     with backend.open() as ctx:
         db.migrate(ctx.conn, resources.migrations_dir())
@@ -263,6 +272,7 @@ def seed(directory: Path) -> Backend:
             _plans(ctx.conn, ws.state_dir, root)
             _memory(ctx.conn)
             mock_reviews.seed(ctx.conn, ws.state_dir, at)
+            mock_drafts.seed(ctx.conn, ws.state_dir, at, slot_path(root, "web", 3))
     _transcripts(ws.state_dir)
     return backend
 

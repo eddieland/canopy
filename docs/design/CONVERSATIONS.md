@@ -637,7 +637,8 @@ How it serves, true of every page:
   idle seconds. Nothing compresses it.
 - The page makes no request to another origin: fonts and icons are bundled.
 - `python -m canopy.serve --mock` serves the same API over a journal it seeds from fixtures in a temporary directory,
-  for the UI's development server and its end-to-end tests; writes go to that journal. Without `--secret-file` it
+  for the UI's development server and its end-to-end tests; writes go to that journal, and canopy's GitHub programs
+  (§29) are answered from it in process, so a draft sent from the mock posts nowhere. Without `--secret-file` it
   signs nobody in and asks for no session; only mock mode allows that, and it binds loopback only.
 - The API documents itself: its OpenAPI schema at `api/openapi.json` and a Swagger UI page over it at `api/docs`,
   under the base path, behind the session like every other API route. FastAPI's stock page loads Swagger UI from a

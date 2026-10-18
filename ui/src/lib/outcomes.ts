@@ -3,6 +3,8 @@ import type {
     ChoreTried,
     ConfigReload,
     Dismissed,
+    Draft,
+    DraftsSent,
     Forgot,
     Granted,
     MemoryForgotten,
@@ -150,6 +152,43 @@ export function reviewSentText(sent: ReviewSent): string {
         return `${head} went to ${to}: the next tick reads it as your go-ahead.`
     }
     return `${head} already went to ${to}.`
+}
+
+/** What an edit of a draft did, as `canopy draft edit` says it: the text is the operator's now, named by its hash. */
+export function draftEditedText(draft: Draft): string {
+    return `Run ${draft.run}'s draft ${draft.number} is your text now, hash ${draft.hash}.`
+}
+
+/** What a drop or its undo did, as `canopy draft drop` says it: where the draft stands now. */
+export function draftDroppedText(draft: Draft): string {
+    return `Run ${draft.run}'s draft ${draft.number} is ${draft.status}.`
+}
+
+/**
+ * What a send did, as `canopy draft send` says it, a sentence for each draft: sent, with where it went; sent before;
+ * not sent, and why; or perhaps posted, which a read of its PR settles, since canopy sends it no other time.
+ */
+export function draftsSentText(sent: DraftsSent): string {
+    return [
+        ...sent.posted.map((d) => `Sent run ${d.run}'s draft ${d.number}${sentTo(d)}.`),
+        ...sent.already.map((d) => `Run ${d.run}'s draft ${d.number} was sent already${sentTo(d)}.`),
+        ...sent.failed.map(({ draft, why }) => `Run ${draft.run}'s draft ${draft.number} was not sent: ${ended(why)}`),
+        ...sent.unconfirmed.map(
+            (d) =>
+                `Run ${d.run}'s draft ${d.number} may have been posted: the post ended without saying. A read of its ` +
+                'PR settles it; canopy sends it no other time.',
+        ),
+    ].join(' ')
+}
+
+// Where a sent draft went, after a colon, or nothing when the post named no URL.
+function sentTo(draft: Draft): string {
+    return draft.sent_url === null ? '' : `: ${draft.sent_url}`
+}
+
+// The harness's words as a sentence: with a full stop unless they end in one.
+function ended(words: string): string {
+    return /[.!?]$/u.test(words) ? words : `${words}.`
 }
 
 /** What a reply did, as `canopy reply` says it: the message it recorded, or the one that already said it. */

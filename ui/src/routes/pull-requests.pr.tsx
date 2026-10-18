@@ -15,6 +15,7 @@ import { GrantLimits } from '@/components/grant-limits'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll } from '@/components/panel'
 import { ReviewRequestStatus } from '@/components/review-request'
+import { ReviewThreads } from '@/components/review-threads'
 import { ReviewsTable } from '@/components/reviews-table'
 import { RunsTable } from '@/components/runs-table'
 import { Chip } from '@/components/status'
@@ -31,10 +32,13 @@ interface PullRequestSearch {
 
 // What every PR's page shows, on its title's hover: its description is the PR's state.
 const HELP =
-    "What canopy knows of this PR: its ticket when it has one, canopy's reviews of it, the runs that pushed to it, " +
-    'and the decisions naming it.'
+    'What canopy knows of this PR: its ticket when it has one, its review threads and the replies drafted to them, ' +
+    "canopy's reviews of it, the runs that pushed to it, and the decisions naming it."
 
-/** One PR: what it is, canopy's reviews of it, the runs that pushed to it, and the decisions naming it. */
+/**
+ * One PR: what it is, its review threads with the replies its runs drafted, canopy's reviews of it, the runs that
+ * pushed to it, and the decisions naming it.
+ */
 export const Route = createFileRoute('/pull-requests/pr')({
     // The PR is its URL, an opaque string the server checks: only an https:// one is passed on. Every key is returned,
     // undefined when invalid, so the router never keeps the raw value.
@@ -145,6 +149,9 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                         />
                     )}
                 </Panel>
+                {/* Its threads, which the drafts_waiting item opens, when canopy has read them or holds a draft: the
+                    detail says so up front, so the page reserves their place before they arrive. */}
+                {detail.threads && <ReviewThreads url={pr.url} />}
                 <Panel data-testid="pull-request-reviews">
                     <PanelHeader label="Reviews">
                         <span className="flex items-center gap-2">

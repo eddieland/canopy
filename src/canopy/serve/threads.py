@@ -87,6 +87,19 @@ def threads(ctx: Context, url: str) -> PullRequestThreads | None:
     )
 
 
+def known(conn: sqlite3.Connection, url: str) -> bool:
+    """Whether canopy's reader has read the PR or a run drafted for it: whether `threads` has anything to show.
+
+    Returns:
+        True when the journal holds a read of the PR or a draft for it.
+    """
+    found = conn.execute(
+        "SELECT EXISTS (SELECT 1 FROM observed_prs WHERE url = ?) OR EXISTS (SELECT 1 FROM drafts WHERE pr_url = ?)",
+        (url, url),
+    ).fetchone()
+    return bool(found[0])
+
+
 def draft(conn: sqlite3.Connection, found: records.Draft) -> Draft:
     """A draft as the API sends it: its text as it stands, named by its hash.
 

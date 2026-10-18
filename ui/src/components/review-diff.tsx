@@ -32,11 +32,30 @@ const CODE_CLASS: Record<Exclude<CodeKind, 'text'>, string> = {
 
 /**
  * The reviewed commit's diff, a panel per file, with each finding's card under the line it names, or under the file's
- * header when the diff does not show its line. The diff is the PR's own text: every line is React text, its code
- * colored once its language's grammar has read it (`useHighlight`). A diff longer than the page's budget folds what it
- * does not draw at first (`DIFF_BUDGET`), and says so above its first file.
+ * header when the diff does not show its line (`DiffPanels`).
  */
-export function ReviewDiffPanels({ run, diff, placed }: { run: number; diff: ReviewDiff; placed: Placed }) {
+export function ReviewDiffPanels({ run, diff, placed }: { run: number; diff: ReviewDiff; placed: Placed<Numbered> }) {
+    return (
+        <DiffPanels diff={diff} placed={placed} renderCard={(f) => <FindingCard key={f.n} run={run} numbered={f} />} />
+    )
+}
+
+/**
+ * A diff, a panel per file, with the card of each thing placed on it under the line it names, or under the file's
+ * header when the diff does not show its line: a review's findings, a PR's threads. `renderCard` draws one, keyed.
+ * The diff is the PR's own text: every line is React text, its code colored once its language's grammar has read it
+ * (`useHighlight`). A diff longer than the page's budget folds what it does not draw at first (`DIFF_BUDGET`), and says
+ * so above its first file.
+ */
+export function DiffPanels<T>({
+    diff,
+    placed,
+    renderCard,
+}: {
+    diff: ReviewDiff
+    placed: Placed<T>
+    renderCard: (item: T) => ReactNode
+}) {
     const first = shownAtFirst(diff.files, placed.lines)
     const total = diff.files.reduce((sum, file) => sum + lineCount(file), 0)
     const drawn = first.flat().reduce((sum, span) => sum + span.to - span.from, 0)
@@ -50,11 +69,11 @@ export function ReviewDiffPanels({ run, diff, placed }: { run: number; diff: Rev
             {diff.files.map((file, i) => (
                 <FilePanel
                     key={`${i}:${file.path}`}
-                    run={run}
                     file={file}
                     first={first[i] ?? []}
                     onLine={placed.lines.get(i)}
                     onFile={placed.files.get(i) ?? []}
+                    renderCard={renderCard}
                 />
             ))}
             {diff.truncated && (
@@ -66,26 +85,29 @@ export function ReviewDiffPanels({ run, diff, placed }: { run: number; diff: Rev
     )
 }
 
-function FilePanel({
-    run,
+function FilePanel<T>({
     file,
     first,
     onLine,
     onFile,
+    renderCard,
 }: {
-    run: number
     file: DiffFile
     first: Span[]
-    onLine: Map<number, Numbered[]> | undefined
-    onFile: Numbered[]
+    onLine: Map<number, T[]> | undefined
+    onFile: T[]
+    renderCard: (item: T) => ReactNode
 }) {
     // The lines the operator opened, drawn with those the page draws at first, which follow the review as it changes:
-    // a running review's findings arrive when it ends, and each brings its lines into view, folded or not.
+    // a running review's findings arrive when it ends, and each brings its lines into view, folded or not, as a thread
+    // read again does.
     const [opened, setOpened] = useState<Span[]>([])
     const shown = opened.reduce((spans, span) => reveal(spans, span), first)
     const highlighted = useHighlight(file)
     const show = (span: Span) => setOpened((was) => reveal(was, nextStep(span)))
-    const rows = pieces(file, shown).flatMap((piece) => pieceRows(piece, { run, file, highlighted, onLine, show }))
+    const rows = pieces(file, shown).flatMap((piece) =>
+        pieceRows(piece, { file, highlighted, onLine, show, renderCard }),
+    )
     return (
         <Panel data-testid="diff-file">
             <PanelHeader label="File">
@@ -96,11 +118,7 @@ function FilePanel({
                 {file.binary && <Chip>binary</Chip>}
             </PanelHeader>
             {onFile.length > 0 && (
-                <div className="flex flex-col gap-2 border-b p-3">
-                    {onFile.map((f) => (
-                        <FindingCard key={f.n} run={run} numbered={f} />
-                    ))}
-                </div>
+                <div className="flex flex-col gap-2 border-b p-3">{onFile.map((item) => renderCard(item))}</div>
             )}
             {rows.length > 0 && (
                 <div className="overflow-x-auto">
@@ -114,23 +132,23 @@ function FilePanel({
 }
 
 /**
- * The table rows of one piece of a file: a hunk's header, its lines with the cards of the findings on them, or a fold.
+ * The table rows of one piece of a file: a hunk's header, its lines with the cards placed on them, or a fold.
  * Keyed by where they are in the file, so the rows drawn already keep their keys when a fold opens above them.
  */
-function pieceRows(
+function pieceRows<T>(
     piece: Piece,
     {
-        run,
         file,
         highlighted,
         onLine,
         show,
+        renderCard,
     }: {
-        run: number
         file: DiffFile
         highlighted: (CodeToken[] | undefined)[][] | undefined
-        onLine: Map<number, Numbered[]> | undefined
+        onLine: Map<number, T[]> | undefined
         show: (span: Span) => void
+        renderCard: (item: T) => ReactNode
     },
 ): ReactNode[] {
     switch (piece.kind) {
@@ -155,9 +173,7 @@ function pieceRows(
                             <tr>
                                 <td colSpan={4} className="border-y bg-surface p-0">
                                     <InView className="flex flex-col gap-2 px-3 py-2 font-sans">
-                                        {cards.map((f) => (
-                                            <FindingCard key={f.n} run={run} numbered={f} />
-                                        ))}
+                                        {cards.map((item) => renderCard(item))}
                                     </InView>
                                 </td>
                             </tr>

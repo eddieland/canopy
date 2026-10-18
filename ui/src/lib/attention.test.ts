@@ -60,6 +60,7 @@ describe('severity', () => {
         expect(severity(item('a', 'canopy_unavailable', '2026-10-08T12:00:00Z'))).toBe('failed')
         expect(severity(item('a', 'awaiting_reply', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'untrusted_review', '2026-10-08T12:00:00Z'))).toBe('waiting')
+        expect(severity(item('a', 'drafts_waiting', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'plan_review', '2026-10-08T12:00:00Z'))).toBe('waiting')
         expect(severity(item('a', 'needs_reviewer', '2026-10-08T12:00:00Z'))).toBe('other')
         expect(severity(item('a', 'repo_missing', '2026-10-08T12:00:00Z'))).toBe('other')
@@ -105,6 +106,7 @@ describe('ask', () => {
         expect(ask(item('a', 'awaiting_reply', at))).toBe('reply')
         expect(ask(item('a', 'untrusted_review', at))).toBe('reply')
         expect(ask(item('a', 'plan_review', at))).toBe('plan')
+        expect(ask(item('a', 'drafts_waiting', at))).toBe('drafts')
         expect(ask(item('a', 'memory_proposal', at))).toBe('memory')
         expect(ask({ ...item('a', 'lesson_review', at), ticket_key: null })).toBe('memory')
         // A reason that asks for nothing in particular leads with the ticket's own actions.
