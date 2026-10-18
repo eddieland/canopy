@@ -41,10 +41,12 @@ from canopy.core import (
     outbox,
     plans,
     pools,
+    replies,
+    review_diff,
     transcript,
 )
 from canopy.core.config import render_command, setup_words
-from canopy.core.vocab import PoolKind, RunKind, RunStatus
+from canopy.core.vocab import PoolKind, ReplyMode, RunKind, RunStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import logs, procs, stopping
 from canopy.runs import desks, dispatch, drafted, policy, tidy
@@ -681,9 +683,41 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     if unpushed:
         status, note = RunStatus.UNPUSHED, "; ".join(unpushed)
     committed = [found for slot in slots if copy is not None and (found := _committed_copy(slot, branch))]
+    _keep_diffs(ctx, run, slots, log)
     head = _heads(slots, log) if remembered is not None and remembered.notes else None
     notes = "; ".join(n for n in [note, *committed] if n)
     return Outcome(status, parsed, notes, memory=remembered, head=head, drafts=drafted)
+
+
+def _keep_diffs(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], log: logs.TickAdapter) -> None:
+    """Keep each slot's diff, for a run whose drafts the PR's page shows on it: one rendered under `approve`."""
+    rendered = replies.run_replies(ctx.conn, int(run["id"]))
+    if rendered is not None and rendered.mode is ReplyMode.APPROVE:
+        for slot in slots:
+            _keep_diff(slot, Path(run["log_path"]), log)
+
+
+def _keep_diff(slot: _Slot, log_path: Path, log: logs.TickAdapter) -> None:
+    """Keep the slot's diff at the run's head, from where it leaves its base, for the PR's page (DESIGN §29).
+
+    Best effort, as a review's is (§21, The diff): the run does not need it, so any failure, git's or the disk's, is
+    logged and the page shows the threads without a diff. The head is written before the diff, so a diff is never kept
+    without the commit it was taken at.
+    """
+    fields = {"repo": slot.repo, "base": slot.base}
+    try:
+        head = slot.git.result("rev-parse", "HEAD")
+        found = slot.git.result("merge-base", f"refs/remotes/origin/{slot.base}", "HEAD") if head.ok else head
+        sha = head.stdout.strip()
+        diff = slot.git.result(*review_diff.diff_args(found.stdout.strip(), sha)) if found.ok else found
+        if not diff.ok:
+            log.warning("run diff not kept", extra={**fields, "error": diff.stderr[:500]})
+            return
+        path = review_diff.run_path_for(log_path, slot.repo)
+        review_diff.keep_head(path, sha)
+        review_diff.keep(path, diff.stdout)
+    except (_SetupError, OSError) as e:
+        log.warning("run diff not kept", extra={**fields, "error": str(e)})
 
 
 def _heads(slots: Sequence[_Slot], log: logs.TickAdapter) -> str | None:

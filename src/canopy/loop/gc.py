@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.chores import start as chore_start
-from canopy.core import db, hostgit
+from canopy.core import db, hostgit, review_diff
 from canopy.core.context import db_path
 from canopy.core.vocab import MemoryScope, MemoryStatus, TickStatus
 from canopy.infra import lock, logs, procs
@@ -86,7 +86,7 @@ def measure(ctx: Context, now: datetime) -> Report:
     by_runs = f"run_files_days = {retention.run_files_days}"
     notes: list[str] = []
     kinds = [
-        files.kind("run files", _logged(ctx.conn, "runs", runs, ".prompt"), by_runs),
+        files.kind("run files", _run_files(ctx.conn, runs), by_runs),
         files.kind(
             "tick files",
             _tick_files(ctx.conn, files.root, _cutoff(now, retention.tick_files_days), runs),
@@ -218,6 +218,26 @@ def _logged(conn: sqlite3.Connection, table: str, cutoff: str, *suffixes: str) -
     for r in rows:
         log = Path(r["log_path"])
         paths = (log, *(log.with_suffix(s) for s in suffixes))
+        owned.append(_Owned(paths, r["ended_at"], cutoff, lifelock=procs.lifelock(log)))
+    return owned
+
+
+def _run_files(conn: sqlite3.Connection, cutoff: str) -> list[_Owned]:
+    """Each worker run's log, its prompt, and the diffs it kept, with the lifelock it holds while it lives.
+
+    A run under `approve` keeps a diff and its head for each repository it leased (DESIGN §29).
+
+    Returns:
+        What each run owns, oldest first.
+    """
+    repos: dict[int, list[str]] = {}
+    for r in conn.execute("SELECT run_id, repo FROM run_slots WHERE repo IS NOT NULL ORDER BY run_id, repo"):
+        repos.setdefault(int(r["run_id"]), []).append(str(r["repo"]))
+    owned: list[_Owned] = []
+    for r in conn.execute("SELECT id, ended_at, log_path FROM runs ORDER BY id"):
+        log = Path(r["log_path"])
+        kept = [review_diff.run_path_for(log, repo) for repo in repos.get(int(r["id"]), [])]
+        paths = (log, log.with_suffix(".prompt"), *kept, *(p.with_suffix(".head") for p in kept))
         owned.append(_Owned(paths, r["ended_at"], cutoff, lifelock=procs.lifelock(log)))
     return owned
 

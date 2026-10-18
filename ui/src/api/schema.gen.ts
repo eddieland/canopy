@@ -174,6 +174,31 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/drafts/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send drafts
+         * @description `canopy draft send`: the drafts as the operator's own words, each exactly as the page showed it.
+         *
+         *     One PR's drafts go as one comment review, which approves nothing and resolves no thread. Every check runs before
+         *     anything posts, and any refusal posts nothing: `unchecked`, `superseded`, `dropped`, `refused`, `unconfirmed`,
+         *     `stale` for a text that changed since the page showed it, `thread_changed` for a comment that arrived on its thread,
+         *     and `no_post`.
+         */
+        post: operations["sendDrafts"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/events": {
         parameters: {
             query?: never;
@@ -564,6 +589,29 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/pull-request/threads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get a PR's threads and drafts
+         * @description The PR's review threads, as canopy's reader last read them, on the diff the latest run kept, with every draft.
+         *
+         *     Raises:
+         *         HTTPException: 422 when `url` is not a plain https:// URL, 404 when the journal has no read and no draft of it.
+         */
+        get: operations["getPullRequestThreads"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/pull-requests": {
         parameters: {
             query?: never;
@@ -700,6 +748,50 @@ export type paths = {
         get: operations["getRun"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{run_id}/drafts/{number}/drop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Drop a draft
+         * @description `canopy draft drop run:ID N [--undo]`: nobody sends it, or with `undo` it waits again.
+         *
+         *     Refused as the CLI refuses it: `unknown`, and a status that cannot be dropped or taken back.
+         */
+        post: operations["dropDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/runs/{run_id}/drafts/{number}/edit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Edit a draft
+         * @description `canopy draft edit run:ID N --text TEXT`: the operator's text, as a new version beside the run's own.
+         *
+         *     Refused as the CLI refuses it: `unknown`, a status that takes no edit (`sent`, `superseded`, ...), and `bad_text`.
+         */
+        post: operations["editDraft"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1947,6 +2039,193 @@ export type components = {
             undo: boolean;
         };
         /**
+         * Draft
+         * @description A comment a run drafted in place of posting it: a worker's text, untrusted until the operator sends it.
+         */
+        Draft: {
+            /**
+             * Comment Id
+             * @description For a thread's draft, the review comment it names.
+             */
+            comment_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             * @description When the run drafted it.
+             */
+            created_at: string;
+            /**
+             * Edited
+             * @description Whether the operator edited it.
+             */
+            edited: boolean;
+            /**
+             * Hash
+             * @description The name of that text, which a send carries so what posts is what the operator read.
+             */
+            hash: string;
+            /**
+             * Issue Url
+             * @description For a ticket's draft, the issue it goes to, as the worker named it: shown for the operator to check.
+             */
+            issue_url: string | null;
+            /** @description Where it goes. */
+            kind: components["schemas"]["DraftKindName"];
+            /**
+             * Number
+             * @description Its number in the run's drafts, from 1: with the run, how the operator names it.
+             */
+            number: number;
+            /**
+             * Run
+             * @description The run that drafted it.
+             */
+            run: number;
+            /**
+             * Sent Url
+             * @description Once sent, the comment's or the review's URL on GitHub.
+             */
+            sent_url: string | null;
+            /** @description For a thread's draft, what the run did about it. */
+            stance: components["schemas"]["DraftStanceName"] | null;
+            /** @description Where it stands. */
+            status: components["schemas"]["DraftStatusName"];
+            /**
+             * Supersedes Edited
+             * @description Whether a draft it superseded carried the operator's edits, which are not carried over.
+             */
+            supersedes_edited: boolean;
+            /**
+             * Text
+             * @description Its text as it stands, the operator's latest edit or the run's own: plain text, never Markdown, here.
+             */
+            text: string;
+            /**
+             * Thread Id
+             * @description For a thread's draft, the thread a read found that comment on; None until one did.
+             */
+            thread_id: string | null;
+            /**
+             * Ticket Key
+             * @description The ticket the run was for.
+             */
+            ticket_key: string;
+            /**
+             * Why
+             * @description The harness's words for its latest change of status, such as why it was refused.
+             */
+            why: string | null;
+        };
+        /**
+         * DraftDropRequest
+         * @description A drop of a draft, or with `undo` the taking back of one.
+         */
+        DraftDropRequest: {
+            /**
+             * Undo
+             * @description Take the drop back, as `--undo` does.
+             * @default false
+             */
+            undo: boolean;
+        };
+        /**
+         * DraftEditRequest
+         * @description An edit of a draft's text, as `canopy draft edit run:ID N --text TEXT` takes it.
+         */
+        DraftEditRequest: {
+            /**
+             * Text
+             * @description The draft's new text. Bounded again in code, as a run's draft is.
+             */
+            text: string;
+        };
+        /**
+         * DraftFailure
+         * @description A draft a send could not post, and why: it waits on the operator again.
+         */
+        DraftFailure: {
+            /** @description The draft, as it now stands. */
+            draft: components["schemas"]["Draft"];
+            /**
+             * Why
+             * @description Why nothing was posted, in the harness's words.
+             */
+            why: string;
+        };
+        /**
+         * @description Where a draft goes: a reply on a review thread, its PR's one comment, or the ticket's.
+         * @enum {string}
+         */
+        DraftKindName: "thread" | "pr" | "ticket";
+        /**
+         * DraftRef
+         * @description A draft the operator sends, and the hash of its text as the page showed it.
+         */
+        DraftRef: {
+            /**
+             * Hash
+             * @description The hash of its text as the operator last saw it.
+             */
+            hash: string;
+            /**
+             * Number
+             * @description Its number in the run's drafts.
+             */
+            number: number;
+            /**
+             * Run
+             * @description The run that drafted it.
+             */
+            run: number;
+        };
+        /**
+         * DraftSendRequest
+         * @description Drafts to send together, as `canopy draft send` takes them: one PR's go as one comment review.
+         */
+        DraftSendRequest: {
+            /**
+             * Drafts
+             * @description The drafts, each with the hash of the text the page showed.
+             */
+            drafts: components["schemas"]["DraftRef"][];
+        };
+        /**
+         * DraftsSent
+         * @description What a send did, as `canopy draft send` reports it.
+         */
+        DraftsSent: {
+            /**
+             * Already
+             * @description The drafts a send had posted before, which this one left alone.
+             */
+            already: components["schemas"]["Draft"][];
+            /**
+             * Failed
+             * @description The drafts whose post failed, which wait again.
+             */
+            failed: components["schemas"]["DraftFailure"][];
+            /**
+             * Posted
+             * @description The drafts posted now.
+             */
+            posted: components["schemas"]["Draft"][];
+            /**
+             * Unconfirmed
+             * @description The drafts whose post ended without saying whether it submitted, until a read of the PR settles them.
+             */
+            unconfirmed: components["schemas"]["Draft"][];
+        };
+        /**
+         * @description What a thread's draft says the run did: made the change, declined it, or answered a question.
+         * @enum {string}
+         */
+        DraftStanceName: "changed" | "declined" | "answered";
+        /**
+         * @description Where a draft stands (DESIGN §29).
+         * @enum {string}
+         */
+        DraftStatusName: "unchecked" | "waiting" | "refused" | "superseded" | "dropped" | "sending" | "unconfirmed" | "sent";
+        /**
          * ErrorResponse
          * @description The body of an error that is not a guard's refusal or a validation error: a 401, a 403, a 404, or a 503.
          */
@@ -3091,6 +3370,60 @@ export type components = {
             runs: components["schemas"]["Run"][];
         };
         /**
+         * PullRequestThreads
+         * @description A PR's review threads on the diff of the latest run that kept one, and the drafts waiting to be sent.
+         */
+        PullRequestThreads: {
+            /** @description The diff; None when no run kept one. */
+            diff: components["schemas"]["ReviewDiff"] | null;
+            /**
+             * Diff Head
+             * @description The commit the diff was taken at, when it was kept.
+             */
+            diff_head: string | null;
+            /**
+             * Diff Run
+             * @description The run whose diff this is, at its pushed head; None when no run kept one.
+             */
+            diff_run: number | null;
+            /**
+             * Head Sha
+             * @description The PR's head when it was read.
+             */
+            head_sha: string | null;
+            /**
+             * Pr Drafts
+             * @description The drafts for the PR's own comment, which goes in the review's body.
+             */
+            pr_drafts: components["schemas"]["Draft"][];
+            /**
+             * Read At
+             * @description When canopy's reader last read the PR whole; None when it never has.
+             */
+            read_at: string | null;
+            /**
+             * Review Replies
+             * @description How workers' comments reach GitHub now (DESIGN §29).
+             * @enum {string}
+             */
+            review_replies: "approve" | "post";
+            /**
+             * Threads
+             * @description Its review threads, in file order, then by line.
+             */
+            threads: components["schemas"]["Thread"][];
+            /**
+             * Unplaced
+             * @description Drafts no read has placed on a thread yet: unchecked, or refused for naming one the PR does not have.
+             */
+            unplaced: components["schemas"]["Draft"][];
+            /**
+             * Url
+             * @description The PR's URL.
+             */
+            url: string;
+        };
+        /**
          * Refusal
          * @description A guard refused the operator's action: which guard, and why, as the CLI says it.
          */
@@ -4221,6 +4554,103 @@ export type components = {
          * @description One message on the event stream, told apart by its `type`. A named model so the UI's types get its name.
          */
         StreamEvent: components["schemas"]["AttentionUpdated"] | components["schemas"]["RunsUpdated"] | components["schemas"]["TicketsUpdated"] | components["schemas"]["TicketChanged"] | components["schemas"]["ChoresUpdated"] | components["schemas"]["SpendUpdated"] | components["schemas"]["TickUpdated"] | components["schemas"]["LoopUpdated"];
+        /**
+         * Thread
+         * @description A PR's review thread as last read, where it sits on the diff, and the drafts that answer it.
+         */
+        Thread: {
+            /**
+             * Comments
+             * @description Its comments, oldest first.
+             */
+            comments: components["schemas"]["ThreadComment"][];
+            /**
+             * Diff Line
+             * @description Its line on the diff's new side, when the diff shows it; None puts it under its file.
+             */
+            diff_line: number | null;
+            /**
+             * Drafts
+             * @description The drafts that answer it, the newest run's last.
+             */
+            drafts: components["schemas"]["Draft"][];
+            /**
+             * File
+             * @description The index of its file in the diff, when the diff shows it.
+             */
+            file: number | null;
+            /**
+             * Id
+             * @description GitHub's node id for it.
+             */
+            id: string;
+            /**
+             * Line
+             * @description The line it is on, on its side; None for an outdated one.
+             */
+            line: number | null;
+            /**
+             * Outdated
+             * @description Whether GitHub says the code it is on has changed since.
+             */
+            outdated: boolean;
+            /**
+             * Path
+             * @description The file it is on.
+             */
+            path: string | null;
+            /**
+             * Resolved
+             * @description Whether it is resolved: that stays the reviewer's.
+             */
+            resolved: boolean;
+            /**
+             * Side
+             * @description Which side of the diff the line is on.
+             */
+            side: ("left" | "right") | null;
+        };
+        /**
+         * ThreadComment
+         * @description One comment on a PR's review thread, as canopy's reader last read it: someone else's text, untrusted.
+         */
+        ThreadComment: {
+            /**
+             * Author
+             * @description Its author's login; None for a deleted account.
+             */
+            author: string | null;
+            /**
+             * Body
+             * @description Its body, cut as a mirrored comment is: plain text here.
+             */
+            body: string;
+            /**
+             * Bot
+             * @description Whether GitHub says the author is a bot.
+             */
+            bot: boolean;
+            /**
+             * Created At
+             * @description When it was posted, as GitHub says it.
+             */
+            created_at: string | null;
+            /**
+             * Id
+             * @description GitHub's id for it.
+             */
+            id: number;
+            /**
+             * Operator Sent
+             * @description Whether the operator sent it through canopy.
+             */
+            operator_sent: boolean;
+            /**
+             * Url
+             * @description Its URL on GitHub.
+             */
+            url: string | null;
+        };
         /**
          * Tick
          * @description A tick, as `canopy status`'s first line shows the latest (DESIGN §14), with how many decisions it recorded.
@@ -5697,6 +6127,93 @@ export interface operations {
             };
         };
     };
+    sendDrafts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftSendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DraftsSent"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     streamEvents: {
         parameters: {
             query?: never;
@@ -7065,6 +7582,92 @@ export interface operations {
             };
         };
     };
+    getPullRequestThreads: {
+        parameters: {
+            query: {
+                /** @description The PR's plain https:// URL, at most 300 characters. */
+                url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PullRequestThreads"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description No such PR. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not a plain https:// URL of at most 300 characters. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     listPullRequests: {
         parameters: {
             query?: never;
@@ -7572,6 +8175,190 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    dropDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The draft's number in its run's drafts, from 1. */
+                number: number;
+                /** @description The run's id, as `run:ID` names it. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftDropRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    editDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The draft's number in its run's drafts, from 1. */
+                number: number;
+                /** @description The run's id, as `run:ID` names it. */
+                run_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DraftEditRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Draft"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description A guard refused it: `detail` names the guard and its reason. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RefusalResponse"];
                 };
             };
             /** @description Refused before the route ran: a chunked body, with no Content-Length. */
