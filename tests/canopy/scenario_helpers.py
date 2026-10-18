@@ -37,13 +37,27 @@ too:
 
 A step the verbs do not cover is written as before, in the same test: the verbs are argv lists and context managers, so
 they mix with `canopy(...)`, `overseer_does`, and the journal's own queries.
+
+A scenario keeps the story as it played: each move a `Scenario` method made, and what canopy did with it, failing step
+included. When a scenario test fails, its report carries that story in a section of its own, `scenario`, ending on the
+attention list as the test left it, so the failure reads in the order the ticket lived it:
+
+    ---------------------------------------- scenario ----------------------------------------
+    1. run 1, implement of PROJ-1: done: did it
+    2. run 2, resume of PROJ-1 for ci: done: did it
+    3. tick 3 refuses canopy dispatch PROJ-1 --repo repo --kind resume --label agent-ready-tester --reason ci
+         PROJ-1 refused:cooldown: a resume for CI alone in PROJ-1 in repo may run again after 2026-10-18T23:00:02Z
+    4. 1:00:00 passes
+    5. run 3, resume of PROJ-1 for ci: done: did it
+    The attention list now: nothing.
 """
 
 import json
+import shlex
 import sqlite3
 from collections.abc import Iterable, Mapping, Sequence
 from contextlib import AbstractContextManager, ExitStack
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Unpack
@@ -122,8 +136,11 @@ class Ran:
         return self.prompt_file.read_text()
 
     def __str__(self) -> str:
-        """The run in a line, for a failed step's message."""
-        return f"run {self.id}, {self.kind} of {self.row['ticket_key']}: {self.status}"
+        """The run in a line, for a failed step's message: what it was for, how it ended, and what its result said."""
+        why = f" for {', '.join(self.reasons)}" if self.reasons else ""
+        result: dict[str, Any] = json.loads(self.row["result_json"] or "{}")
+        said = [str(result[k]) for k in ("summary", "question", "harness") if result.get(k)]
+        return ": ".join([f"run {self.id}, {self.kind} of {self.row['ticket_key']}{why}", self.status, *said])
 
 
 @dataclass(frozen=True)
@@ -142,7 +159,7 @@ class Ticked:
     def __str__(self) -> str:
         """How the tick ended and what it decided, for a failed step's message."""
         lines = [f"{self.tick.status}: {self.tick.summary}"]
-        lines += [f"  {d.ticket_key or '-'} {d.action}: {d.rationale}" for d in self.decisions]
+        lines += map(_decided, self.decisions)
         lines += [f"  {r}" for r in self.runs]
         return "\n".join(lines)
 
@@ -154,6 +171,8 @@ class Scenario:
     env: CanopyEnv
     conn: sqlite3.Connection
     agent_log: Path
+    # Each move made so far, and what canopy did with it, in the order they were made: `told` reads it out.
+    story: list[str] = field(default_factory=list, init=False)
 
     def tick(
         self,
@@ -187,6 +206,7 @@ class Scenario:
             # A run is detached from the tick, so the worker's script must last until it ends.
             runs = [self._ran(wait_for_run(self.conn, int(r["id"]))) for r in started]
         ticked = Ticked(present(db.get_tick(self.conn, tick.id)), db.decisions_for_tick(self.conn, tick.id), runs)
+        self.story.append(f"tick {tick.id}, exits {exited}: {ticked}")
         assert exited == code, f"tick {tick.id} exited {exited}, not {code}: {ticked}"
         return ticked
 
@@ -206,11 +226,17 @@ class Scenario:
             if worker is not None:
                 stack.enter_context(worker)
             with in_tick(self.conn) as tick_id:
-                assert main(command[1:], runner=runner) == 0, db.decisions_for_tick(self.conn, tick_id)
+                exited = main(command[1:], runner=runner)
+                if exited != 0:
+                    self._tell(f"tick {tick_id} does not dispatch {shlex.join(command)}", tick_id)
+                assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
                 db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
                 run_id = int(last_run(self.conn)["id"])
-                assert main(["_run", str(run_id)], runner=runner) == 0
-        return self._ran(present(db.get_run(self.conn, run_id)))
+                exited = main(["_run", str(run_id)], runner=runner)
+        ran = self._ran(present(db.get_run(self.conn, run_id)))
+        self.story.append(str(ran) if exited == 0 else f"{ran}, and `canopy _run` exits {exited}")
+        assert exited == 0, ran
+        return ran
 
     def refuses(self, command: list[str], *, dry_run: bool = False) -> list[tuple[str, str]]:
         """Dispatch `command`, a `dispatches(...)`, in a tick of its own, which canopy must refuse, starting no run.
@@ -222,6 +248,7 @@ class Scenario:
         with in_tick(self.conn, dry_run=dry_run, ends_ok=True) as tick_id:
             exited = main(command[1:], runner=InlineRunner())
         made = decisions(self.conn, tick_id)
+        self._tell(f"tick {tick_id} {'refuses' if exited == 1 else 'does not refuse'} {shlex.join(command)}", tick_id)
         assert exited == 1, f"dispatch exited {exited}, not refused: {made}"
         started = self.conn.execute("SELECT count(*) FROM runs WHERE tick_id = ?", (tick_id,)).fetchone()[0]
         assert started == 0, made
@@ -233,8 +260,10 @@ class Scenario:
         A cooldown, an attempt's age, a schedule, or a deadline then sees that much time gone by; times inside a JSON
         field stay as they are.
         """
-        seconds = timedelta(hours=hours, minutes=minutes).total_seconds()
+        passed = timedelta(hours=hours, minutes=minutes)
+        seconds = passed.total_seconds()
         assert seconds > 0, "time only passes forward"
+        self.story.append(f"{passed} passes")
         tables = self.conn.execute(
             "SELECT name FROM sqlite_schema WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "
             "AND sql NOT LIKE 'CREATE VIRTUAL%'"
@@ -246,11 +275,14 @@ class Scenario:
 
     def operator(self, *args: str) -> None:
         """Run one of the operator's commands, `canopy ARGS`, from their shell; it must succeed."""
-        assert operator(*args) == 0, args
+        exited = operator(*args)
+        self.story.append(f"the operator runs {shlex.join(['canopy', *args])}, which exits {exited}")
+        assert exited == 0, args
 
     def seen(self, *keys: str) -> None:
         """Record `keys`, KEY if none, as tickets an earlier tick saw, so the overseer owes each a decision."""
         seen(self.conn, self.env, *keys)
+        self.story.append(f"an earlier tick saw {', '.join(keys or (KEY,))}")
 
     def attention(self) -> list[tuple[str | None, str]]:
         """The attention list as it stands, each item as (ticket key, reason)."""
@@ -265,6 +297,23 @@ class Scenario:
         [found] = [t for t in self.state()["tickets"] if t["key"] == key]
         ticket: dict[str, Any] = found
         return ticket
+
+    def told(self) -> str:
+        """The story so far, one numbered step for each move, and the attention list as it stands at its end.
+
+        Returns:
+            The story, for a failed test's report.
+        """
+        steps = [f"{n}. " + step.replace("\n", "\n   ") for n, step in enumerate(self.story, start=1)]
+        # Read for a failed test's report, so a journal the failure left unreadable still lets the steps be told.
+        try:
+            items = [f"{key or '-'} {reason}" for key, reason in self.attention()] or ["nothing"]
+        except sqlite3.Error as e:
+            items = [f"unread ({e})"]
+        return "\n".join([*steps, f"The attention list now: {', '.join(items)}."])
+
+    def _tell(self, step: str, tick_id: int) -> None:
+        self.story.append("\n".join([step, *map(_decided, db.decisions_for_tick(self.conn, tick_id))]))
 
     def _ran(self, row: sqlite3.Row) -> Ran:
         run_id = int(row["id"])
@@ -334,6 +383,10 @@ def asks(question: str = QUESTION) -> Worker:
 def fails(summary: str = "could not build") -> Worker:
     """The worker pushes nothing and reports it failed, saying `summary`."""
     return worker_does(result=json.dumps({"status": "failed", "summary": summary}))
+
+
+def _decided(decision: records.Decision) -> str:
+    return f"  {decision.ticket_key or '-'} {decision.action}: {decision.rationale}"
 
 
 def _option(name: str, value: str | None) -> list[str]:
