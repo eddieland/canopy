@@ -1571,8 +1571,10 @@ since the run started, and a refusal moves that basis; and a post whose outcome 
 read settles it, so a draft is posted at most once. Built: `packages/canopy-github`, the reader and the poster, tested
 against a stand-in for GitHub's GraphQL API, and TRUST_MODEL T2's line for them; `trust.review_replies` (`post`
 until sending is built, then `approve`) and `[connect.sources]`; and migration 0043's tables, `observed_prs`,
-`observed_reviews`, `drafts`, `draft_versions`, and `run_replies`, with their row types. Nothing reads or writes
-them yet.
+`observed_reviews`, `drafts`, `draft_versions`, and `run_replies`, with their row types. Workers draft under
+`approve`: the prompts' posting sentences as placeholders (every prompt the same bytes under `post`, held by the
+memory snapshots), `{{DRAFTS}}` required under `approve`, and `_run` writing a run's drafts under their bounds, each
+refused alone, a PR's waiting `unchecked`.
 
 ## M54. Plans before feedback runs
 
