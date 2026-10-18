@@ -809,6 +809,7 @@ def chore_summary(conn: sqlite3.Connection, state: chore_view.ChoreState, now: d
             )
             for f in state.findings()
         ],
+        max_findings=defined.max_findings,
         more_findings=state.more_findings(),
         latest_note_id=db.latest_message_of(conn, conversation.CHORE, state.name),
         spend=ChoreSpend(

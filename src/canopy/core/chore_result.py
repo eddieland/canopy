@@ -21,6 +21,8 @@ MAX_TITLE = 200
 MAX_ID = 200
 MAX_LINK = 500
 MAX_FINDINGS = 20
+# The findings a run lists unless its chore's `max_findings` says otherwise: as many as a person reads at a glance.
+DEFAULT_MAX_FINDINGS = 5
 # How many findings a run may say it left out. A count, so bounded only to keep nonsense out.
 MAX_MORE_FINDINGS = 100_000
 # Stable across runs for the same problem, so it identifies the finding on the attention list and in notifications.

@@ -91,6 +91,14 @@ export function listedText(findings: number, more: number): string {
     return withCounts(findings === 1 ? '1 finding' : `${findings} findings`, 0, more)
 }
 
+/**
+ * What a chore over its finding limit's band says (docs/design §19): `its latest ok run found 12 more than the 5 it
+ * may list.`
+ */
+export function overLimitText(limit: number, more: number): string {
+    return `its latest ok run found ${more} more than the ${limit} it may list.`
+}
+
 function withCounts(head: string, dismissed: number, more: number): string {
     return [head, dismissed > 0 ? `${dismissed} dismissed` : null, more > 0 ? `${more} not listed` : null]
         .filter((part) => part !== null)

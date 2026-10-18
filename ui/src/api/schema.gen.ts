@@ -1552,6 +1552,11 @@ export type components = {
              */
             latest_note_id: number | null;
             /**
+             * Max Findings
+             * @description The most findings a run of it lists; the rest it only counts.
+             */
+            max_findings: number;
+            /**
              * More Findings
              * @description How many more its latest `ok` run found than it listed, past its `max_findings`: only counted, never recorded.
              * @default 0

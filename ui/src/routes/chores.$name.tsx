@@ -6,6 +6,7 @@ import { choreQuery } from '@/api/queries'
 import type { ChoreDetail, ChoreRun, ChoreSpend, ChoreSpendWindow } from '@/api/types'
 import { Age } from '@/components/age'
 import { ChoreFindingRow } from '@/components/chore-finding'
+import { ChoreLimitBanner } from '@/components/chore-limit'
 import { ChoreRunLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
 import { Copyable, CopyablePath } from '@/components/copy-button'
@@ -78,6 +79,7 @@ function Chore({ detail }: { detail: ChoreDetail }) {
             <PageHeader title={choreRef(chore.name)} help={HELP}>
                 {choreLine(chore, now)}
             </PageHeader>
+            <ChoreLimitBanner chore={chore} />
             {/* The detail skeleton (DESIGN.md): what it is, then its main content, its open findings and the runs that
                 found them, then its notes and spend. Wide, findings and runs take the wide column beside the rest; the
                 source keeps the reading order. */}
