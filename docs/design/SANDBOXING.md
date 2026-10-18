@@ -62,19 +62,19 @@ a cache of its own, setup sharing the worker's (§9); no role reads another's.
 
 ### Logins
 
-The runtime's data directory is code the host runs: in OpenCode 1.19.3, a `wellknown` login in `auth.json`, the
-console account in `opencode.db`, or a planted snapshot git config makes the overseer's OpenCode, or the operator's, run
-what a run chose. So a run's runtime keeps its data in its role's own directory, which the templates name `@DATA@`, and
-the wrapper denies writing the operator's whatever the template says, making it first when it is missing. The operator
-settled (2026-10-18) that they log in once. Before each run the wrapper copies the operator's login files in whole;
-after it, it copies back only what an OAuth refresh changes: the tokens and a later expiry of a login the operator
-already has, of the same kind, checked field by field against what OpenCode writes, since OpenCode drops a login it
-cannot decode. It never adds a login, takes a `wellknown` or API-key one, or takes a field that says where a token goes
-or whose account it is. What a run left is read without following a link or blocking on a fifo. A run killed at its
-timeout hands its tokens back at the role's next run. Rejected: a second login, which the operator, with many, did not
-want; logins in environment variables, which leave OAuth out; and copying in without copying back, which logs the
-operator out at a rotated refresh token. A run can still hand back a token of another account at the same provider,
-or a bad one (T4).
+The runtime's data directory is code the host runs: in OpenCode 1.19.3, a `wellknown` login in `auth.json`, the console
+account in `opencode.db`, or a planted snapshot git config makes the overseer's OpenCode, or the operator's, run what a
+run chose. So a run's runtime keeps its data in its role's own directory, which the templates name `@DATA@`, and the
+wrapper denies writing the operator's, and where it leads if it is a link, whatever the template says, making it first
+when it is missing. The operator settled (2026-10-18) that they log in once. Before each run the wrapper copies the
+operator's login files in whole; after it, it copies back only what an OAuth refresh changes: the tokens and a later
+expiry of a login the operator already has, of the same kind, checked field by field against what OpenCode writes, since
+OpenCode drops a login it cannot decode. It never adds a login, takes a `wellknown` or API-key one, or takes a field
+that says where a token goes or whose account it is. What a run left is read without following a link or blocking on a
+fifo. A run killed at its timeout hands its tokens back at the role's next run. Rejected: a second login, which the
+operator, with many, did not want; logins in environment variables, which leave OAuth out; and copying in without
+copying back, which logs the operator out at a rotated refresh token. A run can still hand back a token of another
+account at the same provider, or a bad one (T4).
 
 ### Git state
 

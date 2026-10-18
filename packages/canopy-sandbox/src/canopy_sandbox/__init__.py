@@ -279,7 +279,7 @@ def run(argv: list[str]) -> int:
         readable = [*vendor_dirs(srt), *([bin_dir] if bin_dir is not None else [])]
         operator = data_home() / credentials.RUNTIME
         denied = [run_dir.parent, cache.parent, data.parent, *state_dirs(objects, cwd)]
-        check(policy, denied, readable, unwritable=[operator] if operator.is_dir() else [])
+        check(policy, denied, readable, unwritable=operator_runtime(operator))
         settings = run_dir / "policy.json"
         settings.write_text(json.dumps(policy, indent=2) + "\n", encoding="utf-8")
         hand_over(data, operator)
@@ -668,6 +668,25 @@ def vendor_dirs(srt: Path) -> list[Path]:
         return []
     vendor = root / "vendor"
     return [vendor] if name == SRT_PACKAGE and vendor.is_dir() else []
+
+
+def operator_runtime(operator: Path) -> list[Path]:
+    """Make the operator's OpenCode data directory, `operator`, if it is missing, so that a policy can deny writing it.
+
+    OpenCode makes it at its first start anyway. srt cannot deny a path that is not there without leaving a mount point
+    in its place on the host, and a template from before `@DATA@` would let a run make it.
+
+    Returns:
+        The directory, and where it leads when it is a link, as a dotfile manager makes it.
+
+    Raises:
+        SandboxError: it cannot be made.
+    """
+    try:
+        operator.mkdir(mode=0o700, parents=True, exist_ok=True)
+    except OSError as e:
+        raise SandboxError(f"your OpenCode data directory {operator} could not be made: {e}") from None
+    return list(dict.fromkeys([operator, operator.resolve()]))
 
 
 def hand_over(data: Path, operator: Path) -> None:
