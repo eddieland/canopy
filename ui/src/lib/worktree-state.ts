@@ -119,7 +119,7 @@ export function slotGroups(worktrees: readonly Worktree[], state?: WorktreeState
 
 /**
  * Whether a pool shows under the worktrees page's filter by `state`: with no filter, every pool; with one, a pool with
- * a slot in that state, or under `broken` one treehouse could not read, which the Needs a look counter counts too.
+ * a slot in that state, or under `broken` one that could not be read, which the Needs a look counter counts too.
  */
 export function poolShown(pool: Pool, state: WorktreeState | undefined): boolean {
     if (state === undefined) {
