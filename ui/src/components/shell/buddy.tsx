@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react'
 
 import { HatDrawing } from '@/components/hat'
 import { useFits } from '@/hooks/use-fits'
-import { setBuddy, tipFor } from '@/lib/buddy'
+import { nextTip, setBuddy } from '@/lib/buddy'
 import type { View } from '@/lib/buddy'
 import { useWardrobe } from '@/lib/hats'
 import type { HatId } from '@/lib/hats'
@@ -22,12 +22,14 @@ const OVERLAP_PX = 40
 /** How Sprig fits its slot: with the room for its bubble too, or only for itself, standing over the spend a little. */
 type Room = 'roomy' | 'tight'
 
-/** The tip Sprig last offered: on which view, its place in that view's tips, whether it is up, and if it was asked. */
+/** The tip Sprig last offered: on which view, what it says, whether it is up, and if it was asked. */
 interface Offer {
     /** The view it was offered on, which it is about. */
     view: View | undefined
-    /** How many tips came before it, since the page loaded: its place in its view's tips (`tipFor`). */
+    /** How many tips came before it, since the page loaded: a new count pops a new bubble in. */
     n: number
+    /** What it says: picked at random as it is offered (`nextTip`), and kept, so it never changes under the reader. */
+    tip: string
     /** Whether its bubble is up, till it is closed or its time runs out. */
     open: boolean
     /** Whether the reader asked for it with a click, rather than Sprig offering it on its own. */
@@ -37,10 +39,10 @@ interface Offer {
 /**
  * Sprig, the helper at the foot of the side rail: a bent wire with a sprig on top and googly eyes that follow the
  * pointer. Now and then, at random, it offers a tip about the view on screen, the dumber the better (`TIPS` in
- * src/lib/buddy.ts); clicking it offers another at once. Its clock is its own: turning a page neither offers a tip nor
- * puts the next one off, and a tip offered on one view is not shown on another. The tip closes with its button, or by
- * itself after a while, and the next comes a few minutes after that. Settings turns Sprig off, and so does the tip's
- * "Don't show me tips again".
+ * src/lib/buddy.ts), each picked at random, as the ticker's headlines are; clicking it offers another at once. Its
+ * clock is its own: turning a page neither offers a tip nor puts the next one off, and a tip offered on one view is not
+ * shown on another. The tip closes with its button, or by itself after a while, and the next comes a few minutes after
+ * that. Settings turns Sprig off, and so does the tip's "Don't show me tips again".
  *
  * It has a slot of its own in the rail's column, between what the rail holds and its footer: the slot is the room
  * left under the rail's blocks, and Sprig stands at its foot. A slot with room for Sprig and its bubble covers
@@ -51,19 +53,19 @@ interface Offer {
  */
 export function Buddy() {
     const view = viewOf(useRouterState({ select: (state) => state.matches.at(-1)?.routeId }))
-    // Read once per page load, as the ticker's reel is: the tip must not change under the reader.
-    const [today] = useState(() => Date.now())
-    // Closed until the first is offered, the bubble holding the view's first tip's room meanwhile.
-    const [offer, setOffer] = useState<Offer>({ view, n: 0, open: false, asked: false })
-    const tip = tipFor(offer.view, offer.n, today)
+    // Closed until the first is offered, the bubble holding a tip's room meanwhile.
+    const [offer, setOffer] = useState<Offer>(() => ({ view, n: 0, tip: nextTip(view, ''), open: false, asked: false }))
     const [slot, room] = useFits(roomFor)
     const { worn } = useWardrobe()
-    const another = () => setOffer({ view, n: offer.n + 1, open: true, asked: true })
-    // Offers the next tip unasked, for the view on screen when the time comes, if the bubble would cover nothing and
-    // the tab is in sight to read it.
+    // Offers the next tip, about the view on screen, never the one just offered.
+    const offerNext = (asked: boolean) =>
+        setOffer({ view, n: offer.n + 1, tip: nextTip(view, offer.tip), open: true, asked })
+    const another = () => offerNext(true)
+    // Offers the next tip unasked, when the time comes, if the bubble would cover nothing and the tab is in sight to
+    // read it.
     const offerUnasked = useEffectEvent(() => {
         if (room === 'roomy' && document.visibilityState === 'visible') {
-            setOffer({ view, n: offer.n + 1, open: true, asked: false })
+            offerNext(false)
         }
     })
     const close = () => setOffer((last) => ({ ...last, open: false }))
@@ -98,7 +100,14 @@ export function Buddy() {
                     room === false && 'invisible',
                 )}
             >
-                <Bubble key={offer.n} tip={tip} open={offer.open} shown={shown} onAnother={another} onClose={close} />
+                <Bubble
+                    key={offer.n}
+                    tip={offer.tip}
+                    open={offer.open}
+                    shown={shown}
+                    onAnother={another}
+                    onClose={close}
+                />
                 <button
                     type="button"
                     aria-label="Ask Sprig for a tip"

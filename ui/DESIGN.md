@@ -332,16 +332,17 @@ Sprig:
   more room for it. It is off until Settings turns it on. Its tips are by view (`TIPS` in `src/lib/buddy.ts`), by the
   route's id: several of its own for every route, a section's list and one of its items apart (`/tickets/` and
   `/tickets/$key`), so the same joke never shows on two views; then ones for anywhere. A new route is a type error there
-  until it has its own. Every one is a joke, and none opens with "Tip:", which on the ticker names something real; a
-  joke dressed as a tip opens with "Unhelpful tip:". The jokes come in several voices (the paperclip's "It looks like
-  you're...", a false "Fun fact:", a "Hot take:", a diary entry, a haiku, a riddle), mixed in each list so that no voice
-  follows itself. Sprig keeps its own time, not the pages': a page loads with no tip up, and the first comes at random,
-  two to six minutes on, about whatever view is on screen then; each later one comes as long again after the last
-  closes, in a tab in sight. Turning a page neither offers a tip nor puts the next off, which a tip on every page did
-  once, too often to be funny: the operator asked for the timer. A tip is about the view it was offered on, so another
-  view hides it, a list filtered another way does not, and it closes on time all the same. Clicking Sprig, or the
-  bubble's Another tip, offers the next at once; the bubble closes with its button or 20 seconds after it opened, and
-  "Don't show me tips again" turns Sprig off.
+  until it has its own. Each tip is picked at random from the view's own and the ones for anywhere, as the ticker picks
+  its headlines, never the one just offered, on the same view or the next. Every one is a joke, and none opens with
+  "Tip:", which on the ticker names something real; a joke dressed as a tip opens with "Unhelpful tip:". The jokes come
+  in several voices (the paperclip's "It looks like you're...", a false "Fun fact:", a "Hot take:", a diary entry, a
+  haiku, a riddle), mixed in each list so that no voice follows itself. Sprig keeps its own time, not the pages': a page
+  loads with no tip up, and the first comes at random, two to six minutes on, about whatever view is on screen then;
+  each later one comes as long again after the last closes, in a tab in sight. Turning a page neither offers a tip nor
+  puts the next off, which a tip on every page did once, too often to be funny: the operator asked for the timer. A tip
+  is about the view it was offered on, so another view hides it, a list filtered another way does not, and it closes on
+  time all the same. Clicking Sprig, or the bubble's Another tip, offers the next at once; the bubble closes with its
+  button or 20 seconds after it opened, and "Don't show me tips again" turns Sprig off.
 - Its place is the rail's column, between the blocks and the footer: the room left there is its slot, and it stands at
   the slot's foot. A slot with room for Sprig and its bubble (with the mock's three working runs, a window about 1100px
   tall) covers nothing. A laptop's window never leaves that much, and the operator would rather see Sprig standing over

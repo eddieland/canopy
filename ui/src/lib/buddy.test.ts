@@ -3,10 +3,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { breakStorage, otherTab, otherTabClears } from '@/test-utils'
 
-import { ANYWHERE, DEFAULT, parseBuddy, TIPS, tipFor } from './buddy'
+import { ANYWHERE, DEFAULT, nextTip, parseBuddy, TIPS } from './buddy'
 import type { View } from './buddy'
-
-const DAY = 86_400_000
 
 // The setting is read when the module loads, so each test loads a fresh copy.
 function load() {
@@ -60,39 +58,30 @@ describe('TIPS', () => {
     })
 })
 
-describe('tipFor', () => {
-    it("draws from the view's tips and the ones for anywhere", () => {
+// Draws `count` tips for a view, each with an even share of the range a random number falls in.
+function drawAll(view: View | undefined, count: number): Set<string> {
+    return new Set(Array.from({ length: count }, (_, n) => nextTip(view, '', () => n / count)))
+}
+
+describe('nextTip', () => {
+    it("draws from the view's tips and the ones for anywhere, and nothing else", () => {
         const length = TIPS['/chores/$name'].length + ANYWHERE.length
-        const tips = new Set(Array.from({ length }, (_, n) => tipFor('/chores/$name', n, 0)))
-        expect(tips).toEqual(new Set([...TIPS['/chores/$name'], ...ANYWHERE]))
+        expect(drawAll('/chores/$name', length)).toEqual(new Set([...TIPS['/chores/$name'], ...ANYWHERE]))
     })
 
     it('draws only from the ones for anywhere off every view', () => {
-        expect(ANYWHERE).toContain(tipFor(undefined, 0, 0))
+        expect(drawAll(undefined, ANYWHERE.length)).toEqual(new Set(ANYWHERE))
     })
 
-    it("opens on the view's own tips, then the ones for anywhere", () => {
-        for (let day = 0; day < 12; day += 1) {
-            const tips = Array.from({ length: TIPS['/runs/$id'].length + ANYWHERE.length }, (_, n) =>
-                tipFor('/runs/$id', n, day * DAY),
-            )
-            expect(new Set(tips.slice(0, TIPS['/runs/$id'].length))).toEqual(new Set(TIPS['/runs/$id']))
-            expect(new Set(tips.slice(TIPS['/runs/$id'].length))).toEqual(new Set(ANYWHERE))
-        }
-    })
-
-    it('never opens two views on the same tip, a list and one of its items included', () => {
+    it('never offers the tip just offered, on its view or another', () => {
         const views = [...(Object.keys(TIPS) as View[]), undefined]
-        for (let day = 0; day < 12; day += 1) {
-            const first = views.map((view) => tipFor(view, 0, day * DAY))
-            expect(new Set(first).size).toBe(views.length)
+        for (const view of views) {
+            for (const last of [...(view === undefined ? [] : TIPS[view]), ...ANYWHERE]) {
+                for (const random of [0, 0.5, 0.999]) {
+                    expect(nextTip(view, last, () => random)).not.toBe(last)
+                }
+            }
         }
-    })
-
-    it('is the same for the same view, count, and day, and moves on with either', () => {
-        expect(tipFor('/runs/', 1, 5 * DAY)).toBe(tipFor('/runs/', 1, 5 * DAY + 1000))
-        expect(tipFor('/runs/', 1, 5 * DAY)).not.toBe(tipFor('/runs/', 2, 5 * DAY))
-        expect(tipFor('/runs/', 0, 5 * DAY)).not.toBe(tipFor('/runs/', 0, 6 * DAY))
     })
 })
 

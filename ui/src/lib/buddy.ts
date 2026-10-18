@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react'
 
+import { nextIndex } from '@/lib/headlines'
+
 /**
  * Sprig, the helper at the foot of the side rail (src/components/shell/buddy.tsx): a bent wire with a sprig on top,
  * offering tips nobody asked for, several of its own for each view. Its tips are plain strings written here, never
@@ -230,19 +232,13 @@ export const ANYWHERE: readonly string[] = [
 ]
 
 /**
- * The `n`th tip for a view: its own first, then the ones for anywhere, each list starting at a different one each day,
- * as the ticker's reel does. A view's first tip is its own, so two views never open on the same one. The same view,
- * day, and count always give the same tip, so a screenshot is stable.
+ * The next tip for a view: one at random from its own and the ones for anywhere, as the ticker picks its headlines
+ * (`nextIndex`), but never `last`, the tip just offered, wherever it was offered. So no tip follows itself, on the
+ * same view or on the next.
  */
-export function tipFor(view: View | undefined, n: number, now: number): string {
-    const day = Math.floor(now / 86_400_000)
-    const tips = [...rotated(view === undefined ? [] : TIPS[view], day), ...rotated(ANYWHERE, day)]
-    return tips[n % tips.length] ?? ''
-}
-
-function rotated(tips: readonly string[], by: number): string[] {
-    const start = tips.length === 0 ? 0 : by % tips.length
-    return [...tips.slice(start), ...tips.slice(0, start)]
+export function nextTip(view: View | undefined, last: string, random: () => number = Math.random): string {
+    const tips = [...(view === undefined ? [] : TIPS[view]), ...ANYWHERE]
+    return tips[nextIndex(tips.length, tips.indexOf(last), random)] ?? ''
 }
 
 function read(): BuddySetting {
