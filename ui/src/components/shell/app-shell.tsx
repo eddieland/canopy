@@ -212,7 +212,8 @@ function RailColumn({ buddy }: { buddy: boolean }) {
                 <RailSpend />
             </div>
             {buddy ? <Buddy /> : <div className="flex-1" />}
-            <div className="pt-3">
+            {/* pt-1, not more: the room is Sprig's slot, which a laptop's window has little of to spare. */}
+            <div className="pt-1">
                 <RailFooter />
             </div>
         </>

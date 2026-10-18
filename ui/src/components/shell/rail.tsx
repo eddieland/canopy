@@ -107,18 +107,17 @@ export function RailSpend() {
 }
 
 /**
- * The rail's foot, on two lines: the version canopy serves, with the width to itself so it shows whole, opening the
- * releases on GitHub in a new tab; and under it two buttons alike, the guide, the operator's documentation, bundled
- * with that version, and Settings, which the operator opens too seldom to take a place in the nav. Always at the
- * window's foot, however long the page.
+ * The rail's foot, on two lines: the version canopy serves, with the width to itself, cut short only past a long
+ * build's hash, opening the releases on GitHub in a new tab; and under it two buttons alike, the guide, the operator's
+ * documentation, bundled with that version, and Settings, which the operator opens too seldom to take a place in the
+ * nav. Always at the window's foot, however long the page.
  */
 export function RailFooter() {
     const meta = useQuery(metaQuery).data
     return (
-        // py-1, not py-2: the buttons' 24px row takes the 8px back, so the footer stays as tall as with links, and
-        // the room above it, Sprig's slot in a laptop's window, stays the same.
+        // pb-2: a little room under the buttons, so they do not sit on the window's edge.
         <div
-            className="mx-2 flex flex-col gap-1 border-t px-2.5 py-1 text-2xs text-muted-foreground"
+            className="mx-2 flex flex-col gap-1 border-t px-2.5 pt-1 pb-2 text-xs text-muted-foreground"
             data-testid="rail-footer"
         >
             <a
@@ -126,7 +125,7 @@ export function RailFooter() {
                 target="_blank"
                 rel="noreferrer noopener"
                 title={meta === undefined ? undefined : `canopy ${meta.version}: the releases on GitHub`}
-                className="readout min-h-4 min-w-0 truncate rounded-sm hover:text-foreground"
+                className="readout min-h-4 min-w-0 truncate rounded-sm text-foreground/80 hover:text-foreground"
                 data-testid="rail-version"
             >
                 {meta === undefined ? '' : `canopy ${meta.version}`}
@@ -167,9 +166,9 @@ function FooterLink({
             title={title}
             data-testid={testId}
             className={cn(
-                'flex h-6 items-center gap-1.5 rounded-md bg-surface-raised px-2 text-xs text-foreground',
+                'flex h-7 items-center gap-1.5 rounded-md bg-surface-raised px-2.5 text-sm text-foreground',
                 'transition-colors outline-none hover:bg-surface focus-visible:ring-2 focus-visible:ring-ring',
-                '[&_svg]:size-3',
+                '[&_svg]:size-3.5',
             )}
         >
             {children}

@@ -137,12 +137,12 @@ Rules:
   opening the run's page; at most four, then `+N more` to the runs page, so the sticky part fits an 800px window. The
   spend is the last 24 hours and the last 30 days from `GET /api/spend`, on the stream, in small readouts: it is shown
   nowhere else, but for the lifetime total Sprig's hats are bought with (Fun, below). The footer is two lines, the
-  version, a link out to canopy's releases on GitHub, with the width to itself, then the guide and Settings as two
-  filled pills alike, `foreground` on `surface-raised` with no border, so they stand out from the version's print; the
-  footer's tighter padding pays for their height, so it is no taller than with plain links and Sprig's slot is
-  unchanged. It sits at
-  the foot of the sticky column, so at the window's foot however long the page; in a window too short for the rest, the
-  part above it scrolls on its own. The room left between the blocks and the footer is Sprig's (Fun, below).
+  version, a link out to canopy's releases on GitHub, with the width to itself and cut short only past a long build's
+  hash, then the guide and Settings as two filled pills alike, `foreground` on `surface-raised` with no border, in the
+  rail's body size, so they stand out from the version's print, with a little room under them so they do not sit on
+  the window's edge. It sits at the foot of the sticky column, so at the window's foot however long the page; in a
+  window too short for the rest, the part above it scrolls on its own. The room left between the blocks and the footer
+  is Sprig's (Fun, below).
 - **Narrower than `lg`, the rail is a strip** (`useRailMode`), since half of a second monitor is under it and a whole
   rail there left a list too little room: 3.5rem of the nav's icons (the nav's `compact`), each named on hover and to a
   screen reader, Attention's count one number on its icon's corner in its most severe item's color. A button atop the

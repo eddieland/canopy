@@ -65,7 +65,7 @@ export function SearchBox() {
     }
 
     return (
-        <search className="px-2 pt-2">
+        <search className="px-2 pt-3">
             <form
                 onSubmit={(event) => {
                     event.preventDefault()
