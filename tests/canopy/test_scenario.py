@@ -45,3 +45,26 @@ def test_the_step_that_failed_is_in_the_story(scenario: Scenario) -> None:
         "     - queried: the query returned no open ticket",
         "The attention list now: nothing.",
     ]
+
+
+def test_a_held_run_is_at_work_until_the_story_says_what_becomes_of_it(scenario: Scenario, git_pool: GitPool) -> None:
+    working = scenario.starts(worker=pushes())
+    assert working.row["status"] == "running"
+    scenario.refuses(dispatches())
+    assert working.finishes().status == "done"
+    slot = git_pool.slots[0]  # run 1 gave it back
+    [left] = scenario.tick(*waits("PROJ-1"), dispatches("PROJ-2"), hold=True).working
+    left.dies()
+    assert scenario.told().splitlines() == [
+        "1. run 1, implement of PROJ-1: at work",
+        "2. tick 2 refuses canopy dispatch PROJ-1 --repo repo --kind implement --label agent-ready-tester",
+        "     PROJ-1 refused:running: run 1 is already working PROJ-1",
+        "3. run 1, implement of PROJ-1: done: did it",
+        "4. tick 3, exits 0: ok: 3 decisions: dispatch:implement=1, queried=1, wait=1",
+        "     - queried: the query returned no open ticket",
+        "     PROJ-1 wait: nothing to do yet",
+        f"     PROJ-2 dispatch:implement: run 2: agent/PROJ-2-work in repo at {slot}; label agent-ready-tester",
+        "     run 2, implement of PROJ-2: at work",
+        "5. run 2, implement of PROJ-2: its `canopy _run` dies, its worker still at work",
+        "The attention list now: nothing.",
+    ]
