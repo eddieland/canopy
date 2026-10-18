@@ -25,6 +25,7 @@ import type { Hat } from '@/lib/hats'
 import type { TickerTopic } from '@/lib/headlines'
 import { noticeSetText, reloadedText } from '@/lib/outcomes'
 import { setRave, useRave } from '@/lib/rave'
+import { dropDrafts } from '@/lib/reply-draft'
 import { setSendKey, useSendKey } from '@/lib/send-key'
 import type { SendKey } from '@/lib/send-key'
 import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } from '@/lib/ticker-settings'
@@ -500,8 +501,10 @@ function SessionPanel() {
     const client = useQueryClient()
     const { data } = useQuery(sessionQuery)
     const mutation = useMutation({
+        mutationKey: keys.session,
         mutationFn: signOut,
         onSuccess: (session) => {
+            dropDrafts()
             client.setQueryData(keys.session, session)
             client.removeQueries({ predicate: (query) => query.queryKey[0] !== 'session' })
         },

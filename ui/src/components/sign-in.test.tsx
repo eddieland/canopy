@@ -106,4 +106,19 @@ describe('SignIn', () => {
         expect((await screen.findByRole('alert')).textContent).toBe('the journal is busy')
         expect(screen.getByLabelText('Listener secret').getAttribute('aria-invalid')).toBe('false')
     })
+
+    it('says an action signed out by a 401 was not sent, until signing in again', async () => {
+        const client = new QueryClient()
+        renderSignIn(client)
+        expect(screen.queryByText(/not sent/u)).toBeNull()
+        cleanup()
+
+        client.setQueryData(keys.unsent, true)
+        renderSignIn(client)
+        expect(screen.getByText('Your last action was not sent: sign in and send it again.')).toBeDefined()
+        signInWith('s3cret')
+        await waitFor(() => {
+            expect(client.getQueryData(keys.unsent)).toBe(false)
+        })
+    })
 })

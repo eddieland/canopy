@@ -11,20 +11,26 @@ import type { ReplyTarget } from './reply-form'
 const TICKET: ReplyTarget = { kind: 'ticket', key: 'ABC-1', isPublic: false }
 const CHORE: ReplyTarget = { kind: 'chore', name: 'deps' }
 
-// Every reply the form sends, and what the server stand-in answers next: a failure, then the reply recorded.
+// Every reply the form sends, and what the server stand-in answers next: a failure, then the reply recorded. An error
+// is what fetch throws when no server answers.
 let sent: { path: string; body: { body: string; submission: string } }[] = []
-let answers: Response[] = []
+let answers: (Response | Error)[] = []
 
 const server: Middleware = {
     async onRequest({ request }) {
         sent.push({ path: new URL(request.url).pathname, body: (await request.json()) as never })
-        return answers.shift() ?? Response.json({ message_id: sent.length, answers: null, new: true })
+        const answer = answers.shift() ?? Response.json({ message_id: sent.length, answers: null, new: true })
+        if (answer instanceof Error) {
+            throw answer
+        }
+        return answer
     },
 }
 
 beforeEach(() => {
     sent = []
     answers = []
+    sessionStorage.clear()
     api.use(server)
 })
 
@@ -107,5 +113,39 @@ describe('ReplyForm', () => {
         expect(retried).toBe(failed)
         expect(next).not.toBe(retried)
         expect(new Set(sent.map((request) => request.path))).toEqual(new Set(['/api/tickets/ABC-1/replies']))
+    })
+
+    it('keeps an unsent reply across a sign-out, as the same submission, and forgets it once recorded', async () => {
+        answers = [Response.json({ detail: 'sign in with the listener secret' }, { status: 401 })]
+        const first = renderForm(TICKET)
+        type('Reply', 'Use the v2 API')
+        fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
+        await screen.findByRole('alert')
+        // Signed out, the shell swaps the page for the sign-in page; signed in again, the form is drawn anew.
+        first.unmount()
+
+        renderForm(TICKET)
+        expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' }).value).toBe('Use the v2 API')
+        renderForm(CHORE)
+        expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Note' }).value).toBe('')
+        cleanup()
+
+        renderForm(TICKET)
+        fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
+        await screen.findByRole('status')
+        const [failed, resent] = sent.map((request) => request.body.submission)
+        expect(resent).toBe(failed)
+        cleanup()
+
+        renderForm(TICKET)
+        expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' }).value).toBe('')
+    })
+
+    it('says a reply that reached no server in canopy’s words, not the browser’s', async () => {
+        answers = [new TypeError('Failed to fetch')]
+        renderForm(TICKET)
+        type('Reply', 'Use the v2 API')
+        fireEvent.click(screen.getByRole('button', { name: 'Reply' }))
+        expect((await screen.findByRole('alert')).textContent).toBe('canopy did not answer: is canopy loop running?')
     })
 })
