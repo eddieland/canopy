@@ -7,7 +7,7 @@ import { mockAttention, mockTickets } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { TicketSummary } from '@/api/types'
 import { ToastContext } from '@/hooks/use-toast'
-import { setTicketToasts } from '@/lib/ticket-toasts'
+import { DEFAULTS, setToastSettings } from '@/lib/toast-settings'
 import type { NewToast } from '@/lib/toasts'
 import { FakeEventSource } from '@/test-utils'
 
@@ -22,7 +22,7 @@ beforeEach(() => {
 afterEach(() => {
     cleanup()
     vi.useRealTimers()
-    setTicketToasts([])
+    setToastSettings(DEFAULTS)
 })
 
 function live(
@@ -73,7 +73,7 @@ describe('useLiveUpdates', () => {
 
     it('shows a toast for a ticket moving into a state Settings turned on, and none for the first list', () => {
         const show = vi.fn<(toast: NewToast) => void>()
-        setTicketToasts(['blocked'])
+        setToastSettings({ tickets: ['blocked'] })
         live(new QueryClient(), true, show)
         act(() => {
             latest().open()

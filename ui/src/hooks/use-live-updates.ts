@@ -5,7 +5,8 @@ import { keys } from '@/api/queries'
 import type { TicketSummary } from '@/api/types'
 import { useToast } from '@/hooks/use-toast'
 import { apiUrl } from '@/lib/base'
-import { ticketToasts, useTicketToasts } from '@/lib/ticket-toasts'
+import { ticketToasts } from '@/lib/ticket-toasts'
+import { useToastSettings } from '@/lib/toast-settings'
 
 import { useEventStream } from './use-event-stream'
 import type { StreamState } from './use-event-stream'
@@ -15,12 +16,12 @@ import type { StreamState } from './use-event-stream'
  * once, in the shell, and only when signed in: the stream needs a session. Every connection, a reconnect included,
  * starts with the three lists whole, so nothing needs refetching after a drop but the ticket a page shows, and the
  * server's meta: a drop is most often the loop restarting, perhaps upgraded, so it may serve a newer UI (NewerBuild).
- * A ticket the tickets list shows moving into a state Settings turned on shows a toast (`ticketToasts`).
+ * A change Settings turned toasts on for shows one: a ticket in the tickets list moving into a state (`ticketToasts`).
  */
 export function useLiveUpdates(enabled: boolean): StreamState {
     const client = useQueryClient()
     const show = useToast()
-    const states = useTicketToasts()
+    const toasts = useToastSettings()
     return useEventStream(apiUrl('/events'), {
         enabled,
         parse: parseStreamEvent,
@@ -28,7 +29,7 @@ export function useLiveUpdates(enabled: boolean): StreamState {
             const before = client.getQueryData<TicketSummary[]>(keys.tickets)
             applyStreamEvent(client, event)
             if (event.type === 'tickets.updated') {
-                for (const toast of ticketToasts(before, event.tickets, states)) {
+                for (const toast of ticketToasts(before, event.tickets, toasts.tickets)) {
                     show(toast)
                 }
             }
