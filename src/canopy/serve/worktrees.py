@@ -44,6 +44,12 @@ _STATES: dict[str, WorktreeState] = {
 _NO_CLONE = "no clone; run `canopy workspace sync`"
 _STALE = "no running run holds this lease; the next tick's reconcile returns it"
 _SYNC = "held while `canopy workspace sync` makes this pool's slots"
+# What a dirty slot blocks and what clears it (DESIGN §18, What a pool guarantees). No canopy command clears one: its
+# changes may be someone's work, so the operator keeps or discards them.
+_DIRTY = (
+    "never reused while it has changes, and counts as busy, so a full pool refuses a lease: keep what you need of "
+    "them, then discard them in the slot"
+)
 
 
 def pools(backend: Backend, ctx: Context) -> list[Pool]:
@@ -88,7 +94,7 @@ def worktree(slot: Slot, run: sqlite3.Row | None, review: sqlite3.Row | None, *,
 
     Returns:
         The worktree, `working` while a run or review holds it, with a note when its lease is canopy's but no running
-        run holds it, or `canopy workspace sync` does.
+        run holds it, or `canopy workspace sync` does, or when it is dirty.
     """
     leased = slot.lease_id != ""
     state: WorktreeState = _STATES.get(slot.status, "broken")
@@ -99,6 +105,8 @@ def worktree(slot: Slot, run: sqlite3.Row | None, review: sqlite3.Row | None, *,
         note = _SYNC
     elif leased and slot.lease_holder.startswith(HOLDER_PREFIX):
         note = _STALE
+    elif state == "dirty":
+        note = _DIRTY
     return Worktree(
         name=slot.name,
         path=views.shown_path(str(slot.path), root),

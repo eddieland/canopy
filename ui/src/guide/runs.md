@@ -65,9 +65,10 @@ a private ticket's run at once. [Tickets](tickets#acting-on-a-ticket) covers it.
 
 ## Worktrees
 
-[Worktrees](/worktrees) shows every slot in canopy's treehouse pools, a pool per repository: what holds each slot, what
-it has checked out, and what processes run in it. The counters at the top add them up: slots working, held, needing a
-look, and free.
+[Worktrees](/worktrees) shows every slot in canopy's pools, a pool per repository: what holds each slot, what it has
+checked out, and what processes run in it. The line under the title says how many pools and slots there are, and how
+long ago they were read. The counters add them up: slots working, held (and by what), needing a look, and free.
+Needing a look counts dirty slots, broken ones, and any pool that couldn't be read at all.
 
 A slot is:
 
@@ -79,6 +80,11 @@ A slot is:
 
 The chips filter by state. A slot held by no running run is marked as such: the next tick returns it. A pool larger
 than its declared size says so, and `canopy workspace sync` removes the idle slots over it.
+
+A dirty slot is the one to look at. The pool never reuses it and counts it as busy, so it quietly shrinks the pool until
+someone deals with it, and once the rest are busy the next lease is refused. Nothing in canopy cleans it for you,
+since those changes might be the only copy of someone's afternoon: open the slot (its path is on its number), keep
+what you need, and discard the rest.
 
 This page only reads, and it's the one page not kept current by the stream: it rereads the pools every 10 seconds
 while you're looking, and **Read again** rereads them now. Each read takes every pool's lock for a moment, which is
