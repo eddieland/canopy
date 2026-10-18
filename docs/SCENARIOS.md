@@ -32,6 +32,10 @@ relying on a permission they check.
   tool of the tracker's server, and the tracker CLIs in bash.
 - **S4. A heredoc `canopy` command** (M19). Confirmed in OpenCode's source (1.18.35), not in a run. Check that the
   overseer's `canopy *` rule admits `canopy mirror` fed by a heredoc.
+- **S44. The token split** (M33). Confirmed in OpenCode's source (1.19.3), not in a run. canopy's new tokens add a
+  `step_finish`'s `output` and `reasoning` (`core/agent_output.py`), which holds only while `output` leaves reasoning
+  out. Check that OpenCode's `session.ts` still sets `output: outputTokens - reasoningTokens`; aide found the overlap
+  differed in earlier releases (PRIOR_ART).
 
 ## Install and setup
 
