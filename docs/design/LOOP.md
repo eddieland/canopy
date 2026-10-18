@@ -153,8 +153,8 @@ messages and slots, a review's slot); a new kind joins that set rather than copy
 4. Print the tick's status, summary, decisions other than waits, attention items added and resolved, running workers,
    and what the overseer cost when the runtime reported it (§13), and the wait that follows.
 5. Wait, measured from the end of the tick, for `--every`, else `loop.interval_minutes`, whatever the tick's status,
-   lengthened after idle ticks and ended at a gate (Idle pacing, below). Pacing does not read tick cost (ROADMAP M13,
-   deferred). An operator message recorded since the tick began, such as a `canopy reply`, ends the wait early (§22);
+   lengthened after idle ticks and ended at a gate (Idle pacing, below). Pacing does not read tick cost (ROADMAP,
+   Deferred). An operator message recorded since the tick began, such as a `canopy reply`, ends the wait early (§22);
    so does a run ending (below). The wait never ends sooner than `loop.min_gap_minutes` (private, default 1) after the
    tick began, whatever ended it, which bounds how often the overseer runs: a burst of messages, runs ending one after
    another, or a gate opening just after a tick would otherwise run ticks back to back. On a terminal, pressing `t`

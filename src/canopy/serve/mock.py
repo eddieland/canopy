@@ -361,28 +361,31 @@ def _grant(ctx: Context, ref: conversation.Ref, kind: str, repo: str | None) -> 
     Raises:
         Refused: `unknown` for a PR never reviewed, `unknown_repo` for a unit the ticket has had no runs in.
     """
-    if kind == "review":
-        reviewed = _review_limit(ctx, ref.id)
-        if reviewed is None:
-            raise conversation.Refused("unknown", f"canopy has not reviewed {ref}, so it has no review limit to grant")
-        with db.transaction(ctx.conn):
+    # Read and insert in one `BEGIN IMMEDIATE` transaction, which holds the write lock from the read to the insert, so
+    # the limit reported counts this grant and no other request's.
+    with db.transaction(ctx.conn):
+        if kind == "review":
+            reviewed = _review_limit(ctx, ref.id)
+            if reviewed is None:
+                raise conversation.Refused(
+                    "unknown", f"canopy has not reviewed {ref}, so it has no review limit to grant"
+                )
             ctx.conn.execute(
                 "INSERT INTO review_grants (pr_url, runs, granted_at) VALUES (?, 1, ?)", (ref.id, db.format_time(T0))
             )
-        return Granted(repo=None, runs=reviewed.runs, limit=reviewed.limit + 1)
-    units = {(found.repo, found.kind): found for found in _limits(ctx, ref.id)}
-    repos = {r for r, _ in units}
-    if repo is None and len(repos) == 1:
-        [repo] = repos
-    current = units.get((repo, kind))
-    if repo is None or current is None:
-        raise conversation.Refused("unknown_repo", f"{ref} has had no runs in {repo or 'one repository only'}")
-    with db.transaction(ctx.conn):
+            return Granted(repo=None, runs=reviewed.runs, limit=reviewed.limit + 1)
+        units = {(found.repo, found.kind): found for found in _limits(ctx, ref.id)}
+        repos = {r for r, _ in units}
+        if repo is None and len(repos) == 1:
+            [repo] = repos
+        current = units.get((repo, kind))
+        if repo is None or current is None:
+            raise conversation.Refused("unknown_repo", f"{ref} has had no runs in {repo or 'one repository only'}")
         ctx.conn.execute(
             "INSERT INTO attempt_grants (ticket_key, repo, kind, runs, granted_at) VALUES (?, ?, ?, 1, ?)",
             (ref.id, repo, kind, db.format_time(T0)),
         )
-    return Granted(repo=repo, runs=current.runs, limit=current.limit + 1)
+        return Granted(repo=repo, runs=current.runs, limit=current.limit + 1)
 
 
 def _try_chore(ctx: Context, name: str) -> int:
