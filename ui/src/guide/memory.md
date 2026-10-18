@@ -73,6 +73,13 @@ memory in use never share a label, so you never mistake one for the other.
   for its notes, each with Promote and Forget. A busy workspace has thousands, so the page reads a ticket's notes only
   once you ask. On a wide screen this panel sits beside the other two.
 
+Above the panels, a filter field narrows all three as you type: a word in a memory's key, its text, its ticket, or its
+repository, or in a ticket's key or title. The repository chips keep the proposals and lessons for that repository's
+runs, a lesson for every repository included, since those runs read it too. While lessons are in use, the Lessons header
+has `due` and `wrong` chips for the ones that need you. All of it lives in the URL, so a filtered page is a link you can
+keep. The proposals flip between oldest first, the nearest to lapsing, and newest first. Searching a memory's words
+across the whole journal is still `canopy memory search`.
+
 ## Reading a memory
 
 Each memory is a row, read left to right like every other list in canopy. First where it stands, a dot and a word:

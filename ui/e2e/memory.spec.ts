@@ -107,3 +107,37 @@ test('a run says what it wrote, what it read, and what was refused, and recordin
     await settled(page)
     await expect(page.getByTestId('run-memory')).toHaveCount(0)
 })
+
+test('the memory page narrows every panel by words, a repository, and a lesson’s standing, kept in the URL', async ({
+    page,
+}) => {
+    await page.goto('memory')
+    await settled(page)
+    const proposals = page.getByTestId('memory-proposals')
+    const lessons = page.getByTestId('memory-lessons')
+    const notes = page.getByTestId('memory-notes')
+
+    await page.getByRole('searchbox', { name: 'Filter memory by key, text, ticket, or repository' }).fill('billing')
+    await expect(page).toHaveURL(/[?&]q=billing/u)
+    await expect(proposals.getByTestId('memory-proposals-count')).toHaveText('0 of 2')
+    await expect(proposals.getByText('no proposals with “billing”')).toBeVisible()
+    await expect(lessons.getByTestId('memory-8')).toBeVisible()
+    await expect(notes.getByText('no ticket with notes has “billing” in its key or title')).toBeVisible()
+
+    await page.getByRole('navigation', { name: 'Filter by repository' }).getByRole('link', { name: 'api' }).click()
+    await expect(page).toHaveURL(/[?&]repo=api/u)
+    await expect(lessons.getByText('no lessons with “billing” for api')).toBeVisible()
+
+    // Back to everything: the chips and the field undo it.
+    await page
+        .getByRole('navigation', { name: 'Filter by repository' })
+        .getByRole('link', { name: 'every repository' })
+        .click()
+    await page.getByRole('button', { name: 'Clear the filter' }).click()
+    await expect(proposals.getByTestId('memory-proposals-count')).toHaveText('2')
+
+    // The proposals flip, the newest first.
+    await expect(proposals.getByTestId(/^memory-\d+$/u).first()).toHaveAttribute('data-testid', 'memory-5')
+    await proposals.getByTestId('order-memory-proposals').click()
+    await expect(proposals.getByTestId(/^memory-\d+$/u).first()).toHaveAttribute('data-testid', 'memory-6')
+})
