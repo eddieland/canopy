@@ -30,7 +30,7 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     // Its title leads with its own, after the PR's name, and its description is its state.
     const heading = page.getByRole('heading', { level: 1 })
     await expect(heading).toHaveText('acme/web#88 ABC-099: debounce the search box by 250 ms')
-    await expect(page.locator('main header p')).toHaveText('ABC-099 · 2 reviews')
+    await expect(page.locator('main header p')).toHaveText('review:4 3 findings, 1 major · at its review limit')
     await expect(nav.getByRole('link', { name: 'Pull requests' })).toHaveAttribute('data-status', 'active')
     // The run that opened it, its two reviews, and what the loop decided about it.
     await expect(page.getByTestId('pull-request-runs').getByRole('link', { name: 'run:39' })).toBeVisible()
@@ -53,6 +53,60 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(
         'acme/web#88 ABC-099: debounce the search box by 250 ms',
     )
+})
+
+test("a PR's page leads with where it stands, high on the page", async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 900 })
+    await page.goto(`pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`)
+    await settled(page)
+    const description = page.locator('main header p')
+    await expect(description).toHaveText('review:4 3 findings, 1 major · at its review limit')
+    const box = await description.boundingBox()
+    expect(box).not.toBeNull()
+    // The verdict starts above y=150, under the title rather than a panel down the page.
+    expect(box?.y ?? Infinity).toBeLessThan(150)
+    // Its repository is its title's, not a field too.
+    const terms = page.getByTestId('pull-request-fields').getByRole('term')
+    await expect(terms.first()).toHaveText('ticket')
+    await expect(terms.filter({ hasText: /^repository$/u })).toHaveCount(0)
+})
+
+test('a PR canopy only reviews says so once, has no runs, and its empty lists collapse to their headers', async ({
+    page,
+}) => {
+    for (const [pr, state] of [
+        ['https://github.com/acme/web/pull/95', 'not reviewed · canopy only reviews it'],
+        ['https://github.com/acme/api/pull/12', 'review:2 clean · canopy only reviews it'],
+    ] as const) {
+        await page.goto(`pull-requests/pr?url=${encodeURIComponent(pr)}`)
+        await settled(page)
+        await expect(page.locator('main header p')).toHaveText(state)
+        await expect(page.locator('main').getByText('canopy only reviews it')).toHaveCount(1)
+        await expect(page.getByTestId('pull-request-fields').getByRole('definition').first()).toHaveText('none')
+        // Runs are a ticket's: a PR with none can never have one, so it has no Runs panel, and nothing names a ticket.
+        await expect(page.getByTestId('pull-request-reviews')).toBeVisible()
+        await expect(page.getByTestId('pull-request-runs')).toHaveCount(0)
+        await expect(page.locator('main')).not.toContainText("its ticket's")
+    }
+
+    // acme/web#95 has no reviews and no decisions: each is its header and its count, nothing under it.
+    const reviews = page.getByTestId('pull-request-reviews')
+    const decisions = page.getByTestId('pull-request-decisions')
+    await page.goto(`pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/95')}`)
+    await settled(page)
+    await expect(reviews).toHaveText('Reviews0')
+    await expect(decisions).toHaveText('Decisions0')
+    await expect(reviews.getByTestId('list-count')).toHaveAttribute(
+        'title',
+        'no reviews yet: canopy has not reviewed it',
+    )
+    // The panels under the identity panel, from the first one's top to the last one's foot, the gap between included.
+    const first = await reviews.boundingBox()
+    const last = await decisions.boundingBox()
+    expect(first).not.toBeNull()
+    expect(last).not.toBeNull()
+    const below = (last?.y ?? Infinity) + (last?.height ?? 0) - (first?.y ?? 0)
+    expect(below).toBeLessThan(120)
 })
 
 test('a PR the journal does not know says so, and a decision about a PR opens its page', async ({ page }) => {

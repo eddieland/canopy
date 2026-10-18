@@ -1,8 +1,10 @@
 // What a detail page's description says: its subject's state, never what every page of its kind shows, which is the
 // title's help (ui/DESIGN.md, the detail skeleton). Each is the facts known, joined as one line: `done · implement`.
 
-import type { ChoreRun, PullRequest, ReviewSummary, Run, Tick } from '@/api/types'
-import { runRef } from '@/lib/refs'
+import type { ChoreRun, Limit, PullRequest, ReviewSummary, Run, Tick } from '@/api/types'
+import { stuck } from '@/lib/limits'
+import { reviewRef, runRef } from '@/lib/refs'
+import { verdictText } from '@/lib/reviews'
 import { NO_TICKET, readable } from '@/lib/words'
 
 /** A run's page: how it ended, its kind, and its ticket, as `done · implement · ABC-099`. */
@@ -18,10 +20,21 @@ export function reviewDescription(review: Pick<ReviewSummary, 'status'>): string
     return readable(review.status)
 }
 
-/** A PR's page: its ticket, or why it has none, how many of its reviews canopy keeps, and the run working it now. */
-export function pullRequestDescription(pr: Pick<PullRequest, 'ticket_key' | 'running_run'>, reviews: number): string {
+/**
+ * A PR's page: where it stands, as its row on the pull requests list says it: its latest review and that review's
+ * verdict (`review:4 3 findings, 1 major`) or `not reviewed`, `at its review limit` while it is, and the run working it
+ * now. A PR canopy only reviews says so here, and only here. Its ticket is its identity panel's, its phase its title's
+ * chip, and its reviews are counted in their panel's header.
+ */
+export function pullRequestDescription(
+    pr: Pick<PullRequest, 'ticket_key' | 'running_run' | 'latest_review'>,
+    reviewLimit: Limit | null,
+): string {
+    const review = pr.latest_review
+    const reviewed = review === null ? 'not reviewed' : `${reviewRef(review.id)} ${verdictText(review)}`
+    const atLimit = reviewLimit !== null && stuck([reviewLimit]).length > 0 ? 'at its review limit' : null
     const running = pr.running_run === null ? null : `${runRef(pr.running_run)} running`
-    return line(pr.ticket_key ?? NO_TICKET, counted(reviews, 'review'), running)
+    return line(reviewed, atLimit, running, pr.ticket_key === null ? NO_TICKET : null)
 }
 
 /** A chore run's page: how it ended and, for one that ended `ok`, how many findings it listed and how many more not. */
