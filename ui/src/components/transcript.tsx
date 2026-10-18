@@ -118,7 +118,7 @@ export function TranscriptPanel({
                         <Copyable
                             text={transcript.session_id}
                             label="session id"
-                            className="readout hidden text-xs text-muted-foreground sm:inline-flex"
+                            className="readout hidden text-xs text-muted-foreground @lg:inline-flex"
                         >
                             <span title="open it with the runtime's tools too: opencode export <id>">
                                 session {transcript.session_id}
@@ -127,7 +127,7 @@ export function TranscriptPanel({
                     )}
                     {session && transcript?.session_id && (entries.length > 1 || calls.calls.length > 0 || tools) && (
                         // The session is what the transcript is; the modes after the rule are how it is shown.
-                        <span aria-hidden className="hidden h-4 w-px bg-border sm:inline" />
+                        <span aria-hidden className="hidden h-4 w-px bg-border @lg:inline" />
                     )}
                     <span className="flex items-center gap-1">
                         {entries.length > 1 && <OrderToggle list="transcript" />}
@@ -279,7 +279,7 @@ function Find({
     rows: number
 }) {
     return (
-        <search className="ml-auto w-full sm:w-72">
+        <search className="ml-auto w-full @lg:w-72">
             <SearchField
                 size="sm"
                 aria-label="Find lines in the transcript"
@@ -443,10 +443,11 @@ function Tool({
                 >
                     <When at={entry.at} start={start} />
                     <RunDot state={failed ? 'failed' : 'done'} />
-                    <span className="w-32 shrink-0 truncate font-mono text-xs sm:w-56" title={entry.tool}>
+                    {/* The name takes its own width up to 14rem and gives way first; the command takes the rest. */}
+                    <span className="max-w-56 truncate font-mono text-xs" title={entry.tool}>
                         <MarkedText text={entry.tool} words={words} />
                     </span>
-                    <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="flex min-w-40 flex-1 flex-col">
                         {/* A shell call's title is what the agent said it was for: the command is what it did. */}
                         <span className="truncate font-mono text-xs" title={entry.title ?? did}>
                             <MarkedText text={did} words={words} />
@@ -618,7 +619,7 @@ function CallRow({
                     {end === null && <Chip word="unfinished" />}
                     {end?.reason && end.reason !== 'tool-calls' && <Chip word={end.reason} />}
                     <span
-                        className="readout hidden shrink-0 text-xs text-muted-foreground sm:inline"
+                        className="readout hidden shrink-0 text-xs text-muted-foreground @lg:inline"
                         title={step === null ? undefined : `in: ${signed(step)} on call ${call.n - 1}`}
                     >
                         {split === null
@@ -656,9 +657,9 @@ function CallBody({
     split: TranscriptTokens | null
 }) {
     return (
-        // On a narrow screen the body takes the row's whole width; on a wider one it starts under the text.
+        // In a narrow panel the body takes the row's whole width; in a wider one it starts under the text.
         <RowGrid kind="transcript" className="pb-3" data-testid="transcript-call-body">
-            <RowLine from="text" className="flex flex-col gap-3 max-sm:col-[time/end]">
+            <RowLine from="text" className="flex flex-col gap-3 @max-lg:col-[time/end]">
                 <section className="flex flex-col gap-2" aria-label={`call ${call.n} input`}>
                     <Heading
                         label="input"

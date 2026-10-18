@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
+import type { Locator } from '@playwright/test'
 
-import { settled, signIn } from './helpers.ts'
+import { FULL_RAIL, settled, signIn, windowWidth } from './helpers.ts'
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
@@ -298,6 +299,36 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
     await expect(split).toBeHidden()
 })
 
+test("a tool call's name takes its own width, so its command keeps the rest on either side of the rail's step", async ({
+    page,
+}) => {
+    await page.goto('ticks/2')
+    await settled(page)
+    await windowWidth(page, 820)
+    const transcript = page.getByTestId('transcript')
+    const dispatch = transcript.getByTestId('transcript-tool').filter({ hasText: 'canopy dispatch ABC-104' })
+    const command = dispatch.locator('summary').getByText('canopy dispatch ABC-104', { exact: false })
+    const refusal = dispatch.locator('summary').getByText(/^dispatch refused/u)
+    // On half a monitor the command keeps 300px, and its refusal reads to what refused it.
+    await expect.poll(async () => (await command.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(300)
+    expect(await cutAfter(refusal, 'run 43 is still working')).toBeLessThanOrEqual(0)
+    // A short name takes no more than its own width.
+    const bash = transcript
+        .getByTestId('transcript-tool')
+        .filter({ hasText: 'canopy decide ABC-101' })
+        .locator('summary')
+        .getByTitle('bash', { exact: true })
+    expect(await spare(bash)).toBeLessThanOrEqual(1)
+
+    // The whole rail takes its width from the pane, and the command gives up that much and no more.
+    await windowWidth(page, FULL_RAIL - 1)
+    const before = { panel: await widthOf(transcript), command: await widthOf(command) }
+    await windowWidth(page, FULL_RAIL)
+    const after = { panel: await widthOf(transcript), command: await widthOf(command) }
+    expect(before.panel - after.panel).toBeGreaterThan(100)
+    expect(Math.abs(before.command - after.command - (before.panel - after.panel))).toBeLessThanOrEqual(1)
+})
+
 test("a tick's output shows as written when asked, stderr included, and a tick that kept none says so", async ({
     page,
 }) => {
@@ -402,3 +433,35 @@ test('a run that does not exist, or a path that names none, says so', async ({ p
     await page.goto('runs/two')
     await expect(page.getByText("not a run: a run's id is a positive number")).toBeVisible()
 })
+
+/** An element's width on the page. */
+async function widthOf(locator: Locator): Promise<number> {
+    const box = await locator.boundingBox()
+    return box?.width ?? 0
+}
+
+/** How far past the element's right edge the end of `text` in it falls, cut off: 0 or less when it shows whole. */
+function cutAfter(locator: Locator, text: string): Promise<number> {
+    return locator.evaluate((el, wanted) => {
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT)
+        for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
+            const at = node.textContent?.indexOf(wanted) ?? -1
+            if (at >= 0) {
+                const range = document.createRange()
+                range.setStart(node, at)
+                range.setEnd(node, at + wanted.length)
+                return range.getBoundingClientRect().right - el.getBoundingClientRect().right
+            }
+        }
+        return Number.POSITIVE_INFINITY
+    }, text)
+}
+
+/** How much wider the element is than the text it holds. */
+function spare(locator: Locator): Promise<number> {
+    return locator.evaluate((el) => {
+        const range = document.createRange()
+        range.selectNodeContents(el)
+        return el.getBoundingClientRect().width - range.getBoundingClientRect().width
+    })
+}

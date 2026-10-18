@@ -157,8 +157,9 @@ Rules:
   atop the strip opens the whole rail, footer included, the same column, as a sheet over the page (`Sheet`, a Radix
   dialog: Escape or a click outside closes it, and the focus goes back to the button). It opens in its search box, so
   `/` opens it too. A link followed or a search sent from it closes it, since the page it covered is leaving. The
-  breakpoint is the viewport's, as the rail's place is the window's; what a list shows is its own width's (Primitives,
-  `ListRow`). Half a monitor, about 820px, is the narrowest window the UI is made for; a phone's is not.
+  breakpoint is the viewport's, as the rail's place is the window's; what a list shows, and every other layout step
+  inside the pane, is its own width's (Primitives). Half a monitor, about 820px, is the narrowest window the UI is
+  made for; a phone's is not.
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
@@ -425,6 +426,14 @@ each fun setting under a `canopy-*` key of its own, all synced across tabs.
 Every list and detail page is built from the same few pieces, so a new page lines up with the others without anyone
 measuring. A page that needs something they do not offer extends them here first; it never builds a row, a field
 list, an empty state, or a skeleton by hand.
+
+**A layout step inside the content pane is a container query, never a viewport breakpoint** (`@container` on the
+pane's part or its `Panel`, then `@min-[…]:` or a named size). The rail takes 13rem from the pane at `lg`, so a step
+keyed to the window is tightest just past it: going from a 1023px window to a 1024px one makes the pane about 150px
+narrower. A step comes in once the pane has room for it and what it sits beside at full size, so nothing narrows as
+the window widens: the worktrees counters stand four across once each gets 11rem, else two by two, never three and
+one. The wide screens' second column (Shape and space) stays the window's, at `2xl`, where the rail is whole either
+side.
 
 - **`ListRow`** (`src/components/rows.tsx`): a list's row, a CSS grid in its kind's columns (`ROW_COLUMNS` in
   `src/lib/rows.ts`). Each column is a named grid line and a width; every one is fixed but one free column, which
@@ -718,9 +727,10 @@ list, an empty state, or a skeleton by hand.
 - **A transcript** (`TranscriptPanel`) is a session's events as rows, in the order the runtime printed them, each with
   its time from the session's first event (`+12:05`; the local time on hover). The agent's text keeps its line breaks,
   its reasoning muted and italic under a `thinking` label. A tool call is a native `<details>` whose line says what it
-  did and how it ended (`src/lib/transcript.ts`): a `RunDot` in `done` or `failed`, the tool's name, and in monospace a
-  shell call's command (the agent's description of it on hover), else the runtime's title, else its input's short values
-  as `key=value`; under that, muted, its error's first line in `status-failed`, or an output of one short line that is
+  did and how it ended (`src/lib/transcript.ts`): a `RunDot` in `done` or `failed`, the tool's name at its own width up
+  to 14rem, the first to give way, and in monospace a shell call's command (the agent's description of it on hover),
+  else the runtime's title, else its input's short values as `key=value`; under that, muted, its error's first line in
+  `status-failed`, or an output of one short line that is
   not JSON; then how long it took. A canopy command that printed a refusal is `failed`, with a `refused: <guard>` chip
   in `status-failed`. It opens to its input and its output (or error), JSON indented and colored as a tick's output is
   with Pretty on (below), every value as written, in monospace blocks at most 24rem tall. A model call is a muted line
@@ -791,12 +801,15 @@ list, an empty state, or a skeleton by hand.
 - **The guide** (`/guide/PAGE`, `src/lib/guide.ts`, `GuideText`) is the operator's documentation, a page each, as
   Markdown in `src/guide/` (docs/design/CONVERSATIONS.md §22), laid out as a documentation site rather than in panels.
   On the left, the pages by group (`SOURCES`), each group a heading over its pages on a hairline, the page shown in
-  the accent on an accent stroke; under `lg` the same list folds into a `Guide pages` toggle above the page. In the
-  middle, the article at `max-w-3xl`: the group as the header's trail, the title, and the lead, then the body at
-  `text-base` with soft line breaks read as spaces, each `##` a section under a hairline and each heading a `#` link to
-  itself on hover, and at its foot Previous and Next, the pages either side in the sidebar's order. On the right from
-  `xl`, `On this page`, its `##` headings. The sidebar and contents stick as the article scrolls. `/guide` opens the
-  first page. It reads what rich text reads, `##` and `###` headings as real headings, each with its anchor as its id,
+  the accent on an accent stroke, once the pane holds it and the article's whole measure (62.5rem, a container query
+  as the plan editor's, so the rail's width counts); short of that the same list folds into a `Guide pages` toggle
+  above the page. In the middle, the article at `max-w-3xl`: the group as the header's trail, the title, and the lead,
+  then the body at `text-base` with soft line breaks read as spaces, each `##` a section under a hairline and each
+  heading a `#` link to itself on hover, and at its foot Previous and Next, the pages either side in the sidebar's
+  order. On the right, once the pane holds that too (76.5rem), `On this page`, its `##` headings. So the article never
+  narrows as the window widens: a column comes in only where the article keeps its measure. The sidebar and contents
+  stick as the article scrolls. `/guide` opens the first page. It reads what rich text reads, `##` and `###` headings
+  as real headings, each with its anchor as its id,
   and labelled links in the accent, underlined: `[text](page)` or `(page#heading)` to the guide, `(#heading)` on this
   page, `(/runs)` to a section, and `(https://...)` to the web in a new tab. A link to anything else stays characters,
   and `guide.test.ts` fails on it. A page opens with `# Title` and then a lead of a sentence or two, says what the
