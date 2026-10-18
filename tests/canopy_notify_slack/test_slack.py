@@ -626,3 +626,12 @@ def test_a_save_keeps_the_scopes_of_other_channels_and_repositories(tmp_path: Pa
     # The other scope's fingerprints are not this one's to skip.
     assert slack.Threads.load(path, "C1", "/r/api").posted == set()
     assert sorted(p.name for p in tmp_path.iterdir()) == ["slack-threads.json", "slack-threads.json.lock"]
+
+
+def test_finishing_forgets_only_earlier_days(tmp_path: Path) -> None:
+    threads = slack.Threads.load(tmp_path / "slack-threads.json", "C1", "/r/api")
+    threads.threads = {"OLD": ("2026-09-23", "1.1"), "NOW": ("2026-09-24", "1.2"), "LATER": ("2026-09-25", "1.3")}
+    threads.posted = {"f" * 64}
+    threads.finish("2026-09-24")
+    assert threads.threads == {"NOW": ("2026-09-24", "1.2"), "LATER": ("2026-09-25", "1.3")}
+    assert threads.posted == set()

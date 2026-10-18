@@ -728,7 +728,8 @@ class Threads:
             SinkError: The file cannot be written.
         """
         self.posted.clear()
-        self.threads = {key: thread for key, thread in self.threads.items() if thread[0] == day}
+        # ISO dates order as strings. A later day's thread stays, should a delivery carry an earlier clock.
+        self.threads = {key: thread for key, thread in self.threads.items() if thread[0] >= day}
         self.save()
 
 
