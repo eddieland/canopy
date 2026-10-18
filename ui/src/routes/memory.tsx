@@ -22,6 +22,7 @@ import { TicketLink } from '@/components/ticket-link'
 import { TicketTitle } from '@/components/ticket-title'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ticketNotesUsedText } from '@/lib/memory'
+import type { TierModes } from '@/lib/memory'
 import { rowLineFrom } from '@/lib/rows'
 import { cn } from '@/lib/utils'
 
@@ -42,7 +43,7 @@ function MemoryPage() {
     return (
         <>
             <PageHeader title="Memory">
-                What workers learned, the proposals waiting on you, and the lessons every run reads. Decide them here or
+                What workers learned, the proposals waiting on you, and the lessons you promoted. Decide them here or
                 with <code className="font-mono text-xs">canopy memory</code>.
             </PageHeader>
             {data === undefined ? (
@@ -65,6 +66,7 @@ function MemoryPage() {
 function Tiers({ overview, state }: { overview: MemoryOverview; state: MemoryState }) {
     const { tickets, proposals, lessons, lessons_digest: digest } = overview
     const acting = state.lessons.mode !== 'off'
+    const modes = { ticket_notes: state.ticket_notes.mode, lessons: state.lessons.mode }
     return (
         // Wide, the queue keeps the width and the tickets with notes sit beside it, in the narrow order's last place.
         <div
@@ -75,9 +77,9 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
         >
             <div className="flex flex-col gap-6">
                 <Proposals proposals={proposals} acting={acting} />
-                <Lessons lessons={lessons} digest={digest} tier={state.lessons} acting={acting} />
+                <Lessons lessons={lessons} digest={digest} tier={state.lessons} acting={acting} modes={modes} />
             </div>
-            <TicketNotesPanel tickets={tickets} tier={state.ticket_notes} acting={acting} />
+            <TicketNotesPanel tickets={tickets} tier={state.ticket_notes} acting={acting} modes={modes} />
         </div>
     )
 }
@@ -135,11 +137,13 @@ function Lessons({
     digest,
     tier,
     acting,
+    modes,
 }: {
     lessons: MemoryEntry[]
     digest: MemoryDigest | null
     tier: MemoryTier
     acting: boolean
+    modes: TierModes
 }) {
     const [said, setSaid] = useState<string | null>(null)
     const below = new Map(
@@ -158,7 +162,7 @@ function Lessons({
                 <Empty>no lessons yet: promote a proposal above, or a ticket&apos;s note from its page</Empty>
             ) : (
                 <PanelScroll label="Lessons">
-                    <MemoryRows entries={lessons} digest={digest} below={below} />
+                    <MemoryRows entries={lessons} digest={digest} below={below} modes={modes} />
                 </PanelScroll>
             )}
             {digest !== null && <ServedDigest digest={digest} />}
@@ -185,7 +189,17 @@ function ServedDigest({ digest }: { digest: MemoryDigest }) {
  * notes they hold beside them, since a row opens to several. While `acting`, each opened note is promoted or
  * forgotten from its row, and what that did is said under the band.
  */
-function TicketNotesPanel({ tickets, tier, acting }: { tickets: TicketNotes[]; tier: MemoryTier; acting: boolean }) {
+function TicketNotesPanel({
+    tickets,
+    tier,
+    acting,
+    modes,
+}: {
+    tickets: TicketNotes[]
+    tier: MemoryTier
+    acting: boolean
+    modes: TierModes
+}) {
     const [said, setSaid] = useState<string | null>(null)
     const notes = tickets.reduce((sum, t) => sum + t.count, 0)
     return (
@@ -204,7 +218,12 @@ function TicketNotesPanel({ tickets, tier, acting }: { tickets: TicketNotes[]; t
                 <PanelScroll label="Ticket notes">
                     <ul className="divide-y">
                         {tickets.map((t) => (
-                            <TicketNotesRow key={t.ticket_key} notes={t} onSaid={acting ? setSaid : undefined} />
+                            <TicketNotesRow
+                                key={t.ticket_key}
+                                notes={t}
+                                onSaid={acting ? setSaid : undefined}
+                                modes={modes}
+                            />
                         ))}
                     </ul>
                 </PanelScroll>
@@ -218,7 +237,15 @@ function TicketNotesPanel({ tickets, tier, acting }: { tickets: TicketNotes[]; t
  * Its notes open under it, read only once opened (closed, the content is not mounted), so a workspace of many tickets
  * sends their counts and not every note.
  */
-function TicketNotesRow({ notes, onSaid }: { notes: TicketNotes; onSaid: ((said: string) => void) | undefined }) {
+function TicketNotesRow({
+    notes,
+    onSaid,
+    modes,
+}: {
+    notes: TicketNotes
+    onSaid: ((said: string) => void) | undefined
+    modes: TierModes
+}) {
     const [open, setOpen] = useState(false)
     const what = `${notes.count} ${notes.count === 1 ? 'note' : 'notes'}`
     return (
@@ -233,7 +260,7 @@ function TicketNotesRow({ notes, onSaid }: { notes: TicketNotes; onSaid: ((said:
                 <span className="truncate text-right text-xs text-muted-foreground">{ticketNotesUsedText(notes)}</span>
                 <Age at={notes.latest_at} variant="ago" className="text-right" />
                 <CollapsibleContent className={cn('-mx-3 -mb-2.5 border-t', rowLineFrom('key'))}>
-                    <OpenNotes ticketKey={notes.ticket_key} onSaid={onSaid} />
+                    <OpenNotes ticketKey={notes.ticket_key} onSaid={onSaid} modes={modes} />
                 </CollapsibleContent>
             </ListRow>
         </Collapsible>
@@ -244,7 +271,15 @@ function TicketNotesRow({ notes, onSaid }: { notes: TicketNotes; onSaid: ((said:
  * A ticket's notes in force, under its row: each marked when the cap leaves it out of its next run's prompt, and with
  * `onSaid`, each with its verbs, Promote and Forget.
  */
-function OpenNotes({ ticketKey, onSaid }: { ticketKey: string; onSaid: ((said: string) => void) | undefined }) {
+function OpenNotes({
+    ticketKey,
+    onSaid,
+    modes,
+}: {
+    ticketKey: string
+    onSaid: ((said: string) => void) | undefined
+    modes: TierModes
+}) {
     const { data } = useQuery(ticketMemoryQuery(ticketKey))
     if (data === undefined) {
         return <PanelSkeleton rows={1} />
@@ -256,5 +291,5 @@ function OpenNotes({ ticketKey, onSaid }: { ticketKey: string; onSaid: ((said: s
     const below = new Map(
         onSaid === undefined ? [] : inForce.map((n) => [n.id, <NoteActions key={n.id} note={n} onSaid={onSaid} />]),
     )
-    return <MemoryRows entries={inForce} digest={data.digest} below={below} />
+    return <MemoryRows entries={inForce} digest={data.digest} below={below} modes={modes} />
 }

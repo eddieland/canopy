@@ -1,4 +1,4 @@
-import type { MemoryEntry } from '@/api/types'
+import type { MemoryEntry, MemoryTier } from '@/api/types'
 import { age } from '@/lib/time'
 
 /**
@@ -58,17 +58,38 @@ export function usedText(entry: Pick<MemoryEntry, 'use_count' | 'last_used_at'>)
 
 /**
  * Where a memory stands, in the words a row leads with: its status, but a lesson in force that a run reported wrong is
- * `wrong`, and one past its review date `due`, since each calls for the operator.
+ * `wrong`, and one past its review date `due`, since each calls for the operator; and one in force while its tier only
+ * records is `recorded`, since no run reads it, so it never reads as in force (DESIGN §28).
  */
-export type MemoryStand = MemoryEntry['status'] | 'wrong' | 'due'
+export type MemoryStand = MemoryEntry['status'] | 'wrong' | 'due' | 'recorded'
 
-/** Where `entry` stands at `now`, as `MemoryStand` says: wrong before due, since a wrong lesson misleads every run. */
+/** Each tier's mode, as the loop's state carries it, which says whether a memory in force reaches a run. */
+export interface TierModes {
+    /** Ticket notes' mode. */
+    ticket_notes: MemoryTier['mode']
+    /** Lessons' and proposals' mode. */
+    lessons: MemoryTier['mode']
+}
+
+/** The mode of the tier `scope` is in: a note's is ticket notes', a proposal's and a lesson's is lessons'. */
+export function tierMode(scope: MemoryEntry['scope'], modes: TierModes): MemoryTier['mode'] {
+    return scope === 'ticket' ? modes.ticket_notes : modes.lessons
+}
+
+/**
+ * Where `entry` stands at `now`, as `MemoryStand` says: recorded before anything a run would report, since no run read
+ * it, then wrong before due, since a wrong lesson misleads every run. With no `mode`, its tier is taken as in use.
+ */
 export function memoryStand(
     entry: Pick<MemoryEntry, 'status' | 'wrong_run_id' | 'review_at'>,
     now: number,
+    mode: MemoryTier['mode'] = 'use',
 ): MemoryStand {
     if (entry.status !== 'active') {
         return entry.status
+    }
+    if (mode !== 'use') {
+        return 'recorded'
     }
     if (entry.wrong_run_id !== null) {
         return 'wrong'

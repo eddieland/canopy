@@ -144,6 +144,12 @@ describe('MemoryRows', () => {
         expect(screen.getByText(/^reported wrong by/u).textContent).toMatch(/^reported wrong by run:44 \S+ ago$/u)
     })
 
+    it('reads a memory in force under a recording tier as recorded, by its own tier', async () => {
+        const lesson = { ...NOTE, id: 13, scope: 'lesson' as const }
+        await renderRows(<MemoryRows entries={[NOTE, lesson]} modes={{ ticket_notes: 'use', lessons: 'record' }} />)
+        expect(screen.getAllByTestId('memory-stand').map((s) => s.textContent)).toEqual(['active', 'recorded'])
+    })
+
     it('says a deleted text was deleted, and nothing of use for a memory no run relied on', async () => {
         await renderRows(<MemoryRows entries={[{ ...NOTE, text: null, use_count: 0, last_used_at: null }]} />)
         expect(screen.getByText('text deleted')).toBeDefined()
