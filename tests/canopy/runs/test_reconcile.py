@@ -30,6 +30,7 @@ from tests.canopy.helpers import (
     waits,
     worker_does,
 )
+from tests.canopy.scenario_helpers import Scenario, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool, executable, pool_state
 
 
@@ -75,39 +76,45 @@ def last_tick_decisions(conn: sqlite3.Connection) -> list[tuple[str | None, str,
     return [(d.ticket_key, d.action, d.rationale) for d in db.decisions_for_tick(conn, tick.id)]
 
 
-def test_dead_worker_is_crashed_and_its_slot_returned(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    conn: sqlite3.Connection,
+def test_a_run_whose_process_died_is_crashed_its_worker_killed_and_its_slot_returned(
+    scenario: Scenario, treehouse_state: Path, git_pool: GitPool
 ) -> None:
-    with overseer_does(*waits("PROJ-1", "PROJ-2", "PROJ-3")):
-        dead = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=DEAD_PID)
-        never_started = add_run(conn, "PROJ-2", lease(treehouse_state, "PROJ-2"), pid=None)
-        live = add_run(conn, "PROJ-3", lease(treehouse_state, "PROJ-3"), pid=os.getpid())
+    dies = scenario.starts(worker=pushes())
+    lives = scenario.starts(dispatches("PROJ-2"), worker=pushes("agent/PROJ-2-work", "PROJ-2: the change"))
+    left_behind = int(dies.row["worker_pid"])
+    dies.dies()
+    assert procs.alive(left_behind)  # the worker leads its own group, so it outlives the run's process
 
+    ticked = scenario.tick(*waits("PROJ-1", "PROJ-2"))
+    assert ticked.actions == ["attention:crashed", "queried", "wait", "wait"]
+    crashed = dies.row
+    assert crashed["status"] == "crashed"
+    assert json.loads(crashed["result_json"]) == {"harness": "the worker process is gone"}
+    deadline = time.monotonic() + 30
+    while procs.alive(left_behind) and time.monotonic() < deadline:
+        time.sleep(0.05)
+    assert not procs.alive(left_behind)
+    assert git_pool.remote_head("agent/PROJ-1-work") is None  # killed before it pushed
+    assert [s["status"] for s in pool(treehouse_state)] == ["available", "leased"]
+    assert scenario.state()["capacity"]["running"] == 1
+    assert scenario.ticket_state("PROJ-1")["last_run"]["status"] == "crashed"  # for the overseer
+    assert scenario.attention() == [("PROJ-1", "crashed")]
+
+    assert lives.finishes().status == "done"  # a run that lives is left to end as it would have
+    assert git_pool.remote_head("agent/PROJ-2-work") is not None
+
+
+def test_a_run_never_claimed_is_crashed_and_its_slot_returned(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, conn: sqlite3.Connection
+) -> None:
+    with overseer_does(*waits("PROJ-1")):
+        never_started = add_run(conn, "PROJ-1", lease(treehouse_state, "PROJ-1"), pid=None)
         assert main(["tick"]) == 0
-        for run_id in (dead, never_started):
-            run = present(db.get_run(conn, run_id))
-            assert run["status"] == "crashed"
-            assert json.loads(run["result_json"]) == {"harness": "the worker process is gone"}
-        still = present(db.get_run(conn, live))
-        assert still["status"] == "running"
-        assert [s["status"] for s in pool(treehouse_state)] == ["available", "available", "leased"]
-
-        items = [(k, a) for k, a, _ in last_tick_decisions(conn)]
-        assert items == [
-            ("PROJ-1", "attention:crashed"),
-            ("PROJ-2", "attention:crashed"),
-            (None, "queried"),
-            ("PROJ-1", "wait"),
-            ("PROJ-2", "wait"),
-            ("PROJ-3", "wait"),
-        ]
-        [prompt] = [r["argv"][-1] for r in agent_runs(agent_log)]
-        assert '"running":1' in prompt
-        assert '"available":1' in prompt
-        assert '"status":"crashed"' in prompt  # the ticket's last run, for the overseer
+    run = present(db.get_run(conn, never_started))
+    assert run["status"] == "crashed"
+    assert json.loads(run["result_json"]) == {"harness": "the worker process is gone"}
+    assert [s["status"] for s in pool(treehouse_state)] == ["available"]
+    assert last_tick_decisions(conn)[0][:2] == ("PROJ-1", "attention:crashed")
 
 
 def test_a_worker_is_alive_while_it_holds_its_lifelock_whatever_its_pid(
