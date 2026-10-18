@@ -1,20 +1,50 @@
 import type { ReactNode } from 'react'
 
-import type { MemoryDigest, MemoryEntry, MemoryOrigin, MemoryProposal, MemoryTier, RunMemory } from '@/api/types'
+import type {
+    MemoryDigest,
+    MemoryEntry,
+    MemoryOrigin,
+    MemoryProposal,
+    MemoryTier,
+    RunMemory,
+    RunState,
+} from '@/api/types'
 import { Age } from '@/components/age'
 import { CopyButton } from '@/components/copy-button'
 import { RowLine, ListRow } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
-import { Chip, Word } from '@/components/status'
+import { Chip, RunDot, Word } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
-import { Timestamp } from '@/components/timestamp'
-import { lapsesText, leftOutText, memorySegments, usedText } from '@/lib/memory'
+import { lapsesText, leftOutText, memorySegments, memoryStand, reviewText, usedText } from '@/lib/memory'
+import type { MemoryStand } from '@/lib/memory'
 import { memoryRef } from '@/lib/refs'
+import { RUN_TEXT } from '@/lib/run-state'
 import { localTime, useNow } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
 // A proposal this close to lapsing undecided says so in the color of what waits on the operator.
 const LAPSING_SOON_MS = 2 * 24 * 60 * 60 * 1000
+
+// Each standing's run state, for its dot and its word's color: what calls for the operator in the colors of what is
+// broken and what waits on them, a memory in force as done, one out of force as stopped.
+const STAND_STATE: Record<MemoryStand, RunState> = {
+    wrong: 'failed',
+    due: 'blocked',
+    pending: 'blocked',
+    active: 'done',
+    superseded: 'stopped',
+    invalid: 'stopped',
+}
+
+// What each standing means, on hover, where the journal gives no reason of its own.
+const STAND_TITLE: Record<MemoryStand, string> = {
+    wrong: 'a run reported it wrong: renew it or forget it',
+    due: 'its review date has come: renew it or forget it',
+    pending: 'waiting on you: promote it or reject it',
+    active: 'in force',
+    superseded: 'replaced by a later one under its key',
+    invalid: 'no longer in force',
+}
 
 /**
  * What a worker wrote, or the operator for a lesson, as plain text (DESIGN §28): never Markdown or a link, and every
@@ -56,15 +86,18 @@ export function MemoryBand({ tier, name }: { tier: MemoryTier; name: string }) {
 }
 
 /**
- * Memories, one row each: where it stands, id, key, how runs used it, and when it was written; then what it says,
- * plain, and where it came from. `ticket` names each note's ticket, for a list across tickets; `below` adds what goes
- * under a row, by its id, such as a proposal's provenance; `ownRun` leaves out the run whose page it is; `digest` is
+ * Memories, one row each, in the order every list reads: where it stands, a dot and a word, so a lesson reported wrong
+ * or due for review shows at the left edge; its id; with `ticket`, its ticket, for a list across tickets; its
+ * repository; its key; how many runs relied on it, once any has; and when it was written. Then what it says, plain,
+ * and one line of where it came from. `facts` adds to that line by a row's id, such as how a proposal's run ended;
+ * `below` adds what goes under a row, such as its verbs; `ownRun` leaves out the run whose page it is; `digest` is
  * what a run is served of the entries' tier, so a row in force that its cap leaves out says so; `cited` is what the
  * run whose page it is said of each, so a row it relied on or found wrong says so.
  */
 export function MemoryRows({
     entries,
     ticket = false,
+    facts,
     below,
     ownRun,
     digest,
@@ -72,31 +105,42 @@ export function MemoryRows({
 }: {
     entries: MemoryEntry[]
     ticket?: boolean
+    facts?: ReadonlyMap<number, ReactNode>
     below?: ReadonlyMap<number, ReactNode>
     ownRun?: number
     digest?: MemoryDigest | null | undefined
     cited?: Pick<RunMemory, 'used' | 'wrong'>
 }) {
+    const now = useNow()
     const served = new Set(digest?.ids)
     return (
         <ul className="divide-y" data-testid="memory-rows">
             {entries.map((entry) => (
-                <ListRow key={entry.id} kind="memory" className="group/copy" data-testid={`memory-${entry.id}`}>
-                    <span className="truncate text-xs" title={entry.why ?? undefined}>
-                        <Word word={entry.status} />
-                    </span>
+                <ListRow
+                    key={entry.id}
+                    kind={ticket ? 'memory-across' : 'memory'}
+                    className="group/copy"
+                    data-testid={`memory-${entry.id}`}
+                >
+                    <MemoryStanding entry={entry} now={now} />
                     {/* Copied, since Forget asks for it typed and the CLI's verbs take it. */}
                     <span className="flex min-w-0 items-center gap-0.5">
                         <span className="readout text-xs text-muted-foreground">{memoryRef(entry.id)}</span>
                         <CopyButton text={memoryRef(entry.id)} label={memoryRef(entry.id)} reveal />
                     </span>
-                    <span className="flex min-w-0 items-center gap-2">
-                        <span className="truncate font-mono text-xs">{entry.key}</span>
-                        {ticket && entry.ticket_key !== null && <TicketLink ticketKey={entry.ticket_key} />}
-                        {entry.repo !== null && <Chip>{entry.repo}</Chip>}
+                    {ticket && (
+                        <span className="min-w-0">
+                            {entry.ticket_key !== null && <TicketLink ticketKey={entry.ticket_key} />}
+                        </span>
+                    )}
+                    <span className="flex min-w-0">
+                        {entry.repo !== null && <Chip className="min-w-0 shrink" word={entry.repo} />}
+                    </span>
+                    <span className="truncate font-mono text-xs" title={entry.key}>
+                        {entry.key}
                     </span>
                     <span
-                        className="truncate text-xs text-muted-foreground"
+                        className="truncate text-right text-xs text-muted-foreground"
                         title={entry.last_used_at === null ? undefined : `last at ${localTime(entry.last_used_at)}`}
                     >
                         {usedText(entry)}
@@ -109,12 +153,16 @@ export function MemoryRows({
                             <MemoryText text={entry.text} />
                         )}
                     </RowLine>
-                    <RowLine from="key" className="flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+                    <RowLine
+                        from="key"
+                        className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground"
+                    >
                         {entry.run_id !== null && entry.run_id !== ownRun && (
                             <span>
                                 by <RunLink id={entry.run_id} />
                             </span>
                         )}
+                        {facts?.get(entry.id)}
                         {entry.head !== null && <span className="font-mono">at {entry.head}</span>}
                         {entry.origin !== null && <Origin origin={entry.origin} />}
                         {cited?.used.includes(entry.id) === true && <span>this run relied on it</span>}
@@ -126,9 +174,12 @@ export function MemoryRows({
                             <span>{leftOutText(digest.served)}</span>
                         )}
                         {entry.why !== null && <span>{entry.why}</span>}
-                        {entry.review_at !== null && (
-                            <span>
-                                review at <Timestamp at={entry.review_at} />
+                        {entry.review_at !== null && entry.status === 'active' && (
+                            <span
+                                className={cn(Date.parse(entry.review_at) <= now && 'text-status-blocked')}
+                                title={`at ${localTime(entry.review_at)}`}
+                            >
+                                {reviewText(entry.review_at, now)}
                             </span>
                         )}
                         {entry.wrong_run_id !== null && (
@@ -147,6 +198,26 @@ export function MemoryRows({
                 </ListRow>
             ))}
         </ul>
+    )
+}
+
+/**
+ * Where a memory stands, a row's leading column: a dot in its state's color and its word, in that color, the reason on
+ * hover. A lesson in force that a run reported wrong reads `wrong`, and one past its review date `due`, since those
+ * call for the operator; a proposal is `pending` on them too.
+ */
+function MemoryStanding({ entry, now }: { entry: MemoryEntry; now: number }) {
+    const stand = memoryStand(entry, now)
+    const state = STAND_STATE[stand]
+    return (
+        <span
+            className={cn('flex min-w-0 items-center gap-1.5 font-mono text-xs', RUN_TEXT[state])}
+            title={entry.why ?? STAND_TITLE[stand]}
+            data-testid="memory-stand"
+        >
+            <RunDot state={state} />
+            <span className="truncate">{stand}</span>
+        </span>
     )
 }
 
@@ -228,20 +299,21 @@ export function MemoryDigestView({
 }
 
 /**
- * Where a proposal came from, under its row: how its run ended, its ticket's state, when it lapses undecided (in
- * `status-blocked` in its last two days), and a private run's warning.
+ * What a proposal's line of provenance adds, after the run that wrote it (`MemoryRows`' `facts`): how its run ended,
+ * whether its ticket is done, when it lapses undecided (in `status-blocked` in its last two days), and, for a private
+ * ticket's run, a `private` chip that says why on hover.
  */
-export function ProposalProvenance({ proposal }: { proposal: MemoryProposal }) {
+export function ProposalFacts({ proposal }: { proposal: MemoryProposal }) {
     const now = useNow()
     const soon = Date.parse(proposal.expires_at) - now < LAPSING_SOON_MS
     return (
-        <RowLine from="key" className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+        <>
             {proposal.run_kind !== null && (
                 <span>
-                    its run: <Word word={proposal.run_kind} />, ended <Word word={proposal.run_status ?? 'unknown'} />
+                    <Word word={proposal.run_kind} />, ended <Word word={proposal.run_status ?? 'unknown'} />
                 </span>
             )}
-            <span>{proposal.ticket_done ? 'its ticket is done' : 'its ticket is not done yet'}</span>
+            <span>{proposal.ticket_done ? 'ticket done' : 'ticket not done yet'}</span>
             <span
                 className={cn(soon && 'text-status-blocked')}
                 title={`at ${localTime(proposal.expires_at)}`}
@@ -249,7 +321,14 @@ export function ProposalProvenance({ proposal }: { proposal: MemoryProposal }) {
             >
                 {lapsesText(proposal.expires_at, now)}
             </span>
-            {proposal.private && <Chip tone="blocked">private: its text may hold what you kept off the tracker</Chip>}
-        </RowLine>
+            {proposal.private && (
+                <span
+                    title="its run worked a private ticket: its text may hold what you kept off the tracker"
+                    className="inline-flex"
+                >
+                    <Chip tone="blocked">private</Chip>
+                </span>
+            )}
+        </>
     )
 }

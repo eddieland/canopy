@@ -176,7 +176,11 @@ def _review_order(lesson: records.Memory) -> tuple[bool, str, str]:
 
 def _ticket_notes(found: memory.TicketNotes) -> TicketNotes:
     return TicketNotes(
-        ticket_key=found.ticket_key, count=found.count, used=found.used, latest_at=db.parse_time(found.latest_at)
+        ticket_key=found.ticket_key,
+        count=found.count,
+        used=found.used,
+        latest_at=db.parse_time(found.latest_at),
+        title=found.title,
     )
 
 

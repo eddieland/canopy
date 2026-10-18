@@ -183,24 +183,36 @@ export const ROW_COLUMNS = {
         ['age', AGE, 1],
     ],
     /**
-     * A note, proposal, or lesson (DESIGN §28): where it stands, its id, its key, how runs used it, and when it was
-     * written. What it says goes under its key.
+     * A note, proposal, or lesson (DESIGN §28): where it stands, its id, its repository, its key, how many runs relied
+     * on it, and when it was written. What it says goes under its key.
      */
     memory: [
         ['state', '6rem'],
         ['id', '6rem'],
+        ['repo', '5rem', 3],
         ['key', FREE],
-        ['use', '11rem', 1],
+        ['use', '8rem', 1],
+        ['age', AGE, 2],
+    ],
+    /** Memories across tickets, the proposals: a memory's columns, with its ticket after its id. */
+    'memory-across': [
+        ['state', '6rem'],
+        ['id', '6rem'],
+        ['ticket', '6rem', 4],
+        ['repo', '5rem', 3],
+        ['key', FREE],
+        ['use', '8rem', 1],
         ['age', AGE, 2],
     ],
     /**
-     * A ticket with notes in force, on the memory page: its key, what opens its notes under it, how runs used them, and
-     * when the newest was written.
+     * A ticket with notes in force, on the memory page: its key, what opens its notes under it, the ticket's title, how
+     * runs used them, and when the newest was written.
      */
     'memory-ticket': [
         ['key', '6rem'],
-        ['text', FREE],
-        ['use', '11rem', 1],
+        ['notes', '7rem'],
+        ['title', FREE],
+        ['use', '9rem', 1],
         ['age', AGE, 2],
     ],
     /** A transcript's row: its time, its mark, and its text, under which a tool call's body opens. */
@@ -333,15 +345,18 @@ const FROM: Record<RowColumn, string> = {
     label: 'col-[label/end]',
     mark: 'col-[mark/end]',
     name: 'col-[name/end]',
+    notes: 'col-[notes/end]',
     peak: 'col-[peak/end]',
     phase: 'col-[phase/end]',
     pr: 'col-[pr/end]',
+    repo: 'col-[repo/end]',
     run: 'col-[run/end]',
     severity: 'col-[severity/end]',
     slot: 'col-[slot/end]',
     state: 'col-[state/end]',
     subject: 'col-[subject/end]',
     text: 'col-[text/end]',
+    ticket: 'col-[ticket/end]',
     time: 'col-[time/end]',
     title: 'col-[title/end]',
     tokens: 'col-[tokens/end]',

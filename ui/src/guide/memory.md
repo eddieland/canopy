@@ -68,17 +68,24 @@ memory in use never share a label, so you never mistake one for the other.
 - **Lessons** are the ones you promoted, each with Renew and Forget, the ones a run reported wrong first, then by review
   date, so what needs you heads the list. Under them, folded until you open it, is the exact text every run is served
   from your lessons, or would be served at use while recording.
-- **Ticket notes** lists the tickets with notes in force, one row each with how many and how runs used them. Open a row
+- **Ticket notes** lists the tickets with notes in force, one row each with its title, how many notes it has, and how
+  many a run relied on. Open a row
   for its notes, each with Promote and Forget. A busy workspace has thousands, so the page reads a ticket's notes only
   once you ask. On a wide screen this panel sits beside the other two.
 
 ## Reading a memory
 
-Each memory is a row: where it stands (`active`, `pending`, `superseded`, or `invalid`, with the reason on hover), its
-ref, as `memory:42`, its key, how many runs used it, and how long ago it was written. Under that, what it says, and
-where it came from: the run that wrote it, the commit it was written against, and, for a lesson, what it was promoted
-from, its review date, and any run that reported it wrong, and when. Hover over a row for a button that copies its
-ref, which is what Forget and the CLI ask for.
+Each memory is a row, read left to right like every other list in canopy. First where it stands, a dot and a word:
+`active` for a memory in force, `pending` for a proposal waiting on you, `superseded` or `invalid` once it's out of
+force, and for a lesson that needs you, `due` once its review date has come or `wrong` once a run reported it wrong, so
+a glance down the left edge finds them. Hover over the word for the reason. Then its ref, as `memory:42`, with a button
+on hover that copies it, since that's what Forget and the CLI ask for; its ticket, on the proposals; its repository;
+its key; how many runs relied on it, once any has; and how long ago it was written.
+
+Under that, what it says, and one line of where it came from: the run that wrote it and the commit it was written
+against; for a proposal, how its run ended, whether its ticket is done, when it lapses (in amber in its last two days),
+and `private` if its run worked a private ticket; for a lesson, what it was promoted from, when it comes up for review,
+and any run that reported it wrong, and when.
 
 A worker's text is shown as plain text, never as Markdown or a link, unlike everything else a worker writes: a link in
 a note would be a worker's link you'd read as canopy's. Any character that hides text from you but not from a model,
