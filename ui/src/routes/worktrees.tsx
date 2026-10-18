@@ -25,9 +25,26 @@ import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useWholePath } from '@/hooks/use-whole-path'
 import { slotRef } from '@/lib/refs'
-import { overSize, poolShown, slotGroups, slotsRoot, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
+import { useNow } from '@/lib/time'
+import {
+    heldBy,
+    needsLook,
+    overSize,
+    poolsLine,
+    poolShown,
+    slotGroups,
+    slotsRoot,
+    WORKTREE_DOT,
+    WORKTREE_TEXT,
+} from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
 import { runKind } from '@/lib/words'
+
+// What the page shows, the same on every visit: the title's help, so the description is left for the pools' state.
+const HELP =
+    "Every slot in canopy's pools: what holds it, what it has checked out, and what runs in it. Paths inside the " +
+    'workspace are shown from its root. Read when the page opens, whenever a run starts or ends, and every ' +
+    `${WORKTREES_REFRESH_MS / 1000} seconds while it is open.`
 
 interface WorktreesSearch {
     state?: WorktreeState | undefined
@@ -48,7 +65,8 @@ export const Route = createFileRoute('/worktrees')({
 function WorktreesPage() {
     const { state } = Route.useSearch()
     const query = useQuery(worktreesQuery)
-    const { data, error, refetch } = query
+    const { data, dataUpdatedAt, error, refetch } = query
+    const now = useNow()
     const shown = data?.filter((pool) => poolShown(pool, state))
     // Only a read the operator asked for shows on the button: the timed one would make it flicker.
     const [reading, setReading] = useState(false)
@@ -62,10 +80,12 @@ function WorktreesPage() {
     }
     return (
         <>
-            <PageHeader title="Worktrees">
-                Every slot in canopy&apos;s treehouse pools: what holds it, what it has checked out, and what runs in
-                it. Paths inside the workspace are shown from its root. Read from treehouse when the page opens and
-                whenever a run starts or ends.
+            <PageHeader title="Worktrees" help={HELP}>
+                {data === undefined
+                    ? query.isPending
+                        ? 'reading the pools'
+                        : null
+                    : poolsLine(data, dataUpdatedAt, now)}
             </PageHeader>
             <PoolCounters pools={data} />
             {/* One panel of every pool, so the read that covers them all sits in its header, as All open does. */}
@@ -142,12 +162,10 @@ function FilterLink({ search, children }: { search: WorktreesSearch; children: R
 function PoolCounters({ pools }: { pools: Pool[] | undefined }) {
     const slots = pools?.flatMap((p) => p.worktrees)
     const count = (state: WorktreeState) => slots?.filter((w) => w.state === state).length
-    const dirty = count('dirty')
-    const broken = count('broken')
-    const look = dirty === undefined || broken === undefined ? undefined : dirty + broken
-    // A pool treehouse could not read is a slot count nobody knows: it shows here, in the failure color.
-    const unread = pools?.filter((p) => p.error !== null).length ?? 0
-    const lookTone: Tone = (broken ?? 0) > 0 || unread > 0 ? 'failed' : (dirty ?? 0) > 0 ? 'blocked' : 'plain'
+    const look = pools === undefined ? undefined : needsLook(pools)
+    // A broken slot, or a pool that could not be read, is a slot nobody can vouch for: the failure color.
+    const failed = (count('broken') ?? 0) > 0 || (pools ?? []).some((p) => p.error !== null)
+    const lookTone: Tone = failed ? 'failed' : (count('dirty') ?? 0) > 0 ? 'blocked' : 'plain'
     const repos = pools?.filter((p) => p.worktrees.some((w) => w.state === 'working')).length
     return (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-3" data-testid="pool-counters">
@@ -155,21 +173,16 @@ function PoolCounters({ pools }: { pools: Pool[] | undefined }) {
                 {repos === undefined ? null : `runs and reviews, in ${repos} ${repos === 1 ? 'pool' : 'pools'}`}
             </Counter>
             <Counter label="Held" value={count('held')} tone="stopped">
-                {slots === undefined ? null : 'by a shell, a sync, or another lease'}
+                {slots === undefined ? null : heldBy(slots)}
             </Counter>
-            <Counter label="Needs a look" value={look} tone={lookTone}>
-                {look === undefined ? null : looked(dirty ?? 0, broken ?? 0, unread)}
+            <Counter label="Needs a look" value={look?.count} tone={lookTone}>
+                {look?.text ?? null}
             </Counter>
             <Counter label="Free" value={count('idle')} tone="plain">
                 {slots === undefined ? null : `of ${slots.length} slots`}
             </Counter>
         </div>
     )
-}
-
-function looked(dirty: number, broken: number, unread: number): string {
-    const pools = unread === 0 ? '' : ` · ${unread} ${unread === 1 ? 'pool' : 'pools'} unread`
-    return `${dirty} dirty · ${broken} broken${pools}`
 }
 
 /**

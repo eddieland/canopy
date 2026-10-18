@@ -572,6 +572,10 @@ list, an empty state, or a skeleton by hand.
 - **Counters** (`Counter`, `src/components/counter.tsx`) head the attention page (running, waiting on you, and
   attention; the spend is in the rail) and the worktrees page (working, held, needs a look, free, across every pool).
   The line under the value is cut to fit, and whole on hover, since it grows with the workspace (`4 pools unread`).
+  A line is state, never what every visit would say: Held's names what holds its slots (`1 in use · 1 canopy-sync`).
+  A counter counts what its line lists, and a line that splits the count names only its parts there are: Needs a look
+  adds dirty slots, broken ones, and unread pools (`needsLook`), so one of each dirty and unread reads `2` over
+  `1 dirty · 1 pool unread`, never a `0 broken` among them.
   Each is a label, the value, and one line under it, with a 2px top rule in the state color it counts:
   `status-running`, `status-stopped` for held, `status-blocked`, `status-failed` while something is broken. The
   same color washes down from the rule at 12%, fading out by 70% of the counter's height; a plain counter has none.
@@ -586,16 +590,19 @@ list, an empty state, or a skeleton by hand.
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.
 - **A slot is one line** in our state words, never treehouse's (its word is on hover, as the path is on the slot's
   number). An idle slot shows its state and number alone, muted; only a note or an unreadable branch takes a second
-  line, from the holder's column. The branch and the processes treehouse found share the free column, each cut to fit
-  with the whole on hover: an agent can start a dozen, and the line still ends at the age. A pool treehouse could not
-  read says why as a `Notice`.
+  line, from the holder's column. A dirty slot's note, in `status-blocked`, says what it blocks (the pool never reuses
+  it and counts it busy) and what clears it, since it is the slot most likely to sit there unnoticed. The branch and
+  the processes treehouse found share the free column, each cut to fit with the whole on hover: an agent can start a
+  dozen, and the line still ends at the age. A pool treehouse could not read says why as a `Notice`.
 - **Idle slots fold**: three or more in a row (`IDLE_RUN`, `slotGroups` in `src/lib/worktree-state.ts`) are one line,
   their state and then `Show 37 slots, #4 to #40`, a `Disclosure` (as a ticket's earlier runs are) that opens each
   slot's own line under it. A pool of many slots is mostly idle ones, which say nothing but their number; folded, those
   with work in them stay in reach. One or two in a row show as they are, since a toggle would save no room.
 - **The worktrees filter** is the runs page's, by worktree state, in the Pools panel's header before Read again:
   `?state=` keeps the slots in that state and the pools with one (`poolShown`), under `broken` the pools treehouse
-  could not read too, since Needs a look counts them. A pool's header still counts all its slots. Idle slots fold as
+  could not read too, since Needs a look counts them. A pool's header still counts all its slots. The page's
+  description is the pools' state, `3 pools · 7 slots · read 4s ago` (`poolsLine`): read on a timer, the page says how
+  fresh its read is. What the page shows on every visit is its title's help. Idle slots fold as
   they lie in the whole pool, so a filtered line never spans a slot in another state.
 - **The attention list is an inbox**: one list, most severe first, beside the selected item. Severity
   (`src/lib/attention.ts`): broken work first (a run's `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
