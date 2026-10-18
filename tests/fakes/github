@@ -102,8 +102,9 @@ def post(state: dict[str, Any], request: dict[str, Any]) -> int:
         return 1
     if "issue" in request:
         return post_issue(state, request, outcome)
-    pending = f"PRR_fake_{next_id(state)}"
-    emit({"kind": "pending", "review": pending})
+    pending_id = next_id(state)
+    pending = f"PRR_fake_{pending_id}"
+    emit({"kind": "pending", "review": pending, "id": pending_id})
     if outcome == "pending_left":
         emit({"kind": "end", "submitted": False, "pending": pending})
         return 1
@@ -111,7 +112,7 @@ def post(state: dict[str, Any], request: dict[str, Any]) -> int:
         return 1
     url = request["pr"]
     reviews = state.setdefault("prs", {}).setdefault(url, {}).setdefault("reviews", [])
-    review_id = next_id(state)
+    review_id = pending_id
     lines = []
     for reply in request.get("replies", []):
         answered = next(r for r in reviews if r.get("item") == "comment" and r["id"] == reply["comment"])

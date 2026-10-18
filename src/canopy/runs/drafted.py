@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from canopy.core import drafts, observe
+from canopy.core import drafts, drafts_manage, observe
 from canopy.core.vocab import DraftStatus, PrState
 
 if TYPE_CHECKING:
@@ -30,14 +30,17 @@ def after_run(ctx: Context, run_id: int, log: logs.TickAdapter) -> None:
 
 
 def reconcile(ctx: Context, log: logs.TickAdapter) -> None:
-    """Read every PR a draft still waits on, and check its drafts against what was read: the tick's part (§6 step 3)."""
-    _read_and_check(ctx, drafts.unchecked_prs(ctx.conn), log)
+    """Read every PR a draft waits on or a send left unconfirmed, and check or settle its drafts (§6 step 3)."""
+    _read_and_check(ctx, {*drafts.unchecked_prs(ctx.conn), *drafts_manage.unconfirmed_prs(ctx.conn)}, log)
 
 
 def _read_and_check(ctx: Context, prs: Collection[str], log: logs.TickAdapter) -> None:
     if not prs:
         return
     read = observe.read(ctx.conn, ctx.config, ctx.runner, prs, log)
+    settled = drafts_manage.settle_unconfirmed(ctx.conn, read.whole)
+    if settled:
+        log.info("unconfirmed drafts settled", extra={"drafts": {d.id: d.status for d in settled}})
     checked = drafts.check(ctx.conn, read.whole)
     if checked:
         counts = {s: sum(d.status is s for d in checked) for s in (DraftStatus.WAITING, DraftStatus.REFUSED)}
@@ -50,10 +53,14 @@ WAITING_REASON = "drafts_waiting"
 
 @dataclass(frozen=True)
 class Item:
-    """One `drafts_waiting` item: its ticket, the unit's repository or None for a ticket's draft, and its detail."""
+    """One `drafts_waiting` item: its ticket, its unit's repository, how many drafts wait, and its detail.
+
+    The repository is None for a ticket's own draft.
+    """
 
     ticket_key: str
     repo: str | None
+    count: int
     detail: str
 
 
@@ -79,10 +86,10 @@ def waiting(conn: sqlite3.Connection) -> list[Item]:
         n, unchecked = int(r["n"]), int(r["unchecked"])
         what = f"{n} drafts wait on you" if n > 1 else "1 draft waits on you"
         if r["pr_url"] is None:
-            found.append(Item(str(r["ticket_key"]), None, f"{what}, for the ticket"))
+            found.append(Item(str(r["ticket_key"]), None, n, f"{what}, for the ticket"))
             continue
         detail = f"{what}, for {r['pr_url']}"
         if unchecked:
             detail += f"; its threads could not be read yet, so {unchecked} cannot be sent until they are"
-        found.append(Item(str(r["ticket_key"]), str(r["repo"]), detail))
+        found.append(Item(str(r["ticket_key"]), str(r["repo"]), n, detail))
     return found
