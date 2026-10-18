@@ -2,7 +2,7 @@
 
 Part of the canopy design, normative like all of it: what workers record of what they learn, who reads it, and who
 decides. Sections are numbered across the whole design; the [README](README.md) has the map. Previous: [The overseer's
-tools](OVERSEER_TOOLS.md).
+tools](OVERSEER_TOOLS.md). Next: [Review replies](REVIEW_REPLIES.md).
 
 ## 28. Agent memory (M50)
 
