@@ -9,11 +9,15 @@ import { stamp } from '@/lib/time'
 
 /**
  * The attention page with nothing listed. Before the journal holds any ticket, nothing has started, so it names the
- * first step rather than read as all clear; once there was work, `AllClear` is the reward for an inbox emptied.
+ * first step rather than read as all clear; once there was work, `AllClear` is the reward for an inbox emptied. A
+ * tickets read that failed tells neither apart, and the list read without it, so it is `AllClear`, as before.
  */
 export function EmptyAttention() {
-    const tickets = useQuery(ticketsQuery).data
+    const { data: tickets, isError } = useQuery(ticketsQuery)
     if (tickets === undefined) {
+        if (isError) {
+            return <AllClear />
+        }
         return (
             <Panel>
                 <PanelSkeleton className="min-h-40" />

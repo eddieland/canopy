@@ -31,13 +31,22 @@ describe('AllClear', () => {
     })
 })
 
-function renderEmpty(tickets: TicketSummary[] | undefined) {
+function renderEmpty(tickets: TicketSummary[] | undefined, { failed = false }: { failed?: boolean } = {}) {
     const client = new QueryClient()
     // Nothing is fetched: the tickets and the latest tick are what the test seeds.
     client.setQueryDefaults(keys.tickets, { enabled: false })
     client.setQueryDefaults(keys.tick, { enabled: false })
     if (tickets !== undefined) {
         client.setQueryData(keys.tickets, tickets)
+    }
+    if (failed) {
+        client
+            .getQueryCache()
+            .build(client, { queryKey: keys.tickets })
+            .setState({
+                status: 'error',
+                error: new Error('the loop is down'),
+            })
     }
     client.setQueryData(keys.tick, { tick: null, acknowledged: null })
     return renderRouted(<EmptyAttention />, { client })
@@ -70,6 +79,13 @@ describe('EmptyAttention', () => {
         await renderEmpty(undefined)
         expect(screen.getByTestId('panel-skeleton')).toBeDefined()
         expect(screen.queryByTestId('all-clear')).toBeNull()
+        expect(screen.queryByTestId('first-run')).toBeNull()
+    })
+
+    it('is all clear, as before, when the tickets read failed', async () => {
+        await renderEmpty(undefined, { failed: true })
+        expect(screen.getByTestId('all-clear').textContent).toContain('Nothing needs you.')
+        expect(screen.queryByTestId('panel-skeleton')).toBeNull()
         expect(screen.queryByTestId('first-run')).toBeNull()
     })
 })
