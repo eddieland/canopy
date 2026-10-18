@@ -1463,9 +1463,10 @@ wait, and GitHub Enterprise is supported.
   `canopy status` say so.
 - **The worker drafts and posts no comment.** Under `approve`, a worker, public or private, pushes its changes as today
   (a push never waits: M54 is how the operator approves work before it is pushed) and comments nowhere. Its result line
-  gains `drafts`: one per review thread it answers (the thread's id, the reply's text, and whether it made the change,
-  declined it, or answered a question), at most one top-level comment on the PR, and its question on the ticket when it
-  is blocked. A worker's own PR body and title are not drafts: they describe the change, not the operator's words. A
+  gains `drafts`: one per review thread it answers (a review comment on the thread, the reply's text, and whether it
+  made the change, declined it, or answered a question), at most one top-level comment on the PR, and one ticket
+  comment, its question when it is blocked and otherwise what it did, where a `tracker` source has a post command
+  (DESIGN §29). A worker's own PR body and title are not drafts: they describe the change, not the operator's words. A
   decline it would have argued on the PR is a draft too, and the run still reports `blocked` with the disagreement. At
   most 30 a run, each bounded and refused with hidden characters, as memory's notes are (DESIGN §28). The prompts'
   "Reply on the PR to each comment you addressed", their ticket comments, and their comment marks move behind the
@@ -1562,7 +1563,12 @@ review comments, a `resume` under `approve` pushes its changes and posts nothing
 threads on the PR's page, edits one, drops one, and sends the rest; GitHub shows exactly the sent text under the
 operator's name with no mark; the next tick dispatches nothing for the sent replies.
 
-Status: not started.
+Status: in progress. Designed 2026-10-18 (DESIGN §29). The design settles what the sketch left open: a thread draft
+names a review comment by the id in its URL and canopy finds the thread; a ticket comment is a draft only where the
+operator configured a `tracker` source with a `post_cmd`, since the harness never branches on `tracker.provider`; the
+`vcs` source defaults to canopy's own programs, so `approve` needs nothing configured; `thread_changed` counts comments
+since the run started, and a refusal moves that basis; and a post whose outcome is unknown is `unconfirmed` until a
+read settles it, so a draft is posted at most once. Nothing is built yet.
 
 ## M54. Plans before feedback runs
 
