@@ -92,6 +92,29 @@ test("30 days' table scrolls in its panel under its column names, and a week's s
     expect(await scrolls()).toBe(false)
 })
 
+test("the ticket, PR, and tool tables scroll under their column names, flush with the panel's title", async ({
+    page,
+}) => {
+    await page.goto('spend')
+    await settled(page)
+    for (const id of ['spend-ticket-table', 'spend-pull-request-table', 'spend-tool-table']) {
+        const table = page.getByTestId(id)
+        const region = page.getByRole('region').filter({ has: table })
+        // The mock's rows fit their regions: shorten one until it scrolls, then scroll it to its end.
+        await region.evaluate((el) => {
+            el.style.maxHeight = '6rem'
+            el.scrollTo({ top: el.scrollHeight })
+        })
+        // Within a pixel, as the day table's: no strip of the padded region over the names for the rows to show in.
+        await expect
+            .poll(async () => {
+                const [head, box] = await Promise.all([table.locator('thead').boundingBox(), region.boundingBox()])
+                return Math.abs((head?.y ?? Number.NaN) - (box?.y ?? Number.NaN))
+            })
+            .toBeLessThanOrEqual(1)
+    }
+})
+
 test("each ticket's and PR's own runs, the costliest first, open their pages beside the tickets done", async ({
     page,
 }) => {
