@@ -14,6 +14,7 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/component
 import { RichText } from '@/components/rich-text'
 import { Chip, RunDot, Word } from '@/components/status'
 import { TickOutputPanel } from '@/components/raw-output'
+import { TickSteps } from '@/components/tick-steps'
 import { Timestamp } from '@/components/timestamp'
 import { TranscriptPanel } from '@/components/transcript'
 import { ordered, useListOrder } from '@/lib/list-order'
@@ -80,11 +81,16 @@ function NoTick({ title, children }: { title: string; children: string }) {
 }
 
 function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcript | undefined }) {
-    const { tick, decisions, output_path: output } = detail
+    const { tick, decisions, output_path: output, previous_id: previous, next_id: next } = detail
     const decisionsOrder = useListOrder('tick-decisions')
     return (
         <>
-            <PageHeader title={tickRef(tick.id)} help={help(tick.id)} chips={tick.dry_run && <Chip>dry run</Chip>}>
+            <PageHeader
+                title={tickRef(tick.id)}
+                help={help(tick.id)}
+                chips={tick.dry_run && <Chip>dry run</Chip>}
+                controls={<TickSteps previous={previous} next={next} />}
+            >
                 {tickDescription(tick, decisions.length)}
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
