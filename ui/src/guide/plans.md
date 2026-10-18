@@ -7,8 +7,8 @@ cheapest code review you'll ever do, because there's no code yet.
 ## When a ticket gets a plan
 
 A ticket needs a plan when `policy.plan` is `approve` in your config, or when you asked for one with `canopy plan KEY`
-or `canopy start KEY --plan`. `canopy plan KEY --skip` waives it for one ticket. The plan section on a ticket's page
-says which applies: "Plan needed, by policy.plan approve", or "by your word".
+or `canopy start KEY --plan`. `canopy plan KEY --skip` waives it for one ticket. The plan's page says which applies:
+"Plan needed, by policy.plan approve", or "by your word".
 
 The next tick then dispatches a `plan` run. It writes the plan as a Markdown file, and the ticket's phase becomes
 `plan proposed`, which puts a `plan review` item on your attention list. Until you approve, the overseer can't start an
@@ -16,9 +16,15 @@ implement: the guard is `unplanned`, and no prompt gets around it.
 
 ## Reading a plan
 
-The plan opens in an editor on the ticket's page, above everything else while it waits on you. The line above it says
-which plan this is, when it was written, and whether it was edited since the planner wrote it. Older plans are folded
-under **Earlier plans**, read only.
+A plan has a page of its own, so it gets the whole width and its comments get a margin. The ticket's page has a
+**Plan** card instead, at the top while the plan waits on you: where the plan stands (`needed`, `proposed`,
+`approved`, `superseded`), which plan it is (`plan:2`), the run that wrote it and when, and how many comments are
+open. **Open plan** on the card, or on a `plan review` item in [Attention](attention), opens the plan's page. The card
+only reads; deciding happens on the plan's page, where you can see what you're deciding.
+
+There, the plan opens in an editor. The line above it says which plan this is, when it was written, and whether it was
+edited since the planner wrote it. Older plans are folded under **Earlier plans**, read only. The trail at the top
+leads back to the ticket.
 
 A plan that replaced one opens with its changes marked: the words added and removed since the plan before, word by
 word, so formatting alone is no change. The bar at the foot counts them, and **Previous change** and **Next change**
@@ -68,5 +74,5 @@ Approving doesn't send open comments. The implement reads the plan alone, so a c
 acts on. While any are open, **Ask for changes** is the main button and **Approve** steps back, and the note under the
 bar counts them.
 
-After you ask, the plan section says "You asked for changes" until the next planner starts, and the button reads
+After you ask, the plan's page says "You asked for changes" until the next planner starts, and the button reads
 **Ask again**, so you never send a second request without knowing about the first.

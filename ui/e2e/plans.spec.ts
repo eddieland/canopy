@@ -2,13 +2,13 @@ import { expect, test } from '@playwright/test'
 
 import { plan, select, settled, signIn } from './helpers.ts'
 
-// A ticket's plan on its page (docs/design/PLANNING.md §25), over the mock journal's ABC-105: its newest plan waits on
-// the operator, with three comments on it, one resolved, and an earlier plan it superseded. The root server's journal
-// never changes, so these only read; the writes are in prefixed.spec.ts.
+// A ticket's plan on its own page (docs/design/PLANNING.md §25), over the mock journal's ABC-105: its newest plan
+// waits on the operator, with three comments on it, one resolved, and an earlier plan it superseded. The root server's
+// journal never changes, so these only read; the writes are in prefixed.spec.ts.
 
 test.beforeEach(async ({ page }) => {
     await signIn(page)
-    await page.goto('tickets/ABC-105')
+    await page.goto('tickets/ABC-105/plan')
     await settled(page)
 })
 
@@ -36,14 +36,32 @@ test("a ticket's newest plan opens in the editor, its comments on their passages
     await expect(plan(page).locator('ins').filter({ hasText: 'owner_timezone()' }).first()).toBeVisible()
 })
 
-test('a plan that waits on the operator leads the page, above its Work panel', async ({ page }) => {
-    const section = await page.getByTestId('ticket-plan').boundingBox()
-    const work = await page.getByTestId('ticket-actions').boundingBox()
-    expect(section?.y).toBeLessThan(work?.y ?? 0)
-    await expect(page.getByTestId('ticket-plan')).toBeInViewport()
+test("the plan's page names its ticket and links back to it", async ({ page }) => {
+    const title = page.getByRole('heading', { level: 1, name: 'Plan', exact: true })
+    await expect(page.locator('header', { has: title })).toContainText('Schedule report exports')
+    await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'ABC-105' }).click()
+    await expect(page).toHaveURL(/tickets\/ABC-105$/u)
 })
 
-test('the page waits for its plans to paint, so a plan that leads it never pushes it down', async ({ page }) => {
+test("a plan that waits on the operator leads its ticket's page as a card, which opens the plan", async ({ page }) => {
+    await page.goto('tickets/ABC-105')
+    const card = page.getByTestId('plan-card')
+    await expect(card).toContainText('proposed')
+    await expect(card).toContainText('plan:2')
+    await expect(card).toContainText(/open comments\s*2/u)
+    const box = await card.boundingBox()
+    const work = await page.getByTestId('ticket-actions').boundingBox()
+    expect(box?.y).toBeLessThan(work?.y ?? 0)
+    // The card only reads: the editor and its actions are the plan's page's.
+    await expect(page.getByTestId('ticket-plan')).toHaveCount(0)
+    await card.getByRole('link', { name: 'Open plan' }).click()
+    await expect(page).toHaveURL(/tickets\/ABC-105\/plan$/u)
+    await expect(plan(page).getByRole('heading', { level: 1 })).toHaveText('Schedule report exports')
+})
+
+test("the ticket's page waits for its plans to paint, so a card that leads it never pushes it down", async ({
+    page,
+}) => {
     let release: (() => void) | undefined
     const held = new Promise<void>((resolve) => {
         release = resolve
@@ -52,13 +70,54 @@ test('the page waits for its plans to paint, so a plan that leads it never pushe
         await held
         await route.continue()
     })
-    await page.reload()
+    await page.goto('tickets/ABC-105')
     await expect(page.getByRole('heading', { name: /ABC-105/u })).toBeVisible()
     await expect(page.getByTestId('ticket-actions')).toHaveCount(0)
     release?.()
-    const section = await page.getByTestId('ticket-plan').boundingBox()
+    const card = await page.getByTestId('plan-card').boundingBox()
     const work = await page.getByTestId('ticket-actions').boundingBox()
-    expect(section?.y).toBeLessThan(work?.y ?? 0)
+    expect(card?.y).toBeLessThan(work?.y ?? 0)
+})
+
+test("a ticket's page loads no plan editor", async ({ page }) => {
+    const scripts: string[] = []
+    page.on('request', (request) => {
+        if (request.resourceType() === 'script') {
+            scripts.push(request.url())
+        }
+    })
+    await page.goto('tickets/ABC-102')
+    await settled(page)
+    await page.goto('tickets/ABC-105')
+    await expect(page.getByTestId('plan-card')).toBeVisible()
+    expect(scripts.filter((url) => /plan-editor-/u.test(url))).toEqual([])
+})
+
+test("a plan review on the attention list opens the plan's page", async ({ page }) => {
+    // The stream would send the list as the journal has it, which has no plan review: the list here is the test's.
+    await page.route('**/api/events', (route) => route.abort())
+    await page.route('**/api/attention', (route) =>
+        route.fulfill({
+            json: [
+                {
+                    id: 'ABC-105:plan_review',
+                    ticket_key: 'ABC-105',
+                    ticket_title: 'Schedule report exports',
+                    reason: 'plan_review',
+                    detail: 'plan 2 waits on your approval',
+                    since: '2026-10-08T11:52:00Z',
+                    chore: null,
+                    pr: null,
+                    repo: null,
+                    finding: false,
+                    subject: 'ABC-105',
+                },
+            ],
+        }),
+    )
+    await page.goto('attention')
+    await page.getByTestId('attention-detail').getByRole('link', { name: 'Open plan' }).click()
+    await expect(page).toHaveURL(/tickets\/ABC-105\/plan$/u)
 })
 
 test('an earlier plan opens read only', async ({ page }) => {
@@ -83,7 +142,7 @@ test('leaving the page with an edit not yet saved asks first; Stay keeps the edi
     await expect(ask.getByRole('button', { name: 'Stay' })).toBeFocused()
     await page.keyboard.press('Escape')
     await expect(ask).toBeHidden()
-    await expect(page).toHaveURL(/tickets\/ABC-105$/u)
+    await expect(page).toHaveURL(/tickets\/ABC-105\/plan$/u)
     await expect(plan(page)).toContainText('Or PDF.')
     await tickets.click()
     await ask.getByRole('button', { name: 'Leave' }).click()

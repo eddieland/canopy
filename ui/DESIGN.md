@@ -241,10 +241,12 @@ Rules:
   decisions, and the attention detail, the other place a ticket is answered, reads in the same order: the item, the
   ticket's actions and any limit it is stuck at, then its conversation and the reply. An action over a whole list
   sits in that list's panel header, as a transcript's All open does: the worktrees' Read again heads their one Pools
-  panel, a section per pool in it. A ticket whose plan waits on the operator (proposed, no planner running) leads with
-  the plan instead, above its Work panel, since the plan is what they came to answer and its own line says where the
-  ticket stands; otherwise its plan follows the lists. Where it sits is settled as the page opens, so a plan approved
-  there stays where it was read.
+  panel, a section per pool in it. A ticket's plan is on a page of its own, `/tickets/$key/plan`, under the ticket in
+  the trail; the ticket's page has its card (`PlanCard`): the plan's reference and status chip in its header, the run
+  that wrote it and its open comments as fields, and `Open plan` in its foot, primary while the plan waits on the
+  operator. A ticket whose plan waits on the operator (proposed, no planner running) leads with the card, above its
+  Work panel, since the plan is what they came to answer; otherwise the card follows the lists. Where it sits is
+  settled as the page opens, so a plan approved meanwhile leaves its card where it was read.
 - **Every page header opens with its trail**, a breadcrumb (`nav` named Breadcrumb) in `panel-label` type: the
   section's name in its color, then the pages between it and this one. On the section's own list the name is plain
   text; on any page under it every step is a link and ends in a small chevron, pointing at the title. A page in no

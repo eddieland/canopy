@@ -15,6 +15,7 @@ export const ROUTES = [
     'tickets',
     'tickets/ABC-102',
     'tickets/ABC-105',
+    'tickets/ABC-105/plan',
     'pull-requests',
     `pull-requests/pr?url=${encodeURIComponent('https://github.com/acme/web/pull/88')}`,
     'reviews',

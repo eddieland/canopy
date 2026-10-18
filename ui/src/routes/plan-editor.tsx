@@ -11,8 +11,8 @@ import { SAMPLE_PLAN, SAMPLE_PREVIOUS, SAMPLE_THREADS } from '@/lib/plan-sample'
 
 /**
  * The plan editor over a sample plan, on mock data alone: where the editor is tried and tested on its own
- * (docs/design/PLANNING.md §25). A ticket's own plan opens on its page. Nothing here is saved: what Ask for changes
- * would send the planner shows under the editor instead, with the plan's Markdown.
+ * (docs/design/PLANNING.md §25). A ticket's own plan opens on its plan page. Nothing here is saved: what Ask for
+ * changes would send the planner shows under the editor instead, with the plan's Markdown.
  */
 export const Route = createFileRoute('/plan-editor')({
     component: PlanEditorPage,
