@@ -1,5 +1,7 @@
 import { useSyncExternalStore } from 'react'
 
+import { nextIndex } from '@/lib/headlines'
+
 /**
  * Sprig, the helper at the foot of the side rail (src/components/shell/buddy.tsx): a bent wire with a sprig on top,
  * offering tips nobody asked for, several of its own for each view. Its tips are plain strings written here, never
@@ -7,8 +9,7 @@ import { useSyncExternalStore } from 'react'
  * with "Tip:", so Sprig's jokes open with anything else. They come in several voices, mixed in each list so that no
  * voice follows itself: the paperclip's "It looks like you're...", an "Unhelpful tip:", a "Did you know?" or "Fun
  * fact:" that is not one, a "Hot take:", a "Dear diary," entry, a haiku, a riddle. It is off until Settings turns it
- * on, which is kept in localStorage like the theme, and synced across tabs. How many tips it has offered is kept there
- * too, so a page loaded again picks up where the last left off rather than offering the same tips over.
+ * on, which is kept in localStorage like the theme, and synced across tabs.
  */
 
 /** Whether Sprig shows. */
@@ -19,18 +20,9 @@ export const STORAGE_KEY = 'canopy-buddy'
 /** The setting until the operator turns Sprig on: off. */
 export const DEFAULT: BuddySetting = 'off'
 
-/** Where localStorage keeps how many tips Sprig has offered in this browser, over every page load. */
-export const OFFERED_KEY = 'canopy-buddy-offered'
-
 /** The setting as stored, or the default for anything it does not recognize. */
 export function parseBuddy(raw: string | null): BuddySetting {
     return raw === 'on' || raw === 'off' ? raw : DEFAULT
-}
-
-/** The count of tips offered as stored, or none for anything that is not a count. */
-export function parseOffered(raw: string | null): number {
-    const n = Number(raw)
-    return Number.isSafeInteger(n) && n >= 0 ? n : 0
 }
 
 /**
@@ -240,19 +232,13 @@ export const ANYWHERE: readonly string[] = [
 ]
 
 /**
- * The `n`th tip for a view: its own first, then the ones for anywhere, each list starting at a different one each day,
- * as the ticker's reel does. A view's first tip is its own, so two views never open on the same one. The same view,
- * day, and count always give the same tip, so a screenshot is stable.
+ * The next tip for a view: one at random from its own and the ones for anywhere, as the ticker picks its headlines
+ * (`nextIndex`), but never `last`, the tip just offered, wherever it was offered. So no tip follows itself, on the
+ * same view or on the next.
  */
-export function tipFor(view: View | undefined, n: number, now: number): string {
-    const day = Math.floor(now / 86_400_000)
-    const tips = [...rotated(view === undefined ? [] : TIPS[view], day), ...rotated(ANYWHERE, day)]
-    return tips[n % tips.length] ?? ''
-}
-
-function rotated(tips: readonly string[], by: number): string[] {
-    const start = tips.length === 0 ? 0 : by % tips.length
-    return [...tips.slice(start), ...tips.slice(0, start)]
+export function nextTip(view: View | undefined, last: string, random: () => number = Math.random): string {
+    const tips = [...(view === undefined ? [] : TIPS[view]), ...ANYWHERE]
+    return tips[nextIndex(tips.length, tips.indexOf(last), random)] ?? ''
 }
 
 function read(): BuddySetting {
@@ -314,22 +300,4 @@ export function setBuddy(next: BuddySetting): void {
         // Not persisted, but still applied for this page.
     }
     announce(next)
-}
-
-/** How many tips Sprig has offered in this browser: none where storage is unavailable. */
-export function readOffered(): number {
-    try {
-        return parseOffered(globalThis.localStorage.getItem(OFFERED_KEY))
-    } catch {
-        return 0
-    }
-}
-
-/** Stores how many tips Sprig has offered, for the next page load to go on from. */
-export function storeOffered(n: number): void {
-    try {
-        globalThis.localStorage.setItem(OFFERED_KEY, String(n))
-    } catch {
-        // Not persisted: the next page load starts over.
-    }
 }

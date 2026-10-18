@@ -20,6 +20,16 @@ async function waitForTip(page: Page, tip: Locator): Promise<void> {
     await expect(tip).toBeVisible()
 }
 
+/**
+ * Makes every `Math.random` on the page return 0, so Sprig picks the same tips on every run: its view's first holds
+ * the bubble's room, and a click offers its second.
+ */
+async function fixRandom(page: Page): Promise<void> {
+    await page.addInitScript(() => {
+        Math.random = () => 0
+    })
+}
+
 /** Asks Sprig for a tip from the keyboard, then lets go of the focus: no pointer moves its eyes, no ring shows. */
 async function askSprig(page: Page): Promise<void> {
     const sprig = page.getByTestId('buddy-sprig')
@@ -70,17 +80,18 @@ test.describe('turned on', () => {
         const second = await tip.textContent()
         await page.getByTestId('buddy-sprig').click()
         await expect(tip).not.toHaveText(second ?? '')
+        const third = await tip.textContent()
 
         await page.getByTestId('buddy-close').click()
         await expect(tip).toBeHidden()
         await expect(page.getByTestId('buddy-sprig')).toBeVisible()
 
-        // A new page offers no tip of its own, and the next comes on Sprig's time, about the page on screen.
+        // A new page offers no tip of its own, and the next comes on Sprig's time, never the one it last offered.
         await page.getByTestId('rail-settings').click()
         await expect(page.getByRole('heading', { level: 1 })).toHaveText('Settings')
         await expect(tip).toBeHidden()
         await waitForTip(page, tip)
-        await expect(tip).not.toHaveText(second ?? '')
+        await expect(tip).not.toHaveText(third ?? '')
     })
 
     test('a tip is shown only on the view it was offered on, and closes on time', async ({ page }) => {
@@ -101,6 +112,8 @@ test.describe('turned on', () => {
     })
 
     test('Sprig has its own tip for a list and one of its items, and keeps it for another filter', async ({ page }) => {
+        // A page loaded anew has no last tip to skip: picked at random, a run's could be the same one for anywhere.
+        await fixRandom(page)
         await page.goto('runs')
         await settled(page)
         const tip = page.getByTestId('buddy-tip')
@@ -299,6 +312,7 @@ test.describe('turned on', () => {
                 globalThis.localStorage.setItem('canopy-hats', JSON.stringify({ owned: ['top'], worn: 'top' }))
             })
             await page.clock.setFixedTime(NOW)
+            await fixRandom(page)
             await storeTheme(page, theme)
             await page.goto('attention')
             await settled(page)
@@ -308,6 +322,7 @@ test.describe('turned on', () => {
 
         test(`Sprig in ${theme}`, async ({ page }) => {
             await page.clock.setFixedTime(NOW)
+            await fixRandom(page)
             await storeTheme(page, theme)
             await page.goto('attention')
             await settled(page)
@@ -318,6 +333,7 @@ test.describe('turned on', () => {
 
     test('the attention page with Sprig in dark', async ({ page }) => {
         await page.clock.setFixedTime(NOW)
+        await fixRandom(page)
         await storeTheme(page, 'dark')
         await page.goto('attention')
         await settled(page)

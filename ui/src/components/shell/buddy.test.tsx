@@ -9,7 +9,7 @@ import {
 } from '@tanstack/react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { STORAGE_KEY, tipFor } from '@/lib/buddy'
+import { ANYWHERE, nextTip, STORAGE_KEY, TIPS } from '@/lib/buddy'
 
 import { Buddy } from './buddy'
 
@@ -49,45 +49,49 @@ async function renderBuddy(at: '/attention' | '/settings') {
 }
 
 // The tip Sprig's bubble shows, or null while it is hidden: a hidden bubble keeps its last tip, to hold its room.
-function shown(tip: string) {
+function shown(): string | null {
     const bubble = screen.getByTestId('buddy-tip')
-    return bubble.classList.contains('invisible') ? null : within(bubble).queryByText(tip)
+    if (bubble.classList.contains('invisible')) {
+        return null
+    }
+    return [...Object.values(TIPS).flat(), ...ANYWHERE].find((tip) => within(bubble).queryByText(tip) !== null) ?? null
 }
 
 describe('Buddy', () => {
-    it('opens on no tip, offers one about the page shown on a click on Sprig, the next on Another tip', async () => {
+    it('opens on no tip, offers one about the page shown on a click on Sprig, a new one on Another tip', async () => {
         await renderBuddy('/attention')
-        expect(shown(tipFor('/attention', 0, NOW))).toBeNull()
+        expect(shown()).toBeNull()
 
         fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
-        expect(shown(tipFor('/attention', 1, NOW))).not.toBeNull()
+        const first = shown()
+        expect([...TIPS['/attention'], ...ANYWHERE]).toContain(first)
 
         fireEvent.click(screen.getByRole('button', { name: 'Another tip' }))
-        expect(shown(tipFor('/attention', 2, NOW))).not.toBeNull()
+        expect(shown()).not.toBeNull()
+        expect(shown()).not.toBe(first)
     })
 
-    it('goes on from the last page load, rather than offering the same tips over', async () => {
+    it('picks each tip at random, never the one just offered', async () => {
+        vi.spyOn(Math, 'random').mockReturnValue(0.5)
+        // The pick that holds the bubble's room at load, then the one a click offers, which is never it.
+        const held = nextTip('/attention', '', () => 0.5)
         await renderBuddy('/attention')
         fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
-        fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
-        cleanup()
-
-        await renderBuddy('/attention')
-        expect(shown(tipFor('/attention', 2, NOW))).toBeNull()
-        fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
-        expect(shown(tipFor('/attention', 3, NOW))).not.toBeNull()
+        expect(shown()).toBe(nextTip('/attention', held, () => 0.5))
+        expect(shown()).not.toBe(held)
     })
 
-    it('keeps a tip to the page it was offered on, and offers the next about the page turned to', async () => {
+    it('keeps a tip to the page it was offered on, and offers a new one about the page turned to', async () => {
         const router = await renderBuddy('/attention')
         fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
+        const first = shown()
 
         await act(() => router.navigate({ to: '/settings' }))
-        expect(shown(tipFor('/attention', 1, NOW))).toBeNull()
-        expect(shown(tipFor('/settings', 1, NOW))).toBeNull()
+        expect(shown()).toBeNull()
 
         fireEvent.click(screen.getByRole('button', { name: 'Ask Sprig for a tip' }))
-        expect(shown(tipFor('/settings', 2, NOW))).not.toBeNull()
+        expect([...TIPS['/settings'], ...ANYWHERE]).toContain(shown())
+        expect(shown()).not.toBe(first)
     })
 
     it('turns itself off, as Settings does, when told not to show tips again', async () => {
