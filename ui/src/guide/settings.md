@@ -40,7 +40,7 @@ Off by default, and none of it does anything useful, by design.
 - **Ticker**: joke headlines crawling across the header, with a speed, a gap between headlines, and topics to pick
   from. **Tips** mixes real tips about canopy in with the jokes.
 - **Sprig**: a small wire figure at the foot of the rail, with a tip for every page. None of them help. Click it for
-  one now, or **Don't show me tips again** to turn it off.
+  a new one, picked at random like the ticker's headlines, or **Don't show me tips again** to turn it off.
 - **The hat shop**: every dollar canopy spends is a dollar towards Sprig's hats. All sales are final.
 
 The switch in the panel's header does exactly what you'd fear.
