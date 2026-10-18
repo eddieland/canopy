@@ -16,9 +16,10 @@ import { forgotText, startedText, stoppedText } from '@/lib/outcomes'
  * is the quietest of them, at the row's end, since what is said loudest is clicked first. A public ticket has no Stop,
  * since its queue label authorizes it: while a worker runs on one, a line in Stop's place says how to stop it. Whether
  * the ticket is private is a chip, beside its page's title or over its attention item's conversation, so nothing here
- * says it again.
+ * says it again. `quiet` sets Start and Stop as ghost buttons, for an attention item whose reason asks for something
+ * else, where they are a row under its thread (ui/DESIGN.md, "The attention detail").
  */
-export function TicketActions({ ticket }: { ticket: TicketSummary }) {
+export function TicketActions({ ticket, quiet = false }: { ticket: TicketSummary; quiet?: boolean }) {
     const client = useQueryClient()
     const key = ticket.key
     const [said, setSaid] = useState<string | null>(null)
@@ -52,13 +53,13 @@ export function TicketActions({ ticket }: { ticket: TicketSummary }) {
         <div className="flex flex-col gap-2 p-3">
             <div className="flex flex-wrap items-center gap-2">
                 {!started && (
-                    <Button variant="outline" onClick={() => start.mutate()} disabled={pending}>
+                    <Button variant={quiet ? 'ghost' : 'outline'} onClick={() => start.mutate()} disabled={pending}>
                         <Play />
                         {ticket.private ? 'Start again' : 'Start privately'}
                     </Button>
                 )}
                 {started && (
-                    <Button variant="outline" onClick={() => stop.mutate(false)} disabled={pending}>
+                    <Button variant={quiet ? 'ghost' : 'outline'} onClick={() => stop.mutate(false)} disabled={pending}>
                         <Square />
                         Stop
                     </Button>

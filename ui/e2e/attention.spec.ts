@@ -28,7 +28,48 @@ test('the list is most severe first, and the most severe ticket opens beside it'
     const detail = page.getByTestId('attention-detail')
     await expect(detail.getByRole('link', { name: 'ABC-100', exact: true })).toBeVisible()
     await expect(detail.getByText('Fix the flaky checkout test')).toBeVisible()
-    await expect(detail.getByRole('form', { name: 'Reply' })).toBeVisible()
+})
+
+test("a broken run's item leads with the run, and grants another try without leaving the page", async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    const detail = page.getByTestId('attention-detail')
+    // The run that failed, as the ticket's Runs list shows it: what it said, and its page a click away.
+    const run = detail.getByTestId('attention-run')
+    await expect(run).toContainText('failed')
+    await expect(run.getByRole('link', { name: 'run:40' })).toHaveAttribute('href', /\/runs\/40$/u)
+    // The detail's own `run:40` links there too.
+    await expect(detail.getByRole('link', { name: 'run:40' })).toHaveCount(2)
+    await expect(detail.getByRole('button', { name: 'Allow one more' })).toBeVisible()
+    // The run and the grant come before the ticket's own verbs, which sit quietly under the thread.
+    const grant = await detail.getByTestId('grant-limits').boundingBox()
+    const actions = await detail.getByTestId('attention-actions').boundingBox()
+    const first = await run.boundingBox()
+    expect(first !== null && grant !== null && actions !== null && first.y < grant.y && grant.y < actions.y).toBe(true)
+    // A public ticket with nothing waiting has no open box, only a way to write its next worker a note.
+    await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
+    await detail.getByRole('button', { name: 'Show a note for its next worker' }).click()
+    const field = detail.getByRole('form', { name: 'Reply' }).getByRole('textbox')
+    await expect(field).toHaveAttribute('placeholder', /next worker reads it/u)
+    await expect(field).not.toHaveAttribute('placeholder', /untrusted/u)
+})
+
+test("a PR waiting on a reviewer leads with its link out, the detail's one stop for the PR", async ({ page }) => {
+    await page.goto('attention')
+    await settled(page)
+    await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'needs reviewer' }).click()
+    const detail = page.getByTestId('attention-detail')
+    const action = detail.getByTestId('attention-pull-request').getByRole('link')
+    await expect(action).toHaveText('acme/web#88 on GitHub')
+    await expect(action).toHaveAttribute('href', 'https://github.com/acme/web/pull/88')
+    // The head names the PR as text, so above the conversation the PR is one tab stop.
+    const said = detail.getByText('acme/web#88 waits on a reviewer')
+    await expect(said).toBeVisible()
+    await expect(said.getByRole('link')).toHaveCount(0)
+    const head = await said.boundingBox()
+    const link = await action.boundingBox()
+    const actions = await detail.getByTestId('attention-actions').boundingBox()
+    expect(head !== null && link !== null && actions !== null && head.y < link.y && link.y < actions.y).toBe(true)
 })
 
 test('choosing an item shows its thread and keeps the choice in the URL', async ({ page }) => {
@@ -42,6 +83,10 @@ test('choosing an item shows its thread and keeps the choice in the URL', async 
     await expect(detail.getByRole('link', { name: 'ABC-102', exact: true })).toBeVisible()
     await expect(detail.getByTestId('message-5')).toContainText('Should the export button be red or blue?')
     await expect(detail.getByText('Reply to message 5')).toBeVisible()
+    // The head names the question; the conversation holds it, once, and the form is how to answer it.
+    await expect(detail.getByTestId('awaiting-line')).toContainText('Waits on your answer to message 5, asked')
+    await expect(detail.getByText('Should the export button be red or blue?')).toHaveCount(1)
+    await expect(detail).not.toContainText('canopy reply')
 
     await page.reload()
     await expect(list.getByRole('link').filter({ hasText: 'awaiting reply' })).toHaveAttribute('aria-current', 'page')
@@ -65,14 +110,17 @@ test("a chore's finding opens the chore's notes and a form for another", async (
     await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
 })
 
-test('an item about no ticket says so, with nothing to answer', async ({ page }) => {
+test('an item about no ticket offers the command that fixes it, with nothing to answer', async ({ page }) => {
     await page.goto('attention')
     await settled(page)
     await page.getByTestId('attention-list').getByRole('link').filter({ hasText: 'repo missing' }).click()
 
     const detail = page.getByTestId('attention-detail')
     await expect(detail).toContainText('api is in the workspace map but has no clone')
-    await expect(detail).toContainText('nothing to answer here')
+    const command = detail.getByTestId('attention-command')
+    await expect(command).toContainText('canopy workspace sync')
+    await expect(command.getByRole('button', { name: 'Copy command' })).toBeVisible()
+    await expect(command).toContainText('Nothing to answer here')
     await expect(detail.getByRole('form', { name: 'Reply' })).toHaveCount(0)
 })
 
@@ -104,7 +152,7 @@ test('the counters show the loop at a glance, and the nav counts the list by sev
     await expect(page.getByTestId('counters')).toHaveCount(0)
 })
 
-test("a started ticket's item leads with the ticket's own actions, then its conversation and the reply", async ({
+test("a question's item is answered in its reply, with the ticket's own actions a quiet row under it", async ({
     page,
 }) => {
     await page.goto('attention')
@@ -114,10 +162,10 @@ test("a started ticket's item leads with the ticket's own actions, then its conv
     await expect(detail.getByRole('button', { name: 'Stop', exact: true })).toBeVisible()
     // Whether the ticket is private is said once, as its page's chip says it, over the conversation it decides.
     await expect(detail.getByText('private', { exact: true })).toBeVisible()
-    // The same order as the ticket's own page: its actions foot what it is, above the thread you answer in.
+    // The reply is what the item asks for, so the ticket's verbs come after it.
     const actions = await detail.getByTestId('attention-actions').boundingBox()
     const reply = await detail.getByRole('textbox', { name: /^Reply/u }).boundingBox()
-    expect(actions !== null && reply !== null && actions.y < reply.y).toBe(true)
+    expect(actions !== null && reply !== null && reply.y < actions.y).toBe(true)
     // The runs working now are the rail's, on every page; the attention page keeps no list of its own.
     await expect(page.getByTestId('workers')).toHaveCount(0)
 })

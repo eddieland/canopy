@@ -2,9 +2,11 @@ import { Fragment, useState } from 'react'
 
 import { LinkedText } from '@/components/linked-text'
 import { PullRequestLink } from '@/components/pull-request-link'
+import { RunLink } from '@/components/run-link'
 import { splitLinks } from '@/lib/links'
 import type { Piece } from '@/lib/links'
 import { isPullRequest, pullRequestLabel } from '@/lib/pull-request-label'
+import { splitRunRefs } from '@/lib/refs'
 import { clamp, codeSpans, parse } from '@/lib/rich-text'
 import type { Block, Inline, Line } from '@/lib/rich-text'
 import { cn } from '@/lib/utils'
@@ -49,8 +51,9 @@ export function RichText({ text, lines, className }: { text: string; lines?: num
 
 /**
  * A line the harness wrote, an attention item's detail, with its `code` spans set as code and nothing else read: the
- * rest stays text, its URLs linked unless `links` is false, as inside an element that is already a link. A GitHub PR's
- * address is named as the PR is anywhere (`acme/web#88`): a `PullRequestLink`, or its name alone without links.
+ * rest stays text, its URLs and the runs it names (`run:40`) linked unless `links` is false, as inside an element that
+ * is already a link. A GitHub PR's address is named as the PR is anywhere (`acme/web#88`): a `PullRequestLink`, or its
+ * name alone without links.
  */
 export function InlineCode({ text, links = true }: { text: string; links?: boolean }) {
     return codeSpans(text).map((piece, i) =>
@@ -68,7 +71,12 @@ export function InlineCode({ text, links = true }: { text: string; links?: boole
 
 function HarnessText({ part, links }: { part: Piece; links: boolean }) {
     if (part.href === undefined) {
-        return part.text
+        if (!links) {
+            return part.text
+        }
+        return splitRunRefs(part.text).map((piece, i) =>
+            piece.run === undefined ? piece.text : <RunLink key={i} id={piece.run} />,
+        )
     }
     if (isPullRequest(part.href)) {
         return links ? <PullRequestLink url={part.href} /> : pullRequestLabel(part.href)

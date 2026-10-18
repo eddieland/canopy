@@ -267,8 +267,9 @@ Rules:
   findings and transcript, a tick's decisions, a review's findings and diff, a PR's reviews. A chore's notes are a
   thread nothing waits on, written now and then, so they follow its main content, with its spend. Then the supporting
   lists: runs, decisions, spend. So on a half-width second monitor a ticket's reply is reached before its runs and
-  decisions, and the attention detail, the other place a ticket is answered, reads in the same order: the item, the
-  ticket's actions and any limit it is stuck at, then its conversation and the reply. An action over a whole list
+  decisions, and the attention detail, the other place a ticket is answered, reads in the same order: the item, then
+  what its reason asks for first (below, "The attention detail"), any limit it is stuck at, then its conversation and
+  the reply. An action over a whole list
   sits in that list's panel header, as a transcript's All open does: the worktrees' Read again heads their one Pools
   panel, a section per pool in it. A ticket's plan is on a page of its own, `/tickets/$key/plan`, under the ticket in
   the trail; the ticket's page has its card (`PlanCard`), and a `plan_review` item shows it too: the plan's reference
@@ -676,18 +677,37 @@ list, an empty state, or a skeleton by hand.
   otherwise. A finding's reason is its id, the agent's text, so its chip says `finding` and the id follows its chore in
   muted monospace. An item's detail is the harness's line, with its `code` spans set as code and nothing else read
   (`InlineCode`), but for a GitHub PR's address, which is a `PullRequestLink` (its name alone in a row, which is a link
-  already), so a detail names a PR as the rest of the page does. The harness names a run in it as `canopy show` reads
-  one, `run:40`. The list is Attention, as the page and its counter are; what waits on the operator's answer is `waiting
-  on you` wherever it shows: the counter, a question's chip in a conversation, the tickets list, and the rail. The
-  selection is `?item=<id>`; with none, the most severe item about a ticket. A ticket's item shows, under the item, the
-  ticket's actions and what it is stuck at (below), then its conversation and the reply form, as a ticket's page orders
-  them; a `plan_review` item first shows the plan's card (`PlanCard`, `bare`, its parts in the item's panel), with
-  `Approve` and `Open plan`, since the plan is what it asks for; an item about a PR no ticket owns, its review limit; a
-  chore's item (a finding or `chore_failed`) shows the chore's notes and the note form, and a finding a ghost `dismiss`
-  beside its age (`useDismissFinding`) and, in place of its detail, the finding as its chore's page has it
-  (`ChoreFindingText`): the title whole, then what it says of itself, then its link on its own line, where the item's
-  detail runs title and link together; an item about neither shows its detail and nothing to answer. The page keeps no
-  list of the runs working now: the rail's, on every page, is the one, so one count of them shows at a time.
+  already), so a detail names a PR as the rest of the page does, and a run named as `canopy show` reads one, `run:40`,
+  which is a `RunLink`. The CLI's `answer with canopy reply KEY` is left off the end of a question's detail: the page's
+  reply form is the answer (`shownDetail`). The list is Attention, as the page and its counter are; what waits on the
+  operator's answer is `waiting on you` wherever it shows: the counter, a question's chip in a conversation, the tickets
+  list, and the rail. The selection is `?item=<id>`; with none, the most severe item about a ticket.
+- **The attention detail: the reason picks the first block**, under the item's head, what the reason asks of the
+  operator (`ask` in `src/lib/attention.ts`), so the action it calls for is never buried under louder controls about
+  something else. A run that broke (`worker_failed`, `crashed`, `unpushed`, `unknown_result`, `attempt_limit`): the
+  ticket's latest run as a `RunsTable` row (its state, `run:N`, what it said, its cost), then the grant when it is stuck
+  at a limit, so why it failed is read and another try allowed without leaving the page. A PR that waits on someone else
+  (`needs_reviewer`, `ready_to_merge`): the PR's `LinkOutButton`, the item's action, its other mention in the head plain
+  text, so the PR is one tab stop. A wait on the operator's answer (`awaiting_reply`, `untrusted_review`): the reply
+  form is the action, and a question's head names it, `Waits on your answer to message 5, asked 3m ago`, rather than
+  saying it, since the conversation holds it, marked `waiting on you` (One home per fact). A plan (`plan_review`): the
+  plan's card (`PlanCard`, `bare`, its parts in the item's panel), with `Approve` and `Open plan`. Memory's items
+  (`memory_proposal`, `lesson_review`, `lesson_wrong`): the proposals or lessons they name, with their verbs (above). An
+  item about nothing the page shows whose detail names a `canopy` command to run (`repo_missing`): the command,
+  `Copyable`, and nothing to answer. A ticket's item then shows what it is stuck at (below), its conversation, and the
+  reply form; on the reasons above the ticket's own verbs (Start or Stop, Forget) are a quiet row under the thread,
+  Start and Stop as ghost buttons, and on any other reason they lead, under the head, as they foot a ticket page's Work
+  panel. An item about a PR no ticket owns shows its review limit; a chore's item (a finding or `chore_failed`) shows
+  the chore's notes and the note form, and a finding a ghost `dismiss` beside its age (`useDismissFinding`) and, in
+  place of its detail, the finding as its chore's page has it (`ChoreFindingText`): the title whole, then what it says
+  of itself, then its link on its own line, where the item's detail runs title and link together; an item about none of
+  them shows its detail and nothing to answer. The page keeps no list of the runs working now: the rail's, on every
+  page, is the one, so one count of them shows at a time.
+- **The reply form is open only where a reply is awaited** (`ReplyForm`): a question waiting, an untrusted review
+  waiting on the go-ahead, any private ticket, whose workers hear the operator only there, and a chore's notes. A public
+  ticket with nothing waiting gets a `Disclosure`, `Show a note for its next worker`, since a full-size box invites a
+  reply nothing waits on; it opens by itself once a reply is awaited or a draft is kept. Its placeholder speaks of an
+  untrusted review only while one waits. It is the form's rule, so the ticket's page and its attention item agree.
 - **A conversation** is a column of messages, each a head line (id, who, kind, age) over a bubble at most `max-w-2xl`
   wide: `surface-raised` for a worker's report or a tracker comment, the `status-blocked` tint for a question, and the
   accent's tint for the operator's own words, which sit on the right. A bubble's corner nearest its side is square.

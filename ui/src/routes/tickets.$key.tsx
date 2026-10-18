@@ -37,6 +37,7 @@ import { TicketLinks } from '@/components/ticket-links'
 import { WorkingNow } from '@/components/working-now'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
+import { useUntrustedReview } from '@/hooks/use-untrusted-review'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
 import { phaseLabel, phaseWord } from '@/lib/phase'
@@ -96,6 +97,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
     const runsOrder = useListOrder('ticket-runs')
     const decisionsOrder = useListOrder('ticket-decisions')
     const conversationOrder = useListOrder('conversation')
+    const untrusted = useUntrustedReview(ticket.key)
     const plans = useQuery(ticketPlansQuery(ticket.key)).data
     const planned = plans !== undefined && (plans.needed || plans.plans.length > 0)
     // A plan waiting on the operator is what they came to answer, so its card leads the page. Where it sits is settled
@@ -189,6 +191,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         key={ticket.key}
                         target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}
                         waiting={ticket.awaiting}
+                        untrusted={untrusted}
                     />
                 </Panel>
                 <Panel className="2xl:col-start-1 2xl:row-start-2" data-testid="ticket-runs">

@@ -67,6 +67,8 @@ test('a public ticket takes a reply that stays in canopy, and its tracker commen
     page,
 }) => {
     await page.goto('tickets/ABC-101')
+    // Nothing waits on it, so the box opens on asking.
+    await page.getByRole('button', { name: 'Show a note for its next worker' }).click()
     const form = page.getByRole('form', { name: 'Reply' })
     await expect(form.getByRole('textbox')).toHaveAttribute('placeholder', /never on the ticket/u)
     await form.getByRole('textbox').fill('Use your judgement on the review bot.')
@@ -88,6 +90,7 @@ test('a public ticket takes a reply that stays in canopy, and its tracker commen
 
 test('Enter sends a reply and Shift+Enter starts a new line', async ({ page }) => {
     await page.goto('tickets/ABC-101')
+    await page.getByRole('button', { name: 'Show a note for its next worker' }).click()
     const form = page.getByRole('form', { name: 'Reply' })
     await expect(form.getByRole('button', { name: 'Reply' })).toHaveAttribute('aria-keyshortcuts', 'Enter')
     const box = form.getByRole('textbox')
@@ -178,6 +181,7 @@ test('under Ctrl+Enter, Enter starts a new line and Ctrl+Enter sends', async ({ 
     await page.getByTestId('send-key-mod-enter').click()
     await expect(page.getByTestId('send-key-mod-enter')).toHaveAttribute('aria-checked', 'true')
     await page.goto('tickets/ABC-101')
+    await page.getByRole('button', { name: 'Show a note for its next worker' }).click()
     const form = page.getByRole('form', { name: 'Reply' })
     // Chromium on Linux: the button names Ctrl, not ⌘.
     await expect(form.getByRole('button', { name: 'Reply' })).toHaveAttribute('aria-keyshortcuts', 'Control+Enter')

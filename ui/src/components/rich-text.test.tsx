@@ -77,11 +77,17 @@ describe('InlineCode', () => {
         expect(screen.getAllByRole('link')).toHaveLength(3)
     })
 
+    it('links the runs harness text names to their pages', async () => {
+        await renderRouted(<InlineCode text="run:40 (fix-ci) ended failed; log runs/40.log" />)
+        expect(screen.getByRole('link', { name: 'run:40' }).getAttribute('href')).toBe('/runs/40')
+        expect(screen.getAllByRole('link')).toHaveLength(1)
+    })
+
     it('links nothing inside an element that is already a link, and still names a PR', () => {
         const { container } = render(
-            <InlineCode text={`opened ${PR}; CI at https://ci.example.test/7`} links={false} />,
+            <InlineCode text={`run:40 opened ${PR}; CI at https://ci.example.test/7`} links={false} />,
         )
         expect(screen.queryByRole('link')).toBeNull()
-        expect(container.textContent).toBe('opened acme/web#88; CI at https://ci.example.test/7')
+        expect(container.textContent).toBe('run:40 opened acme/web#88; CI at https://ci.example.test/7')
     })
 })
