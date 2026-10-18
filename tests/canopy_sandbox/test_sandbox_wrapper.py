@@ -4,6 +4,7 @@ The fake `srt` on PATH records the policy and environment the wrapper hands it, 
 These tests check what the wrapper asks of the sandbox, not that the sandbox holds: that is the canary's job (§6).
 """
 
+import hashlib
 import json
 import os
 import shutil
@@ -542,6 +543,197 @@ def test_what_a_run_leaves_in_place_of_its_logins_is_never_followed(
     assert {p.name: p.read_bytes() for p in elsewhere.iterdir()} == before
 
 
+@dataclass(frozen=True)
+class Bazel:
+    """A `bazel` on PATH that prints its arguments and the rc file it is given, and the operator's repository cache."""
+
+    operator: Path
+    farm: Path
+
+    def entry(self, content: bytes, algorithm: str = "sha256") -> Path:
+        """Put `content` in the operator's cache, as Bazel stores a download, and return its entry."""
+        entry = self.operator / "content_addressable" / algorithm / hashlib.new(algorithm, content).hexdigest()
+        entry.mkdir(parents=True)
+        (entry / "file").write_bytes(content)
+        return entry
+
+    def mine(self, name: str, algorithm: str = "sha256") -> Path:
+        """The role's entry `name`."""
+        return self.farm / "content_addressable" / algorithm / name
+
+
+@pytest.fixture
+def fake_bazel(sandbox: Sandbox, tmp_path: Path) -> Iterator[Bazel]:
+    """A fake `bazel` first on PATH, and an empty repository cache of the operator's, outside the sandbox's caches."""
+    bin_dir = tmp_path / "bazel-bin"
+    bin_dir.mkdir()
+    executable(bin_dir / "bazel", '#!/bin/sh\nprintf "%s\\n" "$@"\ncat "${1#--bazelrc=}"\n')
+    with mock.patch.dict(os.environ, {"PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}):
+        yield Bazel(tmp_path / "bazel-repository-cache", sandbox.caches() / "chore" / "bazel" / "repository-cache")
+
+
+def adds_download(content: bytes, *, name: str | None = None, algorithm: str = "sha256") -> list[str]:
+    """A command that adds `content` to the role's repository cache as Bazel would, under its checksum or `name`."""
+    key = name or hashlib.new(algorithm, content).hexdigest()
+    entry = f'"$XDG_CACHE_HOME/bazel/repository-cache/content_addressable/{algorithm}/{key}"'
+    marker = "id-" + "b" * 64
+    script = f'mkdir -p {entry} && printf %s "$1" > {entry}/file && touch {entry}/{marker}'
+    return ["sh", "-c", script, "sh", content.decode()]
+
+
+def test_bazel_runs_with_the_roles_caches_and_reads_the_operators_downloads(
+    sandbox: Sandbox, fake_bazel: Bazel, tmp_path: Path
+) -> None:
+    """The run's `bazel` reads an rc file of the run's after the repository's: the role's own caches, its repository
+    cache a link to each of the operator's downloads, which the run may read and not write."""
+    entry = fake_bazel.entry(b"torch")
+    options = ["--bazel-repository-cache", str(fake_bazel.operator)]
+
+    done = wrap("chore", *options, "--", "bazel", "build", "//:all", cwd=tmp_path)
+
+    assert done.ok, done.stderr
+    call = sandbox.only_call()
+    bin_dir = call["env"]["PATH"].split(os.pathsep)[0]
+    rc, *args = done.stdout.splitlines()[:3]
+    assert rc == f"--bazelrc={bin_dir}/bazelrc"
+    assert args == ["build", "//:all"]
+    root = sandbox.caches() / "chore" / "bazel"
+    assert done.stdout.splitlines()[3:] == [
+        f"startup --output_user_root={root / 'output'}",
+        f"common --repository_cache={root / 'repository-cache'}",
+        f"common --disk_cache={root / 'disk-cache'}",
+    ]
+    assert fake_bazel.mine(entry.name).readlink() == entry
+    filesystem = call["settings"]["filesystem"]
+    assert str(fake_bazel.operator) in filesystem["allowRead"]
+    assert str(fake_bazel.operator) in filesystem["denyWrite"]
+    assert bin_dir in filesystem["allowRead"]
+
+
+def test_a_download_a_run_adds_is_copied_into_the_operators_cache_once_checked(
+    sandbox: Sandbox, fake_bazel: Bazel, tmp_path: Path
+) -> None:
+    """From a copy the run cannot reach, and only when that copy has the checksum it is named by. The role's entry
+    then links to the operator's, so the download is kept once."""
+    options = ["--bazel-repository-cache", str(fake_bazel.operator)]
+    key = hashlib.sha256(b"cuda").hexdigest()
+
+    done = wrap("chore", *options, "--", *adds_download(b"cuda"), cwd=tmp_path)
+
+    assert done.ok, done.stderr
+    operator = fake_bazel.operator / "content_addressable" / "sha256" / key
+    assert (operator / "file").read_bytes() == b"cuda"
+    assert (operator / ("id-" + "b" * 64)).exists()
+    assert fake_bazel.mine(key).readlink() == operator
+    assert "copied 1 Bazel downloads" in done.stderr
+    assert [p.name for p in operator.parent.iterdir()] == [key]  # no copy left behind
+
+
+@pytest.mark.parametrize(
+    ("command", "algorithm"),
+    [
+        pytest.param(adds_download(b"cuda", name="0" * 64), "sha256", id="not-its-checksum"),
+        pytest.param(adds_download(b"cuda", algorithm="sha1"), "sha1", id="sha1"),
+    ],
+)
+def test_a_download_whose_checksum_cannot_be_trusted_stays_the_roles(
+    sandbox: Sandbox, fake_bazel: Bazel, tmp_path: Path, command: list[str], algorithm: str
+) -> None:
+    """SHA-1 has known collisions: a run could make two files with one name."""
+    options = ["--bazel-repository-cache", str(fake_bazel.operator)]
+
+    done = wrap("chore", *options, "--", *command, cwd=tmp_path)
+
+    assert done.ok, done.stderr
+    assert not [p for p in fake_bazel.operator.rglob("*") if not p.is_dir()]
+    [mine] = (fake_bazel.farm / "content_addressable" / algorithm).iterdir()
+    assert mine.is_dir()
+    assert not mine.is_symlink()
+
+
+def test_a_killed_runs_download_is_copied_back_by_its_roles_next_run(
+    sandbox: Sandbox, fake_bazel: Bazel, tmp_path: Path
+) -> None:
+    key = hashlib.sha256(b"cuda").hexdigest()
+    left = fake_bazel.mine(key)
+    left.mkdir(parents=True)
+    (left / "file").write_bytes(b"cuda")
+    gone = fake_bazel.mine("1" * 64)
+    gone.symlink_to(fake_bazel.operator / "content_addressable" / "sha256" / ("1" * 64))
+
+    assert wrap("chore", "--bazel-repository-cache", str(fake_bazel.operator), "--", "true", cwd=tmp_path).ok
+
+    assert (fake_bazel.operator / "content_addressable" / "sha256" / key / "file").read_bytes() == b"cuda"
+    assert left.is_symlink()
+    assert not gone.is_symlink()  # a link to a download the operator's cache no longer has
+
+
+def test_a_download_the_operator_fetched_meanwhile_is_linked_and_not_copied(
+    sandbox: Sandbox, fake_bazel: Bazel, tmp_path: Path
+) -> None:
+    entry = fake_bazel.entry(b"cuda")
+    left = fake_bazel.mine(entry.name)
+    left.mkdir(parents=True)
+    (left / "file").write_bytes(b"cuda")
+
+    done = wrap("chore", "--bazel-repository-cache", str(fake_bazel.operator), "--", "true", cwd=tmp_path)
+
+    assert done.ok, done.stderr
+    assert left.readlink() == entry
+    assert "copied" not in done.stderr
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        pytest.param('rm -r "$1/content_addressable" && ln -s "$2" "$1/content_addressable"', id="cas-link"),
+        pytest.param('mkdir -p "$4" && ln -s "$2/sha256/$3/file" "$4/file"', id="file-link"),
+        pytest.param('mkdir -p "$4" && mkfifo "$4/file"', id="fifo"),
+    ],
+)
+def test_what_a_run_leaves_in_its_repository_cache_is_never_followed(
+    sandbox: Sandbox, fake_bazel: Bazel, tmp_path: Path, script: str
+) -> None:
+    """The host reads the role's repository cache: a link the run left is not followed, and a fifo does not hang it."""
+    elsewhere = tmp_path / "elsewhere"
+    key = hashlib.sha256(b"cuda").hexdigest()
+    (elsewhere / "sha256" / key).mkdir(parents=True)
+    (elsewhere / "sha256" / key / "file").write_bytes(b"cuda")
+    options = ["--bazel-repository-cache", str(fake_bazel.operator)]
+    farm = str(fake_bazel.farm)
+
+    entry = str(fake_bazel.mine(key))
+    done = wrap("chore", *options, "--", "sh", "-c", script, "sh", farm, str(elsewhere), key, entry, cwd=tmp_path)
+    again = wrap("chore", *options, "--", "true", cwd=tmp_path)
+
+    assert done.ok, done.stderr
+    assert again.ok, again.stderr
+    assert not (fake_bazel.operator / "content_addressable" / "sha256" / key).exists()
+    assert (elsewhere / "sha256" / key / "file").read_bytes() == b"cuda"
+    assert not (fake_bazel.farm / "content_addressable").is_symlink()
+
+
+@pytest.mark.parametrize("place", ["inside", "holding"])
+def test_a_bazel_repository_cache_that_overlaps_the_sandboxs_caches_runs_nothing(
+    sandbox: Sandbox, fake_bazel: Bazel, tmp_path: Path, place: str
+) -> None:
+    operator = sandbox.caches() / "x" if place == "inside" else sandbox.cache_home
+
+    done = wrap("chore", "--bazel-repository-cache", str(operator), "--", "true", cwd=tmp_path)
+
+    assert done.returncode == 2
+    assert "overlaps the sandbox's caches" in done.stderr
+    assert not sandbox.log.exists()
+
+
+@pytest.mark.usefixtures("sandbox")
+def test_a_bazel_repository_cache_without_bazel_runs_nothing(tmp_path: Path) -> None:
+    done = wrap("chore", "--bazel-repository-cache", str(tmp_path / "cache"), "--", "true", cwd=tmp_path)
+
+    assert done.returncode == 2
+    assert "--bazel-repository-cache was given, but bazel is not on PATH" in done.stderr
+
+
 def test_a_run_that_locks_its_temp_directory_still_has_it_removed(sandbox: Sandbox, tmp_path: Path) -> None:
     lock = 'mkdir -p "$TMPDIR/a/b" && chmod 000 "$TMPDIR/a" "$TMPDIR"'
 
@@ -698,6 +890,7 @@ def test_a_run_directory_whose_process_is_gone_is_removed_by_the_next_run(sandbo
         (["chore", "--"], "no command to run"),
         (["chore", "--read"], "--read takes an absolute path"),
         (["chore", "--read", "relative", "true"], "--read takes an absolute path"),
+        (["chore", "--bazel-repository-cache", "relative", "true"], "--bazel-repository-cache takes an absolute path"),
         (["worker", "true"], "CANOPY_GIT_OBJECTS is not set"),
     ],
 )

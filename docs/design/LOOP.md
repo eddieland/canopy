@@ -835,6 +835,8 @@ The operator's guide, with a `.bazelrc` recipe, examples of each setup step, siz
 - Bazel keys a workspace's output base on its path. Slots keep their paths across leases, so each slot's output base
   stays warm for whichever run leases it next. Slots share work only through what the operator's `.bazelrc` shares: a
   disk cache and a repository cache, or a remote cache.
+- A sandboxed run writes none of the operator's Bazel caches. It has caches of its own, and with
+  `--bazel-repository-cache` reads the operator's downloads and hands back its own once checked (§24, Bazel).
 - canopy does not stop a slot's Bazel server when it returns the slot: the harness knows no build tool. The
   operator's `startup --max_idle_secs` ends it once the slot has been idle that long.
 - `bazel-out/`, `bazel-bin/`, and `bazel-testlogs/` are links from the slot into its output base, outside the

@@ -41,7 +41,8 @@ worker_cmd = '''canopy-sandbox worker --read {definitions_dir} -- env OPENCODE_C
 `canopy-sandbox` is a short program canopy installs beside itself, not harness code (D041, D117). Its first argument is
 a role, `worker`, `setup`, `chore`, or `review`, which picks the policy template `~/.config/canopy/sandbox/<role>.json`;
 `--read` names a path the command may read, which is how canopy's agent definitions are re-allowed: pass it
-`{definitions_dir}`. Name the wrapper by its absolute path when `PATH` has a relative entry: canopy runs the template
+`{definitions_dir}`. `--bazel-repository-cache` names the operator's Bazel repository cache, to share its downloads
+(Bazel, below). Name the wrapper by its absolute path when `PATH` has a relative entry: canopy runs the template
 from the slot, where `.` finds what the branch committed. It runs in the run's cwd, the slot or the desk (§8, §18),
 and:
 
@@ -106,6 +107,7 @@ with a `cwd` of its own names no `.canopy/`, so the operator adds the workspace 
 | The operator's runtime data (`~/.local/share/opencode`) | no | no | The host's OpenCode acts on it (Logins, below). |
 | Toolchains the build needs (`~/.local/bin`, `~/.cargo`, `~/.nvm`, ...) | yes | no | Running tests. |
 | The role's cache directory, `~/.cache/canopy/sandbox/<role>/` | yes | yes | Every cache, the runtime's too (below). |
+| The operator's Bazel repository cache, named with `--bazel-repository-cache` | yes | no | Its downloads (Bazel, below). |
 | The operator's own caches (`~/.cache`, `~/.npm`, ...) | no | no | The host runs what is in them. |
 | A per-run temp directory, exported as `TMPDIR` | yes | yes | Scratch space. |
 | A chore's own `cwd` (default `<state_dir>/chores/<name>/`) | yes | only if it writes | Chores only (below). |
@@ -145,9 +147,39 @@ checkout and reach no `github.com`. Rejected: a cache per run, which would fetch
 and one cache for every role, which would hand what a review left to a worker.
 
 What a role's runs share is theirs to poison for one another, as `/tmp/claude` is (Trust model changes, below): a
-private ticket's worker and a public one share the worker's. Bazel's caches are the operator's own builds' too, and
-nothing yet gives the sandbox Bazel caches of its own (Open, below). `canopy sandbox setup` says when a template it kept
-still allows writing in the operator's cache directory.
+private ticket's worker and a public one share the worker's. Bazel's caches are the operator's own builds' too (Bazel,
+below). `canopy sandbox setup` says when a template it kept still allows writing in the operator's cache directory.
+
+### Bazel
+
+§9 shares Bazel's caches across slots through the operator's `.bazelrc`, so the operator's own builds share them too.
+A sandboxed run may not write them: Bazel takes an action's outputs from the disk cache without checking them, and
+runs its own binaries from under the output root. Built cold, though, a repository with large downloads, such as
+PyTorch's wheels or CUDA's archives, fetches them again in every slot. The operator asked (2026-10-18) for the
+sandbox to share their downloads, so the wrapper does, for a run whose prefix names the operator's repository cache
+with `--bazel-repository-cache`:
+
+- The run's Bazel gets caches of the role's own, under its cache directory: an output root, a disk cache, and a
+  repository cache. Bazel takes no variable for them, so the wrapper puts a `bazel` of its own first on the command's
+  `PATH`, which runs the real one with `--bazelrc` naming a file of the run's; Bazel reads that file after the
+  repository's own, so its lines win. A Bazel run by its absolute path gets none of this, and finds the operator's
+  caches unwritable.
+- The role's repository cache is made of a link to each entry in the operator's, added before each run, which the
+  policy lets the run read and not write, so a download the operator already has is never fetched again. A download
+  the run adds lands in the role's cache.
+- When the run ends, and before the role's next run, the wrapper copies each download the run added into the
+  operator's cache, then links the role's entry to it. It copies the file somewhere no run can reach first, and takes
+  it only when that copy has the checksum Bazel named the entry by, as SHA-256, SHA-384, or SHA-512: SHA-1 has known
+  collisions. The operator's own builds then reuse it.
+- A run may not write the operator's repository cache, even though Bazel checks each download's checksum when it reads
+  one (Bazel 9.3.0). It checks, then copies in a separate step, so a run that could rename a file of its own over the
+  entry in between would hand the operator's builds a file of its choosing.
+
+Rejected: sharing the operator's repository cache writable, for that race; read-only alone, since Bazel 9.3.0 fails a
+fetch whose download it cannot store; and copying the operator's downloads in, which doubles their space. Checked
+under `srt` 0.0.79 and bubblewrap 0.9 with Bazel 8.4.2: a sandboxed build reads a download through the link with its
+source gone, and its own download reaches the operator's cache, where the operator's own build uses it. Bazel's own
+sandbox runs nested inside `srt`'s on Linux; macOS is not yet checked.
 
 ### Logins
 
@@ -302,7 +334,8 @@ checked on the host, never by whether the attempt reported an error. Every attem
 - Read a fake SSH key, and anything else under `$HOME` outside the policy.
 - Write under `$HOME`, `~/.config/canopy`, the operator's `~/.cache/opencode` or `~/.local/share/opencode` (the
   latter under a template from before `@DATA@` too), or the state directory; read the operator's OpenCode data; read
-  or write another role's cache or data directory.
+  or write another role's cache or data directory; write the operator's Bazel repository cache, through the role's
+  link to an entry, directly, or by renaming over an entry.
 - Move another slot's branch or any other ref; write the common directory's config or hooks, a `config.worktree`, the
   slot's `commondir` or `gitdir`, or its `.git` link.
 - Connect to a host off the allowlist, to a metadata address, to the host's loopback, or to a Unix socket the host
@@ -315,9 +348,10 @@ to write the checkout and its git directories.
 The positive controls must succeed, so a sandbox that blocks everything cannot pass: commit in the slot, its objects
 only in the run's directory; commit in a repository a tool keeps as a cache, its objects in its own; keep a cache for
 the role's next run; read the operator's logins and hand back a refreshed token, as a worker, a chore, and a review;
-read the checkout as a review; reach an allowed host; run under the system temp directory; receive
-an arbitrary prompt byte for byte; and be killed at a timeout, leaving no process behind (on macOS, only the sandbox's
-process group). Against a fake `srt` that sandboxes nothing, every case but the positive controls fails.
+read a download of the operator's Bazel repository cache through the role's; read the checkout as a review; reach an
+allowed host; run under the system temp directory; receive an arbitrary prompt byte for byte; and be killed at a
+timeout, leaving no process behind (on macOS, only the sandbox's process group). Against a fake `srt` that sandboxes
+nothing, every case but the positive controls fails.
 
 ### Trust model changes
 
@@ -326,7 +360,8 @@ unwrapped overseer and harness calls, `/tmp/claude`, which every process `srt` s
 says, so two runs can pass files through it, and exfiltration through an allowed host with the credentials a run holds.
 A run can also hand back, as a refresh, a token of another account for a login the operator has, or a bad one: the
 operator's OpenCode, the overseer's included, then works as that account, or fails until the operator logs in again.
-It runs no code on the host. The tests with a fake `srt` check what is copied back; the canary checks the denials.
+It runs no code on the host. A run can hand back a Bazel download too, which the operator's builds reuse, but only one
+whose checksum is its name (Bazel, above): it can add a file to the operator's repository cache, and change none.
 The rest of the system temp directory stays readable, as other system paths do: denying it breaks tools that write
 there without reading `TMPDIR`.
 
@@ -335,9 +370,6 @@ there without reading `TMPDIR`.
 - SSH pushes. `srt`'s per-path `allowUnixSockets` is macOS-only; on Linux the only switch is `allowAllUnixSockets`,
   which lifts the block entirely. Whether to support SSH inside the sandbox at all (allow the agent socket, or push
   from the host in `_run`), or leave it to unsandboxed runs, is undecided.
-- Bazel's caches. §9 shares them across slots, and BAZEL.md through the operator's own `~/.bazelrc`, so its own
-  builds share them too. A sandboxed run may not write them (Caches, above), so it builds cold, until a bazelrc that
-  only sandboxed runs read points them under the cache directory.
 - The repository's OpenCode config (skills, MCP servers, plugins) comes from the checked-out branch (T7 residual).
   canopy's own agent definitions do not (D040, D044). The sandbox does not change that, but it bounds what a hostile
   config can reach.

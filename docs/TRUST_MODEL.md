@@ -297,17 +297,19 @@ Controls now:
   that link; a canary like the desk's checks the reads (DESIGN §21).
 - Opt-in: an OS sandbox around every agent run but the overseer's (HOST_ISOLATION, docs/SANDBOX.md, D117, D118). The
   operator prefixes `worker_cmd`, `private_worker_cmd`, `split_cmd`, `plan_cmd`, `runtime.setup_cmd`, `chore_cmd` and
-  each chore's `cmd`, and `review_cmd` with `canopy-sandbox <role>`, which runs the command under `srt` with a policy
-  it writes for the run from the operator's template for that role. Under the shipped templates a sandboxed run reads, under
-  `$HOME`, only its worktrees and their git directories, canopy's agent definitions, and the runtime's and toolchains'
-  files: not `~/.ssh`, other repositories, `~/.config/canopy`, the workspace's `.canopy/`, or the operator's OpenCode
-  data. It writes only its worktrees, its slot's own HEAD, index, and reflog, a per-run object directory and temp
-  directory, and its role's own cache and data directories: no ref another slot shares, no hook, git config, `.git`
+  each chore's `cmd`, and `review_cmd` with `canopy-sandbox <role>`, which runs the command under `srt` with a policy it
+  writes for the run from the operator's template for that role. Under the shipped templates a sandboxed run reads,
+  under `$HOME`, only its worktrees and their git directories, canopy's agent definitions, and the runtime's and
+  toolchains' files: not `~/.ssh`, other repositories, `~/.config/canopy`, the workspace's `.canopy/`, or the operator's
+  OpenCode data. It writes only its worktrees, its slot's own HEAD, index, and reflog, a per-run object directory and
+  temp directory, and its role's own cache and data directories: no ref another slot shares, no hook, git config, `.git`
   link, or `commondir` that git on the host later reads, and none of the operator's caches or OpenCode data, which the
   host's OpenCode, the overseer's included, acts on. Its OpenCode starts with a copy of the operator's logins, and only
-  a refreshed token of a login the operator has is copied back (DESIGN §24, Logins). A review writes none of its
-  checkout. For a sandboxed run the sandbox is the boundary, and the runtime's
-  permissions stay as defense in depth.
+  a refreshed token of a login the operator has is copied back (DESIGN §24, Logins). With `--bazel-repository-cache`, it
+  reads the operator's Bazel downloads and writes none of them; a download it adds is copied into the operator's cache
+  only from a copy it cannot reach, and only when its checksum is the name Bazel stored it under (DESIGN §24, Bazel). A
+  review writes none of its checkout. For a sandboxed run the sandbox is the boundary, and the runtime's permissions
+  stay as defense in depth.
 - The prefix is in the user file or the workspace's private file, which no repository or workspace file can set (T7)
   and no sandboxed run can write, so neither removes it. The harness never learns whether a run is sandboxed: it runs
   the template (D023, D118).
@@ -322,13 +324,14 @@ Controls now:
   so that a sandbox that refuses everything fails. CI runs it on Linux.
 
 Residual: an unsandboxed run has a filesystem-wide shell as the operator, and the sandbox is opt-in. A sandboxed one
-shares the kernel, so code written to escape it is not contained. The overseer, `notify.cmd`, and the harness's own
-git and treehouse calls run outside it (HOST_ISOLATION §4.4). Every process `srt` sandboxes can write `/tmp/claude`,
-so two runs can pass files through it. A run can hand back, as a refresh, a token of another account for a login the
-operator has, or a bad one, so that the operator's OpenCode works as that account or fails until they log in again; it
-runs no code on the host. A filter driver the operator's own git config defines still runs on whatever a
-branch's `.gitattributes` selects, on a slot's return as on any checkout. A template the operator edits can allow
-anything; canopy checks only that it denies some reads and lists an allowlist.
+shares the kernel, so code written to escape it is not contained. The overseer, `notify.cmd`, and the harness's own git
+and treehouse calls run outside it (HOST_ISOLATION §4.4). Every process `srt` sandboxes can write `/tmp/claude`, so two
+runs can pass files through it. A run can hand back, as a refresh, a token of another account for a login the operator
+has, or a bad one, so that the operator's OpenCode works as that account or fails until they log in again; it runs no
+code on the host. A Bazel download a run hands back is one the operator's builds may reuse, but its checksum is its
+name, so it is the file any download under that checksum would be. A filter driver the operator's own git config defines
+still runs on whatever a branch's `.gitattributes` selects, on a slot's return as on any checkout. A template the
+operator edits can allow anything; canopy checks only that it denies some reads and lists an allowlist.
 
 ### T5. Attribution and audit
 

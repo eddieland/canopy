@@ -62,6 +62,9 @@ What each line buys:
 If your repository's `.bazelrc` already does `try-import %workspace%/user.bazelrc`, you can put these lines there
 instead, and seed that file into every slot (setup step 2).
 
+If you run workers in a sandbox, a sandboxed run cannot write these caches, and gets caches of its own instead. It can
+still share your downloads through `--repository_cache`: see [SANDBOX.md](SANDBOX.md), section 5, Bazel.
+
 ## 2. Seed your local files into each slot
 
 Gitignored files in your primary clone, such as `user.bazelrc`, `.env.local`, or credentials a build reads, are not in

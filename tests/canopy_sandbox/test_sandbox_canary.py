@@ -22,7 +22,7 @@ import sqlite3
 import sys
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from unittest import mock
@@ -98,15 +98,21 @@ class Canary:
         return self.common / "worktrees" / self.slot.name
 
     def run(
-        self, script: str, *args: str, role: str = "worker", tmpdir: str | None = None, timeout: float | None = None
+        self,
+        script: str,
+        *args: str,
+        role: str = "worker",
+        tmpdir: str | None = None,
+        timeout: float | None = None,
+        options: Sequence[str] = (),
     ) -> procs.Result:
         """Run `sh -c script` in the slot as `role`, through the wrapper and srt, and check that it started.
 
         A chore runs in its default directory instead, and a review in its own directory, which links to the slot as
         `checkout`, as canopy lays them out. `tmpdir`, when given, is the TMPDIR the wrapper runs with, in place of the
-        fixture's short one.
+        fixture's short one. `options` go to the wrapper, before the command.
         """
-        argv = [str(WRAPPER), role, "--", "sh", "-c", f"echo {RAN}\n{script}", "sh", *args]
+        argv = [str(WRAPPER), role, *options, "--", "sh", "-c", f"echo {RAN}\n{script}", "sh", *args]
         cwd = self.slot
         env: dict[str, str] = {"CANOPY_GIT_OBJECTS": str(self.objects)}
         if role == "chore":
@@ -296,6 +302,65 @@ def test_a_run_reads_the_operators_logins_and_hands_back_a_refresh(canary: Canar
     assert done.ok, done.stderr
     assert json.loads(done.stdout.splitlines()[1]) == {"anthropic": OAUTH}
     assert json.loads(operators.read_text()) == refreshed
+
+
+@contextlib.contextmanager
+def bazel_downloads(canary: Canary, tmp_path: Path) -> Iterator[Path]:
+    """A `bazel` on PATH, which the wrapper needs to share a repository cache, and the operator's repository cache under
+    the HOME the templates deny, holding one download.
+
+    Yields:
+        The download's entry.
+    """
+    stub = tmp_path / "bazel-bin"
+    stub.mkdir()
+    (stub / "bazel").write_text("#!/bin/sh\n")
+    (stub / "bazel").chmod(0o755)
+    entry = canary.home / ".cache" / "bazel" / "repository-cache" / "content_addressable" / "sha256" / ("a" * 64)
+    entry.mkdir(parents=True)
+    (entry / "file").write_text("torch\n")
+    with mock.patch.dict(os.environ, {"PATH": f"{stub}{os.pathsep}{os.environ['PATH']}"}):
+        yield entry
+
+
+@pytest.mark.parametrize("role", ["worker", "chore"])
+def test_a_run_reads_the_operators_bazel_downloads(canary: Canary, tmp_path: Path, role: str) -> None:
+    """A positive control: through its role's repository cache, a run reads a download the operator's cache holds."""
+    with bazel_downloads(canary, tmp_path) as entry:
+        options = ["--bazel-repository-cache", str(entry.parents[2])]
+        link = f'"$XDG_CACHE_HOME/bazel/repository-cache/content_addressable/sha256/{entry.name}/file"'
+
+        done = canary.run(f"cat {link}", role=role, options=options)
+
+    assert done.ok, done.stderr
+    assert done.stdout.splitlines()[1:] == ["torch"]
+
+
+@pytest.mark.parametrize(
+    "script",
+    [
+        pytest.param('echo pwned > "$2/file"', id="through-the-link"),
+        pytest.param('echo pwned > "$1/content_addressable/sha256/$3/file"', id="directly"),
+        pytest.param('mv "$2/file" "$2/x"; echo pwned > "$2/file"', id="rename-over"),
+        pytest.param(
+            'e="$1/content_addressable/sha256/$4" && mkdir -p "$e" && echo pwned > "$e/file"', id="a-new-entry"
+        ),
+    ],
+)
+def test_a_run_cannot_write_the_operators_bazel_downloads(canary: Canary, tmp_path: Path, script: str) -> None:
+    """Bazel checks a download, then copies it in a separate step: a run that could write the operator's repository
+    cache could hand the operator's own builds a file of its choosing in between (DESIGN §24)."""
+    with bazel_downloads(canary, tmp_path) as entry:
+        operator = entry.parents[2]
+        before = {str(p): p.read_bytes() for p in operator.rglob("*") if p.is_file()}
+        link = canary.home / ".cache" / "canopy" / "sandbox" / "worker" / "bazel" / "repository-cache"
+        mine = link / "content_addressable" / "sha256" / entry.name
+
+        canary.run(
+            script, str(operator), str(mine), entry.name, "b" * 64, options=["--bazel-repository-cache", str(operator)]
+        )
+
+    assert {str(p): p.read_bytes() for p in operator.rglob("*") if p.is_file()} == before
 
 
 @pytest.mark.parametrize(

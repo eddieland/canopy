@@ -2,14 +2,16 @@
 
 A prefix on a command template in canopy's user config:
 
-    canopy-sandbox ROLE [--read PATH]... [--] COMMAND [ARG]...
+    canopy-sandbox ROLE [--read PATH]... [--bazel-repository-cache PATH] [--] COMMAND [ARG]...
 
 ROLE is `worker`, `setup`, `chore`, or `review`, and picks the policy template `ROLE.json` in
 `$XDG_CONFIG_HOME/canopy/sandbox/` (`~/.config/canopy/sandbox/` when that is unset), where `canopy sandbox setup`
 copies the templates in `templates/`.
 `--read PATH`, which may repeat, names a path the command may read: pass the template's `{definitions_dir}`, so the
-agent can load canopy's agent definitions. COMMAND and its arguments reach `srt` unchanged, after a `--`, so none of
-them is ever read as an option of the wrapper's or of `srt`'s.
+agent can load canopy's agent definitions. `--bazel-repository-cache PATH` names the operator's Bazel repository
+cache, whose downloads the run's Bazel then reads, and to which it adds its own once they are checked (`bazel`).
+COMMAND and its arguments reach `srt` unchanged, after a `--`, so none of them is ever read as an option of the
+wrapper's or of `srt`'s.
 
 In order, it:
 
@@ -42,6 +44,9 @@ In order, it:
    worktrees, and unchanged anywhere else. Exported to every process, git's variables would reach a repository a tool
    keeps in a cache, such as OpenCode's snapshots or Go's module sources, whose objects would then go when the run's
    directory does. A git run by its absolute path gets neither, and in a worktree cannot write objects at all.
+   With `--bazel-repository-cache`, a `bazel` of its own goes there too, for any role, which runs the real one with
+   the role's own Bazel caches, its repository cache linking to the operator's, which the policy lets the run read and
+   not write (`bazel`).
 7. Runs `srt --settings POLICY -- COMMAND...`, waits for it, removes its directory, and exits with `srt`'s status.
    The `srt` is the one `canopy sandbox setup` installed, pinned by `runtime/package-lock.json`, in
    `$XDG_DATA_HOME/canopy/sandbox-runtime/` (`~/.local/share/canopy/sandbox-runtime/` when that is unset), or else
@@ -95,7 +100,7 @@ import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple
 
-from canopy_sandbox import credentials
+from canopy_sandbox import bazel, credentials
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable, Mapping, MutableMapping, Sequence
@@ -233,6 +238,15 @@ class SandboxError(Exception):
     """The command cannot be sandboxed as asked, so it does not run."""
 
 
+class Args(NamedTuple):
+    """What the wrapper's arguments ask for."""
+
+    role: str
+    reads: list[Path]
+    bazel_cache: Path | None
+    command: list[str]
+
+
 class Worktree(NamedTuple):
     """A worktree the run works in, and its git directories."""
 
@@ -258,7 +272,7 @@ def run(argv: list[str]) -> int:
     """
     scrub(os.environ)
     try:
-        role, reads, command = parse(argv)
+        role, reads, bazel_cache, command = parse(argv)
         objects = objects_dir(role)
         cwd = Path.cwd()
         trees = worktrees(role, cwd)
@@ -274,12 +288,17 @@ def run(argv: list[str]) -> int:
         tmp = run_dir / "tmp"
         check_socket_room(tmp)
         tmp.mkdir(mode=0o700)
-        bin_dir = git_shim(run_dir, trees, objects) if objects is not None else None
+        bin_dir = run_dir / "bin" if objects is not None or bazel_cache is not None else None
+        if bin_dir is not None:
+            bin_dir.mkdir(mode=0o700)
+        if bin_dir is not None and objects is not None:
+            git_shim(bin_dir, trees, objects)
+        shared = bazel_shim(bin_dir, cache, bazel_cache) if bin_dir is not None and bazel_cache is not None else []
         policy = fill(template, placeholders(cwd, trees, objects, tmp, cache=cache, data=data, reads=reads))
-        readable = [*vendor_dirs(srt), *([bin_dir] if bin_dir is not None else [])]
+        readable = [*vendor_dirs(srt), *([bin_dir] if bin_dir is not None else []), *shared]
         operator = data_home() / credentials.RUNTIME
         denied = [run_dir.parent, cache.parent, data.parent, *state_dirs(objects, cwd)]
-        check(policy, denied, readable, unwritable=operator_runtime(operator))
+        check(policy, denied, readable, unwritable=[*operator_runtime(operator), *shared])
         settings = run_dir / "policy.json"
         settings.write_text(json.dumps(policy, indent=2) + "\n", encoding="utf-8")
         hand_over(data, operator)
@@ -290,6 +309,8 @@ def run(argv: list[str]) -> int:
     finally:
         remove(run_dir)
     take_back(data, operator)
+    if bazel_cache is not None:
+        take_back_downloads(cache, bazel_cache)
     return status
 
 
@@ -304,29 +325,35 @@ def scrub(env: MutableMapping[str, str]) -> None:
     env["PATH"] = os.pathsep.join(p for p in env.get("PATH", "").split(os.pathsep) if Path(p).is_absolute())
 
 
-def parse(argv: list[str]) -> tuple[str, list[Path], list[str]]:
-    """Split the wrapper's arguments into its role, the `--read` paths, and the command.
+def parse(argv: list[str]) -> Args:
+    """Split the wrapper's arguments into its role, its options, and the command.
 
     Returns:
-        The role, the paths to allow reading, and the command with its arguments.
+        The role, the paths to allow reading, the operator's Bazel repository cache if named, and the command with its
+        arguments.
 
     Raises:
-        SandboxError: the role is unknown, a `--read` path is missing or relative, or there is no command.
+        SandboxError: the role is unknown, an option's path is missing or relative, or there is no command.
     """
     if not argv or argv[0] not in ROLES:
-        raise SandboxError(f"usage: canopy-sandbox {{{','.join(ROLES)}}} [--read PATH]... [--] COMMAND [ARG]...")
+        usage = f"{{{','.join(ROLES)}}} [--read PATH]... [--bazel-repository-cache PATH] [--] COMMAND [ARG]..."
+        raise SandboxError(f"usage: canopy-sandbox {usage}")
     role, rest = argv[0], argv[1:]
     reads: list[Path] = []
-    while rest and rest[0] == "--read":
+    bazel_cache: Path | None = None
+    while rest and rest[0] in {"--read", "--bazel-repository-cache"}:
         option, *rest = rest
         if not rest or not Path(rest[0]).is_absolute():
             raise SandboxError(f"{option} takes an absolute path")
-        reads.append(Path(rest.pop(0)))
+        if option == "--read":
+            reads.append(Path(rest.pop(0)))
+        else:
+            bazel_cache = Path(rest.pop(0))
     if rest and rest[0] == "--":
         rest = rest[1:]
     if not rest:
         raise SandboxError("no command to run")
-    return role, reads, rest
+    return Args(role, reads, bazel_cache, rest)
 
 
 def worktrees(role: str, cwd: Path) -> list[Worktree]:
@@ -718,6 +745,56 @@ def take_back(data: Path, operator: Path) -> None:
         print(f"canopy-sandbox: copied back the refreshed tokens of {', '.join(taken)}", file=sys.stderr)
 
 
+def bazel_shim(bin_dir: Path, cache: Path, operator: Path) -> list[Path]:
+    """Write the run's `bazel` into `bin_dir`, after giving the role's repository cache the operator's downloads.
+
+    `operator` is the operator's repository cache, made when it is missing so that a policy can deny writing it, as
+    Bazel would make it at its first download. It may neither hold the role's cache directory nor sit inside it.
+
+    Returns:
+        The operator's repository cache, and where it leads when it is a link: what the run may read and not write.
+
+    Raises:
+        SandboxError: there is no `bazel` on PATH, or the operator's repository cache overlaps the sandbox's caches,
+            or cannot be made or linked to.
+    """
+    real = shutil.which("bazel")
+    if real is None:
+        raise SandboxError("--bazel-repository-cache was given, but bazel is not on PATH")
+    try:
+        operator.mkdir(parents=True, exist_ok=True)
+        resolved = operator.resolve()
+        roots = cache.parent.resolve()
+        if resolved.is_relative_to(roots) or roots.is_relative_to(resolved):
+            raise SandboxError(f"the Bazel repository cache {operator} overlaps the sandbox's caches, {roots}")
+        take_back_downloads(cache, operator)
+        with bazel.locked(cache.parent):
+            bazel.share(cache, operator)
+    except OSError as e:
+        raise SandboxError(f"the Bazel repository cache {operator} could not be shared: {e}") from None
+    rc = bin_dir / "bazelrc"
+    rc.write_text(bazel.rc_file(cache), encoding="utf-8")
+    bazel.shim(bin_dir, Path(real).absolute(), rc)
+    return list(dict.fromkeys([operator, resolved]))
+
+
+def take_back_downloads(cache: Path, operator: Path) -> None:
+    """Copy into the operator's Bazel repository cache, `operator`, each download a run of the role added to its own.
+
+    Never fails the run: a download not taken back now is taken back by the role's next run.
+    """
+    try:
+        with bazel.locked(cache.parent):
+            taken = bazel.collect(cache, operator)
+    except OSError as e:
+        print(
+            f"canopy-sandbox: the Bazel downloads a run added could not be copied to {operator}: {e}", file=sys.stderr
+        )
+        return
+    if taken:
+        print(f"canopy-sandbox: copied {len(taken)} Bazel downloads into {operator}", file=sys.stderr)
+
+
 def environment(
     current: Mapping[str, str], bin_dir: Path | None, tmp: Path, *, cache: Path, data: Path
 ) -> dict[str, str]:
@@ -740,11 +817,8 @@ def environment(
     return env
 
 
-def git_shim(run_dir: Path, trees: Collection[Worktree], objects: Path) -> Path:
-    """Write the run's `git`, which points git at `objects` in the run's worktrees only, into `run_dir/bin`.
-
-    Returns:
-        The directory that holds it, to put first on the command's PATH.
+def git_shim(bin_dir: Path, trees: Collection[Worktree], objects: Path) -> None:
+    """Write the run's `git`, which points git at `objects` in the run's worktrees only, into `bin_dir`.
 
     Raises:
         SandboxError: there is no git, or a shared object directory has a name git's list of alternates cannot hold.
@@ -763,12 +837,9 @@ def git_shim(run_dir: Path, trees: Collection[Worktree], objects: Path) -> Path:
         "@ALTERNATES@": shlex.quote(":".join(shared)),
     }
     script = PLACEHOLDER.sub(lambda m: values[m.group()], GIT_SHIM)  # in one pass, so no path is read as a placeholder
-    bin_dir = run_dir / "bin"
-    bin_dir.mkdir(mode=0o700)
     shim = bin_dir / "git"
     shim.write_text(script, encoding="utf-8")
     shim.chmod(0o500)
-    return bin_dir
 
 
 def run_srt(srt: Path, settings: Path, command: Sequence[str], env: Mapping[str, str]) -> int:
