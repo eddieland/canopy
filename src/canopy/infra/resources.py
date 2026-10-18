@@ -6,6 +6,7 @@ bundled inside the package (`canopy/_data/`, see `[tool.hatch.build.targets.whee
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 # This file is canopy/infra/resources.py; bundled files sit beside the top-level package.
@@ -52,3 +53,24 @@ def ui_dir() -> Path | None:
         if (candidate / "index.html").is_file():
             return candidate
     return None
+
+
+def ui_built_before_source(served: Path) -> datetime | None:
+    """Return when `served` was built, if it is a checkout's `ui/dist` and a file under `ui/src` changed since.
+
+    An installed wheel bundles its own build, so only a checkout's can fall behind: after a pull, until `make ui-build`.
+    Modification times are enough, as git writes each file a pull changes.
+
+    Returns:
+        The build's time, in local time, or None when `served` is bundled, or is as new as every source file.
+    """
+    if served != _SOURCE / "ui" / "dist":
+        return None
+    try:
+        built = (served / "index.html").stat().st_mtime
+    except OSError:
+        return None
+    sources = (_SOURCE / "ui" / "src").rglob("*")
+    if not any(p.is_file() and p.stat().st_mtime > built for p in sources):
+        return None
+    return datetime.fromtimestamp(built, tz=UTC).astimezone()
