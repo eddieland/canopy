@@ -500,6 +500,8 @@ class RunReplies(Row):
 
     run_id: int
     mode: ReplyMode
+    # Whether the run's prompt asked for a ticket's draft.
+    ticket_drafts: bool
     # A JSON list of the drafts refused from the run's result, each its number and why.
     refused: str
 

@@ -104,10 +104,12 @@ CREATE TABLE draft_versions (
     CHECK ((author = 'worker') = (version = 1))
 );
 
--- The `trust.review_replies` a run of a kind that comments was rendered under, and the drafts `_run` refused from its
+-- The `trust.review_replies` a run of a kind that comments was rendered under, whether its prompt asked for a ticket's
+-- draft (only with a tracker source that posts, and never on a private ticket), and the drafts `_run` refused from its
 -- result in the harness's words, as a JSON list. A run with no row was rendered before the setting existed.
 CREATE TABLE run_replies (
-    run_id   INTEGER PRIMARY KEY REFERENCES runs(id),
-    mode     TEXT NOT NULL CHECK (mode IN ('approve', 'post')),
-    refused  TEXT NOT NULL DEFAULT '[]'
+    run_id         INTEGER PRIMARY KEY REFERENCES runs(id),
+    mode           TEXT NOT NULL CHECK (mode IN ('approve', 'post')),
+    ticket_drafts  INTEGER NOT NULL,
+    refused        TEXT NOT NULL DEFAULT '[]'
 );
