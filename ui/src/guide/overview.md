@@ -5,7 +5,7 @@ it at `http://127.0.0.1:8765/`, unless `serve.bind` or `serve.port` in your conf
 
 ## Reading this guide
 
-The guide comes in three parts, in the order you'll need them.
+The guide comes in four parts, in the order you'll need them.
 
 - **Getting started**: this page, signing in, [How the loop works](how-the-loop-works), the handful of ideas every
   other page leans on, and [Philosophy](philosophy), why canopy is built the way it is. Read those two before anything
@@ -14,6 +14,7 @@ The guide comes in three parts, in the order you'll need them.
   [Plans](plans), and [Pull requests and reviews](pull-requests).
 - **The loop**: the pages where you watch it work. [Runs and worktrees](runs), [Ticks and spend](ticks),
   [Chores](chores), [Memory](memory), and [Settings](settings).
+- **Reference**: the [Glossary](glossary), every word the other pages assume you know, for when one of them does.
 
 ## The pages
 
