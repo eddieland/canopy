@@ -441,6 +441,30 @@ def run_drafting(conn: sqlite3.Connection, entries: object, *args: str, pr: str 
     return run_with(conn, *(args or WORK), prs={"repo": pr}, drafts=entries)
 
 
+def comment(n: int, thread: str = "PRRT_1", author: str = "alice", body: str = "Rename this.") -> dict[str, Any]:
+    """A review comment line, as the reader prints it without `kind` and `pr`."""
+    where = {"id": thread, "path": "src/app.py", "line": 12, "side": "right", "outdated": False, "resolved": False}
+    return {"item": "comment", "id": n, "author": author, "bot": False, "time": "2026-10-18T10:00:00Z", "body": body,
+            "url": f"{DRAFTS_PR}#discussion_r{n}", "review": 101, "thread": where}  # fmt: skip
+
+
+def github_has(state: Path, *reviews: dict[str, Any], **more: object) -> None:
+    """Make the fake GitHub hold `DRAFTS_PR` with `reviews`, and the other state keys given."""
+    state.write_text(json.dumps({"prs": {DRAFTS_PR: {"reviews": list(reviews)}}, **more}))
+
+
+def thread(n: int, did: str = "changed", text: str = "Renamed.") -> dict[str, object]:
+    """A worker's draft replying on the thread of review comment `n` of `DRAFTS_PR`."""
+    return {"on": "thread", "pr": DRAFTS_PR, "comment": n, "did": did, "text": text}
+
+
+def reads(state: Path, program: str = "connect") -> list[dict[str, Any]]:
+    """What the fake GitHub's `program` was asked, each run in order."""
+    log = state.parent / "github.jsonl"
+    lines: list[str] = log.read_text().splitlines() if log.exists() else []
+    return [json.loads(line)["request"] for line in lines if json.loads(line)["program"] == program]
+
+
 def memories(conn: sqlite3.Connection) -> list[records.Memory]:
     """Every memory in the journal, in the order they were written."""
     return records.fetch_all(conn, records.Memory, "SELECT * FROM memories ORDER BY id")
