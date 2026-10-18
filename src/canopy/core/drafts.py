@@ -295,7 +295,11 @@ def _check_one(conn: sqlite3.Connection, draft: records.Draft, now: str) -> None
 
 
 def _supersede(conn: sqlite3.Connection, draft: records.Draft, same: str, value: object) -> None:
-    """Supersede the unsent drafts of earlier runs that `draft` replaces: those where `same` holds for `value`."""
+    """Supersede the unsent drafts of earlier runs that `draft` replaces: those where `same` holds for `value`.
+
+    Only earlier runs', and that is enough: `check` takes every unchecked draft of a PR it read, whatever its run, in
+    run order, so an earlier run's draft for the PR is checked, and superseded, before a later run's replaces it.
+    """
     conn.execute(
         f"UPDATE drafts SET status = ?, superseded_by = ?, why = ? WHERE {same} AND run_id < ? "  # noqa: S608
         "AND status IN (?, ?)",

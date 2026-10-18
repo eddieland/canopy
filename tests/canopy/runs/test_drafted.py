@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
+import os
+import signal
 import sqlite3
+import threading
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -108,6 +112,35 @@ def test_a_failed_read_keeps_the_drafts_unchecked_until_a_tick_reads_the_pr_whol
     assert len(reads(github_state)) == 3
     drafted.reconcile(ctx, logs.for_tick(None))
     assert len(reads(github_state)) == 3, "a PR with no unchecked draft is not read again"
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_stop_cuts_the_read_after_a_run_short(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, tmp_path: Path
+) -> None:
+    approving(canopy_env)
+    reading = tmp_path / "reading"
+    github_has(github_state, comment(501), hang=str(reading))
+    stopper = threading.Thread(target=stop_once_there, args=(reading,), daemon=True)
+    stopper.start()
+    started = time.monotonic()
+    run = run_drafting(conn, [thread(501)])
+    stopper.join()
+    assert time.monotonic() - started < 50, "the read was not cut short"
+    assert run["status"] == "done"
+    [draft] = all_drafts(conn)
+    assert draft.status is DraftStatus.UNCHECKED
+    assert signal.getsignal(signal.SIGTERM) is signal.SIG_DFL
+
+
+def stop_once_there(path: Path) -> None:
+    """Send this process SIGTERM once `path` exists, as `canopy stop` would a run, or give up after 30 seconds."""
+    deadline = time.monotonic() + 30
+    while not path.exists():
+        if time.monotonic() > deadline:
+            return
+        time.sleep(0.05)
+    os.kill(os.getpid(), signal.SIGTERM)
 
 
 @pytest.mark.usefixtures("git_pool")

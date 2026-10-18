@@ -13,6 +13,7 @@ State keys, each optional:
                 `kind` and `pr`, which the reader adds. A `pr` line's fields default from the URL.
     unread      [URL]: PRs the reader cannot read whole, which it leaves off its `end` line.
     down        true: the reader prints nothing, not even its `end` line, and exits 1.
+    hang        PATH: the reader creates PATH, then sleeps a minute before it reads, as a reader GitHub never answers.
     login       who the poster posts as. Default `me`.
     post        how the next post ends: `ok` (the default), `refused` (nothing posted, `"submitted": false`),
                 `pending_left` (nothing posted, and its pending review left), or `unknown` (no `end` line). With
@@ -28,6 +29,7 @@ Stdlib only, no canopy imports: this runs as a separate process under whatever p
 import json
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -57,6 +59,9 @@ def emit(line: dict[str, object]) -> None:
 
 
 def connect(state: dict[str, Any], request: dict[str, Any]) -> int:
+    if state.get("hang"):
+        Path(state["hang"]).touch()
+        time.sleep(60)
     if state.get("down"):
         print("canopy-connect-github: cannot reach GitHub", file=sys.stderr)
         return 1
