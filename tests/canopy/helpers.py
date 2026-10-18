@@ -114,6 +114,35 @@ def seen(conn: sqlite3.Connection, env: CanopyEnv, *keys: str) -> None:
             db.touch_ticket(conn, key, str(env.root))
 
 
+@contextmanager
+def granted_meanwhile(
+    conn: sqlite3.Connection, owner: object, reads: str, insert: str, *params: object
+) -> Iterator[list[str]]:
+    """Patch `owner.reads`, a read of a grant's limit on `conn`, to try `insert`, another grant, just before it reads.
+
+    The other grant's connection waits for no lock, so it is `locked` out when the read is inside the write transaction
+    of the grant under test, as it must be (#341), and `committed` between that grant and its limit when it is not.
+    Yields what each try did.
+    """
+    [(path,)] = conn.execute("SELECT file FROM pragma_database_list WHERE name = 'main'").fetchall()
+    real = getattr(owner, reads)
+    tried: list[str] = []
+
+    def meanwhile(*args: object, **kwargs: object) -> object:
+        other = sqlite3.connect(path, autocommit=True, timeout=0)
+        try:
+            other.execute(insert, params)
+            tried.append("committed")
+        except sqlite3.OperationalError as e:
+            tried.append("locked" if "locked" in str(e) else str(e))
+        finally:
+            other.close()
+        return real(*args, **kwargs)
+
+    with mock.patch.object(owner, reads, autospec=True, side_effect=meanwhile):
+        yield tried
+
+
 def decisions(conn: sqlite3.Connection, tick_id: int) -> list[tuple[str, str]]:
     """Each decision the tick recorded, as (action, rationale)."""
     return [(d.action, d.rationale) for d in db.decisions_for_tick(conn, tick_id)]

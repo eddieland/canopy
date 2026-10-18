@@ -24,7 +24,7 @@ import uvicorn
 from pydantic import ValidationError
 from starlette.types import Message, Receive, Scope, Send
 
-from canopy.core import db
+from canopy.core import conversation, db
 from canopy.core.context import Context, db_path
 from canopy.serve import live, secret, views
 from canopy.serve import mock as serve_mock
@@ -49,7 +49,7 @@ from canopy.serve.schema import (
 )
 from canopy.serve.spa import content_security_policy
 from canopy.serve.sse import QuietLeaving
-from tests.canopy.helpers import present
+from tests.canopy.helpers import granted_meanwhile, present
 from tests.canopy.web_helpers import ORIGIN, SECRET, client, signed_in
 from tests.conftest import Journals
 
@@ -524,6 +524,37 @@ def test_the_mock_journal_waits_for_a_held_lock_off_the_event_loop(backend: Back
         held = asyncio.run(hold())
     assert held < 1
     assert cost() > before
+
+
+@pytest.mark.parametrize(
+    ("ref", "kind", "repo", "reads", "insert"),
+    [
+        (
+            "ABC-100",
+            "resume",
+            "web",
+            "_limits",
+            "INSERT INTO attempt_grants (ticket_key, repo, kind, runs, granted_at) VALUES (?, 'web', 'resume', 1, ?)",
+        ),
+        (
+            "https://github.com/acme/web/pull/88",
+            "review",
+            None,
+            "_review_limit",
+            "INSERT INTO review_grants (pr_url, runs, granted_at) VALUES (?, 1, ?)",
+        ),
+    ],
+)
+def test_a_grant_on_the_mock_reports_the_limit_of_its_own_transaction(
+    backend: Backend, ref: str, kind: str, repo: str | None, reads: str, insert: str
+) -> None:
+    with backend.open() as ctx:
+        before = backend.review_limit(ctx, ref) if repo is None else backend.limits(ctx, ref)[1]
+        # No other grant commits between this one's read of its limit and its insert (#341).
+        with granted_meanwhile(ctx.conn, serve_mock, reads, insert, ref, db.now()) as tried:
+            granted = backend.grant(ctx, conversation.parse_ref(ref), kind, repo)
+        assert tried == ["locked"]
+        assert (granted.repo, granted.runs, granted.limit) == (repo, present(before).runs, present(before).limit + 1)
 
 
 def test_the_stream_reads_every_list_from_one_snapshot(backend: Backend) -> None:
