@@ -18,15 +18,17 @@ you pick shows on each send button.
 
 ## Toasts
 
-A checkbox for each state a ticket can move into: its own phases, **ready** through **plan proposed**, and **done**.
-Check one, and whenever a ticket moves into it, a toast says so at the bottom of the window, whatever page you're on:
-`ABC-102: needs human`, with the ticket's title under it. Nothing is checked until you check it, so canopy stays quiet
-by default. Check **needs human** and a worker's question finds you wherever you're reading, instead of waiting for
-you to wander back to the list.
+A toast at the bottom of the window when something moves into a state you care about, whatever page you're on. The
+panel has a row for each kind of thing a toast can be about, with a checkbox for each of its states. Nothing is checked
+until you check it, so canopy stays quiet by default.
 
-The phases of a ticket's PRs, such as **ci red** or **approved**, are the PRs' own and aren't on the list. Each tab
-toasts for itself, so three open tabs means three toasts, and a tab only toasts changes it saw happen: open one after
-lunch and it won't recite the morning.
+**Tickets** has a box for each of a ticket's own phases, **ready** through **plan proposed**, and **done**. Check one,
+and whenever a ticket moves into it you get `ABC-102: needs human`, with the ticket's title under it. Check **needs
+human** and a worker's question finds you wherever you're reading, instead of waiting for you to wander back to the
+list. The phases of a ticket's PRs, such as **ci red** or **approved**, are the PRs' own and aren't on the list.
+
+Each tab toasts for itself, so three open tabs means three toasts, and a tab only toasts changes it saw happen: open one
+after lunch and it won't recite the morning.
 
 ## Notice to workers
 

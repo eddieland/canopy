@@ -28,9 +28,10 @@ import { setRave, useRave } from '@/lib/rave'
 import { dropDrafts } from '@/lib/reply-draft'
 import { setSendKey, useSendKey } from '@/lib/send-key'
 import type { SendKey } from '@/lib/send-key'
-import { setTicketToasts, TICKET_TOAST_STATES, useTicketToasts, withState } from '@/lib/ticket-toasts'
 import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } from '@/lib/ticker-settings'
 import type { TickerSpeed } from '@/lib/ticker-settings'
+import { setToastSettings, TOAST_STATES, useToastSettings, withState } from '@/lib/toast-settings'
+import type { ToastSubject } from '@/lib/toast-settings'
 import { readable } from '@/lib/words'
 import type { ThemePreference } from '@/theme/store'
 import { switchTheme } from '@/theme/transition'
@@ -395,34 +396,52 @@ function SendKeyPanel() {
     )
 }
 
-/** Which states a ticket moves into show a toast, one checkbox each: none until the operator checks one. */
+// What each subject's row on the Toasts panel says, in TOAST_STATES order: a subject added there needs one here.
+const TOAST_ROWS: Record<ToastSubject, { label: string; text: string }> = {
+    tickets: {
+        label: 'Tickets',
+        text: 'When a ticket moves into a state checked here. Its PRs have phases of their own, which these leave out.',
+    },
+}
+
+/**
+ * Which changes show a toast, on whatever page is open: a row for each subject, with a checkbox for each of its states.
+ * None until the operator checks one.
+ */
 function ToastsPanel() {
-    const states = useTicketToasts()
+    const settings = useToastSettings()
     return (
         <Panel>
             <PanelHeader label="Toasts" />
-            <div className="flex flex-col gap-3 p-3">
-                <p id="ticket-toasts" className="text-sm text-muted-foreground">
-                    A toast when a ticket moves into a state checked here, on whatever page you are on. A ticket&apos;s
-                    PRs have phases of their own, which these leave out.
-                </p>
-                <fieldset aria-labelledby="ticket-toasts" className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    {TICKET_TOAST_STATES.map((state) => (
-                        <label
-                            key={state}
-                            className="inline-flex items-center gap-2 font-mono text-xs whitespace-nowrap"
+            <div className="divide-y">
+                {(Object.keys(TOAST_ROWS) as ToastSubject[]).map((subject) => (
+                    <div key={subject} className="flex flex-col gap-2 p-3">
+                        <p id={`toasts-${subject}`} className="text-sm text-muted-foreground">
+                            <span className="text-foreground">{TOAST_ROWS[subject].label}</span>:{' '}
+                            {TOAST_ROWS[subject].text}
+                        </p>
+                        <fieldset
+                            aria-labelledby={`toasts-${subject}`}
+                            className="flex flex-wrap items-center gap-x-4 gap-y-2"
                         >
-                            <Checkbox
-                                checked={states.includes(state)}
-                                data-testid={`ticket-toast-${state}`}
-                                onCheckedChange={(checked) =>
-                                    setTicketToasts(withState(states, state, checked === true))
-                                }
-                            />
-                            {readable(state)}
-                        </label>
-                    ))}
-                </fieldset>
+                            {TOAST_STATES[subject].map((state) => (
+                                <label
+                                    key={state}
+                                    className="inline-flex items-center gap-2 font-mono text-xs whitespace-nowrap"
+                                >
+                                    <Checkbox
+                                        checked={settings[subject].includes(state)}
+                                        data-testid={`toast-${subject}-${state}`}
+                                        onCheckedChange={(checked) =>
+                                            setToastSettings(withState(settings, subject, state, checked === true))
+                                        }
+                                    />
+                                    {readable(state)}
+                                </label>
+                            ))}
+                        </fieldset>
+                    </div>
+                ))}
             </div>
         </Panel>
     )

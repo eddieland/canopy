@@ -1,17 +1,10 @@
-import { act, renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
 import { mockTickets } from '@/api/mocks'
 import type { TicketSummary } from '@/api/types'
-import { breakStorage, otherTab, otherTabClears } from '@/test-utils'
+import { TOAST_STATES } from '@/lib/toast-settings'
 
-import { parseStates, TICKET_TOAST_STATES, ticketToasts, withState } from './ticket-toasts'
-
-// The settings are read when the module loads, so each test loads a fresh copy.
-function load() {
-    vi.resetModules()
-    return import('./ticket-toasts')
-}
+import { ticketToasts } from './ticket-toasts'
 
 function ticket(fields: Partial<TicketSummary>): TicketSummary {
     const [base] = mockTickets
@@ -21,28 +14,8 @@ function ticket(fields: Partial<TicketSummary>): TicketSummary {
     return { ...base, ...fields }
 }
 
-describe('parseStates', () => {
-    it('turns on none when nothing, or nothing it can read, is stored', () => {
-        expect(parseStates(null)).toEqual([])
-        expect(parseStates('not json')).toEqual([])
-        expect(parseStates('{"ready":true}')).toEqual([])
-    })
-
-    it('keeps the known states, once each, in their order', () => {
-        expect(parseStates('["done","ci_red","ready","done"]')).toEqual(['ready', 'done'])
-    })
-})
-
-describe('withState', () => {
-    it('turns a state on or off, keeping the order', () => {
-        expect(withState(['done'], 'blocked', true)).toEqual(['blocked', 'done'])
-        expect(withState(['blocked', 'done'], 'blocked', false)).toEqual(['done'])
-        expect(withState([], 'ready', false)).toEqual([])
-    })
-})
-
 describe('ticketToasts', () => {
-    const all = TICKET_TOAST_STATES
+    const all = TOAST_STATES.tickets
 
     it("toasts a ticket's phase moving into a state turned on, with its key over its title", () => {
         const before = [ticket({ phase: 'running' })]
@@ -72,41 +45,5 @@ describe('ticketToasts', () => {
 
     it("never toasts a PR's phase, which no checkbox turns on", () => {
         expect(ticketToasts([ticket({ phase: 'ready' })], [ticket({ phase: 'ci_red' })], all)).toEqual([])
-    })
-})
-
-describe('useTicketToasts', () => {
-    beforeEach(() => localStorage.clear())
-
-    it('turns states on, and keeps them', async () => {
-        const toasts = await load()
-        const { result } = renderHook(() => toasts.useTicketToasts())
-        expect(result.current).toEqual([])
-
-        act(() => toasts.setTicketToasts(['blocked', 'done']))
-        expect(result.current).toEqual(['blocked', 'done'])
-        expect(localStorage.getItem(toasts.STORAGE_KEY)).toBe('["blocked","done"]')
-    })
-
-    it("follows another tab's states, ones stored before it was read, and storage cleared", async () => {
-        const toasts = await load()
-        localStorage.setItem(toasts.STORAGE_KEY, '["ready"]')
-        const { result } = renderHook(() => toasts.useTicketToasts())
-        expect(result.current).toEqual(['ready'])
-
-        act(() => otherTab(toasts.STORAGE_KEY, '["split"]'))
-        expect(result.current).toEqual(['split'])
-        act(() => otherTabClears())
-        expect(result.current).toEqual([])
-    })
-
-    it('turns none on where storage is unavailable, and still changes for this page', async () => {
-        breakStorage()
-        const toasts = await load()
-        const { result } = renderHook(() => toasts.useTicketToasts())
-        expect(result.current).toEqual([])
-
-        act(() => toasts.setTicketToasts(['done']))
-        expect(result.current).toEqual(['done'])
     })
 })
