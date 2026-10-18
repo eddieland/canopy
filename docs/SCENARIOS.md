@@ -129,7 +129,9 @@ relying on a permission they check.
 - **S25. The Slack sink** (M10). On a real channel, one ticket's dispatch, its worker's question, and its PR each reach
   the channel once; an attention item is posted when it opens and when it resolves. Remove the webhook file: Slack
   fails for several ticks while another sink keeps delivering and reports `loop.sink_failing`; restore it and what
-  was missed arrives in one message. A digest arrives on its interval, a quiet one included.
+  was missed arrives in one message. A digest arrives on its interval, a quiet one included. With a bot token and
+  `--threads`: the dispatch starts the ticket's thread, its question is a reply also shown in the channel, a chore's
+  run starts its own thread, and the next day's first post about the ticket starts a new one.
 - **S42. Try a chore from the browser** (M23). With `canopy loop` running, press Try now on S22's chore's page. Expect
   its run in Runs at once, running, with no tick; the page to follow it to its end through the stream; its
   findings on the attention list; and the overseer's next run of it `not_due` counting from the try. Stop the loop

@@ -413,6 +413,15 @@ posts one message per delivery, as Block Kit built from the `json` fields with t
   same checks and must hold an `xoxb-` bot token: a user token acts as the operator with all its scopes. A post counts
   as delivered only when Slack's reply says `ok`, since the Web API answers 200 to a refused post. Like the URL, the
   token is never in canopy's config, argv, journal, or logs, nor in the sink's own messages.
+- With `--channel` and `--threads` it threads by subject, for a channel a busy loop would otherwise fill: what is
+  about one ticket goes in that ticket's thread, a chore's run and its findings in `chore:NAME`'s, and a review's run
+  in its PR's, a new thread each day, started by the first post about it that day; loop events, a repository's
+  attention items, and the digest go in the channel, with the header. A reply holding something urgent (Batching,
+  above) is also shown in the channel. So a delivery can be several posts. The threads are the sink's own, recorded
+  in `~/.local/state/canopy/slack-threads.json` (under `$XDG_STATE_HOME`), never in canopy's journal, each channel
+  and repository apart, so sinks of several workspaces can share the file. A delivery refused partway exits 1; the
+  file keeps what it already posted, so canopy's retry posts only the rest. Losing the file costs only new threads.
+  A webhook cannot thread: it does not say which message it posted.
 - Journal text is escaped for Slack markup (`&`, `<`, `>`) and every text object is `verbatim`, so Slack parses no
   `@here`, `@channel`, person, or channel name in it, and nothing can disguise a link. A URL is shown as itself; one
   holding `|`, which would take a label, stays text.
@@ -440,9 +449,9 @@ could fit T8 once something long-running holds the connection. What fits, in ord
 1. **Replies on the ticket.** Works now: messages name the ticket and carry the journal's links; an authorized reply
    on the ticket resumes the worker. Slack is the pager; the ticket is the conversation.
 2. **Replies in Slack, read by the overseer** through a Slack MCP server each tick, a reply by an authorized Slack
-   account counting as authorized. Needs one thread per ticket (a bot token and `chat.postMessage` instead of a
-   webhook, the sink reporting each thread on stdout for the harness to record and pass into the state block), Slack
-   account ids among the authorized repliers, and a TRUST_MODEL T1 change.
+   account counting as authorized. Needs the harness to know each ticket's thread (`--threads` keeps them in the
+   sink's own file; the sink would report them on stdout for the harness to record and pass into the state block),
+   Slack account ids among the authorized repliers, and a TRUST_MODEL T1 change.
 
 It attaches at the `json` format's `version` and the sink's stdout, ignored today. §22 plans the conversation these
 replies would join: the journal records it, and Slack becomes one channel into it.
