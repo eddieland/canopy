@@ -128,7 +128,9 @@ workspace to a first dry tick, with the sandbox if you want it: [docs/QUICKSTART
 Leave `canopy loop` running (tmux works, or `canopy daemon start`) and work from the web UI it serves at
 `http://127.0.0.1:8765/`. It shows the attention list, runs, worktrees, every ticket's conversation, canopy's reviews
 with their findings on the diff, and your chores, with a search box (`/`) over the whole journal. Its guide, opened
-from the foot of the rail, says what each page holds and how to act on it.
+from the foot of the rail, says what each page holds and how to act on it. To look at it without a loop, run
+`uv run python -m canopy.serve --mock --port 8766` in a checkout, after `make ui-build`: it serves the same pages over
+the sample journal in `src/canopy/serve/mock.py`, with no sign-in and `mock` shown in the header.
 
 Your part is to label tickets with your queue label, answer the agents' questions on the ticket, and review their PRs.
 Humans approve and merge; the agent never does. Only reviewers in `trust.trusted_reviewers` send a worker back to a PR
