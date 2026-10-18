@@ -1,7 +1,7 @@
 """How long `canopy loop` waits after a tick: longer after idle ticks in a row, never past a gate (DESIGN §6).
 
 A tick is idle when the journal shows it found nothing new and changed nothing (`idle`). After the n-th idle tick in a
-row the wait is `base * 2^n`, up to the cap and never below `base`; a `fix-ci` cooldown's end or a chore's `due_at`
+row the wait is `base * 2^n`, up to the cap and never below `base`; the CI cooldown's end or a chore's `due_at`
 still ahead, or the lapse of the operator's notice to workers, ends it sooner (`gate`). While the loop waits, a run that
 ends after the tick read the journal (`read_at`) wakes it, as the operator's own acts do. With the cap not above
 `base`, idle pacing is off: the wait is `base`, no gate shortens it, and only the operator's acts wake it: a message,
@@ -171,14 +171,14 @@ def _quiet(action: str) -> bool:
 def gate(ctx: Context, now: datetime) -> datetime | None:
     """The earliest harness gate still ahead of `now`: a cooldown's end, a chore's `due_at`, or a notice's lapse.
 
-    A `fix-ci` cooldown's end, a configured chore's `due_at`, and the lapse of the notice in force, so work held for the
+    A CI cooldown's end, a configured chore's `due_at`, and the lapse of the notice in force, so work held for the
     notice resumes when it lapses. One already open sets none, so a chore the overseer passed over cannot make the loop
     spin.
 
     Returns:
         The time the earliest gate opens, or None if none is still ahead.
     """
-    cooldowns = policy.fix_ci_cooldowns(ctx.conn, ctx.config, now).values()
+    cooldowns = policy.ci_cooldowns(ctx.conn, ctx.config, now).values()
     dues = [d for s in chore_view.states(ctx.conn, ctx.config, ctx.workspace) if (d := s.due_at(now)) is not None]
     lapse = notice.lapses(ctx.conn, now)
     return min((t for t in (*cooldowns, *dues, *([lapse] if lapse else [])) if t > now), default=None)

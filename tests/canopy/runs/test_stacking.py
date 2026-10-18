@@ -104,19 +104,31 @@ def test_later_runs_on_a_stacked_ticket_take_the_base_they_are_given(
 
     # While the blocker's PR is open the overseer passes the base again; the run continues the pushed branch.
     with worker_does(commit("PROJ-2: review fix"), push(SECOND)):
-        resume = dispatch_and_run(conn, "--label", LABEL, "--kind", "resume", "--base", FIRST, key="PROJ-2")
+        resume = dispatch_and_run(
+            conn, "--label", LABEL, "--kind", "resume", "--reason", "review", "--base", FIRST, key="PROJ-2"
+        )
         assert (resume["status"], slot_of(conn, int(resume["id"]))["base_branch"]) == ("done", FIRST)
         assert f": branch `agent/PROJ-2-second` from `{FIRST}`; PR: " in prompt_of(canopy_env, int(resume["id"]))
 
     # Once it merged, the overseer omits it: the run's base is the repository's, and the worker retargets the PR.
     with worker_does(push(SECOND)):
         retarget = dispatch_and_run(
-            conn, "--label", LABEL, "--kind", "resume", "--context", "blocker merged", key="PROJ-2"
+            conn,
+            "--label",
+            LABEL,
+            "--kind",
+            "resume",
+            "--reason",
+            "retarget",
+            "--context",
+            "blocker merged",
+            key="PROJ-2",
         )
         assert (retarget["status"], slot_of(conn, int(retarget["id"]))["base_branch"]) == ("done", "main")
         text = prompt_of(canopy_env, int(retarget["id"]))
         assert "This ticket is not stacked on another ticket's branch." in text
         assert ": branch `agent/PROJ-2-second` from `main`; PR: " in text
+        assert "- `retarget`: the PR this ticket was stacked on has merged" in text
         assert "change this ticket's PR to target its repository's base branch listed above" in text
         assert subjects(git_pool, "agent/PROJ-2-second")[:2] == ["PROJ-2: review fix", "PROJ-2: stacked"]
 
@@ -160,7 +172,9 @@ def test_a_continued_branch_whose_base_is_gone_is_crashed(
 
         # The blocker's branch is deleted after PROJ-2's branch exists; a resume still naming it must not start.
         git("branch", "--quiet", "-D", FIRST, cwd=git_pool.origin)
-        run = dispatch_and_run(conn, "--label", LABEL, "--kind", "resume", "--base", FIRST, key="PROJ-2")
+        run = dispatch_and_run(
+            conn, "--label", LABEL, "--kind", "resume", "--reason", "ci", "--base", FIRST, key="PROJ-2"
+        )
         assert run["status"] == "crashed"
         assert json.loads(run["result_json"])["harness"].startswith(f"repo: the base branch {FIRST} is not on origin")
         assert len(agent_runs(agent_log)) == workers  # the worker never ran
@@ -217,6 +231,8 @@ def test_a_continued_branch_cannot_be_its_own_base(
                     LABEL,
                     "--kind",
                     "resume",
+                    "--reason",
+                    "conflict",
                     "--base",
                     "agent/PROJ-2-own",
                 ],

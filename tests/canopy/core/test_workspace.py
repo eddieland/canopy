@@ -62,9 +62,9 @@ def test_the_workspace_file_is_a_repository_file_for_scopes_and_policy(ws: Ws, c
     ws_file.write_text(map_text(extra="\n[capacity]\nmax_workers = 50\n"))
     with pytest.raises(config.ConfigError, match=r"canopy-workspace.toml: capacity.max_workers is private"):
         config.load(ws.root, canopy_env.user_file)
-    ws_file.write_text(map_text(extra="\n[policy]\nmax_fix_ci_attempts = 9\nmax_resume_attempts = 1\n"))
+    ws_file.write_text(map_text(extra="\n[policy]\nci_cooldown_minutes = 9\nmax_resume_attempts = 1\n"))
     policy = config.load(ws.root, canopy_env.user_file).policy
-    assert (policy.max_fix_ci_attempts, policy.max_resume_attempts) == (2, 1)  # only tightening applies
+    assert (policy.ci_cooldown_minutes, policy.max_resume_attempts) == (30, 1)  # only tightening applies
 
 
 def load_both(root: Path, user_file: Path) -> None:
@@ -287,7 +287,7 @@ def test_dispatch_names_one_repository_and_leases_from_its_pool(
 
         # The ticket has a unit in api only: resuming it in web has no branch to continue there (DESIGN §18).
         db.finish_run(conn, "runs", 1, RunStatus.DONE, "{}")
-        resume = ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "resume", "--repo", "web"]
+        resume = ["dispatch", "PROJ-1", "--label", LABEL, "--kind", "resume", "--reason", "ci", "--repo", "web"]
         assert main(resume, runner=runner) == 1
         assert decisions(conn, tick_id)[-1] == (
             "refused:no_branch",

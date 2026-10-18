@@ -8,7 +8,9 @@ It is a workspace (DESIGN §18), canopy's usual shape: `api` has no clone, `mobi
 slot past its declared size, and run 43 holds a slot in both. Two chores are configured (§19): `deps`, whose latest run
 found the advisory the attention list shows and which has a note from the operator, and `build-health`, running. Two
 ticks recorded decisions about tickets, a unit, a repository, a chore, and a PR (§6). The workspace's policy allows one
-fix-ci and two reviews, so ABC-100 is at its fix-ci limit in web and PR 88 at its review limit (§22's grants). Runs 39
+resume and two reviews, so ABC-100 is at its resume limit in web, where its run 40, a `fix-ci` from before a resume
+fixed CI, counts as one (§8), and PR 88 at its review limit (§22's grants). Run 43, running, is a resume for a failed
+check and review feedback together. Runs 39
 and 40, tick 2, and chore run 2 left their sessions' events in their logs, as `--format json` prints them, for their
 transcripts (DESIGN §22), and the running runs 41 and 43 the events their workers printed so far, with the latest tool
 call on each one's row (§8).
@@ -29,7 +31,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import chore_view, config, conversation, db, plans, pools, workspace
 from canopy.core.items import Item
-from canopy.core.vocab import RunStatus
+from canopy.core.vocab import RunKind, RunStatus
 from canopy.infra import logs, resources
 from canopy.serve import mock_reviews
 from canopy.serve.backend import Backend, Granted, Limit, Reloading
@@ -68,7 +70,7 @@ query = "project = ABC"
 ticket_url = "https://jira.example/browse/{key}"
 
 [policy]
-max_fix_ci_attempts = 1
+max_resume_attempts = 1
 max_reviews_per_pr = 2
 """
 
@@ -304,25 +306,31 @@ def _limits(ctx: Context, key: str) -> list[Limit]:
         Every kind of every unit, by repository.
     """
     p = ctx.config.policy
-    base = {"implement": p.max_implement_attempts, "fix-ci": p.max_fix_ci_attempts, "resume": p.max_resume_attempts}
+    base = {"implement": p.max_implement_attempts, "resume": p.max_resume_attempts}
     counts: dict[str, dict[str, int]] = {}
     for repo, kind, runs in ctx.conn.execute(
         "SELECT s.repo, r.kind, count(DISTINCT r.id) FROM runs r JOIN run_slots s ON s.run_id = r.id "
         "WHERE r.ticket_key = ? AND r.kind NOT IN ('split', 'plan') AND s.repo IS NOT NULL GROUP BY s.repo, r.kind",
         (key,),
     ):
-        counts.setdefault(str(repo), dict.fromkeys(base, 0))[str(kind)] = int(runs)
-    granted = {
-        (str(r[0]), str(r[1])): int(r[2])
-        for r in ctx.conn.execute(
-            "SELECT repo, kind, sum(runs) FROM attempt_grants WHERE ticket_key = ? GROUP BY repo, kind", (key,)
-        )
-    }
+        of = counts.setdefault(str(repo), dict.fromkeys(base, 0))
+        of[_counted_as(str(kind))] += int(runs)
+    granted: dict[tuple[str, str], int] = {}
+    for r in ctx.conn.execute(
+        "SELECT repo, kind, sum(runs) FROM attempt_grants WHERE ticket_key = ? GROUP BY repo, kind", (key,)
+    ):
+        unit = (str(r[0]), _counted_as(str(r[1])))
+        granted[unit] = granted.get(unit, 0) + int(r[2])
     return [
         Limit(kind, repo, None, runs, granted.get((repo, kind), 0), base[kind] + granted.get((repo, kind), 0))
         for repo, of in sorted(counts.items())
         for kind, runs in of.items()
     ]
+
+
+def _counted_as(kind: str) -> str:
+    # An old fix-ci run, and its grants, count as resume's, as `runs.policy.counted_as` counts them (DESIGN §8).
+    return str(RunKind.RESUME) if kind == RunKind.FIX_CI else kind
 
 
 def _review_limit(ctx: Context, url: str) -> Limit | None:
@@ -547,7 +555,7 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             1.07,
         ),
         (41, "ABC-101", "implement", "agent/ABC-101-login", 0, None, "running", None, 0, 0.42),
-        (43, "ABC-104", "fix-ci", "agent/ABC-104-retry-queue", 5, None, "running", None, 1, 0.12),
+        (43, "ABC-104", "resume", "agent/ABC-104-retry-queue", 5, None, "running", None, 1, 0.12),
     )
     for run_id, key, kind, branch, started, ended, status, result, private, cost in runs:
         conn.execute(
@@ -600,6 +608,8 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
             "VALUES (?, ?, ?, ?, ?, 'main')",
             (run_id, name, slot_path(root, name, slot), lease, holder),
         )
+    # Run 43 fixes a failed check and answers review feedback in one run (DESIGN §8).
+    conn.executemany("INSERT INTO run_reasons (run_id, reason) VALUES (43, ?)", [("ci",), ("review",)])
     for key, started in (("ABC-102", -35), ("ABC-104", -20)):
         conn.execute(
             "INSERT INTO starts (subject_kind, subject_id, status, started_at, channel) VALUES ('ticket', ?, ?, ?, ?)",

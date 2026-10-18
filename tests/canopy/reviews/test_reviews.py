@@ -619,8 +619,12 @@ def implemented(conn: sqlite3.Connection) -> None:
         assert main(["_run", "1"], runner=InlineRunner()) == 0
 
 
+RESUME = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "resume"]
+
+
 def resume(*args: str) -> list[str]:
-    return ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "resume", *args]
+    """A `resume` for review feedback, with `args` (DESIGN §8)."""
+    return [*RESUME, "--reason", "review", *args]
 
 
 def test_a_resume_for_a_review_carries_its_findings_from_the_journal(
@@ -639,7 +643,7 @@ def test_a_resume_for_a_review_carries_its_findings_from_the_journal(
         )
         [(_, _, action, rationale)] = review_decisions(conn, tick_id)
         assert action == "dispatch:resume"
-        assert rationale.endswith(f"; review run {review_id}")
+        assert rationale.endswith(f"; review run {review_id}; for review")
     prompt = (reviews.state_dir / "runs" / "2.prompt").read_text()
     section = prompt.split("## canopy's review\n\n", 1)[1].split("\n\nThese findings", 1)[0]
     assert section == (
@@ -675,7 +679,7 @@ def test_a_review_run_goes_only_to_a_resume_of_its_own_ticket(
             resume("--review-run", "99"),
             resume("--review-run", str(of_query)),
             resume("--review-run", str(failed)),
-            [*resume()[:-2], "--kind", "fix-ci", "--review-run", str(of_ticket)],
+            [*RESUME[:-1], "implement", "--review-run", str(of_ticket)],
         ):
             assert main(args, runner=InlineRunner()) == 1
         assert [(d[2], d[3]) for d in review_decisions(conn, tick_id)] == [
@@ -889,7 +893,7 @@ def test_findings_sent_to_a_worker_reach_its_ticket_as_the_operators_go_ahead(
     tickets = {t["key"]: t for t in state_block(agent_log)["tickets"]}
     assert [m["body"] for m in tickets["PROJ-1"]["operator"]["new_operator_messages"]] == [body]
     with in_tick(conn):
-        command = resume("--review-run", str(review_id), "--cursor", f"message={message['id']}")
+        command = resume("--reason", "reply", "--review-run", str(review_id), "--cursor", f"message={message['id']}")
         assert main(command, runner=InlineRunner()) == 0
     prompt = (reviews.state_dir / "runs" / "2.prompt").read_text()
     assert body in prompt

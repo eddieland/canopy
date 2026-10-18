@@ -378,7 +378,6 @@ What plans add to TRUST_MODEL, with the overseer prompt, `worker-plan.md`, and t
 - Whether canopy should prune old plan files, as issue #424 asks of M36's per-tick tables.
 - Whether a repository that tracks a `.canopy-plan.md` of its own at its root needs another name for the copy: the copy
   would write over it in the worktree, and push verification would report it as the worker's.
-- Whether `fix-ci` runs should get the plan's copy too. They fix a failure, not the plan's work, so for now they do not.
 - Whether the planner should answer each thread in its result, by thread id, rather than only through the new plan.
 - Whether a reworded passage should be found again by its nearest match, rather than shown as gone.
 - Whether threads stay open for comment once a plan is approved, for the `implement` to read.

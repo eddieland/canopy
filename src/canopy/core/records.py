@@ -32,6 +32,7 @@ from canopy.core.vocab import (
     PlanSetting,
     PlanStatus,
     PoolKind,
+    ResumeReason,
     ReviewRunStatus,
     RunKind,
     StartStatus,
@@ -367,6 +368,16 @@ class MemoryRead(Row):
 
     run_id: int
     memory_id: int
+
+
+@dataclass(frozen=True)
+class RunReason(Row):
+    """One reason a `resume` runs, as its dispatch named it (DESIGN §8)."""
+
+    TABLE: ClassVar[str] = "run_reasons"
+
+    run_id: int
+    reason: ResumeReason
 
 
 @dataclass(frozen=True)

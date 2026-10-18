@@ -63,6 +63,9 @@ WORKSPACE_MAP_TABLES = ("workspace", "repos")
 REMOVED_KEYS = {
     "paths.state_dir": f"delete it; state is always in the workspace's {WORKSPACE_STATE_DIR}/ (D016)",
     "trust.pr_label": "delete it; workers no longer label their PRs, which the branch prefix already marks",
+    # M56: a `resume` fixes CI, so one limit counts it, and the cooldown holds a `resume` for CI alone (DESIGN §8).
+    "policy.max_fix_ci_attempts": "delete it; a resume now fixes CI, so raise policy.max_resume_attempts instead",
+    "policy.fix_ci_cooldown_minutes": "rename it policy.ci_cooldown_minutes; it holds a resume whose only reason is ci",
 }
 PROMPT = "{prompt}"
 # Replaced with the snapshot of canopy's agent definitions and skills (D040).
@@ -443,9 +446,11 @@ class Policy(Section):
     """The `[policy]` table: attempt limits and cooldowns. A limit counts every run of that kind a ticket has had."""
 
     max_implement_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 2
-    max_fix_ci_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 2
-    fix_ci_cooldown_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 30
-    max_resume_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 3
+    # Every `resume` of a unit, whatever its reasons, an old `fix-ci` run counted among them (DESIGN §8): one run does
+    # what a fix-ci and a resume did, so the limit is more than their two together.
+    max_resume_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 6
+    # How long a `resume` whose only reason is `ci` waits after the unit's last run that worked on CI ended.
+    ci_cooldown_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 30
     # Split runs per ticket (DESIGN §18). A split creates tickets in the tracker, so one try is the default.
     max_split_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 1
     # Plan runs per ticket (DESIGN §25): a plan covers every repository the ticket will touch.

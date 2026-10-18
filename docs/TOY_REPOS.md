@@ -69,10 +69,10 @@ jobs:
 - `cancel-in-progress` keeps a worker's successive pushes from stacking runs.
 - `check` is the one required status check, so "require status checks" is real.
 - Switches that need no code change:
-  - **A failing check for `fix-ci` (S9):** `ci/branch_check.py` fails a PR whose branch matches the repository
+  - **A failing check for a `resume` for CI (S9):** `ci/branch_check.py` fails a PR whose branch matches the repository
     variable `TOY_FAIL_BRANCH`, which the reset script points at the S9 issue's branches. A worker cannot change a
-    variable, so no push fixes it. An issue that cannot be done as written does not serve: on 2026-10-17 the worker
-    saw the contradiction and asked, opening no PR. The switch gets a fix-ci run, but the worker reads the check, sees
+    variable, so no push fixes it. An issue that cannot be done as written does not serve: on 2026-10-17 the worker saw
+    the contradiction and asked, opening no PR. The switch gets a resume for CI, but the worker reads the check, sees
     the failure is staged, and ends `blocked`; so the attempt limit is not reached live, and stays the fakes' to test.
   - **A staged CI outage (S37, the notice):** `fetch_check.py` fetches the URL in the repository variable
     `TOY_FETCH_URL`. Point it at an unreachable host to stage the outage, and back to end it.

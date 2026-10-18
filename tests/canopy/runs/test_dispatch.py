@@ -262,7 +262,7 @@ def test_bad_slugs_are_usage_errors(canopy_env: CanopyEnv, conn: sqlite3.Connect
 
 
 @pytest.mark.parametrize("mode", ["live", "dry run"])
-@pytest.mark.parametrize("kind", ["implement", "fix-ci", "resume"])
+@pytest.mark.parametrize("kind", ["implement", "resume"])
 @pytest.mark.parametrize(
     ("label", "reason"),
     [
@@ -281,9 +281,18 @@ def test_dispatch_without_a_configured_label_is_unauthorized(
 ) -> None:
     # canopy cannot read labels; the overseer must name the one it read, and only a configured one passes (D051).
     db.touch_ticket(conn, "PROJ-1", str(canopy_env.root))
-    conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-work' WHERE key = 'PROJ-1'")  # so fix-ci and resume could
+    conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-work' WHERE key = 'PROJ-1'")  # so a resume could
     with in_tick(conn, dry_run=mode == "dry run") as tick_id:
-        args = ["dispatch", "PROJ-1", "--repo", "repo", "--kind", kind] + ([] if label is None else ["--label", label])
+        args = [
+            "dispatch",
+            "PROJ-1",
+            "--repo",
+            "repo",
+            "--kind",
+            kind,
+            *(["--reason", "ci"] if kind == "resume" else []),
+        ]
+        args += [] if label is None else ["--label", label]
         assert main(args, runner=InlineRunner()) == 1
         [(action, rationale)] = decisions(conn, tick_id)
         assert action == "refused:unauthorized"
@@ -296,9 +305,10 @@ def test_dispatch_without_a_configured_label_is_unauthorized(
 def test_unauthorized_is_checked_before_the_other_guards(
     canopy_env: CanopyEnv, treehouse_state: Path, conn: sqlite3.Connection
 ) -> None:
-    # No branch to continue, a slug fix-ci does not take, and a bad base: the missing label is still what is reported.
+    # No branch to continue, a slug a resume does not take, and a bad base: the missing label is still what is reported.
     with in_tick(conn) as tick_id:
-        args = ["dispatch", "PROJ-1", "--repo", "repo", "--kind", "fix-ci", "--slug", "again", "--base", "main"]
+        args = ["dispatch", "PROJ-1", "--repo", "repo", "--kind", "resume", "--reason", "ci", "--slug", "again"]
+        args += ["--base", "main"]
         assert main(args, runner=InlineRunner()) == 1
         assert [action for action, _ in decisions(conn, tick_id)] == ["refused:unauthorized"]
         # With the label, the next guard in line refuses instead.
@@ -472,18 +482,18 @@ def test_dry_run_refuses_what_a_live_dispatch_would(
             else:
                 assert db.finish_run(conn, "runs", run_id, RunStatus(status), None)
 
-        past_run("LIMIT", "fix-ci", "done")
-        past_run("LIMIT", "fix-ci", "done")
-        past_run("COOL", "fix-ci", "done")  # just ended, so fix-ci is in its cooldown
+        past_run("LIMIT", "implement", "done")
+        past_run("LIMIT", "implement", "done")
+        past_run("COOL", "fix-ci", "done")  # just ended, so a resume for CI alone is in its cooldown
         past_run("BUSY", "implement", "running")
 
     with in_tick(conn, dry_run=True) as tick_id:
         runner = InlineRunner()
         for args, code in [
-            (["LIMIT", "--label", "agent-ready-tester", "--kind", "fix-ci"], 1),
-            (["COOL", "--label", "agent-ready-tester", "--kind", "fix-ci"], 1),
-            (["BUSY", "--label", "agent-ready-tester", "--kind", "resume"], 1),
-            (["NEW", "--label", "agent-ready-tester", "--kind", "fix-ci"], 1),
+            (["LIMIT", "--label", "agent-ready-tester", "--kind", "implement"], 1),
+            (["COOL", "--label", "agent-ready-tester", "--kind", "resume", "--reason", "ci"], 1),
+            (["BUSY", "--label", "agent-ready-tester", "--kind", "resume", "--reason", "ci"], 1),
+            (["NEW", "--label", "agent-ready-tester", "--kind", "resume", "--reason", "ci"], 1),
             (["NEW", "--label", "agent-ready-tester", "--kind", "implement", "--base", "main"], 1),
             # BUSY and this one fill max_workers = 2
             (["NEW", "--label", "agent-ready-tester", "--kind", "implement"], 0),

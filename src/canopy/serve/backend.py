@@ -53,7 +53,7 @@ class Reloading:
 class Limit:
     """A limit `canopy grant` raises: a ticket's unit's runs of one kind, or a PR's review runs (DESIGN §22)."""
 
-    # `implement`, `fix-ci`, or `resume` for a unit's; `review` for a PR's.
+    # `implement` or `resume` for a unit's; `review` for a PR's.
     kind: str
     # The unit's repository; a PR's, when it is a unit's PR.
     repo: str | None

@@ -7,8 +7,9 @@ and what it cost; the worktrees page is the pools they work in.
 
 [Runs](/runs) lists each ticket's latest run, the running ones first, then the ones that ended most recently. A ticket
 with earlier runs shows **Show N earlier runs** under it. Each row has the run's state, its id (`run:39`), its ticket
-and kind, what it cost, and how long it ran or how long since it ended. Under it are the run's summary, its PRs, the
-worktrees it holds, and, while it runs, its latest tool call.
+and kind, with a resume's reasons beside it (`resume (ci, review)`), what it cost, and how long it ran or how long
+since it ended. Under it are the run's summary, its PRs, the worktrees it holds, and, while it runs, its latest tool
+call.
 
 The chips filter by the latest run's state: `running`, `waiting on you` (the worker stopped to ask something),
 `failed`, `stopped`, and `done`. A cost of `–` means the runtime reported none, which is not the same as free.

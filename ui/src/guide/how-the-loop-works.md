@@ -24,10 +24,15 @@ its repository's pool, does the work, pushes a branch, opens or updates a PR, an
 outlive the tick that started them, so a long one spans many ticks. Each run has a kind:
 
 - `implement`: the first pass at a ticket.
-- `fix-ci`: back to a PR whose checks failed.
-- `resume`: back to a ticket after your reply, or to a PR after review comments or canopy's own review findings.
+- `resume`: back to a PR for whatever came back to it: failed checks, review comments or canopy's own review findings,
+  your reply, a conflict with its base, a branch with no PR yet, or a blocker that merged. A resume names its reasons,
+  and the run's chip shows them, as in `resume (ci, review)`. One resume takes all of a PR's reasons at once, so a red
+  build and a reviewer's comment get one run and one push, not two runs racing for the same branch.
 - `split`: breaks a ticket too big for one PR into child tickets. It works on no branch.
 - `plan`: writes a plan for you to approve before the first implement. See [Plans](plans).
+
+Older runs may say `fix-ci`: that was a kind of its own before a resume took over fixing CI. They still show as they
+ran, and count toward the ticket's resume limit.
 
 A run ends `done`; `waiting on you`, when the worker stopped to ask you something; `stopped`, when you ended it; or
 failed, in one of several ways: `failed`, `crashed`, `timeout`, `unpushed` (it said done, with work it never pushed),
@@ -67,10 +72,11 @@ asks for something a guard won't allow, the decision is recorded as `refused` wi
 it as the CLI does. The ones you'll meet most:
 
 - `capacity`: at most `capacity.max_workers` runs and reviews at once. A refused ticket waits for a slot.
-- `attempt_limit`: each kind of run has a limit per ticket, such as `policy.max_fix_ci_attempts`, two by default.
+- `attempt_limit`: each kind of run has a limit per ticket, such as `policy.max_resume_attempts`, six by default.
   Every run counts, however it ended, and nothing resets the count. A ticket at its limit reaches the attention list,
   and **Allow one more** on its page grants it another run.
-- `cooldown`: a PR waits `policy.fix_ci_cooldown_minutes` after one `fix-ci` before the next.
+- `cooldown`: a resume for failed checks alone waits `policy.ci_cooldown_minutes` after the last run that worked on
+  CI. A resume with review comments or your reply goes at once, and fixes the build on the way.
 - `running`: one worker per ticket. A second one would only argue with the first.
 
 And the guard that never lifts: canopy never approves or merges a PR, and never moves a ticket to Done. Those stay

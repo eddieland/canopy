@@ -179,10 +179,10 @@ or chore `cmd` in a user file from before needs `--format json` added.
 
 ## M14. PR-scoped work
 
-REQUIREMENTS R9 and D056. Needs M3's `fix-ci` and `resume`. Sketch only; the design comes first.
+REQUIREMENTS R9 and D056. Needs M3's and M56's `resume`. Sketch only; the design comes first.
 
-- A unit of work keyed by a PR rather than a ticket, for the operator's own hand-written PRs: `fix-ci` when its checks
-  fail, `resume` when review comments arrive, with the same cursors, attempt limits, and cooldown as a ticket's.
+- A unit of work keyed by a PR rather than a ticket, for the operator's own hand-written PRs: a `resume` when its checks
+  fail or review comments arrive, with the same cursors, attempt limits, and cooldown as a ticket's.
 - Authorization by a queue label on the PR, as on a ticket, so neither the operator nor a coworker learns a command.
   Only PRs the operator authored, in the repository or workspace the loop runs for.
 - The worker pushes to the PR's head branch, never with force, never on a PR from a fork; the harness refuses the
@@ -298,7 +298,7 @@ Learned: closed on the operator's real use; the day-long check is SCENARIOS S29.
 ## M25. Flaky CI triage
 
 REQUIREMENTS R14, DESIGN §23. Needs M3. Asked for by the operator (2026-10-09): a check that fails for a
-reason the change did not cause sends a `fix-ci` worker to change code that is not broken, and spends its attempts.
+reason the change did not cause sends a `resume` to change code that is not broken, and spends its attempts.
 
 - TRUST_MODEL T1, T3, T6, T7, §6, and §7 as DESIGN §23 lists them.
 - Config: `policy.max_triage_ci_attempts` (default 0), `runtime.triage_cmd`, `runtime.triage_timeout_minutes`,
@@ -311,13 +311,13 @@ reason the change did not cause sends a `fix-ci` worker to change code that is n
 - §7, §8, §12, and §13 say what §23 changes in them, and §23 loses its "designed, not built" line.
 - Tests with the fakes: `triage_off` under the default config; a dry-run tick that triages a new failure; a triage
   run's cwd is the primary clone and it leases nothing; a `flaky` result without reruns recorded `failed`; a `real`
-  verdict followed by `fix-ci`; the limit refusing the next triage; `fix-ci` attempts not counting triages.
+  verdict followed by a `resume` for `ci`; the limit refusing the next triage; `resume` attempts not counting triages.
 
 Accept: the tests above pass. Live: on a PR whose check fails for a reason the change did not cause, the loop reruns it
-once and the PR goes green with no `fix-ci` run; on a PR with a real failure, the triage reports `real` and the next
-tick's `fix-ci` fixes it; a repository skill that names a flaky test is followed.
+once and the PR goes green with no `resume` for it; on a PR with a real failure, the triage reports `real` and the
+next tick's `resume` fixes it; a repository skill that names a flaky test is followed.
 
-Status: deferred 2026-10-15. Until it is built, `ci_red` dispatches `fix-ci` as DESIGN §7 says.
+Status: deferred 2026-10-15. Until it is built, `ci_red` dispatches a `resume` for `ci` as DESIGN §7 says.
 
 ## M26. Sandboxed workers, opt-in
 
@@ -630,14 +630,14 @@ model gains its first code checks on what the overseer claims.
   `human_replied` resume must name a comment by an authorized replier or an operator message; a `resume` for review
   feedback must name items by trusted reviewers, or an operator message about them (D089's revisit); `--cursor` must
   name an observed item. `canopy dispatch` is refused `stale` when a subject it depends on has an observation older
-  than `connect.max_age_minutes`: a public ticket's, and the PR's of a unit a `fix-ci` or `resume` names. It covers
+  than `connect.max_age_minutes`: a public ticket's, and the PR's of a unit a `resume` names. It covers
   only subjects a connector observes: a private ticket, authorized by its start record, a chore, and a subject no
   connector covers are not refused. Principle 1's "re-read before any action that matters" becomes "observed this
   tick, or no dispatch".
 - Cursors become journal ids: observations order reviews, review comments, and canopy's review runs together, so the
-  `review` cursor's time form (§7) is no longer needed. CI is keyed on head sha, context, and run id, so a re-run at
-  the same head is observed, as resolving a held check needs (M35, 2026-10-13 F16); `fix-ci` alone starts only when
-  a context's conclusion changed at that head, never on a re-run that went red to red (PRIOR_ART).
+  `review` cursor's time form (§7) is no longer needed. CI is keyed on head sha, context, and run id, so a re-run at the
+  same head is observed, as resolving a held check needs (M35, 2026-10-13 F16); a `resume` for `ci` alone starts only
+  when a context's conclusion changed at that head, never on a re-run that went red to red (PRIOR_ART).
 - The `mirror` tool is retired (M48 retired the heredoc, D081): the tracker connector writes comments. Open: whether
   a tracker with no connector keeps the live-read procedure, or a connector is required (recommended: required; the
   two shipped cover the operator's trackers, and the contract is a page of Python for another).
@@ -658,16 +658,15 @@ showed the derivation getting right: a rule moves into code only with that evide
 
 - Before the overseer runs, the harness records the decisions that need no judgment, as it records `awaiting_reply`
   today: `wait` for `running`, `ci_running`, `needs_human`, a cooldown, a failed latest run, and `blocked` with no
-  stackable blocker; `done` for a closed ticket and for `merged`; `dispatch resume` for `pushed_no_pr` and
-  `conflicted`, with their fixed contexts; `dispatch fix-ci` for `ci_red`, naming the failed checks (after `triage-ci`,
-  with M25), only for a check whose run started while no notice (M35) was in force: for one that ran during a
-  notice, the row stays the overseer's, even after the notice ends, since whether the notice explains the failure is
-  judgment, which M35 keeps out of code; `review run` for `review_pending` and for
-  `review.query`'s PRs. Each is a `decisions` row with `by = harness`, so the corpus, `canopy decisions`, and the
-  tick's page show every decision and who made it. `ci_red` was the row the overseer overruled most, on facts
-  outside it: a PR humans had shelved with labels, an outage, a stacked ticket's open blocker, a build still running
-  (2026-10-15 F27). Its `fix-ci` moves only if M36's day, with PR labels observed, shows the derivation right; until
-  then it stays the overseer's.
+  stackable blocker; `done` for a closed ticket and for `merged`; `dispatch resume` for `pushed_no_pr` and `conflicted`,
+  with their fixed contexts; `dispatch resume --reason ci` for `ci_red`, naming the failed checks (after `triage-ci`,
+  with M25), only for a check whose run started while no notice (M35) was in force: for one that ran during a notice,
+  the row stays the overseer's, even after the notice ends, since whether the notice explains the failure is judgment,
+  which M35 keeps out of code; `review run` for `review_pending` and for `review.query`'s PRs. Each is a `decisions` row
+  with `by = harness`, so the corpus, `canopy decisions`, and the tick's page show every decision and who made it.
+  `ci_red` was the row the overseer overruled most, on facts outside it: a PR humans had shelved with labels, an outage,
+  a stacked ticket's open blocker, a build still running (2026-10-15 F27). Its `resume` moves only if M36's day, with PR
+  labels observed, shows the derivation right; until then it stays the overseer's.
 - The priority order across both deciders is the overseer prompt's step 4 today (a human waiting, then conflicts and
   red CI, then a pushed branch with no PR, then `ready`) and nowhere in the design: it goes into §7, and the
   harness keeps it. The harness records its decisions before the overseer and makes its dispatches after it; the
@@ -1748,7 +1747,9 @@ with a red check and a new review comment from a trusted reviewer, the next tick
 and `review`, which fixes the check and addresses the comment in one push.
 
 Status: in progress. Designed 2026-10-18 (DESIGN §8, One resume for what comes back to a PR). The open question on
-reasons' names is settled there, with `retarget` added for a stacked PR whose blocker merged.
+reasons' names is settled there, with `retarget` added for a stacked PR whose blocker merged. Built 2026-10-18: the
+tests above pass and the design names `fix-ci` only as an old run's kind; the live check waits on the operator
+(SCENARIOS S43).
 
 ## Deferred, with the trigger that would unblock each
 
@@ -1765,8 +1766,7 @@ reasons' names is settled there, with `retarget` added for a stacked PR whose bl
   change.
 - Watching a PR (M42's watch mode): when the operator asks canopy to review the same coworker's PR again after each
   push often enough to want it to follow the PR until it merges. DESIGN §21 (Review requests) says what it needs.
-- Workers against OpenCode's server (M15's last bullets): when the operator wants to prompt a running worker rather
-  than read its transcript and answer it after. The listener follows TRUST_MODEL T8, and OpenCode's server
-  authentication on the pinned version is checked first.
-- Flaky CI triage (M25): when live use shows `fix-ci` attempts spent on failures the change did not cause. The design
-  (DESIGN §23) and the milestone's bullets stand as written.
+- Workers against OpenCode's server (M15's last bullets): when the operator wants to prompt a running worker rather than
+  read its transcript and answer it after. The listener follows TRUST_MODEL T8, and OpenCode's server authentication on
+  the pinned version is checked first. - Flaky CI triage (M25): when live use shows `resume` attempts for CI spent on
+  failures the change did not cause. The design (DESIGN §23) and the milestone's bullets stand as written.

@@ -42,7 +42,7 @@ from tests.canopy.helpers import (
 if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
-FIX_CI = ("--label", "agent-ready-tester", "--kind", "fix-ci")
+FIX_CI = ("--label", "agent-ready-tester", "--kind", "resume", "--reason", "ci")
 LESSON = "Run the API's tests with `make test-api`; plain `pytest` misses its fixtures."
 HEADING = "## Lessons from the operator"
 VALUES = {

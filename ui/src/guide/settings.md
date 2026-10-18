@@ -19,7 +19,7 @@ you pick shows on each send button.
 
 Tell every run dispatched from now on about something going on outside the work, such as a CI outage: "Artifactory is
 down: CI builds that fetch dependencies will likely fail." Workers, reviews, and chores hear it, and the overseer holds
-off sending a `fix-ci` after a failure the notice explains. This is `canopy notice TEXT --for DURATION`.
+off sending a resume after a failure the notice explains. This is `canopy notice TEXT --for DURATION`.
 
 Pick how long it lasts, **1 hour**, **4 hours**, or **1 day**, and press **Set notice**. It lapses on its own, and
 setting another replaces it. While it's in force, a banner above every page shows it, with **Clear** to end it early.

@@ -110,8 +110,8 @@ describe('outcomes', () => {
     })
 
     it('say what a grant did, as canopy grant does: the runs so far still count', () => {
-        expect(grantedText('A-1', { kind: 'fix-ci', repo: 'web', runs: 2, limit: 3 })).toBe(
-            'A-1 in web has had 2 fix-ci runs, and may now have 3. The next tick decides whether to dispatch it.',
+        expect(grantedText('A-1', { kind: 'resume', repo: 'web', runs: 2, limit: 3 })).toBe(
+            'A-1 in web has had 2 resume runs, and may now have 3. The next tick decides whether to dispatch it.',
         )
         expect(grantedText('https://example.test/o/r/pull/1', { kind: 'review', repo: null, runs: 3, limit: 4 })).toBe(
             'https://example.test/o/r/pull/1 has had 3 review runs, and may now have 4. ' +
