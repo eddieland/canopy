@@ -55,3 +55,44 @@ test('a review that does not exist says so', async ({ page }) => {
     await page.goto('reviews/99')
     await expect(page.getByText('no review run 99')).toBeVisible()
 })
+
+test("a review's files fold away on their headers, and hide by type, until a finding's link wants one", async ({
+    page,
+}) => {
+    await page.goto('reviews/4')
+    const files = page.getByTestId('diff-file')
+    const box = files.filter({ hasText: 'src/search/SearchBox.tsx' })
+    const hook = files.filter({ hasText: 'src/search/useSearch.ts' })
+
+    // A file folds to its header and a line counting what it hides; the rest stay open.
+    await box.getByRole('button', { name: 'Hide diff' }).click()
+    await expect(box.locator('tr[data-kind]')).toHaveCount(0)
+    await expect(box).toContainText('9 lines and 1 finding folded away')
+    await expect(hook.locator('tr[data-kind]')).not.toHaveCount(0)
+    // The findings list's link to a card on it opens it again.
+    await page.getByRole('link', { name: 'The debounce delay is a bare number' }).click()
+    await expect(page.locator('#finding-2')).toBeInViewport()
+    await expect(box.getByRole('button', { name: 'Hide diff' })).toBeVisible()
+
+    // The menu of file types has every one ticked; unticking one hides its files.
+    const types = page.getByTestId('diff-file-types')
+    await expect(types).toHaveText('All file types')
+    await types.click()
+    const menu = page.getByRole('menu')
+    const tsx = menu.getByRole('menuitemcheckbox', { name: '.tsx, 1 file', exact: true })
+    await expect(menu.getByRole('menuitemcheckbox', { name: '.ts, 1 file', exact: true })).toBeVisible()
+    await expect(menu.getByRole('menuitemcheckbox')).toHaveCount(2)
+    await tsx.click()
+    await expect(tsx).toHaveAttribute('aria-checked', 'false')
+    await page.keyboard.press('Escape')
+    await expect(types).toHaveText('.ts only')
+    await expect(page.getByTestId('diff-hidden-files')).toHaveText('1 file hidden by type')
+    await expect(files).toHaveCount(1)
+    await expect(hook).toBeVisible()
+
+    // A link to a finding on a hidden file ticks its type again: the same link as before, the hash unchanged.
+    await page.getByRole('link', { name: 'The debounce delay is a bare number' }).click()
+    await expect(files).toHaveCount(2)
+    await expect(page.locator('#finding-2')).toBeInViewport()
+    await expect(types).toHaveText('All file types')
+})
