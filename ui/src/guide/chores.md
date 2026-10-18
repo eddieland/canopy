@@ -60,3 +60,14 @@ run`.
 
 Nothing deletes a note. To take one back, write a newer one that says so. Notes never reach the overseer or the
 attention list: they shape what the chore looks for, not when it runs.
+
+## What a run knows of the last ones
+
+Each run's prompt carries the previous run's summary and the open findings, so it reports a problem still there under
+the same id. That's all it gets for free. When it wants more, say whether a flaky test came and went last week, it runs
+`canopy chore history NAME` for the chore's runs and what each found, and `--run ID` for one in full. A run reads its
+own chore's history and no other's, and the overseer reads none. You can run it too; it's the **Runs** list with the
+details left in.
+
+A chore with an agent definition of your own needs `"canopy chore history *": allow` among its bash rules to look back.
+A sandboxed chore can't: the journal sits in the part of `.canopy/` its sandbox hides, so it makes do with its prompt.

@@ -61,17 +61,18 @@ class Obj:
     runner: procs.Runner
 
 
-def open_context(click_ctx: click.Context, *, migrate: bool = True) -> Context:
+def open_context(click_ctx: click.Context, *, migrate: bool = True, start: Path | None = None) -> Context:
     """Load config and open the journal. The connection closes when the command finishes.
 
     Returns:
-        The context for the workspace the current directory is in, its journal migrated unless `migrate` is false.
+        The context for the workspace `start` is in, the current directory by default, its journal migrated unless
+        `migrate` is false.
 
     Raises:
         RuntimeError: The command was not run through `canopy.cli.main`, so there is no `Obj` to read.
     """
     runner = runner_of(click_ctx)
-    ws = workspace.find(Path.cwd())
+    ws = workspace.find(start or Path.cwd())
     cfg = config.load(ws.root, runner=runner)
     # Logs and overseer output live here; they are for the operator only (TRUST_MODEL T2).
     workspace.ensure_state_dir(ws.state_dir)
