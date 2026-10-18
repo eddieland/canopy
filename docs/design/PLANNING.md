@@ -36,7 +36,7 @@ User file, personal:
 ```toml
 [runtime]
 plan_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json
-    --title={title} {prompt}'''
+    --thinking --title={title} {prompt}'''
 ```
 
 - `policy.plan` says whether a ticket waits on an approved plan before its `implement`. `"off"` is canopy without

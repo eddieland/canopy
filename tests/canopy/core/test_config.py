@@ -351,6 +351,8 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         runtime.review_cmd,
     ):
         assert template.endswith(" --title={title} {prompt}")
+        # Events, with the model's reasoning among them, so a transcript shows why a call did what it did (DESIGN §22).
+        assert " --format json --thinking " in template
 
 
 def test_xdg_config_home(tmp_path: Path) -> None:
