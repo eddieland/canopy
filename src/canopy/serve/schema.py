@@ -1197,6 +1197,8 @@ class MemoryState(_Model):
     """Notes a ticket's runs write for its later runs."""
     lessons: MemoryTier
     """Lessons workers propose and the operator promotes, `memory.proposals`."""
+    proposals_waiting: int
+    """How many proposals wait on the operator to promote or reject them; 0 while proposals are off."""
 
 
 class LoopState(_Model):

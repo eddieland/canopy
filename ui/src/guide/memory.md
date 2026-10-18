@@ -63,8 +63,9 @@ Recorded memory and memory in use never share a label, so you never mistake one 
 - **Ticket notes** lists the tickets with notes in force, one row each with how many and how runs used them. Open a
   row for its notes. A busy workspace has thousands, so the page reads a ticket's notes only once you ask.
 - **Lessons** lists the proposals waiting on you first, each with where it came from: its run's kind and how it ended,
-  and whether its ticket is done, and Promote and Reject under it. Then the lessons you promoted, each with Renew and
-  Forget, the ones a run reported wrong first, then by review
+  and whether its ticket is done, and Promote and Reject under it. The nav counts them beside **Memory** on every page,
+  so a proposal doesn't quietly expire at 14 days because you never came looking. Then the lessons you promoted, each
+  with Renew and Forget, the ones a run reported wrong first, then by review
   date, so what needs you heads the list. Under them is the exact text every run is served from your lessons, labelled
   `served to every run`, or `would be served at use` while recording.
 

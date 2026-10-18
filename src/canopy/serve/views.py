@@ -252,7 +252,7 @@ def loop_state(ctx: Context) -> LoopState:
     paused = None
     if held is not None:
         paused = Pause(since=db.parse_time(held.since), channel=_PAUSE_CHANNELS.get(held.channel, "loop"))
-    remembered = memory_views.state(ctx.config.memory)
+    remembered = memory_views.state(ctx)
     told = notice.current(ctx.conn)
     if told is None:
         return LoopState(paused=paused, memory=remembered)

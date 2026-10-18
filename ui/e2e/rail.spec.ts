@@ -37,7 +37,7 @@ test('the nav lists the sections by how often the operator opens them, and the f
         'Spend',
         'Ticks',
         'Worktrees',
-        'Memory',
+        /^Memory/u,
     ])
 
     await page.getByTestId('rail-settings').click()

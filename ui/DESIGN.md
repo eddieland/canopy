@@ -145,12 +145,12 @@ Rules:
   is Sprig's (Fun, below).
 - **Narrower than `lg`, the rail is a strip** (`useRailMode`), since half of a second monitor is under it and a whole
   rail there left a list too little room: 3.5rem of the nav's icons (the nav's `compact`), each named on hover and to a
-  screen reader, Attention's count one number on its icon's corner in its most severe item's color. A button atop the
-  strip opens the whole rail, footer included, the same column, as a sheet over the page (`Sheet`, a Radix dialog:
-  Escape or a click outside closes it, and the focus goes back to the button). It opens in its search box, so `/` opens
-  it too. A link followed or a search sent from it closes it, since the page it covered is leaving. The breakpoint is
-  the viewport's, as the rail's place is the window's; what a list shows is its own width's (Primitives, `ListRow`).
-  Half a monitor, about 820px, is the narrowest window the UI is made for; a phone's is not.
+  screen reader, each count one number on its icon's corner, Attention's in its most severe item's color. A button
+  atop the strip opens the whole rail, footer included, the same column, as a sheet over the page (`Sheet`, a Radix
+  dialog: Escape or a click outside closes it, and the focus goes back to the button). It opens in its search box, so
+  `/` opens it too. A link followed or a search sent from it closes it, since the page it covered is leaving. The
+  breakpoint is the viewport's, as the rail's place is the window's; what a list shows is its own width's (Primitives,
+  `ListRow`). Half a monitor, about 820px, is the narrowest window the UI is made for; a phone's is not.
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
@@ -181,7 +181,10 @@ Rules:
   rest muted, each only when there is one. Never in the section's rose, too near the failure color to tell apart at that
   size. Since color alone tells the numbers apart, they are said in words on hover and to a screen reader
   (`1 broken, 1 waiting on you, 3 other`), the words the Attention counter's line says under its value: one function
-  splits the count for both (`breakdown` in `src/lib/attention.ts`).
+  splits the count for both (`breakdown` in `src/lib/attention.ts`). The Memory item shows how many proposals wait on
+  the operator, in `status-blocked` as what waits on their answer is, said in words (`2 proposals waiting on you`), and
+  nothing while none waits or proposals are off. It comes with the loop's state on the stream, so it moves as a run
+  proposes and as the operator promotes or rejects.
 - **The pause** is the header's standing action, since it is about the loop, not a page's subject: a ghost Pause
   button while the loop runs; paused, `paused · 3m` in `status-blocked` (the loop waits on the operator; when and
   from where on hover) and a Resume button. The button keeps one width in both states. It has no `Notice`: what it
