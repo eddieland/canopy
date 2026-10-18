@@ -5,6 +5,7 @@
 
 import attention from '@/guide/attention.md?raw'
 import chores from '@/guide/chores.md?raw'
+import glossary from '@/guide/glossary.md?raw'
 import howTheLoopWorks from '@/guide/how-the-loop-works.md?raw'
 import memory from '@/guide/memory.md?raw'
 import overview from '@/guide/overview.md?raw'
@@ -92,6 +93,10 @@ const SOURCES: readonly { title: string; pages: readonly (readonly [string, stri
             ['memory', memory],
             ['settings', settings],
         ],
+    },
+    {
+        title: 'Reference',
+        pages: [['glossary', glossary]],
     },
 ]
 
