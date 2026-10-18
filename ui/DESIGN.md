@@ -308,8 +308,8 @@ Rules:
   there is no title to qualify, a ticket's attention item, its `private` or `public` chip heads its conversation.
 - **A book at the header's top right** opens the guide's page about the page shown, at the heading about it when it has
   one (a run's page at `runs#a-runs-page`), named `The guide: Runs and worktrees` on hover and to a screen reader: a
-  book with a bookmark (`BookMarked`) at 22px in a ghost `icon` button, sized to the title beside it rather than the
-  body text, so it is there when wanted and quiet when not. Which page each route opens is `PAGE_GUIDES`
+  closed book with lines of text (`BookText`) at 22px in a ghost `icon` button, sized to the title beside it rather
+  than the body text, so it is there when wanted and quiet when not. Which page each route opens is `PAGE_GUIDES`
   in `src/lib/guide.ts`, keyed by route id, so a new route fails the type check until it names one. The guide's own
   pages, and the 404, have none.
 - **The tab** names the page too: `PageHeader` renders a `<title>` (`pageTitle` in `src/lib/page-title.ts`), which

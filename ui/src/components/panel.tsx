@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useMatchRoute, useRouterState } from '@tanstack/react-router'
-import { BookMarked, ChevronRight, RotateCw } from 'lucide-react'
+import { BookText, ChevronRight, RotateCw } from 'lucide-react'
 import { Children } from 'react'
 import type { ComponentProps, ReactNode } from 'react'
 
@@ -167,7 +167,7 @@ function GuideBook() {
                 aria-label={name}
                 data-testid="page-guide"
             >
-                <BookMarked aria-hidden className="size-5.5" />
+                <BookText aria-hidden className="size-5.5" />
             </Link>
         </Button>
     )
