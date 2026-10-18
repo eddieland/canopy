@@ -988,7 +988,15 @@ list, an empty state, or a skeleton by hand.
   `surface-raised/50` with a ghost `xs` button, `Show 60 hidden lines`, or `Show 500 of 13,029 hidden lines` past a
   step, which draws the next 500; a fold only adds, as rich text's `show N more lines` does, so it is a plain button,
   not a `Disclosure`. The panels take any card anchored at a line (`DiffPanels`, a card renderer and a `place`d list),
-  so a PR's threads sit on a run's diff as findings do on a review's (A PR's threads, below). A finding's
+  so a PR's threads sit on a run's diff as findings do on a review's (A PR's threads, below). A file's panel folds away
+  whole on `Hide diff`, a `Disclosure` at its header's end, to its header and a muted line counting what it hides
+  (`9 lines and 1 finding folded away`). Above the first file, an outline `xs` button names the file types shown
+  (`All file types`, `.ts only`, `2 of 3 file types`) and opens a `DropdownMenu` of them, each a checkbox item with its
+  count of files, every one ticked at first; unticking one hides its files, the menu staying open so several flip in
+  one go, and a muted line beside the button counts the files hidden, with `Show every type` under them to tick them
+  all again. A file the filter hides keeps its fold and the lines opened in it. A link from a review's findings list to
+  a card ticks its file's type and opens its panel, each time it is followed, so a link never lands on nothing. A
+  finding's
   card (`FindingCard`) sits right under the line it names, or under its file's header when the diff does not show the
   line, or in a Not in the diff panel: its number, its severity as a chip (`blocking` in `status-failed`, `major` in
   `status-blocked`, as the attention list's reasons; `minor` plain), its title, its location, and its detail as rich

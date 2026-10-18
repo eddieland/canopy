@@ -30,7 +30,8 @@ mistakes them for you.
 The PR's page shows its review threads on the diff the latest run pushed, each at its line, with the run's draft under
 the thread it answers. canopy reads the threads itself, so what you see is what GitHub holds, not the worker's
 recollection of it. A thread on a line that's since changed sits under its file, marked `outdated`. If the PR has moved
-on past the diff the page shows, a warning above the diff says so.
+on past the diff the page shows, a warning above the diff says so. Its files fold and filter by type as a review's do
+([below](#a-reviews-page)).
 
 Each waiting draft has three buttons:
 
@@ -92,6 +93,11 @@ At the top, the review's verdict and summary, the commit it read, and the PR's o
 findings, each linking to where it sits, and the diff, a panel per file, with each finding pinned under the line it
 names. A finding about a file the diff doesn't touch has a panel of its own. A long diff shows the lines around each
 finding at first, with folds that open the rest.
+
+**Hide diff**, on a file's header, folds that file away to one line saying how much it hid; **Show diff** brings it
+back. To read only some kinds of file, open **All file types** above the first file and untick the rest: a lockfile's
+thousand lines are rarely where the bug is. Following a finding from the list opens its file again, and ticks its type,
+so nothing you folded hides a finding from you.
 
 A PR stacked on another branch shows that branch's commits too, since the diff runs from where the PR's branch left
 the pool's base branch. If a finding seems to be about code the PR never touched, check that first.
