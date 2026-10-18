@@ -5,6 +5,7 @@ import { tickNow } from '@/api/mutations'
 import { tickQuery } from '@/api/queries'
 import { Button } from '@/components/ui/button'
 import { LOOP_DOWN_TITLE, useLoopDown } from '@/hooks/use-loop-down'
+import { failedText } from '@/lib/outcomes'
 import { cn } from '@/lib/utils'
 
 /**
@@ -18,7 +19,7 @@ export function TickNow() {
     // Nothing would hear it while the loop is down: it waits, and says why, rather than fail with the browser's words.
     const down = useLoopDown().offline
     const ask = useMutation({ mutationFn: tickNow })
-    const failed = ask.error?.message ?? null
+    const failed = ask.error === null ? null : failedText(ask.error)
     return (
         <>
             <Button

@@ -8,6 +8,9 @@ import { api, unwrap } from './client'
  */
 export const keys = {
     session: ['session'] as const,
+    // Under the session's key, so signing in, which reads every other query again, and signing out, which drops
+    // them, leave it to the sign-in page.
+    unsent: ['session', 'unsent'] as const,
     meta: ['meta'] as const,
     attention: ['attention'] as const,
     runs: ['runs'] as const,
@@ -55,6 +58,16 @@ export const keys = {
 export const sessionQuery = queryOptions({
     queryKey: keys.session,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/session', { signal })),
+    staleTime: Number.POSITIVE_INFINITY,
+})
+
+/**
+ * Whether the page was signed out by a 401 to a write, so what the operator last did was not sent. Not read from the
+ * server: the query client sets it on that 401 (`src/lib/query-client.ts`), and signing in clears it.
+ */
+export const unsentQuery = queryOptions({
+    queryKey: keys.unsent,
+    queryFn: () => false,
     staleTime: Number.POSITIVE_INFINITY,
 })
 

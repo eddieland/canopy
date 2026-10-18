@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
+import { ApiError } from '@/api/client'
+
 import {
     dismissedText,
+    failedText,
     forgotText,
     grantedText,
     notedText,
@@ -17,6 +20,35 @@ import {
     stoppedText,
     triedText,
 } from './outcomes'
+
+describe('failedText', () => {
+    it("says a refusal's reason and the server's own words as they are", () => {
+        expect(failedText(new ApiError(409, { guard: 'not_started', reason: 'ABC-1 was not started' }))).toBe(
+            'ABC-1 was not started',
+        )
+        expect(failedText(new ApiError(503, 'the journal is busy'))).toBe('the journal is busy')
+    })
+
+    it('says whether an action was done when the server gave only its status', () => {
+        expect(failedText(new ApiError(500, undefined))).toBe('canopy failed (500): it may not have been done')
+        expect(failedText(new ApiError(502, { unexpected: true }))).toBe(
+            'canopy failed (502): it may not have been done',
+        )
+        expect(failedText(new ApiError(404, undefined))).toBe('canopy answered 404: nothing was done')
+    })
+
+    it('says canopy did not answer, never the browser’s words, when no answer came', () => {
+        const words = 'canopy did not answer: is `canopy loop` running?'
+        expect(failedText(new TypeError('Failed to fetch'))).toBe(words)
+        expect(failedText(new DOMException('The operation was aborted.', 'AbortError'))).toBe(words)
+    })
+
+    it('says any other error in its own words, or that the request failed', () => {
+        expect(failedText(new Error('a review limit names its PR'))).toBe('a review limit names its PR')
+        expect(failedText('no network')).toBe('no network')
+        expect(failedText({ unexpected: true })).toBe('the request failed')
+    })
+})
 
 describe('outcomes', () => {
     it('say what a start did, as canopy start does', () => {

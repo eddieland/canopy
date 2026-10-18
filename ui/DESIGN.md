@@ -962,7 +962,13 @@ list, an empty state, or a skeleton by hand.
   for its subject typed out: Forget opens a form in `status-failed` that says what it drops and keeps, and its button
   stays disabled until the field holds the ticket's key exactly. Until then Forget is the quietest of the row, a ghost
   button in `status-failed` text at its end, since the loudest button is the one clicked first. The line under the
-  actions is empty until one has said something: what the ticket is, private or public, is its chip. A public ticket
+  actions is empty until one has said something: what the ticket is, private or public, is its chip. It is held at
+  one line while empty (`Notice` with `reserve`) wherever it sits under a panel's foot, so the first thing it says
+  moves nothing below it. A failure that is not a refusal says what happened in canopy's words, never the browser's
+  (`failedText` in `src/lib/outcomes.ts`): no answer at all is `canopy did not answer: is canopy loop running?`, and a
+  status with no words of its own says whether the action was done, `nothing was done` for a 4xx and
+  `it may not have been done` for a 5xx, which may come after the write. The header's Pause and Tick now say the same
+  on hover. A public ticket
   has no Stop, since its queue label authorizes it; while a worker runs on one, a muted line stands in Stop's place:
   `Public: remove its queue label to stop it, or start it privately.`
 - **A limit something is stuck at** (`GrantLimits`) sits under a ticket's actions, in its Work panel's foot on its
@@ -1039,3 +1045,7 @@ list, an empty state, or a skeleton by hand.
   (`bg-accent/20`, `src/lib/search.ts`), and its age. A snippet links nothing, since it may cut a URL short. While the
   next query's hits load, the last ones stay, dimmed to 60%.
 - **Signed out**, the whole page is the sign-in card, centered on the canvas: no shell, nothing from the journal.
+  Signed out by a 401 to an action, the card says under its heading, in `status-failed`, that the action was not sent
+  (`unsentQuery`). A reply being written outlives the page that held it: the reply form keeps what is written, with its
+  submission id, in `sessionStorage` per ticket or chore until a reply is recorded (`src/lib/reply-draft.ts`), so after
+  signing in again it is still in the box.

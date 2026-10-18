@@ -105,7 +105,9 @@ export function TicketActions({ ticket }: { ticket: TicketSummary }) {
                     onCancel={() => setConfirming(null)}
                 />
             )}
-            <Notice error={start.error ?? stop.error ?? forget.error}>{said}</Notice>
+            <Notice error={start.error ?? stop.error ?? forget.error} reserve>
+                {said}
+            </Notice>
         </div>
     )
 }

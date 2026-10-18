@@ -500,6 +500,7 @@ function SessionPanel() {
     const client = useQueryClient()
     const { data } = useQuery(sessionQuery)
     const mutation = useMutation({
+        mutationKey: keys.session,
         mutationFn: signOut,
         onSuccess: (session) => {
             client.setQueryData(keys.session, session)

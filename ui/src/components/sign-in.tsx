@@ -1,10 +1,10 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { KeyRound } from 'lucide-react'
 import type { SubmitEvent } from 'react'
 
 import { ApiError } from '@/api/client'
 import { signIn } from '@/api/mutations'
-import { keys } from '@/api/queries'
+import { keys, unsentQuery } from '@/api/queries'
 import { Notice } from '@/components/notice'
 import { Input } from '@/components/input'
 import { Mark } from '@/components/shell/mark'
@@ -13,13 +13,17 @@ import { pageTitle } from '@/lib/page-title'
 
 /**
  * Asks for the listener secret once (DESIGN §22). A right one sets a session cookie for 30 days; the secret itself is
- * never kept by the page. The hidden user name lets a password manager file the secret under canopy.
+ * never kept by the page. The hidden user name lets a password manager file the secret under canopy. Signed out by a
+ * 401 to an action, it says the action was not sent; a reply being written is still in its box after signing in.
  */
 export function SignIn() {
     const client = useQueryClient()
+    const unsent = useQuery(unsentQuery).data === true
     const mutation = useMutation({
+        mutationKey: keys.session,
         mutationFn: signIn,
         onSuccess: (session) => {
+            client.setQueryData(keys.unsent, false)
             client.setQueryData(keys.session, session)
             void client.invalidateQueries({ predicate: (query) => query.queryKey[0] !== 'session' })
         },
@@ -52,6 +56,11 @@ export function SignIn() {
                         Paste the listener secret. <code className="font-mono text-xs">canopy secret</code> prints it on
                         the machine that runs the loop.
                     </p>
+                    {unsent && (
+                        <p className="text-sm text-status-failed">
+                            Your last action was not sent: sign in and send it again.
+                        </p>
+                    )}
                 </div>
                 <input type="text" name="username" value="canopy" autoComplete="username" readOnly hidden />
                 <div className="flex flex-col gap-1.5">
