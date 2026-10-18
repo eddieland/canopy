@@ -67,7 +67,8 @@ If code and the design disagree, the design doc wins until a decision entry says
 - `ruff` for formatting and linting. `pyrefly` in strict mode for type checking. `pytest` for tests, in strict mode,
   where a warning fails the test that raised it.
 - `rumdl` lints and formats Markdown with every default rule. `editorconfig-checker` (`ec`) holds every file that is
-  not Python or Markdown to `.editorconfig`. `shellcheck` lints shell scripts and `actionlint` the GitHub workflows.
+  not Python or Markdown to `.editorconfig`. `shellcheck` lints shell scripts, `actionlint` the GitHub workflows, and
+  `zizmor` their security: every action is pinned to a commit, and a finding it allows is ignored inline with a reason.
   All are dev dependencies, so `uv sync` installs them and `make lint` runs them.
 - ruff selects every stable rule, and preview rules named one by one, the pydoclint ones among them (D018): a public
   module, class, or function has a Google docstring, with Returns, Yields, and Raises sections that match its body.
