@@ -72,7 +72,7 @@ plenty of PRs on [Attention](attention) marked ready for their reviewer, and non
 
 A worktree is held only while an agent is actually working in it. Waiting on CI, on a review, or on your answer holds
 nothing: the worker pushes its branch, hands the worktree back, and the pushed branch is the checkpoint. The next run
-on that ticket, a `fix-ci` or a `resume`, leases a slot and picks up from the branch. A small pool goes a long way when
+on that ticket, a `resume`, leases a slot and picks up from the branch. A small pool goes a long way when
 nobody sits in a slot waiting for a green check.
 
 ## Tell you only what needs you

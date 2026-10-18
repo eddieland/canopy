@@ -145,7 +145,7 @@ on their own; anyone else's comments wait on the attention list as `untrusted_re
 | Work a ticket privately, with no label and nothing written to it | `canopy start KEY`, then `canopy stop KEY` |
 | Work every labeled ticket privately | `private = true` under `[tracker]` in `.canopy/config.toml` |
 | Start a ticket over, once its PR is closed and its branch deleted | `canopy forget KEY` |
-| Allow one more run past an `attempt_limit` | `canopy grant KEY implement` (or `resume`, `fix-ci`), or the ticket's page |
+| Allow one more run past an `attempt_limit` | `canopy grant KEY implement` (or `resume`), or the ticket's page |
 | Allow one more review past a `review_limit` | `canopy grant PR_URL review`, or the PR's page |
 | Have canopy review a coworker's PR | `canopy start PR_URL --review`, or the pull requests page |
 | See what a tick decided and what it cost | `canopy decisions [TICK] [--ticket KEY]` |

@@ -95,7 +95,7 @@ Controls:
 - An operator message on a public ticket (DESIGN §22) is an instruction, like an authorized reply: written only through
   `core/conversation.py` by a channel that authenticated the operator, for a ticket the journal already has. It never
   reaches the tracker. The overseer reads it from the state block and points a worker at it by id; the harness renders
-  it into every public worker prompt itself (`implement`, `fix-ci`, `resume`), and refuses a prompt override that
+  it into every public worker prompt itself (`implement`, `resume`), and refuses a prompt override that
   would drop it (D093).
 - A private ticket (DESIGN §22, M18) is authorized by its start record, and its replies by operator messages, both
   written only through `core/conversation.py` by a channel that authenticated the operator: `canopy start` and
@@ -124,13 +124,13 @@ Controls:
   them, so the reviewer's text stays data. So does `notice`, when it sets or clears the operator's notice to workers
   (DESIGN §8): a notice reaches every later worker's, review's, and chore's prompt as the operator's words, so an agent
   steered by one ticket's text that could set one would write instructions into every other ticket's runs, and one
-  that could clear it could drop the operator's warning and send `fix-ci` at an outage's failures. Reading it refuses
+  that could clear it could drop the operator's warning and send a `resume` at an outage's failures. Reading it refuses
   nothing. Its text is bounded at 1 KiB when it is set, it lapses within seven days, and a run's prompt says that the
   prompt's obligations come before it, as they do before the standing instructions. The overseer reads it as the
-  operator's word about the world, to hold a failed check the notice explains: that changes when `fix-ci` runs, never
-  what a worker may do.
+  operator's word about the world, to hold a failed check the notice explains: that changes when a `resume` for CI runs,
+  never what a worker may do.
 - Ticket notes (DESIGN §28, ROADMAP M50), with `memory.ticket_notes` at `use`: a worker may write notes its own
-  ticket's later `implement`, `fix-ci`, and `resume` runs read as data, the same exposure as its reports in
+  ticket's later `implement` and `resume` runs read as data, the same exposure as its reports in
   `{{PREVIOUS_RUNS}}`, with one new property: a note outlives the tracker comment that steered it, bounded by the
   ticket's life (marking it done invalidates its notes) and by `canopy forget`. `_run` writes only the notes of the
   run's own ticket, read from its row, never from the result; a run renews, drops, or retires only notes rendered into
@@ -231,6 +231,10 @@ Controls in code, not prompts:
 - `capacity.max_workers` cap.
 - Per-run timeout; per-kind attempt limits, raised only by the operator, in config or per unit with `canopy grant`;
   cooldowns.
+- Resumes: one limit per unit, `policy.max_resume_attempts` (6 by default), counts every `resume`, whatever its
+  reasons, and every `fix-ci` run from before a resume fixed CI, with their grants (DESIGN §8, D030). The CI cooldown
+  holds a `resume` whose only reason is `ci`, so a PR that keeps going red still gets one run per cooldown window; one
+  with review feedback or a reply is not held, and fixes the build along the way.
 - One running worker per ticket.
 - Workers exit when their work is pushed. They may push again for a fix found after a push (D116), but do not poll
   CI or retry a rejected push; the run timeout bounds the rest.

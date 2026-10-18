@@ -101,7 +101,7 @@ def test_an_override_without_the_placeholder_fails_closed_once_instructions_are_
     assert "missing required placeholder {{STANDING_INSTRUCTIONS}}" in rationale
 
 
-@pytest.mark.parametrize("kind", ["implement", "fix-ci", "resume"])
+@pytest.mark.parametrize("kind", ["implement", "resume"])
 def test_every_shipped_private_prompt_carries_the_instructions(canopy_env: CanopyEnv, kind: str) -> None:
     instruct(canopy_env, FIXUP)
     cfg = load(canopy_env.root, canopy_env.user_file)

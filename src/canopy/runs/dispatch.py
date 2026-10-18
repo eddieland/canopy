@@ -12,6 +12,7 @@ import json
 import re
 import sys
 from collections.abc import Collection, Iterable, Mapping, Sequence, Sized
+from collections.abc import Set as AbstractSet
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -19,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db, memory, notice, outbox, plans, pools, prompts
 from canopy.core.context import DISPATCH_LOCK
-from canopy.core.vocab import PlanStatus, PoolKind, RunKind, RunStatus, StartStatus
+from canopy.core.vocab import PlanStatus, PoolKind, ResumeReason, RunKind, RunStatus, StartStatus
 from canopy.core.workspace import DESKS_DIR
 from canopy.infra import lock, logs, procs
 from canopy.runs import policy
@@ -40,8 +41,17 @@ JOINT_PR_NOTE = "one per repository, listed under Repositories"
 # A prompt carries at most this much of `MAP.md`.
 MAX_MAP = 20_000
 RUNS_DIR = "runs"
-# The kind a notice to workers can hold (DESIGN §8): a dispatch of it refuses when the notice moved mid-tick.
-FIX_CI = RunKind.FIX_CI
+# Each cursor a dispatch moves, and `--review-run`, by the reason a `resume` must name for it (DESIGN §8): what the
+# dispatch handles is a reason it runs. A reason needs no cursor; `conflict`, `no_pr`, and `retarget` have none.
+REASON_CURSORS: Mapping[str, ResumeReason] = {
+    "ci": ResumeReason.CI,
+    "review": ResumeReason.REVIEW,
+    "review_run": ResumeReason.REVIEW,
+    "comment": ResumeReason.REPLY,
+    "message": ResumeReason.REPLY,
+}
+# The attention item a dispatch refused for a retired `fix-ci` prompt override records (DESIGN §8, §14).
+FIX_CI_OVERRIDE = "fix_ci_override"
 
 
 class Refusal(Exception):  # noqa: N818  (a refusal is an outcome the overseer is told about, not an error)
@@ -51,12 +61,13 @@ class Refusal(Exception):  # noqa: N818  (a refusal is an outcome the overseer i
     limit; the attention item it raises is then about that unit.
     """
 
-    def __init__(self, guard: str, reason: str, *, repo: str | None = None) -> None:
-        """Name the guard and say why it refused."""
+    def __init__(self, guard: str, reason: str, *, repo: str | None = None, attention: str | None = None) -> None:
+        """Name the guard and say why it refused, and the attention item the refusal raises, if any."""
         super().__init__(f"{guard}: {reason}")
         self.guard = guard
         self.reason = reason
         self.repo = repo
+        self.attention = attention if attention is not None else ("attempt_limit" if guard == "attempt_limit" else None)
 
 
 @dataclass(frozen=True)
@@ -126,6 +137,8 @@ def start(
     repos: Sequence[str] = (),
     request: str | None = None,
     review: str | None = None,
+    reasons: Collection[str] = (),
+    cursors: AbstractSet[str] = frozenset(),
 ) -> Started:
     """Check the guards, lease a slot in each repository, record the run, and spawn `canopy _run` for it.
 
@@ -135,7 +148,8 @@ def start(
     A run over several repositories is a joint run (DESIGN §18). A `split` names the authorized replier's comment that
     asked for it with `request`, and works no unit. A `plan` works no unit either, and writes the ticket's plan
     (DESIGN §25). A `resume` for a canopy review's findings carries them in `review`, read from the journal (DESIGN
-    §21).
+    §21). A `resume` names why it runs in `reasons`, and `cursors` names the cursors the dispatch moves, with
+    `review_run` for `--review-run`: each needs its reason (DESIGN §8).
 
     Returns:
         The run that started: its id, branch, the slots it leased, the worker's pid, and its desk if it is joint.
@@ -147,9 +161,21 @@ def start(
     # One dispatch at a time, so two cannot both pass the capacity check. Held from the plan, which reads the ticket's
     # branch, across the leases and the spawn: two first implements must not each name a branch.
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
-        _check_notice(ctx, tick_id, kind)
-        plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base, request=request)
-        attempt, limit = _guard(ctx, key, kind, plan.repos)
+        check_kind(kind)
+        _check_notice(ctx, tick_id, kind, reasons)
+        plan = _plan(
+            ctx,
+            key,
+            kind,
+            label=label,
+            repos=repos,
+            slug=slug,
+            base=base,
+            request=request,
+            reasons=reasons,
+            cursors=cursors,
+        )
+        attempt, limit = _guard(ctx, key, kind, plan.repos, reasons=reasons)
         leases = _lease_all(ctx, key, plan.repos)
         try:
             return _spawn(
@@ -164,6 +190,7 @@ def start(
                 context=context,
                 request=request,
                 review=review,
+                reasons=reasons,
             )
         except BaseException:
             _return_all(ctx, leases)
@@ -181,6 +208,8 @@ def check(
     base: str | None,
     repos: Sequence[str] = (),
     request: str | None = None,
+    reasons: Collection[str] = (),
+    cursors: AbstractSet[str] = frozenset(),
 ) -> Plan:
     """Check the guards a live dispatch would, for a dry run, and return the plan of the run it would start (D036).
 
@@ -202,10 +231,32 @@ def check(
         if d.action.startswith("dispatch:") and (d.ticket_key is not None or d.pr is not None)
     ]
     with lock.hold(ctx.state_dir / DISPATCH_LOCK, wait=True):
-        _check_notice(ctx, tick_id, kind)
-        plan = _plan(ctx, key, kind, label=label, repos=repos, slug=slug, base=base, request=request)
-        _guard(ctx, key, kind, plan.repos, planned=planned)
+        check_kind(kind)
+        _check_notice(ctx, tick_id, kind, reasons)
+        plan = _plan(
+            ctx,
+            key,
+            kind,
+            label=label,
+            repos=repos,
+            slug=slug,
+            base=base,
+            request=request,
+            reasons=reasons,
+            cursors=cursors,
+        )
+        _guard(ctx, key, kind, plan.repos, planned=planned, reasons=reasons)
     return plan
+
+
+def check_kind(kind: str) -> None:
+    """Refuse `fix-ci`, a kind a `resume` with the reason `ci` replaced (DESIGN §8): its old runs still read.
+
+    Raises:
+        Refusal: `bad_kind`, for `fix-ci`.
+    """
+    if kind == policy.RETIRED:
+        raise Refusal("bad_kind", "fix-ci is retired: a resume fixes CI now; dispatch resume --reason ci")
 
 
 def runs_dir(ctx: Context) -> Path:
@@ -338,6 +389,8 @@ def _plan(
     slug: str | None,
     base: str | None,
     request: str | None = None,
+    reasons: Collection[str] = (),
+    cursors: AbstractSet[str] = frozenset(),
 ) -> Plan:
     private = _check_start(ctx, key, kind)
     # A started ticket's start record authorizes it, checked in code; a public ticket's `--label` is a claim (D051).
@@ -350,6 +403,7 @@ def _plan(
         )
     if kind != policy.SPLIT and request is not None:
         raise Refusal("bad_request", "--request names the comment asking for a split; it is for split only")
+    _check_reasons(kind, reasons, cursors, base=base)
     names = _check_repos(ctx, key, repos)
     if kind == policy.PLAN:
         # Before the split check below: a plan for a split's parent is the plan's own refusal.
@@ -369,6 +423,36 @@ def _plan(
     if base is not None:
         _check_base(ctx.config.trust.branch_prefix, branch, base)
     return Plan(branch=branch, base=base, label=configured, repos=names, private=private or starts, starts=starts)
+
+
+def _check_reasons(kind: str, reasons: Collection[str], cursors: AbstractSet[str], *, base: str | None) -> None:
+    """Refuse a `resume` that does not name why it runs, or reasons on another kind (DESIGN §8).
+
+    What the harness can check of the reasons, it does: each cursor the dispatch moves is a reason it runs, and a
+    `retarget` is for a PR whose blocker merged, so it takes no `--base`, which says the blocker is still open.
+
+    Raises:
+        Refusal: `bad_reason`, for a `resume` with no reason, a reason on another kind, a cursor without its reason,
+            or `retarget` with `--base`.
+    """
+    if kind != RunKind.RESUME:
+        if reasons:
+            raise Refusal("bad_reason", "--reason says why a resume runs; it is for resume only")
+        return
+    if not reasons:
+        raise Refusal(
+            "bad_reason",
+            f"--reason is required for a resume: name why it runs, one or more of {', '.join(ResumeReason)}",
+        )
+    for cursor in sorted(cursors):
+        needed = REASON_CURSORS.get(cursor)
+        if needed is not None and needed not in reasons:
+            moved = "--review-run" if cursor == "review_run" else f"--cursor {cursor}"
+            raise Refusal("bad_reason", f"{moved} is handled by a resume for {needed}: add --reason {needed}")
+    if ResumeReason.RETARGET in reasons and base is not None:
+        raise Refusal(
+            "bad_reason", "--reason retarget is for a PR whose blocker merged, and --base says it is still open"
+        )
 
 
 def _check_start(ctx: Context, key: str, kind: str) -> bool:
@@ -525,7 +609,6 @@ def _check_planned(ctx: Context, key: str, kind: str) -> None:
 
     A guard in code, whatever the overseer asks for: an `implement` waits on an approved plan when the ticket needs
     one, and an `implement` or `resume` never follows a plan whose file is no longer the text the operator approved.
-    A `fix-ci` fixes a failure, not the plan's work, and carries no plan.
 
     Raises:
         Refusal: an `implement` for a ticket that needs a plan and has none approved (`unplanned`); an `implement` or
@@ -615,16 +698,16 @@ def _check_base(prefix: str, branch: str, base: str) -> None:
         raise Refusal("bad_base", f"{branch} cannot be stacked on itself")
 
 
-def _check_notice(ctx: Context, tick_id: int, kind: str) -> None:
-    """Refuse a `fix-ci` when the operator set or cleared a notice to workers after this tick read the journal.
+def _check_notice(ctx: Context, tick_id: int, kind: str, reasons: Collection[str]) -> None:
+    """Refuse a `resume` for CI when the operator set or cleared a notice to workers after this tick read the journal.
 
-    The overseer decided from a state block without it, and a `fix-ci` at a failure the notice explains spends an
+    The overseer decided from a state block without it, and a CI fix at a failure the notice explains spends an
     attempt that never resets (D030); the loop's next tick, which the notice wakes, decides with it (DESIGN §8).
 
     Raises:
         Refusal: (`notice_changed`) the notice moved after the tick's read.
     """
-    if kind != FIX_CI:
+    if kind != RunKind.RESUME or ResumeReason.CI not in reasons:
         return
     tick = db.get_tick(ctx.conn, tick_id)
     read = tick.read_at if tick is not None else None
@@ -632,24 +715,32 @@ def _check_notice(ctx: Context, tick_id: int, kind: str) -> None:
         raise Refusal(
             "notice_changed",
             "the operator set or cleared a notice to workers after this tick read the journal; the next tick decides "
-            "fix-ci with it",
+            "the resume for CI with it",
         )
 
 
-def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: Sequence[str] = ()) -> tuple[int, int]:
+def _guard(
+    ctx: Context,
+    key: str,
+    kind: str,
+    repos: Sequence[str],
+    *,
+    planned: Sequence[str] = (),
+    reasons: Collection[str] = (),
+) -> tuple[int, int]:
     """Refuse unless a `kind` run for `key` over `repos` may start now. Returns the run's attempt number and limit.
 
-    Attempt limits and the fix-ci cooldown are per unit: the run is refused if any unit it covers is at its limit or
-    in its cooldown. A unit's limit is the policy's plus the runs the operator granted it (DESIGN §22). The run's
-    attempt number and limit are those of the unit with the most runs of the kind. `planned` holds the tickets a dry
-    run has already dispatched this tick; each counts as a running run.
+    Attempt limits and the CI cooldown are per unit: the run is refused if any unit it covers is at its limit or, for
+    a `resume` whose only reason is `ci`, in its cooldown. A unit's limit is the policy's plus the runs the operator
+    granted it (DESIGN §22). The run's attempt number and limit are those of the unit with the most runs of the kind.
+    `planned` holds the tickets a dry run has already dispatched this tick; each counts as a running run.
 
     Returns:
         The run's attempt number and attempt limit.
 
     Raises:
         Refusal: a run is already working `key` or the dry run dispatched it (`running`), a unit, or the ticket for a
-            split or a plan, is at its attempt limit (`attempt_limit`) or a unit in its fix-ci cooldown (`cooldown`),
+            split or a plan, is at its attempt limit (`attempt_limit`) or a unit in its CI cooldown (`cooldown`),
             or the workers are at capacity (`capacity`). A refusal about one unit names its repository.
     """
     running = db.running_runs(ctx.conn, "runs")
@@ -669,7 +760,7 @@ def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: 
         return done + 1, ticket_limit
     counts = policy.attempts(ctx.conn)
     granted = policy.grants(ctx.conn)
-    cooldowns = policy.fix_ci_cooldowns(ctx.conn, ctx.config, datetime.now(UTC))
+    cooldowns = policy.ci_cooldowns(ctx.conn, ctx.config, datetime.now(UTC))
     # (attempt, -limit) per unit: the unit with the most runs sets both, and of those, the one with the lowest limit.
     numbered: list[tuple[int, int]] = []
     for repo in repos:
@@ -677,7 +768,12 @@ def _guard(ctx: Context, key: str, kind: str, repos: Sequence[str], *, planned: 
         unit_counts = counts.get(unit, dict.fromkeys(policy.KINDS, 0))
         limit = policy.unit_limits(ctx.config, granted.get(unit, {}))[kind]
         refused = policy.blocked(
-            f"{key} in {repo}", kind, counts=unit_counts, limit=limit, cooldown_until=cooldowns.get(unit)
+            f"{key} in {repo}",
+            kind,
+            counts=unit_counts,
+            limit=limit,
+            cooldown_until=cooldowns.get(unit),
+            reasons=frozenset(reasons),
         )
         if refused is not None:
             raise Refusal(*refused, repo=repo)
@@ -743,6 +839,7 @@ def _spawn(
     context: str | None,
     request: str | None = None,
     review: str | None = None,
+    reasons: Collection[str] = (),
 ) -> Started:
     cfg = ctx.config
     branch = plan.branch
@@ -796,6 +893,7 @@ def _spawn(
         "PLAN_FILE": plans.REPLACED,
         "PLAN_OUT": plans.WRITTEN,
         "MAX_PLAN_CHARS": f"{plans.MAX_CHARS:,}",
+        "REASONS": prompts.reasons_note(tuple(reasons), private=plan.private),
     }
     # A joint run's worker learns its repositories only from these, so an override without them fails closed. A
     # splitter's own check of who asked for the split needs the request.
@@ -826,6 +924,8 @@ def _spawn(
     if followed is not None:
         values["PLAN"] = followed[1]
         required = (*required, *prompts.REQUIRED_PLAN_COPY)
+    if kind == RunKind.RESUME:
+        _check_retired_overrides(ctx, plan.repos)
     prompt, remembered = _render(ctx, key, kind, values, required, repos=plan.repos, private=plan.private)
 
     run_id = db.insert_run(
@@ -841,6 +941,7 @@ def _spawn(
         private=plan.private,
         check=functools.partial(_check_start_again, ctx, key, plan),
         plan_id=followed[0] if followed is not None else None,
+        reasons=tuple(r for r in ResumeReason if r in reasons),
         rendered=None
         if remembered is None
         else functools.partial(memory.record_rendered, ctx.conn, rendered=remembered),
@@ -859,6 +960,30 @@ def _spawn(
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, "runs", run_id, pid)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
+
+
+def _check_retired_overrides(ctx: Context, repos: Sequence[str]) -> None:
+    """Refuse every `resume` while the operator overrides a retired `fix-ci` prompt (DESIGN §8).
+
+    Nothing renders that file now, so a `resume` for CI would run without the operator's instructions in it. The
+    refusal raises an attention item on the unit, since it holds every `resume`, not only CI's, and would otherwise
+    look idle.
+
+    Raises:
+        Refusal: `bad_prompt`, with the `fix_ci_override` attention item, while such an override exists.
+    """
+    found = prompts.retired_overrides(ctx.config)
+    if not found:
+        return
+    names = " and ".join(str(p) for p in found)
+    raise Refusal(
+        "bad_prompt",
+        f"{names} overrides a fix-ci prompt, which canopy no longer uses: a resume fixes CI now. Merge what it adds "
+        "into your override of worker-resume.md (or worker-resume-private.md), under its failed-checks section, then "
+        "remove it",
+        repo=repos[0] if len(repos) == 1 else None,
+        attention=FIX_CI_OVERRIDE,
+    )
 
 
 def _render(

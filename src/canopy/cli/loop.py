@@ -12,7 +12,7 @@ from rich.console import Console
 
 from canopy.cli.common import CliError, open_context
 from canopy.cli.params import TICKET_KEY
-from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, spent
+from canopy.cli.render import chore_line, named, one_line, phase_of, prs_of, result_of, run_kind, spent
 from canopy.core import chore_view, contract, conversation, db, memory, notice, pause, review_requests
 from canopy.infra import hangup, keys, lock
 from canopy.loop import attention, repeat, reread, tick
@@ -202,7 +202,7 @@ def _print_workers(ctx: Context) -> None:
         # A joint run holds a slot in each of its repositories.
         where = ", ".join(f"{s['repo']} {s['slot_path']}" for s in slots[int(r["id"])])
         click.echo(
-            f"  {named(r['ticket_key'], r['ticket_title'])}  {r['kind']}  {attention.age(r['started_at'])}  {where}"
+            f"  {named(r['ticket_key'], r['ticket_title'])}  {run_kind(r)}  {attention.age(r['started_at'])}  {where}"
         )
         # What its worker reported so far (DESIGN §8): nothing until its first event, or ever without `--format json`.
         if r["session_id"]:
@@ -234,7 +234,7 @@ def _print_recent_runs(ctx: Context) -> None:
         result = result_of(r)
         ended = f"{attention.age(str(r['ended_at']))} ago"
         prs = "".join(f"  {pr}" for pr in prs_of(result))
-        click.echo(f"  {named(r['ticket_key'], r['ticket_title'])}  {r['kind']}  {r['status']}  {ended}{prs}")
+        click.echo(f"  {named(r['ticket_key'], r['ticket_title'])}  {run_kind(r)}  {r['status']}  {ended}{prs}")
         said = one_line(contract.stored_note(result))
         if said:
             click.echo(f"    {said}")

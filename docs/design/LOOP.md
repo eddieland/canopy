@@ -262,7 +262,7 @@ interval, idle pacing is off. The count lives in the loop, not the journal: a re
 hand-run `canopy tick` between the loop's ticks counts like any other.
 
 Whatever pacing chose, the wait ends no later than the earliest harness gate still ahead, as the state block shows it:
-a `fix-ci` cooldown's end (§8), a configured chore's `due_at` (§19), and the lapse of the notice in force (§8). A gate
+the CI cooldown's end (§8), a configured chore's `due_at` (§19), and the lapse of the notice in force (§8). A gate
 opening is acted on when it opens, even sooner than `base`, though no sooner than `loop.min_gap_minutes` after the tick
 began. A gate already open, such as a chore the overseer passed over, sets no deadline, so it cannot make the loop
 spin.
@@ -309,7 +309,7 @@ escapes it; it stays out of `attention.md` and the `text` format. `canopy forget
 | `pushed_no_pr` | branch exists, no PR | dispatch `resume` with instruction to open the PR |
 | `conflicted` | PR open, GitHub reports it conflicts with its base | dispatch `resume` to bring the base in |
 | `ci_running` | PR open, checks pending | wait |
-| `ci_red` | PR open, checks failed, newer than cursor | dispatch `fix-ci`; at the attempt limit, attention; in cooldown, wait; held for a notice, wait (§8) |
+| `ci_red` | PR open, checks failed, newer than cursor | dispatch `resume` for `ci`, with anything else the unit has (§8, One resume for what comes back to a PR); at the attempt limit, attention; in cooldown, wait; held for a notice, wait (§8) |
 | `review_pending` | with `review.agent_prs`: checks pass, no approval, head commit not reviewed (§21) | review it |
 | `review_findings` | with `review.agent_prs` and `canopy:review` trusted: findings on the head's review, newer than the cursor | as comments (§7) |
 | `changes_requested` | a trusted reviewer's comments or requested changes newer than cursor | dispatch `resume` with the comments; if the overseer judges a comment needs a human (design pushback, scope), attention instead |
@@ -323,7 +323,7 @@ escapes it; it stays out of `attention.md` and the `text` format. `canopy forget
 
 A PR's checks are its head commit's check runs, which is all GitHub Actions writes, and its commit statuses only
 beside them, for CI that writes statuses: statuses alone read an Actions repository as pending forever, with nothing
-written, and a red PR waits instead of getting its `fix-ci`.
+written, and a red PR waits instead of getting its `resume`.
 
 A unit is `conflicted` when GitHub reports that its PR does not merge cleanly into its base; a mergeability not yet
 computed is not a conflict. GitHub runs no `pull_request` checks on a PR it cannot merge, so `conflicted` comes before
@@ -429,8 +429,8 @@ reopened the query finds it again; and a ticket marked done with no `done` decis
 
 ## 8. Dispatch and the worker contract
 
-`canopy dispatch <KEY> --label LABEL --kind implement|fix-ci|resume|split|plan [--repo NAME]... [--slug SLUG]
-[--base BRANCH] [--request COMMENT_ID] [--context TEXT] [--cursor NAME=ID]...`:
+`canopy dispatch <KEY> --label LABEL --kind implement|resume|split|plan [--repo NAME]... [--reason REASON]...
+[--slug SLUG] [--base BRANCH] [--request COMMENT_ID] [--context TEXT] [--cursor NAME=ID]...`:
 
 Each `--repo` names a unit of the ticket, its work in one repository (§18); naming several makes a joint run. Every
 dispatch names at least one, in a workspace of one repository too. A `plan` writes the ticket's plan before its first
@@ -439,6 +439,8 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
 1. Check the guards. They are in code and not overridable from the prompt. A refusal is recorded as a decision
    `refused:<guard>` with the reason, and the command exits 1. A dry run checks the same guards and stops, counting
    each dry-run dispatch already recorded this tick as a running run (§6, D036). In order:
+   - `bad_kind`: `--kind fix-ci`, naming `resume --reason ci`: a `resume` fixes CI (below). The value stays among the
+     run kinds only so the runs earlier canopy made still read.
    - `unauthorized`: no `--label`, or one not in `tracker.labels`, compared case-insensitively. The refusal does not
      list the configured labels. This does not prove the label is on the ticket; the worker's own read is the
      independent check (step 3, D051). A `split` without `--request` is refused here too (§18). A started ticket (§22)
@@ -447,16 +449,20 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
      started ticket, since a split creates tickets in the tracker. `no_read_tools`: a started ticket when no tracker
      tools are known for its worker (§22), or a labeled one its dispatch would start under `tracker.private`.
    - `bad_request`: `--request` on a kind other than `split`.
+   - `bad_reason`: a `resume` with no `--reason`; a `--reason` on any other kind; a cursor without its reason (`ci` for
+     `--cursor ci=`, `review` for `--cursor review=` and `--review-run`, `reply` for `--cursor comment=` and
+     `message=`); or `retarget` with `--base`, which says the blocker is still open (One resume for what comes back to a
+     PR, below).
    - `unknown_repo`: no `--repo`, or one not in the map or with no primary clone; for a split's child, any repository
      but the one the split recorded for it. Naming a repository the ticket has no unit in yet adds that unit (§18,
      D058). A `--repo` that is not a repository name at all is a usage error.
    - `bad_split`: a `split` naming fewer than two repositories, for a ticket with a branch, or for a split's child; and
      any dispatch for a ticket a split already made children of (§18). A split's `--slug` is `bad_slug` and its
      `--base` `bad_base`.
-   - `bad_slug`: a slug that is not lowercase words joined by hyphens; any `--slug` with `fix-ci` or `resume`; or, on
+   - `bad_slug`: a slug that is not lowercase words joined by hyphens; any `--slug` with `resume`; or, on
      a later `implement`, a `--slug` naming another branch than the ticket's. The ticket's first `implement` names its
      branch, and every later dispatch continues it in every unit (D058).
-   - `no_branch`: `fix-ci` or `resume` for a ticket with no branch, or naming a unit no `implement` has covered.
+   - `no_branch`: `resume` for a ticket with no branch, or naming a unit no `implement` has covered.
    - `bad_base`: a `--base` that is not `<trust.branch_prefix>` plus one plain ref component, or that is the run's own
      branch (§10).
    - `running`: a run for KEY is running.
@@ -464,8 +470,8 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
      plus the runs the operator granted that unit with `canopy grant` (§22). A run counts against every unit it
      covered, whatever it ended as; the count never resets (D030). A split's count and limit are the ticket's, and
      only config raises it. The refusal also records the `attempt_limit` attention item (§14), about that unit.
-   - `cooldown`: `fix-ci` only, less than `policy.fix_ci_cooldown_minutes` after the latest fix-ci run covering a named
-     unit ended.
+   - `cooldown`: a `resume` whose only reason is `ci`, less than `policy.ci_cooldown_minutes` after the latest run
+     covering a named unit that worked on CI ended (below).
    - `capacity`: `max_workers` runs and review runs, together, are running (§21).
 
    Later failures are recorded the same way: `no_slot` (a lease failed, or would grow a workspace's pool past its
@@ -495,7 +501,7 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
      rather than silently drop it: `{{LABELS}}` always (D051); `{{REPOSITORIES}}` and `{{PRS}}` for a joint run;
      `{{OPEN_PR}}` in `implement` and `resume` with `runtime.pr_skill` set; `{{OPERATOR_MESSAGES}}` on a public ticket
      once the operator has written to it (§22, D093); `{{STANDING_INSTRUCTIONS}}` with that file set;
-     `{{NOTICE}}` while a notice is in force; `{{BRANCH_UPDATE}}` with `trust.rebase`; in `implement`, `fix-ci`, and
+     `{{NOTICE}}` while a notice is in force; `{{BRANCH_UPDATE}}` with `trust.rebase`; in `implement` and
      `resume`, `{{COMMIT_ATTRIBUTION}}` or `{{COMMIT_TRAILER}}` once the trailer's name or address is changed, and
      `{{COMMIT_ATTRIBUTION}}` once the trailer is off. Older single-repository placeholders still render.
    - Every prompt but a split's carries the standing instructions, the operator's file `paths.worker_instructions`
@@ -503,12 +509,12 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
      without it would work as if the operator had never written it. It is the operator's own text, an instruction like
      their messages, and the prompt's obligations come before it. Every prompt but a split's carries the notice in
      force, or `None.` (Notices to workers, below).
-   - A public ticket's `implement`, `fix-ci`, and `resume` prompts carry its latest three ended runs since any forget,
+   - A public ticket's `implement` and `resume` prompts carry its latest three ended runs since any forget,
      each with its kind, how it ended, and its report and question (step 7). Each run starts a fresh session (below), so
      this is how a worker learns what the runs before it concluded. A report is worker text, so the prompt calls it data
      to check against the branch and PR, and keeps it off the ticket and PRs, since it may repeat the operator's
      messages. A private ticket's prompt has the same reports in its conversation. An override without it still renders.
-   - Every `implement`, `fix-ci`, and `resume` prompt says how to attribute commits: keep the runtime's trailer, or add
+   - Every `implement` and `resume` prompt says how to attribute commits: keep the runtime's trailer, or add
      the one from `trust.commit_trailer_name` and `trust.commit_trailer_email` (§12); with `trust.commit_trailer` off,
      add none.
    - A started ticket's run renders the kind's private variant, `worker-<kind>-private.md` (§22): no label check, no
@@ -662,7 +668,7 @@ MCP, and its URL goes in `prs`. Updating an existing PR, such as retargeting a s
 
 ### A fresh session per run
 
-Every worker run starts a new session, `fix-ci` and `resume` included; none continues the run before it. What carries
+Every worker run starts a new session, `resume` included; none continues the run before it. What carries
 from one run to the next is the pushed branch, its PR, the ticket's cursors (§7), the overseer's `--context`, and what
 the latest runs reported (step 3); the earlier session stays for the operator to open (§13). Why (MEASUREMENTS
 2026-10-15):
@@ -675,7 +681,7 @@ the latest runs reported (step 3); the earlier session stays for the operator to
   write the earlier run's whole context to the cache and read it back on every call.
 - What the earlier run read, CI logs and review comments, would come along. A fresh run reads only what it needs.
 
-Revisit if `fix-ci` or `resume` runs often end `blocked` or `failed` for want of what the earlier run worked out,
+Revisit if `resume` runs often end `blocked` or `failed` for want of what the earlier run worked out,
 visible in their transcripts as steps spent finding it again.
 
 ### Notices to workers
@@ -696,7 +702,7 @@ outage there outlives it or is forgotten.
   refuses nothing.
 - Its text is bounded when it is set, at 1 KiB after trimming, so no dispatch fails on its size later: the operator
   hears `too_long` at once. A blank text is `empty`; a bad duration is `bad_duration`.
-- Who hears it: `implement`, `fix-ci`, and `resume` workers, public and private, under its own heading beside the
+- Who hears it: `implement` and `resume` workers, public and private, under its own heading beside the
   standing instructions; reviews (§21); and chores (§19), in the generated run object the operator's file cannot drop.
   A split hears none: it builds nothing. The prompt is rendered at dispatch, so a running run keeps the prompt it
   started with. A worker leaves a failure the notice explains alone and says so in its summary; a reviewer does not
@@ -704,13 +710,13 @@ outage there outlives it or is forgotten.
 - While a notice is in force, a prompt override without `{{NOTICE}}` is `bad_prompt` (step 3), so an old override
   cannot drop it silently. `canopy notice` names each such override when it sets one.
 - The overseer reads the notices in force or ended in the last seven days (§6 step 4). A failed check whose run started
-  while a notice was in force, and that the notice explains, is held: the overseer records `wait`, sends no `fix-ci`,
-  whose attempts never reset (D030), and leaves the `ci` cursor. It stays held after the notice ends until a newer run
-  of that check exists, so an ending alone never sends `fix-ci` at the outage's failure. Once the notice has ended and
-  no newer run exists, the overseer records `notice_rerun` (§14) for the operator to rerun the check; with M25 built,
-  `triage-ci` reruns it where triage is on. No guard in code: whether a failure is the one the notice names is
-  judgment. What code does guard is the overseer deciding from a stale state block: a `fix-ci` dispatched after a
-  notice was set or cleared since its tick read the journal is refused `notice_changed`, and the tick the notice wakes
+  while a notice was in force, and that the notice explains, is held: the overseer records `wait`, sends no `resume` for
+  it, whose attempts never reset (D030), and leaves the `ci` cursor. It stays held after the notice ends until a newer
+  run of that check exists, so an ending alone never sends a `resume` at the outage's failure. Once the notice has ended
+  and no newer run exists, the overseer records `notice_rerun` (§14) for the operator to rerun the check; with M25
+  built, `triage-ci` reruns it where triage is on. No guard in code: whether a failure is the one the notice names is
+  judgment. What code does guard is the overseer deciding from a stale state block: a `resume` for `ci` dispatched after
+  a notice was set or cleared since its tick read the journal is refused `notice_changed`, and the tick the notice wakes
   decides with it.
 - Setting or clearing a notice is an operator act, like a message: it wakes the loop's wait, keeps the next tick from
   counting as idle, and is recorded as what woke it (§6). Its lapse is a gate the wait ends at, so held work is looked
@@ -719,15 +725,12 @@ outage there outlives it or is forgotten.
 Open: whether a notice should name repositories, so an outage in one repository's CI does not reach runs in another.
 Every notice reaches every run until real use shows the need.
 
-### One resume for what comes back to a PR (M56)
+### One resume for what comes back to a PR
 
-Designed, not built (ROADMAP M56). Until M56 lands, `ci_red` dispatches `fix-ci`, and every section that names
-`fix-ci`, §7 and §8 above among them, describes canopy as it is. This section says what changes.
-
-A PR with a red check and a new review comment takes two runs today, a `fix-ci` and a `resume`, each with its own
-prompt, attempt limit, and cooldown, and each checking out and pushing the same branch. Everything that comes back to a
-PR becomes one kind of run: a `resume`, which on one checkout and one push does whatever the unit needs, from fixing
-the build to answering its reviewers. With M54, that makes a round of feedback one plan as well as one run.
+Everything that comes back to a PR is one kind of run, a `resume`, which on one checkout and one push does whatever
+the unit needs, from fixing the build to answering its reviewers. A PR with a red check and a new review comment gets
+one run, not two each pushing the same branch with its own prompt, limit, and cooldown, as when fixing CI was a kind of
+its own (`fix-ci`, ROADMAP M56). With M54, a round of feedback is one plan as well as one run.
 
 - **Reasons.** Every `resume` names why it runs with `--reason`, once for each:
 
@@ -740,46 +743,39 @@ the build to answering its reviewers. With M54, that makes a round of feedback o
   | `no_pr` | `pushed_no_pr`: the branch is pushed and has no PR | none |
   | `retarget` | the PR's blocker merged, so the PR targets the repository's base branch again (§10) | none |
 
-  The reasons are recorded on the run, and `canopy status` and the web UI show them beside its kind, so a run sent for
-  a red build still reads as one. They are named rather than read off the cursors, since three of them have no cursor
-  and the cooldown below must tell a run for CI alone.
+  The reasons are recorded on the run, and `canopy status`, the state block, and the web UI show them beside its kind,
+  so a run sent for a red build still reads as one. They are named rather than read off the cursors, since three of
+  them have no cursor and the cooldown must tell a run for CI alone. `bad_reason` (step 1) holds what the harness can
+  check of them: each cursor the dispatch moves needs its reason. A reason needs no cursor, since a `ci` after a triage
+  (§23) follows the cursor the triage moved.
 - **One run for a round.** When a tick finds more than one reason on a unit, the unit's phase is the first in §7's
   table, and its one `resume` carries every reason, each with its cursors. `retarget` has no row there: the overseer
   reads that the blocker merged (§10), the harness cannot (D003), and the unit's phase is whatever its PR's state makes
   it, so a stacked PR that is also red gets one `resume` with `ci` and `retarget`. A failed check a notice holds is no
   reason (Notices to workers, above): a `resume` sent for anything else on the unit leaves that check, and the `ci`
-  cursor, alone. Joint runs are as before: a run that moves a unit's cursor names one repository.
-- **Guards.** Beside step 1's, in their order:
-  - `bad_kind`, first: `--kind fix-ci`, naming `resume --reason ci`. The value stays in the run kinds only so old runs
-    read.
-  - `bad_reason`, after `bad_request`: a `resume` with no `--reason`; a `--reason` on any other kind; a cursor
-    without its reason, from the table; or `retarget` with `--base`, since `--base` says the blocker is still open. A
-    reason needs no cursor, since a `ci` after a triage (§23) follows the cursor the triage moved.
-  - `cooldown`: a `resume` whose only reason is `ci`, less than `policy.ci_cooldown_minutes` (default 30) after the
-    latest run covering a named unit that worked on CI ended: a `resume` with `ci` among its reasons, or an old
-    `fix-ci`. A `resume` with any other reason is not held: it would run anyway, and fixing the build on the same
-    checkout costs no attempt of its own. The cooldown's end stays a gate the loop's wait ends at (§6).
-  - `notice_changed` refuses a `resume` with `ci` among its reasons, as it refused `fix-ci`.
-- **One limit.** `policy.max_resume_attempts`, default 6, bounds every `resume` of a unit whatever its reasons, and
-  every old `fix-ci` run counts among them (D030: derived from `runs`, never reset). Six is more than the two limits
-  together (2 and 3), since one run now does what two did; the operator chose one limit (2026-10-17), accepting that a
-  PR that keeps going red can spend the attempts its reviewers would have had. A unit's `fix-ci` grants count toward it
-  as its `resume` grants do, so nothing is migrated: a unit within the old defaults, at most 5 runs together, is
-  within 6, and one past them had grants that carry over. `canopy grant KEY fix-ci` is refused naming `resume`. The
-  state block's `resume` count and limit are those sums, and `fix-ci` leaves its kinds; spend (§11) and run lists show
-  an old `fix-ci` run under its own kind.
-- **Removed keys.** `policy.max_fix_ci_attempts`, whose error says to raise `max_resume_attempts`, and
-  `policy.fix_ci_cooldown_minutes`, whose error names `ci_cooldown_minutes` (§12).
-- **One prompt.** `worker-resume.md` and its private variant gain fix-ci's section on reading a failed check and its
-  log, CI logs being untrusted text, under the reason `ci`. `{{REASONS}}` names the run's reasons, and the worker works
-  the sections they name. An override without it still renders: step 3 refuses an override that drops a check or an
-  operator instruction, and the reasons are neither, since the context names the same work. The `fix-ci` prompts go.
-  While the operator's prompt overrides hold `worker-fix-ci.md` or `worker-fix-ci-private.md`, every `resume` is
-  `bad_prompt` when its prompt renders (step 3, after every guard), naming the file and saying to merge what it adds
-  into the resume override and remove it, so the operator's CI instructions are never dropped silently. That stops every
-  `resume`, not only CI's, so the refusal also records a `fix_ci_override` attention item (§14) on the unit, as an
-  `attempt_limit` refusal records its own, and a held unit never looks idle. A `resume` for CI alone gets the approved
-  plan's copy (§25), as every `resume` does: PLANNING's open question on `fix-ci` closes with the kind.
+  cursor, alone. A run that moves a unit's cursor names one repository, as any does.
+- **One limit.** `policy.max_resume_attempts`, default 6, bounds every `resume` of a unit whatever its reasons (D030:
+  derived from `runs`, never reset). Six is more than a fix-ci's and a resume's limits were together (2 and 3), since
+  one run does what two did; the operator chose one limit (2026-10-17), accepting that a PR that keeps going red can
+  spend the attempts its reviewers would have had. An old `fix-ci` run counts among a unit's resumes, and its `fix-ci`
+  grants as its `resume` grants do, so nothing was migrated: a unit within the old defaults, at most 5 runs together,
+  is within 6, and one past them had grants that carry over. `canopy grant KEY fix-ci` is refused (`bad_kind`) naming
+  `resume`. Spend (§11) and the run lists show an old `fix-ci` run under its own kind.
+- **The CI cooldown** (`cooldown`, step 1) holds a `resume` whose only reason is `ci` for `policy.ci_cooldown_minutes`
+  (default 30) after the latest run covering a named unit that worked on CI ended: a `resume` with `ci` among its
+  reasons, or an old `fix-ci`. So a red build still waits between attempts. A `resume` with any other reason is not
+  held: it would run anyway, and fixing the build on the same checkout costs no attempt of its own. Its end is a gate
+  the loop's wait ends at (§6).
+- **One prompt.** `worker-resume.md` and its private variant carry a section on reading a failed check and its log,
+  CI logs being untrusted text, under the reason `ci`. `{{REASONS}}` names the run's reasons, and the worker works the
+  sections they name. An override without it still renders: step 3 refuses an override that drops a check or an
+  operator instruction, and the reasons are neither, since the context names the same work. Nothing renders the old
+  `worker-fix-ci.md` or `worker-fix-ci-private.md`, so while the operator's prompt overrides hold either, every
+  `resume` is `bad_prompt` when its prompt renders, naming the file and saying to merge what it adds into the resume
+  override and remove it: the operator's CI instructions are never dropped silently. That stops every `resume`, not
+  only CI's, so the refusal also records a `fix_ci_override` attention item (§14) on the unit, as an `attempt_limit`
+  refusal records its own, and a held unit never looks idle. A `resume` for CI alone gets the approved plan's copy
+  (§25), as every `resume` does.
 
 Rejected: a cooldown after every run that worked on CI, whatever the next one is for (it would hold feedback a reviewer
 waits on, behind a build the same run can fix); a limit per reason (the operator chose one); reasons read from the
@@ -849,17 +845,17 @@ The operator's guide, with a `.bazelrc` recipe, examples of each setup step, siz
 - `policy.stacking` (§12) defaults to `"auto"`: the overseer stacks when the conditions above hold. `"never"`: a
   blocked ticket waits until its blocker has landed (closed, and its PR merged if it had one). A blocker whose PR
   closed without merging never landed; the blocked ticket gets `needs_author` attention instead of a dispatch.
-  `"never"` governs starting a ticket; one already stacked keeps its stacked PR, `resume`, and `fix-ci`. The overseer
+  `"never"` governs starting a ticket; one already stacked keeps its stacked PR and its `resume` runs. The overseer
   prompt follows it; the harness adds no guard, so a `--base` dispatch under `"never"` is not refused.
 - The harness checks only the shape of `--base` (`bad_base`, §8): under `trust.branch_prefix`, so a PR cannot target
   a release branch, and not the run's own branch. It does not look the base up in the journal (the blocker may be in
   another operator's queue) and cannot read PR state (D003). `_run` fails a run whose base is not on origin (§8 `_run`
   step 2).
 - The base is not remembered. Every dispatch starts from `--base` if given, else the pool's base branch, in every
-  repository it names, and the run records each, shown in the state block's latest run. While the blocker's PR is
-  open, the overseer passes the same `--base` to the stacked ticket's `resume` and `fix-ci`. Once it merges, a
-  `resume` without `--base` tells the worker to retarget the PR to the repository's base branch, bringing that branch
-  in if it conflicts. Workers never rebase, since their pushes never force, unless the operator sets `trust.rebase`;
-  then they rebase only the ticket's own commits onto it (`git rebase --onto`).
+  repository it names, and the run records each, shown in the state block's latest run. While the blocker's PR is open,
+  the overseer passes the same `--base` to the stacked ticket's `resume`. Once it merges, a `resume` for `retarget`,
+  without `--base`, tells the worker to retarget the PR to the repository's base branch, bringing that branch in if it
+  conflicts. Workers never rebase, since their pushes never force, unless the operator sets `trust.rebase`; then they
+  rebase only the ticket's own commits onto it (`git rebase --onto`).
 - Ordering is decided by the overseer each tick from live state and recorded in `decisions`. There is no plan file
   and no DAG config.

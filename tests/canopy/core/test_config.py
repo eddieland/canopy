@@ -22,7 +22,7 @@ def test_defaults_fill_in_everything_else(canopy_env: CanopyEnv) -> None:
     assert cfg.tracker.provider == "jira"
     assert cfg.tracker.labels == ("agent-ready-tester",)
     assert cfg.tracker.needs_human_label == "needs-human"
-    assert cfg.policy.max_fix_ci_attempts == 2
+    assert (cfg.policy.max_resume_attempts, cfg.policy.ci_cooldown_minutes) == (6, 30)
     assert cfg.trust.branch_prefix == "agent/"
     assert cfg.trust.authorized_repliers == ()
     assert cfg.trust.trusted_reviewers == ()
@@ -106,6 +106,32 @@ def test_a_removed_pr_label_says_to_delete_it(canopy_env: CanopyEnv) -> None:
         load(canopy_env.root, canopy_env.user_file)
 
 
+@pytest.mark.parametrize(
+    ("key", "says"),
+    [
+        (
+            "max_fix_ci_attempts = 3",
+            r"policy\.max_fix_ci_attempts was removed: delete it; .* raise policy\.max_resume_attempts",
+        ),
+        (
+            "fix_ci_cooldown_minutes = 30",
+            r"policy\.fix_ci_cooldown_minutes was removed: rename it policy\.ci_cooldown_minutes",
+        ),
+    ],
+)
+@pytest.mark.parametrize("where", ["workspace", "user"])
+def test_fix_cis_keys_were_removed_and_say_what_replaced_them(
+    canopy_env: CanopyEnv, where: str, key: str, says: str
+) -> None:
+    """A resume fixes CI now, so its limit counts CI runs, and the cooldown holds a resume for CI alone (DESIGN §8)."""
+    if where == "workspace":
+        canopy_env.append_shared(f"[policy]\n{key}\n")
+    else:
+        canopy_env.append_user(f"\n[policy]\n{key}\n")
+    with pytest.raises(ConfigError, match=says):
+        load(canopy_env.root, canopy_env.user_file)
+
+
 @pytest.mark.parametrize("where", ["workspace", "user"])
 def test_unknown_keys_are_errors(canopy_env: CanopyEnv, where: str) -> None:
     if where == "workspace":
@@ -117,19 +143,17 @@ def test_unknown_keys_are_errors(canopy_env: CanopyEnv, where: str) -> None:
 
 
 def test_workspace_policy_only_tightens(canopy_env: CanopyEnv) -> None:
-    canopy_env.append_shared(
-        "[policy]\nmax_fix_ci_attempts = 9\nfix_ci_cooldown_minutes = 5\nmax_resume_attempts = 1\n"
-    )
+    canopy_env.append_shared("[policy]\nmax_implement_attempts = 9\nci_cooldown_minutes = 5\nmax_resume_attempts = 1\n")
     policy = load(canopy_env.root, canopy_env.user_file).policy
-    assert policy.max_fix_ci_attempts == 2  # looser than the default: ignored
-    assert policy.fix_ci_cooldown_minutes == 30  # shorter cooldown is looser: ignored
+    assert policy.max_implement_attempts == 2  # looser than the default: ignored
+    assert policy.ci_cooldown_minutes == 30  # shorter cooldown is looser: ignored
     assert policy.max_resume_attempts == 1  # tighter: used
 
 
 def test_user_policy_may_loosen(canopy_env: CanopyEnv) -> None:
-    canopy_env.append_shared("[policy]\nmax_fix_ci_attempts = 1\n")
-    canopy_env.append_user("\n[policy]\nmax_fix_ci_attempts = 5\n")
-    assert load(canopy_env.root, canopy_env.user_file).policy.max_fix_ci_attempts == 5
+    canopy_env.append_shared("[policy]\nmax_resume_attempts = 1\n")
+    canopy_env.append_user("\n[policy]\nmax_resume_attempts = 9\n")
+    assert load(canopy_env.root, canopy_env.user_file).policy.max_resume_attempts == 9
 
 
 def test_stacking_defaults_to_auto(canopy_env: CanopyEnv) -> None:

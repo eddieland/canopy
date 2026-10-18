@@ -221,7 +221,7 @@ sync reports the repository failed. Run `canopy workspace sync`.
 
 **Add a `setup_cmd` only for what depends on the branch** and the worker relies on, such as regenerating
 `compile_commands.json` for its language server. Most Bazel repositories need none: Bazel fetches and builds what the
-branch needs on its own. Make anything the branch can break non-fatal, or a broken build also crashes the `fix-ci` run
+branch needs on its own. Make anything the branch can break non-fatal, or a broken build also crashes the `resume`
 meant to fix it.
 
 [BAZEL.md](BAZEL.md) is the full recipe: what each `.bazelrc` line buys, a per-repository `setup_cmd` script, how to

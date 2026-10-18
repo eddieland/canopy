@@ -70,7 +70,7 @@ def test_the_next_worker_hears_the_notice_in_force_and_no_other(
     assert notice_of(worker_prompt(canopy_env, conn)) == heard
 
 
-@pytest.mark.parametrize("kind", ["implement", "fix-ci", "resume"])
+@pytest.mark.parametrize("kind", ["implement", "resume"])
 @pytest.mark.parametrize("private", [False, True], ids=["public", "private"])
 def test_every_shipped_prompt_that_builds_carries_the_notice(
     canopy_env: CanopyEnv,
@@ -333,7 +333,7 @@ def test_the_cli_line_drops_control_characters(canopy_env: CanopyEnv, capsys: py
 
 
 @pytest.mark.parametrize("moved", [True, False], ids=["set mid-tick", "set before the tick read"])
-def test_a_fix_ci_after_the_notice_moved_mid_tick_is_refused(
+def test_a_resume_for_ci_after_the_notice_moved_mid_tick_is_refused(
     canopy_env: CanopyEnv,
     conn: sqlite3.Connection,
     moved: bool,  # noqa: FBT001  (a parametrized fixture)
@@ -347,7 +347,10 @@ def test_a_fix_ci_after_the_notice_moved_mid_tick_is_refused(
         if moved:
             conn.execute("UPDATE ticks SET read_at = ? WHERE id = ?", ("2026-01-01T00:00:00.000Z", tick_id))
             notice.set_notice(conn, OUTAGE, minutes=60, channel="cli")
-        args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "fix-ci"]
-        assert main(args, runner=InlineRunner()) == 1
-        [decision] = db.decisions_for_tick(conn, tick_id)
+        args = ["dispatch", "PROJ-1", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "resume"]
+        assert main([*args, "--reason", "review", "--reason", "ci"], runner=InlineRunner()) == 1
+        # A resume that is not for CI is not the notice's to hold: what refuses it is the next guard in line.
+        assert main([*args, "--reason", "review"], runner=InlineRunner()) == 1
+        [decision, not_for_ci] = db.decisions_for_tick(conn, tick_id)
     assert (decision.action == "refused:notice_changed") is moved
+    assert not_for_ci.action == "refused:no_branch"

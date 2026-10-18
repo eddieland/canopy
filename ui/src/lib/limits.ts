@@ -9,7 +9,7 @@ export function stuck(limits: readonly Limit[]): Limit[] {
 }
 
 /**
- * What a limit counts, in a few words: `fix-ci in web`, or `reviews of acme/web#88`, the PR named as anywhere, but on
+ * What a limit counts, in a few words: `resume in web`, or `reviews of acme/web#88`, the PR named as anywhere, but on
  * its own page (`ownPr`), where it is the title and the limit is just `reviews`.
  */
 export function limitLabel(limit: Limit, ownPr?: string): string {

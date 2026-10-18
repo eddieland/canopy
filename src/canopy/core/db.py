@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Literal, assert_never
 
 from canopy.core import agent_output, records
-from canopy.core.vocab import Phase, PlanStatus, PoolKind, StartStatus, TickStatus
+from canopy.core.vocab import Phase, PlanStatus, PoolKind, ResumeReason, StartStatus, TickStatus
 from canopy.infra import procs
 
 if TYPE_CHECKING:
@@ -557,9 +557,13 @@ def recently_done(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
 
 # The run lifecycle (DESIGN §6, §8): what every table of detached runs shares
 
-# A run with its ticket's title as `ticket_title`, for display (DESIGN §13). Every query a page or `canopy status` shows
-# runs from starts here.
-_RUNS = "SELECT r.*, t.title AS ticket_title FROM runs r LEFT JOIN tickets t ON t.key = r.ticket_key"
+# A run with its ticket's title as `ticket_title`, and a `resume`'s reasons as `reasons`, comma-separated (read them
+# with `reasons_in`), for display (DESIGN §8, §13). Every query a page or `canopy status` shows runs from starts here.
+_RUNS = (
+    "SELECT r.*, t.title AS ticket_title, "
+    "(SELECT group_concat(w.reason, ',') FROM run_reasons w WHERE w.run_id = r.id) AS reasons "
+    "FROM runs r LEFT JOIN tickets t ON t.key = r.ticket_key"
+)
 # What a run table's rows are read as: a run with its ticket's title, for display, and any other run as it is.
 _RUN_SELECT: Mapping[RunTable, str] = {
     "runs": _RUNS,
@@ -676,6 +680,7 @@ def insert_run(
     private: bool = False,
     check: Callable[[], None] | None = None,
     plan_id: int | None = None,
+    reasons: Sequence[str] = (),
     rendered: Callable[[int], None] | None = None,
 ) -> int:
     """Insert a `running` run with no pid yet, logging to `<runs_dir>/<id>.log`, and return its id.
@@ -686,6 +691,7 @@ def insert_run(
     transaction, or None when no sink takes it. `private` marks a run on a private ticket (DESIGN §22). `check` runs
     first in the transaction and refuses the run by raising: what it reads cannot change before the row is written.
     `plan_id` is the approved plan an `implement` or `resume` follows, the one its prompt names (DESIGN §25).
+    `reasons` are why a `resume` runs, as its dispatch named them (DESIGN §8).
     `rendered` records, from the run's id, what its prompt was rendered under of agent memory (DESIGN §28).
 
     Returns:
@@ -706,6 +712,7 @@ def insert_run(
             "VALUES (?, ?, ?, ?, ?, ?, ?)",
             [(run_id, s.repo, str(s.slot_path), s.lease_id, s.lease_holder, s.base_branch, s.pool) for s in slots],
         )
+        conn.executemany("INSERT INTO run_reasons (run_id, reason) VALUES (?, ?)", [(run_id, r) for r in reasons])
         event = started(run_id) if started is not None else None
         if event is not None:
             record_event(conn, event)
@@ -720,6 +727,30 @@ def insert_run(
                 "UPDATE ticket_units SET branch = ? WHERE ticket_key = ? AND repo = ?", (branch, key, slot.repo)
             )
     return run_id
+
+
+def run_reasons(conn: sqlite3.Connection, run_ids: Sequence[int]) -> dict[int, tuple[ResumeReason, ...]]:
+    """Return why each `resume` in `run_ids` ran, in the vocabulary's order (DESIGN §8). A run with none is missing."""
+    if not run_ids:
+        return {}
+    # Only the placeholder count is interpolated; the run ids are bound parameters.
+    rows = records.fetch_all(
+        conn,
+        records.RunReason,
+        f"SELECT * FROM run_reasons WHERE run_id IN ({','.join('?' * len(run_ids))})",  # noqa: S608
+        list(run_ids),
+    )
+    found: dict[int, set[ResumeReason]] = {}
+    for row in rows:
+        found.setdefault(row.run_id, set()).add(row.reason)
+    return {run_id: tuple(r for r in ResumeReason if r in named) for run_id, named in found.items()}
+
+
+def reasons_in(row: sqlite3.Row) -> tuple[ResumeReason, ...]:
+    """Return a run row's reasons, in the vocabulary's order: none for a row not read with them, or a run without."""
+    # `keys()`, since `in` a Row tests its values.
+    named: list[str] = str(row["reasons"] or "").split(",") if "reasons" in row.keys() else []  # noqa: SIM118
+    return tuple(r for r in ResumeReason if r in named)
 
 
 def run_slots(conn: sqlite3.Connection, run_id: int) -> list[sqlite3.Row]:

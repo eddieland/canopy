@@ -33,7 +33,7 @@ from tests.canopy.helpers import (
 from tests.conftest import CanopyEnv, GitPool
 
 PLAN = ("--label", LABEL, "--kind", "plan")
-RESUME = ("--label", LABEL, "--kind", "resume")
+RESUME = ("--label", LABEL, "--kind", "resume", "--reason", "review")
 TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n"
 # `canopy plan KEY`, asking for a plan, and its two flags.
 VERBS: tuple[tuple[str, ...], ...] = ((), ("--skip",), ("--approve",))

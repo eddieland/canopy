@@ -250,8 +250,8 @@ Approved with M9:
 - Whether a chore should ever write (acting on others' work, which D010 kept out). Likely first: a ticket for a
   finding, without a queue label like a split child (§18), so a human decides.
 - Whether findings should inform ticket decisions once chores have a track record (a flaky-check finding raising
-  attention instead of dispatching `fix-ci`). Only to hold work back or raise attention, never to make a ticket a
-  candidate, and opt-in per chore.
+  attention instead of dispatching a `resume` for it). Only to hold work back or raise attention, never to make a ticket
+  a candidate, and opt-in per chore.
 - Whether a repository should offer chores operators opt into by name, as it offers its tracker query.
 - Whether a chore should get checkouts of the workspace's repositories, for a tool that reads files rather than
   GitHub (today the operator keeps a checkout current and points `cwd` at it). A review's private linked checkout

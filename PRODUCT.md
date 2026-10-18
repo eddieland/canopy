@@ -52,10 +52,10 @@ faster.
 ## Capabilities and Constraints
 
 - Routes today: attention, runs, ticks, tickets, pull requests, reviews, worktrees, chores, search, settings.
-- Terminology is fixed by the docs and code. Ticket, run, tick, worktree/slot, overseer, worker, attention item,
-  chore, review, finding, grant, guard, journal. Run kinds are implement, resume, fix-ci, and split. Attention reasons
-  include `needs_human`, `green_unreviewed`, `untrusted_review`, and `attempt_limit`. Use these words; don't invent
-  synonyms.
+- Terminology is fixed by the docs and code. Ticket, run, tick, worktree/slot, overseer, worker, attention item, chore,
+  review, finding, grant, guard, journal. Run kinds are implement, resume, split, and plan; older runs may be fix-ci.
+  Attention reasons include `needs_human`, `green_unreviewed`, `untrusted_review`, and `attempt_limit`. Use these words;
+  don't invent synonyms.
 - Local only. No requests to another origin at run time: no CDN fonts, analytics, or remote images.
 - Journal content (tracker comments, agent output) is untrusted and is rendered as text, never as HTML.
 - A running worker's events are known only once it ends; live data arrives over the server's event stream.

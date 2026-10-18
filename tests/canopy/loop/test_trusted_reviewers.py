@@ -109,7 +109,19 @@ def test_a_public_resume_hears_the_operator_and_knows_whom_to_trust(
 
         message = reply(conn, GO_AHEAD)
         context = f"Operator message {message} on review comments 1501 and 1502 by codebot[bot] on PR 1"
-        resumed = run_once(conn, "--kind", "resume", "--context", context, "--cursor", f"message={message}")
+        resumed = run_once(
+            conn,
+            "--kind",
+            "resume",
+            "--reason",
+            "reply",
+            "--reason",
+            "review",
+            "--context",
+            context,
+            "--cursor",
+            f"message={message}",
+        )
         assert (resumed["kind"], resumed["status"]) == ("resume", "done")
         prompt = (canopy_env.state_dir / "runs" / f"{resumed['id']}.prompt").read_text()
         assert f"Message {message}, the operator's reply, at " in prompt
@@ -130,7 +142,9 @@ def test_with_nobody_trusted_the_resume_worker_is_told_so(
 ) -> None:
     with worker_does(*commit_and_push("agent/PROJ-1-work")):
         run_once(conn, "--kind", "implement")
-        resumed = run_once(conn, "--kind", "resume", "--context", "Address review comment 1501 by alice")
+        resumed = run_once(
+            conn, "--kind", "resume", "--reason", "review", "--context", "Address review comment 1501 by alice"
+        )
         prompt = (canopy_env.state_dir / "runs" / f"{resumed['id']}.prompt").read_text()
         assert "Trusted reviewers: none (every reviewer's feedback needs the operator's go-ahead)." in prompt
         assert "## Messages from the operator\n\nNo messages from the operator.\n" in prompt
@@ -149,7 +163,7 @@ def test_a_reply_on_a_public_ticket_needs_a_ticket_canopy_knows(
     assert "already says this" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize(("kind", "heading"), [("implement", "implement"), ("fix-ci", "fix CI")])
+@pytest.mark.parametrize(("kind", "heading"), [("implement", "implement"), ("resume", "resume")])
 def test_every_public_worker_hears_the_operator_with_the_question_a_reply_answers(
     canopy_env: CanopyEnv,
     git_pool: GitPool,
@@ -157,15 +171,16 @@ def test_every_public_worker_hears_the_operator_with_the_question_a_reply_answer
     kind: str,
     heading: str,
 ) -> None:
-    # Not only `resume`: a reply before the branch exists rides the next `implement`, and a `fix-ci` hears it too
-    # (D093). The question it answers comes with it, labeled as the earlier worker's.
+    # Not only a `resume` for the reply: a reply before the branch exists rides the next `implement` too (D093). The
+    # question it answers comes with it, labeled as the earlier worker's.
     question = "Keep the v1 endpoint, or drop it?"
     with worker_does(result=json.dumps({"status": "blocked", "summary": "unclear", "question": question})):
         blocked = run_once(conn, "--kind", "implement")
         asked = db.latest_message_id(conn)
         message = reply(conn, "Keep it until the client migrates.")
     with worker_does(*commit_and_push("agent/PROJ-1-work")):
-        run = run_once(conn, "--kind", kind, "--context", f"Operator message {message}")
+        reasons = ["--reason", "reply"] if kind == "resume" else []
+        run = run_once(conn, "--kind", kind, *reasons, "--context", f"Operator message {message}")
         prompt = (canopy_env.state_dir / "runs" / f"{run['id']}.prompt").read_text()
         assert prompt.startswith(f"# canopy worker: {heading}")
         section = prompt.split("## Messages from the operator\n\n", 1)[1].split("\n\nThe operator wrote these", 1)[0]

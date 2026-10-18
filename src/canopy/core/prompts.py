@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from canopy.core.config import CANOPY_REVIEWER, DEFAULT_TRAILER_EMAIL, DEFAULT_TRAILER_NAME
-from canopy.core.vocab import RunKind
+from canopy.core.vocab import ResumeReason, RunKind
 from canopy.infra import resources
 
 if TYPE_CHECKING:
@@ -22,7 +22,6 @@ if TYPE_CHECKING:
 OVERSEER = "overseer.md"
 WORKER: dict[str, str] = {
     RunKind.IMPLEMENT: "worker-implement.md",
-    RunKind.FIX_CI: "worker-fix-ci.md",
     RunKind.RESUME: "worker-resume.md",
     RunKind.SPLIT: "worker-split.md",
     RunKind.PLAN: "worker-plan.md",
@@ -32,9 +31,33 @@ WORKER: dict[str, str] = {
 # an override without it would run without them.
 WORKER_PRIVATE: dict[str, str] = {
     RunKind.IMPLEMENT: "worker-implement-private.md",
-    RunKind.FIX_CI: "worker-fix-ci-private.md",
     RunKind.RESUME: "worker-resume-private.md",
 }
+# The prompts of `fix-ci`, a kind a `resume` with the reason `ci` replaced (DESIGN §8). An override of either would be
+# read by nothing, so while one exists every `resume` refuses to render (`retired_overrides`) rather than drop the
+# operator's CI instructions silently.
+RETIRED_WORKER = ("worker-fix-ci.md", "worker-fix-ci-private.md")
+# What each reason a `resume` runs for asks of its worker, for `{{REASONS}}` (DESIGN §8). A private ticket's reply is
+# the operator's, in its conversation.
+_REASON_TEXT: dict[ResumeReason, str] = {
+    ResumeReason.CI: 'checks failed on the PR: fix them, as "Failed checks" below says.',
+    ResumeReason.REVIEW: (
+        'review comments, or canopy\'s review findings, to address, as "canopy\'s review" and "Reviewers" below say.'
+    ),
+    ResumeReason.REPLY: (
+        "an authorized human's reply to a question asked earlier, by comment id or link on the ticket, or the "
+        "operator's message above, possibly about review comments to address."
+    ),
+    ResumeReason.CONFLICT: 'the PR conflicts with its base branch: bring that base in, as "Repositories" above says.',
+    ResumeReason.NO_PR: 'the branch is pushed and has no PR: open it, as "Obligations" below says.',
+    ResumeReason.RETARGET: (
+        "the PR this ticket was stacked on has merged: retarget this ticket's PR to its repository's base branch, as "
+        '"Repositories" above says.'
+    ),
+}
+_PRIVATE_REPLY = (
+    "the operator's reply, by message id in the conversation above, possibly about review comments to address."
+)
 REQUIRED_PRIVATE = ("CONVERSATION",)
 # A public ticket's worker hears the operator's replies only from these (D093). An override written before they existed
 # still serves a ticket the operator never replied to; once there is a reply, it fails to render instead of dropping it.
@@ -81,7 +104,7 @@ REQUIRED_NOTICE = ("NOTICE",)
 # or neither. Neither still serves an operator who keeps the default trailer; once `trust.commit_trailer_name` or
 # `trust.commit_trailer_email` is changed, a prompt needs one of the two, so it cannot name the old trailer; and once
 # `trust.commit_trailer` is off, it needs `{{COMMIT_ATTRIBUTION}}`, so it cannot keep adding one.
-COMMITS = (RunKind.IMPLEMENT, RunKind.FIX_CI, RunKind.RESUME)
+COMMITS = (RunKind.IMPLEMENT, RunKind.RESUME)
 REQUIRED_TRAILER = ("COMMIT_ATTRIBUTION", "COMMIT_TRAILER")
 REQUIRED_NO_TRAILER = ("COMMIT_ATTRIBUTION",)
 # How the workers that commit bring a base branch in: merge it, or with `trust.rebase`, rebase and push with a lease
@@ -141,6 +164,35 @@ def trusted_reviewers(reviewers: Sequence[str]) -> str:
         for r in reviewers
     ]
     return ", ".join(names) if names else "none (every reviewer's feedback needs the operator's go-ahead)"
+
+
+def reasons_note(reasons: Sequence[str], *, private: bool) -> str:
+    """Return a resume's `{{REASONS}}`: why it runs, a line for each reason its dispatch named (DESIGN §8).
+
+    The overseer's context points at what to read for each; the prompt's sections say how to work each one.
+
+    Returns:
+        A line per reason, in the vocabulary's order, or a line saying none was named.
+    """
+    named = [r for r in ResumeReason if r in reasons]
+    if not named:
+        return "None named: the context below says why."
+    return "\n".join(
+        f"- `{r}`: {_PRIVATE_REPLY if private and r is ResumeReason.REPLY else _REASON_TEXT[r]}" for r in named
+    )
+
+
+def retired_overrides(config: Config) -> list[Path]:
+    """Return the operator's overrides of the retired `fix-ci` prompts, which refuse every `resume` while they exist.
+
+    Returns:
+        Each such override's path, in `RETIRED_WORKER`'s order.
+    """
+    return [
+        config.paths.prompt_overrides / name
+        for name in RETIRED_WORKER
+        if (config.paths.prompt_overrides / name).is_file()
+    ]
 
 
 def plan_note(copy: Path | None, outline: Sequence[str]) -> str:

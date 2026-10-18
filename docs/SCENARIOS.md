@@ -56,8 +56,11 @@ relying on a permission they check.
 
 - **S8. Label to PR** (M2). Label a real ticket. Expect it to reach an open PR unattended, its slot returned, and a
   correct `runs` row. Kill the worker with SIGKILL mid-run: the next tick marks it `crashed` and returns the slot.
-- **S9. A failing check, to the limit** (M3). On a PR whose check fails, expect exactly one `fix-ci` attempt per
-  cooldown window and an `attempt_limit` item at the limit, with no attempt after it.
+- **S9. A failing check, to the limit** (M3, M56). On a PR whose check fails, expect exactly one `resume --reason ci`
+  per cooldown window and an `attempt_limit` item at the limit, with no attempt after it.
+- **S43. A red check and a review comment, one run** (M56). On one of the loop's PRs with a red check and a new review
+  comment from a trusted reviewer, expect the next tick to send one `resume` with reasons `ci` and `review`, shown as
+  `resume (ci, review)` in `canopy status`, which fixes the check and addresses the comment in one push.
 - **S10. A conflicted PR** (M3). Make a PR conflict with its base. Expect `conflicted`, then a worker that merges the
   base to a clean PR.
 - **S11. A blocked question** (M3, M22). Write a ticket that tells the worker to ask first. Expect one concrete question
@@ -170,9 +173,9 @@ relying on a permission they check.
 - **S37. A notice during a CI outage** (M35). During a CI outage, real or staged (a check that fails fetching a
   dependency), set a notice from the CLI (`canopy notice 'TEXT' --for 1h`) or the web UI's settings page. Expect the
   banner on every page and the line in `canopy status`; the next worker's summary to take the notice into account; the
-  overseer to record `wait` for the `ci_red` unit whose check the outage failed, naming the notice, with no `fix-ci`;
-  once the notice lapses, `notice_rerun` on the attention list until the operator reruns the check, and no `fix-ci`
-  before that newer run; and the next worker's prompt after the lapse to carry `None.` for the notice.
+  overseer to record `wait` for the `ci_red` unit whose check the outage failed, naming the notice, with no `resume`
+  for it; once the notice lapses, `notice_rerun` on the attention list until the operator reruns the check, and no
+  `resume` for it before that newer run; and the next worker's prompt after the lapse to carry `None.` for the notice.
 - **S40. What each agent's first request holds** (M34's prefix, taken on request 2026-10-17). After an OpenCode
   upgrade, a new MCP server or toolset, or a change under `agents/`, record one short session of each canopy agent
   against a recorder on loopback and split its first request by source, as MEASUREMENTS' 2026-10-17 section says

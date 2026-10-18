@@ -516,6 +516,7 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
         ticket_key=str(row["ticket_key"]),
         ticket_title=ticket_title(row["ticket_title"]),
         kind=str(row["kind"]),
+        reasons=list(db.reasons_in(row)),
         status=status,
         state=_run_state(status),
         private=bool(row["private"]),

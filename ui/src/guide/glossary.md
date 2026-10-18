@@ -134,7 +134,7 @@ holds this one up.
 
 ### Attempt limit
 
-How many runs of each kind a ticket may have, such as `policy.max_fix_ci_attempts`, two by default. Every run counts,
+How many runs of each kind a ticket may have, such as `policy.max_resume_attempts`, six by default. Every run counts,
 however it ended. See [Tickets](tickets#allowing-one-more-run).
 
 ### Context
@@ -149,13 +149,20 @@ next tick decides whether to use it.
 
 ### Kind
 
-What a run is for: `implement`, `fix-ci`, `resume`, `split`, or `plan`. Reviews and chores are kinds of their own.
-Each kind has its own attempt limit. See [How the loop works](how-the-loop-works#runs).
+What a run is for: `implement`, `resume`, `split`, or `plan`, and `fix-ci` on runs from before a resume fixed CI.
+Reviews and chores are kinds of their own. Each kind has its own attempt limit. See
+[How the loop works](how-the-loop-works#runs).
 
 ### Pool
 
 A repository's set of worktrees, kept by treehouse. A run leases a slot from it and hands it back when it stops
 working. See [Runs and worktrees](runs#worktrees).
+
+### Reason
+
+Why a resume runs, named when it is dispatched: `ci` for failed checks, `review` for review feedback, `reply` for your
+answer, `conflict` for a clash with the base, `no_pr` for a pushed branch with no PR, and `retarget` when the PR it
+was stacked on merged. One resume carries every reason its PR has. See [How the loop works](how-the-loop-works#runs).
 
 ### Run
 

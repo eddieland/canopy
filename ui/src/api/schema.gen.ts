@@ -1926,7 +1926,7 @@ export type components = {
          * @description A kind of run a ticket's unit is limited in, which `canopy grant` raises (DESIGN §8, §22).
          * @enum {string}
          */
-        GrantKind: "implement" | "fix-ci" | "resume";
+        GrantKind: "implement" | "resume";
         /**
          * GrantRequest
          * @description A grant of one more run of a kind to one of a ticket's units, as `canopy grant KEY KIND --repo NAME` does.
@@ -1999,7 +1999,7 @@ export type components = {
          * @description What a limit counts: a unit's runs of one kind, or with `review` a PR's review runs.
          * @enum {string}
          */
-        LimitKind: "implement" | "fix-ci" | "resume" | "review";
+        LimitKind: "implement" | "resume" | "review";
         /**
          * LoopState
          * @description Whether the loop is paused, the notice to workers in force, and agent memory's tiers.
@@ -3318,7 +3318,7 @@ export type components = {
             id: number;
             /**
              * Kind
-             * @description implement | fix-ci | resume | split | plan
+             * @description implement | resume | split | plan, or fix-ci for a run from before a resume fixed CI (DESIGN §8)
              */
             kind: string;
             /**
@@ -3349,6 +3349,12 @@ export type components = {
              * @default []
              */
             prs: string[];
+            /**
+             * Reasons
+             * @description Why a resume ran, as its dispatch named them: ci, review, reply, conflict, no_pr, retarget (DESIGN §8).
+             * @default []
+             */
+            reasons: string[];
             /**
              * Session Id
              * @description The runtime's session, for opening its transcript with the runtime's own tools.

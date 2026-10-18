@@ -1,4 +1,4 @@
-"""The journal's closed vocabularies: run, tick, start, and plan statuses, run kinds, ticket phases, and lease pools.
+"""The journal's closed vocabularies: run, tick, start, and plan statuses, run kinds and reasons, phases, and pools.
 
 Each is a `StrEnum`, so a member is the string the journal stores and compares equal to it, and a misspelled one is a
 type error rather than a silent wrong decision. Code that branches on one matches it with `typing.assert_never` in the
@@ -78,12 +78,31 @@ class RunKind(StrEnum):
     """What a worker run does, `runs.kind` (DESIGN §8)."""
 
     IMPLEMENT = "implement"
+    # Retired (M56): a `resume` with the reason `ci` fixes CI. Kept so the runs it named still read, and count as
+    # `resume` runs (DESIGN §8); nothing dispatches it.
     FIX_CI = "fix-ci"
     RESUME = "resume"
     # Splits a ticket into children (DESIGN §18): it works on no branch, and counts attempts per ticket, not per unit.
     SPLIT = "split"
     # Writes a plan before a ticket's first implement (DESIGN §25): no branch, attempts counted per ticket, as a split.
     PLAN = "plan"
+
+
+class ResumeReason(StrEnum):
+    """Why a `resume` runs, `run_reasons.reason` (DESIGN §8): each the phase, or the step, that sends it."""
+
+    # `ci_red`: failed checks.
+    CI = "ci"
+    # `changes_requested` and `review_findings`: review feedback, or a canopy review's findings.
+    REVIEW = "review"
+    # `human_replied`: an authorized reply or an operator message.
+    REPLY = "reply"
+    # `conflicted`: the PR conflicts with its base.
+    CONFLICT = "conflict"
+    # `pushed_no_pr`: the branch is pushed and has no PR.
+    NO_PR = "no_pr"
+    # The PR's blocker merged, so it targets the repository's base branch again (DESIGN §10).
+    RETARGET = "retarget"
 
 
 class Phase(StrEnum):

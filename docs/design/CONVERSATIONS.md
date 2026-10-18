@@ -120,7 +120,7 @@ list and runs; there is no separate `list`.
   tracker's MCP server denied by wildcard and only its read tools allowed by name, and the tracker CLIs canopy knows
   (`gh`, `acli`, `jira`) denied in its bash rules, but for `gh pr view`, `gh pr checks`, `gh pr diff`, and
   `gh run view`, which read a PR and its CI and never the ticket, so a resumed worker can read the review comments it
-  was pointed at and a fix-ci one the failing checks.
+  was pointed at and the failing checks.
   - The server is `tracker.mcp_server` and its tools `tracker.read_tools`, both private, each with a default for the
     shipped provider's usual MCP server: `atlassian` with Jira's read tools for `jira`, and `github` for `github`,
     whose server is also the one PRs go through, so its list adds the PR tools a worker needs and leaves out every
@@ -148,7 +148,7 @@ list and runs; there is no separate `list`.
   message after the run ended.
 - `canopy reply` takes a started ticket, or a public one a tick has seen (it has a journal row); any other is refused
   `unknown`. On a public ticket the state block carries its operator messages newer than its message cursor under
-  `operator`, and every public `implement`, `fix-ci`, and `resume` prompt carries the latest 20
+  `operator`, and every public `implement` and `resume` prompt carries the latest 20
   (`{{OPERATOR_MESSAGES}}`, at most 30,000 characters), each labeled the operator's: an instruction. The workers'
   questions come with them, labeled data, so a reply to message N names something the worker can read; the rest of the
   conversation is on the tracker (D093). The same prompts carry the latest three runs' reports (`{{PREVIOUS_RUNS}}`,
@@ -184,7 +184,7 @@ private, from the operator's shell or the web UI's Forget (below), and:
   before them: `last_run` in the state block, the run reasons on the attention list (§14), a private ticket's waiting
   question (`awaiting_reply`) and new operator messages, and a private worker's `{{CONVERSATION}}`. A reply after it
   answers nothing. A forgotten ticket reads to the overseer as one never dispatched, so its prompt is unchanged.
-- keeps the rest. Its runs stay, so the attempt limits and the fix-ci cooldown count every run, before and after
+- keeps the rest. Its runs stay, so the attempt limits and the CI cooldown count every run, before and after
   (D030); a ticket at its implement limit needs `canopy grant` (below) or the limit raised in config, and `forget` says
   so. The comment and mirror cursors stay, so tracker comments already handled stay handled. The message cursor stays,
   and the boundary overrules it. The start record stays: a started ticket stays started, a stopped one stopped. `show`
@@ -202,8 +202,9 @@ private, from the operator's shell or the web UI's Forget (below), and:
 without raising the limit for every ticket. It takes a ticket, public or private, from the operator's shell or the web
 UI (below), and:
 
-- takes `implement`, `fix-ci`, or `resume`. A split's limit is the ticket's, and only config raises it. A plan's is
-  the ticket's too: `canopy grant KEY plan` takes no `--repo` (§25).
+- takes `implement` or `resume`, and refuses `fix-ci` (`bad_kind`), whose old runs count as resumes (§8). A split's
+  limit is the ticket's, and only config raises it. A plan's is the ticket's too: `canopy grant KEY plan` takes no
+  `--repo` (§25).
 - names the unit with `--repo`, which may be left out when the ticket has had runs in one repository only. A repository
   it has had no runs in is refused `unknown_repo`, as is a ticket with no runs, and a ticket with no journal row
   `unknown`. A forgotten ticket's runs still name their repositories, so it can be granted though it has no units.

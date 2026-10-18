@@ -19,6 +19,7 @@ import { rowLineFrom } from '@/lib/rows'
 import { RUN_TEXT } from '@/lib/run-state'
 import type { TicketRuns } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
+import { runKind } from '@/lib/words'
 
 // A run's worktrees named in its row before `+N more`: three repositories' worth, on one line in most panels.
 const WORKTREES_SHOWN = 3
@@ -188,11 +189,11 @@ function RunWorktrees({ paths }: { paths: string[] }) {
     )
 }
 
-/** A run's chips: its kind, and `private` for a private ticket's. */
+/** A run's chips: its kind, with a resume's reasons, and `private` for a private ticket's. */
 function RunChips({ run }: { run: Run }) {
     return (
         <span className="flex min-w-0 items-center gap-3">
-            <Chip word={run.kind} className="min-w-0 shrink" />
+            <Chip word={runKind(run)} className="min-w-0 shrink" />
             {run.private && <Chip>private</Chip>}
         </span>
     )

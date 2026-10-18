@@ -68,7 +68,7 @@ worker_timeout_minutes = 45
 [loop]
 # `canopy loop` waits this long after each tick ends. Every tick runs the overseer, so this sets its spend.
 interval_minutes = 15
-# After each tick that found nothing new, the wait doubles, up to this. It ends sooner when a run ends, a fix-ci
+# After each tick that found nothing new, the wait doubles, up to this. It ends sooner when a run ends, the CI
 # cooldown or a chore's due time comes, or you reply. Set it to interval_minutes to wait the same after every tick.
 # idle_max_minutes = 120
 # No tick starts sooner than this after the last one began, whatever wakes the loop, unless you press t at its terminal.

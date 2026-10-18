@@ -80,15 +80,16 @@ class UnitState(TypedDict):
     phase: str | None
     cursors: dict[str, str | int | None]
     attempts: dict[str, int]
-    fix_ci_cooldown_until: str | None
+    ci_cooldown_until: str | None
     granted: NotRequired[dict[str, int]]
 
 
 class RunState(TypedDict):
-    """A ticket's latest run."""
+    """A ticket's latest run. `reasons` only for a `resume` that named them (DESIGN §8)."""
 
     run_id: int
     kind: str
+    reasons: NotRequired[list[str]]
     status: str
     branch: str | None
     repos: list[RunRepo]
@@ -133,9 +134,8 @@ class PolicyState(TypedDict):
     """The attempt limits and cooldowns the harness enforces."""
 
     max_implement_attempts: int
-    max_fix_ci_attempts: int
-    fix_ci_cooldown_minutes: int
     max_resume_attempts: int
+    ci_cooldown_minutes: int
     max_split_attempts: int
     stacking: str
 
@@ -186,12 +186,13 @@ class CapacityState(TypedDict):
 
 
 class RunningWorker(TypedDict):
-    """A worker run still running."""
+    """A worker run still running. `reasons` only for a `resume` that named them (DESIGN §8)."""
 
     run_id: int
     ticket: str
     repos: list[str]
     kind: str
+    reasons: NotRequired[list[str]]
     branch: str | None
     started_at: str
 
@@ -228,9 +229,10 @@ def state_block(
     units: Mapping[str, Sequence[sqlite3.Row]],
     last_runs: Mapping[str, sqlite3.Row],
     run_slots: Mapping[int, Sequence[sqlite3.Row]],
+    run_reasons: Mapping[int, Sequence[str]] | None = None,
     attempts: Mapping[policy.Unit, Mapping[str, int]],
     grants: Mapping[policy.Unit, Mapping[str, int]],
-    fix_ci_cooldowns: Mapping[policy.Unit, datetime],
+    ci_cooldowns: Mapping[policy.Unit, datetime],
     now: datetime,
     split_attempts: Mapping[str, int],
     split_children: Iterable[sqlite3.Row],
@@ -247,22 +249,23 @@ def state_block(
     """Render the `## State` section the harness sends the overseer as its message, after its prompt.
 
     `tickets` leave out the tickets the operator stopped, which `stopped` names by key (DESIGN §22), and the tickets
-    marked done; `recently_done` names those marked done lately, with when, so the overseer leaves out one the tracker
-    still shows open (DESIGN §7). `units` are each ticket's units and `run_slots` each running or latest run's slots,
-    by run id. `attempts`, `grants`, and
-    `fix_ci_cooldowns` are per unit (`policy.unit`); a unit the operator granted no runs has no `granted` key (DESIGN
-    §22). `split_attempts` are per ticket, and `split_children` are the children of splits not yet done, with their
-    split run's end (DESIGN §18). `chores` are the configured chores (DESIGN §19); with none, the block has no `chores`
-    key, exactly as before chores existed. `notices` are the operator's notices in force or ended lately
-    (`notice.recent`), newest first; with none, the block has no `notices` key. `private` holds each private ticket's
-    conversation state, by key (DESIGN §22); a public ticket has no `private` key. `operator` holds a public ticket's
-    operator messages newer than its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7,
-    D089). `planned` holds a ticket's plan, by key: whether it needs one, its plan attempts and limit, and its newest
-    plan's id, status, and time, never its text (DESIGN §25); a ticket plans do not touch has no `plan` key.
-    `mirror_delimiter` ends the heredoc the overseer passes each mirrored comment's body in: the tick's own, so
-    no comment can predict it. `attention` is the open items the overseer recorded (`attention.for_overseer`), so it
-    sees what leaving one out drops (ROADMAP M28). `query_due` says whether the overseer runs the tracker query this
-    tick or works the tickets the block lists alone (DESIGN §7, Spacing the query).
+    marked done; `recently_done` names those marked done lately, with when, so the overseer leaves out one the
+    tracker still shows open (DESIGN §7). `units` are each ticket's units, and `run_slots` and `run_reasons` each
+    running or latest run's slots and, for a `resume`, its reasons, by run id (DESIGN §8). `attempts`, `grants`, and
+    `ci_cooldowns` are per unit (`policy.unit`); a unit the operator granted no runs has no `granted` key (DESIGN
+    §22). An old `fix-ci` run counts in a unit's `resume` attempts, and its kind is in none. `split_attempts` are
+    per ticket, and `split_children` are the children of splits not yet done, with their split run's end (DESIGN
+    §18). `chores` are the configured chores (DESIGN §19); with none, the block has no `chores` key, exactly as
+    before chores existed. `notices` are the operator's notices in force or ended lately (`notice.recent`), newest
+    first; with none, the block has no `notices` key. `private` holds each private ticket's conversation state, by
+    key (DESIGN §22); a public ticket has no `private` key. `operator` holds a public ticket's operator messages
+    newer than its message cursor, by key; a ticket without any has no `operator` key (DESIGN §7, D089). `planned`
+    holds a ticket's plan, by key: whether it needs one, its plan attempts and limit, and its newest plan's id,
+    status, and time, never its text (DESIGN §25); a ticket plans do not touch has no `plan` key. `mirror_delimiter`
+    ends the heredoc the overseer passes each mirrored comment's body in: the tick's own, so no comment can predict
+    it. `attention` is the open items the overseer recorded (`attention.for_overseer`), so it sees what leaving one
+    out drops (ROADMAP M28). `query_due` says whether the overseer runs the tracker query this tick or works the
+    tickets the block lists alone (DESIGN §7, Spacing the query).
 
     Returns:
         The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
@@ -270,6 +273,7 @@ def state_block(
     private = private or {}
     operator = operator or {}
     planned = planned or {}
+    run_reasons = run_reasons or {}
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
     def unit_summary(key: str, u: sqlite3.Row) -> UnitState:
@@ -282,24 +286,11 @@ def state_block(
             "phase": u["phase"],
             "cursors": {cursor: u[column] for cursor, column in db.UNIT_CURSORS.items()},
             "attempts": dict(attempts.get(unit, no_attempts)),
-            "fix_ci_cooldown_until": _stamp(fix_ci_cooldowns.get(unit)),
+            "ci_cooldown_until": _stamp(ci_cooldowns.get(unit)),
         }
         if unit in grants:
             summary["granted"] = dict(grants[unit])
         return summary
-
-    def run_summary(run: sqlite3.Row | None) -> RunState | None:
-        if run is None:
-            return None
-        return {
-            "run_id": run["id"],
-            "kind": run["kind"],
-            "status": run["status"],
-            "branch": run["branch"],
-            "repos": [{"repo": s["repo"], "base": s["base_branch"]} for s in run_slots.get(int(run["id"]), [])],
-            "started_at": run["started_at"],
-            "ended_at": run["ended_at"],
-        }
 
     def ticket_summary(t: records.Ticket) -> TicketState:
         key = t.key
@@ -317,7 +308,7 @@ def state_block(
             "split_attempts": split_attempts.get(key, 0),
             "needs_human_since": t.needs_human_since,
             "last_seen_at": t.last_seen_at,
-            "last_run": run_summary(last_runs.get(key)),
+            "last_run": _run_summary(last_runs.get(key), run_slots, run_reasons),
         }
         # A private ticket's conversation state, or a public one's new operator messages, each only when it has one.
         if key in private:
@@ -349,9 +340,8 @@ def state_block(
         },
         "policy": {
             "max_implement_attempts": config.policy.max_implement_attempts,
-            "max_fix_ci_attempts": config.policy.max_fix_ci_attempts,
-            "fix_ci_cooldown_minutes": config.policy.fix_ci_cooldown_minutes,
             "max_resume_attempts": config.policy.max_resume_attempts,
+            "ci_cooldown_minutes": config.policy.ci_cooldown_minutes,
             "max_split_attempts": config.policy.max_split_attempts,
             "stacking": config.policy.stacking,
         },
@@ -402,17 +392,7 @@ def state_block(
             "running": capacity.running,
             "available": capacity.available,
         },
-        "running_workers": [
-            {
-                "run_id": r["id"],
-                "ticket": r["ticket_key"],
-                "repos": [s["repo"] for s in run_slots.get(int(r["id"]), [])],
-                "kind": r["kind"],
-                "branch": r["branch"],
-                "started_at": r["started_at"],
-            }
-            for r in running
-        ],
+        "running_workers": [_running_summary(r, run_slots, run_reasons) for r in running],
         # Tracker comments the overseer copies into the journal (DESIGN §22).
         "mirror": {"max_per_tick": conversation.MIRRORS_PER_TICK, "body_delimiter": mirror_delimiter},
         # Whether this tick runs the tracker query, or works the tickets above alone (DESIGN §7, Spacing the query).
@@ -446,6 +426,41 @@ def state_block(
             "",
         ]
     )
+
+
+def _run_summary(
+    run: sqlite3.Row | None, run_slots: Mapping[int, Sequence[sqlite3.Row]], run_reasons: Mapping[int, Sequence[str]]
+) -> RunState | None:
+    if run is None:
+        return None
+    summary: RunState = {
+        "run_id": run["id"],
+        "kind": run["kind"],
+        "status": run["status"],
+        "branch": run["branch"],
+        "repos": [{"repo": s["repo"], "base": s["base_branch"]} for s in run_slots.get(int(run["id"]), [])],
+        "started_at": run["started_at"],
+        "ended_at": run["ended_at"],
+    }
+    if int(run["id"]) in run_reasons:
+        summary["reasons"] = list(run_reasons[int(run["id"])])
+    return summary
+
+
+def _running_summary(
+    run: sqlite3.Row, run_slots: Mapping[int, Sequence[sqlite3.Row]], run_reasons: Mapping[int, Sequence[str]]
+) -> RunningWorker:
+    summary: RunningWorker = {
+        "run_id": run["id"],
+        "ticket": run["ticket_key"],
+        "repos": [s["repo"] for s in run_slots.get(int(run["id"]), [])],
+        "kind": run["kind"],
+        "branch": run["branch"],
+        "started_at": run["started_at"],
+    }
+    if int(run["id"]) in run_reasons:
+        summary["reasons"] = list(run_reasons[int(run["id"])])
+    return summary
 
 
 def _notice(held: Notice, now: datetime) -> NoticeState:

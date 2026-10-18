@@ -29,7 +29,7 @@ What it records, and why:
 - **Runs**: each worker, split, and plan run, and each review and chore run (§21, §19), with its processes, status, and
   a summary of its result, and each slot it leased with the base it started from. A worker run's status is `running`,
   one the worker reports (`done`, `blocked`, `failed`), or one the harness sets (`unknown`, `timeout`, `unpushed`,
-  `crashed`, `stopped`). Runs are the source for capacity, crash detection, attempt counts, and the fix-ci cooldown,
+  `crashed`, `stopped`). Runs are the source for capacity, crash detection, attempt counts, and the CI cooldown,
   which are derived from them, never stored (D030); a unit's limit adds the operator's grants.
 - **Cost**: for a tick's overseer and every run, what the runtime reported (§13), nothing when it reported nothing.
 - **Grants** of attempts, plan runs, and review runs (§21, §22, §25), and the tickets a split created, written only
@@ -162,9 +162,8 @@ ticket_url = ""              # optional; a ticket's page, with {key} for its key
 
 [policy]
 max_implement_attempts = 2
-max_fix_ci_attempts = 2
-fix_ci_cooldown_minutes = 30
-max_resume_attempts = 3
+max_resume_attempts = 6      # every resume of a unit, whatever its reasons, an old fix-ci run among them (§8)
+ci_cooldown_minutes = 30     # how long a resume for CI alone waits after the unit's last run that worked on CI (§8)
 max_split_attempts = 1       # per ticket (§18)
 max_plan_attempts = 3        # per ticket (§25)
 plan = "off"                 # off | approve (§25); "approve" is stricter
@@ -496,7 +495,8 @@ no manual dismissal. `canopy status` prints it too, with the last tick, a pause 
 the operator started (§22), the running workers, and the runs that ended most recently.
 
 Reasons are exactly the attention rows in the phase table plus `crashed`, `unpushed`, `unknown_result`, `worker_failed`,
-`attempt_limit`, a private ticket's `awaiting_reply` (§22) and a planner's (§25), the overseer's `plan_review` and
+`attempt_limit`, `fix_ci_override` (§8: every `resume` is refused while an override of a retired fix-ci prompt
+exists), a private ticket's `awaiting_reply` (§22) and a planner's (§25), the overseer's `plan_review` and
 `plan_changed` (§25), `canopy_unavailable` (§6 step 5), and in a workspace
 `repo_missing` and the overseer's `multi_repo`, `split_unlabeled`, and `split_self_labeled` (§18). Chores add
 `chore_failed` and their findings, listed by chore after the ticket items (§19). Reviews add `review_failed` and
@@ -544,7 +544,7 @@ work it needs, and `canopy dispatch` records it with an `attempt_limit` refusal.
 overseer keeps asking for that work. The refusal's item names the unit at its limit.
 
 Notification. An item is identified by its ticket, reason, and repository if it has one, so two units at their
-fix-ci limit are two items; rewording its detail does not make it new. Each notification sink (§20), `notify.cmd`
+resume limit are two items; rewording its detail does not make it new. Each notification sink (§20), `notify.cmd`
 among them, keeps its own record of what it was told. When `notify.cmd` is set, each tick compares the list with that
 record: unrecorded items are new, and recorded ones no longer listed are resolved. If either exists, the command gets
 one message on stdin: a summary line, a `+ KEY reason: detail` line per new item, a `- KEY reason` line per resolved

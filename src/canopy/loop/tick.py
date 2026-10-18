@@ -102,6 +102,7 @@ def _render(
     planned = _plans(ctx, tickets)
     recently_done = db.recently_done(ctx.conn, db.format_time(now - timedelta(days=RECENTLY_DONE_DAYS)))
     chores = chore_view.state_section(chore_view.states(ctx.conn, ctx.config, ctx.workspace), now)
+    shown = [int(r["id"]) for r in [*running, *last_runs.values()]]
     block = state.state_block(
         ctx.config,
         ctx.repo_root,
@@ -116,10 +117,11 @@ def _render(
         recently_done=recently_done,
         units=db.all_units(ctx.conn),
         last_runs=last_runs,
-        run_slots=db.all_run_slots(ctx.conn, [int(r["id"]) for r in [*running, *last_runs.values()]]),
+        run_slots=db.all_run_slots(ctx.conn, shown),
+        run_reasons=db.run_reasons(ctx.conn, shown),
         attempts=policy.attempts(ctx.conn),
         grants=policy.grants(ctx.conn),
-        fix_ci_cooldowns=policy.fix_ci_cooldowns(ctx.conn, ctx.config, now),
+        ci_cooldowns=policy.ci_cooldowns(ctx.conn, ctx.config, now),
         now=now,
         split_attempts=policy.ticket_attempts(ctx.conn, policy.SPLIT),
         split_children=db.open_split_children(ctx.conn),

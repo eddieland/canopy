@@ -70,6 +70,7 @@ PROMPT_VALUES = {
     "PREVIOUS_RUNS": "None: no earlier run of this ticket has ended.",
     "REVIEW_FINDINGS": "None.",
     "PLAN": "None.",
+    "REASONS": "- `review`: review comments to address.",
 }
 
 

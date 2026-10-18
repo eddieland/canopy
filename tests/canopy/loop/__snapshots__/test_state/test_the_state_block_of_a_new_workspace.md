@@ -29,9 +29,8 @@ This is a live tick.
   },
   "policy": {
     "max_implement_attempts": 2,
-    "max_fix_ci_attempts": 2,
-    "fix_ci_cooldown_minutes": 30,
-    "max_resume_attempts": 3,
+    "max_resume_attempts": 6,
+    "ci_cooldown_minutes": 30,
     "max_split_attempts": 1,
     "stacking": "auto"
   },

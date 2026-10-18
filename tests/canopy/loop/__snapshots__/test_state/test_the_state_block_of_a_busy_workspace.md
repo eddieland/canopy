@@ -29,9 +29,8 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
   },
   "policy": {
     "max_implement_attempts": 2,
-    "max_fix_ci_attempts": 2,
-    "fix_ci_cooldown_minutes": 30,
-    "max_resume_attempts": 3,
+    "max_resume_attempts": 6,
+    "ci_cooldown_minutes": 30,
     "max_split_attempts": 1,
     "stacking": "auto"
   },
@@ -74,12 +73,11 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
           },
           "attempts": {
             "implement": 1,
-            "fix-ci": 1,
-            "resume": 0
+            "resume": 1
           },
-          "fix_ci_cooldown_until": "2026-10-16T10:20:00.000Z",
+          "ci_cooldown_until": "2026-10-16T10:20:00.000Z",
           "granted": {
-            "fix-ci": 1
+            "resume": 1
           }
         }
       ],
@@ -88,7 +86,7 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
       "last_seen_at": "2026-10-16T09:40:00.000Z",
       "last_run": {
         "run_id": 4,
-        "kind": "fix-ci",
+        "kind": "resume",
         "status": "done",
         "branch": "agent/PROJ-1-retry",
         "repos": [
@@ -98,7 +96,11 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
           }
         ],
         "started_at": "2026-10-16T09:45:00.000Z",
-        "ended_at": "2026-10-16T09:50:00.000Z"
+        "ended_at": "2026-10-16T09:50:00.000Z",
+        "reasons": [
+          "ci",
+          "review"
+        ]
       },
       "operator": {
         "message_cursor": null,
@@ -134,10 +136,9 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
           },
           "attempts": {
             "implement": 1,
-            "fix-ci": 0,
             "resume": 0
           },
-          "fix_ci_cooldown_until": null
+          "ci_cooldown_until": null
         }
       ],
       "split_attempts": 0,
@@ -180,10 +181,9 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
           },
           "attempts": {
             "implement": 1,
-            "fix-ci": 0,
             "resume": 0
           },
-          "fix_ci_cooldown_until": null
+          "ci_cooldown_until": null
         }
       ],
       "split_attempts": 0,

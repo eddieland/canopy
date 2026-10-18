@@ -66,7 +66,7 @@ A bare § is a section of the design (`design/`); other documents are named, as 
   a worker that says `done` is recorded `done`. With no branch on origin the ticket derives as `ready` again (§7) and
   is redispatched, spending `implement` attempts on work that never happened. Hermes has an open issue about fabricated
   completions ([#108782](https://github.com/NousResearch/hermes-agent/issues/108782)); a PR that gated completion on
-  git was closed unmerged ([#105452](https://github.com/NousResearch/hermes-agent/pull/105452)). `resume` and `fix-ci`
+  git was closed unmerged ([#105452](https://github.com/NousResearch/hermes-agent/pull/105452)). A `resume`
   can rightly commit nothing.
 - **Harness git in a slot runs the slot's hooks.** `_GIT_ENV` in `runs/worker.py` sets only `GIT_TERMINAL_PROMPT`;
   `checkout` and the fallback `push` run hooks and `core.fsmonitor` from a git directory a worker can write.
@@ -93,7 +93,7 @@ A bare § is a section of the design (`design/`); other documents are named, as 
   knows. Symphony's refresh of running issues by id truncated at 50 until it paged
   ([#43](https://github.com/openai/symphony/pull/43)).
 - **CI newness is keyed on the check run id.** A human re-run or a runner or billing failure makes a newer run and
-  another `fix-ci`. agent-orchestrator woke an agent 8 times in 40 minutes from one billing refusal
+  another `resume` for CI. agent-orchestrator woke an agent 8 times in 40 minutes from one billing refusal
   ([#5089](https://github.com/Untrivial-ai/agent-orchestrator/pull/5089)). Keying on commit and check name, and raising
   attention for failures the branch did not cause, avoids that.
 - **Merge conflicts have no phase** (§7). A conflicting PR may get no CI run and sit in `ci_running` or show a stale

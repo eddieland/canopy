@@ -10,7 +10,7 @@ import { GrantLimits } from './grant-limits'
 
 const PR = 'https://github.com/acme/web/pull/88'
 const IMPLEMENT: Limit = { kind: 'implement', repo: 'web', pr_url: null, runs: 3, granted: 0, limit: 3 }
-const FIX_CI: Limit = { kind: 'fix-ci', repo: 'api', pr_url: null, runs: 1, granted: 1, limit: 2 }
+const RESUME: Limit = { kind: 'resume', repo: 'api', pr_url: null, runs: 1, granted: 1, limit: 2 }
 const REVIEW: Limit = { kind: 'review', repo: 'web', pr_url: PR, runs: 2, granted: 0, limit: 2 }
 
 // Every grant the buttons send, and what the server stand-in answers each.
@@ -59,14 +59,14 @@ function rows(): string[] {
 
 describe('GrantLimits', () => {
     it('shows nothing while nothing is at its limit', () => {
-        const { container } = renderLimits([{ ...IMPLEMENT, runs: 2 }, FIX_CI])
+        const { container } = renderLimits([{ ...IMPLEMENT, runs: 2 }, RESUME])
         expect(container.childElementCount).toBe(0)
     })
 
     it('lists a row for each limit reached, and none for those still under', () => {
-        renderLimits([IMPLEMENT, FIX_CI, { ...FIX_CI, repo: 'web', runs: 2, granted: 1 }])
+        renderLimits([IMPLEMENT, RESUME, { ...RESUME, repo: 'web', runs: 2, granted: 1 }])
         expect(screen.getByText(/^At its limit\./u)).toBeDefined()
-        expect(rows()).toEqual(['implement in web3 of 3 runs', 'fix-ci in web2 of 2 runs, 1 granted'])
+        expect(rows()).toEqual(['implement in web3 of 3 runs', 'resume in web2 of 2 runs, 1 granted'])
     })
 
     it('names the CLI command for the same grant on hover', () => {

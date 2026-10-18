@@ -27,6 +27,7 @@ import { useWholePath } from '@/hooks/use-whole-path'
 import { slotRef } from '@/lib/refs'
 import { overSize, poolShown, slotGroups, slotsRoot, WORKTREE_DOT, WORKTREE_TEXT } from '@/lib/worktree-state'
 import { cn } from '@/lib/utils'
+import { runKind } from '@/lib/words'
 
 interface WorktreesSearch {
     state?: WorktreeState | undefined
@@ -401,7 +402,7 @@ function Holder({ worktree: w }: { worktree: Worktree }) {
         return (
             <span className="flex min-w-0 items-center gap-2">
                 <TicketLink ticketKey={w.run.ticket_key} className="truncate" />
-                <Chip word={w.run.kind} />
+                <Chip word={runKind(w.run)} />
                 <RunLink id={w.run.id} />
             </span>
         )

@@ -117,7 +117,13 @@ def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
         # The next run is told each unit's PR.
         db.finish_tick(conn, tick_id, TickStatus.OK, "test")
         with in_tick(conn):
-            assert main(dispatch("PROJ-1", "--repo", "web", "--repo", "api", kind="resume"), runner=InlineRunner()) == 0
+            assert (
+                main(
+                    dispatch("PROJ-1", "--repo", "web", "--repo", "api", "--reason", "review", kind="resume"),
+                    runner=InlineRunner(),
+                )
+                == 0
+            )
             prompt = (ws.state_dir / "runs" / "2.prompt").read_text()
             assert f"- `web` at `{desk / 'web'}`: branch `{BRANCH}` from `main`; PR: {PRS['web']}." in prompt
 
@@ -182,7 +188,7 @@ def test_units_have_their_own_attempts_and_share_the_branch(ws: Ws, treehouse_st
         # The first implement named the branch; a later one adds a unit on the same branch, and may not rename it.
         assert run("--repo", "web", "--slug", "other") == 1
         assert run("--repo", "web", "--slug", "login") == 0
-        assert run("--repo", "api", kind="fix-ci") == 0
+        assert run("--repo", "api", "--reason", "ci", kind="resume") == 0
         assert run("--repo", "api") == 0  # api's second implement: its limit is 2
         assert run("--repo", "api", "--repo", "web") == 1
         assert run("--repo", "web") == 0  # web has had one
@@ -191,7 +197,7 @@ def test_units_have_their_own_attempts_and_share_the_branch(ws: Ws, treehouse_st
             "dispatch:implement",
             "refused:bad_slug",
             "dispatch:implement",
-            "dispatch:fix-ci",
+            "dispatch:resume",
             "dispatch:implement",
             "refused:attempt_limit",
             "attention:attempt_limit",
@@ -206,10 +212,10 @@ def test_units_have_their_own_attempts_and_share_the_branch(ws: Ws, treehouse_st
         assert limit.repo == "api"  # the item is about the unit at its limit
         assert {str(r["branch"]) for r in conn.execute("SELECT branch FROM runs")} == {"agent/PROJ-1-login"}
 
-        # fix-ci's cooldown is per unit too: api's just ended, web has had none.
-        assert main(dispatch("PROJ-1", "--repo", "api", kind="fix-ci"), runner=runner) == 1
+        # The CI cooldown is per unit too: api's resume for CI just ended, web has had none.
+        assert main(dispatch("PROJ-1", "--repo", "api", "--reason", "ci", kind="resume"), runner=runner) == 1
         assert decisions(conn, tick_id)[-1][0] == "refused:cooldown"
-        assert run("--repo", "web", kind="fix-ci") == 0
+        assert run("--repo", "web", "--reason", "ci", kind="resume") == 0
 
 
 def test_a_dispatch_reads_the_ticket_branch_under_the_dispatch_lock(ws: Ws, treehouse_state: Path) -> None:
@@ -258,7 +264,7 @@ def test_the_state_block_shows_each_unit(ws: Ws, treehouse_state: Path, agent_lo
         BRANCH,
         {"comment": "c-1", "message": None, "mirror": None},
     )
-    no_limit = {"implement": 1, "fix-ci": 0, "resume": 0}
+    no_limit = {"implement": 1, "resume": 0}
     assert ticket["units"] == [
         {
             "repo": "api",
@@ -267,7 +273,7 @@ def test_the_state_block_shows_each_unit(ws: Ws, treehouse_state: Path, agent_lo
             "phase": None,
             "cursors": {"review": None, "ci": None},
             "attempts": no_limit,
-            "fix_ci_cooldown_until": None,
+            "ci_cooldown_until": None,
         },
         {
             "repo": "web",
@@ -276,7 +282,7 @@ def test_the_state_block_shows_each_unit(ws: Ws, treehouse_state: Path, agent_lo
             "phase": "ci_red",
             "cursors": {"review": None, "ci": "run-9"},
             "attempts": no_limit,
-            "fix_ci_cooldown_until": None,
+            "ci_cooldown_until": None,
         },
     ]
     assert ticket["last_run"]["repos"] == [{"repo": "api", "base": "main"}, {"repo": "web", "base": "main"}]

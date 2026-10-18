@@ -230,13 +230,14 @@ def test_grant_from_the_web_raises_a_units_limit_as_canopy_grant_does(ctx: Conte
     implement = {"kind": "implement", "repo": "repo", "pr_url": None, "runs": 2, "granted": 0, "limit": 2}
     assert c.get(f"/api/tickets/{KEY}").json()["limits"] == [
         implement,
-        {"kind": "fix-ci", "repo": "repo", "pr_url": None, "runs": 0, "granted": 0, "limit": 2},
-        {"kind": "resume", "repo": "repo", "pr_url": None, "runs": 0, "granted": 0, "limit": 3},
+        {"kind": "resume", "repo": "repo", "pr_url": None, "runs": 0, "granted": 0, "limit": 6},
     ]
 
     # The CLI's guards hold, and a split's limit is only config's to raise.
     assert refused(grant({"kind": "implement", "repo": "other"})) == "unknown_repo: PROJ-1 has had no runs in other"
     assert grant({"kind": "split"}).status_code == 422
+    # A resume fixes CI now: its limit counts the old fix-ci runs, and fix-ci is not a kind to grant (DESIGN §8).
+    assert grant({"kind": "fix-ci"}).status_code == 422
     assert c.post(f"/api/tickets/{KEY}/grants", json={"kind": "implement"}, headers={"origin": ORIGIN}).status_code == (
         403
     )

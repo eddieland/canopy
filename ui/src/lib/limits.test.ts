@@ -4,7 +4,7 @@ import type { Limit } from '@/api/types'
 
 import { limitCount, limitLabel, stuck } from './limits'
 
-const unit: Limit = { kind: 'fix-ci', repo: 'web', pr_url: null, runs: 1, granted: 0, limit: 1 }
+const unit: Limit = { kind: 'resume', repo: 'web', pr_url: null, runs: 1, granted: 0, limit: 1 }
 const review: Limit = {
     kind: 'review',
     repo: 'web',
@@ -24,7 +24,7 @@ describe('stuck', () => {
 
 describe('limitLabel', () => {
     it("names a unit's kind and repository, and a PR's reviews by the PR's name", () => {
-        expect(limitLabel(unit)).toBe('fix-ci in web')
+        expect(limitLabel(unit)).toBe('resume in web')
         expect(limitLabel(review)).toBe('reviews of acme/web#88')
         expect(limitLabel({ ...review, repo: null })).toBe('reviews of acme/web#88')
         expect(limitLabel({ ...review, pr_url: 'https://example.test/x' })).toBe('reviews of example.test/x')

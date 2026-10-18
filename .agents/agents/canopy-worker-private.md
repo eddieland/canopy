@@ -62,7 +62,7 @@ permission:
     "jira": deny
     "jira *": deny
     # Reading a PR and its CI writes nothing, and these read no ticket: a resumed worker reads the review comments it
-    # was pointed at, and a fix-ci one the failing checks and their logs, as `canopy-worker` can. Compound commands are
+    # was pointed at, and the failing checks and their logs, as `canopy-worker` can. Compound commands are
     # checked command by command, so none of these lets another `gh` command through.
     "gh pr view": allow
     "gh pr view *": allow

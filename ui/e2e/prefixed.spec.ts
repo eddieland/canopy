@@ -314,13 +314,13 @@ test("a review's findings are sent to a worker from its list, as a reply on its 
 test('a ticket at its attempt limit is granted one more run from its page, as canopy grant does', async ({ page }) => {
     await page.goto('tickets/ABC-100')
     const limits = page.getByTestId('grant-limits')
-    await expect(limits).toContainText('fix-ci in web')
+    await expect(limits).toContainText('resume in web')
     await expect(limits).toContainText('1 of 1 runs')
-    const grant = limits.getByTestId('grant-fix-ci in web')
-    await expect(grant).toHaveAttribute('title', 'canopy grant ABC-100 fix-ci --repo web')
+    const grant = limits.getByTestId('grant-resume in web')
+    await expect(grant).toHaveAttribute('title', 'canopy grant ABC-100 resume --repo web')
     await grant.click()
     await expect(limits.getByRole('status')).toHaveText(
-        'ABC-100 in web has had 1 fix-ci runs, and may now have 2. The next tick decides whether to dispatch it.',
+        'ABC-100 in web has had 1 resume runs, and may now have 2. The next tick decides whether to dispatch it.',
     )
     // No longer at its limit, so its row is gone; what the grant did stays said.
     await expect(grant).toHaveCount(0)

@@ -60,7 +60,8 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
 
     with clock("09:00"):
         earlier = db.start_tick(conn, dry_run=False)
-        # PROJ-1: its PR is open and its CI failed; one fix-ci ran, so it cools down, and the operator wrote to it.
+        # PROJ-1: its PR is open and its CI failed; a resume for it and a review ran, so it cools down, and the
+        # operator wrote to it.
         db.set_ticket(
             conn, "PROJ-1", root, title="Retry flaky uploads", phase=Phase.CI_RUNNING, cursors={"comment": "10001"}
         )
@@ -133,14 +134,15 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             conn,
             tick_id=earlier,
             key="PROJ-1",
-            kind="fix-ci",
+            kind="resume",
             branch="agent/PROJ-1-retry",
             slots=[slot(1)],
             runs_dir=runs_dir,
+            reasons=("ci", "review"),
         )
     with clock("09:50"):
         db.finish_run(conn, "runs", fix, RunStatus.DONE, None)
-        policy.grant(conn, ctx.config, "PROJ-1", "fix-ci", repo="repo", runs=1)
+        policy.grant(conn, ctx.config, "PROJ-1", "resume", repo="repo", runs=1)
         db.insert_message(
             conn,
             conversation.TICKET,

@@ -160,7 +160,7 @@ esac
   before the worker starts, and the ticket goes on the attention list. The run still counts toward the ticket's
   attempt limit.
 - So keep out of it anything the branch can break that a worker should fix: a build, a test, or fetching a changed
-  `MODULE.bazel`. If setup fails on those, it also fails the `fix-ci` run meant to fix them. Make such steps
+  `MODULE.bazel`. If setup fails on those, it also fails the `resume` meant to fix them. Make such steps
   non-fatal, as the `api` case above does.
 - It runs the branch's code (install scripts, generators) on your machine, outside the agent's permissions, just
   before the worker's own shell would. If you run workers in a sandbox, run this in the same one (TRUST_MODEL T4).

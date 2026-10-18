@@ -118,6 +118,8 @@ def test_a_started_ticket_is_worked_privately_from_question_to_reply(  # noqa: P
                                 "repo",
                                 "--kind",
                                 "resume",
+                                "--reason",
+                                "reply",
                                 "--cursor",
                                 f"message={newest}",
                                 "--context",
@@ -364,10 +366,13 @@ def test_with_tracker_private_a_labeled_tickets_first_dispatch_starts_it_private
     assert "by its first dispatch, on its queue label" in capsys.readouterr().out
     assert operator("reply", KEY, "Blue.") == 0
     with private_worker_does(result={**blocked_result(), "status": "done", "question": None}):
-        assert dispatch_in_tick(conn, "--kind", "resume", runner=runner).code == 0
+        assert dispatch_in_tick(conn, "--kind", "resume", "--reason", "reply", runner=runner).code == 0
     assert last_run(conn)["private"] == 1
     assert operator("stop", KEY) == 0
-    assert dispatch_in_tick(conn, "--label", "agent-ready-tester", "--kind", "resume", runner=runner).code == 1
+    stopped = dispatch_in_tick(
+        conn, "--label", "agent-ready-tester", "--kind", "resume", "--reason", "reply", runner=runner
+    )
+    assert stopped.code == 1
     assert "dispatch refused (stopped)" in capsys.readouterr().err
 
 

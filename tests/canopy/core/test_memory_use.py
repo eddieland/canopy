@@ -25,7 +25,7 @@ from tests.canopy.helpers import (
 if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
-FIX_CI = ("--label", "agent-ready-tester", "--kind", "fix-ci")
+FIX_CI = ("--label", "agent-ready-tester", "--kind", "resume", "--reason", "ci")
 NOTE = "The lint job fails on a cold cache: run `make lint` twice before trusting it."
 HEADING = "## Notes from earlier runs\n\n"
 OTHER = "PROJ-2"

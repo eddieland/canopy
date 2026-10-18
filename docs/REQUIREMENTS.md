@@ -73,8 +73,9 @@ Built. Aggressive release (§9, D005): waiting holds no slot and no capacity.
 
 ### R4. Feedback routing: CI failures and review comments go back to the agent that owns the PR
 
-Built in code (M3), live acceptance pending. `fix-ci` and `resume` runs continue the ticket's branch and PR, with
-cursors so each failure and comment is handled once (§7, §8), attempt limits and a cooldown in code (D030).
+Built in code (M3, M56), live acceptance pending. A `resume` continues the ticket's branch and PR for whatever comes
+back to it, failed checks and review comments in one run, with cursors so each failure and comment is handled once (§7,
+§8), and one attempt limit and a CI cooldown in code (D030).
 
 Partial on "the agent that owns the PR": each run is a fresh worker on the pushed branch with no transcript of the run
 before it. That is deliberate (PRIOR_ART: long-lived sessions fed events contaminate), and M15 kept it: a feedback run
@@ -182,7 +183,7 @@ an instruction ("use your best judgement based on the bot's review").
 Shape (§7, D089): `trust.trusted_reviewers` lists the trusted, empty by default, with `canopy:review` for canopy's own
 reviewer. Untrusted feedback is `untrusted_review` on the attention list. The operator answers with `canopy reply` or
 the web UI, on a public ticket too; the reply is the worker's instruction and never reaches the ticket. Every public
-worker hears it, an `implement` or `fix-ci` as well as a `resume` (D093); keeping it off the ticket is the worker
+worker hears it, an `implement` as well as a `resume` (D093); keeping it off the ticket is the worker
 prompt's, not a guard (TRUST_MODEL T6). The gate is the
 overseer's judgment, checked again by the worker; the harness cannot see who wrote a review comment (D003).
 
@@ -193,8 +194,8 @@ flaky test, a lost runner, a registry outage), canopy should rerun it instead of
 not broken. Which failures are flaky is the repository's knowledge, so it comes from a skill the operator or the
 repository provides, and a CI that is not GitHub Actions is reached through its own MCP server.
 
-Shape (§23): a `triage-ci` run comes before `fix-ci` on a new failure. It reads the failure, follows the
-named skill, and either reruns the failed jobs or reports the failure real, which sends `fix-ci` as today. It never
+Shape (§23): a `triage-ci` run comes before a `resume` for `ci` on a new failure. It reads the failure, follows the
+named skill, and either reruns the failed jobs or reports the failure real, which sends the `resume` as today. It never
 edits or pushes. The operator turns it on with `policy.max_triage_ci_attempts`, off by default; the repository supplies
 the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, §6, §7) approved in M25's PR.
 
@@ -203,7 +204,7 @@ the skill but cannot turn reruns on. Needs TRUST_MODEL changes (T1, T3, T6, T7, 
 Built in M35, live acceptance pending (SCENARIOS S37). Written down 2026-10-14. When something outside the work goes
 wrong for a while (an artifact registry outage, so CI builds will likely fail), the operator should be able to say so
 once and have every run that builds, tests, or reads CI hear it until it is over, without editing a file and remembering
-to edit it back. The overseer should hear it too, so it does not spend `fix-ci` attempts, which never reset (D030), on
+to edit it back. The overseer should hear it too, so it does not spend `resume` attempts, which never reset (D030), on
 failures the notice explains. `paths.worker_instructions` (§12) carries text to workers, but it never lapses, the
 overseer, reviews, and chores never read it, and nothing shows it is in force; a notice to workers (`canopy notice`, or
 the web UI's settings page, §8) lapses, reaches all of them, and shows on every page while it lasts.
