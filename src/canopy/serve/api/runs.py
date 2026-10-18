@@ -1,4 +1,4 @@
-"""The runs (DESIGN §8), and each one's session transcript. Reads only; a transcript is untrusted text."""
+"""The runs (DESIGN §8), each one's session transcript, and its log's end. Reads only; both are untrusted text."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException
 from canopy.serve import views
 from canopy.serve.api.deps import BackendDep
 from canopy.serve.api.refs import RunId, not_found
-from canopy.serve.schema import Run, Transcript
+from canopy.serve.schema import RawOutput, Run, Transcript
 
 TAG = "runs"
 router = APIRouter(tags=[TAG])
@@ -41,6 +41,22 @@ def run_transcript(run_id: RunId, backend: BackendDep) -> Transcript:
     """The run's session, read back from its log: agent output, untrusted and bounded."""
     with backend.open() as ctx:
         found = views.run_transcript(ctx, run_id)
+    if found is None:
+        raise HTTPException(status_code=404, detail=f"no run {run_id}")
+    return found
+
+
+# The end of the same log as written, setup output and stderr included, read again on each request (DESIGN §22).
+@router.get(
+    "/runs/{run_id}/output",
+    operation_id="getRunOutput",
+    summary="Get a run's output",
+    responses=not_found("run"),
+)
+def run_output(run_id: RunId, backend: BackendDep) -> RawOutput:
+    """The end of the run's log as written, its setup commands' and its stderr included: untrusted and bounded."""
+    with backend.open() as ctx:
+        found = views.run_raw_output(ctx, run_id)
     if found is None:
         raise HTTPException(status_code=404, detail=f"no run {run_id}")
     return found

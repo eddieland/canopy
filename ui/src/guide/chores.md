@@ -20,7 +20,7 @@ schedule, and what its runs cost over the last day and month. To run one now ins
   when it's worth running.
 - **Open findings**: what its latest ok run found. Each finding also reaches the attention list.
 - **Runs**: every run, with its status, how many findings it had, its cost, and its summary. A run's page has its
-  transcript, as a worker's does.
+  transcript, as a worker's does, filling in while the run works.
 - **Notes**: what you've told its runs. More on these below.
 - **Spend**: its runs' cost over the last 24 hours and 30 days, average and worst included.
 

@@ -133,6 +133,18 @@ export function foldedText(drawn: number, total: number): string {
     )
 }
 
+/**
+ * What a file's panel says while the operator has folded it: `120 lines folded away`, or `120 lines and 2 findings
+ * folded away` when cards sit on it. `cards` names what they are, one and many (`['finding', 'findings']`).
+ */
+export function fileFoldedText(lines: number, count: number, cards: readonly [string, string]): string {
+    const counted = `${GROUPED.format(lines)} ${lines === 1 ? 'line' : 'lines'}`
+    if (count === 0) {
+        return `${counted} folded away`
+    }
+    return `${counted} and ${count} ${count === 1 ? cards[0] : cards[1]} folded away`
+}
+
 /** The lines a click on `fold` shows: its first `DIFF_BUDGET.step`. */
 export function nextStep(fold: Span): Span {
     return { from: fold.from, to: Math.min(fold.to, fold.from + DIFF_BUDGET.step) }

@@ -19,6 +19,8 @@ export type RunState = Schemas['RunState']
 export type TicketSummary = Schemas['TicketSummary']
 /** One ticket: what `canopy show` prints, and the latest decisions about it. */
 export type TicketDetail = Schemas['TicketDetail']
+/** One time the operator forgot a ticket's work (DESIGN §22), and the branch and PRs it dropped. */
+export type TicketForget = Schemas['TicketForget']
 /** What a ticket's or a PR's agent runs cost in all (DESIGN §13), and how many runs and reviews that counts. */
 export type CostTotal = Schemas['CostTotal']
 /** A ticket's plans: whether it needs one, its newest as the file stands, every plan, and the operator's comments. */
@@ -144,7 +146,7 @@ export type TranscriptTokens = Schemas['TranscriptTokens']
 /** The message canopy gave the runtime to start a session: its first model call's input, as far as any file says. */
 export type TranscriptPrompt = Schemas['TranscriptPrompt']
 /** The end of a tick's overseer output as written, stdout then stderr: what the transcript leaves out too. */
-export type TickOutput = Schemas['TickOutput']
+export type RawOutput = Schemas['RawOutput']
 /** A search: the words it looked for, its hits by source and newest first, and the sources that had more. */
 export type SearchResults = Schemas['SearchResults']
 /** One row holding every word of a search, and where it opens. */
@@ -171,6 +173,18 @@ export type DiffFile = Schemas['DiffFile']
 export type DiffHunk = Schemas['DiffHunk']
 /** One line of a hunk, with its number on each side it is on. */
 export type DiffLine = Schemas['DiffLine']
+/** A PR's review threads on the diff a run kept, and every draft for it (DESIGN §29). */
+export type PullRequestThreads = Schemas['PullRequestThreads']
+/** One review thread as canopy's reader last read it, where it sits on the diff, and the drafts answering it. */
+export type ReviewThread = Schemas['Thread']
+/** One comment on a review thread: someone else's text, shown as text. */
+export type ThreadComment = Schemas['ThreadComment']
+/** A comment a run drafted in place of posting it: a worker's text until the operator sends it. */
+export type Draft = Schemas['Draft']
+/** Where a draft stands, as `canopy draft list` prints it. */
+export type DraftStatus = Schemas['DraftStatusName']
+/** What a send did: the drafts posted, sent before, not sent and why, and those it cannot say of. */
+export type DraftsSent = Schemas['DraftsSent']
 
 /** Every run state, in display order. `satisfies` fails the typecheck if the schema gains a state these miss. */
 export const RUN_STATES = ['running', 'blocked', 'failed', 'stopped', 'done'] as const satisfies readonly RunState[]

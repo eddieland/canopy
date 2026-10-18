@@ -100,6 +100,8 @@ list and runs; there is no separate `list`.
   removed.
 - `stop` marks the start record stopped rather than deleting it. A stopped ticket stays private and is dispatched by
   nothing, whatever labels it carries, until `canopy start` again: a queue label left on it never turns it public.
+  A question its last run asked then waits on nothing: the attention list and the web UI's runs working now leave it
+  out, though a run still working the ticket stays listed until it finishes.
 - The start record is the authorization. Only the operator's commands write it, and, under `tracker.private`, a
   labeled ticket's first dispatch, short of T1's residual (below).
 - A started ticket is private even when it also carries a queue label, or gains one later. The harness chooses the
@@ -175,20 +177,24 @@ list and runs; there is no separate `list`.
 private, from the operator's shell or the web UI's Forget (below), and:
 
 - refuses `unknown` for a ticket the journal has no row for, `running` while a run works it (wait for it, or end a
-  started ticket's with `canopy stop --now`), and `split` for a ticket a split made children of: they are tickets of
-  their own, and forgetting the parent would not undo them.
+  started ticket's with `canopy stop --now`), `split` for a ticket a split made children of: they are tickets of
+  their own, and forgetting the parent would not undo them, and `already_forgotten` for a ticket with no run,
+  message, branch, unit, or done mark since its last forget, which would have nothing to drop.
 - clears the ticket's branch, phase, when it began needing a human, and done flag, and deletes its units, with their
   branches, PRs, phases, and review and ci cursors. The next `implement` names a new branch with its `--slug`; from
   then on `bad_slug` (§8) binds to that one.
-- records when the ticket was forgotten, with its newest run and message ids, and the loop's reads skip what came
-  before them: `last_run` in the state block, the run reasons on the attention list (§14), a private ticket's waiting
-  question (`awaiting_reply`) and new operator messages, and a private worker's `{{CONVERSATION}}`. A reply after it
-  answers nothing. A forgotten ticket reads to the overseer as one never dispatched, so its prompt is unchanged.
+- records the forget as an event, kept for good: when, from which channel, the ticket's newest run and message then,
+  and the branch and PRs it dropped. A ticket forgotten again has a forget for each attempt, and the ticket's row
+  holds the latest, the boundary every read of the loop's view uses. The loop's reads skip what came before it:
+  `last_run` in the state block, the run reasons on the attention list (§14), a private ticket's waiting question
+  (`awaiting_reply`) and new operator messages, and a private worker's `{{CONVERSATION}}`. A reply after it answers
+  nothing. A forgotten ticket reads to the overseer as one never dispatched, so its prompt is unchanged.
 - keeps the rest. Its runs stay, so the attempt limits and the CI cooldown count every run, before and after
   (D030); a ticket at its implement limit needs `canopy grant` (below) or the limit raised in config, and `forget` says
   so. The comment and mirror cursors stay, so tracker comments already handled stay handled. The message cursor stays,
   and the boundary overrules it. The start record stays: a started ticket stays started, a stopped one stopped. `show`
-  prints the whole history and when the work was forgotten.
+  prints the whole history and each forget, with what it dropped. The web UI shows the conversation as the loop reads
+  it: each forget heads the messages of the attempt it ended, folded away until asked for.
 - holds the dispatch lock, which a dispatch holds from its plan through its run's insert, so a dispatch that read the
   old branch cannot record it again after `forget` commits.
 - touches nothing outside the journal. The old PR and the branch on origin are the operator's to close and delete, and
@@ -513,8 +519,8 @@ The transcripts (M27): what a session did, its tool calls above all, without lea
   dropped, line breaks kept. A log that is a symlink, a FIFO, or anything but a regular file is not read: it is opened
   without following links and without blocking.
 - A transcript says why it has nothing: no session (a template without `--format json`), no log, or none of its
-  events yet. A worker run's events reach its log as the worker prints them (§8), so a running run's transcript is
-  what it has done so far; a chore run's reach its log only when it ends (§19), as a tick's output does (§6). A model
+  events yet. A worker run's, a chore run's, and a tick's events reach its log as the agent prints them (§6, §8, §19),
+  so a running one's transcript is what it has done so far, read again as its cost or decisions move. A model
   call's reasoning shows only with OpenCode's `--thinking`, which every default template passes, so a transcript says
   why a call made the tool calls it did, not only that it made them; a provider that redacts its reasoning shows none.
   A subagent's calls are its own session's (§13), so a `task` call shows as one tool call with its answer.
@@ -552,17 +558,20 @@ its characters over four, never more than that call was sent; the rest is the ru
 entry with a tokenizer. The tokenizer is the model's, which canopy does not know and the runtime does not report, and a
 step's sum is already exact; a closer split is not worth a dependency per provider.
 
-The tick's output: the transcript keeps only the overseer's session, so what the runtime printed on stderr, and any
-line that is not one of its events, sent the operator back to the file, most of all for a tick whose overseer failed.
+The output: the transcript keeps only the agent's session, so what the runtime printed on stderr, a run's setup
+commands' output, and any line that is not one of its events sent the operator back to the file, most of all for a
+tick whose overseer failed or a run that failed before its first event.
 
-- The server reads the end of the tick's output file as written, on each request: its stdout, the `--- stderr ---`
-  line the tick writes, and its stderr (§6). The same checks as a transcript's, at most its last 1 MiB from the first
-  whole line in it, control characters dropped and line breaks kept. It says the file's size and whether it was cut,
-  or `no_output` when there is none (the tick kept none, or is still running). Its end, since that is where a failed
-  tick says why, and the transcript has the session from its start.
+- The server reads the end of a tick's output file or a worker run's log as written, on each request: a tick's
+  stdout, the `--- stderr ---` line the tick writes, and its stderr (§6); a run's setup commands' output and its
+  worker's stdout, stderr, and exit, each under the line `_run` writes (§8). The same checks as a transcript's, at most
+  its last 1 MiB from the first whole line in it, control characters dropped and line breaks kept. It says the file's
+  size and whether it was cut, or `no_output` when there is none (the tick kept none, or its overseer has not
+  started); a running one's holds what it has printed so far, its stderr once it ends. Its end, since that is where a
+  failed tick or run says why, and the transcript has the session from its start.
 - Everything in it is agent output, rendered as text.
-- A tick's output only. A run's log is the worker's and its setup commands' (§8), and stays its transcript (above)
-  until the operator asks for the rest.
+- A tick's and a worker run's only. A chore run's log is its agent's alone (§19), so its transcript says all of it
+  but stderr, and a review's adds its diff, which its page shows (§21).
 
 The worktrees page: for each repository in the workspace, its pool's slots as `treehouse status --json` reports them,
 read when the page asks. A lease is matched to a running run or review by its lease id, as reconcile matches them, so a
@@ -637,7 +646,8 @@ How it serves, true of every page:
   idle seconds. Nothing compresses it.
 - The page makes no request to another origin: fonts and icons are bundled.
 - `python -m canopy.serve --mock` serves the same API over a journal it seeds from fixtures in a temporary directory,
-  for the UI's development server and its end-to-end tests; writes go to that journal. Without `--secret-file` it
+  for the UI's development server and its end-to-end tests; writes go to that journal, and canopy's GitHub programs
+  (§29) are answered from it in process, so a draft sent from the mock posts nowhere. Without `--secret-file` it
   signs nobody in and asks for no session; only mock mode allows that, and it binds loopback only.
 - The API documents itself: its OpenAPI schema at `api/openapi.json` and a Swagger UI page over it at `api/docs`,
   under the base path, behind the session like every other API route. FastAPI's stock page loads Swagger UI from a

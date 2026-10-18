@@ -1,6 +1,6 @@
-// shadcn/ui DropdownMenu, Radix base, ported by hand; see button.tsx. Only the parts the UI uses: no checkbox or
-// sub-menus. shadcn's `bg-accent` focus tint is `surface-raised` here (DESIGN.md), it has no shadow but its
-// hairline, and it does not animate, so it opens as fast as the links it holds.
+// shadcn/ui DropdownMenu, Radix base, ported by hand; see button.tsx. Only the parts the UI uses: no sub-menus.
+// shadcn's `bg-accent` focus tint is `surface-raised` here (DESIGN.md), it has no shadow but its hairline, and it does
+// not animate, so it opens as fast as the links it holds.
 import { Check } from 'lucide-react'
 import { DropdownMenu as DropdownMenuPrimitive } from 'radix-ui'
 import type { ComponentProps } from 'react'
@@ -91,6 +91,36 @@ function DropdownMenuRadioItem({
     )
 }
 
+/**
+ * An option in the menu that is on or off, with a check at its left while on; `checked` is its state and
+ * `onCheckedChange` hears it flip. Picking one closes the menu unless its `onSelect` prevents that.
+ */
+function DropdownMenuCheckboxItem({
+    className,
+    children,
+    ...props
+}: ComponentProps<typeof DropdownMenuPrimitive.CheckboxItem>) {
+    return (
+        <DropdownMenuPrimitive.CheckboxItem
+            data-slot="dropdown-menu-checkbox-item"
+            className={cn(
+                'relative flex cursor-default items-center gap-2 rounded-sm py-1.5 pr-2 pl-8 text-sm outline-hidden',
+                'select-none focus:bg-surface-raised data-disabled:pointer-events-none data-disabled:opacity-50',
+                '[&_svg]:pointer-events-none [&_svg]:shrink-0',
+                className,
+            )}
+            {...props}
+        >
+            <span className="pointer-events-none absolute left-2 flex size-4 items-center justify-center">
+                <DropdownMenuPrimitive.ItemIndicator>
+                    <Check className="size-4 text-accent" />
+                </DropdownMenuPrimitive.ItemIndicator>
+            </span>
+            {children}
+        </DropdownMenuPrimitive.CheckboxItem>
+    )
+}
+
 /** A hairline between a menu's groups. */
 function DropdownMenuSeparator({ className, ...props }: ComponentProps<typeof DropdownMenuPrimitive.Separator>) {
     return (
@@ -104,6 +134,7 @@ function DropdownMenuSeparator({ className, ...props }: ComponentProps<typeof Dr
 
 export {
     DropdownMenu,
+    DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuRadioGroup,

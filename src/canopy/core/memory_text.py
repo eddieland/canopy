@@ -1,4 +1,4 @@
-"""What a memory's text may hold, and how it is shown (DESIGN §28, Bounds).
+"""What a memory's text may hold, and how it is shown (DESIGN §28, Bounds); a draft's is held to the same (§29).
 
 A note or a proposal is worker text that may reach later prompts, so it is checked in code when it is written, never
 cut or cleaned: a refused entry is stored nowhere, and why is recorded with its run. A key is a slug. A text is one
@@ -70,8 +70,11 @@ def check_key(value: object) -> str:
     return value
 
 
-def check_text(value: object, limit: int) -> str:
+def check_text(value: object, limit: int, *, lines: bool = False) -> str:
     """Return a memory's text, trimmed, refusing what canopy never stores (DESIGN §28, Bounds).
+
+    With `lines`, as for a draft's text (DESIGN §29), line feeds and tabs are allowed: a reply may hold paragraphs and
+    code. Every other character `hidden_char` names is still refused.
 
     Returns:
         The text without surrounding spaces.
@@ -87,7 +90,7 @@ def check_text(value: object, limit: int) -> str:
         raise TextRefused("its text is blank")
     if len(text) > limit:
         raise TextRefused(f"its text is {len(text)} characters, over {limit}")
-    hidden = next((c for c in text if hidden_char(c)), None)
+    hidden = next((c for c in text if hidden_char(c) and not (lines and c in "\n\t")), None)
     if hidden is not None:
         raise TextRefused(f"its text holds {_name(hidden)}, a character that hides text")
     if looks_secret(text):

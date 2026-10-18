@@ -1,5 +1,6 @@
-"""Fixtures for the tests of canopy: the workspace's journal and context, the web UI's mock backend, notification
-commands that record what they are sent, Markdown snapshots, workspaces of several repositories (DESIGN §18)."""
+"""Fixtures for the tests of canopy: the workspace's journal and context, scenarios played in it, the web UI's mock
+backend, notification commands that record what they are sent, Markdown snapshots, workspaces of several repositories
+(DESIGN §18)."""
 
 import contextlib
 import json
@@ -20,6 +21,7 @@ from canopy.infra import resources
 from canopy.serve import mock as serve_mock
 from canopy.serve.backend import Backend
 from tests.canopy.helpers import context
+from tests.canopy.scenario_helpers import Scenario
 from tests.conftest import HERMETIC_GIT, CanopyEnv, Journals, executable, git
 
 
@@ -35,6 +37,13 @@ def ctx(canopy_env: CanopyEnv) -> Context:
     found = context(canopy_env)
     db.migrate(found.conn, resources.migrations_dir())
     return found
+
+
+@pytest.fixture
+def scenario(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, conn: sqlite3.Connection) -> Scenario:
+    """The workspace, with the fake treehouse and agents on PATH, where a test tells a ticket's story
+    (`scenario_helpers.py`). A test whose workers push asks for `git_pool` too."""
+    return Scenario(canopy_env, conn, agent_log)
 
 
 @pytest.fixture

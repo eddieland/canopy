@@ -3,6 +3,14 @@
 Everything the loop is doing, on one screen, so you can stop tailing `canopy.log` and squinting. `canopy loop` serves
 it at `http://127.0.0.1:8765/`, unless `serve.bind` or `serve.port` in your config says otherwise.
 
+## Only trusted tickets
+
+Never point canopy at a tracker where someone you don't trust can file tickets, such as the issues of a public GitHub
+repository. A ticket is the task: a worker does what it says, with your credentials, so whoever writes your tickets
+steers your agents. Your queue label decides which tickets get worked, not who wrote them, and a ticket's author can
+edit it after you label it. [Philosophy](philosophy#agents-are-untrusted) has the rest of the argument. This is the one
+paragraph in the guide to read even if you read nothing else.
+
 ## Reading this guide
 
 The guide comes in four parts, in the order you'll need them.
@@ -75,9 +83,10 @@ sooner. You set one on [Settings](settings#notice-to-workers).
 
 The strip beside the nav, on every page. From the top: a search box over the whole journal (below), the runs working
 right now, running first and then the ones waiting on you, and what the last 24 hours and the last 30 days cost, each
-a link to the spend page. Its foot names the version canopy is serving, which links to canopy's releases on GitHub,
-and under it two buttons: **Guide**, which opens this guide, and **Settings**. On a narrow window the rail folds to
-icons; **Open the rail** brings it back.
+a link to the spend page. A ticket you stopped drops out of the working runs once its run ends; a question it left
+behind waits on nothing, so it is not listed either. Its foot names the version canopy is serving, which links to
+canopy's releases on GitHub, and under it two buttons: **Guide**, which opens this guide, and **Settings**. On a
+narrow window the rail folds to icons; **Open the rail** brings it back.
 
 ## Search
 

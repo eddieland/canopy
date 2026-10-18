@@ -41,7 +41,7 @@ test.describe('on half a monitor', () => {
         await settled(page)
         const strip = page.getByTestId('rail-strip')
         await expect(strip.getByRole('link', { name: 'Runs' })).toBeVisible()
-        await expect(strip.getByTestId('nav-attention-count')).toHaveText(/^5/u)
+        await expect(strip.getByTestId('nav-attention-count')).toHaveText(/^6/u)
         await expect(page.getByTestId('rail-working')).toHaveCount(0)
 
         await strip.getByRole('button', { name: 'Open the rail' }).click()

@@ -1,8 +1,9 @@
 # canopy scenarios
 
 Live checks worth running through against real systems: the operator's queue, a real tracker and GitHub, the pinned
-OpenCode. The fakes-based tests cover the harness's half of each; these cover the half only a real run can, the
-model's judgment and the runtime's permissions above all.
+OpenCode. The fakes-based tests cover the harness's half of each, and a new one is told through the `scenario`
+fixture (`tests/canopy/scenario_helpers.py`); these cover the half only a real run can, the model's judgment and the
+runtime's permissions above all.
 
 Most came from milestone acceptance criteria that were closed on real use rather than by a dedicated run (ROADMAP,
 2026-10-13). Each names the milestone it came from, which says why the behavior exists.
@@ -32,7 +33,11 @@ relying on a permission they check.
   tool of the tracker's server, and the tracker CLIs in bash.
 - **S4. A heredoc `canopy` command** (M19). Confirmed in OpenCode's source (1.18.35), not in a run. Check that the
   overseer's `canopy *` rule admits `canopy mirror` fed by a heredoc.
-- **S44. Sandboxed runs keep you logged in** (M26). Confirmed in OpenCode's source (1.19.3), not in a run. With
+- **S44. The token split** (M33). Confirmed in OpenCode's source (1.19.3), not in a run. canopy's new tokens add a
+  `step_finish`'s `output` and `reasoning` (`core/agent_output.py`), which holds only while `output` leaves reasoning
+  out. Check that OpenCode's `session.ts` still sets `output: outputTokens - reasoningTokens`; aide found the overlap
+  differed in earlier releases (PRIOR_ART).
+- **S45. Sandboxed runs keep you logged in** (M26). Confirmed in OpenCode's source (1.19.3), not in a run. With
   every agent command sandboxed (`docs/SANDBOX.md`) and an OAuth login in your OpenCode, a provider's and a remote
   MCP server's, run the loop past the login's expiry. Expect a run's log to say `canopy-sandbox: copied back the
   refreshed tokens of ...`, and your own OpenCode, and the overseer's, still logged in after. After an OpenCode
@@ -134,7 +139,9 @@ relying on a permission they check.
 - **S25. The Slack sink** (M10). On a real channel, one ticket's dispatch, its worker's question, and its PR each reach
   the channel once; an attention item is posted when it opens and when it resolves. Remove the webhook file: Slack
   fails for several ticks while another sink keeps delivering and reports `loop.sink_failing`; restore it and what
-  was missed arrives in one message. A digest arrives on its interval, a quiet one included.
+  was missed arrives in one message. A digest arrives on its interval, a quiet one included. With a bot token and
+  `--threads`: the dispatch starts the ticket's thread, its question is a reply also shown in the channel, a chore's
+  run starts its own thread, and the next day's first post about the ticket starts a new one.
 - **S42. Try a chore from the browser** (M23). With `canopy loop` running, press Try now on S22's chore's page. Expect
   its run in Runs at once, running, with no tick; the page to follow it to its end through the stream; its
   findings on the attention list; and the overseer's next run of it `not_due` counting from the try. Stop the loop

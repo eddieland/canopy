@@ -30,10 +30,11 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from canopy.core import chore_view, config, conversation, db, plans, pools, workspace
+from canopy.core.context import db_path
 from canopy.core.items import Item
 from canopy.core.vocab import RunKind, RunStatus
 from canopy.infra import logs, resources
-from canopy.serve import mock_reviews
+from canopy.serve import mock_drafts, mock_reviews
 from canopy.serve.backend import Backend, Granted, Limit, Reloading
 
 if TYPE_CHECKING:
@@ -130,6 +131,13 @@ ATTENTION: tuple[Item, ...] = (
         at(-70),
     ),
     Item("ABC-099", "needs_reviewer", "https://github.com/acme/web/pull/88 waits on a reviewer", at(-55)),
+    Item(
+        "ABC-099",
+        "drafts_waiting",
+        "3 drafts wait on you, for https://github.com/acme/web/pull/88",
+        at(-22),
+        repo="web",
+    ),
     Item(
         "ABC-102",
         "awaiting_reply",
@@ -255,6 +263,7 @@ def seed(directory: Path) -> Backend:
         mock=True,
         slots=slots,
         clock=lambda: T0,
+        runner=lambda: mock_drafts.GitHub(db_path(ws)),
     )
     with backend.open() as ctx:
         db.migrate(ctx.conn, resources.migrations_dir())
@@ -263,6 +272,7 @@ def seed(directory: Path) -> Backend:
             _plans(ctx.conn, ws.state_dir, root)
             _memory(ctx.conn)
             mock_reviews.seed(ctx.conn, ws.state_dir, at)
+            mock_drafts.seed(ctx.conn, ws.state_dir, at, slot_path(root, "web", 3))
     _transcripts(ws.state_dir)
     return backend
 
@@ -970,7 +980,7 @@ def _memory(conn: sqlite3.Connection) -> None:
             db.format_time(T0 + timedelta(days=90)),
         ),
     )
-    conn.execute("INSERT INTO memory_reads (run_id, memory_id) VALUES (40, 1)")
+    conn.execute("INSERT INTO memory_reads (run_id, memory_id, cited) VALUES (40, 1, 'used')")
 
 
 def _chore_fixtures(conn: sqlite3.Connection, root: Path) -> None:
@@ -1243,6 +1253,18 @@ as a finding.
 
 None.
 """
+# Run 40's setup command, as `_run` writes it before the worker starts (DESIGN §8), and its runtime's stderr.
+_SETUP_40 = """\
+--- setup web stdout ---
+Lockfile is up to date, resolution step is skipped
+Packages: +412
+Done in 6.2s
+--- setup web stderr ---
+ WARN  deprecated inflight@1.0.6
+"""
+_RUN_STDERR_40 = """\
+ERROR 2026-10-08T09:41:12 +3m12s service=session error=rate limited: retry after 30s
+"""
 _TICK_STDERR = """\
 INFO  2026-10-08T11:00:00 +210ms service=default version=1.19.0 args=["run","--format","json"] opencode
 WARN  2026-10-08T11:00:01 +1043ms service=mcp key=jira error=timed out after 1000ms listing prompts
@@ -1438,7 +1460,7 @@ def _transcripts(state_dir: Path) -> None:
         _text(s2, -59.1, '{"status": "ok", "summary": "mock tick"}'),
         _step(s2, -59, 0.31, reason="stop"),
     ]
-    # The running chore run's log exists, as `canopy chores run` opens it, and holds no events until it ends.
+    # The running chore run's log exists, as `canopy chores run` opens it, and holds no events yet.
     none: list[str] = []
     written = (
         ("runs", "39", run_39),
@@ -1457,6 +1479,10 @@ def _transcripts(state_dir: Path) -> None:
         elif directory == "runs" and name in RUNNING_LOGS:
             # A running worker's stdout so far: no stderr or exit until it ends.
             text = f"--- worker stdout ---\n{stdout}\n"
+        elif directory == "runs" and name == "40":
+            # What only its output shows: its setup command's, and the runtime's own lines on stderr.
+            worker = f"--- worker stdout ---\n{stdout}\n--- worker stderr ---\n{_RUN_STDERR_40}--- worker exit 1 ---\n"
+            text = _SETUP_40 + worker
         elif directory == "runs":
             text = f"--- worker stdout ---\n{stdout}\n--- worker stderr ---\n\n--- worker exit 0 ---\n"
         elif directory.startswith("chore-runs/"):

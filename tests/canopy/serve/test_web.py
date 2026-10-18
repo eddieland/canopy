@@ -171,6 +171,24 @@ def test_stop_now_from_the_web_ends_the_run_as_canopy_stop_now_does(ctx: Context
     assert "canopy stop --now" in str(run["result_json"])
 
 
+def test_a_run_says_its_ticket_was_stopped_so_its_question_waits_on_nothing(ctx: Context) -> None:
+    c, headers = signed_in_client(ctx)
+    assert c.post(f"/api/tickets/{KEY}/start", headers=headers).status_code == 200
+    run_id = running_run(ctx, KEY)
+    run = present(db.get_run(ctx.conn, run_id))
+    result = {"status": "blocked", "summary": "half done", "question": "Red or blue?"}
+    assert conversation.close_run(ctx.conn, ctx.config, run, RunStatus.BLOCKED, json.dumps(result))
+    [listed] = c.get("/api/runs").json()
+    assert (listed["state"], listed["ticket_stopped"]) == ("blocked", False)
+
+    assert c.post(f"/api/tickets/{KEY}/stop", json={"now": False}, headers=headers).status_code == 200
+
+    [listed] = c.get("/api/runs").json()
+    assert (listed["state"], listed["ticket_stopped"]) == ("blocked", True)
+    assert c.get(f"/api/runs/{run_id}").json()["ticket_stopped"] is True
+    assert c.get(f"/api/tickets/{KEY}").json()["ticket"]["awaiting"] is None
+
+
 def test_forget_from_the_web_needs_the_key_typed_and_then_forgets_as_canopy_forget_does(ctx: Context) -> None:
     c, headers = signed_in_client(ctx)
     pr = "https://example.test/pr/1"
@@ -191,12 +209,29 @@ def test_forget_from_the_web_needs_the_key_typed_and_then_forgets_as_canopy_forg
 
     ctx.conn.execute("UPDATE runs SET status = 'done', ended_at = started_at WHERE id = ?", (run_id,))
     ctx.conn.commit()
+    assert c.get(f"/api/tickets/{KEY}").json()["forgets"] == []
+    before = conversation.reply(ctx.conn, conversation.Ref(conversation.TICKET, KEY), "try again", channel="web")
     forgot = c.post(f"/api/tickets/{KEY}/forget", json={"confirm": KEY}, headers=headers)
     assert forgot.json() == {"branch": f"agent/{KEY}-work", "prs": [pr]}
     ticket = present(db.get_ticket(ctx.conn, KEY))
     assert (ticket.branch, ticket.phase, ticket.forgotten_run_id) == (None, None, run_id)
     assert db.units(ctx.conn, KEY) == []
     assert db.get_run(ctx.conn, run_id) is not None
+    # The page keeps the conversation, and says where the forget falls in it and what it dropped.
+    detail = c.get(f"/api/tickets/{KEY}").json()
+    [forget] = detail["forgets"]
+    assert {k: v for k, v in forget.items() if k != "at"} == {
+        "channel": "web",
+        "run_id": run_id,
+        "message_id": before.message_id,
+        "branch": f"agent/{KEY}-work",
+        "prs": [pr],
+    }
+    assert [m["id"] for m in detail["messages"]] == [before.message_id]
+    # Nothing has happened since, so there is nothing new to forget.
+    assert refused(c.post(f"/api/tickets/{KEY}/forget", json={"confirm": KEY}, headers=headers)).startswith(
+        "already_forgotten"
+    )
 
 
 def ended_run(ctx: Context, key: str, kind: str) -> int:

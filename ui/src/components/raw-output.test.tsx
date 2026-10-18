@@ -4,17 +4,17 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from '@/api/client'
-import type { TickOutput } from '@/api/types'
+import type { RawOutput } from '@/api/types'
 import { STORAGE_KEY } from '@/lib/pretty-output'
 
-import { TickOutputPanel } from './tick-output'
+import { RunOutputPanel, TickOutputPanel } from './raw-output'
 
 const PATH = '/home/op/.canopy/ticks/7.out'
 const TEXT = '{"type":"result","ok":true}\n--- stderr ---\nrate limited once'
 
 // The paths the panel read, and what the server stand-in answers each.
 let read: string[] = []
-let answer: TickOutput = { status: 'read', text: TEXT, size: 2048, truncated: false }
+let answer: RawOutput = { status: 'read', text: TEXT, size: 2048, truncated: false }
 
 const server: Middleware = {
     onRequest({ request }) {
@@ -56,11 +56,7 @@ async function show() {
 
 describe('TickOutputPanel', () => {
     it.each([
-        [
-            'while the tick runs, that it is written at the end',
-            true,
-            'no output yet: the overseer’s is written when it ends',
-        ],
+        ['while the tick runs, that its overseer has not started', true, 'no output yet: the overseer has not started'],
         ['once it ended, that none was kept', false, 'no output kept'],
     ] as const)('with no file says, %s, and offers nothing to show', (_, running, says) => {
         renderPanel(null, running)
@@ -118,5 +114,49 @@ describe('TickOutputPanel', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Pretty', pressed: true }))
         expect(output()).toBe(TEXT)
         expect(localStorage.getItem(STORAGE_KEY)).toBe('[]')
+    })
+})
+
+// The run panel of run 40, whose log the server stand-in answers for.
+function renderRun() {
+    return render(
+        <QueryClientProvider client={new QueryClient()}>
+            <RunOutputPanel id={40} />
+        </QueryClientProvider>,
+    )
+}
+
+describe('RunOutputPanel', () => {
+    const LOG = '--- setup web stdout ---\nDone in 6.2s\n--- worker stdout ---\n{"type":"text"}\n--- worker exit 1 ---'
+
+    it('names its log while hidden, and reads the run’s output only once shown, setup lines and all', async () => {
+        answer = { status: 'read', text: LOG, size: LOG.length, truncated: false }
+        renderRun()
+        expect(screen.getByText(/as written: its setup commands’ output/u).textContent).toBe(
+            'the run’s log as written: its setup commands’ output, then the worker’s stdout and stderr',
+        )
+        expect(read).toEqual([])
+
+        await show()
+        expect((await screen.findByRole('region', { name: "the run's output" })).textContent).toBe(LOG)
+        expect(read).toEqual(['/api/runs/40/output'])
+    })
+
+    it('keeps Pretty for the page alone, never in the ticks’ store', async () => {
+        answer = { status: 'read', text: LOG, size: LOG.length, truncated: false }
+        renderRun()
+        await show()
+        await screen.findByRole('region', { name: "the run's output" })
+        fireEvent.click(screen.getByRole('button', { name: 'Pretty', pressed: false }))
+        expect(screen.getByRole('button', { name: 'Pretty', pressed: true })).toBeDefined()
+        expect(screen.getByRole('region', { name: "the run's output" }).textContent).toContain('{\n  "type": "text"\n}')
+        expect(localStorage.getItem(STORAGE_KEY)).toBeNull()
+    })
+
+    it('says so when the run wrote nothing', async () => {
+        answer = { status: 'read', text: '', size: 0, truncated: false }
+        renderRun()
+        await show()
+        expect(await screen.findByText('empty: the run wrote nothing')).toBeDefined()
     })
 })

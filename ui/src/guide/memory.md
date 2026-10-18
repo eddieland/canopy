@@ -91,7 +91,12 @@ A ticket's page has a **Memory** panel while ticket notes are on: every note its
 invalidated included, and the text its next run would be served. A run's page has one too, for a run started while
 either tier was on: what it wrote, what it read, and anything it tried to write that canopy refused, in canopy's words,
 not the worker's. A run started while recording read `none, recording only`, which isn't the same as reading an empty
-list.
+list. Among what it read, a memory it said it relied on says `this run relied on it`, and one it reported says `this
+run found it wrong`.
+
+Going the other way, a memory names the latest runs that relied on it, `used in run:40, run:38`, each opening that
+run's page, so you can check what a note actually steered before you trust it. Past five, or for runs from before
+canopy kept track, it counts the rest as `and 3 more`.
 
 A ticket's notes are invalidated when it's marked done and when you forget it. Stopping it keeps them, since you may
 start it again.

@@ -24,7 +24,12 @@ from typing import Any, ClassVar
 # Imported for real, not under TYPE_CHECKING: `typing.get_type_hints` resolves a row type's fields when it is read.
 from canopy.core.vocab import (
     ChoreRunStatus,
+    DraftAuthor,
+    DraftKind,
+    DraftStance,
+    DraftStatus,
     MemoryAuthor,
+    MemoryCited,
     MemoryMode,
     MemoryScope,
     MemoryStatus,
@@ -32,8 +37,12 @@ from canopy.core.vocab import (
     PlanSetting,
     PlanStatus,
     PoolKind,
+    PrState,
+    ReplyMode,
     ResumeReason,
+    ReviewItem,
     ReviewRunStatus,
+    ReviewState,
     RunKind,
     StartStatus,
     TickStatus,
@@ -120,6 +129,25 @@ class Ticket(Row):
     title: str | None
     # The ticket's own plan setting, overriding `policy.plan`; None when unset (DESIGN §25).
     plan_setting: PlanSetting | None
+
+
+@dataclass(frozen=True)
+class Forget(Row):
+    """One time the operator forgot a ticket's work (DESIGN §22), and what it dropped; its row holds the latest."""
+
+    TABLE: ClassVar[str] = "forgets"
+
+    id: int
+    ticket_key: str
+    at: str
+    # `cli` or `web`; None, with `prs`, for a forget made before forgets were recorded.
+    channel: str | None
+    # The ticket's newest run and message then: the loop reads only later ones.
+    run_id: int | None
+    message_id: int | None
+    branch: str | None
+    # A JSON array of its units' PR URLs.
+    prs: str | None
 
 
 @dataclass(frozen=True)
@@ -368,6 +396,8 @@ class MemoryRead(Row):
 
     run_id: int
     memory_id: int
+    # What the run said of it; None when it cited it in neither list, and for every read from before runs were named.
+    cited: MemoryCited | None
 
 
 @dataclass(frozen=True)
@@ -392,6 +422,111 @@ class RunTool(Row):
     calls: int
     errors: int
     result_chars: int
+
+
+@dataclass(frozen=True)
+class ObservedPr(Row):
+    """A PR as canopy's GitHub reader last read it whole (DESIGN §29)."""
+
+    TABLE: ClassVar[str] = "observed_prs"
+
+    url: str
+    repository: str
+    number: int
+    head_sha: str | None
+    base_ref: str | None
+    state: PrState | None
+    draft: bool
+    mergeable: str | None
+    author: str | None
+    observed_at: str
+
+
+@dataclass(frozen=True)
+class ObservedReview(Row):
+    """A review or a review comment of a PR, as the reader last read it whole (DESIGN §29). Text, never authority."""
+
+    TABLE: ClassVar[str] = "observed_reviews"
+
+    pr_url: str
+    item: ReviewItem
+    id: int
+    author: str | None
+    bot: bool
+    state: ReviewState | None
+    created_at: str | None
+    body: str
+    url: str | None
+    review_id: int | None
+    thread_id: str | None
+    path: str | None
+    line: int | None
+    side: str | None
+    outdated: bool | None
+    resolved: bool | None
+    observed_at: str
+
+
+@dataclass(frozen=True)
+class Draft(Row):
+    """A comment a run would have posted, waiting on the operator to send, edit, or drop it (DESIGN §29)."""
+
+    TABLE: ClassVar[str] = "drafts"
+
+    id: int
+    run_id: int
+    number: int
+    ticket_key: str
+    kind: DraftKind
+    repo: str | None
+    pr_url: str | None
+    comment_id: int | None
+    issue_url: str | None
+    stance: DraftStance | None
+    thread_id: str | None
+    status: DraftStatus
+    why: str | None
+    basis: str
+    superseded_by: int | None
+    created_at: str
+    checked_at: str | None
+    send_started_at: str | None
+    send_version: int | None
+    pending_review: str | None
+    pending_review_id: int | None
+    sent_at: str | None
+    sent_comment_id: int | None
+    sent_review_id: int | None
+    sent_url: str | None
+    sent_channel: str | None
+
+
+@dataclass(frozen=True)
+class DraftVersion(Row):
+    """One version of a draft's text: the run's own, or one of the operator's edits (DESIGN §29)."""
+
+    TABLE: ClassVar[str] = "draft_versions"
+
+    draft_id: int
+    version: int
+    body: str
+    author: DraftAuthor
+    channel: str | None
+    created_at: str
+
+
+@dataclass(frozen=True)
+class RunReplies(Row):
+    """The `trust.review_replies` a run was rendered under, and the drafts `_run` refused of it (DESIGN §29)."""
+
+    TABLE: ClassVar[str] = "run_replies"
+
+    run_id: int
+    mode: ReplyMode
+    # Whether the run's prompt asked for a ticket's draft.
+    ticket_drafts: bool
+    # A JSON list of the drafts refused from the run's result, each its number and why.
+    refused: str
 
 
 def fetch_all[R: Row](conn: sqlite3.Connection, row_type: type[R], sql: str, params: Sequence[object] = ()) -> list[R]:

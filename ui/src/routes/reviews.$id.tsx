@@ -15,6 +15,7 @@ import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/component
 import { PullRequestLink } from '@/components/pull-request-link'
 import { Notice } from '@/components/notice'
 import { FindingCard, ReviewDiffPanels } from '@/components/review-diff'
+import type { Wanted } from '@/components/review-diff'
 import { RichText } from '@/components/rich-text'
 import { ReviewLink } from '@/components/review-link'
 import { ListRow } from '@/components/rows'
@@ -54,6 +55,8 @@ function ReviewPage() {
 
 function Loaded({ id }: { id: number }) {
     const query = useQuery(reviewQuery(id))
+    // The file of the finding whose link the operator last followed, a new object each time, so the diff shows it.
+    const [wanted, setWanted] = useState<Wanted | null>(null)
     const { data, error } = query
     if (error instanceof ApiError && error.status === 404) {
         return <NoReview title={reviewRef(id)}>{error.message}</NoReview>
@@ -80,7 +83,7 @@ function Loaded({ id }: { id: number }) {
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <ReviewPanel detail={data} />
-                {data.findings.length > 0 && <FindingsPanel detail={data} />}
+                {data.findings.length > 0 && <FindingsPanel detail={data} onFollow={(file) => setWanted({ file })} />}
                 {placed.elsewhere.length > 0 && data.diff !== null && (
                     <Panel>
                         <PanelHeader label="Not in the diff" />
@@ -106,7 +109,7 @@ function Loaded({ id }: { id: number }) {
                         )}
                     </Panel>
                 ) : (
-                    <ReviewDiffPanels run={data.review.id} diff={data.diff} placed={placed} />
+                    <ReviewDiffPanels run={data.review.id} diff={data.diff} placed={placed} wanted={wanted} />
                 )}
             </div>
         </>
@@ -202,9 +205,9 @@ function ReviewPanel({ detail }: { detail: ReviewDetail }) {
  * Every finding in one list, each linking to its card on the diff. On a review of one of the loop's own PRs, each
  * finding the operator has not dismissed has a box, and the ticked ones go to a worker together, as
  * `canopy send review:ID N...`: a reply on the ticket naming them, which the next tick reads as the operator's go-ahead
- * (DESIGN §21).
+ * (DESIGN §21). `onFollow` hears a link followed to a finding on a file, by the file's index in the diff.
  */
-function FindingsPanel({ detail }: { detail: ReviewDetail }) {
+function FindingsPanel({ detail, onFollow }: { detail: ReviewDetail; onFollow: (file: number) => void }) {
     const { review } = detail
     const client = useQueryClient()
     const [picked, setPicked] = useState<ReadonlySet<number>>(new Set())
@@ -260,6 +263,11 @@ function FindingsPanel({ detail }: { detail: ReviewDetail }) {
                                 to="/reviews/$id"
                                 params={{ id: String(detail.review.id) }}
                                 hash={findingAnchor(i + 1)}
+                                onClick={() => {
+                                    if (f.file !== null) {
+                                        onFollow(f.file)
+                                    }
+                                }}
                                 className="min-w-0 truncate text-accent underline-offset-4 hover:underline"
                             >
                                 {f.title}

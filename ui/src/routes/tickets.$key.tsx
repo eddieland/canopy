@@ -6,7 +6,6 @@ import { ApiError } from '@/api/client'
 import { loopQuery, ticketMemoryQuery, ticketPlansQuery, ticketQuery } from '@/api/queries'
 import type { TicketDetail } from '@/api/types'
 import { Age } from '@/components/age'
-import { Conversation } from '@/components/conversation'
 import { CostTotalRow } from '@/components/cost-total'
 import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
@@ -33,11 +32,13 @@ import { RunsTable } from '@/components/runs-table'
 import { StartTicket } from '@/components/start-ticket'
 import { Chip, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
+import { TicketDrafts } from '@/components/ticket-drafts'
 import { TicketLinks } from '@/components/ticket-links'
-import { WorkingNow } from '@/components/working-now'
+import { TicketThread } from '@/components/ticket-thread'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
 import { useUntrustedReview } from '@/hooks/use-untrusted-review'
+import { sinceForget } from '@/lib/forgotten'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
 import { phaseLabel, phaseWord } from '@/lib/phase'
@@ -167,7 +168,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     <PanelHeader label="Conversation">
                         <span className="flex items-center gap-2">
                             {messages.length > 1 && <OrderToggle list="conversation" />}
-                            <span className="readout text-xs text-muted-foreground">{messages.length}</span>
+                            <span className="readout text-xs text-muted-foreground">{sinceForget(detail).length}</span>
                         </span>
                     </PanelHeader>
                     <ThreadScroll
@@ -175,17 +176,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         label="Conversation"
                         end={conversationOrder === 'oldest' ? 'bottom' : 'top'}
                     >
-                        {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
-                        {conversationOrder === 'newest' && <WorkingNow ticketKey={ticket.key} />}
-                        {messages.length === 0 ? (
-                            <Empty>no messages yet: what you and its workers say shows here</Empty>
-                        ) : (
-                            <Conversation
-                                messages={ordered('conversation', conversationOrder, messages)}
-                                waiting={ticket.awaiting}
-                            />
-                        )}
-                        {conversationOrder === 'oldest' && <WorkingNow ticketKey={ticket.key} />}
+                        <TicketThread detail={detail} order={conversationOrder} />
                     </ThreadScroll>
                     <ReplyForm
                         key={ticket.key}
@@ -225,6 +216,8 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     )}
                 </Panel>
             </div>
+            {/* What its runs would have said on it, waiting on the operator to send (DESIGN §29). */}
+            <TicketDrafts ticketKey={ticket.key} drafts={detail.drafts} />
             {planned && planLeads === false && <PlanCard ticketKey={ticket.key} plans={plans} />}
             <TicketMemoryPanel ticketKey={ticket.key} />
         </>

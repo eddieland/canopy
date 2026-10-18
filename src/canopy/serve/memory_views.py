@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 from canopy.core import db, memory, memory_manage
-from canopy.core.vocab import MemoryMode
+from canopy.core.vocab import MemoryCited, MemoryMode
 from canopy.serve.schema import (
     MemoryDigest,
     MemoryEntry,
@@ -105,10 +105,13 @@ def run_memory(ctx: Context, run_id: int) -> RunMemory | None:
     rendered = memory.run_memory(ctx.conn, run_id)
     if rendered is None:
         return RunMemory(rendered=None, wrote=[], read=[], refused=[])
+    cited = memory.citations(ctx.conn, run_id)
     return RunMemory(
         rendered=RunMemoryModes(ticket_notes=_mode(rendered.ticket_notes), lessons=_mode(rendered.proposals)),
         wrote=[entry(ctx, m) for m in memory.written_by(ctx.conn, run_id)],
         read=[entry(ctx, m) for m in memory.read_by(ctx.conn, run_id)],
+        used=[i for i, c in cited.items() if c is MemoryCited.USED],
+        wrong=[i for i, c in cited.items() if c is MemoryCited.WRONG],
         refused=[MemoryRefusal(field=r.field, key=r.key, why=r.why) for r in memory.refused_of(rendered)],
     )
 
@@ -117,7 +120,8 @@ def entry(ctx: Context, m: records.Memory) -> MemoryEntry:
     """A memory as the API sends it.
 
     Returns:
-        Its fields, its times as datetimes, and whether a private ticket's run wrote it.
+        Its fields, its times as datetimes, the latest runs that relied on it, and whether a private ticket's run wrote
+        it.
     """
     return MemoryEntry(
         id=m.id,
@@ -133,6 +137,7 @@ def entry(ctx: Context, m: records.Memory) -> MemoryEntry:
         created_at=db.parse_time(m.created_at),
         use_count=m.use_count,
         last_used_at=_time(m.last_used_at),
+        used_by=memory.used_by(ctx.conn, m.id) if m.use_count else [],
         review_at=_time(m.review_at),
         wrong_at=_time(m.wrong_at),
         wrong_run_id=m.wrong_run_id,

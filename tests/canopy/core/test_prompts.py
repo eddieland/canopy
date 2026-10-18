@@ -2,7 +2,7 @@ import re
 
 import pytest
 
-from canopy.core import prompts, vocab
+from canopy.core import prompts, replies, vocab
 from canopy.core.config import load
 from canopy.infra import resources
 from tests.canopy.helpers import PROMPT_VALUES, with_rebase
@@ -183,7 +183,8 @@ def test_comment_marks_name_every_mark_set(prefix: str, suffix: str, recognized:
 @pytest.mark.parametrize("kind", LABELED_KINDS)
 def test_shipped_worker_prompts_mark_and_recognize_worker_comments(canopy_env: CanopyEnv, kind: str) -> None:
     # Everything posts as the operator, so a worker's own reply must not read back as feedback or a reply (D069).
-    values = {**PROMPT_VALUES, "MARK_COMMENTS": "<mark them>", "WORKER_COMMENT": "<is marked>"}
+    marked = {"MARK_COMMENTS": "<mark them>", **replies.posted_values("<mark them>", "needs-human")}
+    values = {**PROMPT_VALUES, **marked, "WORKER_COMMENT": "<is marked>"}
     text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, values)
     assert "<mark them>" in text
     assert "a comment that <is marked>" in text

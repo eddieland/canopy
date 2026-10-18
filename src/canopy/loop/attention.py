@@ -28,6 +28,7 @@ from canopy.core.items import Item, age, fingerprint, one_line, subject
 from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import logs
 from canopy.notify import deliver
+from canopy.runs import drafted
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -76,6 +77,7 @@ HARNESS_REASONS = frozenset(
         "repo_missing",
         UNAVAILABLE,
         *memory.HARNESS_REASONS,
+        drafted.WAITING_REASON,
     }
 )
 # The window the list reads: how far back to look when working out how long an item has been open. Garbage

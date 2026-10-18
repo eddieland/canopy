@@ -109,6 +109,8 @@ def test_a_tickets_memory_is_every_note_and_the_digest_its_next_run_gets(backend
     assert "\u200b" in found["notes"][0]["text"]
     assert found["notes"][2]["use_count"] == 1
     assert found["notes"][2]["last_used_at"] == at(-115)
+    # It names the run that relied on it; a note no run relied on names none.
+    assert (found["notes"][2]["used_by"], found["notes"][0]["used_by"]) == ([40], [])
     assert (found["digest"]["ids"], found["digest"]["served"]) == ([3, 2], True)
     assert c.get("/api/tickets/ABC-999/memory").status_code == 404
 
@@ -119,6 +121,7 @@ def test_a_runs_memory_is_what_it_wrote_read_and_had_refused(backend: Backend) -
     assert found["rendered"] == {"ticket_notes": "use", "lessons": "record"}
     assert [m["id"] for m in found["wrote"]] == [2, 3]
     assert [m["id"] for m in found["read"]] == [1]
+    assert (found["used"], found["wrong"]) == ([1], [])
     assert found["refused"] == [
         {"field": "notes", "key": "staging-login", "why": "its text looks like it holds a secret"}
     ]
@@ -126,7 +129,14 @@ def test_a_runs_memory_is_what_it_wrote_read_and_had_refused(backend: Backend) -
     recorded = c.get("/api/runs/37/memory").json()
     assert (recorded["rendered"], recorded["read"]) == ({"ticket_notes": "record", "lessons": "record"}, [])
     # Rendered with memory off: no row at all.
-    assert c.get("/api/runs/41/memory").json() == {"rendered": None, "wrote": [], "read": [], "refused": []}
+    assert c.get("/api/runs/41/memory").json() == {
+        "rendered": None,
+        "wrote": [],
+        "read": [],
+        "used": [],
+        "wrong": [],
+        "refused": [],
+    }
     assert c.get("/api/runs/999/memory").status_code == 404
 
 

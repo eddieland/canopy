@@ -1,16 +1,37 @@
-import { ChevronsUpDown } from 'lucide-react'
+import { ChevronDown, ChevronsUpDown, ListFilter } from 'lucide-react'
 import { Fragment, useState } from 'react'
 import type { ReactNode } from 'react'
 
 import type { DiffFile, DiffLine, ReviewDiff } from '@/api/types'
+import { Disclosure } from '@/components/disclosure'
 import { useDismissReviewFinding } from '@/components/dismiss-finding'
 import { Panel, PanelHeader } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
 import { Chip } from '@/components/status'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { useHighlight } from '@/hooks/use-highlight'
+import { fileType, fileTypes, fileTypesLabel, hiddenFilesText } from '@/lib/file-types'
+import type { FileType } from '@/lib/file-types'
 import type { CodeKind, CodeToken } from '@/lib/highlight'
-import { foldedText, foldLabel, lineCount, nextStep, pieces, reveal, shownAtFirst } from '@/lib/review-folds'
+import {
+    fileFoldedText,
+    foldedText,
+    foldLabel,
+    lineCount,
+    nextStep,
+    pieces,
+    reveal,
+    shownAtFirst,
+} from '@/lib/review-folds'
 import type { Piece, Span } from '@/lib/review-folds'
 import { findingAnchor, SEVERITY_TONE } from '@/lib/reviews'
 import type { Numbered, Placed } from '@/lib/reviews'
@@ -30,33 +51,119 @@ const CODE_CLASS: Record<Exclude<CodeKind, 'text'>, string> = {
     comment: 'text-muted-foreground',
 }
 
+/** A file of a diff the operator just asked to see, by following a link to a card on it, a new object each time. */
+export interface Wanted {
+    /** The file's index in the diff. */
+    file: number
+}
+
 /**
  * The reviewed commit's diff, a panel per file, with each finding's card under the line it names, or under the file's
- * header when the diff does not show its line. The diff is the PR's own text: every line is React text, its code
- * colored once its language's grammar has read it (`useHighlight`). A diff longer than the page's budget folds what it
- * does not draw at first (`DIFF_BUDGET`), and says so above its first file.
+ * header when the diff does not show its line (`DiffPanels`). `wanted` is the file of the finding whose link in the
+ * findings list the operator last followed.
  */
-export function ReviewDiffPanels({ run, diff, placed }: { run: number; diff: ReviewDiff; placed: Placed }) {
+export function ReviewDiffPanels({
+    run,
+    diff,
+    placed,
+    wanted = null,
+}: {
+    run: number
+    diff: ReviewDiff
+    placed: Placed<Numbered>
+    wanted?: Wanted | null
+}) {
+    return (
+        <DiffPanels
+            diff={diff}
+            placed={placed}
+            cards={['finding', 'findings']}
+            wanted={wanted}
+            renderCard={(f) => <FindingCard key={f.n} run={run} numbered={f} />}
+        />
+    )
+}
+
+/**
+ * A diff, a panel per file, with the card of each thing placed on it under the line it names, or under the file's
+ * header when the diff does not show its line: a review's findings, a PR's threads. `renderCard` draws one, keyed, and
+ * `cards` names them, one and many. The diff is the PR's own text: every line is React text, its code colored once its
+ * language's grammar has read it (`useHighlight`). A diff longer than the page's budget folds what it does not draw at
+ * first (`DIFF_BUDGET`), and says so above its first file. Above the files, a menu of their types hides the files of
+ * those the operator unticks, every type ticked at first; and each file's panel folds away whole on its header's
+ * disclosure. A `wanted` file, one the operator followed a link to a card on, comes back into view: its type ticked
+ * and its panel open. Each new object shows it again, so following the same link twice works twice.
+ */
+export function DiffPanels<T>({
+    diff,
+    placed,
+    cards,
+    renderCard,
+    wanted = null,
+}: {
+    diff: ReviewDiff
+    placed: Placed<T>
+    cards: readonly [string, string]
+    renderCard: (item: T) => ReactNode
+    wanted?: Wanted | null
+}) {
     const first = shownAtFirst(diff.files, placed.lines)
     const total = diff.files.reduce((sum, file) => sum + lineCount(file), 0)
     const drawn = first.flat().reduce((sum, span) => sum + span.to - span.from, 0)
+    const types = fileTypes(diff.files.map((file) => file.path))
+    // Held here rather than in each file's panel, which the filter unmounts, so a file it hides keeps its fold, and the
+    // lines opened in it, for when it comes back. Both are by the file's index.
+    const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set())
+    const [folded, setFolded] = useState<ReadonlySet<number>>(new Set())
+    const [opened, setOpened] = useState<ReadonlyMap<number, Span[]>>(new Map())
+    // A file just wanted is shown as the page draws it, before the router scrolls to the card on it.
+    const [seen, setSeen] = useState(wanted)
+    if (wanted !== seen) {
+        setSeen(wanted)
+        const path = wanted === null ? undefined : diff.files[wanted.file]?.path
+        if (wanted !== null && path !== undefined) {
+            setHidden((was) => without(was, fileType(path)))
+            setFolded((was) => without(was, wanted.file))
+        }
+    }
+    const hiddenFiles = diff.files.filter((file) => hidden.has(fileType(file.path))).length
     return (
         <>
+            {diff.files.length > 0 && (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <FileTypeFilter types={types} hidden={hidden} onHiddenChange={setHidden} />
+                    {hiddenFiles > 0 && (
+                        <span className="font-mono text-xs text-muted-foreground" data-testid="diff-hidden-files">
+                            {hiddenFilesText(hiddenFiles)}
+                        </span>
+                    )}
+                </div>
+            )}
             {drawn < total && (
                 <p className="font-mono text-xs text-muted-foreground" data-testid="diff-folded">
                     {foldedText(drawn, total)}
                 </p>
             )}
-            {diff.files.map((file, i) => (
-                <FilePanel
-                    key={`${i}:${file.path}`}
-                    run={run}
-                    file={file}
-                    first={first[i] ?? []}
-                    onLine={placed.lines.get(i)}
-                    onFile={placed.files.get(i) ?? []}
-                />
-            ))}
+            {diff.files.map(
+                (file, i) =>
+                    !hidden.has(fileType(file.path)) && (
+                        <FilePanel
+                            key={`${i}:${file.path}`}
+                            file={file}
+                            first={first[i] ?? []}
+                            onLine={placed.lines.get(i)}
+                            onFile={placed.files.get(i) ?? []}
+                            cards={cards}
+                            renderCard={renderCard}
+                            opened={opened.get(i) ?? []}
+                            onShow={(span) =>
+                                setOpened((was) => new Map(was).set(i, reveal(was.get(i) ?? [], nextStep(span))))
+                            }
+                            open={!folded.has(i)}
+                            onOpenChange={(open) => setFolded((was) => (open ? without(was, i) : new Set([...was, i])))}
+                        />
+                    ),
+            )}
             {diff.truncated && (
                 <p className="font-mono text-xs text-muted-foreground">
                     The diff is longer than the page shows; the rest is left out.
@@ -66,71 +173,148 @@ export function ReviewDiffPanels({ run, diff, placed }: { run: number; diff: Rev
     )
 }
 
-function FilePanel({
-    run,
+function without<T>(set: ReadonlySet<T>, item: T): ReadonlySet<T> {
+    if (!set.has(item)) {
+        return set
+    }
+    const next = new Set(set)
+    next.delete(item)
+    return next
+}
+
+/**
+ * The menu of the diff's file types, each with how many files are of it and a check while its files show. Picking one
+ * flips it and leaves the menu open, so several flip in one go; `Show every type` ticks them all again.
+ */
+function FileTypeFilter({
+    types,
+    hidden,
+    onHiddenChange,
+}: {
+    types: readonly FileType[]
+    hidden: ReadonlySet<string>
+    onHiddenChange: (hidden: ReadonlySet<string>) => void
+}) {
+    const shown = (type: string, on: boolean) => {
+        onHiddenChange(on ? without(hidden, type) : new Set([...hidden, type]))
+    }
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="xs" data-testid="diff-file-types">
+                    <ListFilter aria-hidden />
+                    {fileTypesLabel(types, hidden)}
+                    <ChevronDown aria-hidden />
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="min-w-44">
+                {types.map(({ type, count }) => (
+                    <DropdownMenuCheckboxItem
+                        key={type}
+                        checked={!hidden.has(type)}
+                        onCheckedChange={(checked) => shown(type, checked)}
+                        onSelect={(event) => event.preventDefault()}
+                        aria-label={`${type}, ${count} ${count === 1 ? 'file' : 'files'}`}
+                    >
+                        <span className="font-mono text-xs">{type}</span>
+                        <span className="ml-auto readout text-xs text-muted-foreground">{count}</span>
+                    </DropdownMenuCheckboxItem>
+                ))}
+                {types.some(({ type }) => hidden.has(type)) && (
+                    <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem onSelect={() => onHiddenChange(new Set())}>Show every type</DropdownMenuItem>
+                    </>
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+}
+
+function FilePanel<T>({
     file,
     first,
     onLine,
     onFile,
+    cards,
+    renderCard,
+    opened,
+    onShow,
+    open,
+    onOpenChange,
 }: {
-    run: number
     file: DiffFile
     first: Span[]
-    onLine: Map<number, Numbered[]> | undefined
-    onFile: Numbered[]
+    onLine: Map<number, T[]> | undefined
+    onFile: T[]
+    cards: readonly [string, string]
+    renderCard: (item: T) => ReactNode
+    opened: Span[]
+    onShow: (span: Span) => void
+    open: boolean
+    onOpenChange: (open: boolean) => void
 }) {
     // The lines the operator opened, drawn with those the page draws at first, which follow the review as it changes:
-    // a running review's findings arrive when it ends, and each brings its lines into view, folded or not.
-    const [opened, setOpened] = useState<Span[]>([])
+    // a running review's findings arrive when it ends, and each brings its lines into view, folded or not, as a thread
+    // read again does.
     const shown = opened.reduce((spans, span) => reveal(spans, span), first)
     const highlighted = useHighlight(file)
-    const show = (span: Span) => setOpened((was) => reveal(was, nextStep(span)))
-    const rows = pieces(file, shown).flatMap((piece) => pieceRows(piece, { run, file, highlighted, onLine, show }))
+    const rows = pieces(file, shown).flatMap((piece) =>
+        pieceRows(piece, { file, highlighted, onLine, show: onShow, renderCard }),
+    )
+    const count = onFile.length + [...(onLine?.values() ?? [])].reduce((sum, items) => sum + items.length, 0)
+    const body = onFile.length > 0 || rows.length > 0
     return (
-        <Panel data-testid="diff-file">
-            <PanelHeader label="File">
-                <span className="min-w-0 flex-1 truncate font-mono text-xs" title={file.path}>
-                    {file.old_path !== null && <span className="text-muted-foreground">{file.old_path} → </span>}
-                    {file.path}
-                </span>
-                {file.binary && <Chip>binary</Chip>}
-            </PanelHeader>
-            {onFile.length > 0 && (
-                <div className="flex flex-col gap-2 border-b p-3">
-                    {onFile.map((f) => (
-                        <FindingCard key={f.n} run={run} numbered={f} />
-                    ))}
-                </div>
-            )}
-            {rows.length > 0 && (
-                <div className="overflow-x-auto">
-                    <table className="w-full border-collapse font-mono text-xs">
-                        <tbody>{rows}</tbody>
-                    </table>
-                </div>
-            )}
-        </Panel>
+        <Collapsible asChild open={open || !body} onOpenChange={onOpenChange}>
+            <Panel data-testid="diff-file">
+                <PanelHeader label="File">
+                    <span className="min-w-0 flex-1 truncate font-mono text-xs" title={file.path}>
+                        {file.old_path !== null && <span className="text-muted-foreground">{file.old_path} → </span>}
+                        {file.path}
+                    </span>
+                    {file.binary && <Chip>binary</Chip>}
+                    {body && <Disclosure open={open} what="diff" />}
+                </PanelHeader>
+                <CollapsibleContent>
+                    {onFile.length > 0 && (
+                        <div className="flex flex-col gap-2 border-b p-3">{onFile.map((item) => renderCard(item))}</div>
+                    )}
+                    {rows.length > 0 && (
+                        <div className="overflow-x-auto">
+                            <table className="w-full border-collapse font-mono text-xs">
+                                <tbody>{rows}</tbody>
+                            </table>
+                        </div>
+                    )}
+                </CollapsibleContent>
+                {!open && body && (
+                    <p className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                        {fileFoldedText(lineCount(file), count, cards)}
+                    </p>
+                )}
+            </Panel>
+        </Collapsible>
     )
 }
 
 /**
- * The table rows of one piece of a file: a hunk's header, its lines with the cards of the findings on them, or a fold.
+ * The table rows of one piece of a file: a hunk's header, its lines with the cards placed on them, or a fold.
  * Keyed by where they are in the file, so the rows drawn already keep their keys when a fold opens above them.
  */
-function pieceRows(
+function pieceRows<T>(
     piece: Piece,
     {
-        run,
         file,
         highlighted,
         onLine,
         show,
+        renderCard,
     }: {
-        run: number
         file: DiffFile
         highlighted: (CodeToken[] | undefined)[][] | undefined
-        onLine: Map<number, Numbered[]> | undefined
+        onLine: Map<number, T[]> | undefined
         show: (span: Span) => void
+        renderCard: (item: T) => ReactNode
     },
 ): ReactNode[] {
     switch (piece.kind) {
@@ -155,9 +339,7 @@ function pieceRows(
                             <tr>
                                 <td colSpan={4} className="border-y bg-surface p-0">
                                     <InView className="flex flex-col gap-2 px-3 py-2 font-sans">
-                                        {cards.map((f) => (
-                                            <FindingCard key={f.n} run={run} numbered={f} />
-                                        ))}
+                                        {cards.map((item) => renderCard(item))}
                                     </InView>
                                 </td>
                             </tr>

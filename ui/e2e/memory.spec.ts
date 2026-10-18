@@ -57,6 +57,12 @@ test("a ticket's page lists its notes and what its next run gets", async ({ page
     const panel = page.getByTestId('ticket-memory')
     await expect(panel.getByTestId('memory-band')).toContainText('In use.')
     await expect(panel.getByTestId('memory-1')).toContainText('superseded')
+    // A note names the runs that relied on it, each opening its page.
+    await expect(panel.getByTestId('memory-1')).toContainText('used in run:40')
+    await expect(panel.getByTestId('memory-1').getByRole('link', { name: 'run:40' })).toHaveAttribute(
+        'href',
+        /\/runs\/40$/u,
+    )
     await expect(panel.getByText('served to its next run')).toBeVisible()
     await expect(panel.getByTestId('memory-digest')).toContainText('## Notes from earlier runs')
 })
@@ -69,7 +75,8 @@ test('a run says what it wrote, what it read, and what was refused, and recordin
     const run = page.getByTestId('run-memory')
     await expect(run).toContainText('ticket notes in use, lessons recording')
     await expect(run.getByTestId('memory-2')).toBeVisible()
-    await expect(run.getByTestId('memory-1')).toBeVisible()
+    await expect(run.getByTestId('memory-1')).toContainText('this run relied on it')
+    await expect(run.getByTestId('memory-1')).not.toContainText('used in')
     await expect(run.getByTestId('memory-refused')).toHaveText(
         'notes staging-login: its text looks like it holds a secret',
     )

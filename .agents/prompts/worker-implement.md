@@ -93,9 +93,7 @@ commit message.{{WORKSPACE_LESSONS}}
   Commit on the detached HEAD as it is: create no local branch. {{BRANCH_UPDATE}}
 - Open a PR for each repository you changed, against that repository's base branch listed above, with the ticket key
   in the title and a description of the change. Never target another branch. {{OPEN_PR}}
-- Comment on the ticket: what you did, every PR link, anything a reviewer should look at first.
-- {{MARK_COMMENTS}} You post as the operator, so that is how canopy knows the comment is yours and never reads it
-  back as review feedback or as a reply.
+{{TICKET_REPORT}}
 - Never approve, merge, or close PRs. Never transition the ticket, including indirectly: refer to it by key only, with
   no closing keywords (`Fixes`, `Closes`, `Resolves`) or tracker commands in commit messages, the PR title, or the PR
   body.
@@ -117,8 +115,7 @@ discover the task should not be done as described:
 
 1. Commit and push what you have as WIP if it is coherent; otherwise push
    nothing.
-2. Post your question as a ticket comment. One question, concrete, with the
-   options you see.
+2. {{ASK_QUESTION}}
 3. Add the label `{{NEEDS_HUMAN_LABEL}}` to the ticket with the tracker's MCP tool for editing it, changing nothing
    but its labels. If you cannot set it, say so in the question comment.
 4. Report `blocked`.
@@ -129,4 +126,4 @@ Do not guess on decisions that would be expensive to reverse.
 
 Your last line of stdout must be exactly one JSON object and nothing after it:
 
-{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"pr_titles":{{PR_TITLES}},"summary":"<one paragraph>","question":"<only when blocked>"}{{MEMORY_CONTRACT}}
+{"status":"done|blocked|failed","branch":"{{BRANCH}}","prs":{{PRS}},"pr_titles":{{PR_TITLES}},"summary":"<one paragraph>","question":"<only when blocked>"}{{MEMORY_CONTRACT}}{{DRAFTS}}

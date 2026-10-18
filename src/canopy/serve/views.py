@@ -6,6 +6,7 @@ message bodies as `canopy show` drops them, run summaries are cut to one line, a
 
 from __future__ import annotations
 
+import json
 import math
 from datetime import datetime, timedelta
 from itertools import starmap
@@ -29,7 +30,7 @@ from canopy.core import (
 from canopy.core import spend as spending
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ChoreRunStatus, RunStatus
-from canopy.serve import memory_views
+from canopy.serve import draft_views, memory_views
 from canopy.serve.schema import (
     AttentionItem,
     ChoreDetail,
@@ -52,6 +53,7 @@ from canopy.serve.schema import (
     NoticeChannel,
     Pause,
     PauseChannel,
+    RawOutput,
     Run,
     RunActivity,
     RunState,
@@ -72,8 +74,8 @@ from canopy.serve.schema import (
     Tick,
     TickDetail,
     TicketDetail,
+    TicketForget,
     TicketSummary,
-    TickOutput,
     Transcript,
     TranscriptEntry,
     TranscriptError,
@@ -349,7 +351,7 @@ def tick_transcript(ctx: Context, tick_id: int) -> Transcript | None:
     return session_transcript(tick_output(ctx, tick_id), row.session_id)
 
 
-def tick_raw_output(ctx: Context, tick_id: int) -> TickOutput | None:
+def tick_raw_output(ctx: Context, tick_id: int) -> RawOutput | None:
     """The end of a tick's output as written, or None if there is no such tick.
 
     Returns:
@@ -357,10 +359,27 @@ def tick_raw_output(ctx: Context, tick_id: int) -> TickOutput | None:
     """
     if db.get_tick(ctx.conn, tick_id) is None:
         return None
-    found = transcript.tail(tick_output(ctx, tick_id))
+    return _raw_output(tick_output(ctx, tick_id))
+
+
+def run_raw_output(ctx: Context, run_id: int) -> RawOutput | None:
+    """The end of a run's log as written, its setup commands' output and its worker's stderr included (DESIGN §22).
+
+    Returns:
+        The tail, without control characters, or a `no_output` status when the log is missing or not a regular file;
+        None if there is no such run.
+    """
+    row = db.get_run(ctx.conn, run_id)
+    if row is None:
+        return None
+    return _raw_output(Path(str(row["log_path"])))
+
+
+def _raw_output(path: Path) -> RawOutput:
+    found = transcript.tail(path)
     if found is None:
-        return TickOutput(status="no_output")
-    return TickOutput(status="read", text=found.text, size=found.size, truncated=found.truncated)
+        return RawOutput(status="no_output")
+    return RawOutput(status="read", text=found.text, size=found.size, truncated=found.truncated)
 
 
 def run_detail(ctx: Context, run_id: int) -> Run | None:
@@ -520,6 +539,7 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
         status=status,
         state=_run_state(status),
         private=bool(row["private"]),
+        ticket_stopped=bool(row["ticket_stopped"]),
         branch=str(row["branch"]) or None,
         started_at=db.parse_time(str(row["started_at"])),
         ended_at=db.parse_time(str(row["ended_at"])) if row["ended_at"] else None,
@@ -681,8 +701,26 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         + [limit(found, repo=repo) for repo, found in reviews],
         runs=[run(r, ctx.workspace.root) for r in db.runs_of(ctx.conn, key, TICKET_RUNS)],
         messages=[message(m) for m in db.messages_of(ctx.conn, conversation.TICKET, key, TICKET_MESSAGES)],
+        forgets=[forget(f) for f in db.forgets_of(ctx.conn, key)],
         decisions=[decision(d) for d in db.decisions_about(ctx.conn, key, TICKET_DECISIONS)],
         cost=_ticket_cost(ctx.conn, key),
+        drafts=draft_views.of_ticket(ctx.conn, key),
+    )
+
+
+def forget(found: records.Forget) -> TicketForget:
+    """One forget of a ticket, as the API sends it.
+
+    Returns:
+        The forget, its PRs decoded from the journal's JSON.
+    """
+    return TicketForget(
+        at=db.parse_time(found.at),
+        channel=found.channel,
+        run_id=found.run_id,
+        message_id=found.message_id,
+        branch=found.branch,
+        prs=json.loads(found.prs) if found.prs is not None else None,
     )
 
 

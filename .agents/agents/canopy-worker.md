@@ -45,6 +45,9 @@ permission:
     "gh pr close*": deny
     "gh issue close*": deny
     "gh api*": deny
+    # With `trust.review_replies = "approve"`, canopy renders the denial of `gh`'s commands that comment at the marked
+    # line: the worker drafts its comments, and the operator sends them (DESIGN §29).
+    # canopy: reply rules
     # The loop's own tools belong to the harness and the overseer, but for the search the memory digests name, which
     # reads only what this run's prompt could be served (DESIGN §28) and writes nothing.
     "canopy *": deny
@@ -82,6 +85,8 @@ permission:
   "*cancel*": deny
   "*createConfluence*": deny
   "*updateConfluence*": deny
+  # With `trust.review_replies = "approve"`, canopy renders the denial of the GitHub server's comment tools here.
+  # canopy: reply tools
 ---
 
 The system prompt is supplied by the harness at invocation time via the

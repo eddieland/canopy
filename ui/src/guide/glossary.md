@@ -105,7 +105,8 @@ A ticket the queue label brought in. Workers write their reports and questions o
 ### Queue label
 
 The tracker label that brings a ticket in, `agent-ready-` and your name by default. Adding it hands a ticket to the
-loop, and removing it is how you stop a public one.
+loop, and removing it is how you stop a public one. It decides which tickets get worked, not who wrote them, so keep
+the loop away from trackers where people you don't trust file tickets ([Philosophy](philosophy#agents-are-untrusted)).
 
 ### Reply
 

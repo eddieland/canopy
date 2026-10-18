@@ -52,8 +52,9 @@ such as a shipped migration, may still cite one, and git history has its text.
 
 - The harness imports no tracker or VCS client and holds no token. Agents reach trackers and GitHub through MCP.
 - Consequence: the harness cannot verify anything the tracker says, such as who wrote a comment.
-- Settled by the operator (2026-10-17, REQUIREMENTS C7): canopy will ship separate programs, run as commands with
-  `gh`'s token, that read GitHub and post what the operator approved word for word (ROADMAP M36, M53).
+- Settled by the operator (2026-10-17, REQUIREMENTS C7): canopy ships separate programs, run as commands with `gh`'s
+  token, that read GitHub and post what the operator approved word for word: `canopy-connect-github` and
+  `canopy-post-github` (DESIGN §29), whose reader ROADMAP M36 grows into the whole connector.
 - Revisit: if the overseer's token cost for reading state dominates; then move polling into Python.
 
 ## D004. SQLite journal plus flock, not a stateless overseer
@@ -274,6 +275,7 @@ such as a shipped migration, may still cite one, and git history has its text.
 ## D069. Worker comments carry a configurable prefix and suffix that only take authority away
 
 - A comment with every mark, outside a quote, is a worker's and never authority. Forging the marks only silences.
+- A reply the operator sent through canopy carries no marks: canopy knows it by the comment id the post returned.
 - Rejected: an HTML comment marker (Jira drops or escapes it).
 
 ## D072. The journal holds every ticket's conversation; authority stays with its source

@@ -90,3 +90,48 @@ def test_agent_default_result_is_last_line(agent_log: Path) -> None:
 def test_agent_prints_configured_result(agent_log: Path, configured: str) -> None:
     with mock.patch.dict(os.environ, {"FAKE_AGENT_RESULT": configured}):
         assert run(["agent"]).stdout.splitlines()[-1] == configured
+
+
+PR = "https://github.com/acme/api/pull/7"
+COMMENT = {
+    "item": "comment",
+    "id": 501,
+    "author": "alice",
+    "bot": False,
+    "time": "2026-10-18T10:00:00Z",
+    "body": "Rename this.",
+    "thread": {"id": "PRRT_1", "path": "a.py", "line": 3, "side": "right", "outdated": False, "resolved": False},
+}
+
+
+def github(program: str, request: object) -> tuple[int, list[dict[str, object]]]:
+    result = run([f"canopy-{program}-github"], stdin=json.dumps(request))
+    return result.returncode, [json.loads(line) for line in result.stdout.splitlines()]
+
+
+def test_the_github_fake_reads_what_its_state_holds_and_posts_into_it(github_state: Path) -> None:
+    assert github("connect", {"prs": [PR]}) == (1, [{"kind": "end", "prs": []}])
+    github_state.write_text(json.dumps({"prs": {PR: {"reviews": [COMMENT]}}}))
+    code, lines = github("connect", {"prs": [PR]})
+    assert code == 0
+    assert [line["kind"] for line in lines] == ["pr", "review", "end"]
+    assert lines[1] == {"kind": "review", "pr": PR, **COMMENT}
+
+    code, lines = github("post", {"pr": PR, "body": "Done.", "replies": [{"comment": 501, "text": "Renamed."}]})
+    assert code == 0
+    assert [line["kind"] for line in lines] == ["as", "pending", "comment", "review", "end"]
+    _, read = github("connect", {"prs": [PR]})
+    reply = next(line for line in read if line.get("body") == "Renamed.")
+    assert (reply["author"], reply["thread"]) == ("me", COMMENT["thread"])
+    [log, *_] = [json.loads(line) for line in (github_state.parent / "github.jsonl").read_text().splitlines()]
+    assert log == {"program": "connect", "request": {"prs": [PR]}}
+
+
+@pytest.mark.parametrize(
+    ("post", "kinds", "code"),
+    [("refused", ["as", "end"], 1), ("pending_left", ["as", "pending", "end"], 1), ("unknown", ["as", "pending"], 1)],
+)
+def test_the_github_fake_ends_a_post_as_told(github_state: Path, post: str, kinds: list[str], code: int) -> None:
+    github_state.write_text(json.dumps({"prs": {PR: {"reviews": [COMMENT]}}, "post": post}))
+    found, lines = github("post", {"pr": PR, "replies": [{"comment": 501, "text": "Renamed."}]})
+    assert (found, [line["kind"] for line in lines]) == (code, kinds)

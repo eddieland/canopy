@@ -9,7 +9,8 @@ test.beforeEach(async ({ page }) => {
 test("a run's id opens its page, and its transcript opens each tool call to its input and output, as text", async ({
     page,
 }) => {
-    await page.goto('runs')
+    // ABC-099's page, since the runs page shows its latest run, 45.
+    await page.goto('tickets/ABC-099')
     await settled(page)
     await page.getByTestId('run-39').getByRole('link', { name: 'run:39' }).click()
     await expect(page).toHaveURL(/\/runs\/39$/u)
@@ -168,6 +169,25 @@ test("a failed run's transcript ends in the runtime's error, and a running one's
     const tools = page.getByTestId('transcript').getByTestId('transcript-tool')
     await expect(tools).toHaveCount(2)
     await expect(tools.last()).toContainText('npm test -- login')
+})
+
+test("a run's output is its log as written: what its setup commands and the runtime printed, read when shown", async ({
+    page,
+}) => {
+    await page.goto('runs/40')
+    await settled(page)
+    const output = page.getByTestId('run-output')
+    await expect(output).toContainText('the run’s log as written: its setup commands’ output')
+    await expect(output.getByTestId('run-output-text')).toHaveCount(0)
+
+    await output.getByRole('button', { name: 'Show output' }).click()
+    const text = output.getByTestId('run-output-text')
+    await expect(text).toContainText('--- setup web stdout ---')
+    await expect(text).toContainText('Packages: +412')
+    await expect(text).toContainText('error=rate limited: retry after 30s')
+    await expect(text).toContainText('--- worker exit 1 ---')
+    // None of which is the session's: the transcript leaves it out.
+    await expect(page.getByTestId('transcript-entries')).not.toContainText('Packages: +412')
 })
 
 test("a transcript's chart names what grew each call's context, and shows the largest addition's row", async ({
@@ -358,7 +378,7 @@ test("a chore run's id opens its page: what it reported, in full, over its sessi
 
     await page.goto('chores/build-health/runs/4')
     await settled(page)
-    await expect(page.getByTestId('transcript')).toContainText('the session’s events reach the log when it ends')
+    await expect(page.getByTestId('transcript')).toContainText('no events yet: they show here as the agent prints them')
     await page.goto('chores/deps/runs/4')
     await expect(page.getByText("chore 'deps' has no run 4")).toBeVisible()
 })

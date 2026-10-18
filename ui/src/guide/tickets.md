@@ -37,6 +37,11 @@ and its branches. Below:
 - **Runs**: every run on the ticket, each linking to its transcript.
 - **Decisions**: what each tick decided about the ticket, and why, in the overseer's words. A `refused` decision names
   the guard that stopped it, and an `attention` decision the reason it reached your list.
+- **Drafts for the ticket**, when its runs drafted comments for it: a question a blocked run would have asked there, or
+  what a run did, each with the issue it goes to, so you can check a worker didn't get creative with the URL. **Send**,
+  **Edit**, and **Drop** work as on a PR's threads ([Pull requests](pull-requests#replying-to-your-coworkers-reviews)).
+  This needs a `tracker` source with a post command; without one, workers post their ticket comments themselves,
+  marked.
 - **Plan**, when the ticket has or needs one: a card saying where the plan stands, with **Approve** while it can be
   approved and **Open plan**, which opens the plan on its own page. When a plan waits on your approval, the card leads
   the page. See [Plans](plans).
@@ -56,10 +61,13 @@ The ticket's actions sit on its Work panel and on its attention item. Hover over
   worktrees, as `canopy stop KEY --now`. The run ends `stopped` and still counts toward the ticket's limits. Use it
   when a worker is plainly lost; the meter runs while you watch.
 - **Forget**, as `canopy forget KEY`: canopy drops what it knows of the ticket's branch, PRs, and phase, so its next
-  implement starts over on a new branch. Type the key to confirm. Its runs and conversation stay, and so do its
-  attempt counts. Closing its PRs and deleting its branch on origin is yours to do, and until you do, the overseer
-  will find them again and the ticket can't start over. canopy refuses while a run is on it, and for a ticket a split
-  made children from.
+  implement starts over on a new branch. Type the key to confirm. Its runs and attempt counts stay. So does its
+  conversation, but the loop stops reading the old part, and so does the page: those messages fold away under a line
+  saying when you forgot it and which branch and PRs it dropped, with **Show N earlier messages** for when you want
+  the history back. Forget a ticket three times and you get three of those lines, one per attempt, which is also a
+  hint worth reading. Closing its PRs and deleting its branch on origin is yours to do, and until you do, the
+  overseer will find them again and the ticket can't start over. canopy refuses while a run is on it, for a ticket a
+  split made children from, and when nothing has happened since you last forgot it.
 
 ## Allowing one more run
 
