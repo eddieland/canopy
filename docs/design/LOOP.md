@@ -181,9 +181,16 @@ going.
 
 Stopping: SIGINT (Ctrl-C) or SIGTERM during the wait ends the loop at once. During a tick, the first lets the tick
 finish and ends the loop without waiting; both exit 0. A second aborts the tick: the overseer's process group is killed
-as on a timeout, the command exits 1, and the next tick closes the row as `abandoned`. Dispatched workers are
-unaffected. A signal within a second of the first is the same keypress. The web UI's server stops with the loop.
-SIGHUP does not stop the loop but reloads its config (below), unless the terminal hung up.
+as on a timeout, the command exits 1, and the next tick closes the row as `abandoned`. A signal within a second of the
+first is the same keypress. The web UI's server stops with the loop. SIGHUP does not stop the loop but reloads its
+config (below), unless the terminal hung up.
+
+- After a Ctrl-C, the loop starts no tick but waits for the runs still running (workers, reviews, chores) to end,
+  naming them, with the web UI still served. A run whose own process is gone does not count: it never ends by itself,
+  and the next tick's reconcile closes it. A second Ctrl-C ends the wait and leaves the runs running; either way the
+  loop exits 0.
+- SIGTERM does not wait for runs, so `canopy daemon stop` returns once the tick ends, not once every worker has.
+- Runs are detached (§8), so stopping the loop never stops one; `canopy stop --now` does, per ticket.
 
 Reloading config: SIGHUP or Reload in the web UI makes the loop read the workspace, user, and private files again
 (§12), so a change needs no restart: the next tick's limits, the pace, and what the web UI serves. `--every` still

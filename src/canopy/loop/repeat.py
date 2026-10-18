@@ -34,11 +34,12 @@ import os
 import signal
 import time
 from collections import Counter
-from collections.abc import Callable, Collection, Generator
+from collections.abc import Callable, Collection, Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, Literal
+from pathlib import Path
+from typing import TYPE_CHECKING, Literal, assert_never
 
 from rich.live import Live
 from rich.spinner import Spinner
@@ -46,10 +47,11 @@ from rich.table import Table
 from rich.text import Text
 
 from canopy.core import config, db, notice, pause
-from canopy.infra import lock, logs, resources
+from canopy.infra import lock, logs, procs, resources
 from canopy.loop import attention, duties, pacing, reread, tick, tick_now
 
 if TYPE_CHECKING:
+    import sqlite3
     from types import FrameType
 
     from rich.console import Console
@@ -105,6 +107,8 @@ class Stop:
 
     requested: bool = False
     requested_at: float | None = None  # `signals`' clock at the first stop signal
+    # The first stop signal was SIGINT, a Ctrl-C: the loop waits for the runs still running to end before it exits.
+    awaits_runs: bool = False
 
 
 @contextmanager
@@ -117,19 +121,22 @@ def signals(
 ) -> Generator[None]:
     """Make SIGINT and SIGTERM ask the loop to stop once the current tick ends, instead of killing it.
 
-    A second signal raises KeyboardInterrupt, which aborts the tick in progress: `procs` kills the overseer's process
-    group, and the next tick closes the tick row as `abandoned`. Workers already dispatched are detached and keep going.
-    A signal within `SAME_SIGNAL_SECONDS` of the first counts as the first again, not as a second.
+    A first SIGINT, a Ctrl-C, also asks the loop to wait for the runs still running to end (`Stop.awaits_runs`); a
+    first SIGTERM, as `canopy daemon stop` sends, does not. A second signal raises KeyboardInterrupt, which aborts the
+    tick in progress: `procs` kills the overseer's process group, and the next tick closes the tick row as `abandoned`.
+    During the wait for runs, it ends the wait instead. Runs are detached and keep going either way. A signal within
+    `SAME_SIGNAL_SECONDS` of the first counts as the first again, not as a second.
 
     With `reload`, SIGHUP asks the loop to read its config again instead of ending it. A terminal hanging up sends
     SIGHUP too: when `hung_up()` says it did, the loop ends as SIGHUP always ended it, unless SIGHUP was ignored on
     entry, as under `nohup`, where the loop is meant to outlive its terminal and a reload does no harm.
     """
 
-    def handle(_signum: int, _frame: FrameType | None) -> None:
+    def handle(signum: int, _frame: FrameType | None) -> None:
         now = clock()
         if stop.requested_at is None:
             stop.requested, stop.requested_at = True, now
+            stop.awaits_runs = signum == signal.SIGINT
         elif now - stop.requested_at >= SAME_SIGNAL_SECONDS:
             raise KeyboardInterrupt
 
@@ -257,6 +264,9 @@ def run(
                 clock=clock,
                 log=log,
             )
+            if stop.awaits_runs:
+                # Inside the `try`: the web UI stays up while the runs end, so the operator can watch them there.
+                _await_runs(console, settings.ctx, sleep=sleep, clock=clock, log=log)
         finally:
             if serving is not None and serving.server is not None:
                 serving.server.stop()
@@ -535,6 +545,78 @@ def _log_woken(
         log.info("the operator asked for a tick now", extra={"channel": "web"})
 
 
+def _await_runs(
+    console: Console,
+    ctx: Context,
+    *,
+    sleep: Callable[[float], None],
+    clock: Callable[[], float],
+    log: logs.TickAdapter,
+) -> None:
+    """Wait for every run still running, a worker's, a review's, or a chore's, to end, drawing which ones are left.
+
+    Only runs whose own process is alive count: one whose process is gone never ends by itself, and the next tick's
+    reconcile closes it. A second Ctrl-C raises KeyboardInterrupt in `signals`, which ends the wait and leaves the runs
+    running, detached, as they always are.
+    """
+    running = _live_runs(ctx.conn)
+    if not running:
+        return
+    log.info("loop waits for runs to end", extra={"runs": running})
+    console.print(_stamped(Text("waiting for runs", style="bold"), f"  {_runs_note(running)}"))
+    started = clock()
+    try:
+        with Live(console=console, transient=True, auto_refresh=False) as live:
+            while running:
+                live.update(_draining(running, clock() - started), refresh=True)
+                sleep(_WAIT_STEP_SECONDS)
+                running = _live_runs(ctx.conn)
+    except KeyboardInterrupt:
+        log.info("loop left runs running", extra={"runs": running})
+        console.print(_stamped(Text("left runs running", style="bold yellow"), f"  {_runs_note(running)}"))
+        return
+    log.info("runs ended", extra={"wait_seconds": round(clock() - started)})
+    console.print(_stamped(Text("runs ended", style="bold green"), f"  after {duration(clock() - started)}"))
+
+
+def _live_runs(conn: sqlite3.Connection) -> list[str]:
+    """Every table's running runs whose own process is alive, as the operator reads them.
+
+    Returns:
+        A label for each run, workers first, then chores, then reviews, oldest first within each.
+    """
+    return [
+        _run_label(table, r)
+        for table in db.RUN_TABLES
+        for r in db.running_runs(conn, table)
+        if procs.running(Path(r["log_path"]), r["pid"])
+    ]
+
+
+def _run_label(table: db.RunTable, row: sqlite3.Row) -> str:
+    match table:
+        case "runs":
+            return f"{row['ticket_key']} {row['kind']}"
+        case "chore_runs":
+            return f"chore {row['chore']}"
+        case "review_runs":
+            return f"review {row['ticket_key'] or row['pr_url']}"
+        case _:
+            assert_never(table)
+
+
+def _runs_note(labels: Sequence[str]) -> str:
+    return f"{len(labels)} run{'' if len(labels) == 1 else 's'}: {', '.join(labels)}"
+
+
+def _draining(labels: Sequence[str], elapsed: float) -> Text:
+    return Text.assemble(
+        ("waiting for ", "dim"),
+        (_runs_note(labels), "bold"),
+        (f"  {duration(elapsed)}  ·  Ctrl-C again leaves them running", "dim"),
+    )
+
+
 def _tick(ctx: Context, *, dry_run: bool, log: logs.TickAdapter) -> tick.Outcome:
     """Run one tick. An unexpected error ends that tick, not the loop, as with a scheduler that starts each tick.
 
@@ -684,7 +766,13 @@ def _header(
         since = f"since {_local_time(held.since)} ({held.channel}); no tick until resumed"
         grid.add_row("paused", Text(since, style="yellow"))
     console.print(grid)
-    console.print(Text("Ctrl-C stops after the current tick; a second Ctrl-C aborts it.", style="dim"))
+    console.print(
+        Text(
+            "Ctrl-C stops after the current tick and waits for running runs to end; a second Ctrl-C aborts the tick,"
+            " or stops waiting and leaves the runs running.",
+            style="dim",
+        )
+    )
     if keys:
         console.print(
             Text(f"Press {TICK_NOW_KEY} during the wait to tick now, {PAUSE_KEY} to pause or resume.", style="dim")

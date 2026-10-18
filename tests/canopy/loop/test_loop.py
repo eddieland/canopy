@@ -22,10 +22,21 @@ from rich.console import Console
 
 from canopy.cli.main import main
 from canopy.core import conversation, db, pause
-from canopy.core.vocab import TickStatus
+from canopy.core.context import Context
+from canopy.core.vocab import RunStatus, TickStatus
 from canopy.infra import lock, procs, resources
 from canopy.loop import repeat, reread
-from tests.canopy.helpers import FakeKeys, FakeTime, canopy, console, context, overseer_does, present, with_events
+from tests.canopy.helpers import (
+    FakeKeys,
+    FakeTime,
+    canopy,
+    console,
+    context,
+    overseer_does,
+    present,
+    running_run,
+    with_events,
+)
 from tests.conftest import CanopyEnv, user_toml
 
 
@@ -418,6 +429,107 @@ def test_a_second_signal_aborts_only_after_the_window(gap: float, aborts: bool) 
         else:
             os.kill(os.getpid(), signal.SIGINT)
     assert stop.requested
+
+
+def live_run(env: CanopyEnv, ctx: Context, key: str) -> int:
+    """Record a running run of `key` whose own process is alive: this one, holding no lifelock.
+
+    Returns:
+        The run's id.
+    """
+    env.journal()  # migrated, as the loop would, so the run can be recorded before it starts
+    run_id = running_run(ctx, key)
+    assert db.claim_run(ctx.conn, "runs", run_id, os.getpid())
+    return run_id
+
+
+def test_ctrl_c_waits_for_running_runs_to_end_before_the_loop_exits(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    with overseer_does(canopy("decide", "PROJ-9", "wait", "--rationale", "running")):
+        ctx = context(canopy_env)
+        run_id = live_run(canopy_env, ctx, "PROJ-9")
+        time = FakeTime()
+
+        def during_waits() -> None:
+            if len(time.slept) == 1:  # the wait after the tick
+                running_run(ctx, "PROJ-8")  # its process is gone: the next tick's reconcile closes it, not this wait
+                os.kill(os.getpid(), signal.SIGINT)
+            elif len(time.slept) == 3:  # two steps into the wait for runs
+                db.finish_run(ctx.conn, "runs", run_id, RunStatus.DONE, None)
+
+        time.on_sleep = during_waits
+        term, out = console()
+        stop = repeat.Stop()
+        with repeat.signals(stop):
+            statuses = repeat.run(
+                ctx,
+                dry_run=True,
+                interval_minutes=15,
+                max_ticks=None,
+                console=term,
+                stop=stop,
+                sleep=time.sleep,
+                clock=time.clock,
+            )
+        assert statuses == {"ok": 1}
+        assert len(time.slept) == 3
+        printed = out.getvalue()
+        assert "waiting for runs  1 run: PROJ-9 implement" in printed
+        assert "runs ended" in printed
+        assert printed.index("runs ended") < printed.index("stopped after 1 tick")
+
+
+def test_sigterm_stops_the_loop_without_waiting_for_runs(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    """`canopy daemon stop` sends SIGTERM and waits for the loop: it should not wait for every run as well."""
+    with overseer_does(canopy("decide", "PROJ-9", "wait", "--rationale", "running")):
+        ctx = context(canopy_env)
+        run_id = live_run(canopy_env, ctx, "PROJ-9")
+        time = FakeTime(on_sleep=lambda: os.kill(os.getpid(), signal.SIGTERM))
+        term, out = console()
+        stop = repeat.Stop()
+        with repeat.signals(stop):
+            repeat.run(
+                ctx,
+                dry_run=True,
+                interval_minutes=15,
+                max_ticks=None,
+                console=term,
+                stop=stop,
+                sleep=time.sleep,
+                clock=time.clock,
+            )
+        assert len(time.slept) == 1
+        assert "waiting for runs" not in out.getvalue()
+        assert present(db.get_run(ctx.conn, run_id))["status"] == "running"
+
+
+def test_a_second_ctrl_c_stops_waiting_and_leaves_the_runs_running(
+    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
+) -> None:
+    with overseer_does(canopy("decide", "PROJ-9", "wait", "--rationale", "running")):
+        ctx = context(canopy_env)
+        run_id = live_run(canopy_env, ctx, "PROJ-9")
+        time = FakeTime(on_sleep=lambda: os.kill(os.getpid(), signal.SIGINT))
+        term, out = console()
+        stop = repeat.Stop()
+        with repeat.signals(stop, clock=seconds_apart(repeat.SAME_SIGNAL_SECONDS + 0.5)):
+            statuses = repeat.run(
+                ctx,
+                dry_run=True,
+                interval_minutes=15,
+                max_ticks=None,
+                console=term,
+                stop=stop,
+                sleep=time.sleep,
+                clock=time.clock,
+            )
+        assert statuses == {"ok": 1}
+        assert len(time.slept) == 2  # the wait after the tick, then one step of the wait for runs
+        assert "left runs running  1 run: PROJ-9 implement" in out.getvalue()
+        assert present(db.get_run(ctx.conn, run_id))["status"] == "running"
 
 
 def test_a_tick_that_raises_ends_that_tick_not_the_loop(
