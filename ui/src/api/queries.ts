@@ -290,7 +290,7 @@ export function tickDetailQuery(id: number) {
 export const WORKTREES_REFRESH_MS = 10_000
 
 /**
- * Each pool's worktrees, read from treehouse by the server on every fetch. Not on the event stream: the stream marks it
+ * Each pool's worktrees, read from the pool by the server on every fetch. Not on the event stream: the stream marks it
  * stale when a run starts or ends (live.ts), the page reads it again on demand, and every 10 seconds while a page shows
  * it and its tab is visible. That timer is the UI's one refetch on an interval: what runs in a slot,
  * whether it is dirty, and a slot sync adds never reach the journal.
