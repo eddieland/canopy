@@ -1,10 +1,10 @@
 """The pool contract (DESIGN §18, What a pool guarantees; ROADMAP M45): every guarantee canopy takes from a pool.
 
-Each case states one guarantee through `pools.Pool`'s operations, `status`, `lease`, `lease_as`, `return_slot`, and
-`destroy`, the interface every caller uses, and runs against each pool: canopy's own and the fake on every
-`make check`, and real treehouse when it is on PATH (`make pool-contract`, which fails instead of skipping when it is
-not). A behavior no case states is not a guarantee. Where pools differ on purpose, the design says so and the case says
-which expects what.
+Each case states one guarantee through `pools.Pool`'s operations, `status`, `lease`, `lease_as`, `return_slot`,
+`release`, and `destroy`, the interface every caller uses, and runs against each pool: canopy's own and the fake on
+every `make check`, and real treehouse when it is on PATH (`make pool-contract`, which fails instead of skipping when
+it is not). A behavior no case states is not a guarantee. Where pools differ on purpose, the design says so and the
+case says which expects what.
 
 The fake models treehouse's CLI and its lease bookkeeping, not git: its slots are empty directories. A case about what
 is in a slot (`checkout` below) runs only against a pool whose slots are real worktrees. For the fake, a dirty or busy
@@ -125,6 +125,10 @@ class Contract:
     def destroy(self, path: Path) -> str | None:
         """Remove the slot at `path`, if the pool will."""
         return self.make().destroy(path)
+
+    def release(self, path: Path) -> pools.ReturnOutcome:
+        """Release the slot at `path`, as the operator does, if a failed seeding holds it."""
+        return self.make().release(path)
 
     def limit(self, max_trees: int) -> None:
         """Bound an unmanaged pool at `max_trees` slots, where each pool reads its bound."""
@@ -512,6 +516,18 @@ def test_an_idle_slot_with_unmerged_commits_is_not_reused(pool: Contract) -> Non
 # Seeding
 
 
+def quarantine(pool: Contract) -> Path:
+    """Leave a slot held as quarantined: a lease's seeding collides with a file a run left in it. Returns its path."""
+    first = pool.lease()
+    # Ignored, so the return keeps it; seeding did not write it, so the return does not remove it.
+    (first.path / "user.local").write_text("the run's own\n")
+    pool.give_back(first)
+    (pool.clone / "user.local").write_text("personal\n")
+    with pytest.raises(pools.PoolError, match=r"(?i)file exists"):
+        pool.lease("PROJ-2", using=include(pool, "*.local"))
+    return first.path
+
+
 def include(pool: Contract, *lines: str) -> pools.Pool:
     """Write the operator's own `.worktreeinclude` and return the pool with it."""
     manifest = pool.tmp / "worktreeinclude"
@@ -561,18 +577,32 @@ def test_a_return_removes_what_seeding_wrote(pool: Contract) -> None:
 
 def test_a_seed_target_already_in_the_slot_fails_the_lease_and_holds_the_slot(pool: Contract) -> None:
     needs_checkout(pool)
-    first = pool.lease()
-    # Ignored, so the return keeps it; seeding did not write it, so the return does not remove it.
-    (first.path / "user.local").write_text("the run's own\n")
-    pool.give_back(first)
-    (pool.clone / "user.local").write_text("personal\n")
-    with pytest.raises(pools.PoolError, match=r"(?i)file exists"):
-        pool.lease("PROJ-2", using=include(pool, "*.local"))
+    path = quarantine(pool)
     # treehouse quarantines the slot, holding it under a holder no ticket can name, so no lease is handed it as is.
-    slot = pool.slot(first.path)
+    slot = pool.slot(path)
     assert (slot.status, slot.lease_id, slot.canopy_key) == ("leased", "", None)
-    assert slot.lease_holder.startswith("quarantined")
-    assert (first.path / "user.local").read_text() == "the run's own\n"
+    assert slot.lease_holder == pools.QUARANTINED
+    assert (path / "user.local").read_text() == "the run's own\n"
+
+
+def test_the_operator_releases_a_quarantined_slot_and_the_next_lease_reuses_it(pool: Contract) -> None:
+    needs_checkout(pool)
+    path = quarantine(pool)
+    assert pool.release(path) is pools.ReturnOutcome.RETURNED
+    slot = pool.slot(path)
+    assert (slot.status, slot.lease_id, slot.lease_holder) == ("available", "", "")
+    # Reset as a return resets: ignored files stay, the one seeding collided with too, for the operator to remove.
+    assert (path / "user.local").read_text() == "the run's own\n"
+    assert pool.lease("PROJ-3").path == path
+
+
+def test_a_release_refuses_a_slot_no_failed_seeding_holds(pool: Contract) -> None:
+    lease = pool.lease()
+    assert pool.release(lease.path) is pools.ReturnOutcome.FAILED
+    assert pool.slot(lease.path).lease_id == lease.lease_id
+    pool.give_back(lease)
+    assert pool.release(lease.path) is pools.ReturnOutcome.FAILED
+    assert pool.slot(lease.path).status == pools.AVAILABLE
 
 
 def test_a_seeded_link_is_written_as_a_file_holding_its_target(pool: Contract) -> None:

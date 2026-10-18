@@ -86,6 +86,12 @@ someone deals with it, and once the rest are busy the next lease is refused. Not
 since those changes might be the only copy of someone's afternoon: open the slot (its path is on its number), keep
 what you need, and discard the rest.
 
+A slot held by `quarantined: worktree seeding failed` needs a look too. A lease went to copy your seed files into it,
+found one of them already there, and stopped rather than overwrite it. The pool holds the slot from then on, counted
+as busy, and no tick will free it. Open the slot, deal with the file in the way, then run the `canopy workspace
+release` command its note gives you. Release it without moving that file and the next lease that seeds it trips over
+the same thing.
+
 This page only reads, and it's the one page not kept current by the stream: it rereads the pools every 10 seconds
 while you're looking, and **Read again** rereads them now. Each read takes every pool's lock for a moment, which is
 why it doesn't do so constantly.

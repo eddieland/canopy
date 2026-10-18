@@ -162,7 +162,7 @@ def test_seeding_never_writes_through_a_link_in_the_slot(ws: Ws, tmp_path: Path)
         ws.pool(include_file=manifest).lease("PROJ-2")
     assert list(outside.iterdir()) == []
     [row] = ws.rows()
-    assert row["lease_holder"] == pool.QUARANTINED
+    assert row["lease_holder"] == pools.QUARANTINED
 
 
 def test_the_journal_records_what_seeding_wrote(ws: Ws, tmp_path: Path) -> None:

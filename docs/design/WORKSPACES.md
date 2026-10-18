@@ -243,8 +243,9 @@ Seeding (§9):
 - Every lease, a reused slot's too, copies from the primary clone the untracked, ignored files the include file
   selects, and nothing else; never a tracked file.
 - A return removes what seeding wrote, so the next lease seeds afresh.
-- A seed target already in the slot fails the lease, and the slot is held under a holder no ticket can name until the
-  operator returns it.
+- A seed target already in the slot fails the lease, and the slot is held under the holder `quarantined: worktree
+  seeding failed`, which no ticket can name, until the operator releases it.
+- A release frees only a slot held so, and resets it as a return does: the file seeding collided with stays.
 - A seeded symlink is written as a regular file holding the link's target; whether it should be a link is open
   (ROADMAP M45).
 - A missing include file fails the lease before any slot is touched.
@@ -293,6 +294,11 @@ reaches either through one interface and none learns which it has.
   only when it is clean, has no process in it, and its HEAD is an ancestor of the base or of the base it was last
   leased on. treehouse also reuses one whose HEAD has the same content as a squash merge into the base; canopy's pool
   makes a new slot instead.
+- **A quarantined slot waits for the operator,** in either pool. Reconcile never returns it, and it counts as busy
+  against the declared size until `canopy workspace release REPO SLOT` frees it in the pool `pools.backend` names. The
+  command refuses any other slot, since a run's lease goes back with its run or through reconcile. Nothing frees one on
+  its own, sync included: the file seeding collided with may be a run's work, so the operator removes it, or a lease
+  that seeds it fails again. The worktrees page says so on the slot.
 - **Processes in a slot** are read from `/proc` on Linux and with `lsof` on macOS, with no dependency. A return ends
   them; one that outlives SIGTERM and SIGKILL fails the return and keeps the lease. A slot whose processes cannot be
   read is `unverified`, never reused, and kept by `destroy`.
