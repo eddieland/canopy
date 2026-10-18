@@ -3,8 +3,9 @@
 import io
 import json
 import os
+import shutil
 import threading
-from collections.abc import Generator, Iterable, Mapping
+from collections.abc import Callable, Generator, Iterable, Mapping
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any, ClassVar, override
@@ -337,14 +338,19 @@ def test_help_never_waits_for_stdin(capsys: pytest.CaptureFixture[str]) -> None:
 class _Api(BaseHTTPRequestHandler):
     received: ClassVar[list[tuple[str | None, dict[str, Any]]]] = []
     reply: ClassVar[dict[str, Any]] = {"ok": True}
+    # The posts, counted from 1, refused as `not_in_channel`.
+    refuse: ClassVar[set[int]] = set()
 
     def do_POST(self) -> None:
         length = int(self.headers["Content-Length"])
         _Api.received.append((self.headers["Authorization"], json.loads(self.rfile.read(length))))
+        n = len(_Api.received)
+        # Each post's `ts` says which it was, as the Web API names a message by its time.
+        reply = {"ok": False, "error": "not_in_channel"} if n in _Api.refuse else {**_Api.reply, "ts": f"1790.{n:06d}"}
         # Like the Web API: 200 even when the post is refused.
         self.send_response(200)
         self.end_headers()
-        self.wfile.write(json.dumps(_Api.reply).encode())
+        self.wfile.write(json.dumps(reply).encode())
 
     @override
     def log_message(self, format: str, *args: Any) -> None:
@@ -356,6 +362,7 @@ def api() -> Generator[str]:
     """A local stand-in for Slack's `chat.postMessage`. Yields its URL."""
     _Api.received = []
     _Api.reply = {"ok": True}
+    _Api.refuse = set()
     server = HTTPServer(("127.0.0.1", 0), _Api)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -472,6 +479,7 @@ def test_the_name_and_icon_are_checked(
         ["--channel", "C0123ABCD", "--webhook-file", "/x"],
         ["--username", "canopy"],
         ["--icon-emoji", ":robot_face:"],
+        ["--threads"],
     ],
 )
 def test_a_token_and_a_webhook_are_not_mixed(argv: list[str], capsys: pytest.CaptureFixture[str]) -> None:
@@ -479,3 +487,122 @@ def test_a_token_and_a_webhook_are_not_mixed(argv: list[str], capsys: pytest.Cap
         slack.run(argv, io.StringIO(json.dumps(MESSAGE)))
     assert exited.value.code == 2
     assert "canopy-notify-slack: error:" in capsys.readouterr().err
+
+
+# Slack with a bot token, in threads
+
+
+def _delivery(sent_at: str, events: list[dict[str, Any]], added: list[dict[str, Any]] | None = None) -> str:
+    attention: dict[str, Any] = {"added": added or [], "resolved": [], "open": len(added or []), "path": "/a.md"}
+    return json.dumps({"repo": "/r/api", "sent_at": sent_at, "attention": attention, "events": events, "omitted": 0})
+
+
+def _run(ticket: str, run: int, status: str | None = None) -> dict[str, Any]:
+    if status is None:
+        started = {"attempt": 1, "limit": 3, "branch": f"agent/{ticket}"}
+        return {"id": run, "kind": "run.started", "ticket": ticket, "run": run, "run_kind": "implement", **started}
+    return {"id": run, "kind": "run.ended", "ticket": ticket, "run": run, "run_kind": "implement", "status": status}
+
+
+@pytest.fixture
+def threaded(api: str, tmp_path: Path) -> Generator[Callable[[str], int]]:
+    """Run the sink with `--threads`, its state under `tmp_path`. Yields the call: a delivery in, the exit code out."""
+    argv = ["--channel", "C0123ABCD", "--token-file", str(token_file(tmp_path)), "--threads"]
+    with mock.patch.dict(os.environ, {"XDG_STATE_HOME": str(tmp_path / "state")}):
+        yield lambda delivery: slack.run(argv, io.StringIO(delivery), api_url=api)
+
+
+def _posts() -> list[tuple[str | None, bool, list[str]]]:
+    """Each post's thread, whether it is also shown in the channel, and its text, in the order made."""
+    return [(p.get("thread_ts"), p.get("reply_broadcast", False), _texts(p["blocks"])) for _, p in _Api.received]
+
+
+def test_threads_hold_a_tickets_chores_and_reviews_posts_for_a_day(
+    threaded: Callable[[str], int], tmp_path: Path
+) -> None:
+    first = [
+        _run("PROJ-1", 1),
+        {"id": 2, "kind": "chore.ended", "chore": "deps", "run": 2, "status": "done", "findings": 0},
+        {"id": 3, "kind": "loop.recovered", "failed": 3},
+        {"id": 4, "kind": "review.ended", "pr": "https://x.test/pr/9", "ticket": "PROJ-1", "run": 4, "status": "done"},
+    ]
+    assert threaded(_delivery("2026-09-24T12:30:00Z", first)) == 0
+    # The channel's own post first, with the header; then one post starting each thread, in the order named.
+    assert _posts() == [
+        (None, False, ["1 event", ":white_check_mark: *The loop recovered* after 3 failed ticks"]),
+        (None, False, [":arrow_forward: *PROJ-1* · implement run 1 started\nattempt 1 of 3 on `agent/PROJ-1`"]),
+        (None, False, [":white_check_mark: *chore:deps* · run 2 ended *done* · 0 findings"]),
+        (None, False, [":white_check_mark: *PROJ-1* · review run 4 ended *done*\n<https://x.test/pr/9>"]),
+    ]
+    assert _Api.received[0][1]["blocks"][0]["type"] == "header"
+    assert all(p["blocks"][0]["type"] == "section" for _, p in _Api.received[1:])
+
+    _Api.received.clear()
+    later = [
+        _run("PROJ-1", 5, "blocked"),
+        {"id": 6, "kind": "chore.ended", "chore": "deps", "run": 6, "status": "failed", "findings": 1},
+        _run("PROJ-2", 7),
+    ]
+    added = [{"ticket": "chore:deps", "reason": "lodash", "detail": "CVE"}]
+    assert threaded(_delivery("2026-09-24T12:31:00Z", later, added)) == 0
+    # The same day: replies in each thread, those holding a question or a new attention item shown in the channel.
+    # The chore's thread first: attention items come before events.
+    assert [(ts, shown) for ts, shown, _ in _posts()] == [("1790.000003", True), ("1790.000002", True), (None, False)]
+    assert _posts()[0][2] == [
+        ":bell: *chore:deps* · lodash\nCVE",
+        ":x: *chore:deps* · run 6 ended *failed* · 1 finding",
+    ]
+
+    _Api.received.clear()
+    assert threaded(_delivery("2026-09-26T12:30:00Z", [_run("PROJ-1", 8, "done")])) == 0
+    # A new day starts a new thread, and forgets the old day's.
+    assert [(ts, shown) for ts, shown, _ in _posts()] == [(None, False)]
+    state = json.loads((tmp_path / "state" / "canopy" / "slack-threads.json").read_text())
+    assert state == {
+        "version": 1,
+        "threads": {'["C0123ABCD", "/r/api", "PROJ-1"]': {"day": "2026-09-26", "ts": "1790.000001"}},
+        "posted": [],
+    }
+
+
+def test_a_threaded_delivery_refused_partway_posts_the_rest_on_retry(threaded: Callable[[str], int]) -> None:
+    delivery = _delivery("2026-09-24T12:30:00Z", [_run("PROJ-1", 1), _run("PROJ-2", 2), _run("PROJ-3", 3)])
+    _Api.refuse = {2}
+    assert threaded(delivery) == 1
+    _Api.refuse = set()
+    assert threaded(delivery) == 0
+    # PROJ-1 was posted once; PROJ-2, refused, and PROJ-3, never tried, were posted on the retry.
+    tickets = [p["blocks"][0]["text"]["text"].split("*")[1] for _, p in _Api.received]
+    assert tickets == ["PROJ-1", "PROJ-2", "PROJ-2", "PROJ-3"]
+    assert threaded(delivery) == 0
+    # Once a delivery posts whole, the same items are new again: canopy sends an item once.
+    assert len(_Api.received) == 7
+
+
+def test_a_threads_file_that_is_not_the_sinks_starts_over(threaded: Callable[[str], int], tmp_path: Path) -> None:
+    path = tmp_path / "state" / "canopy" / "slack-threads.json"
+    path.parent.mkdir(parents=True)
+    path.write_text('{"threads": {"k": {"day": "2026-09-24", "ts": "<!channel>"}}, "posted": 3}')
+    assert threaded(_delivery("2026-09-24T12:30:00Z", [_run("PROJ-1", 1)])) == 0
+    assert json.loads(path.read_text())["threads"] == {
+        '["C0123ABCD", "/r/api", "PROJ-1"]': {"day": "2026-09-24", "ts": "1790.000001"}
+    }
+    path.write_text("not json")
+    assert threaded(_delivery("2026-09-24T12:31:00Z", [_run("PROJ-1", 2)])) == 0
+    assert _Api.received[-1][1].get("thread_ts") is None
+
+
+def test_a_threads_file_that_cannot_be_used_refuses_before_posting(
+    threaded: Callable[[str], int], tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    path = tmp_path / "state" / "canopy" / "slack-threads.json"
+    path.parent.mkdir(parents=True)
+    os.mkfifo(path, 0o600)
+    assert threaded(_delivery("2026-09-24T12:30:00Z", [_run("PROJ-1", 1)])) == 2
+    assert "is not a regular file" in capsys.readouterr().err
+    shutil.rmtree(tmp_path / "state")
+    # Its directory cannot be made: a file stands where it would be.
+    (tmp_path / "state").write_text("")
+    assert threaded(_delivery("2026-09-24T12:30:00Z", [_run("PROJ-1", 1)])) == 2
+    assert "the threads file" in capsys.readouterr().err
+    assert _Api.received == []

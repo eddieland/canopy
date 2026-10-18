@@ -10,9 +10,12 @@ environment, or canopy's config: `--webhook-file PATH`, by default
 Text from the journal, which agents and org members wrote, is escaped for Slack's markup and set `verbatim`, so it
 cannot mention a person or `@channel`, or show one link and point at another.
 
+With `--channel` and `--threads`, what is about one ticket, chore, or review goes in its own thread, a new one each
+day, recorded in the sink's own state file, `$XDG_STATE_HOME/canopy/slack-threads.json`; the rest goes in the channel.
+
 Exit codes: 0 posted (a 2xx reply, and `"ok": true` from the Web API); 1 the post failed, with Slack's reply on
-stderr; 2 the secret file, the channel, or the message on stdin is not usable, saying which. canopy retries anything
-but 0 on its next tick.
+stderr; 2 the secret file, the channel, the threads file, or the message on stdin is not usable, saying which. canopy
+retries anything but 0 on its next tick.
 
 Stdlib only, importing nothing from canopy: canopy runs it as a command, so the process that holds the journal and
 enforces the guards never opens a connection or reads this secret (D035).
@@ -22,18 +25,22 @@ from __future__ import annotations
 
 import argparse
 import functools
+import hashlib
 import json
 import os
 import re
 import stat
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable, Mapping, Sequence
-from datetime import datetime
+from collections.abc import Set as AbstractSet
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import TextIO
+from typing import Protocol, TextIO
 
 SLACK_PREFIX = "https://hooks.slack.com/"
 SLACK_API_URL = "https://slack.com/api/chat.postMessage"
@@ -501,18 +508,19 @@ def _digest(digest: Mapping[str, object]) -> list[Block]:
     return out
 
 
-def blocks(message: Mapping[str, object]) -> list[Block]:
+def blocks(message: Mapping[str, object], *, header: bool = True) -> list[Block]:
     """Return Block Kit blocks for one canopy `json` message, built from its fields rather than its text lines.
 
     A header with the repository directory name and counts, a section per attention item and per event, the resolved
     items together, and the digest as fields. At most Slack's 50 blocks, the last saying how many were left out.
+    Without `header`, as a post in a ticket's thread is, the message starts at its first item.
 
     Returns:
         The blocks, in the order Slack shows them.
     """
     repo = Path(str(message.get("repo") or "")).name or "canopy"
-    header: Block = {"type": "plain_text", "text": f"canopy · {repo}"[:_MAX_HEADER]}
-    out: list[Block] = [{"type": "header", "text": header}]
+    title: Block = {"type": "plain_text", "text": f"canopy · {repo}"[:_MAX_HEADER]}
+    out: list[Block] = [{"type": "header", "text": title}] if header else []
     counts: list[str] = []
     given = message.get("attention")
     body: list[Block] = []
@@ -532,7 +540,7 @@ def blocks(message: Mapping[str, object]) -> list[Block]:
         counts.append("digest")
         body += [_DIVIDER] if body else []
         body += _digest({str(k): v for k, v in digest.items()})
-    if counts:
+    if counts and header:
         out.append(_context(" · ".join(counts)))
     out += body
     omitted = message.get("omitted")
@@ -564,10 +572,13 @@ def post_message(
     *,
     username: str | None = None,
     icon_emoji: str | None = None,
+    thread_ts: str | None = None,
+    reply_broadcast: bool = False,
 ) -> tuple[bool, str]:
     """Post `blocks` to `channel` with `chat.postMessage`, as `username` with `icon_emoji` when given.
 
-    `text` is what Slack shows in a notification, and where blocks cannot be shown.
+    `text` is what Slack shows in a notification, and where blocks cannot be shown. Given `thread_ts`, the post is a
+    reply in that message's thread, also shown in the channel with `reply_broadcast`.
 
     Returns:
         Whether Slack accepted it, and its reply. A 2xx reply without `"ok": true` is not accepted.
@@ -578,6 +589,10 @@ def post_message(
         payload["username"] = username
     if icon_emoji is not None:
         payload["icon_emoji"] = icon_emoji
+    if thread_ts is not None:
+        payload["thread_ts"] = thread_ts
+        if reply_broadcast:
+            payload["reply_broadcast"] = True
     ok, reply = _post(api_url, payload, headers)
     if not ok:
         return ok, reply
@@ -599,6 +614,280 @@ def _post(url: str, payload: dict[str, object], headers: dict[str, str]) -> tupl
         return False, f"HTTP {e.code}: {e.read().decode(errors='replace')[:_MAX_REPLY]}"
     except (urllib.error.URLError, TimeoutError, OSError) as e:
         return False, f"cannot reach Slack: {e}"
+
+
+# Threads, with `--threads`
+
+# Kinds canopy sends at once, unbatched (DESIGN §20), so a reply holding one is shown in the channel too.
+_URGENT_KINDS = frozenset({"plan.proposed", "loop.failing", "loop.sink_failing"})
+# A message's `ts`, which names it to reply in its thread.
+_TS = re.compile(r"\d{1,20}\.\d{1,20}")
+
+
+def default_threads_file() -> Path:
+    """`$XDG_STATE_HOME/canopy/slack-threads.json`, or `~/.local/state/canopy/slack-threads.json`.
+
+    Returns:
+        The path, whether or not the file exists.
+    """
+    base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    return Path(base).expanduser() / "canopy" / "slack-threads.json"
+
+
+class Send(Protocol):
+    """Post one message to the channel, as a reply in a thread when given its `ts`: `post_message`, its target bound."""
+
+    def __call__(
+        self, text: str, blocks: list[Block], *, thread_ts: str | None = None, reply_broadcast: bool = False
+    ) -> tuple[bool, str]:
+        """Post it.
+
+        Returns:
+            Whether Slack accepted it, and its reply.
+        """
+        ...
+
+
+@dataclass
+class Threads:
+    """The sink's own record of each thread it posts in today, and what a delivery that failed partway posted.
+
+    A thread is keyed by channel, repository, and what it is about, so channels and workspaces sharing the file keep
+    their own. Losing the file costs nothing worse than new threads.
+    """
+
+    path: Path
+    # Key to the day the thread was started and its first message's `ts`.
+    threads: dict[str, tuple[str, str]]
+    # Fingerprints of the items posted by a delivery that has not yet posted whole, so canopy's retry skips them.
+    posted: set[str]
+
+    @classmethod
+    def load(cls, path: Path) -> Threads:
+        """Read `path`, or start empty when it is missing or holds what this sink did not write.
+
+        Returns:
+            The threads and fingerprints the file holds.
+
+        Raises:
+            SinkError: `path` is there but cannot be read, or is not a regular file.
+        """
+        try:
+            st = path.stat()
+        except FileNotFoundError:
+            return cls(path, {}, set())
+        except OSError as e:
+            raise SinkError(f"cannot read the threads file {path}: {e.strerror}") from e
+        # Checked before reading: opening a FIFO would block.
+        if not stat.S_ISREG(st.st_mode):
+            raise SinkError(f"the threads file {path} is not a regular file")
+        try:
+            parsed: object = json.loads(path.read_text(encoding="utf-8"))
+        except OSError as e:
+            raise SinkError(f"cannot read the threads file {path}: {e.strerror}") from e
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            parsed = None
+        threads: dict[str, tuple[str, str]] = {}
+        posted: set[str] = set()
+        if isinstance(parsed, dict):
+            given: object = parsed.get("threads")
+            for key, thread in given.items() if isinstance(given, dict) else ():
+                day, ts = (thread.get("day"), thread.get("ts")) if isinstance(thread, dict) else (None, None)
+                if isinstance(day, str) and isinstance(ts, str) and _TS.fullmatch(ts):
+                    threads[str(key)] = (day, ts)
+            fingerprints: object = parsed.get("posted")
+            posted = {f for f in fingerprints if isinstance(f, str)} if isinstance(fingerprints, list) else set()
+        return cls(path, threads, posted)
+
+    def save(self) -> None:
+        """Write the file whole, replacing it, so a sink killed mid-write leaves the last one.
+
+        Raises:
+            SinkError: The file or its directory cannot be written.
+        """
+        data = {
+            "version": 1,
+            "threads": {key: {"day": day, "ts": ts} for key, (day, ts) in sorted(self.threads.items())},
+            "posted": sorted(self.posted),
+        }
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                "w", encoding="utf-8", dir=self.path.parent, prefix=".slack-threads-", delete=False
+            ) as f:
+                json.dump(data, f)
+                f.write("\n")
+            Path(f.name).replace(self.path)
+        except OSError as e:
+            raise SinkError(f"cannot write the threads file {self.path}: {e.strerror or e}") from e
+
+    def finish(self, day: str) -> None:
+        """A delivery has posted whole: forget what it posted, and every thread started before `day`.
+
+        Raises:
+            SinkError: The file cannot be written.
+        """
+        self.posted.clear()
+        self.threads = {key: thread for key, thread in self.threads.items() if thread[0] == day}
+        self.save()
+
+
+@dataclass
+class Part:
+    """What one post of a threaded delivery holds: one thread's items, or, with no `thread`, the channel's."""
+
+    thread: str | None
+    added: list[dict[str, object]] = field(default_factory=list)
+    resolved: list[dict[str, object]] = field(default_factory=list)
+    events: list[dict[str, object]] = field(default_factory=list)
+    digest: dict[str, object] | None = None
+    omitted: int = 0
+
+    def items(self) -> list[object]:
+        """Everything the post shows, one item each, as fingerprinted.
+
+        Returns:
+            The attention items, the events, the digest, and the count of what canopy left out, those it has.
+        """
+        return [
+            *self.added,
+            *self.resolved,
+            *self.events,
+            *([self.digest] if self.digest is not None else []),
+            *([{"omitted": self.omitted}] if self.omitted else []),
+        ]
+
+    def message(self, message: Mapping[str, object]) -> dict[str, object]:
+        """`message` cut down to this part's items, for `blocks` and `render`.
+
+        Returns:
+            The message, its attention, events, digest, and count of what was left out replaced by this part's.
+        """
+        out: dict[str, object] = {**message, "events": self.events, "digest": self.digest, "omitted": self.omitted}
+        attention = message.get("attention")
+        if isinstance(attention, dict):
+            out["attention"] = {**attention, "added": self.added, "resolved": self.resolved}
+        return out
+
+    @property
+    def urgent(self) -> bool:
+        """Whether the post holds something canopy would not hold back: a new attention item, a question, a plan."""
+        return bool(self.added) or any(
+            e.get("kind") in _URGENT_KINDS or (e.get("kind") == "run.ended" and e.get("status") == "blocked")
+            for e in self.events
+        )
+
+
+def post_threaded(message: Mapping[str, object], send: Send, threads: Threads, channel: str) -> tuple[bool, str]:
+    """Post `message` as `split` divides it, recording in `threads` each thread it starts and each post it makes.
+
+    What is about a ticket, a chore, or a review's PR goes in its thread for the day; the first post about it that day
+    starts the thread, in the channel. A reply holding something urgent is shown in the channel too. The rest, loop
+    events and the digest among it, is posted in the channel first, with the header.
+
+    Returns:
+        Whether Slack accepted every post, and its reply to the last one tried. The first refused post ends the
+        delivery: canopy retries it whole, and the posts already made are skipped.
+
+    Raises:
+        SinkError: `threads` cannot be saved.
+    """
+    day = _day(message.get("sent_at"))
+    repo = str(message.get("repo") or "")
+    ok, reply = True, ""
+    for part in split(message, threads.posted):
+        key = json.dumps([channel, repo, part.thread])
+        started = threads.threads.get(key) if part.thread is not None else None
+        ts = started[1] if started is not None and started[0] == day else None
+        cut = part.message(message)
+        ok, reply = send(
+            render(cut),
+            blocks(cut, header=part.thread is None),
+            thread_ts=ts,
+            reply_broadcast=ts is not None and part.urgent,
+        )
+        if not ok:
+            return ok, reply
+        threads.posted.update(_fingerprint(item) for item in part.items())
+        if part.thread is not None and ts is None and (first := _ts(reply)) is not None:
+            threads.threads[key] = (day, first)
+        threads.save()
+    threads.finish(day)
+    return ok, reply
+
+
+def split(message: Mapping[str, object], skip: AbstractSet[str] = frozenset()) -> list[Part]:
+    """Divide `message` into posts: the channel's first, then a thread's each, in the order the message names them.
+
+    An item goes in its ticket's thread, a chore's run in `chore:NAME`'s (where its findings' attention items go too),
+    and a review's run in its PR's; anything else, such as a loop event, a repository's attention item, or the digest,
+    in the channel. An item whose fingerprint is in `skip` is left out, and so is a post left with nothing.
+
+    Returns:
+        The posts, each with at least one item.
+    """
+    channel = Part(None)
+    parts: dict[str | None, Part] = {None: channel}
+
+    def part(item: Mapping[str, object]) -> Part:
+        thread = _thread(item)
+        return parts.setdefault(thread, Part(thread))
+
+    given = message.get("attention")
+    attention: dict[str, object] = {str(k): v for k, v in given.items()} if isinstance(given, dict) else {}
+    for a in _dicts(attention.get("added")):
+        if _fingerprint(a) not in skip:
+            part(a).added.append(a)
+    for r in _dicts(attention.get("resolved")):
+        if _fingerprint(r) not in skip:
+            part(r).resolved.append(r)
+    for e in _dicts(message.get("events")):
+        if _fingerprint(e) not in skip:
+            part(e).events.append(e)
+    digest = message.get("digest")
+    if isinstance(digest, dict) and _fingerprint(digest) not in skip:
+        channel.digest = {str(k): v for k, v in digest.items()}
+    omitted = message.get("omitted")
+    if isinstance(omitted, int) and omitted and _fingerprint({"omitted": omitted}) not in skip:
+        channel.omitted = omitted
+    return [p for p in parts.values() if p.items()]
+
+
+def _thread(item: Mapping[str, object]) -> str | None:
+    kind = item.get("kind")
+    if kind == "chore.ended":
+        return f"chore:{item['chore']}" if item.get("chore") else None
+    if kind == "review.ended":
+        return f"review:{item['pr']}" if item.get("pr") else None
+    return str(item["ticket"]) if item.get("ticket") else None
+
+
+def _fingerprint(item: object) -> str:
+    return hashlib.sha256(json.dumps(item, sort_keys=True, default=str).encode()).hexdigest()
+
+
+def _day(sent_at: object) -> str:
+    """The operator's local date when canopy sent the message, or now if it sent no time with a time zone.
+
+    Returns:
+        The date, as `YYYY-MM-DD`.
+    """
+    try:
+        at = datetime.fromisoformat(str(sent_at))
+    except ValueError:
+        at = None
+    if at is None or at.tzinfo is None:
+        at = datetime.now(UTC)
+    return at.astimezone().date().isoformat()
+
+
+def _ts(reply: str) -> str | None:
+    try:
+        parsed: object = json.loads(reply)
+    except json.JSONDecodeError:
+        return None
+    ts = parsed.get("ts") if isinstance(parsed, dict) else None
+    return ts if isinstance(ts, str) and _TS.fullmatch(ts) else None
 
 
 def read_message(stdin: str) -> dict[str, object]:
@@ -640,6 +929,11 @@ def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_u
     parser.add_argument(
         "--icon-emoji", default=None, help="with --channel, the emoji to post with, such as :robot_face:"
     )
+    parser.add_argument(
+        "--threads",
+        action="store_true",
+        help="with --channel, post each ticket's, chore's, and review's messages in its own thread, a new one each day",
+    )
     args = parser.parse_args(argv)
     for given, flag in (
         (args.token_file, "--token-file"),
@@ -648,15 +942,18 @@ def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_u
     ):
         if args.channel is None and given is not None:
             parser.error(f"{flag} needs --channel")
+    if args.channel is None and args.threads:
+        parser.error("--threads needs --channel")
     if args.channel is not None and args.webhook_file is not None:
         parser.error("--webhook-file and --channel are two ways to post; give one")
     send: Callable[[str, list[Block]], tuple[bool, str]]
+    threaded: tuple[Send, Threads, str] | None = None
     try:
         if args.channel is None:
             send = functools.partial(post, read_webhook(args.webhook_file or default_webhook_file(), prefix=prefix))
         else:
             channel = check_channel(args.channel)
-            send = functools.partial(
+            to_channel = functools.partial(
                 post_message,
                 api_url,
                 read_token(args.token_file or default_token_file()),
@@ -664,11 +961,17 @@ def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_u
                 username=None if args.username is None else check_username(args.username),
                 icon_emoji=None if args.icon_emoji is None else check_icon_emoji(args.icon_emoji),
             )
+            send = to_channel
+            if args.threads:
+                threads = Threads.load(default_threads_file())
+                # Saved before anything is posted, so a file that cannot be written refuses the delivery whole.
+                threads.save()
+                threaded = (to_channel, threads, channel)
         parsed = read_message(stdin.read())
+        ok, reply = send(render(parsed), blocks(parsed)) if threaded is None else post_threaded(parsed, *threaded)
     except SinkError as e:
         print(f"canopy-notify-slack: {e}", file=sys.stderr)  # noqa: T201
         return 2
-    ok, reply = send(render(parsed), blocks(parsed))
     if not ok:
         print(f"canopy-notify-slack: Slack refused the post: {reply[:_MAX_REPLY]}", file=sys.stderr)  # noqa: T201
         return 1
