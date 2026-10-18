@@ -344,7 +344,11 @@ def _entry(event: Mapping[str, object]) -> Entry | None:
     at = _at(event.get("timestamp"))
     part = event.get("part")
     if kind in {"text", "reasoning"}:
-        text, cut = _cut(_Text.model_validate(part).text, MAX_TEXT)
+        said = _Text.model_validate(part).text
+        # A provider's redacted thinking arrives as reasoning with no text: there is nothing to show.
+        if kind == "reasoning" and not said.strip():
+            return None
+        text, cut = _cut(said, MAX_TEXT)
         return Text(at, text, reasoning=kind == "reasoning", cut=cut)
     if kind == "tool_use":
         tool = _Tool.model_validate(part)

@@ -195,7 +195,29 @@ describe('TranscriptPanel', () => {
         expect(call('1.2k in · 300 out').textContent).not.toContain('tool calls')
         const second = call('1.5k in · 60 out')
         expect(within(second).getByText('length')).toBeDefined()
+    })
+
+    it('opens a model call in order to what it was sent and what it did, built only once opened', () => {
+        render(<TranscriptPanel transcript={transcript()} running={false} />)
+        const second = call('1.5k in · 60 out')
+        expect(second.textContent).toContain('model call 2')
+        expect(within(second).queryByRole('region', { name: 'call 2 input' })).toBeNull()
+
+        second.open = true
+        fireEvent(second, new Event('toggle'))
+        const input = within(second).getByRole('region', { name: 'call 2 input' })
+        expect(within(input).getByText('call 1’s input and output, then what its tools returned:')).toBeDefined()
+        expect(within(input).getByText('ENOENT: no such file or directory')).toBeDefined()
+        const output = within(second).getByRole('region', { name: 'call 2 output' })
+        expect(within(output).getByText('rate limited')).toBeDefined()
         expect(within(second).getByTitle('1200 tokens').textContent).toBe('1.2k')
+
+        // The first call was sent the prompt canopy kept.
+        const first = call('1.2k in · 300 out')
+        first.open = true
+        fireEvent(first, new Event('toggle'))
+        const sent = within(first).getByRole('region', { name: 'call 1 input' })
+        expect(within(sent).getByText('Implement ABC-1: sign in with SSO.')).toBeDefined()
     })
 
     it('names the session in its header, but on a page that names it already', () => {

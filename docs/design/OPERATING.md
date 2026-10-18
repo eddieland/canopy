@@ -191,13 +191,13 @@ backend = "treehouse"   # or "canopy": canopy's own pool makes the worktrees (§
 
 [runtime]
 overseer_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json
-    --title={title} {prompt}'''
+    --thinking --title={title} {prompt}'''
 worker_cmd   = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json
-    --title={title} {prompt}'''
+    --thinking --title={title} {prompt}'''
 split_cmd    = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json
-    --title={title} {prompt}'''
+    --thinking --title={title} {prompt}'''
 plan_cmd     = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json
-    --title={title} {prompt}'''
+    --thinking --title={title} {prompt}'''
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 pr_skill = ""           # optional; the skill workers open PRs with instead of the GitHub MCP (§8)

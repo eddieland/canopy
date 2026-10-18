@@ -25,13 +25,14 @@ The **Transcript** is the run's session, from its log, oldest first:
 - its text, with its reasoning set in italics and marked `thinking`;
 - each tool call, with what it did and how long it took; click one to see its input and output. A canopy command the
   harness refused is marked `refused`, with the guard;
-- each model call, with the tokens in and out, and its cost;
+- each model call, with the tokens in and out, and its cost; click one to see what it was sent and what it did. The
+  first call was sent canopy's prompt, and every later one what the tools returned since;
 - any runtime error, tinted red.
 
 The tally above it counts the tool calls, how many failed or were refused, and the model calls. **Find lines**
-searches the transcript and opens the calls that match. **By call** groups the events by model call instead: each
-call's input and output, the first call's input being canopy's prompt. **All open** opens every call at once, for when
-you'd rather scroll than click.
+searches the transcript and opens the calls that match. **By call** groups the events by model call instead, each call
+one row that opens to the same input and output. **All open** opens every call at once, for when you'd rather
+scroll than click.
 
 The session id in the transcript's header opens the same session in the runtime's own tools: `opencode export ID`.
 

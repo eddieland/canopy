@@ -764,9 +764,10 @@ list, an empty state, or a skeleton by hand.
   not JSON; then how long it took. A canopy command that printed a refusal is `failed`, with a `refused: <guard>` chip
   in `status-failed`. It opens to its input and its output (or error), JSON indented and colored as a tick's output is
   with Pretty on (below), every value as written, in monospace blocks at most 24rem tall. A model call is a muted line
-  with its tokens `in · out`, as By call says them, and its cost, and its reason only when it is not `tool-calls`, as
-  every call but the last is; it opens the same way to its tokens by kind, each a label and a readout on one line, and
-  All open leaves it closed. A runtime error is tinted `status-failed`. The header has the session id, then a hairline
+  with its number, its tokens `in · out`, as By call says them, and its cost, and its reason only when it is not
+  `tool-calls`, as every call but the last is; it opens the same way to its tokens by kind, each a label and a readout
+  on one line, then to the input and output sections By call shows (below), built only when opened; All open leaves
+  it closed. A runtime error is tinted `status-failed`. The header has the session id, then a hairline
   rule and the modes: the order, By call, and All open, a `Toggle` that opens every call turned on and closes them all
   turned off, and is on too while a search has opened what it found. Above the rows, how many tool calls, failed and
   refused ones, and model calls, and at that line's end a search field (`Find lines`, `SearchField` at its `sm` size).

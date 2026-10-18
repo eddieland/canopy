@@ -112,6 +112,20 @@ def test_only_the_recorded_sessions_events_are_read(tmp_path: Path) -> None:
     assert [e.text for e in found.entries if isinstance(e, Text)] == ["mine"]
 
 
+def test_reasoning_with_no_text_is_left_out(tmp_path: Path) -> None:
+    # A provider's redacted thinking arrives as reasoning with no text.
+    path = log(
+        tmp_path,
+        event("reasoning", {"type": "reasoning", "text": ""}),
+        event("reasoning", {"type": "reasoning", "text": " \n"}),
+        event("text", {"type": "text", "text": "done"}),
+    )
+    found = transcript.read(path, SESSION)
+    assert found is not None
+    assert found.entries == [Text(AT, "done")]
+    assert found.unreadable == 0
+
+
 def test_an_event_that_does_not_validate_is_counted_and_left_out(tmp_path: Path) -> None:
     path = log(
         tmp_path,
