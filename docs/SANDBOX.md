@@ -21,7 +21,7 @@ allowlist. Under the shipped templates:
 | | Allowed | Refused |
 | --- | --- | --- |
 | Read | the run's worktrees and their git directories, canopy's agent definitions, the runtime's files, the toolchains you list | the rest of `$HOME`: `~/.ssh`, cloud credentials, other repositories, `~/.config/canopy`, the workspace's `.canopy/` |
-| Write | the run's worktrees, its own HEAD and index, a per-run object directory, a per-run temp directory, the role's own cache directory, the runtime's data | everything else, shared git state included: no branch moves, no hooks, no git config, none of your own caches |
+| Write | the run's worktrees, its own HEAD and index, a per-run object directory, a per-run temp directory, the role's own cache and data directories | everything else, shared git state included: no branch moves, no hooks, no git config, none of your own caches |
 | Network | the hosts in the template's allowlist | every other host, loopback, link-local, and cloud metadata addresses |
 
 A write the policy refuses under `$HOME` may look as if it worked: `srt` puts an empty, writable `tmpfs` over a denied
@@ -31,9 +31,8 @@ What it does not cover: a worker can still send anything to a host you allowed, 
 your GitHub token; the overseer is not wrapped; and the sandbox shares the kernel,
 so it is no defense against an exploit written to escape it (DESIGN §24).
 
-**Not yet closed:** the templates let a run write OpenCode's data directory, `~/.local/share/opencode`, and what a run
-writes there can make the overseer's OpenCode, or your own, run code outside the sandbox at its next start (DESIGN
-§24, Open). Until that is closed, the sandbox does not hold against a worker that knows to do it.
+You log in once, as without a sandbox: each run's OpenCode starts with a copy of your OpenCode logins, and a token it
+refreshes comes back to yours (section 2).
 
 ## 1. Run `canopy sandbox setup`
 
@@ -46,7 +45,8 @@ again after each upgrade of canopy: it keeps your templates and installs a new `
 
 - copies the policy templates to `~/.config/canopy/sandbox/`, never over one that is there, and says when one that is
   there lets a run write in your own cache directory, as templates copied before `@CACHE@` let it write
-  `~/.cache/opencode` (section 3);
+  `~/.cache/opencode`, or names your own OpenCode data, `~/.local/share/opencode`, as templates copied before `@DATA@`
+  did (section 3);
 - installs `srt`, pinned by a lockfile canopy ships, with `npm ci`, into `~/.local/share/canopy/sandbox-runtime/`. That
   needs Node 22.12 or later and npm on `PATH`. A worker cannot write there, and the wrapper prefers that `srt` to any
   other on `PATH`;
@@ -101,6 +101,21 @@ set), which the wrapper makes, and setup in the worker's, so that what it instal
 wrapper points the command's `XDG_CACHE_HOME` there, and `npm_config_cache`, `GOCACHE`, `GOMODCACHE`, and
 `PIP_CACHE_DIR` under it, whatever you set them to. The first sandboxed run of each role fills its cache from nothing.
 
+OpenCode keeps its data the same way, in `~/.local/share/canopy/sandbox/<role>/` (under `$XDG_DATA_HOME` when that is
+set), which the wrapper makes the command's `XDG_DATA_HOME`: your own, `~/.local/share/opencode`, is what your
+OpenCode and the overseer's act on outside the sandbox, so no run writes it, whatever its template says. Your logins
+are the one part a run needs, and you keep them where they are:
+
+- Just before each run, the wrapper copies your `auth.json` and `mcp-auth.json` from your OpenCode data into the
+  role's, replacing what an earlier run left there. Log in, or out, as you always do; the next run has the change.
+- When a run refreshes an OAuth token, the wrapper copies the new token back into yours when the run ends, and the run's
+  log says `canopy-sandbox: copied back the refreshed tokens of auth.json: anthropic`. It takes nothing else: no new
+  login, no API key, and no field that says where a token is sent or whose account it is. A run killed at its timeout
+  hands its token back at the role's next run.
+
+uv's Pythons and tools stay where you keep them: the wrapper sets `UV_PYTHON_INSTALL_DIR` and `UV_TOOL_DIR` to them
+unless you have.
+
 `srt` is a beta. canopy pins the version DESIGN §24 was checked against; to try another, install it on `PATH`
 and remove canopy's, and re-read DESIGN §24's claims first.
 
@@ -130,11 +145,12 @@ and `~/.local/share/uv` are there. A toolchain is readable, not writable.
 Caches go in `@CACHE@`, the role's cache directory, which the templates allow reading and writing. Never put one of
 your own caches in `allowWrite`: your own tools run what is in them, outside the sandbox, so a run that can write one
 can run code on your machine. OpenCode's is one: it imports packages and runs programs from `~/.cache/opencode`, the
-overseer's OpenCode included, which is why the templates name `@CACHE@` instead. A tool whose cache the wrapper does
-not move, such as cargo's under `~/.cargo`, writes under the `$HOME` the template hides, so its cache lasts one run;
-to keep it, point it under the cache directory, by its absolute path, in the command after the wrapper's `--`, such as
-`env CARGO_HOME=/home/you/.cache/canopy/sandbox/worker/cargo`: the template is split into words, and no shell expands
-`$HOME` in it. Two more you are likely to need:
+overseer's OpenCode included, which is why the templates name `@CACHE@` instead. OpenCode's data, logins and
+sessions, goes in `@DATA@` for the same reason: leave `~/.local/share/opencode` out of both lists. A tool whose cache
+the wrapper does not move, such as cargo's under `~/.cargo`, writes under the `$HOME` the template hides, so its cache
+lasts one run; to keep it, point it under the cache directory, by its absolute path, in the command after the
+wrapper's `--`, such as `env CARGO_HOME=/home/you/.cache/canopy/sandbox/worker/cargo`: the template is split into
+words, and no shell expands `$HOME` in it. Two more you are likely to need:
 
 - **Push credentials.** A worker pushes from inside the sandbox, so its git credential helper does too. Add what the
   helper reads: `~/.config/gh` for `gh auth setup-git`, `~/.git-credentials` for the store helper. That token is in
@@ -257,6 +273,9 @@ github.com.
   canopy running as root.
 - **The worker cannot push:** an SSH remote (step 4), or a credential helper whose files are not in `allowRead`
   (step 3).
+- **A run's OpenCode is not logged in:** a template without `@DATA@` in `allowRead` and `allowWrite`, as one copied
+  before it was; `canopy sandbox setup` says which. Or the login is not in your own OpenCode data: log in there, as
+  without a sandbox.
 - **A build cannot fetch, or a tool cannot find its files:** a registry missing from `allowedDomains`, or a toolchain
   missing from `allowRead`. The error is the tool's own, in the run's log. A tool that writes outside `TMPDIR`, the
   worktree, and the cache directory needs its directory moved under the cache directory (step 3), or, if nothing of

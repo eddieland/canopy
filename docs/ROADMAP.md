@@ -412,8 +412,15 @@ and a planted snapshot git directory each make the overseer's OpenCode, or the o
 the state directory is not (DESIGN §24, Open).
 CI dropped its macOS canary job 2026-10-17, at the operator's request: macOS is left to the live check on the
 operator's machine.
-Next: data of the sandbox's own, once the operator settles how sandboxed runs get their credentials; then the canary on
-the operator's Linux and macOS machines.
+Data of the sandbox's own is in, on the operator's call (2026-10-18) that they log in once, not again for the sandbox:
+each role's OpenCode keeps its data in `~/.local/share/canopy/sandbox/<role>/`, the wrapper copies the operator's
+`auth.json` and `mcp-auth.json` in before each run and copies back after it only an OAuth refresh of a login the
+operator has, and it denies writing the operator's OpenCode data whatever the template says, so a template kept from
+before is closed too; `canopy sandbox setup` says when one still names it. Reading OpenCode 1.19.3's source found that
+it drops a login it cannot decode, and the whole of `mcp-auth.json` for one bad entry, so what comes back is checked
+field by field against the shapes OpenCode writes (DESIGN §24, Logins). The canary's new cases pass under `srt` 0.0.79
+and bubblewrap 0.9 on Ubuntu 24.04, and fail under the fake `srt`, as its others do.
+Next: the canary on the operator's Linux and macOS machines, then a day of `canopy loop` with sandboxed workers.
 
 ## M27. Session transcripts in the web UI
 

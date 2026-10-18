@@ -59,11 +59,13 @@ and:
    without bubblewrap at all.
 4. Sets the command's `TMPDIR`, and `srt`'s, to the run's temp directory: `srt` otherwise uses `/tmp/claude`, shared by
    every sandboxed process. On Linux it refuses a system temp directory too long to hold `srt`'s network sockets
-   (macOS's deep per-user one is not too long). It points the command's caches at the role's own (Caches, below), and
-   for a worker or setup puts a `git` of its own first on the command's `PATH` (Git state, below).
+   (macOS's deep per-user one is not too long). It points the command's caches and OpenCode's data at the role's own,
+   copies the operator's OpenCode logins in (Caches and Logins, below), and for a worker or setup puts a `git` of its
+   own first on the command's `PATH` (Git state, below).
 5. Runs `srt --settings <policy> -- "$@"`: after a `--`, since `srt` reads its own options anywhere in its arguments,
    and `-c` takes a shell command. It waits for `srt` and then removes its directory; a run killed with SIGKILL leaves
    one that a later run removes. It re-allows reading `srt`'s `vendor/`, whose seccomp helper runs inside the sandbox.
+   Then it copies back each login token the run refreshed (Logins, below).
 
 Because `worker_cmd` is a private key (TRUST_MODEL T7), a repository cannot remove the prefix. Because the sandbox
 denies writes to `~/.config/canopy`, a worker cannot remove it either.
@@ -99,7 +101,9 @@ with a `cwd` of its own names no `.canopy/`, so the operator adds the workspace 
 | This slot's `worktrees/<slot>/`, except `config.worktree`, `commondir`, `gitdir` | yes | yes | Its own HEAD, index, and reflog. |
 | The run's object directory, `<state_dir>/runs/<id>.objects/` | yes | yes | New commits (§8). |
 | The runtime's config (`~/.config/opencode`) | yes | no | A worker must not rewrite its own permissions. |
-| The runtime's data and state (`~/.local/share/opencode`, ...) | yes | yes | Sessions and token refresh (Open, below). |
+| The runtime's state (`~/.local/state/opencode`) | yes | yes | Not code the host runs (Logins, below). |
+| The role's data directory, `~/.local/share/canopy/sandbox/<role>/` | yes | yes | The runtime's data, with a copy of the logins (below). |
+| The operator's runtime data (`~/.local/share/opencode`) | no | no | The host's OpenCode acts on it (Logins, below). |
 | Toolchains the build needs (`~/.local/bin`, `~/.cargo`, `~/.nvm`, ...) | yes | no | Running tests. |
 | The role's cache directory, `~/.cache/canopy/sandbox/<role>/` | yes | yes | Every cache, the runtime's too (below). |
 | The operator's own caches (`~/.cache`, `~/.npm`, ...) | no | no | The host runs what is in them. |
@@ -144,6 +148,45 @@ What a role's runs share is theirs to poison for one another, as `/tmp/claude` i
 private ticket's worker and a public one share the worker's. Bazel's caches are the operator's own builds' too, and
 nothing yet gives the sandbox Bazel caches of its own (Open, below). `canopy sandbox setup` says when a template it kept
 still allows writing in the operator's cache directory.
+
+### Logins
+
+OpenCode's data directory is code the host runs too. In OpenCode 1.19.3, a run that writes `~/.local/share/opencode`
+can make the overseer's OpenCode, or the operator's, run code outside the sandbox at its next start: through
+`auth.json` (a `wellknown` login names a URL whose config OpenCode merges, with its plugins and local MCP servers),
+`opencode.db` (the console account's remote config, the same way), or a snapshot git directory there, whose planted
+config (`core.fsmonitor`, say) runs on OpenCode's `git add`; that last reaches the overseer only when the workspace is
+inside a git repository. Its state directory, `~/.local/state/opencode`, is not a way out, and stays writable.
+
+So a run's OpenCode keeps its data in a directory of its role's own, `$XDG_DATA_HOME/canopy/sandbox/<role>/`, private
+and shared by the role's runs as the cache directory is, which the templates allow as `@DATA@`. The wrapper points the
+command's `XDG_DATA_HOME` there, keeps uv's Pythons and tools where the operator keeps them, since the templates let a
+run read those, and denies writing the operator's OpenCode data directory whatever the template says, so a template
+from before `@DATA@` cannot write it either. canopy reads a run's transcript from the run's log, never from OpenCode's
+data, so the sessions there are the role's alone.
+
+The logins are the one part of that data a run needs: each provider's in `auth.json`, and each remote MCP server's
+OAuth tokens in `mcp-auth.json`. The operator settled (2026-10-18) that they log in once, as without a sandbox, so the
+wrapper shares them:
+
+- Just before the command starts, it copies the operator's two files into the role's directory, whole, over what an
+  earlier run left there; a file the operator has none of is removed.
+- When the command ends, it copies into the operator's files only what an OAuth refresh changes: of a login the
+  operator has, OAuth in both, the run's tokens and expiry, when that expiry is later; of an MCP server's, its
+  `tokens`, when its server URL is the same. It never adds a login, never takes a `wellknown` or API-key one, and
+  never takes a field that says where a token goes or whose account it is (`enterpriseUrl`, `accountId`, `serverUrl`,
+  `clientInfo`). Without this step, a provider that rotates refresh tokens would log the operator out the first time a
+  run refreshed one.
+- A run canopy kills at its timeout copies nothing back; the role's next run does, before it copies the logins in.
+- What a run left is read on the host without following a link or blocking on a fifo, and only up to 1 MiB. An entry
+  that is not the shape OpenCode writes is left where it is: OpenCode drops a login it cannot decode, and the whole of
+  `mcp-auth.json` for one bad entry.
+
+Rejected: a second login for the sandbox, which the operator, with many credentials, did not want; logins in
+environment variables, which leave OAuth logins out; and copying in without copying back, which logs the operator out
+at a rotated refresh token. What remains is that a run can hand back, as a refresh, a token of another account at the
+same provider, or a bad one (Trust model changes, below). `canopy sandbox setup` says when a template it kept names
+the operator's OpenCode data, or leaves out `@DATA@`.
 
 ### Git state
 
@@ -206,7 +249,7 @@ A local MCP server is a child of OpenCode, started in the slot with its environm
 `uvx` fetches itself each run, from a registry that must be allowed. One started with `docker run` cannot work: the
 Docker daemon is a Unix socket, which the sandbox refuses, and which would be a way out if it did not; run such a server
 as a binary, or use its remote form, whose host must be allowed. OpenCode keeps MCP OAuth tokens in its data directory,
-which the worker template allows writing. None of this needs a role or a template of its own.
+so a run starts with a copy of the operator's (Logins, above). None of this needs a role or a template of its own.
 
 ### What the harness runs around a sandboxed run
 
@@ -255,8 +298,9 @@ clone and two slots under a fake `$HOME`. An attempt that failed because nothing
 checked on the host, never by whether the attempt reported an error. Every attempt must fail:
 
 - Read a fake SSH key, and anything else under `$HOME` outside the policy.
-- Write under `$HOME`, `~/.config/canopy`, the operator's `~/.cache/opencode`, or the state directory; read or write
-  another role's cache directory.
+- Write under `$HOME`, `~/.config/canopy`, the operator's `~/.cache/opencode` or `~/.local/share/opencode` (the
+  latter under a template from before `@DATA@` too), or the state directory; read the operator's OpenCode data; read
+  or write another role's cache or data directory.
 - Move another slot's branch or any other ref; write the common directory's config or hooks, a `config.worktree`, the
   slot's `commondir` or `gitdir`, or its `.git` link.
 - Connect to a host off the allowlist, to a metadata address, to the host's loopback, or to a Unix socket the host
@@ -268,7 +312,8 @@ to write the checkout and its git directories.
 
 The positive controls must succeed, so a sandbox that blocks everything cannot pass: commit in the slot, its objects
 only in the run's directory; commit in a repository a tool keeps as a cache, its objects in its own; keep a cache for
-the role's next run; read the checkout as a review; reach an allowed host; run under the system temp directory; receive
+the role's next run; read the operator's logins and hand back a refreshed token, as a worker, a chore, and a review;
+read the checkout as a review; reach an allowed host; run under the system temp directory; receive
 an arbitrary prompt byte for byte; and be killed at a timeout, leaving no process behind (on macOS, only the sandbox's
 process group). Against a fake `srt` that sandboxes nothing, every case but the positive controls fails.
 
@@ -277,6 +322,9 @@ process group). Against a fake `srt` that sandboxes nothing, every case but the 
 TRUST_MODEL T4 and T6 name the sandbox as an opt-in control (D118), with what it does not cover: the shared kernel, the
 unwrapped overseer and harness calls, `/tmp/claude`, which every process `srt` sandboxes can write whatever the policy
 says, so two runs can pass files through it, and exfiltration through an allowed host with the credentials a run holds.
+A run can also hand back, as a refresh, a token of another account for a login the operator has, or a bad one: the
+operator's OpenCode, the overseer's included, then works as that account, or fails until the operator logs in again.
+It runs no code on the host. The tests with a fake `srt` check what is copied back; the canary checks the denials.
 The rest of the system temp directory stays readable, as other system paths do: denying it breaks tools that write
 there without reading `TMPDIR`.
 
@@ -285,14 +333,6 @@ there without reading `TMPDIR`.
 - SSH pushes. `srt`'s per-path `allowUnixSockets` is macOS-only; on Linux the only switch is `allowAllUnixSockets`,
   which lifts the block entirely. Whether to support SSH inside the sandbox at all (allow the agent socket, or push
   from the host in `_run`), or leave it to unsandboxed runs, is undecided.
-- The runtime's data directory is a way out. The templates leave `~/.local/share/opencode` writable, for sessions and
-  OAuth tokens, and the overseer's OpenCode, and the operator's own, read it outside any sandbox. In OpenCode 1.19.0, a
-  run that writes there can make either run code on the host: through `auth.json` (a `wellknown` URL whose config
-  OpenCode merges, with its plugins and local MCP servers), `opencode.db` (the console account's remote config, the
-  same way), or a snapshot git directory under it, whose planted config (`core.fsmonitor`, say) runs on OpenCode's
-  `git add` and `git gc`; that last reaches the overseer only when the workspace is inside a git repository. The state
-  directory is not a way out. Closing it means data of the sandbox's own, as for caches, which leaves sandboxed runs
-  without the credentials kept there; how they get them is the operator's call.
 - Bazel's caches. §9 shares them across slots, and BAZEL.md through the operator's own `~/.bazelrc`, so its own
   builds share them too. A sandboxed run may not write them (Caches, above), so it builds cold, until a bazelrc that
   only sandboxed runs read points them under the cache directory.
