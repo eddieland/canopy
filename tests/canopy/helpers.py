@@ -608,6 +608,23 @@ def agent_runs(agent_log: Path) -> list[dict[str, Any]]:
     return [json.loads(line) for line in agent_log.read_text().splitlines()]
 
 
+def titled_overseer(env: CanopyEnv) -> None:
+    """Have the test config's overseer template pass `--title={title}`, as the default templates do."""
+    template = "agent run --agent canopy-overseer {prompt}"
+    text = env.user_file.read_text()
+    assert template in text
+    env.write_user(text.replace(template, template.replace(" {prompt}", " --title={title} {prompt}")))
+
+
+def overseer_titles(agent_log: Path) -> list[str]:
+    """The session title each fake overseer run was given, in order, under `titled_overseer`."""
+    return [
+        str(run["argv"][3]).removeprefix("--title=")
+        for run in agent_runs(agent_log)
+        if run["argv"][:3] == ["run", "--agent", "canopy-overseer"]
+    ]
+
+
 def commands_run(agent_log: Path) -> list[list[dict[str, Any]]]:
     """The commands each fake agent run ran, in order: each one's argv, exit code, stdout, and stderr."""
     return [run["commands"] for run in agent_runs(agent_log)]

@@ -435,7 +435,16 @@ Every runtime template may name `{title}`, the run's session title, and the defa
 `opencode run --title={title}`, so OpenCode's session list names each session as canopy does:
 
 - a worker or split run: `<KEY> <kind>: <the ticket's title>` (§7), or `<KEY> <kind>` before the overseer names it;
-- a tick's overseer: `tick <id>`; a chore: `chore:<name>`; a review: `review <PR URL>`.
+- a tick's overseer: `tick <id> · <what started it> · <what it faces>`, such as `tick 412 · run ended · 2 tickets, 1
+  running, 1 needs you`;
+- a chore: `chore:<name>`; a review: `review <PR URL>`.
+
+Ticks outnumber every other session, and their titles are fixed before the overseer decides anything, so a tick's says
+what it can know then. What started it is the loop's `ticks.woken_by` (§6): `timer`, `gate`, `run ended`, `message`,
+`asked`, and the rest, or `by hand` for `canopy tick`. What it faces is counted as it starts: the open tickets and the
+worker runs still running, as its state block lists them, and the attention list's items (§14), the harness's own
+included, though the state block leaves those out; or `nothing open`. A quiet stretch reads alike, tick
+after tick, so the ticks something reached stand out.
 
 The title is read when the run starts, so a rename shows in canopy at once and in the runtime from the ticket's next
 run. canopy names sessions rather than reading OpenCode's own titles because those are not in the events: reading one
