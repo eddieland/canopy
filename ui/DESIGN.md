@@ -116,7 +116,8 @@ Rules:
   arbitrary sizes (`text-[0.625rem]`).
 - **An icon is the size of the text it sits with**: 16px (`size-4`) beside `text-sm` and in a button of the default or
   `sm` size, which sets it; 12px (`size-3`) beside `text-xs` or smaller, in an `xs` or `icon-xs` button and a segmented
-  control, which set it too, and as a link out in a row. Nothing between, but a checkbox's tick, which fills its box.
+  control, which set it too, and as a link out in a row. Nothing between, but a checkbox's tick, which fills its box,
+  and nothing larger, but the page header's guide book (22px, `size-5.5`), which sits with the title.
 
 ## Shape and space
 
@@ -298,6 +299,12 @@ Rules:
   repeats it. The trail follows the URL, not the journal: a run's page is under Runs, not its ticket, which its panel
   links. What qualifies a page, `private` or `dry run`, is a `Chip` beside the title, never a word in the trail. Where
   there is no title to qualify, a ticket's attention item, its `private` or `public` chip heads its conversation.
+- **A book at the header's top right** opens the guide's page about the page shown, at the heading about it when it has
+  one (a run's page at `runs#a-runs-page`), named `The guide: Runs and worktrees` on hover and to a screen reader: a
+  closed book with lines of text (`BookText`) at 22px in a ghost `icon` button, sized to the title beside it rather
+  than the body text, so it is there when wanted and quiet when not. Which page each route opens is `PAGE_GUIDES`
+  in `src/lib/guide.ts`, keyed by route id, so a new route fails the type check until it names one. The guide's own
+  pages, and the 404, have none.
 - **The tab** names the page too: `PageHeader` renders a `<title>` (`pageTitle` in `src/lib/page-title.ts`), which
   React puts ahead of `index.html`'s. A tab is narrow and cut from the right, so it leads with how many attention
   items block work, when any do, then the page's name, then `canopy`: `(3) ABC-102 Export reports as CSV · canopy`.
@@ -736,7 +743,8 @@ list, an empty state, or a skeleton by hand.
   the code and why to the design. It talks to the operator as `you`, in plain, direct sentences, as good developer
   docs do, with the odd dry aside from a staff engineer who has seen a few incidents: an aside rides on a fact, never
   stands in for one, and they stay rare enough to land. A new page is a file there and a line in its group in
-  `SOURCES`; the rail's foot, under the version, opens the guide.
+  `SOURCES`; the rail's foot, under the version, opens the guide, and the book atop every other page opens its page
+  about that one.
 - **A question before losing work** (`AlertDialog`, `src/components/ui/alert-dialog.tsx`): a page that holds the
   operator's work not yet saved or sent asks before it is left, in a dialog centred over the canvas at 70%, on
   `surface` with a hairline border: its question as the title (`Leave this page?`), what leaving loses under it, then
