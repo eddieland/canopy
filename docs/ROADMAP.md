@@ -1568,7 +1568,8 @@ names a review comment by the id in its URL and canopy finds the thread; a ticke
 operator configured a `tracker` source with a `post_cmd`, since the harness never branches on `tracker.provider`; the
 `vcs` source defaults to canopy's own programs, so `approve` needs nothing configured; `thread_changed` counts comments
 since the run started, and a refusal moves that basis; and a post whose outcome is unknown is `unconfirmed` until a
-read settles it, so a draft is posted at most once. Nothing is built yet.
+read settles it, so a draft is posted at most once. Built: `packages/canopy-github`, the reader and the poster, tested
+against a stand-in for GitHub's GraphQL API, and TRUST_MODEL T2's line for them; nothing runs them yet.
 
 ## M54. Plans before feedback runs
 
