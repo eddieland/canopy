@@ -728,7 +728,11 @@ def test_a_bazel_repository_cache_that_overlaps_the_sandboxs_caches_runs_nothing
 
 @pytest.mark.usefixtures("sandbox")
 def test_a_bazel_repository_cache_without_bazel_runs_nothing(tmp_path: Path) -> None:
-    done = wrap("chore", "--bazel-repository-cache", str(tmp_path / "cache"), "--", "true", cwd=tmp_path)
+    """On a PATH without the `bazel` a machine may have, as CI's runners do."""
+    path = os.pathsep.join(p for p in os.environ["PATH"].split(os.pathsep) if not (Path(p) / "bazel").exists())
+    cache = str(tmp_path / "cache")
+
+    done = wrap("chore", "--bazel-repository-cache", cache, "--", "true", cwd=tmp_path, env={"PATH": path})
 
     assert done.returncode == 2
     assert "--bazel-repository-cache was given, but bazel is not on PATH" in done.stderr
