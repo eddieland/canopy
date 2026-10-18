@@ -1077,15 +1077,18 @@ sliver beside four others; and its axis names short call numbers without measuri
   path and branch, a run's or chore run's session id, a chore run's log) it shows only while its row (`group/copy`) is
   hovered or it has the focus, keeping its space so nothing moves, and always on a touch screen. The clipboard needs a
   secure context (https or localhost), so elsewhere there is no button and the text stays selectable.
-- **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was
-  done shows too little of it: a copy names what it copied. It sits at the bottom center of the window on `surface`
-  with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title in `text-sm`, and a line under it
-  in muted monospace `text-xs`, on one line with an ellipsis where it is cut: what it names is on the clipboard,
-  whole. It closes on its own after 3 seconds, held while the pointer or the focus is on it, or when swiped down; F8
-  reaches it from the keyboard and Escape closes it. At most three show, the newest last. A screen reader announces
-  it. It never carries an action, and it is never the only place an outcome shows: the control that acted says so
-  too, and a refusal is still a `Notice`. `main.tsx` renders the one `Toaster`, around the router, so a toast
-  outlives the page it came from.
+- **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was done
+  shows too little of it: a copy names what it copied. It also says a ticket moved into a state the operator checked on
+  Settings (`src/lib/ticket-toasts.ts`): one of the ticket's own phases, or done, with an `ArrowRight` in the accent,
+  `ABC-102: needs human` over its title. None is checked until the operator checks it, and the first tickets list a tab
+  reads toasts nothing, as it has nothing to compare. It sits at the bottom center of the window on `surface` with a
+  hairline, a `Check` in the accent or an `X` in `status-failed`, its title in `text-sm`, and a line under it in muted
+  monospace `text-xs`, on one line with an ellipsis where it is cut: what it names is on the clipboard, whole. It closes
+  on its own after 3 seconds, held while the pointer or the focus is on it, or when swiped down; F8 reaches it from the
+  keyboard and Escape closes it. At most three show, the newest last. A screen reader announces it. It never carries an
+  action, and it is never the only place an outcome shows: the control that acted says so too, a ticket's state shows on
+  the tickets list, and a refusal is still a `Notice`. `main.tsx` renders the one `Toaster`, around the router, so a
+  toast outlives the page it came from.
 - **A reply or note form** sends on the key Settings names: Enter by default, as a chat does; Ctrl+Enter (⌘+Enter on
   a Mac), Enter making a new line; or Button only. Shift+Enter always starts a new line, and an Enter that ends an IME
   composition only commits it (`src/lib/send-key.ts`). Its field is named for the form, as its panel is for its page:

@@ -1,11 +1,20 @@
-import { Check, X } from 'lucide-react'
+import { ArrowRight, Check, X } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 
 import { Toast, ToastDescription, ToastProvider, ToastTitle, ToastViewport } from '@/components/ui/toast'
 import { ToastContext } from '@/hooks/use-toast'
 import { addToast, closeToast } from '@/lib/toasts'
-import type { ToastItem } from '@/lib/toasts'
+import type { NewToast, ToastItem } from '@/lib/toasts'
+import { cn } from '@/lib/utils'
+
+// Each tone's icon, and its color.
+const TONES: Record<NewToast['tone'], { icon: LucideIcon; className: string }> = {
+    done: { icon: Check, className: 'text-accent' },
+    failed: { icon: X, className: 'text-status-failed' },
+    moved: { icon: ArrowRight, className: 'text-accent' },
+}
 
 /** How long a toast shows, unless the pointer or the focus holds it. */
 const TOAST_MS = 3000
@@ -36,11 +45,7 @@ export function Toaster({
                             }
                         }}
                     >
-                        {toast.tone === 'done' ? (
-                            <Check aria-hidden className="mt-0.5 size-4 shrink-0 text-accent" />
-                        ) : (
-                            <X aria-hidden className="mt-0.5 size-4 shrink-0 text-status-failed" />
-                        )}
+                        <ToneIcon tone={toast.tone} />
                         <div className="min-w-0">
                             <ToastTitle>{toast.title}</ToastTitle>
                             {toast.detail !== undefined && (
@@ -55,4 +60,9 @@ export function Toaster({
             </ToastProvider>
         </ToastContext>
     )
+}
+
+function ToneIcon({ tone }: { tone: NewToast['tone'] }) {
+    const { icon: Icon, className } = TONES[tone]
+    return <Icon aria-hidden className={cn('mt-0.5 size-4 shrink-0', className)} />
 }

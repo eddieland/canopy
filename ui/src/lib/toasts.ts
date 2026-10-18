@@ -1,14 +1,17 @@
 /** At most this many toasts show at once; a new one past it closes the oldest. */
 export const MAX_TOASTS = 3
 
-/** What a toast says: what an action did, and a line of what it did it to. */
+/** What a toast says: what an action did, or what a ticket moved to, and a line of what it did it to. */
 export interface NewToast {
     /** What happened, in a few words: `Copied branch`. */
     title: string
     /** What it happened to, in monospace under the title, such as the text copied. */
     detail?: string
-    /** Whether the action did what it was asked (`done`, a check in the accent) or not (`failed`, a cross). */
-    tone: 'done' | 'failed'
+    /**
+     * Whether the action did what it was asked (`done`, a check in the accent) or not (`failed`, a cross), or that a
+     * ticket moved into a state Settings asked to hear about (`moved`, an arrow in the accent).
+     */
+    tone: 'done' | 'failed' | 'moved'
 }
 
 /** A toast in the stack: its id, unique among those shown, and whether it is still open or playing its way out. */
