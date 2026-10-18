@@ -39,10 +39,10 @@ afterEach(() => {
     cleanup()
 })
 
-function renderForm(target: ReplyTarget, waiting: number | null = null) {
+function renderForm(target: ReplyTarget, waiting: number | null = null, untrusted = false) {
     return render(
         <QueryClientProvider client={new QueryClient()}>
-            <ReplyForm target={target} waiting={waiting} />
+            <ReplyForm target={target} waiting={waiting} untrusted={untrusted} />
         </QueryClientProvider>,
     )
 }
@@ -71,6 +71,33 @@ describe('ReplyForm', () => {
         renderForm({ ...TICKET, isPublic: true }, 3)
         const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply to message 3' })
         expect(field.placeholder).toMatch(/^Stays in canopy, never on the ticket\./u)
+    })
+
+    it('asks about an untrusted review only while one waits on the go-ahead', () => {
+        renderForm({ ...TICKET, isPublic: true }, null, true)
+        const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' })
+        expect(field.placeholder).toMatch(/the untrusted review\.$/u)
+        expect(screen.queryByRole('button', { name: /a note for its next worker/u })).toBeNull()
+    })
+
+    it('keeps a public ticket with nothing waiting closed, behind a disclosure, until it is opened', () => {
+        renderForm({ ...TICKET, isPublic: true })
+        expect(screen.queryByRole('form', { name: 'Reply' })).toBeNull()
+        const show = screen.getByRole('button', { name: 'Show a note for its next worker', expanded: false })
+        fireEvent.click(show)
+        const field = screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' })
+        expect(field.placeholder).toMatch(/^Stays in canopy, never on the ticket\./u)
+        expect(field.placeholder).not.toMatch(/untrusted/u)
+        expect(screen.getByRole('button', { name: 'Hide a note for its next worker', expanded: true })).toBeDefined()
+    })
+
+    it('opens by itself on a public ticket whose draft is kept', () => {
+        renderForm({ ...TICKET, isPublic: true })
+        fireEvent.click(screen.getByRole('button', { name: 'Show a note for its next worker' }))
+        type('Reply', 'Leave the docs alone')
+        cleanup()
+        renderForm({ ...TICKET, isPublic: true })
+        expect(screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Reply' }).value).toBe('Leave the docs alone')
     })
 
     it('notes something to a chore, for its next runs', () => {

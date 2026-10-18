@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest'
 
-import { choreRef, choreRunRef, memoryRef, messageRef, planRef, reviewRef, runRef, slotRef, tickRef } from './refs'
+import {
+    choreRef,
+    choreRunRef,
+    memoryRef,
+    messageRef,
+    planRef,
+    reviewRef,
+    runRef,
+    slotRef,
+    splitRunRefs,
+    tickRef,
+} from './refs'
 
 describe('refs', () => {
     it('names each kind as KIND:ID, the grammar the CLI reads', () => {
@@ -20,5 +31,18 @@ describe('refs', () => {
     it('numbers a message and a slot as their lists do', () => {
         expect(messageRef(5)).toBe('#5')
         expect(slotRef('3')).toBe('#3')
+    })
+})
+
+describe('splitRunRefs', () => {
+    it('splits harness text around each run it names, standing as a word of its own', () => {
+        expect(splitRunRefs('run:40 (fix-ci) ended failed; see run:39.')).toEqual([
+            { text: 'run:40', run: 40 },
+            { text: ' (fix-ci) ended failed; see ' },
+            { text: 'run:39', run: 39 },
+            { text: '.' },
+        ])
+        expect(splitRunRefs('rerun:4 and run:x')).toEqual([{ text: 'rerun:4 and run:x' }])
+        expect(splitRunRefs('')).toEqual([])
     })
 })

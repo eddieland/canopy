@@ -6,6 +6,29 @@ export function runRef(id: number | string): string {
     return `run:${id}`
 }
 
+/** A piece of harness text: plain, or a run it names as `run:41`, with the run's id. */
+export type RefPiece = { text: string; run?: undefined } | { text: string; run: number }
+
+// A run named as the harness writes one, standing as a word of its own.
+const RUN_REF = /\brun:(\d+)\b/gu
+
+/** Split harness text around the runs it names as `run:41`, so a page can link each to its run. */
+export function splitRunRefs(text: string): RefPiece[] {
+    const pieces: RefPiece[] = []
+    let last = 0
+    for (const match of text.matchAll(RUN_REF)) {
+        if (match.index > last) {
+            pieces.push({ text: text.slice(last, match.index) })
+        }
+        pieces.push({ text: match[0], run: Number(match[1]) })
+        last = match.index + match[0].length
+    }
+    if (last < text.length) {
+        pieces.push({ text: text.slice(last) })
+    }
+    return pieces
+}
+
 /** A review run, as `canopy show` reads it: `review:4`. */
 export function reviewRef(id: number | string): string {
     return `review:${id}`
