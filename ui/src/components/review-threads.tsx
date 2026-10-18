@@ -49,6 +49,7 @@ export function ReviewThreads({ url }: { url: string }) {
                 <DiffPanels
                     diff={data.diff}
                     placed={placed}
+                    cards={['thread', 'threads']}
                     renderCard={(t) => <ThreadCard key={t.id} thread={t} onChange={changed} />}
                 />
             )}

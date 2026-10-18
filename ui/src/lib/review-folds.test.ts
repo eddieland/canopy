@@ -2,7 +2,17 @@ import { describe, expect, it } from 'vitest'
 
 import type { DiffFile, DiffLine } from '@/api/types'
 
-import { DIFF_BUDGET, foldedText, foldLabel, lineCount, nextStep, pieces, reveal, shownAtFirst } from './review-folds'
+import {
+    DIFF_BUDGET,
+    fileFoldedText,
+    foldedText,
+    foldLabel,
+    lineCount,
+    nextStep,
+    pieces,
+    reveal,
+    shownAtFirst,
+} from './review-folds'
 
 /** A file of hunks with these many lines each, every line added, numbered on the new side from 1 across them. */
 function file(...hunks: number[]): DiffFile {
@@ -103,6 +113,17 @@ describe('foldLabel', () => {
         expect(foldLabel({ from: 0, to: 1 })).toBe('Show 1 hidden line')
         expect(foldLabel({ from: 40, to: 100 })).toBe('Show 60 hidden lines')
         expect(foldLabel({ from: 1960, to: 14_989 })).toBe('Show 500 of 13,029 hidden lines')
+    })
+})
+
+describe('fileFoldedText', () => {
+    const FINDINGS = ['finding', 'findings'] as const
+
+    it('counts the lines and cards a folded file hides', () => {
+        expect(fileFoldedText(1, 0, FINDINGS)).toBe('1 line folded away')
+        expect(fileFoldedText(13_029, 0, FINDINGS)).toBe('13,029 lines folded away')
+        expect(fileFoldedText(40, 1, FINDINGS)).toBe('40 lines and 1 finding folded away')
+        expect(fileFoldedText(40, 3, ['thread', 'threads'])).toBe('40 lines and 3 threads folded away')
     })
 })
 
