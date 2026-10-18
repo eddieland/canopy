@@ -681,6 +681,8 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         + [limit(found, repo=repo) for repo, found in reviews],
         runs=[run(r, ctx.workspace.root) for r in db.runs_of(ctx.conn, key, TICKET_RUNS)],
         messages=[message(m) for m in db.messages_of(ctx.conn, conversation.TICKET, key, TICKET_MESSAGES)],
+        forgotten_at=db.parse_time(str(row["forgotten_at"])) if row["forgotten_at"] else None,
+        forgotten_message_id=int(row["forgotten_message_id"]) if row["forgotten_message_id"] is not None else None,
         decisions=[decision(d) for d in db.decisions_about(ctx.conn, key, TICKET_DECISIONS)],
         cost=_ticket_cost(ctx.conn, key),
         drafts=draft_views.of_ticket(ctx.conn, key),

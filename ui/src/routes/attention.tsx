@@ -19,7 +19,6 @@ import { Age } from '@/components/age'
 import { ChoreFindingText } from '@/components/chore-finding'
 import { ChoreLink } from '@/components/chore-link'
 import { ChoreNotes } from '@/components/chore-notes'
-import { Conversation } from '@/components/conversation'
 import { Copyable } from '@/components/copy-button'
 import { Counters } from '@/components/counters'
 import { useDismissFinding } from '@/components/dismiss-finding'
@@ -36,12 +35,12 @@ import { RunsTable } from '@/components/runs-table'
 import { Chip, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
 import { TicketDrafts } from '@/components/ticket-drafts'
+import { TicketThread } from '@/components/ticket-thread'
 import { TicketLink } from '@/components/ticket-link'
 import { LinkOutButton } from '@/components/ticket-links'
 import { TicketTitle } from '@/components/ticket-title'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { WorkingNow } from '@/components/working-now'
 import { useUntrustedReview } from '@/hooks/use-untrusted-review'
 import { answered } from '@/lib/acknowledged'
 import { ask, bySeverity, commandOf, pullRequestOf, severity, shownDetail } from '@/lib/attention'
@@ -49,7 +48,8 @@ import type { Ask, Severity } from '@/lib/attention'
 import { settled, withLeaving } from '@/lib/leaving'
 import type { Listed } from '@/lib/leaving'
 import { onGitHub } from '@/lib/links'
-import { ordered, useListOrder } from '@/lib/list-order'
+import { sinceForget } from '@/lib/forgotten'
+import { useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
 import { phaseLabel, phaseWord } from '@/lib/phase'
 import { pullRequestLabel } from '@/lib/pull-request-label'
@@ -508,19 +508,12 @@ function Thread({ item, ticketKey, asks }: { item: AttentionItem; ticketKey: str
                     <Chip>{ticket.private ? 'private' : 'public'}</Chip>
                     {messages.length > 1 && <OrderToggle list="conversation" />}
                     <span className="readout text-xs text-muted-foreground">
-                        <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} /> · {messages.length}
+                        <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} /> · {sinceForget(data).length}
                     </span>
                 </span>
             </PanelHeader>
             <ThreadScroll key={ticket.key} label="Conversation" end={order === 'oldest' ? 'bottom' : 'top'}>
-                {/* The run working the ticket now is its newest word, so it sits at the newest end. */}
-                {order === 'newest' && <WorkingNow ticketKey={ticket.key} />}
-                {messages.length === 0 ? (
-                    <Empty>no messages yet: what you and its workers say shows here</Empty>
-                ) : (
-                    <Conversation messages={ordered('conversation', order, messages)} waiting={ticket.awaiting} />
-                )}
-                {order === 'oldest' && <WorkingNow ticketKey={ticket.key} />}
+                <TicketThread detail={data} order={order} />
             </ThreadScroll>
             <ReplyForm
                 key={ticket.key}

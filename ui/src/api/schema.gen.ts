@@ -4806,6 +4806,17 @@ export type components = {
              */
             drafts: components["schemas"]["Draft"][];
             /**
+             * Forgotten At
+             * @description When the operator last forgot its work (DESIGN §22); None if never.
+             */
+            forgotten_at: string | null;
+            /**
+             * Forgotten Message Id
+             * @description The newest message from before that forget, or None: the messages up to it are history the loop no longer
+             *     reads, kept for the operator.
+             */
+            forgotten_message_id: number | null;
+            /**
              * Limits
              * @description Each kind's limit in each repository it has had runs in, then the review limit of each of its units' PRs canopy
              *     has reviewed.
