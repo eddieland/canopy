@@ -96,7 +96,7 @@ function renderIn(ui: React.JSX.Element) {
 describe('ProposalActions', () => {
     it("opens the promote form on the proposal's words, naming the lesson it replaces and where", async () => {
         renderIn(<ProposalActions proposal={ENTRY} onSaid={vi.fn<(said: string) => void>()} />)
-        fireEvent.click(screen.getByRole('button', { name: 'Promote' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Edit and promote' }))
         const form = screen.getByRole('form', { name: 'Promote memory:5' })
         expect(
             within(form).getByRole<HTMLTextAreaElement>('textbox', { name: 'The lesson, in your words' }).value,
@@ -117,7 +117,7 @@ describe('ProposalActions', () => {
         answer = Response.json(promoted())
         const onSaid = vi.fn<(said: string) => void>()
         renderIn(<ProposalActions proposal={ENTRY} onSaid={onSaid} />)
-        fireEvent.click(screen.getByRole('button', { name: 'Promote' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Edit and promote' }))
         fireEvent.click(screen.getByRole('button', { name: 'Promote memory:5' }))
         await vi.waitFor(() => {
             expect(onSaid).toHaveBeenCalledOnce()
@@ -136,7 +136,7 @@ describe('ProposalActions', () => {
     it('sends the words and repository the operator changed, and holds the text to the bound', async () => {
         answer = Response.json(promoted())
         renderIn(<ProposalActions proposal={ENTRY} onSaid={vi.fn<(said: string) => void>()} />)
-        fireEvent.click(screen.getByRole('button', { name: 'Promote' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Edit and promote' }))
         const field = screen.getByRole('textbox', { name: 'The lesson, in your words' })
         const save = screen.getByRole<HTMLButtonElement>('button', { name: 'Promote memory:5' })
         fireEvent.change(field, { target: { value: 'x'.repeat(601) } })
@@ -156,7 +156,7 @@ describe('ProposalActions', () => {
 
     it("warns while the text is still a private ticket's run's own words, as canopy memory promote does", () => {
         renderIn(<ProposalActions proposal={{ ...ENTRY, private: true }} onSaid={vi.fn<(said: string) => void>()} />)
-        fireEvent.click(screen.getByRole('button', { name: 'Promote' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Edit and promote' }))
         expect(screen.getByTestId('promote-private').textContent).toMatch(/^Warning: its text is from a private/u)
         fireEvent.change(screen.getByRole('textbox', { name: 'The lesson, in your words' }), {
             target: { value: 'In my own words.' },
@@ -181,7 +181,7 @@ describe('ProposalActions', () => {
             { status: 409 },
         )
         const onSaid = vi.fn<(said: string) => void>()
-        renderIn(<ProposalActions proposal={ENTRY} asWritten onSaid={onSaid} />)
+        renderIn(<ProposalActions proposal={ENTRY} edit={false} onSaid={onSaid} />)
         fireEvent.click(screen.getByRole('button', { name: 'Promote as written' }))
         expect((await screen.findByRole('alert')).textContent).toBe(
             'refused (not_pending): proposal 5 is invalid: rejected',
@@ -199,12 +199,12 @@ describe('ProposalActions as written', () => {
         const onSaid = vi.fn<(said: string) => void>()
         renderIn(<ProposalActions proposal={ENTRY} onSaid={onSaid} />)
         expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
-            'Promote',
-            'As written',
+            'Promote as written',
+            'Edit and promote',
             'Reject',
             'Forget',
         ])
-        fireEvent.click(screen.getByRole('button', { name: 'As written' }))
+        fireEvent.click(screen.getByRole('button', { name: 'Promote as written' }))
         await vi.waitFor(() => {
             expect(onSaid).toHaveBeenCalledOnce()
         })
@@ -247,7 +247,9 @@ describe('ProposalActions forget', () => {
     })
 
     it('offers no Forget on an attention item', () => {
-        renderIn(<ProposalActions proposal={ENTRY} asWritten forget={false} onSaid={vi.fn<(said: string) => void>()} />)
+        renderIn(
+            <ProposalActions proposal={ENTRY} edit={false} forget={false} onSaid={vi.fn<(said: string) => void>()} />,
+        )
         expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Promote as written', 'Reject'])
     })
 })

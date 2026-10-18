@@ -31,7 +31,7 @@ export function ProposalsWaiting({ ticketKey }: { ticketKey: string }) {
     const below = new Map(
         waiting.map((p) => [
             p.entry.id,
-            <ProposalActions key={p.entry.id} proposal={p.entry} asWritten forget={false} onSaid={setSaid} />,
+            <ProposalActions key={p.entry.id} proposal={p.entry} edit={false} forget={false} onSaid={setSaid} />,
         ]),
     )
     return (
