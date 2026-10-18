@@ -433,6 +433,28 @@ def test_review_runs_from_before_their_purpose_are_own_only_where_their_tickets_
     assert purposes == ["own", "own", "query", "query", "query"]
 
 
+def test_a_ticket_forgotten_before_forgets_were_recorded_has_its_latest_forget_with_what_it_dropped_unknown(
+    tmp_path: Path, journals: Journals
+) -> None:
+    """0045 records each ticket's latest forget from its row; what that forget dropped, and from where, is unknown."""
+    conn = journal_at(journals, tmp_path, 44)
+    conn.execute(
+        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, forgotten_at) VALUES "
+        "('OLD-1', '/r', 'x', 'y', '2026-10-01T00:00:00Z'), ('OLD-2', '/r', 'x', 'y', NULL)"
+    )
+    assert db.migrate(conn, resources.migrations_dir()) == versions_after(44)
+    [forget] = db.forgets_of(conn, "OLD-1")
+    assert (forget.at, forget.channel, forget.run_id, forget.message_id, forget.branch, forget.prs) == (
+        "2026-10-01T00:00:00Z",
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    assert db.forgets_of(conn, "OLD-2") == []
+
+
 def test_the_memory_index_is_built_from_what_the_journal_holds_and_kept_in_step(
     tmp_path: Path, journals: Journals
 ) -> None:

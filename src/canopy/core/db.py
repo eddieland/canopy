@@ -1715,11 +1715,12 @@ def latest_message_of(conn: sqlite3.Connection, subject_kind: str, subject_id: s
     return None if row[0] is None else int(row[0])
 
 
-def forget_ticket(conn: sqlite3.Connection, key: str) -> None:
+def forget_ticket(conn: sqlite3.Connection, key: str, *, channel: str, branch: str | None, prs: Iterable[str]) -> None:
     """Clear what the journal knows of a ticket's branch, PRs, and phases, and mark where its loop view begins.
 
-    Call inside a transaction. Runs, messages, the start record, and the cursors stay (DESIGN §22). A waiting or
-    approved plan is superseded, so a ticket planned under `policy.plan = "approve"` is planned again; its file stays.
+    Call inside a transaction. Runs, messages, the start record, and the cursors stay (DESIGN §22). The forget is
+    recorded with the `branch` and `prs` it dropped, beside every earlier one. A waiting or approved plan is
+    superseded, so a ticket planned under `policy.plan = "approve"` is planned again; its file stays.
     """
     conn.execute(
         "UPDATE tickets SET branch = NULL, phase = NULL, needs_human_since = NULL, done = 0, forgotten_at = ?, "
@@ -1728,11 +1729,44 @@ def forget_ticket(conn: sqlite3.Connection, key: str) -> None:
         "WHERE key = ?",
         (now(), key, SUBJECT_TICKET, key, key),
     )
+    conn.execute(
+        "INSERT INTO forgets (ticket_key, at, channel, run_id, message_id, branch, prs) "
+        "SELECT key, forgotten_at, ?, forgotten_run_id, forgotten_message_id, ?, ? FROM tickets WHERE key = ?",
+        (channel, branch, json.dumps(list(prs)), key),
+    )
     conn.execute("DELETE FROM ticket_units WHERE ticket_key = ?", (key,))
     conn.execute(
         "UPDATE plans SET status = ? WHERE ticket_key = ? AND status != ?",
         (PlanStatus.SUPERSEDED, key, PlanStatus.SUPERSEDED),
     )
+
+
+def forgets_of(conn: sqlite3.Connection, key: str) -> list[records.Forget]:
+    """Return each time the operator forgot ticket `key`'s work, oldest first; the last is the one its row holds."""
+    return records.fetch_all(conn, records.Forget, "SELECT * FROM forgets WHERE ticket_key = ? ORDER BY id", (key,))
+
+
+def worked_since_forget(conn: sqlite3.Connection, ticket: records.Ticket) -> bool:
+    """Return whether anything has happened to a forgotten ticket since its latest forget, or True if it was never one.
+
+    Work is a run, a message, a branch, a unit, or the done mark: what another forget would have something to drop.
+    """
+    if ticket.forgotten_at is None or ticket.branch is not None or ticket.done:
+        return True
+    row = conn.execute(
+        "SELECT EXISTS (SELECT 1 FROM runs WHERE ticket_key = ? AND id > ?) "
+        "OR EXISTS (SELECT 1 FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ?) "
+        "OR EXISTS (SELECT 1 FROM ticket_units WHERE ticket_key = ?)",
+        (
+            ticket.key,
+            ticket.forgotten_run_id or 0,
+            SUBJECT_TICKET,
+            ticket.key,
+            ticket.forgotten_message_id or 0,
+            ticket.key,
+        ),
+    ).fetchone()
+    return bool(row[0])
 
 
 def forgotten_message_id(conn: sqlite3.Connection, key: str) -> int:

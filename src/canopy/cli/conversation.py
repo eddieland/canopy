@@ -11,6 +11,7 @@ ten refuse inside canopy's own ticks and runs, `notice` only when it sets or cle
 
 from __future__ import annotations
 
+import json
 import sys
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -313,7 +314,7 @@ def cmd_forget(click_ctx: click.Context, ref: str) -> int:
     subject = _ref(ref, "forget")
     ctx = open_context(click_ctx)
     try:
-        forgot = conversation.forget(ctx.conn, subject, dispatch_lock=ctx.dispatch_lock_path)
+        forgot = conversation.forget(ctx.conn, subject, channel=CLI, dispatch_lock=ctx.dispatch_lock_path)
     except conversation.Refused as r:
         raise CliError(f"forget refused ({r.guard}): {r.reason}") from None
     logs.for_tick(None).info(
@@ -573,16 +574,24 @@ def _show_ticket(ctx: Context, key: str, *, every_plan: bool) -> None:
     if ticket is not None:
         done = ", done" if ticket.done else ""
         click.echo(f"  phase {phase_of(ctx.conn, ticket)}{done}; branch {ticket.branch or 'none yet'}")
+        for forget in db.forgets_of(ctx.conn, key):
+            click.echo(f"  {_forget_line(forget)}")
         if ticket.forgotten_at:
-            click.echo(
-                f"  forgotten {attention.age(ticket.forgotten_at)} ago: the runs and messages before then are "
-                "history, and the loop reads only what came after"
-            )
+            click.echo("  the runs and messages before the latest forget are history: the loop reads only later ones")
         for unit in db.units(ctx.conn, key):
             click.echo(f"  {unit['repo']}  PR {unit['pr_url'] or 'none recorded'}  phase {unit['phase'] or 'unknown'}")
         _show_plans(ctx, ticket, every=every_plan)
     _show_runs(ctx, key)
     _show_conversation(ctx, key, record)
+
+
+def _forget_line(forget: records.Forget) -> str:
+    """One forget as `show` prints it: when, from where, and the branch and PRs it dropped."""
+    line = f"forgotten {attention.age(forget.at)} ago"
+    if forget.channel is None or forget.prs is None:
+        return f"{line}, before canopy recorded what a forget dropped"
+    dropped = [*([f"branch {forget.branch}"] if forget.branch is not None else []), *json.loads(forget.prs)]
+    return f"{line} via {forget.channel}, dropping {', '.join(dropped) if dropped else 'no branch or PR'}"
 
 
 def _show_plans(ctx: Context, ticket: records.Ticket, *, every: bool) -> None:

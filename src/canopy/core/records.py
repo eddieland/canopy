@@ -132,6 +132,25 @@ class Ticket(Row):
 
 
 @dataclass(frozen=True)
+class Forget(Row):
+    """One time the operator forgot a ticket's work (DESIGN §22), and what it dropped; its row holds the latest."""
+
+    TABLE: ClassVar[str] = "forgets"
+
+    id: int
+    ticket_key: str
+    at: str
+    # `cli` or `web`; None, with `prs`, for a forget made before forgets were recorded.
+    channel: str | None
+    # The ticket's newest run and message then: the loop reads only later ones.
+    run_id: int | None
+    message_id: int | None
+    branch: str | None
+    # A JSON array of its units' PR URLs.
+    prs: str | None
+
+
+@dataclass(frozen=True)
 class Decision(Row):
     """A decision a tick recorded (DESIGN §6): the overseer's, a guard's refusal, or an attention item."""
 

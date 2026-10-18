@@ -342,6 +342,23 @@ class CostTotal(_Model):
     """What they cost, in US dollars; None when none reported a cost."""
 
 
+class TicketForget(_Model):
+    """One time the operator forgot a ticket's work (DESIGN §22), and what it dropped."""
+
+    at: datetime
+    """When."""
+    channel: str | None = None
+    """How: `cli` or `web`. None, with `prs`, for a forget made before canopy recorded them."""
+    run_id: int | None = None
+    """The ticket's newest run then, if it had one."""
+    message_id: int | None = None
+    """The ticket's newest message then, if it had one: the messages up to it are from before the forget."""
+    branch: str | None = None
+    """The branch it dropped, the operator's to delete."""
+    prs: list[str] | None = None
+    """The URLs of the PRs it dropped, the operator's to close; None when not recorded."""
+
+
 class TicketDetail(_Model):
     """One ticket: what `canopy show` prints, and the latest decisions about it."""
 
@@ -356,11 +373,9 @@ class TicketDetail(_Model):
     """Its latest runs, newest first."""
     messages: list[Message]
     """Its conversation: the latest 100 messages, oldest first."""
-    forgotten_at: datetime | None = None
-    """When the operator last forgot its work (DESIGN §22); None if never."""
-    forgotten_message_id: int | None = None
-    """The newest message from before that forget, or None: the messages up to it are history the loop no longer
-    reads, kept for the operator."""
+    forgets: list[TicketForget] = []
+    """Each time the operator forgot its work (DESIGN §22), oldest first. The messages up to the latest one's are
+    history the loop no longer reads, kept for the operator."""
     decisions: list[Decision]
     """The latest 20 decisions about it across ticks, newest first: why the loop did, or did not, work it."""
     cost: CostTotal

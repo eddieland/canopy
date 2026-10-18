@@ -224,6 +224,9 @@ test('forget asks for the key typed out, then forgets the branch and PR', async 
     const thread = page.getByTestId('ticket-conversation')
     const earlier = thread.getByText('Remove it: the mobile app moved to v2 last week.')
     await expect(thread.getByText(/^no messages since its work was forgotten/u)).toBeVisible()
+    // The forget heads them, with the branch and PR it dropped, which are yours to delete and close.
+    await expect(thread.getByTestId('forgotten')).toContainText('dropped branch agent/ABC-103-billing-v2, acme/web#91')
+    await expect(thread.getByRole('link', { name: 'acme/web#91', exact: true })).toBeVisible()
     await expect(earlier).toHaveCount(0)
     await thread.getByRole('button', { name: 'Show 3 earlier messages' }).click()
     await expect(earlier).toBeVisible()
