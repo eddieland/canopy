@@ -5,7 +5,8 @@ import { ApiError } from '@/api/client'
 import { ticketPlansQuery, ticketQuery } from '@/api/queries'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelLoading } from '@/components/panel'
-import { TicketPlan } from '@/components/ticket-plan'
+import { PlanState, TicketPlan } from '@/components/ticket-plan'
+import { planRef } from '@/lib/refs'
 
 /**
  * A ticket's plan on a page of its own (docs/design/PLANNING.md §25): its newest plan in the plan editor, with its
@@ -22,9 +23,16 @@ function PlanPage() {
     const title = useQuery(ticketQuery(key)).data?.ticket.title
     const query = useQuery(ticketPlansQuery(key))
     const { data, error } = query
+    const newest = data?.newest?.plan
+    // The plan's reference leads its title, then its ticket's, as a run's page leads with `run:39`.
     const header = (
-        <PageHeader parents={<TicketCrumb ticketKey={key} />} title="Plan" tab={`${key} plan`}>
-            {title ?? ''}
+        <PageHeader
+            parents={<TicketCrumb ticketKey={key} />}
+            title={newest === undefined ? 'Plan' : planRef(newest.id)}
+            subject={title}
+            tab={`${key} plan`}
+        >
+            {data !== undefined && <PlanState plans={data} />}
         </PageHeader>
     )
     if (error instanceof ApiError && (error.status === 404 || error.status === 409)) {

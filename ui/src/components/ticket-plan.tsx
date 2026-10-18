@@ -19,7 +19,9 @@ import { Age } from '@/components/age'
 import { Disclosure } from '@/components/disclosure'
 import { Notice } from '@/components/notice'
 import { Empty, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { PlanChip } from '@/components/plan-card'
 import { PlanEditor } from '@/components/plan-editor'
+import { RunLink } from '@/components/run-link'
 import { Chip } from '@/components/status'
 import {
     AlertDialog,
@@ -34,6 +36,7 @@ import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { PendingWork, usePending, usePendingWork } from '@/hooks/use-pending'
 import { planText } from '@/lib/outcomes'
+import { planNeededWhy, planWaits } from '@/lib/plan-state'
 import { fromServer, movedAnchors, threadChanges } from '@/lib/plan-threads'
 import type { PlanThread, ThreadChange } from '@/lib/plan-threads'
 import { isApple } from '@/lib/send-key'
@@ -42,6 +45,8 @@ import { ariaKeys, isPressed, keysLabel } from '@/lib/shortcut'
 const APPLE = isApple(navigator.userAgent)
 // Save, as a document's: anywhere on the page while the plan is open.
 const SAVE_KEYS = 'Mod-s'
+// What Approve does, on its hover: the line under the actions is kept for what the comments open call for.
+const APPROVE_TITLE = 'Approving takes the plan as saved, your edits included, and lets its implement go ahead.'
 
 /**
  * A ticket's plan (docs/design/PLANNING.md §25): its newest plan in the plan editor, where the operator edits it and
@@ -65,7 +70,15 @@ export function TicketPlan({ ticketKey, plans }: { ticketKey: string; plans: Tic
     })
     return (
         <section aria-label="Plan" className="flex flex-col gap-3" data-testid="ticket-plan">
-            <PlanStatus plans={plans} />
+            {newest === null && (
+                <Panel>
+                    <Empty size="panel">
+                        {plans.planning === null
+                            ? 'no plan yet: the next tick dispatches a planner'
+                            : `no plan yet: run ${plans.planning} is writing one`}
+                    </Empty>
+                </Panel>
+            )}
             {newest !== null && newest.text !== null && (
                 <PendingWork value={reportPending}>
                     <NewestPlan
@@ -96,40 +109,40 @@ export function TicketPlan({ ticketKey, plans }: { ticketKey: string; plans: Tic
     )
 }
 
-/** Whether the ticket needs a plan and why, its newest plan's status and approval, and a planner at work. */
-function PlanStatus({ plans }: { plans: TicketPlans }) {
+/**
+ * The plan's state in a sentence or two, its page's description: the run that wrote it, its approval, what changed in
+ * its file since, and what comes next. Its status and age are its panel's header; with no plan, its panel says what
+ * comes, and this says nothing.
+ */
+export function PlanState({ plans }: { plans: TicketPlans }) {
     const newest = plans.newest
-    const why = plans.setting === null ? `policy.plan ${plans.policy}` : `your word, ${plans.setting}`
+    if (newest === null) {
+        return null
+    }
+    const { plan } = newest
     return (
-        <p className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground" data-testid="plan-status">
-            <span>
-                Plan {plans.needed ? 'needed' : 'not needed'}, by {why}.
-            </span>
-            {newest !== null && (
-                <span className="flex items-center gap-1.5">
-                    <Chip>{newest.plan.status}</Chip>
-                    plan {newest.plan.id}, written <Age at={newest.plan.created_at} variant="ago" />
-                    {newest.plan.approved_at !== null && (
-                        <>
-                            , approved <Age at={newest.plan.approved_at} variant="ago" /> via{' '}
-                            {newest.plan.approved_channel}
-                        </>
-                    )}
-                    {newest.edited && <span>, edited since the planner wrote it</span>}
-                    {newest.changed_since_approval && <span>, changed since it was approved</span>}
-                </span>
+        <>
+            Written by <RunLink id={plan.run_id} className="text-sm" />
+            {plan.approved_at !== null && (
+                <>
+                    , approved <Age at={plan.approved_at} variant="ago" className="text-sm" /> via{' '}
+                    {plan.approved_channel}
+                </>
             )}
-            {newest === null && plans.planning === null && plans.needed && (
-                <span>None yet: the next tick dispatches a planner.</span>
-            )}
-            {plans.planning !== null && <span>Run {plans.planning} is writing a new plan.</span>}
+            {newest.edited && ', edited since the planner wrote it'}
+            {newest.changed_since_approval && ', changed since it was approved'}.{' '}
+            {plans.planning !== null && `Run ${plans.planning} is writing a new plan.`}
             {plans.planning === null && plans.changes_asked !== null && (
-                <span>
-                    You asked for changes <Age at={plans.changes_asked} variant="ago" />: the next tick asks the planner
-                    for a new plan.
-                </span>
+                <>
+                    You asked for changes <Age at={plans.changes_asked} variant="ago" className="text-sm" />: the next
+                    tick asks the planner for a new plan.
+                </>
             )}
-        </p>
+            {planWaits(plans) && 'It waits on you: read it, comment, then approve it or ask for changes.'}
+            {plan.status === 'superseded' && !plans.needed && (
+                <span title={planNeededWhy(plans)}>Its ticket needs no plan now.</span>
+            )}
+        </>
     )
 }
 
@@ -176,8 +189,7 @@ function NewestPlan({
     const dirty = markdown !== text
     usePending(dirty, 'edit')
     const approvable = status === 'proposed' || (status === 'approved' && (newest.changed_since_approval || dirty))
-    // Open comments reach no one on Approve: the implement reads the plan alone. While any are, Approve steps back for
-    // Ask for changes, and the line under the actions says why.
+    // Open comments reach no one on Approve, since the implement reads the plan alone: the foot's line says so.
     const open = held.filter((thread) => !thread.resolved).length
 
     function refresh(): Promise<void> {
@@ -311,16 +323,20 @@ function NewestPlan({
                     ? { label: `plan ${before.id}`, markdown: replaced.text, shown: status === 'proposed' }
                     : undefined
             }
+            status={
+                <>
+                    <PlanChip plans={plans} />
+                    <Age at={newest.plan.created_at} variant="ago" />
+                </>
+            }
             onAskForChanges={status === 'proposed' ? askForChanges : undefined}
             asked={plans.changes_asked !== null}
             actions={
-                <div className="flex flex-wrap items-center gap-2" data-testid="plan-actions">
+                // `contents`, so its buttons are items of the foot's line, with Ask for changes after them.
+                <div className="contents" data-testid="plan-actions">
                     {approvable && (
-                        <Button
-                            variant={status === 'proposed' && open > 0 ? 'outline' : 'default'}
-                            onClick={() => decide('approve')}
-                            disabled={busy > 0}
-                        >
+                        // The foot's one primary, whatever is open: Ask for changes, its other way out, is outlined.
+                        <Button onClick={() => decide('approve')} disabled={busy > 0} title={APPROVE_TITLE}>
                             <Check />
                             {dirty ? 'Save and approve' : 'Approve'}
                         </Button>
@@ -345,29 +361,27 @@ function NewestPlan({
                     </Button>
                 </div>
             }
-            actionsNote={
-                <div className="flex flex-col gap-2">
-                    <p className="text-xs text-muted-foreground">
-                        Approving takes the plan as saved, your edits included, and lets its implement go ahead.
-                        {status === 'approved' && ' Saving an edit means approving it again.'}
-                        {status === 'proposed' && open > 0 && ` ${openText(open)}`}
-                    </p>
-                    <Notice error={failure} reserve>
-                        {said}
-                    </Notice>
-                </div>
+            actionsNote={actionsNote(status, open)}
+            outcome={
+                <Notice error={failure} reserve>
+                    {said}
+                </Notice>
             }
         />
     )
 }
 
-// What approving does to the comments still open, which reach the planner only through Ask for changes.
-function openText(open: number): string {
-    const which =
-        open === 1
-            ? '1 comment is still open: approving does not send it'
-            : `${open} comments are still open: approving sends none of them`
-    return `${which}, since the implement reads the plan alone. Ask for changes does.`
+// What the line under the actions says of them, after how many comments go with Ask for changes: that approving sends
+// none of those, since the implement reads the plan alone, or that an approved plan's edit is approved again.
+function actionsNote(status: PlanFile['plan']['status'], open: number): string | undefined {
+    if (status === 'approved') {
+        return 'Saving an edit means approving it again.'
+    }
+    if (status === 'proposed' && open > 0) {
+        const sends = open === 1 ? 'does not send it' : 'sends none of them'
+        return `Approving ${sends}: the implement reads the plan alone.`
+    }
+    return undefined
 }
 
 /** The ticket's earlier plans, newest first, each read only once opened. */

@@ -12,33 +12,85 @@ test.beforeEach(async ({ page }) => {
     await settled(page)
 })
 
-test('with comments open, the bar says Approve sends none of them', async ({ page }) => {
+test('with comments open, the foot says they go with Ask for changes, and Approve sends none of them', async ({
+    page,
+}) => {
     await expect(page.getByTestId('plan-bar')).toContainText(
-        '2 comments are still open: approving sends none of them, since the implement reads the plan alone. ' +
-            'Ask for changes does.',
+        '2 open comments go with Ask for changes. Approving sends none of them: the implement reads the plan alone.',
     )
 })
 
 test("a ticket's newest plan opens in the editor, its comments on their passages", async ({ page }) => {
     const section = page.getByTestId('ticket-plan')
-    await expect(section.getByTestId('plan-status')).toContainText('Plan not needed, by policy.plan off.')
-    await expect(section.getByTestId('plan-status')).toContainText('proposed')
+    // In words, as everything that waits on you reads; nothing says a plan that waits is not needed.
+    await expect(section.getByText('waiting on you', { exact: true })).toBeVisible()
+    await expect(page.getByRole('main')).not.toContainText('needed')
     await expect(plan(page).getByRole('heading', { level: 1 })).toHaveText('Schedule report exports')
     await expect(page.getByRole('article')).toHaveCount(2)
     await expect(page.getByRole('button', { name: 'Show 1 resolved' })).toBeVisible()
     await expect(page.getByTestId('plan-actions').getByRole('button', { name: 'Approve' })).toBeVisible()
     await expect(page.getByTestId('plan-actions').getByRole('button', { name: 'Save' })).toBeDisabled()
     await expect(page.getByRole('form', { name: 'Ask for changes' })).toBeVisible()
-    // It replaced plan 1, so it opens with what changed since marked, and counted.
-    const bar = page.getByTestId('plan-bar')
-    await expect(bar.getByRole('button', { name: 'Changes since plan 1' })).toHaveAttribute('aria-pressed', 'true')
-    await expect(bar.getByText(/^\d+ changes$/u)).toBeVisible()
+    // It replaced plan 1, so it opens with what changed since marked, and counted: a mode of the Plan panel's header.
+    await expect(page.getByRole('button', { name: 'Changes since plan 1' })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByTestId('plan-bar').getByRole('button', { name: 'Changes since plan 1' })).toHaveCount(0)
+    await expect(page.getByText(/^\d+ changes$/u)).toBeVisible()
     await expect(plan(page).locator('ins').filter({ hasText: 'owner_timezone()' }).first()).toBeVisible()
 })
 
+test("the plan's foot sits in its panel, with one primary, and at 820px takes two lines", async ({ page }) => {
+    await page.setViewportSize({ width: 820, height: 800 })
+    const bar = page.getByTestId('plan-bar')
+    const approve = bar.getByRole('button', { name: 'Approve' })
+    const ask = bar.getByRole('button', { name: 'Ask for changes' })
+    // Its actions on one line, the note on the whole plan among them, and what they do on the line under it.
+    const tops = await Promise.all(
+        [
+            approve,
+            bar.getByRole('button', { name: 'Save' }),
+            bar.getByRole('button', { name: 'Skip the plan' }),
+            ask,
+        ].map(async (button) => (await button.boundingBox())?.y ?? 0),
+    )
+    expect(Math.max(...tops) - Math.min(...tops)).toBeLessThanOrEqual(1)
+    const note = await bar.getByRole('textbox', { name: 'On the whole plan' }).boundingBox()
+    expect(note?.y ?? 0).toBeLessThan((tops[0] ?? 0) + 8)
+    expect((await bar.boundingBox())?.height ?? 0).toBeLessThan(120)
+    // The foot of the panel the plan is in, not a box of its own under it.
+    const panel = page.locator('section:has(> [data-testid="plan-bar"])')
+    await expect(panel.getByRole('textbox', { name: 'Plan', exact: true })).toHaveCount(1)
+    // A note being written takes a line of its own, the foot's whole width.
+    await bar.getByRole('textbox', { name: 'On the whole plan' }).click()
+    const written = await bar.getByRole('textbox', { name: 'On the whole plan' }).boundingBox()
+    const actions = await approve.boundingBox()
+    expect(written?.y ?? 0).toBeGreaterThan((actions?.y ?? 0) + (actions?.height ?? 0))
+    expect(written?.width ?? 0).toBeGreaterThan((await ask.boundingBox())?.width ?? Infinity)
+})
+
+test('what Tab moves to stops above the stuck foot, never under it', async ({ page }) => {
+    await page.setViewportSize({ width: 820, height: 800 })
+    const bar = page.getByTestId('plan-bar')
+    await page.getByRole('toolbar', { name: 'Format' }).getByRole('button', { name: 'Undo' }).focus()
+    for (let step = 0; step < 30; step += 1) {
+        await page.keyboard.press('Tab')
+        const focused = page.locator(':focus')
+        // The foot's own controls are in it, and the plan is the page's length: neither is covered.
+        const inBar = await focused.evaluate(
+            (element) => element.closest('[data-testid=plan-bar]') !== null || element.matches('.plan-doc'),
+        )
+        const box = await focused.boundingBox()
+        const foot = await bar.boundingBox()
+        if (!inBar && box !== null && foot !== null) {
+            // Above the foot, or below it once the panel has ended and the foot rests at its end.
+            const under = box.y + box.height > foot.y + 1 && box.y < foot.y + foot.height - 1
+            expect(under).toBe(false)
+        }
+    }
+})
+
 test("the plan's page names its ticket and links back to it", async ({ page }) => {
-    const title = page.getByRole('heading', { level: 1, name: 'Plan', exact: true })
-    await expect(page.locator('header', { has: title })).toContainText('Schedule report exports')
+    const title = page.getByRole('heading', { level: 1, name: 'plan:2 Schedule report exports' })
+    await expect(title).toBeVisible()
     await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'ABC-105' }).click()
     await expect(page).toHaveURL(/tickets\/ABC-105$/u)
 })
@@ -46,13 +98,14 @@ test("the plan's page names its ticket and links back to it", async ({ page }) =
 test("a plan that waits on the operator leads its ticket's page as a card, which opens the plan", async ({ page }) => {
     await page.goto('tickets/ABC-105')
     const card = page.getByTestId('plan-card')
-    await expect(card).toContainText('proposed')
+    await expect(card).toContainText('waiting on you')
+    await expect(card.getByRole('button', { name: 'Approve' })).toBeVisible()
     await expect(card).toContainText('plan:2')
     await expect(card).toContainText(/open comments\s*2/u)
     const box = await card.boundingBox()
     const work = await page.getByTestId('ticket-actions').boundingBox()
     expect(box?.y).toBeLessThan(work?.y ?? 0)
-    // The card only reads: the editor and its actions are the plan's page's.
+    // The card approves, and nothing else: the editor and its other actions are the plan's page's.
     await expect(page.getByTestId('ticket-plan')).toHaveCount(0)
     await card.getByRole('link', { name: 'Open plan' }).click()
     await expect(page).toHaveURL(/tickets\/ABC-105\/plan$/u)
@@ -93,7 +146,9 @@ test("a ticket's page loads no plan editor", async ({ page }) => {
     expect(scripts.filter((url) => /plan-editor-/u.test(url))).toEqual([])
 })
 
-test("a plan review on the attention list opens the plan's page", async ({ page }) => {
+test("a plan review on the attention list shows the plan's card, which approves it and opens its page", async ({
+    page,
+}) => {
     // The stream would send the list as the journal has it, which has no plan review: the list here is the test's.
     await page.route('**/api/events', (route) => route.abort())
     await page.route('**/api/attention', (route) =>
@@ -115,8 +170,22 @@ test("a plan review on the attention list opens the plan's page", async ({ page 
             ],
         }),
     )
+    // The root server's journal never changes: the approval is answered here, as canopy plan --approve would.
+    const approvals: unknown[] = []
+    await page.route('**/api/tickets/ABC-105/plan', async (route) => {
+        approvals.push(route.request().postDataJSON())
+        await route.fulfill({ json: { action: 'approve', already: false, plan: 2, superseded: null } })
+    })
     await page.goto('attention')
-    await page.getByTestId('attention-detail').getByRole('link', { name: 'Open plan' }).click()
+    const card = page.getByTestId('attention-detail').getByTestId('plan-card')
+    await expect(card).toContainText('waiting on you')
+    await expect(card).toContainText('plan:2')
+    await card.getByRole('button', { name: 'Approve' }).click()
+    await expect(card.getByRole('status')).toHaveText(
+        'Plan 2 of ABC-105 is approved as its file stands now. The next tick can implement it.',
+    )
+    expect(approvals).toEqual([{ action: 'approve' }])
+    await card.getByRole('link', { name: 'Open plan' }).click()
     await expect(page).toHaveURL(/tickets\/ABC-105\/plan$/u)
 })
 

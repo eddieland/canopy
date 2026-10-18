@@ -1,6 +1,8 @@
-import { cleanup, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, screen } from '@testing-library/react'
+import type { Middleware } from 'openapi-fetch'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
+import { api } from '@/api/client'
 import type { PlanSummary, TicketPlans } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
@@ -55,35 +57,83 @@ const PLANS: TicketPlans = {
     ],
 }
 
-afterEach(cleanup)
+// Every write the card sends, and the server stand-in's answer to it, as `canopy plan --approve`'s.
+let sent: { path: string; body: unknown }[] = []
+
+const server: Middleware = {
+    async onRequest({ request }) {
+        if (request.method === 'GET') {
+            return Response.json({})
+        }
+        sent.push({ path: new URL(request.url).pathname, body: JSON.parse(await request.text()) as unknown })
+        return Response.json({ action: 'approve', already: false, plan: 2, superseded: null })
+    },
+}
+
+beforeEach(() => {
+    sent = []
+    api.use(server)
+})
+
+afterEach(() => {
+    api.eject(server)
+    cleanup()
+})
 
 async function renderCard(plans: Partial<TicketPlans> = {}) {
     await renderRouted(<PlanCard ticketKey="ABC-1" plans={{ ...PLANS, ...plans }} />, { at: '/tickets/ABC-1' })
 }
 
 describe('PlanCard', () => {
-    it('says where the plan stands, which it is, who wrote it, and how many comments are open', async () => {
+    it('says where the plan stands in words, which it is, who wrote it, and how many comments are open', async () => {
         await renderCard()
         const card = await screen.findByTestId('plan-card')
-        expect(card.textContent).toContain('proposed')
+        expect(card.textContent).toContain('waiting on you')
+        expect(card.textContent).not.toContain('proposed')
         expect(card.textContent).toContain('plan:2')
         expect(screen.getByRole('link', { name: 'run:41' })).toBeTruthy()
         expect(card.textContent).toMatch(/open comments1/u)
-        expect(card.textContent).toContain('It waits on you')
+        expect(card.textContent).toContain('1 open comment: approving sends none.')
     })
 
-    it("opens the plan's own page, and edits and decides nothing itself", async () => {
+    it('approves a waiting plan as canopy plan --approve does, and says so in its words', async () => {
+        await renderCard()
+        fireEvent.click(await screen.findByRole('button', { name: 'Approve' }))
+        expect((await screen.findByRole('status')).textContent).toBe(
+            'Plan 2 of ABC-1 is approved as its file stands now. The next tick can implement it.',
+        )
+        expect(sent).toEqual([{ path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
+    })
+
+    it("opens the plan's own page, and edits nothing itself", async () => {
         await renderCard()
         const open = await screen.findByRole('link', { name: 'Open plan' })
         expect(open.getAttribute('href')).toBe('/tickets/ABC-1/plan')
-        expect(screen.queryByRole('button', { name: /Approve|Skip/u })).toBeNull()
+        expect(screen.queryByRole('button', { name: /Skip/u })).toBeNull()
         expect(screen.queryByRole('textbox')).toBeNull()
     })
 
-    it('says a plan is needed while none is written, and which run writes one', async () => {
+    it('offers no Approve for a plan approved and unchanged since, or one a planner is replacing', async () => {
+        const approved = { ...PLAN, status: 'approved' as const, approved_at: '2026-10-08T11:30:00Z' }
+        const newest = PLANS.newest === null ? null : { ...PLANS.newest, plan: approved }
+        await renderCard({ newest })
+        expect((await screen.findByTestId('plan-card')).textContent).toContain('approved')
+        expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+        cleanup()
+
+        await renderCard({ planning: 7 })
+        const card = await screen.findByTestId('plan-card')
+        expect(card.textContent).toContain('proposed')
+        expect(card.textContent).not.toContain('waiting on you')
+        expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
+    })
+
+    it('says a plan is needed while none is written, why on hover, and which run writes one', async () => {
         await renderCard({ newest: null, plans: [], threads: [], planning: 7 })
         const card = await screen.findByTestId('plan-card')
-        expect(card.textContent).toContain('needed')
+        expect(screen.getByText('needed').closest('[title]')?.getAttribute('title')).toBe(
+            'policy.plan is approve: every implement waits on a plan you approve.',
+        )
         expect(card.textContent).toContain('Run 7 is writing a new plan.')
     })
 })

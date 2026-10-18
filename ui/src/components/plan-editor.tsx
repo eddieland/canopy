@@ -23,7 +23,7 @@ import {
 import { Fragment, useEffect, useEffectEvent, useLayoutEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { Panel, PanelHeader } from '@/components/panel'
+import { Panel, PanelFooter, PanelHeader } from '@/components/panel'
 import { AskForChanges, DraftForm, PlanThreads, ThreadCard } from '@/components/plan-threads'
 import type { Draft, ThreadActions } from '@/components/plan-threads'
 import { Button } from '@/components/ui/button'
@@ -67,11 +67,13 @@ import { ariaKeys, keysLabel } from '@/lib/shortcut'
 const APPLE = isApple(navigator.userAgent)
 // The selection's bubble, by its key, so opening a comment can hide it.
 const BUBBLE = new PluginKey('planBubble')
-// How far below the top of the page the editor keeps what it scrolls into view, in pixels: the sticky toolbar's height
-// (`min-h-9`) and a little air. A passage's highlight keeps the same as its scroll margin (`.plan-comment`).
-const TOOLBAR_CLEARANCE = 48
-// How far above the bottom of the page: the bar of actions, which sticks there (`min-h-12`), and a little air.
-const BAR_CLEARANCE = 64
+// How far below the top of the page the editor keeps what it scrolls into view, in pixels: the sticky header's height,
+// its label's line and the toolbar's under it, and a little air. A passage's highlight keeps the same as its scroll
+// margin (`.plan-comment`).
+const TOOLBAR_CLEARANCE = 80
+// How far above the bottom of the page: the plan's foot, which sticks there, at rest its actions' line and the line
+// under them, and a little air. The page keeps the same clear of it for the keyboard (`scroll-padding-bottom`).
+const BAR_CLEARANCE = 128
 // The shortcut that comments on the selection (`PlanHighlights`).
 const COMMENT_KEYS = 'Mod-Alt-m'
 // A comment floating under its passage, over the plan, while the comments sit under it.
@@ -85,8 +87,8 @@ const FLOAT = 'absolute z-20 w-[min(24rem,100%)] overflow-hidden rounded-md bord
  * in the comment; while one is half written, it keeps its passage and takes the cursor back instead. The comments
  * stay on their passages as the plan is edited, by their words (`src/lib/plan-anchors.ts`), and a passage deleted
  * whole leaves its comment marked as gone. The threads are the caller's state, given as `threads` and changed through
- * `onThreadsChange`. `markdown` is read once: a new plan is a new `key`. With `onAskForChanges`, the comments end in
- * Ask for changes, which sends the open ones to the planner as one message (`changeRequest`).
+ * `onThreadsChange`. `markdown` is read once: a new plan is a new `key`. With `onAskForChanges`, the plan's foot ends
+ * in Ask for changes, which sends the open comments to the planner as one message (`changeRequest`).
  */
 export function PlanEditor({
     markdown,
@@ -95,10 +97,12 @@ export function PlanEditor({
     onChange,
     editable = true,
     edited = false,
+    status,
     onAskForChanges,
     asked = false,
     actions,
     actionsNote,
+    outcome,
     previous,
 }: {
     /** The plan, as Markdown. Read when the editor opens. */
@@ -113,14 +117,18 @@ export function PlanEditor({
     editable?: boolean
     /** Whether the plan was edited before it was opened here, as an edit made here marks it too. */
     edited?: boolean
+    /** Where the plan stands, at the right of its panel's header, before its modes: a status chip and its age. */
+    status?: ReactNode
     /** Sends the open comments, and a note on the whole plan, to the planner as one message. */
     onAskForChanges?: (message: string) => void
     /** Whether the operator asked for changes no planner has read yet, so that asking again is said as such. */
     asked?: boolean
-    /** The caller's own word on the plan, such as Approve, at the start of the bar under it. */
+    /** The caller's own word on the plan, such as Approve, at the start of the plan's foot. */
     actions?: ReactNode
-    /** What the caller says about those, under them in the bar: what they will do, or what one did. */
+    /** What the caller says of those, in words, on the line under them: what they will do. */
     actionsNote?: ReactNode
+    /** What the caller's last action did, or why it was refused, at the foot's end (`Notice`). */
+    outcome?: ReactNode
     /**
      * The plan this one replaces, by its name and Markdown, to show what changed since (`src/lib/plan-diff.ts`); with
      * `shown`, the changes show as the editor opens, until the operator turns them off.
@@ -402,9 +410,28 @@ export function PlanEditor({
             <div className="grid min-w-0 items-start gap-6 @min-[60rem]:grid-cols-[minmax(0,51rem)_20rem]">
                 <Panel>
                     <PanelHeader label="Plan" sticky>
+                        {(status !== undefined || previous !== undefined) && (
+                            <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                                {status}
+                                {status !== undefined && previous !== undefined && (
+                                    // What the plan is, then after the rule how it is shown, as a transcript's modes.
+                                    <span aria-hidden className="h-4 w-px bg-border" />
+                                )}
+                                {previous !== undefined && (
+                                    <span className="flex items-center gap-1">
+                                        {/* A mode, named for what it shows: the plan as it reads now, what changed
+                                            since marked on it. */}
+                                        <Toggle size="xs" pressed={showChanges} onPressedChange={setShowChoice}>
+                                            Changes since {previous.label}
+                                        </Toggle>
+                                        {showChanges && <ChangeSteps count={seen.changes} onStep={goToChange} />}
+                                    </span>
+                                )}
+                            </span>
+                        )}
                         {editable && <FormatBar editor={editor} canComment={seen.selected} onComment={startComment} />}
                     </PanelHeader>
-                    <EditorContent editor={editor} className="px-6 py-4" />
+                    <EditorContent editor={editor} className={cn('px-6 py-4', showChanges && 'plan-changes')} />
                     {editable && (
                         <BubbleMenu
                             editor={editor}
@@ -425,6 +452,29 @@ export function PlanEditor({
                                 Comment
                             </Button>
                         </BubbleMenu>
+                    )}
+                    {editable && (actions !== undefined || onAskForChanges !== undefined) && (
+                        // The plan's actions stay at the bottom of the page while it scrolls, as a document's do, so
+                        // a long plan is approved or sent back from where it is read, not from under its last line.
+                        <PanelFooter sticky data-testid="plan-bar">
+                            <div className="flex flex-wrap items-center gap-2">
+                                {actions}
+                                {onAskForChanges !== undefined && (
+                                    <AskForChanges
+                                        threads={threads}
+                                        starts={starts}
+                                        edited={edited || changed}
+                                        asked={asked}
+                                        onAsk={onAskForChanges}
+                                        note={actionsNote}
+                                    />
+                                )}
+                                {onAskForChanges === undefined && actionsNote !== undefined && (
+                                    <p className="basis-full text-xs text-muted-foreground">{actionsNote}</p>
+                                )}
+                            </div>
+                            {outcome}
+                        </PanelFooter>
                     )}
                 </Panel>
                 <Panel>
@@ -455,36 +505,6 @@ export function PlanEditor({
                     />
                 </Panel>
             </div>
-            {editable && (actions !== undefined || onAskForChanges !== undefined || previous !== undefined) && (
-                // The plan's actions stay at the bottom of the page while it scrolls, as a document's do, so a long
-                // plan is approved or sent back from where it is read rather than from under its last line.
-                <div
-                    data-testid="plan-bar"
-                    className={cn(
-                        'sticky bottom-0 z-10 mt-3 flex min-h-12 flex-wrap items-center gap-2 rounded-md border',
-                        'bg-surface px-3 py-2',
-                    )}
-                >
-                    {previous !== undefined && (
-                        // A mode, named for what it shows: the plan as it reads now, with what changed marked on it.
-                        <Toggle size="xs" pressed={showChanges} onPressedChange={setShowChoice}>
-                            Changes since {previous.label}
-                        </Toggle>
-                    )}
-                    {previous !== undefined && showChanges && <ChangeSteps count={seen.changes} onStep={goToChange} />}
-                    {actions}
-                    {onAskForChanges !== undefined && (
-                        <AskForChanges
-                            threads={threads}
-                            starts={starts}
-                            edited={edited || changed}
-                            asked={asked}
-                            onAsk={onAskForChanges}
-                        />
-                    )}
-                    {actionsNote !== undefined && <div className="basis-full">{actionsNote}</div>}
-                </div>
-            )}
             {draftFloats && (
                 <div ref={float} data-testid="plan-float" className={cn(FLOAT, 'bg-accent/14 px-3 py-2.5')}>
                     <DraftForm
@@ -660,7 +680,8 @@ function FormatBar({ editor, canComment, onComment }: { editor: Editor; canComme
     }
 
     return (
-        <Toolbar aria-label="Format" className="-mr-2 ml-auto">
+        // A line of its own under the label, in line with it, so the header's first line keeps to the plan's state.
+        <Toolbar aria-label="Format" className="-ml-1.5 basis-full pb-1">
             <ToolbarButton
                 aria-label="Undo"
                 title={withKeys('Undo', UNDO_KEYS)}
