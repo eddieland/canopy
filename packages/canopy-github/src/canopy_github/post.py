@@ -9,9 +9,9 @@ left, which is deleted first, and only if it is still pending, on that PR, and t
 
 On stdout, one JSON line each: `as`, the login it posts as; for a PR, `pending`, the pending review's node id and its
 id, once it has one; once it is submitted, `comment` for each reply (the comment it answered, the new comment's id and
-URL) and `review` (its id and URL); for an issue, `comment`; last, `end`, saying whether it submitted. `"submitted": false` is
-printed only when nothing was posted, with `pending` naming a pending review it could not delete. No `end` line means
-the outcome is unknown: the submit may have reached GitHub.
+URL) and `review` (its id and URL); for an issue, `comment`; last, `end`, saying whether it submitted.
+`"submitted": false` is printed only when nothing was posted, with `pending` naming a pending review it could not
+delete. No `end` line means the outcome is unknown: the submit may have reached GitHub.
 
 It never approves, requests changes, resolves a thread, or deletes a review but the pending one it is handed.
 
