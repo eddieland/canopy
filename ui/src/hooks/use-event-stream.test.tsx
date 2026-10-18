@@ -51,10 +51,10 @@ describe('useEventStream', () => {
                 onReconnect,
             }),
         )
-        expect(result.current).toBe('connecting')
+        expect(result.current.status).toBe('connecting')
 
         act(() => latest().open())
-        expect(result.current).toBe('open')
+        expect(result.current.status).toBe('open')
 
         act(() => {
             latest().send('a')
@@ -63,9 +63,9 @@ describe('useEventStream', () => {
         expect(onEvent).toHaveBeenCalledExactlyOnceWith('A')
 
         act(() => latest().drop())
-        expect(result.current).toBe('reconnecting')
+        expect(result.current.status).toBe('reconnecting')
         act(() => latest().open())
-        expect(result.current).toBe('open')
+        expect(result.current.status).toBe('open')
         expect(onReconnect).toHaveBeenCalledOnce()
 
         unmount()
@@ -76,7 +76,7 @@ describe('useEventStream', () => {
         const { result } = renderHook(() =>
             useEventStream('/api/events', { parse: (d) => d, onEvent: () => {}, enabled: false }),
         )
-        expect(result.current).toBe('closed')
+        expect(result.current.status).toBe('closed')
         expect(FakeEventSource.instances).toHaveLength(0)
     })
 
@@ -95,7 +95,7 @@ describe('useEventStream', () => {
         })
         expect(first.closed).toBe(true)
         expect(FakeEventSource.instances).toHaveLength(2)
-        expect(result.current).toBe('reconnecting')
+        expect(result.current.status).toBe('reconnecting')
 
         act(() => latest().drop())
         act(() => {
@@ -108,7 +108,7 @@ describe('useEventStream', () => {
         expect(FakeEventSource.instances).toHaveLength(3)
 
         act(() => latest().open())
-        expect(result.current).toBe('open')
+        expect(result.current.status).toBe('open')
         expect(onReconnect).toHaveBeenCalledOnce()
     })
 
@@ -120,20 +120,20 @@ describe('useEventStream', () => {
             vi.advanceTimersByTime(RETRY_FIRST_MS * 4)
         })
         expect(FakeEventSource.instances).toHaveLength(1)
-        expect(result.current).toBe('open')
+        expect(result.current.status).toBe('open')
         expect(onReconnect).toHaveBeenCalledOnce()
     })
 
     it('tries again after the server refused it, which the browser never does', () => {
         const { result } = stream()
         act(() => latest().refuse())
-        expect(result.current).toBe('reconnecting')
+        expect(result.current.status).toBe('reconnecting')
         act(() => {
             vi.advanceTimersByTime(RETRY_FIRST_MS)
         })
         expect(FakeEventSource.instances).toHaveLength(2)
         act(() => latest().open())
-        expect(result.current).toBe('open')
+        expect(result.current.status).toBe('open')
     })
 
     it('starts over when the page is shown after long enough hidden to have lost the stream unawares', () => {
@@ -152,7 +152,7 @@ describe('useEventStream', () => {
         act(() => show('visible'))
         expect(FakeEventSource.instances).toHaveLength(2)
         expect(FakeEventSource.instances[0]?.closed).toBe(true)
-        expect(result.current).toBe('reconnecting')
+        expect(result.current.status).toBe('reconnecting')
         act(() => latest().open())
         expect(onReconnect).toHaveBeenCalledOnce()
     })
@@ -174,6 +174,27 @@ describe('useEventStream', () => {
             globalThis.dispatchEvent(new Event('online'))
         })
         expect(FakeEventSource.instances).toHaveLength(3)
+    })
+
+    it('says since when a stream that never reopens has been down, the first drop, through every retry', () => {
+        const { result } = stream()
+        expect(result.current.downSince).toBeNull()
+        const dropped = Date.now()
+        act(() => latest().drop())
+        expect(result.current).toEqual({ status: 'reconnecting', downSince: dropped })
+        for (let n = 0; n < 6; n += 1) {
+            act(() => {
+                vi.advanceTimersByTime(60_000)
+            })
+            act(() => latest().refuse())
+        }
+        expect(FakeEventSource.instances.length).toBeGreaterThan(4)
+        expect(result.current).toEqual({ status: 'reconnecting', downSince: dropped })
+
+        act(() => latest().open())
+        expect(result.current).toEqual({ status: 'open', downSince: null })
+        act(() => latest().drop())
+        expect(result.current.downSince).toBe(Date.now())
     })
 
     it('stops trying once unmounted', () => {

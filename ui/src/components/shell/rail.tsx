@@ -10,6 +10,7 @@ import { Cost } from '@/components/cost'
 import { RunDot } from '@/components/status'
 import { TicketTitle } from '@/components/ticket-title'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useLoopDown } from '@/hooks/use-loop-down'
 import { runRef } from '@/lib/refs'
 import { railRuns } from '@/lib/run-state'
 import { cn } from '@/lib/utils'
@@ -28,8 +29,15 @@ const RAIL_RUNS = 4
 export function RailWorking() {
     const runs = useQuery(runsQuery).data
     const { shown, more } = railRuns(runs ?? [], RAIL_RUNS)
+    // While the loop isn't answering, these are only what it last said: dimmed, as stale search hits are.
+    const stale = useLoopDown().offline
     return (
-        <RailSection label="Working" testId="rail-working" count={runs === undefined ? undefined : shown.length + more}>
+        <RailSection
+            label="Working"
+            testId="rail-working"
+            count={runs === undefined ? undefined : shown.length + more}
+            stale={stale}
+        >
             {runs === undefined ? (
                 <Skeleton className="mx-2.5 h-8" />
             ) : shown.length === 0 ? (
@@ -174,15 +182,22 @@ function RailSection({
     label,
     testId,
     count,
+    stale = false,
     children,
 }: {
     label: string
     testId: string
     count?: number
+    stale?: boolean
     children: ReactNode
 }) {
     return (
-        <section aria-label={label} className="mx-2 mt-3 border-t pt-3" data-testid={testId}>
+        <section
+            aria-label={label}
+            className={cn('mx-2 mt-3 border-t pt-3 transition-opacity', stale && 'opacity-60')}
+            data-stale={stale || undefined}
+            data-testid={testId}
+        >
             <div className="flex items-center justify-between px-2.5 pb-1.5">
                 <span className="panel-label">{label}</span>
                 {count !== undefined && <span className="readout text-2xs text-muted-foreground">{count}</span>}
