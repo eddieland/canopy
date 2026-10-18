@@ -430,6 +430,11 @@ def approving(canopy_env: CanopyEnv, extra: str = "") -> None:
     canopy_env.write_private(f'[trust]\nreview_replies = "approve"\n{extra}')
 
 
+def posting(canopy_env: CanopyEnv) -> None:
+    """Set `trust.review_replies = "post"` in the private file: workers post their own comments, marked, as before."""
+    canopy_env.write_private('[trust]\nreview_replies = "post"\n')
+
+
 def all_drafts(conn: sqlite3.Connection) -> list[records.Draft]:
     """Every draft in the journal, in the order they were written."""
     return records.fetch_all(conn, records.Draft, "SELECT * FROM drafts ORDER BY id")

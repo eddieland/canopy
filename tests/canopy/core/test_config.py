@@ -454,21 +454,21 @@ def test_the_workspace_file_cannot_shorten_retention(canopy_env: CanopyEnv) -> N
         load(canopy_env.root, canopy_env.user_file)
 
 
-def test_review_replies_and_the_vcs_source_default_to_posting_and_canopys_own_programs(canopy_env: CanopyEnv) -> None:
+def test_review_replies_and_the_vcs_source_default_to_drafting_and_canopys_own_programs(canopy_env: CanopyEnv) -> None:
     cfg = load(canopy_env.root, canopy_env.user_file)
-    assert cfg.trust.review_replies == "post"
+    assert cfg.trust.review_replies == "approve"
     assert cfg.connect.vcs() == config.Source(kind="vcs", cmd="canopy-connect-github", post_cmd="canopy-post-github")
     assert cfg.connect.tracker() is None
 
 
 def test_review_replies_and_sources_are_set_in_the_operators_files(canopy_env: CanopyEnv) -> None:
     canopy_env.append_user(
-        '\n[trust]\nreview_replies = "approve"\n\n[connect.sources.ghe]\nkind = "vcs"\n'
+        '\n[trust]\nreview_replies = "post"\n\n[connect.sources.ghe]\nkind = "vcs"\n'
         'cmd = "ghe-read --host ghe.example.com"\ntimeout_minutes = 5\n'
         '\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "canopy-post-github"\n'
     )
     cfg = load(canopy_env.root, canopy_env.user_file)
-    assert cfg.trust.review_replies == "approve"
+    assert cfg.trust.review_replies == "post"
     assert cfg.connect.vcs() == config.Source(kind="vcs", cmd="ghe-read --host ghe.example.com", timeout_minutes=5)
     assert cfg.connect.tracker() == config.Source(kind="tracker", post_cmd="canopy-post-github")
 

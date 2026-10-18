@@ -86,6 +86,13 @@ Controls:
   prompt's. Jira's issue edit cannot change status. Label writes replace the whole set and are not atomic; the
   tracker skills read the set immediately before writing it.
 - Authorized repliers are matched on the tracker's stable account id, never a display name, whatever the tracker.
+- With `trust.review_replies = "approve"`, the default (DESIGN §29), a worker's draft is untrusted text, written from
+  coworkers' comments, until the operator sends it: every surface shows it as plain text with each hidden character
+  named, and its bounds refuse hidden characters and what looks like a secret. PR review threads join the journal
+  through canopy's own reader, read only: they decide which thread a draft answers and what the operator is shown,
+  never what an agent does. A draft names a PR of its own run's units, or it is refused. Editing, dropping, sending,
+  and settling a draft refuse when `CANOPY_TICK_ID` or `CANOPY_RUN_ID` is set, as `reply` does: an agent that could
+  send a draft could post as the operator.
 - Review feedback from anyone not in `trust.trusted_reviewers` (private, empty by default) starts no run on its own
   (D089). The overseer records `untrusted_review` and keeps its `review` cursor before it until the operator answers in
   canopy, with `canopy reply` or the web UI; the `resume` worker addresses such a comment only as an operator message
@@ -336,6 +343,11 @@ but must be distinguishable:
 - `decisions` and `runs` tables are a complete local audit log of what the
   loop did and why.
 - canopy's reviews post nothing (D114), so nothing a reviewer writes appears under the operator's name.
+- A reply the operator sends through canopy (DESIGN §29) carries no marks: it is their own words, posted word for
+  word as they last saw it, named by its hash, as one comment review that approves nothing and resolves no thread. The
+  journal records which run drafted it, whether the operator edited it, the channel, and the comment's id, by which
+  canopy knows it: the state block lists those ids, and neither the overseer nor a worker reads one as review feedback
+  or a go-ahead.
 - Every comment and reply a worker posts starts with `trust.comment_prefix` (`CANOPY:` by default) and ends with
   `trust.comment_suffix`, whichever are set (DESIGN §8, D069). The overseer and workers never read a comment carrying
   them as an authorized reply, a split request, or review feedback. The marks only take authority away, so forging
@@ -367,6 +379,11 @@ Controls:
   private. Residual: a worker reads the approved plan from a copy in its working directory, ignored by git, and can
   still commit it by name, which on a private ticket publishes the plan with its branch. The prompt forbids it, and
   push verification gives the run a harness note when a pushed branch holds the copy; nothing prevents it.
+- With `trust.review_replies = "approve"`, a worker's comments leave the machine only as the operator sent them: its
+  prompt says to post none and to draft each instead (DESIGN §29), and both worker definitions deny the GitHub
+  server's reply and review-comment tools and `gh pr comment` by name, as defense in depth; where a tracker source
+  posts the ticket's drafts, the issue-comment ones too. canopy posts what the operator sent through
+  `canopy-post-github` (T2), never through an agent.
 - A private ticket's worker (DESIGN §22) runs `canopy-worker-private`, whose definition canopy renders from the user
   config: every tool of the tracker's MCP server (`tracker.mcp_server`) is denied by a wildcard, then only
   `tracker.read_tools` are allowed by name, so a write tool missing from the list fails closed; the tracker CLIs canopy
@@ -588,7 +605,8 @@ loop's terminal would.
 
 ## 6. What canopy must never do
 
-- Approve, merge, or close a PR, or submit a PR review of any kind (approve or request changes).
+- Approve, merge, or close a PR, or submit a PR review that approves or requests changes. The one review canopy
+  submits is a comment review of text the operator sent through canopy word for word (DESIGN §29).
 - Push to or edit a PR the loop is only reviewing.
 - Transition a ticket to Done.
 - Push to any branch outside `trust.branch_prefix`, except the head branch of an open, non-fork PR the operator

@@ -218,7 +218,7 @@ def test_an_override_without_the_contract_serves_until_a_tier_records(
 ) -> None:
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
-    (overrides / "worker-implement.md").write_text("Work on {{KEY}}, labels {{LABELS}}.\n")
+    (overrides / "worker-implement.md").write_text("Work on {{KEY}}, labels {{LABELS}}.\n{{DRAFTS}}\n")
     assert dispatch_in_tick(conn, *WORK).code == 0
     # Ended, so the next dispatch is refused for its prompt alone.
     conn.execute("UPDATE runs SET status = 'crashed', ended_at = 'x' WHERE status = 'running'")

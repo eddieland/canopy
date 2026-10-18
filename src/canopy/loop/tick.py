@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Literal
 
 from canopy.chores import reconcile as chore_reconcile
-from canopy.core import agent_output, chore_view, conversation, db, definitions, notice, plans, pools
+from canopy.core import agent_output, chore_view, conversation, db, definitions, drafts, notice, plans, pools
 from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.core.vocab import TickStatus
@@ -134,6 +134,7 @@ def _render(
         mirror_delimiter=conversation.body_delimiter(),
         attention=attention.for_overseer(ctx.conn),
         query_due=query_due,
+        operator_sent=drafts.sent_by_pr(ctx.conn),
     )
     owed = duties.owed(
         ctx.conn,

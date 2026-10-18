@@ -39,7 +39,7 @@ timeout_minutes = 2
 
 - `approve` drafts; `post` is how workers worked before this section, every prompt the same bytes, held by a snapshot.
   The default changes what workers do on upgrade, so the release notes say so, and `canopy status` names the setting
-  and the drafts waiting. Until canopy can send drafts, while ROADMAP M53 is being built, the default is `post`.
+  and the drafts waiting.
 - A source is configured as ROADMAP M36's connectors are: a command split into words as a sink's is (§20), run with
   no shell, with a timeout, private. This section defines
   the `vcs` source's table and its `post_cmd`, and runs them only for drafts (The threads, read in code, below); M36

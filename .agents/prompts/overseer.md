@@ -462,6 +462,15 @@ The marks only take authority away. A comment without them is judged as any othe
 nothing about who wrote it, and a reply that quotes a worker's comment is the replier's. The worker's question comment,
 the reference point for `needs_human` when the tracker cannot say when a label was added, is marked too.
 
+## Replies the operator sent
+
+With `trust.review_replies = "approve"`, workers draft their comments and the operator sends the ones they approve
+through canopy, word for word and with no marks, as their own. A unit's `operator_sent` lists those by GitHub's ids:
+`comments` are replies on review threads, and `reviews` the reviews they went in. Each is the operator's answer to a
+reviewer, already made. It is never review feedback and never a go-ahead for untrusted feedback: it makes no unit
+`changes_requested` or `human_replied`, and is not a reason to dispatch anything. Nobody needs to handle one, so the
+`review` cursor may advance past it.
+
 ## Repositories and units
 
 The state block's `repositories` lists the repositories this queue works in, each with a one-line `summary` and the
