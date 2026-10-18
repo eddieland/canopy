@@ -73,7 +73,10 @@ comes first. Never quote, paraphrase, or mention them in a PR or a commit messag
 
 ## Obligations
 
-- Stay inside /pool/1/repo. Do not touch files outside it.
+- Stay inside /pool/1/repo. Do not touch files outside it. Each shell command starts in /pool/1/repo, whatever an earlier
+  one changed directory to, and a `cd` is checked against where its command starts, even after another `cd` in the
+  same command: `cd app && cd ../lib` is refused as leaving /pool/1/repo. To work in a directory inside it, set the
+  command's working directory to it, or `cd` by its path from /pool/1/repo.
 - Commit with clear messages. Keep the agent runtime's attribution trailer on commits, or add `Co-authored-by: canopy worker <noreply@canopy.invalid>`. Never disguise agent work as human work.
 - Push only to `agent/PROJ-1-work`, with `git push origin HEAD:refs/heads/agent/PROJ-1-work` in each repository you changed.
   Commit on the detached HEAD as it is: create no local branch. To bring a base branch into yours, merge `origin/<base>` into it. Never rebase or otherwise rewrite a commit that is already pushed: a push must never need force.
