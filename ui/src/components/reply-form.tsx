@@ -10,6 +10,7 @@ import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
 import { Kbd } from '@/components/ui/kbd'
 import { notedText, repliedText } from '@/lib/outcomes'
+import { draftKey, keepDraft, readDraft } from '@/lib/reply-draft'
 import { isApple, sends, sendShortcut, useSendKey } from '@/lib/send-key'
 
 // The operator's bound (DESIGN §22): the server refuses more, after stripping, rather than cut it.
@@ -40,15 +41,19 @@ export type ReplyTarget = { kind: 'ticket'; key: string; isPublic: boolean } | {
 /**
  * Answers a ticket, as `canopy reply` does, or notes something to a chore, as `canopy reply chore:NAME` does. The
  * submission id is drawn when the form is rendered and kept until a reply is recorded, so sending again after an
- * uncertain result records nothing new (DESIGN §22). On a public ticket the reply stays in canopy: it is how the
- * operator says what to do about an untrusted reviewer's comments (D089).
+ * uncertain result records nothing new (DESIGN §22). Until it is recorded, what is written is kept with its submission
+ * id for the tab's life (`src/lib/reply-draft.ts`), so a sign-out mid-reply loses nothing. On a public ticket the
+ * reply stays in canopy: it is how the operator says what to do about an untrusted reviewer's comments (D089).
  */
 export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; waiting?: number | null }) {
     const client = useQueryClient()
     const sendKey = useSendKey()
     const shortcut = sendShortcut(sendKey, APPLE)
-    const [body, setBody] = useState('')
-    const [submission, setSubmission] = useState(newSubmission)
+    const stored = draftKey(target.kind === 'ticket' ? `ticket:${target.key}` : `chore:${target.name}`)
+    // The parent keys the form by its subject, so the draft is read once for it, on mount.
+    const [draft] = useState(() => readDraft(stored))
+    const [body, setBody] = useState(draft?.body ?? '')
+    const [submission, setSubmission] = useState(() => draft?.submission ?? newSubmission())
     const [said, setSaid] = useState<string | null>(null)
     const mutation = useMutation({
         mutationFn: (text: string): Promise<Replied> =>
@@ -59,6 +64,7 @@ export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; wai
             setSaid(target.kind === 'ticket' ? repliedText(target.key, replied) : notedText(target.name, replied))
             setBody('')
             setSubmission(newSubmission())
+            keepDraft(stored, { body: '', submission })
             void (target.kind === 'ticket' ? refreshTicket(client, target.key) : refreshChore(client, target.name))
         },
     })
@@ -101,7 +107,10 @@ export function ReplyForm({ target, waiting = null }: { target: ReplyTarget; wai
                     name="body"
                     value={body}
                     maxLength={MAX_REPLY}
-                    onChange={(event) => setBody(event.target.value)}
+                    onChange={(event) => {
+                        setBody(event.target.value)
+                        keepDraft(stored, { body: event.target.value, submission })
+                    }}
                     onKeyDown={sendOnKey}
                     placeholder={placeholder}
                 />

@@ -33,6 +33,13 @@ describe('Notice', () => {
         expect(screen.getByRole('alert').textContent).toBe('the request failed')
     })
 
+    it('says a failure that is not a refusal in canopy’s words, never the browser’s', () => {
+        const { rerender } = render(<Notice error={new TypeError('Failed to fetch')} />)
+        expect(screen.getByRole('alert').textContent).toBe('canopy did not answer: is canopy loop running?')
+        rerender(<Notice error={new ApiError(500, undefined)} />)
+        expect(screen.getByRole('alert').textContent).toBe('canopy failed (500): it may not have been done')
+    })
+
     it('says what an action did as a status, and nothing when it has nothing to say', () => {
         const { rerender, container } = render(<Notice>Recorded message 4 on ABC-1.</Notice>)
         expect(screen.getByRole('status').textContent).toBe('Recorded message 4 on ABC-1.')
@@ -41,5 +48,12 @@ describe('Notice', () => {
         const empty = ''
         rerender(<Notice>{empty}</Notice>)
         expect(container.childElementCount).toBe(0)
+    })
+
+    it('keeps its line while it has nothing to say, when asked to', () => {
+        const { rerender } = render(<Notice reserve>{null}</Notice>)
+        expect(screen.getByRole('status').textContent).toBe('')
+        rerender(<Notice reserve>Recorded message 4 on ABC-1.</Notice>)
+        expect(screen.getByRole('status').textContent).toBe('Recorded message 4 on ABC-1.')
     })
 })

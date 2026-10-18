@@ -388,6 +388,8 @@ Signing in:
 - Every API route but the session's answers 401 without a valid session. A write (any method but GET and HEAD) also
   needs the token and an `Origin` header naming an allowed host: a same-origin request. The custom header makes a
   cross-origin write need a CORS preflight, which the server never grants.
+- A 401 signs the page out: it shows the sign-in page. One to a write says the write was not sent, and a reply being
+  written is kept in the tab until it is recorded, so signing in again loses nothing.
 - The app's own files (`index.html` and its assets) are served without a session: they hold no journal data, and the
   sign-in page is one of them.
 

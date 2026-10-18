@@ -7,6 +7,7 @@ import type { Pause as Paused } from '@/api/types'
 import { Age } from '@/components/age'
 import { Button } from '@/components/ui/button'
 import { LOOP_DOWN_TITLE, useLoopDown } from '@/hooks/use-loop-down'
+import { failedText } from '@/lib/outcomes'
 import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -36,7 +37,7 @@ export function LoopPause() {
         return <span aria-hidden className="w-20" />
     }
     const paused = loop.data.paused
-    const failed = toggle.error?.message ?? null
+    const failed = toggle.error === null ? null : failedText(toggle.error)
     return (
         <div className="flex items-center gap-2" data-testid="loop-pause" data-paused={paused !== null}>
             {paused !== null && (

@@ -1,3 +1,4 @@
+import { ApiError } from '@/api/client'
 import type {
     ChoreTried,
     ConfigReload,
@@ -15,7 +16,35 @@ import type {
     Stopped,
 } from '@/api/types'
 
-// What each of the operator's actions did, in the words the CLI's verb prints (canopy/cli/conversation.py).
+// What each of the operator's actions did, in the words the CLI's verb prints (canopy/cli/conversation.py), and what
+// one that failed says in canopy's words rather than the browser's.
+
+/**
+ * What a failed action says: a refusal's reason, or the server's own words, as they are; for an answer that gave only
+ * its status, whether the action was done; and when no answer came at all (the browser's `Failed to fetch`, an aborted
+ * request), that canopy did not answer, which almost always means the loop that serves the page stopped. A failed read
+ * says the same in its own sentence (`readFailure`).
+ */
+export function failedText(error: unknown): string {
+    if (error instanceof ApiError) {
+        if (!error.bare) {
+            return error.message
+        }
+        // A 4xx is turned away before the action runs; a 5xx may come after it ran, or from a proxy in front of canopy.
+        return error.status < 500
+            ? `canopy answered ${error.status}: nothing was done`
+            : `canopy failed (${error.status}): it may not have been done`
+    }
+    // fetch rejects with a bare TypeError when no answer comes, so a TypeError from a bug in the page reads the same:
+    // fetch gives nothing narrower to tell them apart by.
+    if (error instanceof TypeError || (error instanceof DOMException && error.name === 'AbortError')) {
+        return 'canopy did not answer: is `canopy loop` running?'
+    }
+    if (error instanceof Error) {
+        return error.message
+    }
+    return typeof error === 'string' ? error : 'the request failed'
+}
 
 /** What a start did, as `canopy start` says it: whether it was already started, and any run still working it. */
 export function startedText(key: string, started: Started): string {

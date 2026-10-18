@@ -35,6 +35,8 @@ export class ApiError extends Error {
     readonly status: number
     /** The guard that refused the action, as the CLI names it, or null for any other failure. */
     readonly guard: string | null
+    /** Whether the body said nothing of its own, so the message names only the status. */
+    readonly bare: boolean
 
     /** An error for a response with `status` and its body's `detail`: a message, a refusal, or anything else. */
     constructor(status: number, detail: unknown) {
@@ -42,6 +44,7 @@ export class ApiError extends Error {
         this.name = 'ApiError'
         this.status = status
         this.guard = refusalGuard(detail)
+        this.bare = typeof detail !== 'string' && !isRefusal(detail)
     }
 }
 

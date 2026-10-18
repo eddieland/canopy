@@ -63,7 +63,9 @@ export function ReviewRequestForm({ className }: { className?: string }) {
                     Review
                 </Button>
             </div>
-            <Notice error={request.error}>{said}</Notice>
+            <Notice error={request.error} reserve>
+                {said}
+            </Notice>
         </form>
     )
 }
@@ -123,7 +125,9 @@ export function ReviewRequestStatus({
                     </Button>
                 )}
             </div>
-            <Notice error={stop.error}>{said}</Notice>
+            <Notice error={stop.error} reserve>
+                {said}
+            </Notice>
         </div>
     )
 }

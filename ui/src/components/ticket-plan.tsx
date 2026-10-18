@@ -352,7 +352,9 @@ function NewestPlan({
                         {status === 'approved' && ' Saving an edit means approving it again.'}
                         {status === 'proposed' && open > 0 && ` ${openText(open)}`}
                     </p>
-                    <Notice error={failure}>{said}</Notice>
+                    <Notice error={failure} reserve>
+                        {said}
+                    </Notice>
                 </div>
             }
         />

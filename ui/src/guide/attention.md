@@ -52,6 +52,11 @@ Type in the box under it and press **Reply**, or your send key (Enter, unless yo
 question the ticket waits on, and can say anything else a worker should know: what to try, what to leave alone, that
 the flaky test is flaky. A reply holds up to 4000 characters; a longer one is refused, not cut.
 
+Until it's sent, what you've written stays with the tab. If your session ends mid-reply, the sign-in page says your
+last action wasn't sent, and once you're back in, the reply is still in its box, waiting for you to press **Reply**
+again. Sending it twice after an unclear failure records it once. If canopy can't be reached at all, the line under
+the box says `canopy did not answer`, which nearly always means `canopy loop` isn't running.
+
 What happens next depends on the ticket:
 
 - On a **private** ticket, your reply is the next worker's instruction.

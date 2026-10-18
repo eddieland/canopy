@@ -10,7 +10,7 @@ import { ApiError } from '@/api/client'
 export function readFailure(error: unknown): string {
     if (error instanceof ApiError) {
         // A body with no words of its own says only its status, which the sentence says already.
-        const said = error.message === `request failed with status ${error.status}` ? '' : `: ${error.message}`
+        const said = error.bare ? '' : `: ${error.message}`
         return `could not read it: the server answered ${error.status}${said}`
     }
     return 'could not read it: canopy did not answer. `canopy loop` serves this page; is it running?'
