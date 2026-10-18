@@ -231,13 +231,16 @@ Rules:
   notes, a row a ticket opening to its notes, which it reads only then, counted `2 tickets · 3 notes`. Wide, the tickets
   sit beside the other two. Over all three, a filter field and a chip for each repository narrow the page (`?q=`,
   `?repo=`, `src/lib/memory-filter.ts`), as the tickets filters do: a word in a memory's key, text, ticket, or
-  repository, or a ticket's key or title; a lesson for every repository is kept under any repository's chip. While
-  lessons are in use, the Lessons header has `all`, `due`, and `wrong` chips with their dots (`?show=`). A filtered
-  count says `2 of 7`, and an empty result says which filter left nothing. The proposals flip with an `OrderToggle`,
-  oldest first by default, which is the nearest to lapsing. A `history` chip in the Proposals and Lessons headers
-  (`?history=true`, `GET /api/memory?history=true`) lists each panel's latest memories no longer pending or in force
-  under the rest, Decided and Retired, at most 50 each, with their standing and reason and no verbs. Each list scrolls
-  in its panel but the proposals, which hold 20 at most and so grow with their rows, and a row in force that its
+  repository, or a ticket's key or title, and, since the page holds only each ticket's count of notes, what notes say
+  through `canopy memory search`'s operator search (`GET /api/memory/search`), listed under the tickets as Notes that
+  say it, each with its verbs; while a repository chip is on, Ticket notes says it is not narrowed by one, since a note
+  is read by its own ticket's runs in any repository; a lesson for every repository is kept under any repository's chip.
+  While lessons are in use, the Lessons header has `all`, `due`, and `wrong` chips with their dots (`?show=`). A
+  filtered count says `2 of 7`, and an empty result says which filter left nothing. The proposals flip with an
+  `OrderToggle`, oldest first by default, which is the nearest to lapsing. A `history` chip in the Proposals and Lessons
+  headers (`?history=true`, `GET /api/memory?history=true`) lists each panel's latest memories no longer pending or in
+  force under the rest, Decided and Retired, at most 50 each, with their standing and reason and no verbs. Each list
+  scrolls in its panel but the proposals, which hold 20 at most and so grow with their rows, and a row in force that its
   digest's cap leaves out says so in its second line, in the same words for served and recording that the digest's label
   keeps apart. The verbs on memory (`src/components/memory-actions.tsx`) sit in a line under a row, `xs` as a row's
   buttons are, and only while lessons are on, but Forget under a ticket's note, which shows while ticket notes are on,

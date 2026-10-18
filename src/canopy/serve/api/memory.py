@@ -18,6 +18,7 @@ from canopy.serve.api.refs import REFUSED, WEB, MemoryId, RefusedError, RunId, T
 from canopy.serve.schema import (
     MemoryForgetRequest,
     MemoryForgotten,
+    MemoryFound,
     MemoryOverview,
     MemoryPromoted,
     MemoryRejected,
@@ -47,6 +48,19 @@ def overview(
     """
     with backend.open() as ctx:
         return memory_views.overview(ctx, history=history)
+
+
+@router.get("/memory/search", operation_id="searchMemory", summary="Search agent memory")
+def search(
+    q: Annotated[str, Query(max_length=200, description="The words to find, any of them, as canopy memory search.")],
+    backend: BackendDep,
+) -> MemoryFound:
+    """`canopy memory search Q` in the operator's shell: every memory that keeps its text, best match first, at most 50.
+
+    It reads only, as the overview does.
+    """
+    with backend.open() as ctx:
+        return memory_views.found(ctx, q)
 
 
 @router.get(

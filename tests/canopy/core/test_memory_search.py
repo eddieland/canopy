@@ -12,8 +12,8 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db, memory
+from canopy.core import memory_search as search
 from canopy.core.vocab import RunKind, RunStatus
-from canopy.memory import search
 from tests.canopy.helpers import (
     BRANCH,
     KEY,
