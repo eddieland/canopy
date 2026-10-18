@@ -241,6 +241,14 @@ base_path = ""          # a path prefix such as "/canopy", for a proxy
 [memory]                # agent memory (§28); each tier off, record, or use
 ticket_notes = "off"    # notes a ticket's runs write for its later runs
 proposals = "off"       # lessons workers propose, which reach runs once you promote them
+
+[retention]             # how long canopy keeps its own history (§26); 0 keeps a kind forever
+run_files_days = 30     # a run's, chore run's, or review's files, once it ended this long ago
+tick_files_days = 7     # a tick's files; a tick not `ok` keeps them for run_files_days
+journal_days = 90       # harness attention rows, past the window the attention list reads
+log_max_mib = 50        # canopy.log is rotated past this
+log_keep = 3            # and this many rotated files are kept
+memory_days = 30        # the text of a note or proposal no longer in force (§28)
 ```
 
 Built-in defaults are the values shown, except: `tracker.provider`, `tracker.query`, and `tracker.labels` have no

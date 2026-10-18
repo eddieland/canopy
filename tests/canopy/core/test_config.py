@@ -430,6 +430,28 @@ def test_a_private_key_in_the_workspace_file_names_the_private_file(canopy_env: 
     )
 
 
+def test_retention_defaults_to_the_proposal_and_takes_zero_for_forever(canopy_env: CanopyEnv) -> None:
+    assert load(canopy_env.root, canopy_env.user_file).retention == config.Retention(
+        run_files_days=30, tick_files_days=7, journal_days=90, log_max_mib=50, log_keep=3, memory_days=30
+    )
+    canopy_env.append_user("\n[retention]\nrun_files_days = 0\nlog_keep = 0\n")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert (cfg.retention.run_files_days, cfg.retention.log_keep) == (0, 0)
+
+
+@pytest.mark.parametrize("value", ["-1", "true", '"30"', "1.5"])
+def test_retention_takes_only_non_negative_integers(canopy_env: CanopyEnv, value: str) -> None:
+    canopy_env.append_user(f"\n[retention]\njournal_days = {value}\n")
+    with pytest.raises(ConfigError, match=r"retention\.journal_days"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
+def test_the_workspace_file_cannot_shorten_retention(canopy_env: CanopyEnv) -> None:
+    canopy_env.append_shared("\n[retention]\nrun_files_days = 1\n")
+    with pytest.raises(ConfigError, match=r"retention\.run_files_days is private"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
 def test_a_private_file_and_no_user_file_runs(canopy_env: CanopyEnv) -> None:
     canopy_env.user_file.unlink()
     canopy_env.write_private(user_toml())

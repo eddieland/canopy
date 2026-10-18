@@ -6,8 +6,9 @@ keeps. Sections are numbered across the whole design; the [README](README.md) ha
 
 ## 26. Garbage collection (M47)
 
-Designed, not built (ROADMAP M47). Until M47 lands, canopy removes only what the last column of the table below says
-it removes today, and §6, §11, §12, §18, and §22 describe canopy as it is. This section says what changes.
+Stage 1 of ROADMAP M47 is built: `canopy gc --dry-run` and `[retention]`, which nothing else reads yet. The pass and
+the flags that remove anything are not. Until they land, canopy removes only what the third column of the table below
+says it removes today, and §6, §11, §12, §18, and §22 describe canopy as it is. This section says what changes.
 
 Almost everything canopy writes is kept forever. Most of the bytes are files, not journal rows: every run, tick, chore
 run, and review writes a log of the runtime's JSON events beside a prompt, each up to megabytes. The journal grows too,
@@ -62,8 +63,10 @@ to run, and must not stop the loop that would free it.
 
 `canopy gc` runs the same pass by hand, taking the tick lock as `canopy workspace sync` does (§18):
 
-- `canopy gc --dry-run` changes nothing, and reports for each row of the table above how many there are, their bytes,
-  and what a pass would remove.
+- `canopy gc --dry-run [--json]` changes nothing, and reports for each row of the table above that M47 changes how
+  many there are, their bytes, and what a pass with the operator's retention would remove. It counts the overseer's
+  own attention rows apart from the harness's, for the open question below, and reads each primary clone with `git
+  count-objects`, which writes nothing. A row's bytes are its text's, not the pages it fills.
 - `--vacuum`, `--git`, and `--caches` add the steps below that the loop never runs on its own.
 - It refuses inside a tick or a run, as `forget` and `grant` do (TRUST_MODEL T1). No flag shortens retention; only
   the operator's own config does. An agent that could remove history early could remove the transcript that shows

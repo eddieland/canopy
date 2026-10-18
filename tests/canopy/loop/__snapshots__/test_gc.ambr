@@ -1,0 +1,15 @@
+# serializer version: 1
+# name: test_the_text_report
+  '''
+  What canopy keeps, at 2026-10-18 09:30 UTC, and what a pass would remove.
+  
+  kind                unit            count       size  removes      frees  by
+  run files           files             812    1.2 GiB      301  410.1 MiB  run_files_days = 30
+  harness attention   rows            52000    8.7 MiB        0        0 B  journal_days = 90
+  journal WAL         files               0        0 B        0        0 B  checkpointed
+  
+  The journal is 120.2 MiB.
+  repo: git count-objects failed in /ws/repos/repo
+  Nothing was removed: this is a dry run.
+  '''
+# ---
