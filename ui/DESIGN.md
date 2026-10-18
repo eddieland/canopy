@@ -701,7 +701,11 @@ list, an empty state, or a skeleton by hand.
   tool, and its summary over its output's block. The output is the call's rows as above, in a bordered list. A call's
   body is built only when opened, and All open opens the calls. A run's id in a list (`run:N`) opens its page, which is
   the run's fields over its transcript, and a chore run's id (`chore:NAME#N`) its page, whose findings sit between the
-  two; a tick's page has the overseer's under its decisions.
+  two; a tick's page has the overseer's under its decisions. A run or chore run that ended `failed`, `crashed`, or
+  `unknown` has an `ended on` field after its summary (`EndedOnField`, `endedOn` in `src/lib/transcript.ts`): the
+  transcript's last runtime error, else its last failed or refused tool call, as its time, its name or tool, and its
+  first line in mono `status-failed`, a button that shows its row as the context chart's entries do (below); the page
+  holds the transcript's view (`useTranscriptView`) for both. A skeleton holds its place while the transcript is read.
 - **A transcript's context** (`ContextChart`, `contextShape` in `src/lib/transcript.ts`) sits between the counts and
   the rows, in either view, once a model call has its tokens. Its line: a `context` label, the peak (`peak 30.2k at
   call 3`), the largest single addition as a button in the accent (the tool and its summary, or `text` and its start)
