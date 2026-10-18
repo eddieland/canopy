@@ -29,16 +29,17 @@ if TYPE_CHECKING:
     from datetime import datetime
 
     from canopy.core import records
-    from canopy.core.config import Memory
     from canopy.core.context import Context
 
 
-def state(settings: Memory) -> MemoryState | None:
+def state(ctx: Context) -> MemoryState | None:
     """Agent memory's tiers, or None while both are off.
 
     Returns:
-        The readout, each tier's mode in words, and what reads each.
+        The readout, each tier's mode in words, what reads each, and how many proposals wait on the operator: none
+        while proposals are off, when no proposal shows.
     """
+    settings = ctx.config.memory
     readout = memory.readout(settings)
     if readout is None:
         return None
@@ -47,6 +48,7 @@ def state(settings: Memory) -> MemoryState | None:
         tiers=memory.tiers(settings),
         ticket_notes=_tier(settings.ticket_notes, memory.notes_band(settings.ticket_notes)),
         lessons=_tier(settings.proposals, memory.lessons_band(settings.proposals)),
+        proposals_waiting=0 if settings.proposals is MemoryMode.OFF else memory.pending_count(ctx.conn),
     )
 
 
@@ -64,7 +66,7 @@ def overview(ctx: Context) -> MemoryOverview:
         found = memory.lessons_digest(ctx.conn, None, cite=False)
         digest = _digest(found, served=settings.proposals is MemoryMode.USE)
     return MemoryOverview(
-        state=state(settings),
+        state=state(ctx),
         tickets=[_ticket_notes(t) for t in memory.ticket_notes(ctx.conn)],
         proposals=[_proposal(ctx, p) for p in memory.pending_proposals(ctx.conn)],
         lessons=[entry(ctx, m) for m in sorted(memory.active_lessons(ctx.conn), key=_review_order)],
@@ -86,7 +88,7 @@ def ticket_memory(ctx: Context, key: str) -> TicketMemory | None:
     if mode is not MemoryMode.OFF:
         digest = _digest(memory.ticket_digest(ctx.conn, key), served=mode is MemoryMode.USE)
     return TicketMemory(
-        state=state(ctx.config.memory),
+        state=state(ctx),
         notes=[entry(ctx, m) for m in memory.notes(ctx.conn, key, every=True)],
         digest=digest,
     )

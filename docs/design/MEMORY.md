@@ -233,7 +233,8 @@ Wherever memory shows, the operator must never take recorded memory for memory i
 mode is said in words, never by color alone, and the two modes never share a label. The web UI's header names whether
 any memory is in use while a tier is on; its memory page, a ticket's page, and a run's page say for each tier what reads
 it, what a run wrote and read, and what it would be served, with the operator's verbs on them (Commands). How it looks
-is `ui/DESIGN.md`'s.
+is `ui/DESIGN.md`'s. While `memory.proposals` is on, the web UI's nav counts the proposals waiting beside the memory
+page, on every page, so a queue that expires in 14 days is not found only by visiting it.
 
 A busy workspace holds thousands of notes and hundreds of lessons, so the memory page lists the tickets with notes in
 force, one row each with its count, and reads a ticket's notes only when the operator opens its row; the lessons come
