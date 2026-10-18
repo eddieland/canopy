@@ -14,6 +14,7 @@ the run ends. The positive controls must succeed, so a sandbox that refuses ever
 """
 
 import contextlib
+import json
 import os
 import shutil
 import socket  # noqa: TID251  (the host's side of the loopback the sandbox must not reach)
@@ -72,6 +73,8 @@ LINGERER = "987.654321"
 TIMEOUT = 3.0
 # What every sandboxed command prints first, so an attempt that fails because nothing ran fails the test instead.
 RAN = "canary-ran"
+# The operator's OpenCode login, as OpenCode keeps it in its data directory.
+OAUTH = {"type": "oauth", "refresh": "refresh-1", "access": "access-1", "expires": 1_000}
 
 
 @dataclass(frozen=True)
@@ -147,8 +150,8 @@ def sandbox_runtime(fakes_on_path: Path) -> Iterator[Path]:
 
 @pytest.fixture
 def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Iterator[Canary]:
-    """The shipped templates, unchanged, and a primary clone with two linked worktrees, all under HOME, as is the
-    operator's cache directory, with OpenCode's in it."""
+    """The shipped templates, unchanged, and a primary clone with two linked worktrees, all under HOME, as are the
+    operator's cache directory, with OpenCode's in it, and OpenCode's data directory, with a login and a session."""
     home = canopy_env.home
     templates = home / ".config" / "canopy" / "sandbox"
     templates.mkdir(parents=True)
@@ -158,6 +161,10 @@ def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Iter
     (home / ".ssh" / "id_ed25519").write_text(f"{PLANTED}\n")
     (home / ".bashrc").write_text("# the operator's\n")
     (home / ".cache" / "opencode").mkdir(parents=True)
+    runtime_data = home / ".local" / "share" / "opencode"
+    runtime_data.mkdir(parents=True)
+    (runtime_data / "auth.json").write_text(json.dumps({"anthropic": OAUTH}))
+    (runtime_data / "opencode.db").write_text(f"{PLANTED}\n")
     (canopy_env.state_dir / "secret").write_text(f"{PLANTED}\n")
     (canopy_env.state_dir / "config.toml").write_text(f"# {PLANTED}\n")
     objects = canopy_env.state_dir / "runs" / "1.objects"
@@ -192,6 +199,7 @@ def canary(canopy_env: CanopyEnv, sandbox_runtime: Path, tmp_path: Path) -> Iter
         pytest.param('cat "$HOME/.ssh/id_ed25519"', id="ssh-key"),
         pytest.param('cat "$1/secret"', id="state-dir"),
         pytest.param('cat "$1/config.toml"', id="private-config"),
+        pytest.param('cat "$HOME/.local/share/opencode/opencode.db"', id="runtime-data"),
         pytest.param(f'grep -r {PLANTED.removeprefix("canary-")} "$HOME" "$1"', id="search"),
     ],
 )
@@ -213,6 +221,12 @@ def test_a_run_cannot_read_home_or_the_state_dir(canary: Canary, script: str, ro
         pytest.param('echo pwned > "$1/runs/planted"', "{state}/runs/planted", id="state-runs"),
         # OpenCode imports packages and runs programs from its cache: the overseer's, outside any sandbox, included.
         pytest.param('echo pwned > "$HOME/.cache/opencode/planted"', "~/.cache/opencode/planted", id="runtime-cache"),
+        # Its data directory too: a `wellknown` login there makes OpenCode merge the config a URL serves.
+        pytest.param(
+            'echo pwned > "$HOME/.local/share/opencode/auth.json"',
+            "~/.local/share/opencode/auth.json",
+            id="runtime-data",
+        ),
     ],
 )
 @pytest.mark.parametrize("role", ROLES)
@@ -238,10 +252,11 @@ def test_a_run_keeps_its_cache_in_its_roles_own_directory(canary: Canary, role: 
     assert done.stdout.splitlines()[1:] == [role]
 
 
+@pytest.mark.parametrize("kind", [".cache", ".local/share"], ids=["cache", "data"])
 @pytest.mark.parametrize("role", ROLES)
-def test_a_run_cannot_read_or_write_another_roles_cache(canary: Canary, role: str) -> None:
+def test_a_run_cannot_read_or_write_another_roles_cache_or_data(canary: Canary, role: str, kind: str) -> None:
     """A review reads the most hostile text the loop meets: what it leaves in its cache must not reach a worker."""
-    other = canary.home / ".cache" / "canopy" / "sandbox" / ("review" if role in {"worker", "setup"} else "worker")
+    other = canary.home / kind / "canopy" / "sandbox" / ("review" if role in {"worker", "setup"} else "worker")
     other.mkdir(parents=True)
     (other / "secret").write_text(f"{PLANTED}\n")
 
@@ -249,6 +264,38 @@ def test_a_run_cannot_read_or_write_another_roles_cache(canary: Canary, role: st
 
     assert PLANTED not in done.stdout + done.stderr
     assert not (other / "planted").exists()
+
+
+def test_a_template_from_before_data_cannot_write_the_operators_opencode_data(canary: Canary) -> None:
+    """The templates `canopy sandbox setup` copied before `@DATA@` allow writing `~/.local/share/opencode`, and setup
+    keeps a template it finds: the wrapper denies writing it whatever the template says."""
+    template = canary.home / ".config" / "canopy" / "sandbox" / "worker.json"
+    old = json.loads(template.read_text())
+    for key in ("allowRead", "allowWrite"):
+        old["filesystem"][key] = ["~/.local/share/opencode" if e == "@DATA@" else e for e in old["filesystem"][key]]
+    template.write_text(json.dumps(old))
+    auth = canary.home / ".local" / "share" / "opencode" / "auth.json"
+    before = auth.read_bytes()
+
+    canary.run('echo pwned > "$HOME/.local/share/opencode/auth.json"; echo pwned > "$HOME/.local/share/opencode/x"')
+
+    assert auth.read_bytes() == before
+    assert not (auth.parent / "x").exists()
+
+
+@pytest.mark.parametrize("role", ["worker", "chore", "review"])
+def test_a_run_reads_the_operators_logins_and_hands_back_a_refresh(canary: Canary, role: str) -> None:
+    """A positive control: OpenCode's data directory is the role's, holding a copy of the operator's logins, and a
+    token the run refreshes there reaches the operator's. Setup runs no OpenCode, so its template leaves it out."""
+    operators = canary.home / ".local" / "share" / "opencode" / "auth.json"
+    refreshed = {"anthropic": {**OAUTH, "refresh": "refresh-2", "access": "access-2", "expires": 2_000}}
+    script = 'cat "$XDG_DATA_HOME/opencode/auth.json" && printf %s "$1" > "$XDG_DATA_HOME/opencode/auth.json"'
+
+    done = canary.run(script, json.dumps(refreshed), role=role)
+
+    assert done.ok, done.stderr
+    assert json.loads(done.stdout.splitlines()[1]) == {"anthropic": OAUTH}
+    assert json.loads(operators.read_text()) == refreshed
 
 
 @pytest.mark.parametrize(

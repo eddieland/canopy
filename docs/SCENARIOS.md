@@ -32,6 +32,11 @@ relying on a permission they check.
   tool of the tracker's server, and the tracker CLIs in bash.
 - **S4. A heredoc `canopy` command** (M19). Confirmed in OpenCode's source (1.18.35), not in a run. Check that the
   overseer's `canopy *` rule admits `canopy mirror` fed by a heredoc.
+- **S44. Sandboxed runs keep you logged in** (M26). Confirmed in OpenCode's source (1.19.3), not in a run. With
+  every agent command sandboxed (`docs/SANDBOX.md`) and an OAuth login in your OpenCode, a provider's and a remote
+  MCP server's, run the loop past the login's expiry. Expect a run's log to say `canopy-sandbox: copied back the
+  refreshed tokens of ...`, and your own OpenCode, and the overseer's, still logged in after. After an OpenCode
+  upgrade, check that `auth.json` and `mcp-auth.json` still have the shapes DESIGN §24 (Logins) names.
 
 ## Install and setup
 
