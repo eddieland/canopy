@@ -22,7 +22,8 @@ fmt: ui-fmt ## Run autoformatters (ruff import sorting, ruff format, rumdl for M
 	uv run rumdl fmt .
 
 # ruff owns Python and rumdl Markdown; editorconfig-checker holds every other file to .editorconfig.
-lint: ## Run linters and the type checker (ruff, pyrefly strict, rumdl, editorconfig-checker, shellcheck, actionlint)
+# zizmor runs offline, so the lint needs no GitHub token and gives the same answer on every machine.
+lint: ## Run linters and the type checker (ruff, pyrefly strict, rumdl, ec, shellcheck, actionlint, zizmor)
 	uv run ruff format --check .
 	uv run ruff check .
 	uv run pyrefly check
@@ -30,6 +31,7 @@ lint: ## Run linters and the type checker (ruff, pyrefly strict, rumdl, editorco
 	uv run ec
 	uv run shellcheck $$(git ls-files '*.sh')
 	uv run actionlint
+	uv run zizmor --offline --quiet .
 
 # One worker per CPU. For one test or a debugger, run `uv run pytest` without -n: it stays serial.
 # A test still running after a minute (the slowest takes ~10s) is hung: faulthandler dumps every thread's stack and
