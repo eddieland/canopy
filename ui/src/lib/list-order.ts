@@ -34,6 +34,8 @@ export const LISTS = {
     tickets: 'newest',
     /** The memory page's proposals, oldest first: the nearest to lapsing undecided. */
     'memory-proposals': 'oldest',
+    /** The memory page's tickets with notes, the one whose newest note was written last first. */
+    'memory-tickets': 'newest',
     /** The pull requests page, by latest activity. */
     'pull-requests': 'newest',
     /** The reviews page. */

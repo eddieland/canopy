@@ -261,7 +261,7 @@ function Lessons({
             ) : (
                 <PanelScroll label="Lessons">
                     {/* The proposals' columns, the ticket's left empty, so key and text line up down the page. */}
-                    <MemoryRows entries={lessons} ticket digest={digest} below={below} modes={modes} />
+                    <MemoryRows entries={lessons} across digest={digest} below={below} modes={modes} />
                 </PanelScroll>
             )}
             {digest !== null && <ServedDigest digest={digest} />}
@@ -309,11 +309,15 @@ function TicketNotesPanel({
     const notesWord = notes === 1 ? 'note' : 'notes'
     const shown = shownCount(tickets.length, total, filter.q !== undefined)
     const ticketsCount = `${shown} ${ticketsWord} · ${notes} ${notesWord}`
+    const order = useListOrder('memory-tickets')
     return (
         <Panel data-testid="memory-notes">
             <PanelHeader label="Ticket notes">
-                <span className="readout text-xs text-muted-foreground" data-testid="memory-notes-count">
-                    {ticketsCount}
+                <span className="flex items-center gap-x-3">
+                    {tickets.length > 1 && <OrderToggle list="memory-tickets" />}
+                    <span className="readout text-xs text-muted-foreground" data-testid="memory-notes-count">
+                        {ticketsCount}
+                    </span>
                 </span>
             </PanelHeader>
             <MemoryBand tier={tier} name="ticket notes" />
@@ -325,7 +329,7 @@ function TicketNotesPanel({
             ) : (
                 <PanelScroll label="Ticket notes">
                     <ul className="divide-y">
-                        {tickets.map((t) => (
+                        {ordered('memory-tickets', order, tickets).map((t) => (
                             <TicketNotesRow
                                 key={t.ticket_key}
                                 notes={t}
@@ -485,5 +489,5 @@ function OpenNotes({
     const below = new Map(
         onSaid === undefined ? [] : inForce.map((n) => [n.id, <NoteActions key={n.id} note={n} onSaid={onSaid} />]),
     )
-    return <MemoryRows entries={inForce} digest={data.digest} below={below} modes={modes} />
+    return <MemoryRows entries={inForce} across digest={data.digest} below={below} modes={modes} />
 }
