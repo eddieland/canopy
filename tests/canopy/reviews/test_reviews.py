@@ -18,10 +18,12 @@ from canopy.core.config import load
 from canopy.core.vocab import ReviewRunStatus, TickStatus
 from canopy.infra import procs
 from canopy.loop import attention
+from canopy.reviews import grants
 from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
     commit_and_push,
+    granted_meanwhile,
     in_run,
     in_tick,
     lifelock_left,
@@ -253,6 +255,22 @@ def test_a_grant_lets_a_pr_at_its_review_limit_be_reviewed_again_and_every_run_s
     prs = {p["url"]: p for p in state_block(agent_log)["reviews"]["prs"]}
     assert (prs[PR]["review_runs"], prs[PR]["granted"]) == (2, 3)
     assert "granted" not in prs[f"{PR}0"]
+
+
+def test_a_review_grant_reports_the_limit_of_its_own_transaction_whatever_grant_commits_beside_it(
+    reviews: CanopyEnv,
+    git_pool: GitPool,
+) -> None:
+    conn = reviews.journal()
+    with reviewer_reports(CLEAN):
+        run_inline(conn, sha=head(git_pool))
+    cfg = load(reviews.root, reviews.user_file)
+    other = "INSERT INTO review_grants (pr_url, runs, granted_at) VALUES (?, 1, ?)"
+    # No other grant commits between this one and the read of its limit, so two at once never report the same (#341).
+    with granted_meanwhile(conn, grants, "limit", other, PR, db.now()) as tried:
+        granted = grants.grant(conn, cfg, conversation.parse_ref(PR), runs=1)
+    assert tried == ["locked"]
+    assert (granted.runs, granted.limit) == (1, cfg.policy.max_reviews_per_pr + 1)
 
 
 @pytest.mark.parametrize("env", ["CANOPY_TICK_ID", "CANOPY_RUN_ID"])

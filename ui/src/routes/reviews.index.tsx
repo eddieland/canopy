@@ -4,6 +4,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { reviewsQuery } from '@/api/queries'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { ReviewRequestForm } from '@/components/review-request'
 import { ReviewsTable } from '@/components/reviews-table'
 import { ordered, useListOrder } from '@/lib/list-order'
 
@@ -23,6 +24,10 @@ function ReviewsPage() {
                 their findings are the only places they are.
             </PageHeader>
             <Panel>
+                <PanelHeader label="Review a PR" />
+                <ReviewRequestForm />
+            </Panel>
+            <Panel>
                 <PanelHeader label="Reviews">
                     <span className="flex items-center gap-2">
                         {data !== undefined && data.length > 1 && <OrderToggle list="reviews" />}
@@ -33,7 +38,8 @@ function ReviewsPage() {
                     <PanelSkeleton className="min-h-72" />
                 ) : data.length === 0 ? (
                     <Empty size="panel">
-                        no reviews yet: set review.agent_prs or review.query, with capacity.max_reviews above 0
+                        no reviews yet: ask for one above, or set review.agent_prs or review.query, with
+                        capacity.max_reviews above 0
                     </Empty>
                 ) : (
                     <ReviewsTable reviews={ordered('reviews', order, data)} />

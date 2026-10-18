@@ -169,20 +169,22 @@ Rules:
   last is `1fr`, so a long thread or list leaves no gaps between the panels beside it. Content of two panels is one
   column element spanning those rows, so the first panel's length never stretches a row beside it.
 - Between the header's name and its readouts, the ticker crawls joke headlines (Fun, below).
-- The header carries the loop's pause (`LoopPause`) and Tick now (`TickNow`), the latest tick (`tick:12 · 3m ago`,
-  its status when not `ok`, in `status-failed` when it failed or was abandoned, its summary on hover, linking to its
-  page), the stream's state (and `mock`), and the theme toggle, in three groups with a hairline rule between each: the
-  actions, the readouts, the theme.
-- The stream's readout holds one width, `down · 59m`'s (`w-[10ch]`, its text to the right), so a drop moves nothing
-  beside it: `live` in the accent while open, `opening` and `retrying` muted while it connects or has just dropped, and
-  once it has been down past the first retry's wait (`RETRY_FIRST_MS`, 5s), `down · 2m`, an `Age` from the drop, in
-  `status-blocked`, when it dropped on hover. Only `canopy loop` serves the UI (D073), so a stream that stays down
-  almost always means the loop stopped, and the page says so rather than look live: after 10s a band heads the content
-  column, as the notice to workers does, saying the loop isn't answering, that the page shows what it last said and how
-  long ago, and `canopy loop` or `canopy daemon start` as code (`LoopDownBand`). While it is down, Pause and Tick now
-  wait, with the band's reason on hover; the Working rail dims to 60%, as stale search hits do; and an empty attention
-  list says nothing needed the operator as of the drop rather than celebrate. What is on screen stays. All of it reads
-  the stream from the shell (`useLoopDown`), and leaves the moment the stream opens again, with no reload.
+- The header carries, after its name, the stream's state (and `mock`), then at its end the loop's pause
+  (`LoopPause`) and Tick now (`TickNow`), the latest tick (`tick:12 · 3m ago`, its status when not `ok`, in
+  `status-failed` when it failed or was abandoned, its summary on hover, linking to its page), and the theme toggle,
+  in three groups with a hairline rule between each: the actions, the readouts, the theme.
+- The stream's readout sits beside the name (`StreamReadout`), not with the readouts at the end, so a drop moves
+  nothing: its word hugs its text, and only the ticker's window gives way when it changes. Held to one width at the end,
+  it left a hole before `live` whenever the loop was up. `live` in the accent while open, `opening` and `retrying` muted
+  while it connects or has just dropped, and once it has been down past the first retry's wait (`RETRY_FIRST_MS`, 5s),
+  `down · 2m`, an `Age` from the drop, in `status-blocked`, when it dropped on hover. Only `canopy loop` serves the UI
+  (D073), so a stream that stays down almost always means the loop stopped, and the page says so rather than look live:
+  after 10s a band heads the content column, as the notice to workers does, saying the loop isn't answering, that the
+  page shows what it last said and how long ago, and `canopy loop` or `canopy daemon start` as code (`LoopDownBand`).
+  While it is down, Pause and Tick now wait, with the band's reason on hover; the Working rail dims to 60%, as stale
+  search hits do; and an empty attention list says nothing needed the operator as of the drop rather than celebrate.
+  What is on screen stays. All of it reads the stream from the shell (`useLoopDown`), and leaves the moment the stream
+  opens again, with no reload.
   The readouts hug their text, inset as far as a ghost button's label, so each rule sits midway. The counters are the
   attention page's, and the nav's Attention item shows how many items it lists, on every page, split by severity as the
   Attention counter splits them: broken in `status-failed`, waiting on the operator's answer in `status-blocked`, the
@@ -238,7 +240,8 @@ Rules:
   refusal stays under the row. On the attention list, a `memory_proposal` item lists its proposals with
   `Promote as written`, which saves at once, and `Reject`; a `lesson_review`, its lessons due with `Renew` alone.
 - **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
-  (`NewerBuild`): an accent button, the action to take, saying on hover why and that unsent text is lost. It never
+  (`NewerBuild`): a ghost button on the accent's tint at 14%, its label in the accent, the action to take without a
+  fill that outshouts the ghost buttons beside it, saying on hover why and that unsent text is lost. It never
   reloads on its own, since the operator may be typing. The page knows its build from the `canopy-build` meta tag the
   server writes into index.html, and the server's from `GET /api/meta`, read again whenever the stream comes back:
   a loop restarted on an upgrade drops it.
@@ -698,7 +701,11 @@ list, an empty state, or a skeleton by hand.
   tool, and its summary over its output's block. The output is the call's rows as above, in a bordered list. A call's
   body is built only when opened, and All open opens the calls. A run's id in a list (`run:N`) opens its page, which is
   the run's fields over its transcript, and a chore run's id (`chore:NAME#N`) its page, whose findings sit between the
-  two; a tick's page has the overseer's under its decisions.
+  two; a tick's page has the overseer's under its decisions. A run or chore run that ended `failed`, `crashed`, or
+  `unknown` has an `ended on` field after its summary (`EndedOnField`, `endedOn` in `src/lib/transcript.ts`): the
+  transcript's last runtime error, else its last failed or refused tool call, as its time, its name or tool, and its
+  first line in mono `status-failed`, a button that shows its row as the context chart's entries do (below); the page
+  holds the transcript's view (`useTranscriptView`) for both. A skeleton holds its place while the transcript is read.
 - **A transcript's context** (`ContextChart`, `contextShape` in `src/lib/transcript.ts`) sits between the counts and
   the rows, in either view, once a model call has its tokens. Its line: a `context` label, the peak (`peak 30.2k at
   call 3`), the largest single addition as a button in the accent (the tool and its summary, or `text` and its start)
@@ -969,7 +976,7 @@ list, an empty state, or a skeleton by hand.
   hover. What the grant did goes under the rows (`Notice`), untinted once nothing is stuck; the row
   leaves once the limit is above its runs. A limit with room left shows nothing.
 - **A review request** (`ReviewRequestForm`, `ReviewRequestStatus`) is how the operator has canopy review a PR the loop
-  does not own (DESIGN §21). The pull requests page leads with a `Review a PR` panel above the list: a line saying
+  does not own (DESIGN §21). The reviews page leads with a `Review a PR` panel above the list: a line saying
   nothing is posted on the PR, the PR's URL in a monospace field, and a `Review` button beside it, the form's submit,
   with the CLI's command on hover. It takes no repository: the overseer finds the PR's (DESIGN §21). A PR with an open
   request wears a `requested` chip after its review in the list. On a PR's page the request is a line in the foot of its

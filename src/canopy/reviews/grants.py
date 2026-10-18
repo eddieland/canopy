@@ -63,6 +63,7 @@ def grant(conn: sqlite3.Connection, config: Config, ref: conversation.Ref, *, ru
     reviewed = len(db.review_runs_of(conn, ref.id))
     if reviewed == 0:
         raise conversation.Refused("unknown", f"canopy has not reviewed {ref}, so it has no review limit to grant past")
+    # The limit is read in the grant's own write transaction, so it counts this grant and none committed after it.
     with db.transaction(conn):
         conn.execute("INSERT INTO review_grants (pr_url, runs, granted_at) VALUES (?, ?, ?)", (ref.id, runs, db.now()))
-    return Granted(runs=reviewed, limit=limit(conn, config, ref.id))
+        return Granted(runs=reviewed, limit=limit(conn, config, ref.id))

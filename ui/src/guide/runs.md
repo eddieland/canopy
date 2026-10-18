@@ -20,6 +20,12 @@ The **Run** panel has the facts: the ticket, the branch, when it started and end
 and the path of its log, which only you can read. **spent** gives its cost, the tokens it used, and its peak context,
 the most one model call was sent.
 
+A run that ended `failed`, `crashed`, or `unknown` also has **ended on**, right under its summary: the transcript's
+last runtime error, or failing that its last failed or refused tool call, with when it happened. The summary is the
+harness's side of it (`the worker exited 1 without a result line`), which is true and not much help; this is the
+agent's side, often something as mundane as a rate limit. Click it to jump to that row in the transcript instead of
+scrolling past a few hundred rows to find it. A chore run's page has the same field.
+
 The **Transcript** is the run's session, from its log, oldest first:
 
 - its text, with its reasoning set in italics and marked `thinking`;

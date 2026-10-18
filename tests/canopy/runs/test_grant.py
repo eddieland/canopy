@@ -14,6 +14,7 @@ from tests.canopy.helpers import (
     canopy,
     dispatch_and_run,
     dispatch_refused,
+    granted_meanwhile,
     in_run,
     in_tick,
     operator,
@@ -91,6 +92,31 @@ def test_a_unit_with_no_grant_has_no_granted_key(
         [ticket] = state_block(agent_log)["tickets"]
         [unit] = ticket["units"]
         assert "granted" not in unit
+
+
+def test_a_grant_reports_the_limit_of_its_own_transaction_whatever_grant_commits_beside_it(
+    canopy_env: CanopyEnv,
+    git_pool: GitPool,
+    conn: sqlite3.Connection,
+) -> None:
+    fail_twice(conn)
+    cfg = config.load(canopy_env.root, canopy_env.user_file)
+    unit_grant = (
+        "INSERT INTO attempt_grants (ticket_key, repo, kind, runs, granted_at) VALUES (?, 'repo', 'implement', 1, ?)"
+    )
+    # No other grant commits between this one and the read of its limit, so two at once never report the same (#341).
+    with granted_meanwhile(conn, policy, "grants", unit_grant, KEY, db.now()) as tried:
+        granted = policy.grant(conn, cfg, KEY, "implement", repo=None, runs=1)
+    assert tried == ["locked"]
+    assert (granted.repo, granted.runs, granted.limit) == ("repo", 2, 3)
+
+    # A ticket's grants likewise.
+    ticket_grant = "INSERT INTO ticket_grants (ticket_key, kind, runs, granted_at) VALUES (?, 'plan', 1, ?)"
+    before = policy.ticket_limit(conn, cfg, KEY, "plan")
+    with granted_meanwhile(conn, policy, "ticket_grants", ticket_grant, KEY, db.now()) as tried:
+        planned = policy.grant_ticket(conn, cfg, KEY, "plan", runs=1)
+    assert tried == ["locked"]
+    assert planned.limit == before + 1 == policy.ticket_limit(conn, cfg, KEY, "plan")
 
 
 @pytest.mark.parametrize("env", ["CANOPY_TICK_ID", "CANOPY_RUN_ID"])
