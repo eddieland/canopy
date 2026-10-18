@@ -177,8 +177,9 @@ ui/              the web UI (D079): a Vite and React app, its own rules in ui/AG
 them, with `migrations/` and the built UI, so a new runtime directory needs a line in `pyproject.toml`.
 
 canopy installs from git with `uv tool install` (D046), which builds the wheel and so the web UI, and puts `canopy`,
-both sinks, and the sandbox wrapper on `PATH`. Dispatch, chores, and reviews start `_run`, `_chore`, and `_review` via
-`sys.executable -m canopy`, so whatever runs canopy must be an interpreter that imports it. The version is the tag's
+both sinks, the GitHub reader and poster (§29), and the sandbox wrapper on `PATH`. Dispatch, chores, and reviews start
+`_run`, `_chore`, and `_review` via `sys.executable -m canopy`, so whatever runs canopy must be an interpreter that
+imports it. The version is the tag's
 (D085). A tag's GitHub Release carries notes, not a build: the install is still from git.
 
 Where later work goes:

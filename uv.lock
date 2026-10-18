@@ -5,6 +5,7 @@ requires-python = ">=3.12"
 [manifest]
 members = [
     "canopy",
+    "canopy-github",
     "canopy-notify-slack",
     "canopy-sandbox",
 ]
@@ -51,6 +52,7 @@ name = "canopy"
 source = { editable = "." }
 dependencies = [
     { name = "anyio" },
+    { name = "canopy-github" },
     { name = "canopy-notify-slack" },
     { name = "canopy-sandbox" },
     { name = "click" },
@@ -79,6 +81,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "anyio", specifier = ">=4.15.1" },
+    { name = "canopy-github", editable = "packages/canopy-github" },
     { name = "canopy-notify-slack", editable = "packages/canopy-notify-slack" },
     { name = "canopy-sandbox", editable = "packages/canopy-sandbox" },
     { name = "click", specifier = ">=8.5.0" },
@@ -103,6 +106,11 @@ dev = [
     { name = "shellcheck-py", specifier = ">=0.11.0.1" },
     { name = "syrupy", specifier = ">=6.1.1" },
 ]
+
+[[package]]
+name = "canopy-github"
+version = "0.0.1"
+source = { editable = "packages/canopy-github" }
 
 [[package]]
 name = "canopy-notify-slack"

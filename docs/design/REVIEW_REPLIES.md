@@ -204,8 +204,10 @@ is, and the page sends one draft or several together. The attention item opens t
 
 The host is the PR's own, read from its URL by the program, never by the harness, with the token `gh` holds for that
 host, read when the program runs, so GitHub Enterprise works as github.com does and the harness never holds a token
-(TRUST_MODEL T2). Lint bans importing it from the harness, as it bans the sink. Rejected: posting through an agent (the
-text it posts is the model's last word, not the operator's); the harness calling GitHub (D003).
+(TRUST_MODEL T2). A URL is a worker's word, so the program reads a token only for a host `gh` is logged in to, since
+`gh auth token` answers `GH_ENTERPRISE_TOKEN` for any host but github.com, and it follows no redirect, which would
+carry the token elsewhere. Lint bans importing it from the harness, as it bans the sink. Rejected: posting through an
+agent (the text it posts is the model's last word, not the operator's); the harness calling GitHub (D003).
 
 ### Agent definitions
 
