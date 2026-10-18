@@ -43,14 +43,7 @@ use the Tailwind utility a token generates (`bg-surface`, `text-muted-foreground
 | `spend-overseer`, `-idle`, `-workers`, `-chores`, `-reviews`, `-dry-run` | The spend chart's series, as fills only. |
 | `context-carried`, `context-added` | The context chart's fills: what a model call carried, and what it added. |
 | `syntax-key`, `-string`, `-number`, `-literal` | Agent output's JSON keys, strings, numbers, literals; diff code. |
-| `flair-yellow`, `-red`, `-green`, `-cyan`, `-blue`, `-purple` | The ticker's RuneScape chat colors, and only those. |
-| `buddy-eye`, `buddy-pupil` | Sprig's googly eyes: the white and the pupil, and its rim. |
-| `buddy-leaf` | The sprig on Sprig's head. A green of its own, yellower than `status-running`'s, its near twin. |
-| `buddy-hat` | A hat's felt: a dark grey, and the propeller's stem. |
-| `buddy-hat-band` | A hat's band, pompom, and trim: a plum no status wears. |
-| `buddy-hat-gold`, `-cloth`, `-blue` | A hat's gold, its white cloth (outlined to show on white), a wizard's blue. |
-| `buddy-keyboard`, `buddy-key` | Sprig's keyboard: its case and its keys. A key pressed lights in the accent. |
-| `rave-dark` | The lightswitch rave's dark, the lights off: a near black with the indigo in it. Beams: `flair-*`. |
+| `flair-*`, `buddy-*`, `rave-dark` | Fun's own colors (Fun, below), each named in `tokens.css`. Never a status. |
 
 Rules:
 
@@ -306,110 +299,32 @@ Rules:
 
 ## Fun
 
-canopy should be a little fun to use (PRODUCT.md), and the fun lives in a few named places, each written here, never
-journal text: the ticker, Sprig, the empty inbox, and the lightswitch rave. They share these rules:
+canopy should be a little fun to use (PRODUCT.md): the header's ticker, Sprig at the foot of the rail, the empty inbox
+and the leaf a cleared item drops, and the lightswitch rave. Fun is ancillary, so this design holds only the rules it
+all keeps; what each one does is written in its code. None of it is journal text.
 
 - **Fun never covers data, and never squeezes it.** Each has a place of its own in the layout. Where the window
   leaves it too little room to be read, it steps out entirely, rather than shrinking, clipping, or sitting on
   something; its room stays, so nothing beside it moves. The fit is measured as the layout changes (`useFits` in
-  `src/hooks/use-fits.ts`), before the first paint, so what does not fit never flashes in.
-- **Fun is never colored as state.** Its colors are its own tokens (`flair-*`, `buddy-*`) or the accent, never a
-  status color, so nothing in it reads as a run's state.
-- **Fun honours reduced motion** (Motion, below): it holds still, and says the same.
+  `src/hooks/use-fits.ts`), before the first paint, so what does not fit never flashes in. Two exceptions, both the
+  operator's call: Sprig may stand over the foot of the rail's spend by 40px rather than step out, offering tips there
+  only when clicked; and the rave covers the whole page, taking no pointer, hidden from a screen reader, not printed.
+- **Fun is never colored as state.** Its colors are its own tokens (`flair-*`, `buddy-*`, `rave-dark`) or the accent,
+  never a status color, so nothing in it reads as a run's state.
+- **Fun never fakes state.** A cleared item's row leaves after the item is already gone from the list and counters.
+- **A tip is true; a joke never looks like one.** The ticker's tips open with "Tip:" and name a real key, command, or
+  setting in its own words; one that stops being true is fixed or dropped. Nothing else opens with "Tip:".
+- **Fun honours reduced motion** (Motion, below): it holds still, and says the same. Nothing flashes more than twice a
+  second, well clear of the three that WCAG 2.3.1 counts as harmful.
 - **Settings has one Fun panel**, second to last, below the settings that change how canopy works and above Session:
   an on/off for each, as checkboxes, then each one's details. Everything in it is kept in this browser (Themes, below).
-  The rave is the one without a checkbox: its switch hides in the panel's header (below).
-
-The ticker:
-
-- Between the header's name and its readouts, the ticker crawls joke headlines about programming and vibe coding,
-  one at a time (`Ticker`, the headlines in `src/lib/headlines.ts`), in `text-xs` `muted-foreground`, faded out at
-  both ends. Tips for using canopy are mixed in among the jokes, each opening with "Tip:" and without flair. Each
-  headline is picked at random from the topics turned on, never the one just shown, so a topic turns up as often as
-  its share of the headlines. A tip names a real key, command, or setting, in that command's own words; one that
-  stops being true is fixed or dropped. A new topic is a name in `TICKER_TOPICS`, its headlines, and its label in
-  Settings.
-- It is on by default. Settings sets its speed (Slow, Normal, Spicy), the seconds between headlines (0 by default),
-  and its topics (Programming, Vibe coding, Tips), a checkbox each, all on by default. Off keeps the rest for when it
-  comes back on. With every topic off the window is gone, as with the ticker off.
-- Its window is the room the header leaves between its name and its readouts. Narrower than 16rem, too narrow to read
-  a few words of a headline in, the window is gone (`MIN_WIDTH_REM` in `src/components/shell/ticker.tsx`).
-- A headline may open with RuneScape chat flair, typed as a player would: a color (`yellow`, `red`, `green`, `cyan`,
-  `purple`, `white`, `flash1` to `flash3`, `glow1` to `glow3`), then an effect (`wave`, `wave2`, `shake`), each
-  ending in a colon: `flash2:wave:Now with...`. Colors come from the `flair-*` tokens, never a status color, so no
-  headline reads as a state. A flash swaps its two colors about once a second; an effect moves each letter a fraction
-  of an em, and the headline is read once, as text, by a screen reader. Give flair to some headlines, not most.
-
-Sprig:
-
-- Sprig (`Buddy`, `src/components/shell/buddy.tsx`) is a bent wire with a sprig on top and googly eyes, behind a
-  keyboard it vibe codes on (`Keyboard`), at the foot of the side rail, under a speech bubble offering, now and then, a
-  tip about the page. The keyboard stands in front of the wire's foot, inside the figure's own box, so Sprig takes no
-  more room for it. It is off until Settings turns it on. Its tips are by view (`TIPS` in `src/lib/buddy.ts`), by the
-  route's id: several of its own for every route, a section's list and one of its items apart (`/tickets/` and
-  `/tickets/$key`), so the same joke never shows on two views; then ones for anywhere. A new route is a type error there
-  until it has its own. Each tip is picked at random from the view's own and the ones for anywhere, as the ticker picks
-  its headlines, never the one just offered, on the same view or the next. Every one is a joke, and none opens with
-  "Tip:", which on the ticker names something real; a joke dressed as a tip opens with "Unhelpful tip:". The jokes come
-  in several voices (the paperclip's "It looks like you're...", a false "Fun fact:", a "Hot take:", a diary entry, a
-  haiku, a riddle), mixed in each list so that no voice follows itself. Sprig keeps its own time, not the pages': a page
-  loads with no tip up, and the first comes at random, two to six minutes on, about whatever view is on screen then;
-  each later one comes as long again after the last closes, in a tab in sight. Turning a page neither offers a tip nor
-  puts the next off, which a tip on every page did once, too often to be funny: the operator asked for the timer. A tip
-  is about the view it was offered on, so another view hides it, a list filtered another way does not, and it closes on
-  time all the same. Clicking Sprig, or the bubble's Another tip, offers the next at once; the bubble closes with its
-  button or 20 seconds after it opened, and "Don't show me tips again" turns Sprig off.
-- Its place is the rail's column, between the blocks and the footer: the room left there is its slot, and it stands at
-  the slot's foot. A slot with room for Sprig and its bubble (with the mock's three working runs, a window about 1100px
-  tall) covers nothing. A laptop's window never leaves that much, and the operator would rather see Sprig standing over
-  the spend a little than not at all: so a shorter slot, down to one that leaves Sprig over the foot of the spend by
-  40px, still shows it, the one exception to Fun's first rule. There the bubble would cover the runs working now, so a
-  tip shows only when asked for, by a click on Sprig, and closes as any other; one Sprig would offer on its own it lets
-  pass, and waits again. A slot shorter still leaves Sprig out. The bubble keeps its room once closed, so closing it
-  never moves Sprig.
-- **Sprig's hats** are bought at the foot of Settings' Fun panel (`HatShop` in `src/routes/settings.tsx`, the shop in
-  `src/lib/hats.ts`, the drawings in `src/components/hat.tsx`). The wallet is `total_usd` from `GET /api/spend`,
-  everything canopy has ever spent, less the price of each hat bought, so it fills as canopy works; nothing real is
-  spent. The shop is folded under its wallet row, which stays in view, until its `Show hats` opens it (a
-  `Disclosure`, closed on every visit). The hats bought and the one worn are kept in this browser. A hat bought goes on
-  at once; one owned goes on and comes off with a click; there are no refunds. Each hat is drawn in Sprig's own units,
-  its brim on the top of the wire and under the brows, in the `buddy-hat-*` tokens, and drawn after the leaf, which
-  shows behind the crown like a feather. Hats are priced for an operator who spends about $2,000 a month, $50 to
-  $25,000: the first inside a day, the last after about a year. A new hat is an id in `HatId`, a row in `HATS` (cheapest
-  first), and its drawing.
-
-The empty inbox, and an item clearing:
-
-- With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`), in the
-  accent: the one drawing in a page made for its own sake.
-- An item leaving the attention list leaves with a small reward rather than vanishing: its row stays where it was,
-  fades, then folds shut, while one of the empty inbox's leaves tumbles off it, in 600ms (`Leaving` in
-  `src/routes/attention.tsx`, the rows from `withLeaving` in `src/lib/leaving.ts`). Any item that clears gets it,
-  whether the operator cleared it (a reply read, a finding dismissed, a limit granted) or its cause went on its own:
-  either way, work cleared. The leaving row is only for the eye: no link, inert, and hidden from a screen reader,
-  which hears the list's count change. It never fakes state: the item is already gone from the list and the counters.
-  The last item to leave shows the empty inbox at once instead.
-
-The lightswitch rave:
-
-- An Easter egg, after The Cheat's lightswitch rave: a wall light switch (`Switch`, `src/components/ui/switch.tsx`)
-  at the end of the Fun panel's header, with no words beside it, named `Lightswitch rave` to a screen reader and
-  `The Cheat's light switch` on hover. Flipped, the lights go off and on over the whole app, and its lever flicks
-  with them, until it is flipped back (`Rave` in `src/components/shell/rave.tsx`, `src/lib/rave.ts`). Off by default,
-  and kept in this browser, so it outlasts a reload and every tab raves together (Themes, below).
-- It is the one fun that covers the page, since the operator asked for it by name and it ends with one more flip: it
-  takes no pointer, so everything under it still works; it is hidden from a screen reader, which hears the switch's
-  state; and it is not printed. The dark is `rave-dark` at 60%, so the page still reads through it, and beams in the
-  `flair-*` colors turn slowly through the dark, never a status color.
-- The lights go off and on once every 0.6 seconds, under two flashes a second, well clear of the three that WCAG 2.3.1
-  counts as harmful. Under reduced motion the lights rest off, the beams hold still, and the lever rests down.
+  The rave is the one without a checkbox: its switch hides in the panel's header.
 
 ## Motion
 
 Motion says something arrived or changed, and gives the page some life without asking for attention. It is short
 (at most 700ms), eased out (`cubic-bezier(0.2, 0, 0, 1)`), and never loops on anything but the logo, a running run,
-a skeleton, the empty inbox, the header's ticker, Sprig's blink and typing, and the lightswitch rave. The keyframes
-and utilities are in `src/index.css`.
+a skeleton, and fun (Fun, above). The keyframes and utilities are in `src/index.css`.
 
 - Route changes cross-fade in 160ms through the `<ViewTransition>` around the outlet. The old page stays until the
   new one is ready, because navigations run inside React transitions.
@@ -424,29 +339,16 @@ and utilities are in `src/index.css`.
 - The header's logo is alive: its dot breathes while the stream is live, an arc sweeps its ring while a tick runs, and
   a ripple leaves it when a new tick appears.
 - The theme toggle reveals the new theme as a circle growing from the button, in 420ms, and its new icon spins in.
-- The header's ticker crawls one headline right to left, from the window's right edge until it has left by the
-  left, then leaves the window empty for the set gap before the next. Every headline moves at the same pace, set in
-  rem a second (`SPEED_REM` in `src/lib/ticker-settings.ts`), and holds still under the pointer. A headline starts
-  from the window's width as its pass begins and keeps it, so the readouts beside it changing width as a tick starts
-  or ends never move it back or on. At rest the window is empty, between headlines.
 - Skeletons shimmer: a light passes over them.
-- With nothing listed, the attention page shows a small canopy swaying, a leaf drifting off it (`AllClear`, Fun
-  below).
-- An item leaving the attention list fades and folds shut as a leaf tumbles off it (Fun, above). Its fold is the one
-  animation that fills forwards: the row is let go once it has played.
-- The lightswitch rave flicks the lights off and on every 0.6 seconds in steps, the switch's lever flicking with them,
-  while its beams turn once every 8 seconds (Fun, above).
-- Sprig's tip pops in a moment after it is offered, its brows rise once with each new tip, its eyes blink now and
-  then and look toward the pointer, and every 5 seconds it types a burst on its keyboard, each key it presses sinking
-  and lighting in the accent for a moment.
+- Fun moves as its code says, within these rules. A cleared item's fold is the one animation that fills forwards:
+  the row is let go once it has played.
 - A toast rises in from below and fades out.
 - Only `running` runs pulse.
 - Every animation rests on the frame a still page shows (its last, or for a loop its first), so a screenshot with
   animations frozen is the page at rest.
 - Everything above is off under `prefers-reduced-motion: reduce`: the theme swaps instantly, values and rows appear
-  in place, pulses, ripples, and the drifting leaf are hidden, a cleared item is simply gone, the ticker shows its
-  first headline in place, Sprig's eyes and keys hold still, and the rave rests with its lights off. New motion goes
-  inside a `prefers-reduced-motion: no-preference` block or a `motion-safe:` variant.
+  in place, pulses and ripples are hidden, and fun holds still. New motion goes inside a
+  `prefers-reduced-motion: no-preference` block or a `motion-safe:` variant.
 
 ## No layout shift
 
@@ -462,12 +364,9 @@ and utilities are in `src/index.css`.
 Light, dark, and system, stored in `localStorage` under `canopy-theme` (absent means system) and synced across tabs.
 The blocking script in `index.html` sets the `dark` class, `color-scheme`, and `data-theme` on `<html>` before first
 paint; `src/theme/store.ts` keeps them current afterwards. Change one, change both: `theme-script.test.ts` runs the
-inline script and checks it against the store's key. Whether the ticker is on, its speed, gap, and hidden topics are
-kept the same way, as JSON under `canopy-ticker` (`src/lib/ticker-settings.ts`), whether Sprig is on under
-`canopy-buddy` (`src/lib/buddy.ts`), whether the lightswitch rave is on under `canopy-rave` (`src/lib/rave.ts`), the
-key that sends a reply under `canopy-send-key` (`src/lib/send-key.ts`), and each list's order under
-`canopy-list-order` (`src/lib/list-order.ts`), all synced across tabs. The ticker keeps the topics left out, not those
-shown, so a topic added later shows until it is turned off.
+inline script and checks it against the store's key. The key that sends a reply is kept the same way, under
+`canopy-send-key` (`src/lib/send-key.ts`), each list's order under `canopy-list-order` (`src/lib/list-order.ts`), and
+each fun setting under a `canopy-*` key of its own, all synced across tabs.
 
 ## Primitives
 
