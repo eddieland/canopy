@@ -20,7 +20,7 @@ maintenance (§18) and nothing runs maintenance in its place.
 
 | What | Grows by | Removed today | Removed by M47 |
 | --- | --- | --- | --- |
-| `runs/<id>.log`, `.prompt` | one pair per worker run | never | after `run_files_days` |
+| `runs/<id>.log`, `.prompt`, and `<id>.<repo>.diff`, `.head` under `approve` (§29) | one set per worker run | never | after `run_files_days` |
 | `ticks/<id>.log`, `.prompt` | one pair per tick | never | after `tick_files_days` (a tick not `ok`: `run_files_days`) |
 | `chore-runs/<name>/<id>.log`, `.prompt` | one pair per chore run | never | after `run_files_days` |
 | `reviews/<id>.log`, `.prompt`, `.diff` | one set per review run | never | after `run_files_days` |

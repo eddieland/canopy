@@ -1586,7 +1586,9 @@ review's id, or the operator a ticket's; and `canopy status` names the setting a
 id: the state block's `operator_sent` per unit, the overseer prompt's section on it, and the `resume` prompt naming
 what was sent on its PRs; the worker definitions under `approve` deny the GitHub server's comment tools and `gh pr
 comment` by name; TRUST_MODEL T1, T5, T6, and §6, D003, D069, and AGENTS.md's GitHub-client line; and `approve` is the
-default.
+default. The web API: `_run` keeps each repository's diff at its pushed head under `approve`, with the commit, through
+the diff code moved down to `core`; `GET /api/pull-request/threads` serves a PR's threads on that diff with every draft,
+and edit, drop, and send take the CLI's functions; and TRUST_MODEL T8 for both.
 
 ## M54. Plans before feedback runs
 

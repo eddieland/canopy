@@ -18,6 +18,7 @@ from canopy.serve.api import (
     chores,
     deps,
     docs,
+    drafts,
     events,
     loop,
     memory,
@@ -52,6 +53,7 @@ _RESOURCES = (
     search,
     reviews,
     pull_requests,
+    drafts,
     memory,
 )
 

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from canopy.cli.main import main
-from canopy.core import drafts, observe, records, replies
+from canopy.core import drafts, observe, records, replies, review_diff
 from canopy.core.config import load
 from canopy.core.vocab import DraftKind, DraftStatus, ReviewItem
 from canopy.infra import logs, procs
@@ -29,6 +29,7 @@ from tests.canopy.helpers import (
     comment,
     github_has,
     overseer_does,
+    posting,
     present,
     reads,
     run_drafting,
@@ -230,3 +231,25 @@ def test_a_read_records_only_what_it_read_whole_and_passes_over_lines_it_cannot_
     assert [(o.pr_url, o.id) for o in observed] == [(PR, 501)]
     [pr] = records.fetch_all(conn, records.ObservedPr, "SELECT * FROM observed_prs")
     assert (pr.url, pr.number, pr.draft) == (PR, 7, False)
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_run_under_approve_keeps_its_diff_at_its_pushed_head(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path
+) -> None:
+    approving(canopy_env)
+    github_has(github_state, comment(501))
+    run = run_drafting(conn, [thread(501)])
+    diff = review_diff.run_path_for(str(run["log_path"]), "repo")
+    assert diff.is_file()
+    assert review_diff.read(diff) is not None
+    head = review_diff.read_head(diff)
+    assert head is not None
+    assert len(head) == 40
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_run_under_post_keeps_no_diff(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
+    posting(canopy_env)
+    run = run_drafting(conn, [])
+    assert not review_diff.run_path_for(str(run["log_path"]), "repo").exists()
