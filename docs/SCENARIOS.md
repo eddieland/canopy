@@ -1,8 +1,9 @@
 # canopy scenarios
 
 Live checks worth running through against real systems: the operator's queue, a real tracker and GitHub, the pinned
-OpenCode. The fakes-based tests cover the harness's half of each; these cover the half only a real run can, the
-model's judgment and the runtime's permissions above all.
+OpenCode. The fakes-based tests cover the harness's half of each, and a new one is told through the `scenario`
+fixture (`tests/canopy/scenario_helpers.py`); these cover the half only a real run can, the model's judgment and the runtime's
+permissions above all.
 
 Most came from milestone acceptance criteria that were closed on real use rather than by a dedicated run (ROADMAP,
 2026-10-13). Each names the milestone it came from, which says why the behavior exists.

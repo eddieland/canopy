@@ -13,7 +13,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db
-from canopy.core.vocab import TickStatus
+from canopy.core.vocab import ResumeReason, RunKind, TickStatus
 from canopy.loop import attention
 from tests.canopy.helpers import (
     InlineRunner,
@@ -33,6 +33,7 @@ from tests.canopy.helpers import (
     wait_for_run,
     worker_does,
 )
+from tests.canopy.scenario_helpers import Scenario, asks, dispatches, pushes
 from tests.conftest import CanopyEnv, GitPool, git
 
 LABEL = ("--label", "agent-ready-tester")
@@ -102,59 +103,41 @@ def test_a_red_check_resumes_the_recorded_branch_with_the_checks_named(
     assert CHECK in prompt
 
 
-def test_a_red_check_and_a_review_comment_in_one_tick_make_one_run(
-    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
-) -> None:
-    with worker_does(*commit_and_push("agent/PROJ-1-work")):
-        dispatch_and_run(conn, *LABEL, "--kind", "implement")
-    both = canopy(
-        "dispatch",
-        "PROJ-1",
-        "--repo",
-        "repo",
-        *RESUME,
-        "--reason",
-        "review",
-        "--reason",
-        "ci",
-        "--cursor",
-        "ci=run-77",
-        "--cursor",
-        "review=2026-10-17T09:30:00Z",
-        "--context",
-        f"{CHECK}, and address review comment 1501 by octocat on PR 1",
+def test_a_red_check_and_a_review_comment_in_one_tick_make_one_run(scenario: Scenario, git_pool: GitPool) -> None:
+    scenario.run(worker=pushes())
+    both = dispatches(
+        kind=RunKind.RESUME,
+        reasons=[ResumeReason.REVIEW, ResumeReason.CI],
+        cursors={"ci": "run-77", "review": "2026-10-17T09:30:00Z"},
+        context=f"{CHECK}, and address review comment 1501 by octocat on PR 1",
     )
-    with worker_does(*commit_and_push("agent/PROJ-1-work", "PROJ-1: fix and address")), overseer_does(both):
-        assert main(["tick"]) == 0
-        tick = last_tick(conn)
-        assert [d.action for d in db.decisions_for_tick(conn, tick.id)] == ["queried", "dispatch:resume"]
-        run = wait_for_run(conn, 2)
+    ticked = scenario.tick(both, worker=pushes(message="PROJ-1: fix and address"))
+    assert ticked.actions == ["queried", "dispatch:resume"]
+    [run] = ticked.runs
     assert (run["kind"], run["status"]) == ("resume", "done")
     # One run, one push, for both; its reasons in the vocabulary's order, as the decision names them.
-    assert db.run_reasons(conn, [2]) == {2: ("ci", "review")}
-    assert "for ci, review" in db.decisions_for_tick(conn, tick.id)[1].rationale
+    assert db.run_reasons(scenario.conn, [run["id"]]) == {run["id"]: ("ci", "review")}
+    assert "for ci, review" in ticked.decisions[1].rationale
     assert git("log", "--format=%s", "agent/PROJ-1-work", cwd=git_pool.origin).splitlines()[0] == (
         "PROJ-1: fix and address"
     )
-    unit = unit_of(conn, "PROJ-1")
+    unit = unit_of(scenario.conn, "PROJ-1")
     assert (unit["last_ci_run_id"], unit["last_review_id"]) == ("run-77", "2026-10-17T09:30:00Z")
-    prompt = prompt_of(canopy_env, 2)
+    prompt = prompt_of(scenario.env, run["id"])
     assert "- `ci`: checks failed" in prompt
     assert "- `review`: review comments" in prompt
 
 
 def test_resume_prompt_points_at_the_reply_and_names_the_repliers(
-    canopy_env: CanopyEnv, git_pool: GitPool, agent_log: Path, conn: sqlite3.Connection
+    scenario: Scenario, canopy_env: CanopyEnv, git_pool: GitPool
 ) -> None:
     canopy_env.append_user('\n[trust]\nauthorized_repliers = ["alice", "5b10ac"]\n')
-    blocked = json.dumps({"status": "blocked", "summary": "unclear", "question": "which API?"})
-    with worker_does(result=blocked):
-        first = dispatch_and_run(conn, *LABEL, "--kind", "implement")
+    first = scenario.run(worker=asks("which API?"))
     assert first["status"] == "blocked"
 
     context = "Authorized reply: ticket comment 10234 by account alice"
-    with worker_does(*commit_and_push("agent/PROJ-1-work")):
-        resumed = dispatch_and_run(conn, *RESUME, "--reason", "reply", "--context", context)
+    resume = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REPLY], context=context)
+    resumed = scenario.run(resume, worker=pushes())
     assert (resumed["kind"], resumed["status"], resumed["branch"]) == ("resume", "done", "agent/PROJ-1-work")
     # Nothing was pushed before, so the resume started from main.
     assert git("log", "--format=%s", "agent/PROJ-1-work", cwd=git_pool.origin).splitlines() == [
