@@ -953,6 +953,12 @@ What treehouse does that canopy relies on or works around, from its source at th
 
 - Goes: treehouse's implementation, `pools.backend` (a config still setting it is warned about, then ignored), the
   fake and its fixture, `make treehouse` and the CI job, README's install step, and the mock's pool hashes.
+- Stays: finishing the move without treehouse, for a workspace that skipped the release where sync moved its slots.
+  A lease the journal says treehouse made is returned by canopy's own forced return of that worktree (its processes
+  ended, reset to its base, ignored files kept), with no treehouse call, so no tick fails on one. Sync finds each
+  worktree of a clone under `.treehouse/` with `git worktree list` and moves it into `pools/` as stage 3's switch
+  does; one with changes or a process in it stays, and sync says so and exits 1. `.treehouse/` goes once it holds no
+  worktree. A test upgrades a journal and workspace with both left over.
 - Docs: D002 (rewritten as settled), D033's last `Rejected` line, D066's first bullet, DESIGN §6, §8, §9, §18, §22,
   and §24, REQUIREMENTS R2, README, GETTING_STARTED, PRIOR_ART, TRUST_MODEL, and where the web UI's guide and the
   worktrees API's descriptions name treehouse.
