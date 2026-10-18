@@ -1582,7 +1582,11 @@ programs in `tests/fakes/github`. Sending from the CLI: `core/drafts_manage.py` 
 `edit`, `drop`, `send`, and `settle`, each refusing `inside_run`; a send checks every draft and reads each PR again
 whole before anything posts, refusing `stale` and `thread_changed`, claims its drafts, posts one PR's as one review,
 and records each comment's id; a post that ends unsure is `unconfirmed` until a read settles it by its pending
-review's id, or the operator a ticket's; and `canopy status` names the setting and the drafts waiting.
+review's id, or the operator a ticket's; and `canopy status` names the setting and the drafts waiting. Read back by
+id: the state block's `operator_sent` per unit, the overseer prompt's section on it, and the `resume` prompt naming
+what was sent on its PRs; the worker definitions under `approve` deny the GitHub server's comment tools and `gh pr
+comment` by name; TRUST_MODEL T1, T5, T6, and §6, D003, D069, and AGENTS.md's GitHub-client line; and `approve` is the
+default.
 
 ## M54. Plans before feedback runs
 

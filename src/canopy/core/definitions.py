@@ -29,7 +29,8 @@ from collections.abc import Collection, Iterable, Mapping
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import prompts
+from canopy.core import prompts, replies
+from canopy.core.vocab import ReplyMode, RunKind
 from canopy.infra import logs, resources
 
 if TYPE_CHECKING:
@@ -55,6 +56,16 @@ _REBASE_RULES = (
     '    "git push *--force": deny\n',
     '    "git push *--force *": deny\n',
 )
+# The lines of the shipped worker definitions the denial of commenting is rendered at, with `trust.review_replies =
+# "approve"` (DESIGN §29): in bash, `gh`'s commands that comment; among the MCP rules, the GitHub server's comment
+# tools.
+# A worker that still posts its ticket comments itself, for want of a tracker source that posts, keeps the issue ones.
+_REPLY_BASH_MARKER = "    # canopy: reply rules\n"
+_REPLY_TOOLS_MARKER = "  # canopy: reply tools\n"
+_REPLY_BASH = ('    "gh pr comment*": deny\n',)
+_REPLY_BASH_ISSUES = ('    "gh issue comment*": deny\n',)
+_REPLY_TOOLS = ('  "*reply_to_pull_request_comment*": deny\n', '  "*add_comment_to_pending_review*": deny\n')
+_REPLY_TOOLS_ISSUES = ('  "*add_issue_comment*": deny\n',)
 # The line of the shipped private worker's and planner's definitions the tracker's rules are rendered at.
 _TOOLS_MARKER = "  # canopy: tracker tools\n"
 OVERSEER = "canopy-overseer"
@@ -104,6 +115,28 @@ def render_rebase(text: str, name: str, *, rebase: bool) -> str:
     return text.replace(_REBASE_MARKER, _REBASE_MARKER + "".join(_REBASE_RULES), 1)
 
 
+def render_replies(text: str, name: str, *, approve: bool, ticket_comments: bool) -> str:
+    """Return worker definition `name` denying the GitHub server's comment tools and `gh`'s, if `approve`.
+
+    Under `trust.review_replies = "approve"` a worker drafts every comment it would post (DESIGN §29), so the tools that
+    comment are denied by name, as defense in depth: the prompt is what keeps it from posting. A worker that still
+    posts its ticket comments itself (`ticket_comments`) keeps the issue-comment ones, which GitHub's issues share with
+    a PR's top-level comments.
+
+    Raises:
+        DefinitionsError: `text` has no marked lines to render the rules at.
+    """
+    for marker in (_REPLY_BASH_MARKER, _REPLY_TOOLS_MARKER):
+        if marker not in text:
+            raise DefinitionsError(f"{name} has no line {marker.strip()!r} to render the reply rules at")
+    if not approve:
+        return text
+    bash = (*_REPLY_BASH, *(() if ticket_comments else _REPLY_BASH_ISSUES))
+    tools = (*_REPLY_TOOLS, *(() if ticket_comments else _REPLY_TOOLS_ISSUES))
+    text = text.replace(_REPLY_BASH_MARKER, _REPLY_BASH_MARKER + "".join(bash), 1)
+    return text.replace(_REPLY_TOOLS_MARKER, _REPLY_TOOLS_MARKER + "".join(tools), 1)
+
+
 def render_overseer(text: str, prompt: str, skill: str | None) -> str:
     """Return the overseer's definition with `prompt`, then `skill` if given, as its body from its marked line on.
 
@@ -138,7 +171,12 @@ def sources(config: Config | None = None) -> dict[str, bytes]:
             found[rel] = render_private(found[rel].decode(), config.tracker.tools(), rel).encode()
     for rel in _WORKER_FILES:
         if config is not None and rel in found:
-            found[rel] = render_rebase(found[rel].decode(), rel, rebase=config.trust.rebase).encode()
+            text = render_rebase(found[rel].decode(), rel, rebase=config.trust.rebase)
+            replied = replies.render(config, RunKind.RESUME, private=rel == _PRIVATE_FILE)
+            approve = replied is not None and replied.mode is ReplyMode.APPROVE
+            # A public worker without a ticket's draft posts its ticket comments itself; a private one posts none.
+            ticket_comments = rel != _PRIVATE_FILE and not (replied is not None and replied.ticket_drafts)
+            found[rel] = render_replies(text, rel, approve=approve, ticket_comments=ticket_comments).encode()
     if config is not None and _OVERSEER_FILE in found:
         path = prompts.prompt_path(config, prompts.OVERSEER)
         try:

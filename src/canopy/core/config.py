@@ -488,9 +488,8 @@ class Trust(Section):
     # workers replace a branch's history.
     rebase: Annotated[StrictBool, Scope.PRIVATE] = False
     # Whether workers draft the comments they would post, for the operator to send, or post them, marked (DESIGN
-    # §29). Private: a shared file must not decide what is said in the operator's name. `post` until the operator can
-    # send drafts (ROADMAP M53); then `approve`.
-    review_replies: Annotated[ReplyMode, Scope.PRIVATE] = ReplyMode.POST
+    # §29). Private: a shared file must not decide what is said in the operator's name.
+    review_replies: Annotated[ReplyMode, Scope.PRIVATE] = ReplyMode.APPROVE
 
     @model_validator(mode="after")
     def _one_comment_mark(self) -> Trust:

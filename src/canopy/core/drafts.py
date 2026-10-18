@@ -232,6 +232,29 @@ def _url(value: object) -> str:
     return value
 
 
+def sent_by_pr(conn: sqlite3.Connection) -> dict[str, dict[str, list[int]]]:
+    """Return what the operator sent through canopy on each PR, by GitHub's ids: the comments and the reviews.
+
+    A sent reply carries no mark and is by the operator's login, so these ids are how the loop knows it (DESIGN §29).
+
+    Returns:
+        Each PR's URL, to its sent `comments` and `reviews`, each list of ids in order.
+    """
+    found: dict[str, dict[str, list[int]]] = {}
+    rows = conn.execute(
+        "SELECT pr_url, sent_comment_id, sent_review_id FROM drafts WHERE status = ? AND pr_url IS NOT NULL "
+        "ORDER BY pr_url, sent_at, id",
+        (DraftStatus.SENT,),
+    )
+    for r in rows:
+        sent = found.setdefault(str(r["pr_url"]), {"comments": [], "reviews": []})
+        for name, column in (("comments", "sent_comment_id"), ("reviews", "sent_review_id")):
+            value = r[column]
+            if value is not None and int(value) not in sent[name]:
+                sent[name].append(int(value))
+    return found
+
+
 def unchecked_prs(conn: sqlite3.Connection) -> list[str]:
     """Return the PRs with a draft that waits on a whole read, which each tick's reconcile reads again.
 

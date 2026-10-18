@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from canopy.core import conversation, db, memory, notice, outbox, plans, pools, prompts, replies
+from canopy.core import conversation, db, drafts, memory, notice, outbox, plans, pools, prompts, replies
 from canopy.core.context import DISPATCH_LOCK
 from canopy.core.vocab import PlanStatus, PoolKind, ResumeReason, RunKind, RunStatus, StartStatus
 from canopy.core.workspace import DESKS_DIR
@@ -1007,7 +1007,9 @@ def _render(
     if remembered is not None:
         values = {**values, **remembered.values}
         required = (*required, *remembered.required)
-    replied = replies.render(ctx.config, kind, private=private)
+    units = {str(u["pr_url"]) for u in db.units(ctx.conn, key) if u["pr_url"] and u["repo"] in repos}
+    sent = {pr: ids for pr, ids in drafts.sent_by_pr(ctx.conn).items() if pr in units}
+    replied = replies.render(ctx.config, kind, private=private, sent=sent)
     if replied is not None:
         values = {**values, **replied.values}
         required = (*required, *replied.required)

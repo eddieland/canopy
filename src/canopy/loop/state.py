@@ -82,6 +82,14 @@ class UnitState(TypedDict):
     attempts: dict[str, int]
     ci_cooldown_until: str | None
     granted: NotRequired[dict[str, int]]
+    operator_sent: NotRequired[SentState]
+
+
+class SentState(TypedDict):
+    """What the operator sent through canopy on a unit's PR, by GitHub's ids (DESIGN §29): never review feedback."""
+
+    comments: list[int]
+    reviews: list[int]
 
 
 class RunState(TypedDict):
@@ -245,6 +253,7 @@ def state_block(
     mirror_delimiter: str,
     attention: list[OpenItem] | None = None,
     query_due: bool,
+    operator_sent: Mapping[str, Mapping[str, Sequence[int]]] | None = None,
 ) -> str:
     """Render the `## State` section the harness sends the overseer as its message, after its prompt.
 
@@ -265,7 +274,9 @@ def state_block(
     ends the heredoc the overseer passes each mirrored comment's body in: the tick's own, so no comment can predict
     it. `attention` is the open items the overseer recorded (`attention.for_overseer`), so it sees what leaving one
     out drops (ROADMAP M28). `query_due` says whether the overseer runs the tracker query this tick or works the
-    tickets the block lists alone (DESIGN §7, Spacing the query).
+    tickets the block lists alone (DESIGN §7, Spacing the query). `operator_sent` holds, by PR, the comments and
+    reviews the operator sent through canopy (`drafts.sent_by_pr`); a unit whose PR has none has no `operator_sent`
+    key (DESIGN §29).
 
     Returns:
         The section as Markdown: its heading, whether the tick is a dry run, and the state as a fenced JSON block.
@@ -274,6 +285,7 @@ def state_block(
     operator = operator or {}
     planned = planned or {}
     run_reasons = run_reasons or {}
+    operator_sent = operator_sent or {}
     no_attempts = dict.fromkeys(policy.KINDS, 0)
 
     def unit_summary(key: str, u: sqlite3.Row) -> UnitState:
@@ -290,6 +302,9 @@ def state_block(
         }
         if unit in grants:
             summary["granted"] = dict(grants[unit])
+        sent = operator_sent.get(str(u["pr_url"])) if u["pr_url"] else None
+        if sent is not None:
+            summary["operator_sent"] = {"comments": list(sent["comments"]), "reviews": list(sent["reviews"])}
         return summary
 
     def ticket_summary(t: records.Ticket) -> TicketState:

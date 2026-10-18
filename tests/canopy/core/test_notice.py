@@ -125,7 +125,7 @@ def test_an_override_without_the_placeholder_refuses_only_while_a_notice_is_in_f
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir(parents=True)
     override = overrides / "worker-implement.md"
-    override.write_text("Implement {{KEY}} if it carries {{LABELS}}.\n")
+    override.write_text("Implement {{KEY}} if it carries {{LABELS}}.\n{{DRAFTS}}\n")
     (overrides / "reviewer.md").write_text("Review {{PR_URL}} at {{SHA}} in {{CHECKOUT}}.\n{{NOTICE}}\n")
     if in_force:
         assert main(["notice", OUTAGE]) == 0

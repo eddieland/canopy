@@ -78,6 +78,14 @@ This is a dry run. `canopy dispatch` checks its guards and records what it would
           "ci_cooldown_until": "2026-10-16T10:20:00.000Z",
           "granted": {
             "resume": 1
+          },
+          "operator_sent": {
+            "comments": [
+              9001
+            ],
+            "reviews": [
+              9000
+            ]
           }
         }
       ],
