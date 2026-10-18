@@ -407,9 +407,20 @@ function Code({ tokens }: { tokens: CodeToken[] }) {
 
 /**
  * One finding: its number and severity, its title and where, and its detail as rich text, as an agent wrote it. A small
- * button at the end of its head line dismisses it, so no worker or tick acts on it; a dismissed one says so.
+ * button at the end of its head line dismisses it, so no worker or tick acts on it; a dismissed one says so. `pick`, a
+ * checkbox, leads its head line when the card is the findings list's row itself, as on a review with no diff kept.
  */
-export function FindingCard({ run, numbered, className }: { run: number; numbered: Numbered; className?: string }) {
+export function FindingCard({
+    run,
+    numbered,
+    pick,
+    className,
+}: {
+    run: number
+    numbered: Numbered
+    pick?: ReactNode
+    className?: string
+}) {
     const { n, finding } = numbered
     const { button, notice } = useDismissReviewFinding(run, n, finding.dismissed)
     return (
@@ -420,6 +431,7 @@ export function FindingCard({ run, numbered, className }: { run: number; numbere
             data-dismissed={finding.dismissed || undefined}
         >
             <header className="flex flex-wrap items-center gap-2">
+                {pick}
                 <span className="readout text-xs text-muted-foreground">{n}</span>
                 <Chip tone={SEVERITY_TONE[finding.severity]}>{finding.severity}</Chip>
                 <span className={cn('font-medium', finding.dismissed && 'text-muted-foreground')}>{finding.title}</span>

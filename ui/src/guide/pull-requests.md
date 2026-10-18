@@ -90,10 +90,15 @@ with the worst among them, such as `3 findings, 1 major`. A finding is `blocking
 
 ## A review's page
 
-At the top, the review's verdict and summary, the commit it read, and the PR's other reviews, if any. Then its
+At the top, the reviewer's summary, since that's the answer you came for, then its verdict, the PR (with its other
+reviews, if any, on a line under it), and the commit it read. The status is the line under the title. Then its
 findings, each linking to where it sits, and the diff, a panel per file, with each finding pinned under the line it
-names. A finding about a file the diff doesn't touch has a panel of its own. A long diff shows the lines around each
-finding at first, with folds that open the rest.
+names. A finding about a file the diff doesn't touch waits in a panel of its own after the files. A long diff shows the
+lines around each finding at first, with folds that open the rest.
+
+An old review may have no diff kept. Its findings list is then the cards themselves, each with its location, its
+detail, and **dismiss**, so each finding is on the page once, which is about as often as you want to read a blocking
+one.
 
 **Hide diff**, on a file's header, folds that file away to one line saying how much it hid; **Show diff** brings it
 back. To read only some kinds of file, open **All file types** above the first file and untick the rest: a lockfile's

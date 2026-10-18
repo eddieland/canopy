@@ -424,7 +424,7 @@ list, an empty state, or a skeleton by hand.
 - **`Fields`** and **`Field`** (`src/components/fields.tsx`): a detail page's field list, an `8rem` label column and
   the values beside it, the label in `panel-label` type and the value in prose or, with `mono`, in monospace data.
   The rows sit on their first baseline, so a label stays level with the first line of a value that wraps (a summary,
-  a list of reviews), and a label that wraps does too. A total cost is a `Field` (`CostTotalRow`).
+  a PR with its other reviews under it), and a label that wraps does too. A total cost is a `Field` (`CostTotalRow`).
 - **`ReviewsTable`** and **`RunsTable`**: review runs and runs, one row each, on every page that lists them. On the
   page of what they belong to, the columns that would repeat it go (`pr={false}`, `ticket={false}`), as a `ListRow`
   kind of their own (`own-review`, `own-run`). A run names the PRs it pushed to under its row, so on a PR's page
@@ -558,8 +558,9 @@ list, an empty state, or a skeleton by hand.
   hairline at 40% over the same color at 10%, so it holds its edge on a selected row's tint; `plain` in
   `muted-foreground`, else the status color of the state it marks, `failed`, `blocked`, or `running`. No chip is
   colored by classes of its own.
-- **A status in a detail page's header** (a run's, a chore run's, a review's, a tick's) is a dot in its state's color
-  and its word in that color. A run's journal says `done` where a tick's and a chore run's say `ok`: each is the CLI's
+- **A status in a detail page's header** (a run's, a chore run's, a tick's) is a dot in its state's color
+  and its word in that color. A review's is its page's description alone, since its panel leads with what it found
+  (A review, below). A run's journal says `done` where a tick's and a chore run's say `ok`: each is the CLI's
   word for its own, kept as it prints it, and both wear `status-done`, as a tick's `skipped` does (`tickState` in
   `src/lib/ticks.ts`).
 - **A run state named in words** (a filter's chip, a counter's line) is the operator's: `blocked`, a run that asked,
@@ -1000,7 +1001,12 @@ list, an empty state, or a skeleton by hand.
   Pull request panel, since when, with an outline `Stop` at its end while it is open, or how it ended once it has; what
   Stop did goes under it (`Notice`).
 - **A review** (`/reviews/$id`) is canopy's shadow PR review, kept in the journal and posted nowhere (D114): the
-  review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. A diff is a
+  review's fields, its findings as a list linking to each one's card, and the diff, a panel per file. Each fact is said
+  once. The description is the run's status alone (`done`), and the Review panel's header has no dot. The panel leads
+  with the reviewer's summary, the answer the operator came for, then the `harness` line when the harness decided the
+  status, then the verdict, in its worst finding's color with its impact chip (its one home, since the description is
+  plain words and could carry neither), the PR, with the PR's other reviews on a muted line under it (`also review:1,
+  1 blocking finding`, each verdict in its color), the ticket, the commit, when it ended, and what it spent. A diff is a
   monospace table: the old and new line numbers, the `+` or `-` in `diff-add` or `diff-del`, and the line, its row on
   that token's 12% tint; a hunk's header on `surface-raised`; long lines scroll sideways inside the panel, while a
   finding's card and a fold keep to the panel's width at its left edge (sticky, `100cqw`), so one long line never
@@ -1029,7 +1035,9 @@ list, an empty state, or a skeleton by hand.
   a card ticks its file's type and opens its panel, each time it is followed, so a link never lands on nothing. A
   finding's
   card (`FindingCard`) sits right under the line it names, or under its file's header when the diff does not show the
-  line, or in a Not in the diff panel: its number, its severity as a chip (`blocking` in `status-failed`, `major` in
+  line, or in a Not in the diff panel after the files. A review with no diff kept shows each finding once: its
+  findings list is their cards, a checkbox leading each that can be sent, and the Diff panel only says no diff was
+  kept. A card holds its number, its severity as a chip (`blocking` in `status-failed`, `major` in
   `status-blocked`, as the attention list's reasons; `minor` plain), its title, its location, and its detail as rich
   text, with `dismiss` at the end of its head line (`useDismissReviewFinding`); a dismissed one has a `dismissed` chip,
   its title muted, `undo` in place of `dismiss` (as on a chore's finding, and as `canopy dismiss --undo`), and the
