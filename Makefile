@@ -1,13 +1,13 @@
 .DEFAULT_GOAL := help
 
 .PHONY: help all check fmt lint test coverage snapshots ui-fmt ui-check ui-e2e ui-build install-check sandbox-canary
-.PHONY: pool-contract treehouse
+.PHONY: pool-contract treehouse burn-in burn-in-py burn-in-ui ui-e2e-burn-in
 
 ##@ General
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} \
-		/^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2} \
+		/^[a-zA-Z0-9_-]+:.*## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2} \
 		/^##@ / {printf "\n\033[1m%s\033[0m\n", substr($$0, 5)}' $(MAKEFILE_LIST)
 
 all: fmt check ## Everything to run before committing: fmt, then check
@@ -49,6 +49,43 @@ coverage: ## Run all tests measuring coverage: a summary, htmlcov/, and coverage
 # the snapshots no test reads any more. Serial: syrupy refuses to update under xdist without an experimental file lock.
 snapshots: ## Run all tests, recording every snapshot that differs
 	uv run pytest -q --snapshot-update
+
+##@ Flaky tests
+
+# A flaky test is most often a new one, so these run the tests a change touched many times over, and fail if any run
+# does: before a test merges, not after it has failed someone else's pull request. Run them before claiming a flaky
+# test is fixed, too. BASE is what the change is measured from: by default where this branch left origin/main, and on
+# CI's pull requests HEAD^1, the base side of the merge commit it checks out. ALL=1 runs every test instead, as the
+# Flaky tests workflow does each night. REPEAT is how many times each runs.
+BASE ?= $(shell git merge-base origin/main HEAD 2>/dev/null)
+REPEAT ?= 10
+need-base = @test -n "$(ALL)$(BASE)" || { echo "BASE is empty: fetch origin/main, or pass BASE=ref or ALL=1"; exit 1; }
+
+burn-in: burn-in-py burn-in-ui ## Run the Python and UI unit tests changed since BASE (ALL=1: every one) REPEAT times
+
+# Whole runs one after another, not pytest-repeat's parametrized copies: those rename each test, so no syrupy snapshot
+# matches, and each run here also spreads the tests across xdist's workers in a different order.
+burn-in-py: ## Run each Python test file changed since BASE REPEAT times, the whole file each time
+	$(need-base)
+	@files=$$($(if $(ALL),echo tests,git diff --name-only --diff-filter=AMR $(BASE) -- 'tests/*test_*.py')); \
+	if [ -z "$$files" ]; then echo "No Python test file changed since $(BASE)."; exit 0; fi; \
+	for i in $$(seq $(REPEAT)); do \
+		echo "Run $$i of $(REPEAT):" $$files; \
+		$(PYTEST) $$files || { echo "Failed on run $$i of $(REPEAT): flaky, or broken."; exit 1; }; \
+	done
+
+# --changed takes every test a file changed in a commit since BASE reaches through its imports, not only the test files
+# changed; it reads no change not yet committed.
+burn-in-ui: ui/node_modules ## Run the UI's unit tests that a change since BASE reaches REPEAT times each
+	$(need-base)
+	npm --prefix ui test -- $(if $(ALL),,--changed $(BASE) --passWithNoTests) --repeats $$(( $(REPEAT) - 1 ))
+
+# --only-changed takes the spec files changed and those whose imports, such as e2e/helpers.ts, changed; not a change
+# to the app alone. Skipped without a build when nothing under e2e/ changed.
+ui-e2e-burn-in: ui/node_modules ## Build ui/ and run the Playwright spec files changed since BASE REPEAT times each
+	$(need-base)
+	@$(if $(ALL),,if git diff --quiet $(BASE) -- ui/e2e; then echo "No Playwright test changed."; exit 0; fi;) \
+	npm --prefix ui run test:e2e -- $(if $(ALL),,--only-changed=$(BASE) --pass-with-no-tests) --repeat-each=$(REPEAT)
 
 ##@ Web UI (ui/; needs Node 22.12+, D079)
 
