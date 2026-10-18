@@ -21,7 +21,8 @@ const STREAM_LABEL: Record<StreamStatus, string> = {
 }
 
 /**
- * The header's readouts: the latest tick, and agent memory while a tier is on. The counters are the attention page's.
+ * The header's readouts: the latest tick, or `no tick yet` before the first, and agent memory while a tier is on. The
+ * counters are the attention page's.
  */
 export function LiveReadouts() {
     const last = useQuery(tickQuery)
@@ -29,7 +30,14 @@ export function LiveReadouts() {
     return (
         // Inset as far as a ghost button's label, so the rules either side sit midway between their neighbors.
         <div className="flex items-center gap-4 px-2.5" data-testid="live-readouts">
-            {last.data?.tick && <LastTick tick={last.data.tick} />}
+            {/* Nothing until the read lands, so a workspace that has ticked never flashes `no tick yet`. */}
+            {last.data === undefined ? null : last.data.tick === null ? (
+                <span className="readout text-xs whitespace-nowrap text-muted-foreground" data-testid="last-tick">
+                    no tick yet
+                </span>
+            ) : (
+                <LastTick tick={last.data.tick} />
+            )}
             {memory !== null && <MemoryReadout memory={memory} />}
         </div>
     )

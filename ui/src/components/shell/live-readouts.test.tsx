@@ -117,14 +117,37 @@ describe('LiveReadouts', () => {
         expect(screen.queryByText('mock')).toBeNull()
     })
 
-    it('shows no tick before the first, and no memory while no tier is on', async () => {
+    it('says no tick yet before the first, and shows no memory while no tier is on', async () => {
         await renderReadouts('open')
+        expect(screen.getByTestId('last-tick').textContent).toBe('no tick yet')
         expect(screen.queryByRole('link')).toBeNull()
+    })
+
+    it('says nothing of the tick until its read lands, then no tick yet until the first one runs', async () => {
+        const client = new QueryClient()
+        client.setQueryDefaults(keys.tick, { enabled: false })
+        client.setQueryDefaults(keys.loop, { enabled: false })
+        await renderRouted(<LiveReadouts />, { client })
+        expect(screen.queryByTestId('last-tick')).toBeNull()
+
+        act(() => {
+            client.setQueryData(keys.tick, { tick: null, acknowledged: null })
+        })
+        expect((await screen.findByTestId('last-tick')).textContent).toBe('no tick yet')
+
+        // The stream sends the first tick as it starts: the readout becomes it.
+        act(() => {
+            client.setQueryData(keys.tick, { tick: { ...TICK, status: 'running', ended_at: null }, acknowledged: null })
+        })
+        await waitFor(() => {
+            expect(screen.getByTestId('last-tick').textContent).toBe('tick:12 running · for 4m')
+        })
     })
 
     it("names the latest tick as `canopy status` does, its summary on hover, and opens the tick's page", async () => {
         const { router } = await renderReadouts('open', { tick: TICK })
         expect(screen.getByTitle(TICK.summary ?? '').textContent).toBe('tick:12 · 3m ago')
+        expect(screen.queryByText('no tick yet')).toBeNull()
 
         await act(async () => {
             fireEvent.click(screen.getByRole('link', { name: 'tick:12' }))

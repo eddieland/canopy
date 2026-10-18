@@ -68,9 +68,16 @@ function RunsPage() {
                     <PanelSkeleton className="min-h-72" />
                 ) : shown.length === 0 ? (
                     <Empty size="panel">
-                        {state
-                            ? `no runs ${RUN_WORD[state]} now: no ticket's latest run is ${RUN_WORD[state]}`
-                            : 'no runs yet: the overseer starts one when a ticket is ready to work'}
+                        {state ? (
+                            `no runs ${RUN_WORD[state]} now: no ticket's latest run is ${RUN_WORD[state]}`
+                        ) : (
+                            <>
+                                no runs yet: give a ticket your queue label, or start one privately on{' '}
+                                <Link to="/tickets" className="text-accent underline-offset-4 hover:underline">
+                                    Tickets
+                                </Link>
+                            </>
+                        )}
                     </Empty>
                 ) : (
                     <TicketRunsTable groups={ordered('runs', order, shown)} />

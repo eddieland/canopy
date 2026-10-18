@@ -171,8 +171,9 @@ Rules:
 - Between the header's name and its readouts, the ticker crawls joke headlines (Fun, below).
 - The header carries, after its name, the stream's state (and `mock`), then at its end the loop's pause
   (`LoopPause`) and Tick now (`TickNow`), the latest tick (`tick:12 · 3m ago`, its status when not `ok`, in
-  `status-failed` when it failed or was abandoned, its summary on hover, linking to its page), and the theme toggle,
-  in three groups with a hairline rule between each: the actions, the readouts, the theme.
+  `status-failed` when it failed or was abandoned, its summary on hover, linking to its page; before the first, `no
+  tick yet` in muted readout type, so a fresh workspace does not read as a quiet one), and the theme toggle, in three
+  groups with a hairline rule between each: the actions, the readouts, the theme.
 - The stream's readout sits beside the name (`StreamReadout`), not with the readouts at the end, so a drop moves
   nothing: its word hugs its text, and only the ticker's window gives way when it changes. Held to one width at the end,
   it left a hole before `live` whenever the loop was up. `live` in the accent while open, `opening` and `retrying` muted
@@ -433,10 +434,11 @@ list, an empty state, or a skeleton by hand.
   sizes: `row`, where a panel's list would be, as its one row; `panel`, a page's main panel, centered with room
   around it, as one sentence whatever links or commands it holds. Its words are `no X yet` and one clause on why or
   what to do (`no runs yet: the overseer starts one when it is due`); `now` for what comes and goes rather than `yet`
-  (`no open findings now`). A search that finds nothing says so; a page whose subject is missing (a 404) says why. An
-  error is never an `Empty`, and never a red sentence in a panel: it is a `Notice`, which names a refusal's guard and
-  sets its `code` spans as code, as an attention item's detail is. A page whose read was refused (a 409) shows its
-  `Notice` in its main panel.
+  (`no open findings now`). A config key or a command in it is `code` (`capacity.max_chores`); a next step the UI can
+  take itself is a link, or an inline button as Tick now is, never the CLI command that does the same. A search that
+  finds nothing says so; a page whose subject is missing (a 404) says why. An error is never an `Empty`, and never a
+  red sentence in a panel: it is a `Notice`, which names a refusal's guard and sets its `code` spans as code, as an
+  attention item's detail is. A page whose read was refused (a 409) shows its `Notice` in its main panel.
 - **`None`** (`src/components/none.tsx`): what a field or a cell holds when it has no value, `none` in muted text in
   its place's own type, never a sentence of its own. With a reason, the reason follows a colon; in a column too narrow
   for it (`brief`), the reason is on hover. One phrase per concept: a summary, a branch, a PR, a session, or a tick's
@@ -619,6 +621,10 @@ list, an empty state, or a skeleton by hand.
   reply form is the answer (`shownDetail`). The list is Attention, as the page and its counter are; what waits on the
   operator's answer is `waiting on you` wherever it shows: the counter, a question's chip in a conversation, the tickets
   list, and the rail. The selection is `?item=<id>`; with none, the most severe item about a ticket.
+- **An empty attention list tells never started from all handled** (`EmptyAttention`). Before the journal holds any
+  ticket, the page is the first step, an `Empty`: `no tickets yet: give one your queue label in the tracker, or start
+  one privately on Tickets, then Tick now`, with Tickets a link and Tick now the header's button inline, since an
+  inbox that was never filled is not one emptied. Once there was work, the empty inbox (Fun) is the reward.
 - **The attention detail: the reason picks the first block**, under the item's head, what the reason asks of the
   operator (`ask` in `src/lib/attention.ts`), so the action it calls for is never buried under louder controls about
   something else. A run that broke (`worker_failed`, `crashed`, `unpushed`, `unknown_result`, `attempt_limit`): the

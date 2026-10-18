@@ -3,6 +3,11 @@
 What needs you, worst first, as `canopy status` lists it. It's the home page, and on a good day it's empty: "Nothing
 needs you", and a little canopy swaying in a breeze.
 
+The canopy is earned. In a fresh workspace, before the journal holds a single ticket, the page says so instead,
+`no tickets yet`, and names the first step: give a ticket your queue label in the tracker, or start one privately on
+[Tickets](/tickets), then **Tick now**. A quiet inbox and one nobody has filled yet look alike from a distance, and
+only one of them is good news.
+
 ## The list
 
 The loop rebuilds the list at the end of every tick, so an item leaves when its cause is gone: the question answered,

@@ -14,7 +14,7 @@ import {
     ticketsQuery,
 } from '@/api/queries'
 import type { AttentionItem, Draft, Run, Unit } from '@/api/types'
-import { AllClear } from '@/components/all-clear'
+import { EmptyAttention } from '@/components/all-clear'
 import { Age } from '@/components/age'
 import { ChoreFindingText } from '@/components/chore-finding'
 import { ChoreLink } from '@/components/chore-link'
@@ -97,9 +97,7 @@ function AttentionPage() {
             </PageHeader>
             <Counters />
             {items !== undefined && items.length === 0 ? (
-                <Panel>
-                    <AllClear />
-                </Panel>
+                <EmptyAttention />
             ) : (
                 <div className="flex flex-wrap items-start gap-6">
                     <div className="flex max-w-md min-w-0 flex-[1_1_22rem] flex-col gap-6 2xl:max-w-lg 2xl:basis-md">

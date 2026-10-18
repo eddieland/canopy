@@ -38,8 +38,10 @@ function ReviewsPage() {
                     <PanelSkeleton className="min-h-72" />
                 ) : data.length === 0 ? (
                     <Empty size="panel">
-                        no reviews yet: ask for one above, or set review.agent_prs or review.query, with
-                        capacity.max_reviews above 0
+                        no reviews yet: ask for one above, or set{' '}
+                        <code className="font-mono text-xs">review.agent_prs</code> or{' '}
+                        <code className="font-mono text-xs">review.query</code>, with{' '}
+                        <code className="font-mono text-xs">capacity.max_reviews</code> above 0
                     </Empty>
                 ) : (
                     <ReviewsTable reviews={ordered('reviews', order, data)} />

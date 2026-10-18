@@ -34,7 +34,9 @@ function ChoresPage() {
                     <PanelSkeleton className="min-h-40" />
                 ) : data.length === 0 ? (
                     <Empty size="panel">
-                        no chores yet: define [chores.NAME] in your user config, with capacity.max_chores above 0
+                        no chores yet: define <code className="font-mono text-xs">[chores.NAME]</code> in{' '}
+                        <code className="font-mono text-xs">.canopy/config.toml</code>, with{' '}
+                        <code className="font-mono text-xs">capacity.max_chores</code> above 0
                     </Empty>
                 ) : (
                     <ul className="divide-y" data-testid="chores">

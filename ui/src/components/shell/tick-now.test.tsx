@@ -32,14 +32,14 @@ afterEach(() => {
     cleanup()
 })
 
-function renderWith(status: Tick['status'] | null) {
+function renderWith(status: Tick['status'] | null, inline = false) {
     const client = new QueryClient()
     // Nothing is fetched: the latest tick is what the test seeds.
     client.setQueryDefaults(keys.tick, { enabled: false })
     client.setQueryData(keys.tick, { tick: status === null ? null : ({ id: 7, status } as Tick), acknowledged: null })
     return render(
         <QueryClientProvider client={client}>
-            <TickNow />
+            <TickNow inline={inline} />
         </QueryClientProvider>,
     )
 }
@@ -72,6 +72,18 @@ describe('TickNow', () => {
         await waitFor(() => {
             expect(asked).toEqual(['/api/loop/tick'])
         })
+    })
+
+    it("asks the same inline, in an Empty's sentence, and waits while a tick runs", async () => {
+        const { unmount } = renderWith(null, true)
+        fireEvent.click(screen.getByRole('button', { name: 'Tick now' }))
+        await waitFor(() => {
+            expect(asked).toEqual(['/api/loop/tick'])
+        })
+        unmount()
+
+        renderWith('running', true)
+        expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Tick now' }).disabled).toBe(true)
     })
 
     it('waits while a tick runs', () => {

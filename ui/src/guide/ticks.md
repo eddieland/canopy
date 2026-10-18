@@ -7,7 +7,8 @@ expect, a tick's page is where you find out what it was thinking.
 
 [Ticks](/ticks) lists the latest 50 ticks, newest first: each one's status, how many decisions it recorded, what its
 overseer cost in dollars, tokens, and peak context, and its summary. A `dry run` chip marks a tick from
-`canopy tick --dry-run`, which plans and dispatches nothing.
+`canopy tick --dry-run`, which plans and dispatches nothing. Before the first tick, the page says when one comes: after
+`loop.interval_minutes`, or now, with **Tick now** right there in the sentence.
 
 A tick ends:
 

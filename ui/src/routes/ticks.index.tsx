@@ -4,6 +4,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ticksQuery } from '@/api/queries'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelSkeleton } from '@/components/panel'
+import { TickNow } from '@/components/shell/tick-now'
 import { TickRow } from '@/components/tick-row'
 import { ordered, useListOrder } from '@/lib/list-order'
 
@@ -33,8 +34,8 @@ function TicksPage() {
                     <PanelSkeleton className="min-h-72" />
                 ) : data.length === 0 ? (
                     <Empty size="panel">
-                        no ticks yet: <code className="font-mono text-xs">canopy tick</code> runs one, and{' '}
-                        <code className="font-mono text-xs">canopy loop</code> one after another
+                        no ticks yet: the loop runs one every{' '}
+                        <code className="font-mono text-xs">loop.interval_minutes</code>, or now with <TickNow inline />
                     </Empty>
                 ) : (
                     <ul className="divide-y" data-testid="ticks">

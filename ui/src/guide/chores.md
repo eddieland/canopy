@@ -5,10 +5,10 @@ can look at on a schedule and report on to the attention list.
 
 ## Chores
 
-A chore is an agent run about no ticket: no worktree, no branch, no push. You define one as `[chores.NAME]` in your
-own config, with a prompt and how often it may run, and set `capacity.max_chores` above 0. The overseer decides when a
-due chore runs, each tick, within the hours you allowed it. The schedule is a floor, not an alarm clock: "at most
-every 120 minutes" means no sooner, not on the dot.
+A chore is an agent run about no ticket: no worktree, no branch, no push. You define one as `[chores.NAME]` in
+`.canopy/config.toml` (or `~/.config/canopy/config.toml`, for every workspace), with a prompt and how often it may run,
+and set `capacity.max_chores` above 0. The overseer decides when a due chore runs, each tick, within the hours you
+allowed it. The schedule is a floor, not an alarm clock: "at most every 120 minutes" means no sooner, not on the dot.
 
 [Chores](/chores) lists each chore: whether it's running, when it last ran ok, when it's due, its open findings, its
 schedule, and what its runs cost over the last day and month. To run one now instead of waiting for the overseer, use
