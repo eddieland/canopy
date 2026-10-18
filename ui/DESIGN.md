@@ -73,12 +73,26 @@ Rules:
   pulse; the run it names does, on the runs page), `held` is `status-stopped`, `dirty` is `status-blocked`, `broken`
   is `status-failed`. An `idle` slot is a hollow ring in `muted-foreground`: nothing holds it, so no status color
   claims it.
-- **Section colors**, one per section: Attention rose, Tickets sky, Pull requests gold, Reviews fuchsia, Runs violet,
-  Chores orange, Spend azure, Ticks lime, Worktrees teal, Memory chartreuse, Settings lavender (`src/lib/sections.ts`;
-  the current one from `useSection`). Memory's hue sits between gold and lime, the one gap wide enough that no status
-  color is near it. Settings, in the rail's footer rather than the nav, wears its color on its trail alone. They go on
-  the nav's icons and highlight, the first step of the page header's trail, and the header's aurora, and nowhere in a
-  page's data: there a color is a state's. A page in no section (the 404) takes the accent.
+- **Section colors**, one per section, each taken from something its page is about, so the color says what the page
+  is for (`src/lib/sections.ts`; the current one from `useSection`):
+  - Attention rose, an alarm light: something needs you.
+  - Tickets sky, a message bubble: a ticket is a conversation with the operator.
+  - Pull requests violet, the purple a merged PR turns, where every PR is headed.
+  - Reviews fuchsia, the proofreader's pen.
+  - Runs indigo, the night shift: workers carry on after the operator logs off.
+  - Chores orange, a hi-vis vest: scheduled maintenance.
+  - Spend gold, coins.
+  - Ticks lime, a heart monitor's trace: each tick is the loop's pulse.
+  - Worktrees teal, water in the pool each repository's slots come from.
+  - Memory pale azure, the forget-me-not. It shares done's hue, which costs nothing: its page shows no run state.
+  - Settings slate, the machinery. It is in the rail's footer rather than the nav, so it needs no hue of its own and
+    wears its color on its trail alone.
+
+  A new section takes a color the same way, from what its page holds, and stays apart from its neighbours in the nav
+  and from the status colors on its own page. Ten nav hues, five statuses, and the accent leave the wheel full, so a
+  new one may mean moving another. They go on the nav's icons and highlight, the first step of the page header's trail,
+  and the header's aurora, and nowhere in a page's data: there a color is a state's. A page in no section (the 404)
+  takes the accent.
 - **Spend series** (`src/lib/spend.ts`) color a kind of agent run in the spend page's chart and its legend, and
   nowhere else: they are fills, never text, so the legend's words are `muted-foreground` beside a swatch. Idle overseer
   spend is the overseer's hue, lighter, so it reads as part of it. Each reaches 3:1 on `surface` in both themes, WCAG's
@@ -301,8 +315,8 @@ Rules:
 - **The nav wears the sections' colors**: every item's icon in its own, and the active item's highlight a 16% tint
   with a 2px hairline in it. In a page, **selected is the accent's tint**: the selected inbox row (`bg-accent/14`) and
   the runs page's chosen filter (`bg-accent/16`). Hover stays `surface-raised`, so selected and hovered differ.
-- **The aurora**: a 2px hairline along the header's foot, over its border, fading from Attention's rose through Runs'
-  violet to Worktrees' teal. It is static.
+- **The aurora**: a 2px hairline along the header's foot, over its border, fading from Attention's rose through Pull
+  requests' violet to Worktrees' teal. It is static.
 
 ## Fun
 
