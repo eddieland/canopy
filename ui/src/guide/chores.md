@@ -19,9 +19,9 @@ schedule, and what its runs cost over the last day and month. To run one now ins
 - **Schedule**: how often it may run, the hours it may start in, and its `when`, the words you gave the overseer for
   when it's worth running.
 - **Open findings**: what its latest ok run found. Each finding also reaches the attention list.
-- **Notes**: what you've told its runs. More on these below.
 - **Runs**: every run, with its status, how many findings it had, its cost, and its summary. A run's page has its
   transcript, as a worker's does.
+- **Notes**: what you've told its runs. More on these below.
 - **Spend**: its runs' cost over the last 24 hours and 30 days, average and worst included.
 
 A chore run that doesn't end ok reaches the attention list as `chore failed`.
