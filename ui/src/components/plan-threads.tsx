@@ -361,8 +361,6 @@ export function ThreadCard({
         >
             <div className="flex items-start gap-2">
                 <Quote text={thread.anchor.quote} onClick={lost ? undefined : () => onActivate(thread.id)} />
-                {lost && <Chip className="mt-0.5">passage gone</Chip>}
-                {thread.resolved && <Chip className="mt-0.5">resolved</Chip>}
                 {idle && (
                     // A row's own actions, in words, as a finding's `dismiss` is: an icon alone would say less, and a
                     // tick reads as accepted rather than resolved.
@@ -390,6 +388,13 @@ export function ThreadCard({
                     </div>
                 )}
             </div>
+            {(lost || thread.resolved) && (
+                // On a line of their own, so the quote keeps the width the actions leave it.
+                <div className="flex gap-1.5">
+                    {lost && <Chip>passage gone</Chip>}
+                    {thread.resolved && <Chip>resolved</Chip>}
+                </div>
+            )}
             {editing === COMMENT ? (
                 <CommentForm
                     label="Edit comment"
