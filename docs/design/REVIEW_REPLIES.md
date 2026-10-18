@@ -76,7 +76,9 @@ approves work before it is pushed. Its result line gains `drafts`, parsed apart 
 - Bounds, in code, each draft refused alone with a harness note on the run, never cut or cleaned: at most 30 a run; a
   text at most 4000 characters, line feeds allowed, every other character §28's bounds refuse refused, a secret's shape
   included. A `thread` or `pr` draft naming a PR that is not one of the run's units' is `not_ours`, and a `ticket`
-  draft on a run that may not make one is `no_post`. The operator's edits are held to the same bounds. Under `post`,
+  draft on a run that may not make one is `no_post`. The operator's edits are held to the same bounds, a secret's
+  shape included, since a sent reply is public: the refusal names the word, and text canopy refuses the operator posts
+  on GitHub themselves. Under `post`,
   `drafts` a worker sends anyway are stored nowhere.
 - The prompts' "Reply on the PR to each comment you addressed", their PR and ticket comments, and their comment marks
   render from `{{COMMENTING}}`, which under `post` is the text it replaced. Under `approve`, an override without it is
@@ -95,9 +97,9 @@ canopy reads review threads itself, never through the worker, so the page shows 
 draft can answer only a thread that exists.
 
 - After a run under `approve` closes with its drafts (§8, step 7), `_run` runs the `vcs` source's `cmd` for each PR of
-  the run's units, and records what it read in `observed_reviews` (M36): each thread's path, line, side, and whether it
-  is outdated or resolved, and each comment's id, author login, time, and body, cut as a mirrored comment is (§22). The
-  slots are already returned, so the read holds none.
+  the run's units, and records what it read in `observed_reviews` (M36): each review's id, author login, state, and
+  time; each thread's path, line, side, and whether it is outdated or resolved; and each comment's id, author login,
+  time, and body, cut as a mirrored comment is (§22). The slots are already returned, so the read holds none.
 - A draft is unchecked until a whole read of its PR, one whose `end` line covers it. A `thread` draft whose comment that
   read did not return is refused (`unknown_thread`), with a harness note on the run; a `pr` draft needs only the read.
   A `ticket` draft needs none.
@@ -136,10 +138,14 @@ approval does (§25). Every verb refuses as `inside_run` when `CANOPY_TICK_ID` o
 - A draft is posted at most once. The send claims its drafts in one transaction, so two sends at once post once, and a
   draft already sent records nothing new. A post that fails before it submits removes its pending review and posts
   nothing, and the drafts can be sent again; GitHub allows one pending review per author, so one the operator left
-  open in the browser fails it, and the refusal says so. A post that ends without saying whether it submitted leaves
-  its drafts `unconfirmed`, never sent again by canopy until a whole read settles it: a comment on the thread by the
-  login the program posted as, with exactly that text, posted after the send began, is the draft sent; none, and it
-  can be sent again.
+  open in the browser fails it, and the refusal says so. A post that ends without saying whether it submitted, after it
+  reported its pending review's id, leaves its drafts `unconfirmed`, never sent again by canopy until a whole read
+  settles it by that id, not by text: that review submitted is the drafts sent, each reply known by its thread; that
+  review still pending, or gone, is nothing posted, and the drafts can be sent again, the next post deleting the
+  pending one first. A post that ended before it reported an id opened no review and posted nothing.
+- A `ticket` draft is one comment, with no review to look for and no reader for the ticket, so a post of one that ends
+  without its comment's id leaves it `unconfirmed` until the operator, shown the ticket's link, marks it sent or not
+  (`canopy draft settle run:ID N --sent|--unsent`).
 - Each sent draft records the comment's id, URL, and time, the run that drafted it, whether the operator edited it, and
   the channel. Nothing canopy sends resolves a thread, approves, or requests changes: that stays the reviewer's.
 
@@ -184,11 +190,17 @@ is, and the page sends one draft or several together. The attention item opens t
 
 - `canopy-connect-github` reads. On stdin, `{"prs":["https://..."]}`; on stdout, M36's `pr` and `review` lines for
   each PR, every thread and comment paged, then an `end` line naming the PRs it read whole.
-- `canopy-post-github` writes, the first program canopy ships that writes to GitHub. On stdin, one PR's drafts
-  (`{"pr":URL,"body":TEXT|null,"replies":[{"comment":ID,"text":TEXT}]}`) or one ticket's (`{"issue":URL,"ticket":KEY,"body":TEXT}`);
-  on stdout, the login it posts as, each new comment's id and URL, and an `end` line saying whether it submitted. It
-  refuses a ticket URL that is not an issue numbered as its key. It never approves, requests changes, or resolves a
-  thread.
+- `canopy-post-github` writes, the first program canopy ships that writes to GitHub. On stdin, one PR's drafts or one
+  ticket's:
+
+  ```json
+  {"pr":"https://...","delete_pending":"ID|null","body":"TEXT|null","replies":[{"comment":2468013579,"text":"TEXT"}]}
+  {"issue":"https://...","ticket":"KEY","body":"TEXT"}
+  ```
+
+  On stdout, the login it posts as, the pending review's id once it has one, each new comment's id and URL, and an
+  `end` line saying whether it submitted. It refuses a ticket URL that is not an issue numbered as its key. It never
+  approves, requests changes, or resolves a thread, and it deletes no review but the pending one it is handed.
 
 The host is the PR's own, read from its URL by the program, never by the harness, with the token `gh` holds for that
 host, read when the program runs, so GitHub Enterprise works as github.com does and the harness never holds a token
@@ -234,5 +246,6 @@ D003 states the programs as built, D069 that a comment the operator sent through
 
 - Whether a run's account of what it did, drafted for the ticket, is worth the operator's send, or should post marked
   without them, as on a tracker with no post command.
-- Whether a draft on a PR that merged or closed should still be sendable, as it is.
+- Whether a draft on a PR that merged or closed should still be sendable, as it is: the reader reads such a PR's
+  threads as any other's, and the page shows the diff the run kept.
 - Editing or deleting a sent reply from canopy. The operator does it on GitHub for now.
