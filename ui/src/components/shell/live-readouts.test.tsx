@@ -46,6 +46,7 @@ const MEMORY: MemoryState = {
     tiers: 'lessons: record, ticket notes: record',
     lessons: TIER,
     ticket_notes: TIER,
+    proposals_waiting: 0,
 }
 
 beforeEach(() => {

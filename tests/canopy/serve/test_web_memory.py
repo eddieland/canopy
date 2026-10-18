@@ -32,6 +32,7 @@ def test_the_loop_state_names_each_tiers_mode_in_words(backend: Backend) -> None
             "words": "recording",
             "band": "Recording only. Workers propose lessons and you may promote them; no run reads them.",
         },
+        "proposals_waiting": 2,
     }
 
 
@@ -54,6 +55,26 @@ def test_recording_is_never_called_in_use(canopy_env: CanopyEnv) -> None:
     c, _ = signed_in_client(migrated(canopy_env))
     state = c.get("/api/loop").json()["memory"]
     assert (state["readout"], state["ticket_notes"]["words"]) == ("memory: recording", "recording")
+
+
+def test_the_loop_state_counts_the_proposals_waiting_only_while_proposals_are_on(canopy_env: CanopyEnv) -> None:
+    with_memory(canopy_env, ticket_notes="record", proposals="record")
+    ctx = migrated(canopy_env)
+    with in_tick(ctx.conn) as tick_id:
+        db.touch_ticket(ctx.conn, KEY, "repo")
+        run_id = db.insert_run(
+            ctx.conn, tick_id=tick_id, key=KEY, kind=RunKind.IMPLEMENT, branch=BRANCH, slots=(), runs_dir=Path("/r")
+        )
+    ctx.conn.executemany(
+        "INSERT INTO memories (scope, ticket_key, run_id, key, body, status, author, created_at) "
+        "VALUES ('proposal', ?, ?, ?, 'A proposal.', ?, 'worker', '2026-10-01T00:00:00.000Z')",
+        [(KEY, run_id, key, status) for key, status in [("waits", "pending"), ("also", "pending"), ("no", "invalid")]],
+    )
+    c, _ = signed_in_client(ctx)
+    assert c.get("/api/loop").json()["memory"]["proposals_waiting"] == 2
+    with_memory(canopy_env, ticket_notes="record")
+    c, _ = signed_in_client(migrated(canopy_env))
+    assert c.get("/api/loop").json()["memory"]["proposals_waiting"] == 0
 
 
 def test_the_overview_counts_the_notes_in_force_by_ticket_and_holds_the_proposals_and_lessons(

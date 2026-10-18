@@ -14,10 +14,11 @@ import {
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
-import { attentionQuery } from '@/api/queries'
+import { attentionQuery, loopQuery } from '@/api/queries'
 import { useSection } from '@/hooks/use-section'
 import { breakdown, breakdownText, countBySeverity } from '@/lib/attention'
 import type { BreakdownPart, Severity } from '@/lib/attention'
+import { counted } from '@/lib/descriptions'
 import { SECTION_FILL, SECTION_LABEL, SECTION_TEXT, SECTION_TINT } from '@/lib/sections'
 import type { Section } from '@/lib/sections'
 import { cn } from '@/lib/utils'
@@ -68,15 +69,16 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
  * The side navigation. Each item's icon is in its section's color. The active item is marked by one highlight, a tint
  * and a hairline in that color, which slides to the item a navigation lands on and takes on its color as it goes; a
  * ticket's page keeps Tickets active, a PR's Pull requests, a review's Reviews, a chore's Chores, and a tick's Ticks.
- * Attention shows how many items it lists, on every page, split as its counter splits them. Hovering an item says what
- * its page holds.
+ * Attention shows how many items it lists, on every page, split as its counter splits them, and Memory how many
+ * proposals wait on the operator, while proposals are on. Hovering an item says what its page holds.
  *
  * `compact`, in the rail's strip under `lg`, shows the icons alone, each still named for a screen reader and on hover,
- * and Attention's count as one number on its icon's corner, in its most severe item's color.
+ * and each count as one number on its icon's corner: Attention's in its most severe item's color.
  */
 export function Nav({ compact = false }: { compact?: boolean }) {
     const attention = useQuery(attentionQuery)
     const counts = attention.data === undefined ? undefined : countBySeverity(attention.data)
+    const waiting = useQuery(loopQuery).data?.memory?.proposals_waiting ?? 0
     const section = useSection()
     const active = ITEMS.findIndex(({ to }) => to === section)
     // With no section active the highlight is hidden; it keeps a color so it fades rather than flashes.
@@ -127,6 +129,7 @@ export function Nav({ compact = false }: { compact?: boolean }) {
                     {to === '/attention' && counts !== undefined && (
                         <AttentionCount counts={counts} compact={compact} />
                     )}
+                    {to === '/memory' && waiting > 0 && <ProposalCount waiting={waiting} compact={compact} />}
                 </Link>
             ))}
         </nav>
@@ -166,6 +169,28 @@ function AttentionCount({ counts, compact }: { counts: Record<Severity, number>;
                     {count}
                 </span>
             ))}
+            <span className="sr-only">{said}</span>
+        </span>
+    )
+}
+
+/**
+ * How many proposals wait on the operator beside Memory's nav item, in the color of what waits on their answer, as
+ * Attention's count shows it, and said in words on hover and to a screen reader (`2 proposals waiting on you`).
+ * `compact`, on the icon's corner.
+ */
+function ProposalCount({ waiting, compact }: { waiting: number; compact: boolean }) {
+    const said = `${counted(waiting, 'proposal')} waiting on you`
+    return (
+        <span
+            className={cn(
+                'readout text-status-blocked',
+                compact ? 'absolute top-0 right-0.5 text-2xs' : 'ml-auto text-xs',
+            )}
+            title={said}
+            data-testid="nav-memory-count"
+        >
+            <span aria-hidden>{waiting}</span>
             <span className="sr-only">{said}</span>
         </span>
     )

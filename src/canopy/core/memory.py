@@ -653,6 +653,14 @@ def pending_proposals(conn: sqlite3.Connection) -> list[records.Memory]:
     )
 
 
+def pending_count(conn: sqlite3.Connection) -> int:
+    """Return how many proposals wait on the operator, as `pending_proposals` lists them."""
+    row = conn.execute(
+        "SELECT count(*) FROM memories WHERE scope = ? AND status = ?", (MemoryScope.PROPOSAL, MemoryStatus.PENDING)
+    ).fetchone()
+    return int(row[0])
+
+
 def active_lessons(conn: sqlite3.Connection) -> list[records.Memory]:
     """Return the lessons in force, in key order."""
     return records.fetch_all(

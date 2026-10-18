@@ -2428,6 +2428,11 @@ export type components = {
             /** @description Lessons workers propose and the operator promotes, `memory.proposals`. */
             lessons: components["schemas"]["MemoryTier"];
             /**
+             * Proposals Waiting
+             * @description How many proposals wait on the operator to promote or reject them; 0 while proposals are off.
+             */
+            proposals_waiting: number;
+            /**
              * Readout
              * @description `memory: recording` while no tier is at `use`, `memory: in use` once one is.
              */

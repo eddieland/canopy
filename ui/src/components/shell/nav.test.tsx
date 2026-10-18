@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { mockAttention } from '@/api/mocks'
 import { keys } from '@/api/queries'
-import type { AttentionItem } from '@/api/types'
+import type { AttentionItem, LoopState, MemoryState } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
 import { Nav } from './nav'
@@ -19,12 +19,25 @@ const ITEMS: AttentionItem[] = [
     { ...WAITING, id: 'a3', reason: 'finding', finding: true, chore: 'deps', ticket_key: null },
 ]
 
-function renderNav({ at = '/attention', items, compact = false }: Partial<NavSetup> = {}) {
+const TIER: MemoryState['lessons'] = { mode: 'record', words: 'recording', band: 'Recording only.' }
+
+function renderNav({ at = '/attention', items, compact = false, waiting }: Partial<NavSetup> = {}) {
     const client = new QueryClient()
-    // Nothing is fetched: the attention list is what the test seeds, as the stream would send it.
+    // Nothing is fetched: the attention list and the loop's state are what the test seeds, as the stream would send.
     client.setQueryDefaults(keys.attention, { enabled: false })
+    client.setQueryDefaults(keys.loop, { enabled: false })
     if (items !== undefined) {
         client.setQueryData(keys.attention, items)
+    }
+    if (waiting !== undefined) {
+        const memory: MemoryState = {
+            readout: 'memory: recording',
+            tiers: 'ticket notes: recording, lessons: recording',
+            ticket_notes: TIER,
+            lessons: TIER,
+            proposals_waiting: waiting,
+        }
+        client.setQueryData<LoopState>(keys.loop, { paused: null, notice: null, memory })
     }
     return renderRouted(<Nav compact={compact} />, { at, client })
 }
@@ -33,6 +46,8 @@ interface NavSetup {
     at: string
     items: AttentionItem[] | undefined
     compact: boolean
+    // How many proposals the loop's state says wait; no memory state when undefined.
+    waiting: number | undefined
 }
 
 // The links the nav marks as the page shown.
@@ -93,12 +108,29 @@ describe('Nav', () => {
         expect(screen.getByRole('link', { name: 'Attention' }).textContent).toBe('Attention')
     })
 
+    it.each([
+        [1, '1 proposal waiting on you'],
+        [3, '3 proposals waiting on you'],
+    ])('counts %i proposal(s) waiting beside Memory, in words for a screen reader and on hover', async (n, said) => {
+        await renderNav({ at: '/runs', items: [], waiting: n })
+        expect(screen.getByRole('link', { name: `Memory ${said}` })).toBeDefined()
+        expect(screen.getByTitle(said).textContent).toBe(`${n}${said}`)
+    })
+
+    it.each<[string, number | undefined]>([
+        ['none waits', 0],
+        ['memory is off', undefined],
+    ])('shows no count beside Memory when %s', async (_, waiting) => {
+        await renderNav({ items: [], waiting })
+        expect(screen.getByRole('link', { name: 'Memory' }).textContent).toBe('Memory')
+    })
+
     it('names each icon in a compact nav, and gives Attention its total, said in words', async () => {
-        await renderNav({ at: '/tickets/ABC-102', items: ITEMS, compact: true })
+        await renderNav({ at: '/tickets/ABC-102', items: ITEMS, compact: true, waiting: 2 })
         expect(current()).toEqual(['Tickets'])
         expect(screen.getByRole('link', { name: 'Attention 1 broken, 1 waiting on you, 1 other' })).toBeDefined()
-        expect(screen.getAllByText(/^\d$/u).map((count) => count.textContent)).toEqual(['3'])
-        expect(screen.getByRole('link', { name: 'Memory' }).title).toBe(
+        expect(screen.getAllByText(/^\d$/u).map((count) => count.textContent)).toEqual(['3', '2'])
+        expect(screen.getByRole('link', { name: 'Memory 2 proposals waiting on you' }).title).toBe(
             'Memory: What workers remember: the ticket notes and lessons, and which runs read them',
         )
     })
