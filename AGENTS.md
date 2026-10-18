@@ -207,6 +207,12 @@ If code and the design disagree, the design doc wins until a decision entry says
   recorded in the test's `__snapshots__/` directory.
   `make snapshots` records the ones that differ, and the diff is reviewed with the change. A snapshot holds canopy's
   output, never a model's.
+- A test waits on a condition, never on time: a loop with a deadline that polls for what it needs, `expect.poll` or
+  `toPass` in Playwright, fake timers in Vitest; never a fixed sleep or `waitForTimeout`. A position on the page is
+  compared within a pixel, never to a fraction of one. When a test is suspected of being flaky, run it many times over:
+  `make burn-in` (and `make ui-e2e-burn-in` for a Playwright spec) runs the tests a branch changed, or every test with
+  `ALL=1`, and the Flaky tests workflow does the same on CI's runners, on demand. Neither runs unasked. A PR that fixes
+  a flaky test says it passed the burn-in: one green run cannot tell a fix from a failure made rarer.
 - Prompts are not unit-tested. `canopy tick --dry-run` writes the overseer's plan to the `decisions` table; that table
   is the evaluation corpus for prompt changes. Do not add prompt "tests" that assert on model output.
 
