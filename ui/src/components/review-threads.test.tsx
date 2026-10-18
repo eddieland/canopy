@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, screen, within } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/api/client'
 import { draft, pullRequestThreads, reviewThread } from '@/api/mocks'
@@ -13,6 +13,8 @@ const PR = 'https://github.com/acme/web/pull/88'
 // Every request sent, by its method and path, with its body, and what the server stand-in answers each.
 let sent: { method: string; path: string; body: unknown }[] = []
 let answer: (path: string) => Response
+// What the cards call once a verb is done, to read again what shows them.
+const changed = vi.fn<() => void>()
 
 const server: Middleware = {
     async onRequest({ request }) {
@@ -25,6 +27,7 @@ const server: Middleware = {
 
 beforeEach(() => {
     sent = []
+    changed.mockClear()
     answer = () => Response.json(pullRequestThreads())
     api.use(server)
 })
@@ -48,7 +51,7 @@ describe('ThreadCard', () => {
             resolved: true,
             comments: comment === undefined ? [] : [{ ...comment, body, operator_sent: true }],
         })
-        await renderRouted(<ThreadCard thread={hidden} url={PR} />)
+        await renderRouted(<ThreadCard thread={hidden} onChange={changed} />)
         const card = screen.getByTestId('review-thread')
         expect(within(card).getByText('src/search/useSearch.ts:16')).toBeTruthy()
         expect(within(card).getByText('outdated')).toBeTruthy()
@@ -65,7 +68,7 @@ describe('ThreadCard', () => {
 
 describe('DraftCard', () => {
     it('offers Send, Edit, and Drop on a waiting draft, with the CLI commands on hover', async () => {
-        await renderRouted(<DraftCard draft={draft()} url={PR} />)
+        await renderRouted(<DraftCard draft={draft()} onChange={changed} />)
         expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Send' }).title).toBe(
             'canopy draft send run:45 1@cb496d375e04',
         )
@@ -84,9 +87,10 @@ describe('DraftCard', () => {
                 failed: [],
                 unconfirmed: [],
             })
-        await renderRouted(<DraftCard draft={draft()} url={PR} />)
+        await renderRouted(<DraftCard draft={draft()} onChange={changed} />)
         fireEvent.click(screen.getByRole('button', { name: 'Send' }))
         expect((await screen.findByRole('status')).textContent).toBe(`Sent run 45's draft 1: ${PR}#discussion_r9.`)
+        expect(changed).toHaveBeenCalledOnce()
         expect(writes()).toEqual([
             {
                 method: 'POST',
@@ -99,14 +103,14 @@ describe('DraftCard', () => {
     it('names the guard of a refused send, as the CLI does', async () => {
         answer = () =>
             Response.json({ detail: { guard: 'stale', reason: "run 45's draft 1 changed since" } }, { status: 409 })
-        await renderRouted(<DraftCard draft={draft()} url={PR} />)
+        await renderRouted(<DraftCard draft={draft()} onChange={changed} />)
         fireEvent.click(screen.getByRole('button', { name: 'Send' }))
         expect((await screen.findByRole('alert')).textContent).toBe("refused (stale): run 45's draft 1 changed since")
     })
 
     it("edits the text as plain text, within the bound, and saves it as the operator's", async () => {
         answer = () => Response.json(draft({ text: 'Mine.', edited: true, hash: 'aaaaaaaaaaaa' }))
-        await renderRouted(<DraftCard draft={draft()} url={PR} />)
+        await renderRouted(<DraftCard draft={draft()} onChange={changed} />)
         fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
         const field = screen.getByRole('textbox', { name: 'In your words' })
         const save = screen.getByRole<HTMLButtonElement>('button', { name: 'Save' })
@@ -123,7 +127,7 @@ describe('DraftCard', () => {
 
     it('drops a draft, and takes a drop back', async () => {
         answer = () => Response.json(draft({ status: 'waiting' }))
-        await renderRouted(<DraftCard draft={draft({ status: 'dropped' })} url={PR} />)
+        await renderRouted(<DraftCard draft={draft({ status: 'dropped' })} onChange={changed} />)
         expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
         fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
         expect((await screen.findByRole('status')).textContent).toBe("Run 45's draft 1 is waiting.")
@@ -131,7 +135,9 @@ describe('DraftCard', () => {
     })
 
     it('offers nothing to send on a draft no read has checked, and warns of edits a newer draft dropped', async () => {
-        await renderRouted(<DraftCard draft={draft({ status: 'unchecked', supersedes_edited: true })} url={PR} />)
+        await renderRouted(
+            <DraftCard draft={draft({ status: 'unchecked', supersedes_edited: true })} onChange={changed} />,
+        )
         expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
         expect(screen.getByRole('button', { name: 'Edit' })).toBeTruthy()
         expect(screen.getByText('It is sent once canopy has read its thread.')).toBeTruthy()
@@ -140,7 +146,10 @@ describe('DraftCard', () => {
 
     it('says why a draft was refused, and offers no verb on it', async () => {
         await renderRouted(
-            <DraftCard draft={draft({ status: 'refused', why: 'unknown_thread: no such comment' })} url={PR} />,
+            <DraftCard
+                draft={draft({ status: 'refused', why: 'unknown_thread: no such comment' })}
+                onChange={changed}
+            />,
         )
         expect(screen.getByText('unknown_thread: no such comment')).toBeTruthy()
         expect(screen.queryAllByRole('button')).toEqual([])

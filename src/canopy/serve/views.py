@@ -29,7 +29,7 @@ from canopy.core import (
 from canopy.core import spend as spending
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ChoreRunStatus, RunStatus
-from canopy.serve import memory_views
+from canopy.serve import draft_views, memory_views
 from canopy.serve.schema import (
     AttentionItem,
     ChoreDetail,
@@ -683,6 +683,7 @@ def ticket(backend: Backend, ctx: Context, key: str) -> TicketDetail | None:
         messages=[message(m) for m in db.messages_of(ctx.conn, conversation.TICKET, key, TICKET_MESSAGES)],
         decisions=[decision(d) for d in db.decisions_about(ctx.conn, key, TICKET_DECISIONS)],
         cost=_ticket_cost(ctx.conn, key),
+        drafts=draft_views.of_ticket(ctx.conn, key),
     )
 
 

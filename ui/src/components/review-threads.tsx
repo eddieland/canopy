@@ -29,7 +29,9 @@ import { cn } from '@/lib/utils'
  * sends every waiting one together, as one comment review.
  */
 export function ReviewThreads({ url }: { url: string }) {
+    const client = useQueryClient()
     const query = useQuery(pullRequestThreadsQuery(url))
+    const changed = () => void refreshThreads(client, url)
     const { data } = query
     if (data === undefined) {
         return (
@@ -42,12 +44,12 @@ export function ReviewThreads({ url }: { url: string }) {
     const placed = placeThreads(data)
     return (
         <>
-            <RepliesPanel threads={data} />
+            <RepliesPanel threads={data} onChange={changed} />
             {data.diff !== null && (
                 <DiffPanels
                     diff={data.diff}
                     placed={placed}
-                    renderCard={(t) => <ThreadCard key={t.id} thread={t} url={url} />}
+                    renderCard={(t) => <ThreadCard key={t.id} thread={t} onChange={changed} />}
                 />
             )}
             {placed.elsewhere.length > 0 && (
@@ -57,7 +59,7 @@ export function ReviewThreads({ url }: { url: string }) {
                     </PanelHeader>
                     <div className="flex flex-col gap-2 p-3">
                         {placed.elsewhere.map((t) => (
-                            <ThreadCard key={t.id} thread={t} url={url} />
+                            <ThreadCard key={t.id} thread={t} onChange={changed} />
                         ))}
                     </div>
                 </Panel>
@@ -69,7 +71,7 @@ export function ReviewThreads({ url }: { url: string }) {
                     </PanelHeader>
                     <div className="flex flex-col gap-2 p-3">
                         {data.unplaced.map((d) => (
-                            <DraftCard key={`${d.run}-${d.number}`} draft={d} url={url} />
+                            <DraftCard key={`${d.run}-${d.number}`} draft={d} onChange={changed} />
                         ))}
                     </div>
                 </Panel>
@@ -82,15 +84,14 @@ export function ReviewThreads({ url }: { url: string }) {
  * The head of a PR's threads: how workers' comments reach GitHub now, when the reader last read the PR, a warning when
  * its head is past the diff the page shows, the drafts for the review's body, and a send of every waiting draft.
  */
-function RepliesPanel({ threads }: { threads: PullRequestThreads }) {
-    const client = useQueryClient()
+function RepliesPanel({ threads, onChange }: { threads: PullRequestThreads; onChange: () => void }) {
     const [said, setSaid] = useState<string | null>(null)
     const sendable = waiting(threads)
     const send = useMutation({
         mutationFn: () => sendDrafts(sendable),
         onSuccess: (sent) => {
             setSaid(draftsSentText(sent))
-            void refreshThreads(client, threads.url)
+            onChange()
         },
     })
     const moved = movedHead(threads)
@@ -147,7 +148,7 @@ function RepliesPanel({ threads }: { threads: PullRequestThreads }) {
                 <div className="flex flex-col gap-2 border-t p-3" data-testid="pr-drafts">
                     <span className="panel-label">The review&apos;s body</span>
                     {threads.pr_drafts.map((d) => (
-                        <DraftCard key={`${d.run}-${d.number}`} draft={d} url={threads.url} />
+                        <DraftCard key={`${d.run}-${d.number}`} draft={d} onChange={onChange} />
                     ))}
                 </div>
             )}
@@ -190,7 +191,7 @@ function sendRefs(drafts: Draft[]): string {
  * them, plain text, with a link to each on its host, then the drafts that answer it. One the operator sent wears `sent
  * by you`. A thread no draft answers shows as it is.
  */
-export function ThreadCard({ thread, url }: { thread: ReviewThread; url: string }) {
+export function ThreadCard({ thread, onChange }: { thread: ReviewThread; onChange: () => void }) {
     const where = thread.path === null ? null : thread.line === null ? thread.path : `${thread.path}:${thread.line}`
     return (
         <article className="rounded-md border bg-surface-raised p-3 text-sm" data-testid="review-thread">
@@ -216,7 +217,7 @@ export function ThreadCard({ thread, url }: { thread: ReviewThread; url: string 
             {thread.drafts.length > 0 && (
                 <div className="mt-2 flex flex-col gap-2">
                     {thread.drafts.map((d) => (
-                        <DraftCard key={`${d.run}-${d.number}`} draft={d} url={url} />
+                        <DraftCard key={`${d.run}-${d.number}`} draft={d} onChange={onChange} />
                     ))}
                 </div>
             )}
@@ -227,27 +228,26 @@ export function ThreadCard({ thread, url }: { thread: ReviewThread; url: string 
 /**
  * One draft, a worker's text until the operator sends it: its run and number, where it stands, what the run did about
  * its thread, and its text, plain, every hidden character named. A waiting draft has Send, Edit, and Drop; one no read
- * has checked yet, Edit and Drop; a dropped one, Undo. Its hash, on hover, is the one a send carries, so what posts is
+ * has checked yet, Edit and Drop; a dropped one, Undo. Its hash is the one a send carries, so what posts is
  * the text shown. A draft superseded by this one that carried the operator's edits is named, since they are not
- * carried over.
+ * carried over. A ticket's draft names the issue it goes to, as the worker read it, for the operator to check. Each
+ * verb calls `onChange` once done, to read again what shows the draft.
  */
-export function DraftCard({ draft, url }: { draft: Draft; url: string }) {
-    const client = useQueryClient()
+export function DraftCard({ draft, onChange }: { draft: Draft; onChange: () => void }) {
     const [said, setSaid] = useState<string | null>(null)
     const [editing, setEditing] = useState(false)
-    const refresh = () => void refreshThreads(client, url)
     const send = useMutation({
         mutationFn: () => sendDrafts([draft]),
         onSuccess: (sent) => {
             setSaid(draftsSentText(sent))
-            refresh()
+            onChange()
         },
     })
     const drop = useMutation({
         mutationFn: (undo: boolean) => dropDraft(draft.run, draft.number, undo),
         onSuccess: (dropped) => {
             setSaid(draftDroppedText(dropped))
-            refresh()
+            onChange()
         },
     })
     const busy = send.isPending || drop.isPending
@@ -281,13 +281,19 @@ export function DraftCard({ draft, url }: { draft: Draft; url: string }) {
                     It replaces a draft you edited, and your edits are not carried over: read it before you send it.
                 </p>
             )}
+            {draft.issue_url !== null && (
+                <p className="mt-1 text-xs text-muted-foreground" data-testid="draft-issue">
+                    To <span className="font-mono break-all text-foreground">{draft.issue_url}</span>, as the worker
+                    named it
+                </p>
+            )}
             {editing ? (
                 <EditDraft
                     draft={draft}
                     onSaved={(text) => {
                         setSaid(text)
                         setEditing(false)
-                        refresh()
+                        onChange()
                     }}
                     onCancel={() => setEditing(false)}
                 />

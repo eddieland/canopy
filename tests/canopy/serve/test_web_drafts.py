@@ -133,3 +133,23 @@ def test_a_pr_the_journal_knows_nothing_of_is_not_found_and_a_bad_url_refused(ca
     c, _ = signed_in_client(migrated(canopy_env))
     assert c.get("/api/pull-request/threads", params={"url": PR}).status_code == 404
     assert c.get("/api/pull-request/threads", params={"url": "ftp://x/1"}).status_code == 422
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_tickets_own_draft_is_on_its_page_and_sent_from_there(
+    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path
+) -> None:
+    issue = "https://github.com/acme/api/issues/1"
+    approving(canopy_env, '\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "canopy-post-github"\n')
+    github_has(github_state)
+    run = run_drafting(conn, [{"on": "ticket", "url": issue, "text": "Which base should this target?"}])
+    c, write = signed_in_client(migrated(canopy_env))
+    [draft] = c.get("/api/tickets/PROJ-1").json()["drafts"]
+    assert (draft["run"], draft["kind"], draft["status"], draft["issue_url"]) == (run["id"], "ticket", "waiting", issue)
+    wanted = [{"run": draft["run"], "number": 1, "hash": draft["hash"]}]
+    sent = c.post("/api/drafts/send", json={"drafts": wanted}, headers=write)
+    assert [d["status"] for d in sent.json()["posted"]] == ["sent"]
+    assert reads(github_state, "post") == [
+        {"issue": issue, "ticket": "PROJ-1", "body": "Which base should this target?"}
+    ]
+    assert c.get("/api/tickets/PROJ-1").json()["drafts"][0]["status"] == "sent"

@@ -13,7 +13,7 @@ import {
     ticketQuery,
     ticketsQuery,
 } from '@/api/queries'
-import type { AttentionItem, Run, Unit } from '@/api/types'
+import type { AttentionItem, Draft, Run, Unit } from '@/api/types'
 import { AllClear } from '@/components/all-clear'
 import { Age } from '@/components/age'
 import { ChoreFindingText } from '@/components/chore-finding'
@@ -35,6 +35,7 @@ import { InlineCode } from '@/components/rich-text'
 import { RunsTable } from '@/components/runs-table'
 import { Chip, Word } from '@/components/status'
 import { TicketActions } from '@/components/ticket-actions'
+import { TicketDrafts } from '@/components/ticket-drafts'
 import { TicketLink } from '@/components/ticket-link'
 import { LinkOutButton } from '@/components/ticket-links'
 import { TicketTitle } from '@/components/ticket-title'
@@ -491,7 +492,7 @@ function Thread({ item, ticketKey, asks }: { item: AttentionItem; ticketKey: str
         <>
             {asks === 'run' && <LatestRun runs={data.runs} />}
             {asks === 'pull-request' && <PullRequestAction item={item} units={data.units} />}
-            {asks === 'drafts' && <DraftsAction item={item} />}
+            {asks === 'drafts' && <DraftsAction item={item} ticketKey={ticket.key} drafts={data.drafts} />}
             {/* What holds it up sits before its conversation, where it is read first (DESIGN.md, the detail
                 skeleton). */}
             {leads && actions}
@@ -549,13 +550,14 @@ function LatestRun({ runs }: { runs: Run[] }) {
 }
 
 /**
- * Replies a run drafted for a PR: its page, where each sits on its thread to read, edit, drop, or send (DESIGN §29).
- * A ticket's own draft names no PR, and has no action here.
+ * Replies a run drafted (DESIGN §29): for a PR, its page, where each sits on its thread to read, edit, drop, or send;
+ * for the ticket itself, the ticket's own drafts that wait, here, with their verbs.
  */
-function DraftsAction({ item }: { item: AttentionItem }) {
+function DraftsAction({ item, ticketKey, drafts }: { item: AttentionItem; ticketKey: string; drafts: Draft[] }) {
     const url = pullRequestOf(item)
     if (url === null) {
-        return null
+        const open = drafts.filter((d) => d.status === 'waiting')
+        return <TicketDrafts ticketKey={ticketKey} drafts={open} bare className="border-b" />
     }
     return (
         <div className="flex flex-wrap items-center gap-2 border-b p-3" data-testid="attention-drafts">
