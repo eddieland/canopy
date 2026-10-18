@@ -45,11 +45,15 @@ listed again. **undo**, here, lists it again now. This is `canopy dismiss chore:
 
 ## Capping the findings
 
-A chore that reports forty findings has told you nothing you'll read. Set `max_findings = 5` in its `[chores.NAME]`
-table and each run lists the five that matter most and only counts the rest. The count shows as `not listed` beside
-**Open findings**, on each run, and in `attention.md`, so a short list never passes for the whole one. canopy keeps the
-first five of a longer list itself, so say in the prompt which kind comes first. A dismissed finding still takes one of
-the five; to make room, write the chore a note to leave it out.
+A chore that reports forty findings has told you nothing you'll read. So each run lists at most five, the ones that
+matter most, and only counts the rest; `max_findings` in its `[chores.NAME]` table changes that, up to 20. The count
+shows as `not listed` beside **Open findings**, on each run, and in `attention.md`, so a short list never passes for
+the whole one. canopy keeps the first five of a longer list itself, so say in the prompt which kind comes first. A
+dismissed finding still takes one of the five; to make room, write the chore a note to leave it out.
+
+A chore over its limit has a band at the top of its page saying by how much. It stays until a run fits under the
+limit, which is the hint: either the chore is looking at too much, and a note can narrow it, or you really do want
+more, and `max_findings` goes up. Either way, decide once, rather than skimming the same top five every morning.
 
 ## Notes to a chore
 

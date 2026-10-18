@@ -37,7 +37,7 @@ days = ["mon", "tue", "wed", "thu", "fri"]
 hours = "08:00-18:00"
 timezone = "America/New_York"
 when = "Skip it when the last run found nothing and nothing has merged to main since."
-max_findings = 5          # optional; default 20
+max_findings = 10         # optional; default 5
 timeout_minutes = 20
 cwd = "~/src/build-tools"
 workspaces = ["acme"]     # optional; default every workspace
@@ -52,10 +52,11 @@ workspaces = ["acme"]     # optional; default every workspace
 - `when` (optional) is plain language for the overseer: when a run is worth it, pointless, or urgent; without it a
   chore runs whenever due. Being operator-written, it is an instruction; nothing a chore reads is. Clock times belong
   in `days` and `hours`, which cost no judgment and no `wait` decision every tick.
-- `max_findings` (optional, 1 to 20, default 20) is the most findings a run lists, so a chore that finds a lot puts
-  the few that matter most before the operator rather than all of them. The prompt asks for the most important first
-  and a count of the rest; a guard in code keeps the first `max_findings` of a longer list and adds the others to
-  that count. A dismissed finding still takes its place: a note is how to make room.
+- `max_findings` (optional, 1 to 20, default 5) is the most findings a run lists, so a chore that finds a lot puts
+  the few that matter most before the operator rather than all of them. Five is what a person reads at a glance; a
+  chore whose findings are each small and alike can raise it to the contract's 20. The prompt asks for the most
+  important first and a count of the rest; a guard in code keeps the first `max_findings` of a longer list and adds
+  the others to that count. A dismissed finding still takes its place: a note is how to make room.
 - `timeout_minutes` defaults to 15. `cwd` defaults to a private directory per chore under the state directory. The
   shadowing check (§13) covers `cwd` and every directory above it: OpenCode config there that defines one of canopy's
   agents makes the run `crashed`.
@@ -199,7 +200,8 @@ result, and exits 0 only on `ok`.
   from the first of the unbroken `ok` runs reporting it. Notification follows §14, keyed by chore and finding id.
 - The latest `ok` run's `more_findings` is said after them, in `attention.md`, `canopy status`, `canopy show`, and the
   web UI's chore pages, so a cut list never reads as the whole. It is not an item and is not notified: it has no id
-  to age or resolve by.
+  to age or resolve by. While it is above 0, the chore's page in the web UI (§22) opens with a band saying the chore is
+  over its limit, by how much, and what to do: raise `max_findings`, or write a note that narrows what it reports.
 
 ### Journal
 
