@@ -1,4 +1,4 @@
-"""A review run's diff, as the web UI's review page shows it (DESIGN §21, Reading reviews).
+"""A review run's diff, as the web UI's review page shows it (DESIGN §21, Reading reviews), and a run's (§29).
 
 `_review` writes `git diff` of the reviewed commit against where it leaves its pool's base branch beside the run's log,
 `<id>.diff`. This reads it back and parses it into files, hunks, and numbered lines, and anchors each finding at its
@@ -17,6 +17,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from canopy.infra import logs
+
 # How much of a diff is written and read: a large PR's, and little enough to read on each request.
 MAX_BYTES = 4 * 1024 * 1024
 # How many files and lines a diff holds, and how many characters a line keeps.
@@ -24,6 +26,8 @@ MAX_FILES = 500
 MAX_LINES = 30_000
 MAX_LINE_CHARS = 1000
 
+_SHA_RE = re.compile(r"[0-9a-f]{7,64}")
+_MAX_HEAD = 80
 _HUNK_RE = re.compile(r"^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@(.*)$")
 _LOCATION_RE = re.compile(r"^(?P<path>.+?)(?::L?(?P<line>\d+)(?:[-:]\d+)?)?$")
 
@@ -64,6 +68,58 @@ class Diff:
 
     files: list[File] = field(default_factory=list)
     truncated: bool = False
+
+
+def diff_args(fork: str, head: str) -> tuple[str, ...]:
+    """The `git` arguments that take a diff to keep: `head` against `fork`, with no diff driver or textconv filter.
+
+    A commit's `.gitattributes` can name a driver or a filter, which would run on the host, so both are off.
+
+    Returns:
+        The arguments after `git`.
+    """
+    return ("diff", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames", fork, head)
+
+
+def keep(path: Path, diff: str) -> None:
+    """Write `diff` to `path`, readable only by the operator, cut at the bound `read` reads.
+
+    It keeps one character past the bound, so a cut diff reads as truncated.
+    """
+    logs.write_private(path, diff[: MAX_BYTES + 1])
+
+
+def run_path_for(log_path: str | Path, repo: str) -> Path:
+    """Where a worker run keeps one repository's diff at its pushed head (DESIGN §29): beside its log.
+
+    Returns:
+        `<id>.<repo>.diff` beside `log_path`. The file may not exist.
+    """
+    log = Path(log_path)
+    return log.with_name(f"{log.stem}.{repo}.diff")
+
+
+def keep_head(path: Path, sha: str) -> None:
+    """Write the commit a kept diff was taken at beside it, `<diff>.head`, to compare with the PR's head."""
+    logs.write_private(path.with_suffix(".head"), f"{sha}\n")
+
+
+def read_head(path: Path) -> str | None:
+    """Read the commit the diff at `path` was taken at, if it was kept and is a commit id.
+
+    Returns:
+        The commit's id, or None when there is none, or it is not a regular file holding one.
+    """
+    try:
+        fd = os.open(path.with_suffix(".head"), os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    except OSError:
+        return None
+    if not stat.S_ISREG(os.fstat(fd).st_mode):
+        os.close(fd)
+        return None
+    with os.fdopen(fd, "rb") as f:
+        text = f.read(_MAX_HEAD).decode("ascii", errors="replace").strip()
+    return text if _SHA_RE.fullmatch(text) else None
 
 
 def path_for(log_path: str | Path) -> Path:

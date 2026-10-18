@@ -560,6 +560,10 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
 - It serves a ticket's plans (DESIGN §25): each plan's file as it stands, model-written from ticket text, read
   bounded from a regular file opened without following links, and drawn in the plan editor as text, its HTML and
   images kept as characters (D113).
+- It serves a PR's review threads and the drafts that answer them (DESIGN §29): what canopy's reader last read of the
+  PR, coworkers' text, and each draft, a worker's text, all rendered as text; and the diff a run under `approve` kept
+  at its pushed head beside its log, read as a review's diff is (below): bounded, from a regular file opened without
+  following links, never served as a file.
 - It serves canopy's reviews (DESIGN §21, M32): each review run's findings, and the diff of the commit it read, which
   `_review` writes beside the run's log. The diff is the PR's own text, by whoever wrote the PR, `review.query`'s
   other people's PRs included: as hostile as anything the loop reads. It is read bounded, from a regular file opened
@@ -574,8 +578,9 @@ The web UI (DESIGN §22, M20) is the first listener. Its controls, in code:
   `canopy pause` and `canopy resume` do, set and clear the notice to workers as `canopy notice` does, ask for, skip,
   or approve a ticket's plan as `canopy plan` does, promote a proposal or a ticket's note to a lesson, reject a
   proposal, renew a lesson, and forget a note's, a proposal's, or a lesson's text as `canopy memory promote`,
-  `reject`, `renew`, and `forget` do (DESIGN §28), ask the loop to read its config files again as SIGHUP does, and
-  ask it for a tick now as `t` at its terminal does.
+  `reject`, `renew`, and `forget` do (DESIGN §28), edit, drop, and send a run's drafts as `canopy draft edit`,
+  `drop`, and `send` do (DESIGN §29), ask the loop to read its config files again as SIGHUP does, and ask it for a
+  tick now as `t` at its terminal does.
   Beyond the CLI's verbs it writes two things, both the operator's own words on a plan (DESIGN §25): an edit of a
   plan's file, saved as the operator's own editor would, operator-only and never through a link, only over the
   ticket's current plan, never while a plan run for it is running, and never over a file that changed since the
@@ -593,7 +598,9 @@ reaches every run's prompt, every ticket's, until it lapses, at most seven days,
 outlives a new secret; the banner on every page and `canopy status` show it while it is
 in force. A lesson promoted that way reaches every worker's prompt while `memory.proposals` is `use`, as such a notice
 does, with no lapse: it outlives a new secret until the operator forgets it, and `canopy memory lessons` and the
-memory page list it, with where it came from. Binding to a private address rather than loopback relies on the network
+memory page list it, with where it came from. It can also edit a run's draft into text of its choosing and send it,
+which posts that text on GitHub as the operator, unmarked, on a PR or a ticket a run drafted for; the journal records
+the edit, the send, and the channel. Binding to a private address rather than loopback relies on the network
 for the rest. A local user on a
 shared machine can reach loopback, and is stopped only by the secret. A browser sends a host's cookies to every port
 on it, so a local service on another port that the operator's browser visits receives the session cookie; it can then

@@ -100,6 +100,24 @@ def test_a_dry_run_counts_what_a_pass_would_remove_and_removes_nothing(
     assert [p for p in before if not p.exists()] == []
 
 
+def test_a_runs_kept_diffs_are_its_run_files(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
+    """A run under `approve` keeps a diff and its head per repository (DESIGN §29): its files, not unrecorded ones."""
+    now = datetime.now(UTC)
+    conn = canopy_env.journal()
+    old = run(conn, canopy_env, tick(conn, earlier(now, 10)), earlier(now, 40))
+    run_id = int(old.stem)
+    conn.execute(
+        "INSERT INTO run_slots (run_id, repo, slot_path, lease_id, lease_holder) VALUES (?, 'api', '/s', 'l', 'h')",
+        (run_id,),
+    )
+    write(old.with_name(f"{run_id}.api.diff"), 30, hours_old=2)
+    write(old.with_name(f"{run_id}.api.head"), 41, hours_old=2)
+    conn.commit()
+    kinds = dry_run(capsys)
+    assert removes(kinds["run files"]) == (4, 181, 4, 181)
+    assert removes(kinds["unrecorded files"])[0] == 0
+
+
 def test_retention_of_zero_keeps_a_kind_forever(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
     canopy_env.append_user("\n[retention]\nrun_files_days = 0\ntick_files_days = 0\n")
     conn = canopy_env.journal()

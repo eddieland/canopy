@@ -59,7 +59,7 @@ def review(ctx: Context, run_id: int) -> ReviewDetail | None:
     dismissed = db.review_dismissals(ctx.conn, run_id)
     note = contract.stored_object(row.result_json).get("harness")
     found = review_diff.read(review_diff.path_for(row.log_path))
-    diff = _diff(found) if found is not None else None
+    diff = diff_view(found) if found is not None else None
     ticket = db.get_ticket(ctx.conn, row.ticket_key) if row.ticket_key else None
     return ReviewDetail(
         review=summary(row),
@@ -138,7 +138,8 @@ def _finding(f: result.Finding, diff: review_diff.Diff | None, dismissed: bool) 
     )
 
 
-def _diff(diff: review_diff.Diff) -> ReviewDiff:
+def diff_view(diff: review_diff.Diff) -> ReviewDiff:
+    """Return a kept diff as the web UI reads it: a review's, or a run's at its pushed head (DESIGN §21, §29)."""
     return ReviewDiff(
         files=[
             DiffFile(

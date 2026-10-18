@@ -182,8 +182,10 @@ is, and the page sends one draft or several together. The attention item opens t
 `ui/DESIGN.md`'s.
 
 - The diff is the run's own: `_run`, under `approve`, takes it at the run's head once its pushes are verified (§8,
-  step 5), from its merge base with the base branch, as a review takes its commit's, and the server reads it with the
-  same bounded reader. When the PR's head has moved past it, the page says so.
+  step 5), from its merge base with the base branch, as a review takes its commit's, and keeps the commit beside it;
+  the server reads it with the same bounded reader. When the PR's head, as last read, is not that commit, the page
+  says so. The API is `GET /api/pull-request/threads`, and the drafts' verbs are `canopy draft`'s, through the same
+  functions.
 - A draft is a worker's text, written from coworkers' comments, and a thread is coworkers' text: both are rendered as
   text, never Markdown, every hidden character named, as memory's are (§28). GitHub renders the reply once it is sent.
 

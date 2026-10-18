@@ -239,11 +239,9 @@ def _save_diff(runner: procs.Runner, slot: Path, run: records.ReviewRun, log: lo
     fork = None if fetched is None else _git_or_none(runner, slot, log, fields, "merge-base", "FETCH_HEAD", sha)
     if fork is None:
         return
-    args = ("diff", "--no-color", "--no-ext-diff", "--no-textconv", "--find-renames", fork.strip(), sha)
-    diff = _git_or_none(runner, slot, log, fields, *args)
+    diff = _git_or_none(runner, slot, log, fields, *review_diff.diff_args(fork.strip(), sha))
     if diff is not None:
-        # Cut at the bound the reader reads, plus one character, so a cut diff reads as truncated.
-        logs.write_private(review_diff.path_for(run.log_path), diff[: review_diff.MAX_BYTES + 1])
+        review_diff.keep(review_diff.path_for(run.log_path), diff)
 
 
 def _git_or_none(
