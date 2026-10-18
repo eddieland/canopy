@@ -215,12 +215,12 @@ def plan_note(copy: Path | None, outline: Sequence[str]) -> str:
     return "\n".join(lines)
 
 
-def mark_comments(prefix: str, suffix: str) -> str:
-    """Return the instruction that has a worker mark each comment it posts (D069)."""
+def mark_comments(prefix: str, suffix: str, *, where: str = "on the ticket or a PR") -> str:
+    """Return the instruction that has a worker mark each comment it posts (D069), `where` it posts them."""
     marks = [f"start it with `{prefix}` and a space"] if prefix else []
     if suffix:
         marks.append(f"end it with `{suffix}`")
-    return f"In every comment and reply you post, on the ticket or a PR, {', and '.join(marks)}, without the backticks."
+    return f"In every comment and reply you post, {where}, {', and '.join(marks)}, without the backticks."
 
 
 def commit_trailer(config: Config) -> str:
