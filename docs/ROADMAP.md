@@ -942,6 +942,9 @@ What treehouse does that canopy relies on or works around, from its source at th
   canopy's idle ones.
 - `post_create` does not run under canopy's pool; the operator's guide says how to move a hook to `runtime.setup_cmd`
   (§9).
+- Before the week starts, the Worktree pools live checks (SCENARIOS S45 to S52) run on the toy workspace (TOY_REPOS),
+  so the week is not the first time canopy's pool leases, resets, reuses, seeds, and returns slots in real
+  repositories, with real workers and processes. A check that fails is an issue, fixed before the week.
 - Check, live, before the default changes: a week on `"canopy"` in which a Bazel or `node_modules` cache in a reused
   slot survives, no slot is left leased without a live run, and one switch back and forward with a run in flight
   loses nothing. Then the default becomes `"canopy"`, in its own PR.
