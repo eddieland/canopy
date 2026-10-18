@@ -28,16 +28,13 @@ from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 
 from canopy.core import db, hostgit, records
-from canopy.core.pools import AVAILABLE, Lease, PoolError, Process, ReturnOutcome, Slot, holder_for
+from canopy.core.pools import AVAILABLE, QUARANTINED, Lease, PoolError, Process, ReturnOutcome, Slot, holder_for
 from canopy.infra import cwds, lock, procs
 
 POOLS_DIR = "pools"
 # A pool with no declared size stops here, as treehouse's default `max_trees` does.
 MAX_SLOTS = 16
 LOCK_NAME = ".lock"
-# The holder of a slot whose seeding failed after its reset: no ticket can name it and no conditional return clears
-# it, so it is not reused until the operator has looked at it (DESIGN §18).
-QUARANTINED = "quarantined: worktree seeding failed"
 LEASED = "leased"
 IN_USE = "in-use"
 DIRTY = "dirty"
@@ -141,21 +138,26 @@ class CanopyPool:
             row = self._row(path)
             if row is None or row.lease_holder is None or (row.lease_id, row.lease_holder) != (lease_id, lease_holder):
                 return ReturnOutcome.FAILED
-            base = row.base
-            if _sound(self.clone, path):
-                try:
-                    if cwds.end(self.runner, path):
-                        return ReturnOutcome.FAILED
-                except cwds.CwdError as e:
-                    raise PoolError(str(e)) from e
-                base = self._reset_to_base(path, row)
-            with db.transaction(self.conn):
-                self.conn.execute(
-                    "UPDATE slots SET lease_id = NULL, lease_holder = NULL, leased_at = NULL, base = ?, seeded = '[]' "
-                    "WHERE path = ?",
-                    (base, str(path)),
-                )
-        return ReturnOutcome.RETURNED
+            return self._free(path, row)
+
+    def release(self, path: Path) -> ReturnOutcome:
+        """Return slot `path` only if a failed seeding still holds it (`QUARANTINED`), as `return_slot` frees a lease.
+
+        The operator's way to free the slot once they have looked at it (DESIGN §18). The ignored file seeding
+        collided with stays, as a return keeps ignored files, so a lease that seeds it fails again until it is gone.
+
+        Returns:
+            `RETURNED`, or `FAILED` when the slot is not this pool's, is not quarantined, or a process in it outlived
+            its signals.
+
+        Raises:
+            PoolError: The process table could not be read, or git could not reset the slot.
+        """
+        with self._locked():
+            row = self._row(path)
+            if row is None or row.lease_id is not None or row.lease_holder != QUARANTINED:
+                return ReturnOutcome.FAILED
+            return self._free(path, row)
 
     def destroy(self, path: Path) -> str | None:
         """Remove slot `path` if nothing in it could be lost: unleased, idle, clean, and merged.
@@ -227,6 +229,33 @@ class CanopyPool:
             with contextlib.suppress(OSError):
                 path.parent.rmdir()
         return target
+
+    def _free(self, path: Path, row: records.PoolSlot) -> ReturnOutcome:
+        """Free the held slot at `path`, under the pool's lock: end its processes, reset it to its base, clear its row.
+
+        A slot whose git link canopy cannot vouch for is freed without a reset.
+
+        Returns:
+            `RETURNED`, or `FAILED` when a process in it outlived its signals.
+
+        Raises:
+            PoolError: The process table could not be read, or git could not reset the slot.
+        """
+        base = row.base
+        if _sound(self.clone, path):
+            try:
+                if cwds.end(self.runner, path):
+                    return ReturnOutcome.FAILED
+            except cwds.CwdError as e:
+                raise PoolError(str(e)) from e
+            base = self._reset_to_base(path, row)
+        with db.transaction(self.conn):
+            self.conn.execute(
+                "UPDATE slots SET lease_id = NULL, lease_holder = NULL, leased_at = NULL, base = ?, seeded = '[]' "
+                "WHERE path = ?",
+                (base, str(path)),
+            )
+        return ReturnOutcome.RETURNED
 
     def _lease(self, holder: str, *, base: str | None, fetch: bool, refuse_busy: bool) -> Lease:
         manifest = self._manifest_file()

@@ -38,6 +38,19 @@ def test_lease_status_and_return(treehouse_state: Path) -> None:
     assert calls[2][:2] == ["return", "--force"]
 
 
+def test_release_returns_only_a_quarantined_slot(treehouse_state: Path) -> None:
+    lease = treehouse.lease(runner, "PROJ-1")
+    assert treehouse.release(runner, lease.path) is pools.ReturnOutcome.FAILED
+    assert treehouse.status(runner)[0].canopy_key == "PROJ-1"
+    treehouse.return_slot(runner, lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
+    assert runner.run(["treehouse", "get", "--lease", "--lease-holder", pools.QUARANTINED]).ok
+    assert treehouse.release(runner, lease.path) is pools.ReturnOutcome.RETURNED
+    [slot] = treehouse.status(runner)
+    assert (slot.status, slot.lease_holder) == ("available", "")
+    calls = json.loads(treehouse_state.read_text())["calls"]
+    assert calls[-2] == ["return", "--force", "--if-lease-holder", pools.QUARANTINED, str(lease.path)]
+
+
 def test_lease_with_base(treehouse_state: Path) -> None:
     assert treehouse.lease(runner, "PROJ-2", base="agent/PROJ-1-x").base_branch == "agent/PROJ-1-x"
 

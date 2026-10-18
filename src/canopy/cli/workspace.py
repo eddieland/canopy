@@ -1,4 +1,7 @@
-"""`canopy workspace sync` and `add`: make the workspace match its map and the declared slots (DESIGN §18)."""
+"""`canopy workspace sync` and `add`: make the workspace match its map and the declared slots (DESIGN §18).
+
+`canopy workspace release` frees a slot a failed seeding left quarantined, the one slot only the operator can free.
+"""
 
 from __future__ import annotations
 
@@ -11,7 +14,8 @@ from typing import TYPE_CHECKING, assert_never
 import click
 
 from canopy.cli.common import CliError, open_context
-from canopy.core import config, pool, workspace
+from canopy.cli.params import REPO
+from canopy.core import config, pool, pools, workspace
 from canopy.core.vocab import PoolKind
 from canopy.infra import lock
 from canopy.setup import init
@@ -57,6 +61,48 @@ def cmd_add(click_ctx: click.Context, repos: tuple[str, ...]) -> int:
     """
     _require_workspace()
     check_synced(sync(click_ctx, dry_run=False, add=repos))
+    return 0
+
+
+@workspace_group.command("release")
+@click.argument("repo", type=REPO)
+@click.argument("slot", metavar="SLOT")
+@click.pass_context
+def cmd_release(click_ctx: click.Context, repo: str, slot: str) -> int:
+    """Free a slot of REPO's pool that a failed seeding holds, so the next lease can reuse it.
+
+    When seeding finds a file already in a reused slot, the lease fails and the pool holds the slot as
+    `quarantined: worktree seeding failed`, counted as busy, until it is released. Look at the slot first: release
+    resets it as a return does and keeps its ignored files, the one seeding collided with too, so a lease that seeds
+    it fails again until you remove that file. SLOT is the slot's number, as the worktrees page shows it. Any other
+    slot is refused: a run's lease goes back when the run ends, or at the next tick's reconcile.
+    """
+    _require_workspace()
+    ctx = open_context(click_ctx)
+    if ctx.workspace.repo(repo) is None:
+        raise CliError(f"the map lists no repository {repo}")
+    pool_ = ctx.pool(repo)
+    try:
+        found = next((s for s in pool_.status() if s.name == slot), None)
+        if found is None:
+            raise CliError(f"{repo}'s pool has no slot {slot}")
+        if found.lease_holder != pools.QUARANTINED:
+            held = f", held by {found.lease_holder}" if found.lease_holder else ""
+            raise CliError(
+                f"slot {slot} is {found.status}{held}, not quarantined by a failed seeding; nothing released"
+            )
+        outcome = pool_.release(found.path)
+    except pools.PoolError as e:
+        raise CliError(f"{repo}'s pool: {e}") from e
+    match outcome:
+        case pools.ReturnOutcome.RETURNED:
+            click.echo(f"{repo}: released slot {slot} ({found.path})")
+        case pools.ReturnOutcome.FAILED | pools.ReturnOutcome.DIRTY:
+            raise CliError(
+                f"{repo}'s pool kept slot {slot}: it is no longer quarantined, or a process in it outlived its signals"
+            )
+        case unknown:
+            assert_never(unknown)
     return 0
 
 
