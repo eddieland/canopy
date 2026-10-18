@@ -20,7 +20,6 @@ from tests.canopy.helpers import (
     approve_policy,
     planner_does,
     present,
-    prompt_of,
     seen,
     state_block,
     waits,
@@ -90,11 +89,11 @@ def test_a_proposed_plan_waits_and_a_reply_asks_for_changes(
     scenario.tick(*waits(KEY), dry_run=True)
     assert plan_of(scenario)["changes_asked"] is True
     second = scenario.run(PLAN, worker=planner_does(plan="# Plan, blue\n"))
-    assert second["status"] == RunStatus.DONE
-    assert "Make it blue." in prompt_of(canopy_env, second["id"])
+    assert second.status == RunStatus.DONE
+    assert "Make it blue." in second.prompt
     assert [(p.run_id, p.status) for p in plans.history(scenario.conn, KEY)] == [
-        (run["id"], PlanStatus.SUPERSEDED),
-        (second["id"], PlanStatus.PROPOSED),
+        (run.id, PlanStatus.SUPERSEDED),
+        (second.id, PlanStatus.PROPOSED),
     ]
     scenario.tick(*waits(KEY), dry_run=True)
     assert plan_of(scenario)["changes_asked"] is False
@@ -117,7 +116,7 @@ def test_a_blocked_planner_waits_on_the_operator_on_a_public_ticket(
     approve_policy(canopy_env)
     blocked = {"status": "blocked", "summary": "unclear", "question": QUESTION}
     run = scenario.run(PLAN, worker=planner_does(plan=None, result=blocked))
-    assert run["status"] == RunStatus.BLOCKED
+    assert run.status == RunStatus.BLOCKED
     asked = present(plans.question(scenario.conn, KEY))
     assert str(asked["body"]) == QUESTION
 
@@ -156,7 +155,7 @@ def test_a_proposed_plan_tells_the_sinks_without_its_text(
     [plan] = plans.history(scenario.conn, KEY)
     rows = scenario.conn.execute("SELECT kind, fields FROM notify_events ORDER BY id").fetchall()
     found = {str(r["kind"]): json.loads(str(r["fields"])) for r in rows}
-    assert found["plan.proposed"] == {"ticket": KEY, "run": run["id"], "plan": plan.id}
+    assert found["plan.proposed"] == {"ticket": KEY, "run": run.id, "plan": plan.id}
     assert "button" not in json.dumps(found["plan.proposed"])
     line = message.event_line("plan.proposed", found["plan.proposed"])
     assert line == f"? {KEY} plan {plan.id} waits on your approval: canopy show {KEY}"
