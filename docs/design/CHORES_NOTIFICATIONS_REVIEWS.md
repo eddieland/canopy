@@ -73,8 +73,9 @@ what the overseer does with tickets: they cannot cause or prevent a dispatch.
 
 ### Agent definitions and tooling
 
-canopy ships `canopy-chore` in the definitions directory (§13): no edits, no subagents, no bash, and no MCP write tools
-where the runtime can deny them by name. It can read the tracker and GitHub, including other people's PRs.
+canopy ships `canopy-chore` in the definitions directory (§13): no edits, no subagents, no bash but
+`canopy chore history` (History, below), and no MCP write tools where the runtime can deny them by name. It can read
+the tracker and GitHub, including other people's PRs.
 
 A chore using the operator's deterministic tools gets its own definition, copied from `canopy-chore` into the
 operator's runtime config (for OpenCode `~/.config/opencode/agent/`, never the repository's `.opencode/agent/`), with
@@ -86,6 +87,7 @@ permission:
   task: deny
   bash:
     "*": deny
+    "canopy chore history *": allow   # its own earlier runs (History, below)
     "buildq *": allow        # the operator's read-only CLI for the build queue
 ```
 
@@ -121,7 +123,8 @@ prompt are not its to read back or rewrite.
 
 The prompt is the operator's file plus a `## Run` section canopy generates: the time, the overseer's context, the
 operator's notes (below) and notice to workers (§8), the latest run, the open findings so ids can be reused,
-`max_findings`, and the result contract. The notice is in canopy's section, which the operator's file cannot drop.
+`max_findings`, the command that reads earlier runs (`history`, below), and the result contract. The notice is in
+canopy's section, which the operator's file cannot drop.
 
 Result contract, one JSON line, last line of the agent's text (§13):
 
@@ -140,6 +143,27 @@ Result contract, one JSON line, last line of the agent's text (§13):
 
 Reconcile (§6 step 3) treats chore runs like worker runs: one whose process is gone has its agent killed and ends
 `crashed`. Chore runs do not count against `max_workers`.
+
+### History
+
+`canopy chore history <NAME>` lists a chore's runs, newest first, each with how and when it ended, whether the overseer
+or the operator started it, its summary, and its findings' ids, titles, and links: ten by default, `--limit` up to 50,
+and `--before <RUN>` for the page before. `--run <RUN>` prints one run whole, each finding's detail included. It
+records nothing.
+
+- A run's prompt carries the latest run and the open findings, which most runs need and every run pays for. The rest
+  a run reads when it needs it: whether a problem came and went, or what a run said of a finding before it cleared.
+  The `## Run` object names the command as `history`. Rejected: more runs in the prompt, a cost on every run for what
+  few use.
+- A chore's run reads its own chore's runs only: another chore's is refused `other_chore`, and another chore's run id
+  `unknown`. `CANOPY_RUN_ID` names the run, `chore-<id>`, or `chore-try:<name>` for a try that records nothing, and
+  `CANOPY_CHORE_WORKSPACE` the workspace, so the command finds the journal from a `cwd` outside it.
+- The overseer is refused `inside_tick`: its state block carries what it decides a chore on, and findings inform
+  nothing else (Delegation). A worker's or a review's run is refused `not_chore`. The operator reads any chore's.
+- What it prints is what the runs reported: data, framed so for a run, with every hidden character named in what it
+  prints whole. Dismissals and notes are not in it: they are the operator's, and the prompt carries the notes.
+- `canopy-chore` allows bash for this one command; an operator's own chore definition adds the rule to use it. A
+  sandboxed chore cannot: the journal is in the part of `.canopy/` its policy denies (§24), so it has its prompt's.
 
 ### Notes from the operator
 

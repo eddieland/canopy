@@ -378,8 +378,9 @@ Controls:
 - The reviewer writes nothing outside its result line (D114). Its definition denies commenting or replying anywhere,
   submitting a PR review, pushing, writing files, labels, and edits by name, as defense in depth; the operator's
   runtime need not grant it a write tool at all.
-- A chore's only output is its result line. The shipped `canopy-chore` definition has no edit, shell, or subagent
-  tools, and denies MCP write tools by name.
+- A chore's only output is its result line. The shipped `canopy-chore` definition has no edit or subagent tools, a
+  shell that runs `canopy chore history` alone, which reads its own chore's earlier runs and writes nothing, and
+  denies MCP write tools by name.
 - Opt-in: a sandboxed run (T4) reads none of the operator's secrets under `$HOME` but what its template re-allows, and
   reaches the network only through `srt`'s proxy, which connects to the hosts on the operator's allowlist and to no
   other, and to no loopback, link-local, or cloud metadata address, nor the host's own, whatever name resolves there.

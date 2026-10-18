@@ -66,6 +66,7 @@ Run these from anywhere in the workspace the loop runs in (they find it from the
 | `canopy decisions [TICK]` | A tick's decisions and rationales (default: the latest), and its overseer output file. |
 | `canopy tick --dry-run` | One tick: the overseer plans, nothing is dispatched. See it with `canopy decisions`. |
 | `canopy chore try NAME` | Runs a chore now, in the foreground, and records the run; `--no-record` records nothing. |
+| `canopy chore history NAME` | A chore's runs, newest first, with what each found; `--run ID` prints one with its detail. |
 | `canopy loop [--dry-run] [--every MINUTES] [--ticks N]` | The loop, in the foreground. The operator runs this. |
 | `canopy daemon start [LOOP OPTIONS]`, `stop` | The loop, detached; output in `.canopy/daemon.log`. The operator runs these. |
 | `canopy daemon status` | Whether the detached loop runs, since when, and where its output is. |
@@ -202,8 +203,9 @@ findings belong to one run, of one commit of one PR, numbered from 1, each with 
 location, and a detail.
 
 `canopy show chore:NAME` lists a chore's open findings by id and title, marking the dismissed ones, and `canopy review
-show ID` prints a review in full. For a chore finding's detail, or to look across runs, read the journal: each run's
-`result_json` holds what it reported.
+show ID` prints a review in full. `canopy chore history NAME` lists a chore's runs, newest first, each with its summary
+and findings, and `--run ID` prints one run's findings with their detail. To ask more of them, read the journal: each
+run's `result_json` holds what it reported.
 
 ```sh
 # A chore's open findings, with their detail.

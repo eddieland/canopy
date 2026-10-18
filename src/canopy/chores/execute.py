@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.chores import start
+from canopy.chores import history, start
 from canopy.core import agent_output, conversation, db, definitions, outbox
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
@@ -156,8 +156,12 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
     done = ctx.runner.run(
         argv,
         cwd=cwd,
-        # The operator's commands refuse inside canopy's own runs (DESIGN §22).
-        env={conversation.RUN_ID_ENV: f"chore-{run_id}"},
+        # The operator's commands refuse inside canopy's own runs (DESIGN §22); `canopy chore history` reads this
+        # chore's runs from this workspace's journal, wherever `cwd` is.
+        env={
+            conversation.RUN_ID_ENV: f"{history.RUN_PREFIX}{run_id}",
+            history.WORKSPACE_ENV: str(ctx.ws.root.absolute()),
+        },
         timeout=chore.timeout_minutes * 60,
         on_start=lambda pid: db.set_agent_pid(ctx.conn, "chore_runs", run_id, pid),
     )

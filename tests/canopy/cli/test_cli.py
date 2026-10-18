@@ -182,7 +182,7 @@ def test_completion_leaves_out_the_overseers_commands(capsys: pytest.CaptureFixt
     assert "plain,status" in commands
     for overseers in ("attention", "decide", "dispatch", "mirror", "queried", "ticket", "_run", "_chore", "_review"):
         assert f"plain,{overseers}" not in commands
-    assert complete(capsys, "canopy chore ") == ["plain,try"]
+    assert complete(capsys, "canopy chore ") == ["plain,history", "plain,try"]
     assert complete(capsys, "canopy review ") == ["plain,show"]
     assert complete(capsys, "canopy ticket ") == []
 
