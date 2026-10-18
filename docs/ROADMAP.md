@@ -339,6 +339,9 @@ canopy, not built after an incident.
   control §6 lists, the prompt property test included. A Linux CI job runs it with bubblewrap and `srt`.
 - Settled before Accept, each in HOST_ISOLATION §7 or a decision: what treehouse's `return` runs in a slot; caches that
   tools keep as git repositories under the per-run object directory; OpenCode's local MCP servers inside the sandbox.
+- Bazel, on the operator's request (2026-10-18), for their large downloads: with `--bazel-repository-cache`, a run's
+  Bazel uses caches of its role's own, its repository cache linked to the operator's downloads, which it reads and
+  never writes, and a download it adds is copied into the operator's cache once its checksum is checked (DESIGN §24).
 - TRUST_MODEL T4 and T6: the sandbox as a control, what it does not cover (the shared kernel, exfiltration through an
   allowed host), and that it is opt-in. DESIGN §8 and §15 for the object
   directory and reconcile's cleanup; HOST_ISOLATION's settled parts move to DESIGN.
@@ -409,6 +412,13 @@ before is closed too; `canopy sandbox setup` says when one still names it. Readi
 it drops a login it cannot decode, and the whole of `mcp-auth.json` for one bad entry, so what comes back is checked
 field by field against the shapes OpenCode writes (DESIGN §24, Logins). The canary's new cases pass under `srt` 0.0.79
 and bubblewrap 0.9 on Ubuntu 24.04, and fail under the fake `srt`, as its others do.
+Bazel downloads are shared (2026-10-18), at the operator's request for PyTorch and CUDA: `--bazel-repository-cache`
+gives a run's Bazel caches of the role's own, its repository cache linked to the operator's, and copies a download the
+run adds into the operator's cache once its checksum checks. Reading Bazel 9.3.0's source found that it checks a
+cached download, then copies it in a separate step, so a run that could write the operator's cache could swap the file
+in between; and that it fails a fetch whose download it cannot store, so a read-only cache alone breaks a new
+dependency (DESIGN §24, Bazel). Bazel 8.4.2 builds under `srt` 0.0.79 and bubblewrap 0.9, its own sandbox nested,
+with a download read through the link and its source gone.
 Next: the canary on the operator's Linux and macOS machines, then a day of `canopy loop` with sandboxed workers.
 
 ## M27. Session transcripts in the web UI

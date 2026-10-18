@@ -220,6 +220,30 @@ setup_cmd = "canopy-sandbox setup -- sh -c 'pnpm install --frozen-lockfile'"
 - If your `PATH` has a relative entry, such as `.`, name the wrapper by its absolute path: canopy runs the template
   in the slot, where a relative entry finds what the branch committed.
 
+### Bazel
+
+A sandboxed run cannot write your Bazel caches from [BAZEL.md](BAZEL.md): your own builds take outputs from the disk
+cache unchecked, and run Bazel's own binaries from under the output root. It can share your downloads, though, so a
+large dependency such as PyTorch or CUDA is fetched once. Name your repository cache, the `--repository_cache` in your
+`~/.bazelrc`, on every prefix whose command builds, `setup_cmd`'s and the chores' that build included:
+
+```toml
+worker_cmd = '''canopy-sandbox worker --read {definitions_dir} --bazel-repository-cache /fast/bazel/repository-cache --
+    env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json --thinking
+    --title={title} {prompt}'''
+setup_cmd = "canopy-sandbox setup --bazel-repository-cache /fast/bazel/repository-cache -- sh -c 'bazel fetch //...'"
+```
+
+The run's `bazel`, which the wrapper puts first on its `PATH`, then builds with the role's own output root and disk
+cache, under `~/.cache/canopy/sandbox/<role>/bazel/`, and a repository cache that links to each of your downloads,
+which the run can read and not write. A download the run adds is copied into your cache when the run ends, once its
+checksum matches the name Bazel stored it under; your own builds then reuse it. The first sandboxed build in each slot
+still runs its actions from nothing; later ones reuse the role's disk cache. `bazel` must be on `PATH` through an
+absolute entry. If it is Bazelisk, which keeps the Bazel releases it fetches under your HOME, point `BAZELISK_HOME`
+under the role's cache directory, by its absolute path, in the command after the wrapper's `--` (`env
+BAZELISK_HOME=/home/you/.cache/canopy/sandbox/worker/bazelisk`), and put `releases.bazel.build` on the allowlist: it
+fetches Bazel there the first time.
+
 A sandboxed worker's new commits go to a per-run object directory, which canopy reads to push and then deletes, after
 putting each slot back on the commit the run started from (DESIGN §8). An unsandboxed run leaves that directory
 empty.
@@ -280,10 +304,10 @@ github.com.
   missing from `allowRead`. The error is the tool's own, in the run's log. A tool that writes outside `TMPDIR`, the
   worktree, and the cache directory needs its directory moved under the cache directory (step 3), or, if nothing of
   yours runs what it writes, in `allowWrite`.
-- **Bazel:** the disk and repository caches and `--output_user_root` from [BAZEL.md](BAZEL.md) are your own builds'
-  too. In `allowWrite`, a run can leave outputs there that your builds then use, outside the sandbox; left out, each
-  run builds cold. Prefer the cold build, or a remote cache only CI writes, until DESIGN §24 settles Bazel caches of
-  the sandbox's own. Expect each run's Bazel server to end with its sandbox, so a run starts its own.
+- **Bazel:** never put your disk cache, repository cache, or `--output_user_root` from [BAZEL.md](BAZEL.md) in
+  `allowWrite`: a run could leave outputs there that your builds then use, outside the sandbox. Share your downloads
+  with `--bazel-repository-cache` instead (section 5). Expect each run's Bazel server to end with its sandbox, so a run
+  starts its own.
 - **A tool's git cannot write objects in the slot:** inside the sandbox, `git` on `PATH` is the wrapper's own, which
   points git at the run's object directory in the run's worktrees (DESIGN §24, Git state). A tool that runs git by its
   absolute path skips it, and the slot's shared object directory is read-only. Have the tool find `git` on `PATH`.
