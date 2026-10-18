@@ -188,7 +188,8 @@ describe('ProposalActions', () => {
         )
         expect(sent).toEqual([{ path: '/api/memory/5/promote', body: { text: null, repo: null } }])
         expect(screen.queryByRole('form')).toBeNull()
-        expect(onSaid).not.toHaveBeenCalled()
+        // Decided elsewhere: its row may leave as memory is read again, so the list says it too.
+        expect(onSaid).toHaveBeenCalledWith('refused (not_pending): proposal 5 is invalid: rejected')
     })
 })
 
@@ -209,6 +210,21 @@ describe('ProposalActions as written', () => {
         })
         expect(sent).toEqual([{ path: '/api/memory/5/promote', body: { text: null, repo: null } }])
         expect(screen.queryByRole('form')).toBeNull()
+    })
+})
+
+describe('ProposalActions refused', () => {
+    it('reads memory again and says why when a proposal was decided elsewhere', async () => {
+        answer = Response.json(
+            { detail: { guard: 'not_pending', reason: 'proposal 5 is superseded: promoted to lesson 9' } },
+            { status: 409 },
+        )
+        const onSaid = vi.fn<(said: string) => void>()
+        renderIn(<ProposalActions proposal={ENTRY} onSaid={onSaid} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Reject' }))
+        await vi.waitFor(() => {
+            expect(onSaid).toHaveBeenCalledWith('refused (not_pending): proposal 5 is superseded: promoted to lesson 9')
+        })
     })
 })
 
@@ -318,6 +334,32 @@ describe('LessonActions', () => {
             expect(onSaid).toHaveBeenCalledWith('Memory 8 (lesson `web-tests`) is forgotten: its text is deleted.')
         })
         expect(sent).toEqual([{ path: '/api/memory/8/forget', body: { confirm: 'memory:8' } }])
+    })
+
+    it('never offers to promote a used-up proposal again to bring a forgotten lesson back', () => {
+        renderIn(
+            <LessonActions
+                lesson={{ ...LESSON, origin: { id: 7, scope: 'proposal', ticket_key: 'ABC-1', run_id: 3 } }}
+                onSaid={vi.fn<(said: string) => void>()}
+            />,
+        )
+        fireEvent.click(screen.getByRole('button', { name: 'Forget' }))
+        const form = screen.getByRole('form', { name: 'Forget memory:8' })
+        expect(form.textContent).toContain('it cannot come back')
+        expect(form.textContent).not.toContain('promote its')
+    })
+
+    it('says a lesson from a note comes back by promoting the note again', () => {
+        renderIn(
+            <LessonActions
+                lesson={{ ...LESSON, origin: { id: 2, scope: 'ticket', ticket_key: 'ABC-1', run_id: 3 } }}
+                onSaid={vi.fn<(said: string) => void>()}
+            />,
+        )
+        fireEvent.click(screen.getByRole('button', { name: 'Forget' }))
+        expect(screen.getByRole('form', { name: 'Forget memory:8' }).textContent).toContain(
+            'promote its note, memory:2, again',
+        )
     })
 
     it('offers Renew alone on a lesson_review item', () => {
