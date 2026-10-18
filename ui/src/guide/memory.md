@@ -84,16 +84,17 @@ across the whole journal is still `canopy memory search`.
 
 Each memory is a row, read left to right like every other list in canopy. First where it stands, a dot and a word:
 `active` for a memory in force, `recorded` for one in force while its tier only records, which no run reads, `pending`
-for a proposal waiting on you, `superseded` or `invalid` once it's out of force, and for a lesson that needs you, `due`
+for a proposal waiting on you (in the Proposals panel, where every row is, the time it has left instead: `3d left`,
+amber in its last two days), `superseded` or `invalid` once it's out of force, and for a lesson that needs you, `due`
 once its review date has come or `wrong` once a run reported it wrong, so a glance down the left edge finds them. Hover
 over the word for the reason. Then its ref, as `memory:42`, with a button on hover that copies it, since that's what
 Forget and the CLI ask for; its ticket, on the proposals; its repository; its key; how many runs relied on it, once any
 has; and how long ago it was written.
 
-Under that, what it says, and one line of where it came from: the run that wrote it and the commit it was written
-against; for a proposal, how its run ended, whether its ticket is done, when it lapses (in amber in its last two days),
-and `private` if its run worked a private ticket; for a lesson, what it was promoted from, when it comes up for review,
-and any run that reported it wrong, and when.
+Under that, what it says, and one line of where it came from: the run that wrote it, with the commit it was written
+against on hover; for a proposal, how its run ended, whether its ticket is done, and `private` if its run worked a
+private ticket; for a lesson, what it was promoted from, when it comes up for review, and any run that reported it
+wrong, and when.
 
 A worker's text is shown as plain text, never as Markdown or a link, unlike everything else a worker writes: a link in
 a note would be a worker's link you'd read as canopy's. Any character that hides text from you but not from a model,

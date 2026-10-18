@@ -5,6 +5,7 @@ import {
     memoryStand,
     reviewText,
     lapsesText,
+    leftText,
     leftOutText,
     lessonChars,
     memorySegments,
@@ -145,5 +146,13 @@ describe('reviewText', () => {
     it('says how long until a lesson comes up for review, or how long it is overdue', () => {
         expect(reviewText('2026-12-29T13:00:00Z', now)).toBe('review in 82d')
         expect(reviewText('2026-10-05T12:00:00Z', now)).toBe('review overdue 3d')
+    })
+})
+
+describe('leftText', () => {
+    it('says how long a proposal has left, then that it is lapsing', () => {
+        const now = Date.parse('2026-10-08T12:00:00Z')
+        expect(leftText('2026-10-12T13:00:00Z', now)).toBe('4d left')
+        expect(leftText('2026-10-08T12:00:00Z', now)).toBe('lapsing')
     })
 })
