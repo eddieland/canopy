@@ -161,8 +161,10 @@ inside a git repository. Its state directory, `~/.local/state/opencode`, is not 
 So a run's OpenCode keeps its data in a directory of its role's own, `$XDG_DATA_HOME/canopy/sandbox/<role>/`, private
 and shared by the role's runs as the cache directory is, which the templates allow as `@DATA@`. The wrapper points the
 command's `XDG_DATA_HOME` there, keeps uv's Pythons and tools where the operator keeps them, since the templates let a
-run read those, and denies writing the operator's OpenCode data directory whatever the template says, so a template
-from before `@DATA@` cannot write it either. canopy reads a run's transcript from the run's log, never from OpenCode's
+run read those, and denies writing the operator's OpenCode data directory, and where it leads if it is a link, whatever
+the template says, so a template from before `@DATA@` cannot write it either. It makes that directory first when it
+is missing, as OpenCode would at its first start: `srt` cannot deny a path that is not there without leaving a mount
+point on the host in its place. canopy reads a run's transcript from the run's log, never from OpenCode's
 data, so the sessions there are the role's alone.
 
 The logins are the one part of that data a run needs: each provider's in `auth.json`, and each remote MCP server's
