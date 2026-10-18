@@ -68,6 +68,15 @@ describe('railRuns', () => {
         expect(railRuns(runs, 10).shown.map((r) => r.id)).toEqual([3, 4])
     })
 
+    it('leaves out a blocked run whose ticket the operator stopped, and keeps a running one, which still works', () => {
+        const runs = [
+            { ...at(1, 'running', '2026-10-08T12:00:00Z'), ticket_stopped: true },
+            { ...at(2, 'blocked', '2026-10-08T11:00:00Z'), ticket_stopped: true },
+            at(3, 'blocked', '2026-10-08T10:00:00Z'),
+        ]
+        expect(railRuns(runs, 10).shown.map((r) => r.id)).toEqual([1, 3])
+    })
+
     it('counts the runs past the limit', () => {
         const runs = Array.from({ length: 6 }, (_, i) => at(i, 'running', `2026-10-08T12:0${i}:00Z`))
         expect(railRuns(runs, 4)).toEqual({ shown: runs.slice(0, 4), more: 2 })

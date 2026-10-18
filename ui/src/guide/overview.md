@@ -75,9 +75,10 @@ sooner. You set one on [Settings](settings#notice-to-workers).
 
 The strip beside the nav, on every page. From the top: a search box over the whole journal (below), the runs working
 right now, running first and then the ones waiting on you, and what the last 24 hours and the last 30 days cost, each
-a link to the spend page. Its foot names the version canopy is serving, which links to canopy's releases on GitHub,
-and under it two buttons: **Guide**, which opens this guide, and **Settings**. On a narrow window the rail folds to
-icons; **Open the rail** brings it back.
+a link to the spend page. A ticket you stopped drops out of the working runs once its run ends; a question it left
+behind waits on nothing, so it is not listed either. Its foot names the version canopy is serving, which links to
+canopy's releases on GitHub, and under it two buttons: **Guide**, which opens this guide, and **Settings**. On a
+narrow window the rail folds to icons; **Open the rail** brings it back.
 
 ## Search
 
