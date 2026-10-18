@@ -1,0 +1,124 @@
+name: Flaky tests
+
+# Runs tests several times over on CI's runners, for when a test is suspected of being flaky or a fix for one needs
+# proving: the tests a branch changed since it left main, or every test (Makefile, Flaky tests). On demand only, on a
+# branch from the Actions tab or `gh workflow run flaky-tests.yml --ref BRANCH -f tests=all`; it never runs by itself.
+on:
+  workflow_dispatch:
+    inputs:
+      tests:
+        # `changed` is what `make burn-in` runs by default: the tests changed since the branch left main.
+        description: Which tests to run
+        type: choice
+        options: [changed, all]
+        default: changed
+      repeat:
+        description: How many times each test runs
+        type: number
+        default: 5
+
+permissions:
+  contents: read
+
+# Every uv command refuses a uv.lock that is out of date with pyproject.toml, not only the explicit `uv sync
+# --locked`: the `uv run` calls after it, in make and npm scripts, would otherwise re-lock and sync quietly.
+env:
+  UV_LOCKED: "1"
+  REPEAT: ${{ inputs.repeat }}
+  # make reads ALL from the environment: set, every test runs; empty, the ones changed since the branch left main.
+  ALL: ${{ inputs.tests == 'all' && '1' || '' }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          # All of history, so origin/main is there to measure the branch's change from.
+          fetch-depth: 0
+
+      - name: Set up uv and Python 3.12
+        uses: astral-sh/setup-uv@v10.3.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Python tests, REPEAT times
+        run: make burn-in-py REPEAT="$REPEAT"
+
+  ui-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          # All of history, so origin/main is there to measure the branch's change from.
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: UI unit tests, REPEAT times
+        run: make burn-in-ui REPEAT="$REPEAT"
+
+  ui-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          # All of history, so origin/main is there to measure the branch's change from.
+          fetch-depth: 0
+
+      - name: Set up uv and Python 3.12
+        uses: astral-sh/setup-uv@v10.3.0
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          uv sync --locked
+          npm --prefix ui ci --no-audit --no-fund
+
+      - name: Install Playwright's Chromium
+        working-directory: ui
+        run: npx playwright install --with-deps chromium
+
+      - name: Playwright tests, REPEAT times
+        run: make ui-e2e-burn-in REPEAT="$REPEAT"
+
+      - name: Keep the report
+        if: failure()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: playwright-report
+          path: |
+            ui/playwright-report
+            ui/test-results
+          retention-days: 7
