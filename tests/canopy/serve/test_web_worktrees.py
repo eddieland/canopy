@@ -60,6 +60,7 @@ def test_each_slot_shows_what_holds_it_and_what_runs_in_it(ctx: Context, treehou
         slot("6", "available"),
         slot("7", "dirty"),
         slot("8", "damaged"),
+        slot("9", "leased", lease_holder=pools.QUARANTINED, leased_at="2026-10-08T12:00:00Z"),
     ]
     treehouse_state.write_text(pool_state(ctx.workspace.repos[0].path, slots))
     c, _ = signed_in_client(ctx)
@@ -76,6 +77,7 @@ def test_each_slot_shows_what_holds_it_and_what_runs_in_it(ctx: Context, treehou
         "6": "idle",
         "7": "dirty",
         "8": "broken",
+        "9": "held",
     }
     one = by_name["1"]
     assert (one["run"]["id"], one["run"]["kind"], one["review"]) == (run_id, "implement", None)
@@ -92,6 +94,8 @@ def test_each_slot_shows_what_holds_it_and_what_runs_in_it(ctx: Context, treehou
     assert "never reused" in by_name["7"]["note"]
     assert "discard them in the slot" in by_name["7"]["note"]
     assert (by_name["6"]["note"], by_name["8"]["note"]) == (None, None)
+    # A slot a failed seeding holds says how to free it.
+    assert "`canopy workspace release repo 9`" in by_name["9"]["note"]
     assert (by_name["6"]["branch"], by_name["6"]["detached"], by_name["6"]["holder"]) == (None, True, None)
 
 

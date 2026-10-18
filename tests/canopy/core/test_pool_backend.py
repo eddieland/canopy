@@ -1,6 +1,7 @@
 """Choosing the pool (DESIGN §18; ROADMAP M45, stage 3): `pools.backend`, leases going back to the pool that made them,
 and `canopy workspace sync` carrying the slots over when the operator switches."""
 
+import dataclasses
 import json
 import sqlite3
 from pathlib import Path
@@ -270,3 +271,66 @@ def test_under_treehouse_a_canopy_pool_that_cannot_be_read_is_logged_not_fatal(
     assert set(reconciled.leased) == {"api", "web"}
     warnings = [(c.args[0], c.kwargs["extra"]) for c in log.warning.call_args_list]
     assert ("canopy pool not read", {"repo": "api", "error": "the journal says something odd"}) in warnings
+
+
+# Releasing a quarantined slot, with `canopy workspace release`
+
+
+def quarantined(ws: Ws, canopy_env: CanopyEnv, conn: sqlite3.Connection, tmp_path: Path) -> Path:
+    """Leave api's one slot of canopy's pool quarantined: a lease's seeding collides with a file a run left there."""
+    clone = ws.clone("api")
+    (clone / ".git" / "info" / "exclude").write_text("*.local\n")
+    ours = context(ws, canopy_env, conn).canopy_pool("api")
+    lease = ours.lease("PROJ-1")
+    (lease.path / "user.local").write_text("the run's own\n")
+    ours.return_slot(lease.path, lease_id=lease.lease_id, lease_holder=lease.lease_holder)
+    (clone / "user.local").write_text("personal\n")
+    manifest = tmp_path / "worktreeinclude"
+    manifest.write_text("*.local\n")
+    with pytest.raises(pools.PoolError, match="file exists"):
+        dataclasses.replace(ours, include_file=manifest).lease("PROJ-2")
+    return lease.path
+
+
+def test_release_frees_a_quarantined_slot_of_canopy_s_pool(
+    ws: Ws, canopy_env: CanopyEnv, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    use(canopy_env, "canopy")
+    conn = ws.journal()
+    path = quarantined(ws, canopy_env, conn, tmp_path)
+    assert canopy_rows(conn) == [("api", str(path), pools.QUARANTINED)]
+    assert main(["workspace", "release", "api", "1"]) == 0
+    assert capsys.readouterr().out == f"api: released slot 1 ({path})\n"
+    assert canopy_rows(conn) == [("api", str(path), None)]
+    # The file seeding collided with is the operator's to remove: a release keeps ignored files, as a return does.
+    assert (path / "user.local").read_text() == "the run's own\n"
+    assert context(ws, canopy_env, conn).pool("api").lease("PROJ-3").path == path
+
+
+def test_release_refuses_a_slot_no_failed_seeding_holds(
+    ws: Ws, canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]
+) -> None:
+    use(canopy_env, "canopy")
+    conn = ws.journal()
+    lease = context(ws, canopy_env, conn).pool("api").lease("PROJ-1")
+    assert main(["workspace", "release", "api", "1"]) == 1
+    assert "slot 1 is leased, held by canopy:PROJ-1, not quarantined" in capsys.readouterr().err
+    assert canopy_rows(conn) == [("api", str(lease.path), "canopy:PROJ-1")]
+    assert main(["workspace", "release", "api", "2"]) == 1
+    assert "api's pool has no slot 2" in capsys.readouterr().err
+    assert main(["workspace", "release", "elsewhere", "1"]) == 1
+    assert "the map lists no repository elsewhere" in capsys.readouterr().err
+
+
+def test_under_treehouse_release_frees_the_slot_through_treehouse(
+    ws: Ws, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    slot = ws.root / ".treehouse" / "api-fake" / "1" / "api"
+    slot.mkdir(parents=True)
+    held = {"name": "1", "path": str(slot), "status": "leased", "lease_id": "", "lease_holder": pools.QUARANTINED}
+    treehouse_state.write_text(json.dumps({"pools": {str(ws.clone("api")): {"slots": [held]}}}))
+    assert main(["workspace", "release", "api", "1"]) == 0
+    assert capsys.readouterr().out == f"api: released slot 1 ({slot})\n"
+    assert [s["status"] for s in fake_pool(treehouse_state, ws, "api")] == ["available"]
+    returns = [c for c in json.loads(treehouse_state.read_text())["calls"] if c[0] == "return"]
+    assert returns == [["return", "--force", "--if-lease-holder", pools.QUARANTINED, str(slot)]]

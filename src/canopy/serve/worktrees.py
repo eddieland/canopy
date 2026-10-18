@@ -18,7 +18,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from canopy.core import conversation, db
-from canopy.core.pools import AVAILABLE, HOLDER_PREFIX, SYNC_HOLDER, PoolError, Slot
+from canopy.core.pools import AVAILABLE, HOLDER_PREFIX, QUARANTINED, SYNC_HOLDER, PoolError, Slot
 from canopy.serve import views
 from canopy.serve.schema import Pool, Process, ReviewHold, Worktree, WorktreeState
 
@@ -49,6 +49,11 @@ _SYNC = "held while `canopy workspace sync` makes this pool's slots"
 _DIRTY = (
     "never reused while it has changes, and counts as busy, so a full pool refuses a lease: keep what you need of "
     "them, then discard them in the slot"
+)
+# What holds a slot a failed seeding left, and what frees it (DESIGN §18): only the operator, once they have looked.
+_QUARANTINED = (
+    "seeding found a file already in this slot, so the pool holds it and counts it as busy: remove the file it "
+    "collided with, then run `canopy workspace release {repo} {name}`"
 )
 
 
@@ -82,25 +87,29 @@ def pools(backend: Backend, ctx: Context) -> list[Pool]:
         except PoolError as e:
             found.append(Pool(repo=repo.name, size=size, error=str(e)))
             continue
-        worktrees = [worktree(s, by_lease.get(s.lease_id), reviews.get(s.lease_id), root=root) for s in slots]
+        worktrees = [
+            worktree(s, by_lease.get(s.lease_id), reviews.get(s.lease_id), root=root, repo=repo.name) for s in slots
+        ]
         found.append(Pool(repo=repo.name, size=size, worktrees=worktrees))
     return found
 
 
-def worktree(slot: Slot, run: sqlite3.Row | None, review: sqlite3.Row | None, *, root: Path) -> Worktree:
-    """One slot, with the running run or review that holds its lease, if the journal has one.
+def worktree(slot: Slot, run: sqlite3.Row | None, review: sqlite3.Row | None, *, root: Path, repo: str) -> Worktree:
+    """One slot of `repo`'s pool, with the running run or review that holds its lease, if the journal has one.
 
     Its path is shown from workspace `root` when under it.
 
     Returns:
         The worktree, `working` while a run or review holds it, with a note when its lease is canopy's but no running
-        run holds it, or `canopy workspace sync` does, or when it is dirty.
+        run holds it, or `canopy workspace sync` does, when a failed seeding holds it, or when it is dirty.
     """
     leased = slot.lease_id != ""
     state: WorktreeState = _STATES.get(slot.status, "broken")
     note = None
     if run is not None or review is not None:
         state = "working"
+    elif slot.lease_holder == QUARANTINED:
+        note = _QUARANTINED.format(repo=repo, name=slot.name)
     elif leased and slot.lease_holder == SYNC_HOLDER:
         note = _SYNC
     elif leased and slot.lease_holder.startswith(HOLDER_PREFIX):

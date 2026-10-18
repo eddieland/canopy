@@ -1,9 +1,9 @@
 """What a worktree pool is to canopy, whichever implements it (DESIGN §18, What a pool guarantees; ROADMAP M45).
 
 A pool leases slots, git worktrees of one repository's primary clone, to holders: `canopy:<KEY>` for a ticket's run,
-`canopy:review:<id>` for a review, and `canopy-sync` while `canopy workspace sync` makes slots. `Pool` is the four
-operations every caller uses; treehouse (`core/treehouse.py`) is one implementation and canopy's own pool
-(`core/pool.py`) the other. `tests/canopy/core/test_pool_contract.py` holds both to the same guarantees.
+`canopy:review:<id>` for a review, and `canopy-sync` while `canopy workspace sync` makes slots. `Pool` is the operations
+every caller uses; treehouse (`core/treehouse.py`) is one implementation and canopy's own pool (`core/pool.py`) the
+other. `tests/canopy/core/test_pool_contract.py` holds both to the same guarantees.
 """
 
 from __future__ import annotations
@@ -21,6 +21,9 @@ HOLDER_PREFIX = "canopy:"
 # Held only while `canopy workspace sync` makes a pool's slots, which it then returns. Not a `canopy:` holder, so no
 # ticket key can name it and reconcile leaves it to the next sync.
 SYNC_HOLDER = "canopy-sync"
+# The holder of a reused slot whose seeding failed, in both pools: no ticket can name it and no lease's return clears
+# it, so the slot is not reused until the operator releases it (DESIGN §18).
+QUARANTINED = "quarantined: worktree seeding failed"
 AVAILABLE = "available"
 
 
@@ -120,6 +123,10 @@ class Pool(Protocol):
 
     def return_slot(self, path: Path, *, lease_id: str, lease_holder: str) -> ReturnOutcome:
         """Return slot `path` only if it is still held under this exact lease, forced."""
+        ...
+
+    def release(self, path: Path) -> ReturnOutcome:
+        """Return slot `path` only if it is still held as `QUARANTINED`, forced, as the operator asks."""
         ...
 
     def destroy(self, path: Path) -> str | None:

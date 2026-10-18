@@ -1,7 +1,8 @@
 """The treehouse worktree pool, through its CLI (D002).
 
 canopy uses `status --json`, `get --lease --json`, and `return --force --if-lease-id --if-lease-holder`, and
-`canopy workspace sync` also uses `destroy --yes` to remove idle slots a pool has beyond its declared size. Lease
+`canopy workspace sync` also uses `destroy --yes` to remove idle slots a pool has beyond its declared size.
+`canopy workspace release` returns a quarantined slot with `return --force --if-lease-holder` alone. Lease
 holders are `canopy:<KEY>`; sync's own short leases are `canopy-sync`, which reconcile never returns.
 
 treehouse finds a repository's pool from its working directory. Every command runs in the repository's primary clone
@@ -104,6 +105,14 @@ class TreehousePool:
             What treehouse said.
         """
         return return_slot(self.runner, path, lease_id=lease_id, lease_holder=lease_holder, pool=self.where)
+
+    def release(self, path: Path) -> ReturnOutcome:
+        """Return slot `path` only if it is still quarantined, as `release` does.
+
+        Returns:
+            What treehouse said.
+        """
+        return release(self.runner, path, pool=self.where)
 
     def destroy(self, path: Path) -> str | None:
         """Remove slot `path` if treehouse finds it disposable, as `destroy` does.
@@ -212,14 +221,21 @@ def return_slot(
         TreehouseError: treehouse could not be run, timed out, or exited with any other code.
     """
     args = ["return", "--force", "--if-lease-id", lease_id, "--if-lease-holder", lease_holder, str(path)]
-    result = _run(runner, args, pool)
-    if result.ok:
-        return ReturnOutcome.RETURNED
-    if result.returncode == 1:
-        return ReturnOutcome.FAILED
-    if result.returncode == 3:  # noqa: PLR2004
-        return ReturnOutcome.DIRTY
-    raise TreehouseError(_failure(result))
+    return _returned(_run(runner, args, pool))
+
+
+def release(runner: procs.Runner, path: Path, *, pool: Pool = DEFAULT_POOL) -> ReturnOutcome:
+    """Return a slot of `pool` only if a failed seeding still holds it, under `pools.QUARANTINED`, forced.
+
+    A quarantined slot has a holder but no lease id, so only the holder is a condition.
+
+    Returns:
+        `RETURNED`, or `FAILED` (exit 1) or `DIRTY` (exit 3) when treehouse kept the slot.
+
+    Raises:
+        TreehouseError: treehouse could not be run, timed out, or exited with any other code.
+    """
+    return _returned(_run(runner, ["return", "--force", "--if-lease-holder", pools.QUARANTINED, str(path)], pool))
 
 
 def destroy(runner: procs.Runner, path: Path, *, pool: Pool = DEFAULT_POOL) -> str | None:
@@ -245,6 +261,24 @@ def _run(runner: procs.Runner, args: Sequence[str], pool: Pool) -> procs.Result:
     if result.timed_out:
         raise TreehouseError(f"treehouse {args[0]} timed out")
     return result
+
+
+def _returned(result: procs.Result) -> ReturnOutcome:
+    """What a `return` came to, by its exit code.
+
+    Returns:
+        `RETURNED` on exit 0, `FAILED` on 1, `DIRTY` on 3.
+
+    Raises:
+        TreehouseError: treehouse exited with any other code.
+    """
+    if result.ok:
+        return ReturnOutcome.RETURNED
+    if result.returncode == 1:
+        return ReturnOutcome.FAILED
+    if result.returncode == 3:  # noqa: PLR2004
+        return ReturnOutcome.DIRTY
+    raise TreehouseError(_failure(result))
 
 
 def _failure(result: procs.Result) -> str:
