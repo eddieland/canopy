@@ -23,7 +23,10 @@ export default defineConfig({
     testDir: './e2e',
     fullyParallel: true,
     forbidOnly: Boolean(process.env.CI),
-    retries: 0,
+    // On CI a failed test runs once more, and passing then still fails the run: the report names it flaky rather than
+    // failed, so a flake is told from a break at a glance, and is fixed, never let through.
+    retries: process.env.CI ? 1 : 0,
+    failOnFlakyTests: Boolean(process.env.CI),
     reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
     expect: {
         // Fonts are self-hosted and animations are frozen; what is left is antialiasing between Chromium builds.
