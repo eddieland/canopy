@@ -218,8 +218,9 @@ UI (below), and:
   deleted. The unit's limit for the kind is `policy.max_<kind>_attempts` plus the sum of its grants of that kind, so
   lowering the policy lowers it too.
 - resets no count: every run, before and after, still counts (D030). The command prints the unit's runs and its new
-  limit. The state block shows the unit's `granted` counts beside its `attempts`, and the overseer compares against
-  their sum (§6 step 4); a dispatch's attempt limit and the worker's `{{MAX_ATTEMPTS}}` include them.
+  limit, read in the grant's own transaction, so two grants at once each report their own. The state block shows the
+  unit's `granted` counts beside its `attempts`, and the overseer compares against their sum (§6 step 4); a dispatch's
+  attempt limit and the worker's `{{MAX_ATTEMPTS}}` include them.
 - dispatches nothing. The next tick decides from the ticket's phase as usual, so the trigger a refused dispatch left
   (§8: cursors advance only once a worker starts) is still new, and a ticket whose last run failed still waits for a
   reply (§14).
