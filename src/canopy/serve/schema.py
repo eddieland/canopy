@@ -174,6 +174,8 @@ class Run(_Model):
     """Its status, grouped as the UI colors it."""
     private: bool
     """Whether it works a ticket started in canopy, whose conversation never reaches the tracker."""
+    ticket_stopped: bool = False
+    """Whether the operator stopped its ticket (DESIGN §22): a question it asked then waits on nothing."""
     branch: str | None = None
     """The branch it works on."""
     started_at: datetime

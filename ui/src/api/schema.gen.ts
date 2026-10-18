@@ -3936,6 +3936,12 @@ export type components = {
              */
             ticket_key: string;
             /**
+             * Ticket Stopped
+             * @description Whether the operator stopped its ticket (DESIGN §22): a question it asked then waits on nothing.
+             * @default false
+             */
+            ticket_stopped: boolean;
+            /**
              * Ticket Title
              * @description The ticket's title, as the overseer named it (DESIGN §13); None until it does.
              */

@@ -557,11 +557,14 @@ def recently_done(conn: sqlite3.Connection, since: str) -> list[sqlite3.Row]:
 
 # The run lifecycle (DESIGN §6, §8): what every table of detached runs shares
 
-# A run with its ticket's title as `ticket_title`, and a `resume`'s reasons as `reasons`, comma-separated (read them
-# with `reasons_in`), for display (DESIGN §8, §13). Every query a page or `canopy status` shows runs from starts here.
+# A run with its ticket's title as `ticket_title`, a `resume`'s reasons as `reasons`, comma-separated (read them with
+# `reasons_in`), and whether the operator stopped its ticket as `ticket_stopped`, for display (DESIGN §8, §13, §22).
+# Every query a page or `canopy status` shows runs from starts here.
 _RUNS = (
     "SELECT r.*, t.title AS ticket_title, "
-    "(SELECT group_concat(w.reason, ',') FROM run_reasons w WHERE w.run_id = r.id) AS reasons "
+    "(SELECT group_concat(w.reason, ',') FROM run_reasons w WHERE w.run_id = r.id) AS reasons, "
+    "EXISTS (SELECT 1 FROM starts s WHERE s.subject_kind = 'ticket' AND s.subject_id = r.ticket_key "
+    "AND s.status = 'stopped') AS ticket_stopped "
     "FROM runs r LEFT JOIN tickets t ON t.key = r.ticket_key"
 )
 # What a run table's rows are read as: a run with its ticket's title, for display, and any other run as it is.

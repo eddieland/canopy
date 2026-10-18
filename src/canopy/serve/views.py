@@ -520,6 +520,7 @@ def run(row: sqlite3.Row, root: Path, worktrees: list[str] | None = None) -> Run
         status=status,
         state=_run_state(status),
         private=bool(row["private"]),
+        ticket_stopped=bool(row["ticket_stopped"]),
         branch=str(row["branch"]) or None,
         started_at=db.parse_time(str(row["started_at"])),
         ended_at=db.parse_time(str(row["ended_at"])) if row["ended_at"] else None,
