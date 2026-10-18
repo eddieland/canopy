@@ -161,12 +161,22 @@ function UsedIn({ entry, ownRun }: { entry: MemoryEntry; ownRun: number | undefi
 
 /**
  * What a run would be served of a tier, as its prompt would carry it, labelled by whether it is: `served to the next
- * run` at `use`, `would be served at use` while recording.
+ * run` at `use`, `would be served at use` while recording. With `labelled` false, as under a disclosure that already
+ * says so, the label is left to screen readers.
  */
-export function MemoryDigestView({ digest, served }: { digest: MemoryDigest; served: string }) {
+export function MemoryDigestView({
+    digest,
+    served,
+    labelled = true,
+}: {
+    digest: MemoryDigest
+    served: string
+    labelled?: boolean
+}) {
+    const label = digest.served ? served : 'would be served at use'
     return (
-        <section aria-label={digest.served ? served : 'would be served at use'} className="border-t px-3 py-2">
-            <p className="panel-label">{digest.served ? served : 'would be served at use'}</p>
+        <section aria-label={label} className="border-t px-3 py-2">
+            {labelled && <p className="panel-label">{label}</p>}
             {/* canopy's own text, as the prompt carries it: the server named the hidden characters workers wrote. */}
             <pre
                 className="mt-1 max-h-72 overflow-auto font-mono text-xs whitespace-pre-wrap"

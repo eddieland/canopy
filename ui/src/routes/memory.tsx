@@ -3,12 +3,20 @@ import { createFileRoute } from '@tanstack/react-router'
 import { Fragment, useState } from 'react'
 
 import { memoryQuery, ticketMemoryQuery } from '@/api/queries'
-import type { MemoryOverview, MemoryState, TicketNotes } from '@/api/types'
+import type {
+    MemoryDigest,
+    MemoryEntry,
+    MemoryOverview,
+    MemoryProposal,
+    MemoryState,
+    MemoryTier,
+    TicketNotes,
+} from '@/api/types'
 import { Age } from '@/components/age'
 import { Disclosure } from '@/components/disclosure'
 import { MemoryBand, MemoryDigestView, MemoryRows, ProposalProvenance } from '@/components/memory'
 import { LessonActions, MemorySaid, ProposalActions } from '@/components/memory-actions'
-import { Empty, PageHeader, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { ListRow } from '@/components/rows'
 import { TicketLink } from '@/components/ticket-link'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
@@ -17,27 +25,28 @@ import { rowLineFrom } from '@/lib/rows'
 import { cn } from '@/lib/utils'
 
 /**
- * Agent memory (DESIGN §28): each tier under a band that says what reads it, the tickets with notes in force, each
- * opening to its notes, and the lessons with the proposals waiting on the operator, each with what a run would be
- * served. Every list scrolls in its panel, so a busy workspace's thousands of notes and hundreds of lessons keep the
- * page in reach. A proposal is promoted or rejected, and a lesson renewed or forgotten, from its row, as `canopy
- * memory` does, while `memory.proposals` is on (ROADMAP M52).
+ * Agent memory (DESIGN §28), what waits on the operator first: the proposals, then the lessons under the band that says
+ * what reads them, then the tickets with notes in force, each opening to its notes. Every list scrolls in its panel, so
+ * a busy workspace's thousands of notes and hundreds of lessons keep the page in reach. A proposal is promoted or
+ * rejected, and a lesson renewed or forgotten, from its row, as `canopy memory` does, while `memory.proposals` is on
+ * (ROADMAP M52). What every run is served of the lessons is folded under them, since it is the prompt's, not a queue.
  */
 export const Route = createFileRoute('/memory')({
     component: MemoryPage,
 })
 
 function MemoryPage() {
-    const { data } = useQuery(memoryQuery)
+    const query = useQuery(memoryQuery)
+    const { data } = query
     return (
         <>
             <PageHeader title="Memory">
-                What workers recorded of what they learn, and the lessons you promoted. Promote and reject proposals,
-                and renew and forget lessons, here or with <code className="font-mono text-xs">canopy memory</code>.
+                What workers learned, the proposals waiting on you, and the lessons every run reads. Decide them here or
+                with <code className="font-mono text-xs">canopy memory</code>.
             </PageHeader>
             {data === undefined ? (
                 <Panel>
-                    <PanelSkeleton className="min-h-72" />
+                    <PanelLoading query={query} className="min-h-72" />
                 </Panel>
             ) : data.state === null ? (
                 <Panel>
@@ -54,10 +63,33 @@ function MemoryPage() {
 
 function Tiers({ overview, state }: { overview: MemoryOverview; state: MemoryState }) {
     const { tickets, proposals, lessons, lessons_digest: digest } = overview
-    // What a verb did, under the panel's band: its row may have left the list once it was done.
-    const [said, setSaid] = useState<string | null>(null)
     const acting = state.lessons.mode !== 'off'
-    const belowProposals = new Map(
+    return (
+        // Wide, the queue keeps the width and the tickets with notes sit beside it, in the narrow order's last place.
+        <div
+            className={cn(
+                'stagger flex flex-col gap-6',
+                '2xl:grid 2xl:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] 2xl:items-start',
+            )}
+        >
+            <div className="flex flex-col gap-6">
+                <Proposals proposals={proposals} acting={acting} />
+                <Lessons lessons={lessons} digest={digest} tier={state.lessons} acting={acting} />
+            </div>
+            <TicketNotesPanel tickets={tickets} tier={state.ticket_notes} />
+        </div>
+    )
+}
+
+/**
+ * The proposals waiting on the operator, oldest first, each with where it came from and its verbs. None reaches a run
+ * until it is promoted, at any mode, so the panel says that rather than the tier's band, which heads the lessons. Its
+ * count wears `status-blocked` while one waits, as the nav's does.
+ */
+function Proposals({ proposals, acting }: { proposals: MemoryProposal[]; acting: boolean }) {
+    // What a verb did: its row leaves the list once it is done, so it is said under the panel's header.
+    const [said, setSaid] = useState<string | null>(null)
+    const below = new Map(
         proposals.map((p) => [
             p.entry.id,
             <Fragment key={p.entry.id}>
@@ -66,57 +98,118 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
             </Fragment>,
         ]),
     )
-    const belowLessons = new Map(
+    return (
+        <Panel data-testid="memory-proposals">
+            <PanelHeader label="Proposals">
+                <span
+                    className={cn(
+                        'readout text-xs',
+                        proposals.length > 0 ? 'text-status-blocked' : 'text-muted-foreground',
+                    )}
+                    data-testid="memory-proposals-count"
+                >
+                    {proposals.length}
+                </span>
+            </PanelHeader>
+            <p className="border-b px-3 py-2 text-sm text-muted-foreground">
+                What workers proposed. None reaches a run until you promote it.
+            </p>
+            <MemorySaid said={said} className="border-b px-3 py-2" />
+            {proposals.length === 0 ? (
+                // Cleared from this page just now: the one queue memory has is empty, and that is worth a word.
+                <Empty className={cn(said !== null && 'text-accent')}>
+                    {said === null ? 'no proposals wait on you now' : 'all decided: no proposal waits on you'}
+                </Empty>
+            ) : (
+                <PanelScroll label="Proposals">
+                    <MemoryRows entries={proposals.map((p) => p.entry)} ticket below={below} />
+                </PanelScroll>
+            )}
+        </Panel>
+    )
+}
+
+/**
+ * The lessons the operator promoted, under the band that says whether runs read them, those a run reported wrong first,
+ * then by review date. What every run is served of them opens under the list.
+ */
+function Lessons({
+    lessons,
+    digest,
+    tier,
+    acting,
+}: {
+    lessons: MemoryEntry[]
+    digest: MemoryDigest | null
+    tier: MemoryTier
+    acting: boolean
+}) {
+    const [said, setSaid] = useState<string | null>(null)
+    const below = new Map(
         acting ? lessons.map((m) => [m.id, <LessonActions key={m.id} lesson={m} onSaid={setSaid} />]) : [],
     )
     return (
-        <div className="stagger flex flex-col gap-6">
-            <Panel data-testid="memory-notes">
-                <PanelHeader label="Ticket notes">
-                    <span className="readout text-xs text-muted-foreground" data-testid="memory-notes-count">
-                        {tickets.reduce((sum, t) => sum + t.count, 0)}
-                    </span>
-                </PanelHeader>
-                <MemoryBand tier={state.ticket_notes} name="ticket notes" />
-                {tickets.length === 0 ? (
-                    <Empty>no notes in force now: a ticket&apos;s runs write them as they end</Empty>
-                ) : (
-                    <PanelScroll label="Ticket notes">
-                        <ul className="divide-y">
-                            {tickets.map((t) => (
-                                <TicketNotesRow key={t.ticket_key} notes={t} />
-                            ))}
-                        </ul>
-                    </PanelScroll>
-                )}
-            </Panel>
-            <Panel data-testid="memory-lessons">
-                <PanelHeader label="Lessons">
-                    <span className="readout text-xs text-muted-foreground">{lessons.length}</span>
-                </PanelHeader>
-                <MemoryBand tier={state.lessons} name="lessons" />
-                <MemorySaid said={said} className="border-b px-3 py-2" />
-                <h3 className="px-3 pt-2 panel-label">Proposals, waiting on you: none reaches a run</h3>
-                {proposals.length === 0 ? (
-                    <Empty>no proposals wait on you now</Empty>
-                ) : (
-                    <PanelScroll label="Proposals">
-                        <MemoryRows entries={proposals.map((p) => p.entry)} ticket below={belowProposals} />
-                    </PanelScroll>
-                )}
-                <h3 className="border-t px-3 pt-2 panel-label">
-                    Lessons you promoted: reported wrong first, then by review date
-                </h3>
-                {lessons.length === 0 ? (
-                    <Empty>no lessons yet: promote a proposal above, or a ticket&apos;s note from its page</Empty>
-                ) : (
-                    <PanelScroll label="Lessons you promoted">
-                        <MemoryRows entries={lessons} digest={digest} below={belowLessons} />
-                    </PanelScroll>
-                )}
-                {digest !== null && <MemoryDigestView digest={digest} served="served to every run" />}
-            </Panel>
-        </div>
+        <Panel data-testid="memory-lessons">
+            <PanelHeader label="Lessons">
+                <span className="readout text-xs text-muted-foreground" data-testid="memory-lessons-count">
+                    {lessons.length}
+                </span>
+            </PanelHeader>
+            <MemoryBand tier={tier} name="lessons" />
+            <MemorySaid said={said} className="border-b px-3 py-2" />
+            {lessons.length === 0 ? (
+                <Empty>no lessons yet: promote a proposal above, or a ticket&apos;s note from its page</Empty>
+            ) : (
+                <PanelScroll label="Lessons">
+                    <MemoryRows entries={lessons} digest={digest} below={below} />
+                </PanelScroll>
+            )}
+            {digest !== null && <ServedDigest digest={digest} />}
+        </Panel>
+    )
+}
+
+/** What every run is served of the lessons, folded at the panel's foot until the operator asks to read it. */
+function ServedDigest({ digest }: { digest: MemoryDigest }) {
+    const [open, setOpen] = useState(false)
+    const what = digest.served ? 'what every run is served' : 'what every run would be served at use'
+    return (
+        <Collapsible open={open} onOpenChange={setOpen} className="border-t px-3 py-1.5">
+            <Disclosure open={open} what={what} className="-ml-2" data-testid="memory-digest-toggle" />
+            <CollapsibleContent className="-mx-3 -mb-1.5">
+                <MemoryDigestView digest={digest} served="served to every run" labelled={false} />
+            </CollapsibleContent>
+        </Collapsible>
+    )
+}
+
+/**
+ * The tickets with notes in force, a row each, under the tier's band. Its header counts the rows, the tickets, and the
+ * notes they hold beside them, since a row opens to several.
+ */
+function TicketNotesPanel({ tickets, tier }: { tickets: TicketNotes[]; tier: MemoryTier }) {
+    const notes = tickets.reduce((sum, t) => sum + t.count, 0)
+    return (
+        <Panel data-testid="memory-notes">
+            <PanelHeader label="Ticket notes">
+                <span className="readout text-xs text-muted-foreground" data-testid="memory-notes-count">
+                    {tickets.length} {tickets.length === 1 ? 'ticket' : 'tickets'} · {notes}{' '}
+                    {notes === 1 ? 'note' : 'notes'}
+                </span>
+            </PanelHeader>
+            <MemoryBand tier={tier} name="ticket notes" />
+            {tickets.length === 0 ? (
+                <Empty>no notes in force now: a ticket&apos;s runs write them as they end</Empty>
+            ) : (
+                <PanelScroll label="Ticket notes">
+                    <ul className="divide-y">
+                        {tickets.map((t) => (
+                            <TicketNotesRow key={t.ticket_key} notes={t} />
+                        ))}
+                    </ul>
+                </PanelScroll>
+            )}
+        </Panel>
     )
 }
 

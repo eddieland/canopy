@@ -29,7 +29,7 @@ test('the memory page heads each tier with what reads it, and shows what a worke
     )
     // One row a ticket, the newest note's first, each opening to its notes in force.
     await expect(notes.getByTestId(/^memory-ticket-/u)).toHaveCount(2)
-    await expect(notes.getByTestId('memory-notes-count')).toHaveText('3')
+    await expect(notes.getByTestId('memory-notes-count')).toHaveText('2 tickets · 3 notes')
     const ticket = notes.getByTestId('memory-ticket-ABC-100')
     await expect(ticket).toContainText('read by no run')
     await expect(ticket.getByTestId('memory-3')).toHaveCount(0)
@@ -40,14 +40,26 @@ test('the memory page heads each tier with what reads it, and shows what a worke
     await expect(cache.getByRole('link', { name: /evil/u })).toHaveCount(0)
     await expect(cache).toContainText('read by no run')
 
+    // What waits on the operator heads the page, counted as the nav counts it.
+    const proposals = page.getByTestId('memory-proposals')
+    await expect(page.getByTestId(/^memory-(proposals|lessons|notes)$/u)).toHaveCount(3)
+    await expect(page.getByTestId(/^memory-(proposals|lessons|notes)$/u).first()).toHaveAttribute(
+        'data-testid',
+        'memory-proposals',
+    )
+    await expect(proposals.getByTestId('memory-proposals-count')).toHaveText('2')
+    await expect(proposals.getByTestId('memory-6')).toContainText(
+        'private: its text may hold what you kept off the tracker',
+    )
+
     const lessons = page.getByTestId('memory-lessons')
     await expect(lessons.getByTestId('memory-band')).toHaveText(
         'lessons: recordingRecording only. Workers propose lessons and you may promote them; no run reads them.',
     )
-    await expect(lessons.getByTestId('memory-6')).toContainText(
-        'private: its text may hold what you kept off the tracker',
-    )
-    await expect(lessons.getByText('would be served at use')).toBeVisible()
+    await expect(lessons.getByTestId('memory-lessons-count')).toHaveText('1')
+    // What every run would be served is folded until asked for.
+    await expect(lessons.getByTestId('memory-digest')).toHaveCount(0)
+    await lessons.getByRole('button', { name: 'Show what every run would be served at use' }).click()
     await expect(lessons.getByTestId('memory-digest')).toContainText('Lesson 8, `billing-client`, for `web`:')
 })
 
