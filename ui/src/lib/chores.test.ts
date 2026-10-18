@@ -11,6 +11,7 @@ import {
     findingsReadout,
     findingsText,
     listedText,
+    overLimitText,
     runsText,
     windowText,
 } from './chores'
@@ -71,6 +72,7 @@ describe('chores', () => {
         expect(findingsReadout([waiting], 3)).toBe('1 · 3 not listed')
         expect(listedText(5, 7)).toBe('5 findings · 7 not listed')
         expect(listedText(1, 0)).toBe('1 finding')
+        expect(overLimitText(5, 12)).toBe('its latest ok run found 12 more than the 5 it may list.')
     })
 
     it('mark a note no run has read: one after the latest run started', () => {

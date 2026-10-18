@@ -311,9 +311,8 @@ timeout_minutes = 20
   if nothing merged since").
 - **Say what `failed` means.** A chore that could not read its source must report `failed`, not an empty `ok`, or a
   broken MCP server looks like a healthy build.
-- **Say which findings come first.** A run lists at most `max_findings` (20 unless the chore's table sets fewer) and
-  only counts the rest, so the prompt says which to keep when there are more. Set `max_findings = 5` for a chore that
-  finds more than you will read.
+- **Say which findings come first.** A run lists at most `max_findings` (5 unless the chore's table says otherwise, up
+  to 20) and only counts the rest, so the prompt says which to keep when there are more.
 - **Mind the spend.** Every run is an agent session. A daily chore over 5 repositories is cheap; a 15-minute one over
   40 is not.
 - **Own tools: allow exactly one command shape.** Copy `canopy-chore` into `~/.config/opencode/agent/`, keep every

@@ -119,6 +119,7 @@ export const mockChores: ChoreSummary[] = [
                 dismissed: false,
             },
         ],
+        max_findings: 5,
         more_findings: 0,
         latest_note_id: 8,
         spend: {

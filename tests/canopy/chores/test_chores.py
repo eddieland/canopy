@@ -138,6 +138,8 @@ def test_a_chore_run_records_its_findings(canopy_env: CanopyEnv, chores: Path, a
         assert run["previous_run"] is None
         assert run["open_findings"] == []
         assert run["result_contract"] == result.CONTRACT
+        # A chore whose table sets no `max_findings` lists at most five.
+        assert run["max_findings"] == 5
         # Run files are kept by chore, out of its working directory.
         runs = canopy_env.state_dir / "chore-runs" / "build-health"
         assert runs.stat().st_mode & 0o777 == 0o700

@@ -554,6 +554,8 @@ class ChoreSummary(_Model):
     """The earliest time the harness lets a new run start; None, or a time already past, means now."""
     findings: list[ChoreFinding] = []
     """Its open findings."""
+    max_findings: int
+    """The most findings a run of it lists; the rest it only counts."""
     more_findings: int = 0
     """How many more its latest `ok` run found than it listed, past its `max_findings`: only counted, never recorded."""
     latest_note_id: int | None = None

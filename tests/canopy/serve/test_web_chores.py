@@ -62,7 +62,7 @@ def test_a_chore_and_its_run_say_how_many_findings_it_did_not_list(backend: Back
             (mock.at(-10), mock.at(-5), json.dumps({"status": "ok", "findings": [], "more_findings": 7})),
         )
     page = client(None, backend).get("/api/chores/deps").json()
-    assert (page["chore"]["more_findings"], page["chore"]["findings"]) == (7, [])
+    assert (page["chore"]["max_findings"], page["chore"]["more_findings"], page["chore"]["findings"]) == (5, 7, [])
     assert (page["runs"][0]["more_findings"], page["runs"][1]["more_findings"]) == (7, 0)
 
 

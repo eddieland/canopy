@@ -196,6 +196,11 @@ Rules:
   the notice's words through `LinkedText`, until when runs hear it (when and from where on hover), and a ghost Clear.
   It is not in the header, which has no room for a sentence, and it leaves with the stream's word when it lapses.
   Settings sets one, in its own panel, with how long it lasts as a toggle group; any other duration is the CLI's.
+- **A chore over its finding limit** (`ChoreLimitBanner`, docs/design §19) heads its page, under the title, only
+  while its latest ok run counted findings past its `max_findings`: the same band as the notice to workers, on the
+  `status-blocked` tint, since only the operator can settle it, saying by how much and the two ways out (raise the
+  limit, or narrow the chore with a note). It has no button: both ways out are the operator's words, in config or a
+  note, and it leaves once a run fits.
 - **Agent memory** (docs/design §28) shows only while a tier is on, and always says each tier's mode in words, never by
   color alone, so recorded memory is never taken for memory in use. The header's readout, after the latest tick, is
   `memory: recording` or `memory: in use` in muted readout type, each tier's mode on hover and to a screen reader,
