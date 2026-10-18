@@ -81,9 +81,11 @@ approves work before it is pushed. Its result line gains `drafts`, parsed apart 
   shape included, since a sent reply is public: the refusal names the word, and text canopy refuses the operator posts
   on GitHub themselves. Under `post`,
   `drafts` a worker sends anyway are stored nowhere.
-- The prompts' "Reply on the PR to each comment you addressed", their PR and ticket comments, and their comment marks
-  render from `{{COMMENTING}}`, which under `post` is the text it replaced. Under `approve`, an override without it is
-  `bad_prompt` (§8, step 3): an older override would have its worker post in the operator's name.
+- The prompts' sentences on posting, "Reply on the PR to each comment you addressed" among them, with their PR and
+  ticket comments and their comment marks, render from placeholders that under `post` are the text they replaced, and
+  the contract above renders from `{{DRAFTS}}`, empty under `post`. Under `approve`, an override without `{{DRAFTS}}`
+  is `bad_prompt` (§8, step 3): an older override would have its worker post in the operator's name. A private
+  ticket's `implement` posts nothing anywhere, so it drafts nothing.
 
 The marks (D069) change use, not meaning. A comment carrying them is never authority, under either setting. Under
 `approve` they go on what still posts without the operator, a ticket comment with no tracker post command; under

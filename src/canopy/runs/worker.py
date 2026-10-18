@@ -35,6 +35,7 @@ from canopy.core import (
     conversation,
     db,
     definitions,
+    drafts,
     hostgit,
     memory,
     outbox,
@@ -184,6 +185,8 @@ class Outcome:
     # What the worker sent of agent memory, and the commit its branch was at when it ended (DESIGN §28).
     memory: memory.Fields | None = None
     head: str | None = None
+    # The comments it drafted in place of posting them (DESIGN §29).
+    drafts: drafts.Fields | None = None
 
     def result_json(self) -> str:
         """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11)."""
@@ -247,12 +250,18 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             _release(ctx, run, slots, log)
             _record_prs(ctx, run, outcome)
             stored = outcome.result_json()
-            remember = functools.partial(memory.record_run, ctx.conn, run_id, outcome.memory, head=outcome.head)
+            remember = functools.partial(_record_reported, ctx, run_id, outcome)
             if not conversation.close_run(ctx.conn, ctx.config, run, outcome.status, stored, then=remember):
                 log.warning("run was already closed; its outcome is not recorded", extra=fields)
             procs.drop_lifelock(Path(run["log_path"]))
             log.info("run finished", extra={**fields, "status": outcome.status})
     return outcome
+
+
+def _record_reported(ctx: Context, run_id: int, outcome: Outcome) -> None:
+    """Write what the run reported beside its result, in the transaction that closes it: memory (§28), drafts (§29)."""
+    memory.record_run(ctx.conn, run_id, outcome.memory, head=outcome.head)
+    drafts.record_run(ctx.conn, run_id, outcome.drafts)
 
 
 type _Doer = Callable[[Context, sqlite3.Row, Sequence[_Slot], TextIO, logs.TickAdapter], Outcome]
@@ -624,6 +633,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     parsed = parse_result(text)
     # Memory's fields are read only from a valid result line, and never stored with the result (DESIGN §28).
     remembered = memory.parse(text) if parsed is not None else None
+    drafted = drafts.parse(text) if parsed is not None else None
     if parsed is not None:
         parsed = parsed.for_repos([s.repo for s in slots])
     if result.timed_out:
@@ -637,7 +647,7 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
     if rewritten:
         # The slot's git directory may be one the worker made: canopy runs no git in any slot of this run.
         notes = [f"{s.git.where}the worker rewrote {path}; nothing was checked or pushed" for s, path in rewritten]
-        return Outcome(RunStatus.CRASHED, parsed, "; ".join(notes), memory=remembered)
+        return Outcome(RunStatus.CRASHED, parsed, "; ".join(notes), memory=remembered, drafts=drafted)
     objects = _objects(ctx, run)
     if tidy.used(objects):
         # A sandboxed worker's commits are only in the run's object directory (DESIGN §8).
@@ -654,7 +664,8 @@ def _work(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, l
         status, note = RunStatus.UNPUSHED, "; ".join(unpushed)
     committed = [found for slot in slots if copy is not None and (found := _committed_copy(slot, branch))]
     head = _heads(slots, log) if remembered is not None and remembered.notes else None
-    return Outcome(status, parsed, "; ".join(n for n in [note, *committed] if n), memory=remembered, head=head)
+    notes = "; ".join(n for n in [note, *committed] if n)
+    return Outcome(status, parsed, notes, memory=remembered, head=head, drafts=drafted)
 
 
 def _heads(slots: Sequence[_Slot], log: logs.TickAdapter) -> str | None:

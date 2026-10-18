@@ -585,8 +585,9 @@ dispatch names at least one, in a workspace of one repository too. A `plan` writ
    the object directory. A slot that cannot be tidied is not returned, and the directory is kept for the operator.
    SIGKILL cannot be trapped; reconcile tidies and returns that run's slots from what step 2 recorded.
 7. Close the run with its end time, status, and result, and in the same transaction record its messages about its ticket
-   (§22), and what it wrote of agent memory while a tier was on (§28): a `report` (its summary, else the harness's note,
-   else the status, with each PR on a line), and for a `blocked` run its `question`. A git failure before or after the
+   (§22), what it wrote of agent memory while a tier was on (§28), and its drafts under `approve` (§29): a `report`
+   (its summary, else the harness's note, else the status, with each PR on a line), and for a `blocked` run its
+   `question`. A git failure before or after the
    worker is `crashed`. The stored result is the validated one, text fields cut at 2000 characters, plus a `harness`
    note saying why the status differs from what the worker reported. `prs` is kept to the run's repositories; each plain
    `https://` URL becomes its unit's PR, for display and the next run's prompt, and its title in `pr_titles`, if any,
@@ -637,7 +638,9 @@ Worker obligations, stated in every worker prompt:
   <noreply@canopy.invalid>` by default, with the name and address from `trust.commit_trailer_name` and
   `trust.commit_trailer_email` (§12, TRUST_MODEL T5). With `trust.commit_trailer` off, add none.
 - Mark every comment and reply it posts, on the ticket or a PR: start it with `trust.comment_prefix` (`CANOPY:` by
-  default) and end it with `trust.comment_suffix` (empty by default), each when it is set (D069). Below.
+  default) and end it with `trust.comment_suffix` (empty by default), each when it is set (D069). Below. Under
+  `trust.review_replies = "approve"` it posts none on a PR, and on the ticket only without a tracker source that
+  posts: it drafts each in its result's `drafts` instead, for the operator to send (§29).
 - Open each PR through the GitHub MCP, or, with `runtime.pr_skill` set, only with that skill (below).
 - Comment on the ticket describing what was done and linking every PR. In a joint run, each PR's body links its sibling
   PRs and says which merges first.
