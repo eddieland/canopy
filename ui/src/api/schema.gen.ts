@@ -4843,11 +4843,21 @@ export type components = {
              */
             decisions: components["schemas"]["Decision"][];
             /**
+             * Next Id
+             * @description The tick after it, dry runs included, or None on the newest, until the next one starts.
+             */
+            next_id: number | null;
+            /**
              * Output Path
              * @description Where the overseer's stdout and stderr are, from the workspace root, if the file exists. Its session's events
              *     are served as the tick's transcript, and its end as the tick's output (DESIGN §22).
              */
             output_path: string | null;
+            /**
+             * Previous Id
+             * @description The tick before it, dry runs included, or None on the first.
+             */
+            previous_id: number | null;
             /** @description The tick, as the ticks list shows it. */
             tick: components["schemas"]["Tick"];
         };
