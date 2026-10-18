@@ -192,6 +192,26 @@ describe('ProposalActions', () => {
     })
 })
 
+describe('ProposalActions as written', () => {
+    it('promotes a proposal at once in its own words and for its repository, as canopy memory promote ID', async () => {
+        answer = Response.json(promoted())
+        const onSaid = vi.fn<(said: string) => void>()
+        renderIn(<ProposalActions proposal={ENTRY} onSaid={onSaid} />)
+        expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
+            'Promote',
+            'As written',
+            'Reject',
+            'Forget',
+        ])
+        fireEvent.click(screen.getByRole('button', { name: 'As written' }))
+        await vi.waitFor(() => {
+            expect(onSaid).toHaveBeenCalledOnce()
+        })
+        expect(sent).toEqual([{ path: '/api/memory/5/promote', body: { text: null, repo: null } }])
+        expect(screen.queryByRole('form')).toBeNull()
+    })
+})
+
 describe('ProposalActions forget', () => {
     it('forgets a proposal once its ref is typed, so its words leave the journal', async () => {
         answer = Response.json({ id: 5, scope: 'proposal', key: 'web-tests', checkpointed: true })

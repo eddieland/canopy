@@ -124,6 +124,8 @@ served. None of them shows while lessons are off.
   same 600 characters, and the repository whose runs read it. A proposal keeps its own repository unless you pick
   another; a note's lesson is for every repository unless you pick one. Before you save, the form names the lesson in
   force under the same key, if there is one, since yours replaces it.
+- **As written**, beside it, promotes the proposal at once, in its own words and for its own repository, as
+  `canopy memory promote ID` does. Most good proposals need no editing, and this saves the form.
 - It promotes a ticket's note too, done or invalidated, as long as the note still has its text: what a ticket taught
   is often clearest once its PR has merged. The note stays its ticket's.
 - **Reject** ends a proposal. Nothing asks twice: nothing is lost that a worker can't propose again.
@@ -139,9 +141,10 @@ In your shell, `canopy memory promote ID` takes `--text` for your words and `--r
 ## Keeping lessons honest
 
 A lesson never lapses on its own: it's your word, and only you retire it. Each comes up for review 90 days after you
-promoted it or a run last used it. Then you renew it, with **Renew** under it on the memory page or
-`canopy memory renew ID`, move it into a repository's AGENTS.md or a skill through a ticket and a PR you merge, or
-forget it. Renewing also clears a run's report that it's wrong.
+promoted it or a run last used it. Then you renew it, with **Renew** under it on the memory page or `canopy memory renew
+ID`, move it into a repository's AGENTS.md or a skill through a ticket and a PR you merge, or forget it. Renewing also
+clears a run's report that it's wrong. Renew stays quiet on a lesson that isn't due, and stands out once one is due or
+reported wrong.
 
 Three attention items keep you honest, all yours and never the overseer's, and none while lessons are off:
 
@@ -157,13 +160,13 @@ Each item leaves at the next tick once you've dealt with what it names, as an an
 
 ## Forgetting
 
-**Forget**, at the end of any memory's line of buttons, or `canopy memory forget ID`, deletes its text and keeps its
-row, so the history still says something was there: a forgotten lesson is retired, and a forgotten proposal leaves the
-queue. Reject is enough for a proposal you just don't want; Forget is for one whose words shouldn't stay. It can't be
-undone, so the page asks you to type the memory's ref, `memory:42`, before the button wakes up. `canopy memory purge`,
-in your shell alone, does the same for many: a ticket's runs', a run's, or, with `--all`, everything. Neither leaves a
-word of what it deleted in the search index or the journal's free pages. That's the point, if what you're deleting is a
-leaked secret.
+**Forget**, at the end of any memory's line of buttons, muted until you point at its row, or `canopy memory forget ID`,
+deletes its text and keeps its row, so the history still says something was there: a forgotten lesson is retired, and a
+forgotten proposal leaves the queue. Reject is enough for a proposal you just don't want; Forget is for one whose words
+shouldn't stay. It can't be undone, so the page asks you to type the memory's ref, `memory:42`, before the button wakes
+up. `canopy memory purge`, in your shell alone, does the same for many: a ticket's runs', a run's, or, with `--all`,
+everything. Neither leaves a word of what it deleted in the search index or the journal's free pages. That's the point,
+if what you're deleting is a leaked secret.
 
 ## Search
 
