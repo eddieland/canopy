@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 import pytest
+from syrupy.assertion import SnapshotAssertion
 
 from canopy.cli.main import main
 from canopy.core import conversation, db, definitions, review_diff
@@ -134,6 +135,27 @@ def test_a_review_hears_the_notice_in_force(reviews: CanopyEnv, git_pool: GitPoo
         run_id = run_inline(conn, sha=head(git_pool))
     prompt = (reviews.state_dir / "reviews" / f"{run_id}.prompt").read_text()
     assert "## Notice from the operator\n\nCI is down.\n" in prompt
+
+
+@pytest.mark.parametrize("full", [False, True], ids=["defaults", "every-value-set"])
+def test_the_reviewer_prompt(
+    reviews: CanopyEnv, git_pool: GitPool, markdown_snapshot: SnapshotAssertion, *, full: bool
+) -> None:
+    """The reviewer's prompt, whole, so a change to its wording or to what fills it in is a diff in review.
+
+    One with every value at its default, and one with each set: a ticket, the overseer's context, the operator's rule
+    for `low`, and a notice. `git_pool` gives the review a pool to lease from; the run starts and never runs.
+    """
+    args: list[str] = []
+    if full:
+        reviews.append_user('low_impact = "A change to docs or tests only."\n')
+        assert main(["notice", "CI is down."]) == 0
+        args = ["--ticket", "PROJ-1", "--context", "Start with src/retry.py"]
+    conn = reviews.journal()
+    with in_tick(conn):
+        assert main(review(*args, sha="b" * 40), runner=InlineRunner()) == 0
+    prompt = (reviews.state_dir / "reviews" / "1.prompt").read_text()
+    assert prompt.replace(str(reviews.state_dir), "/state") == markdown_snapshot
 
 
 @pytest.mark.parametrize(
