@@ -560,8 +560,9 @@ def test_threads_hold_a_tickets_chores_and_reviews_posts_for_a_day(
     state = json.loads((tmp_path / "state" / "canopy" / "slack-threads.json").read_text())
     assert state == {
         "version": 1,
-        "threads": {'["C0123ABCD", "/r/api", "PROJ-1"]': {"day": "2026-09-26", "ts": "1790.000001"}},
-        "posted": [],
+        "scopes": {
+            '["C0123ABCD", "/r/api"]': {"threads": {"PROJ-1": {"day": "2026-09-26", "ts": "1790.000001"}}, "posted": []}
+        },
     }
 
 
@@ -582,10 +583,12 @@ def test_a_threaded_delivery_refused_partway_posts_the_rest_on_retry(threaded: C
 def test_a_threads_file_that_is_not_the_sinks_starts_over(threaded: Callable[[str], int], tmp_path: Path) -> None:
     path = tmp_path / "state" / "canopy" / "slack-threads.json"
     path.parent.mkdir(parents=True)
-    path.write_text('{"threads": {"k": {"day": "2026-09-24", "ts": "<!channel>"}}, "posted": 3}')
+    scope = '["C0123ABCD", "/r/api"]'
+    path.write_text(json.dumps({"scopes": {scope: {"threads": {"PROJ-1": {"day": "2026-09-24", "ts": "<!channel>"}}}}}))
     assert threaded(_delivery("2026-09-24T12:30:00Z", [_run("PROJ-1", 1)])) == 0
-    assert json.loads(path.read_text())["threads"] == {
-        '["C0123ABCD", "/r/api", "PROJ-1"]': {"day": "2026-09-24", "ts": "1790.000001"}
+    assert _Api.received[-1][1].get("thread_ts") is None
+    assert json.loads(path.read_text())["scopes"][scope]["threads"] == {
+        "PROJ-1": {"day": "2026-09-24", "ts": "1790.000001"}
     }
     path.write_text("not json")
     assert threaded(_delivery("2026-09-24T12:31:00Z", [_run("PROJ-1", 2)])) == 0
@@ -606,3 +609,20 @@ def test_a_threads_file_that_cannot_be_used_refuses_before_posting(
     assert threaded(_delivery("2026-09-24T12:30:00Z", [_run("PROJ-1", 1)])) == 2
     assert "the threads file" in capsys.readouterr().err
     assert _Api.received == []
+
+
+def test_a_save_keeps_the_scopes_of_other_channels_and_repositories(tmp_path: Path) -> None:
+    path = tmp_path / "slack-threads.json"
+    mine = slack.Threads.load(path, "C1", "/r/api")
+    # Another sink, on another channel, saves after this one loaded and before it saves.
+    theirs = slack.Threads.load(path, "C2", "/r/api")
+    theirs.threads["PROJ-9"] = ("2026-09-24", "1790.000009")
+    theirs.posted.add("f" * 64)
+    theirs.save()
+    mine.threads["PROJ-1"] = ("2026-09-24", "1790.000001")
+    mine.save()
+    assert slack.Threads.load(path, "C2", "/r/api") == theirs
+    assert slack.Threads.load(path, "C1", "/r/api").threads == {"PROJ-1": ("2026-09-24", "1790.000001")}
+    # The other scope's fingerprints are not this one's to skip.
+    assert slack.Threads.load(path, "C1", "/r/api").posted == set()
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["slack-threads.json", "slack-threads.json.lock"]

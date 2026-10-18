@@ -24,6 +24,7 @@ enforces the guards never opens a connection or reads this secret (D035).
 from __future__ import annotations
 
 import argparse
+import fcntl
 import functools
 import hashlib
 import json
@@ -618,8 +619,6 @@ def _post(url: str, payload: dict[str, object], headers: dict[str, str]) -> tupl
 
 # Threads, with `--threads`
 
-# Kinds canopy sends at once, unbatched (DESIGN §20), so a reply holding one is shown in the channel too.
-_URGENT_KINDS = frozenset({"plan.proposed", "loop.failing", "loop.sink_failing"})
 # A message's `ts`, which names it to reply in its thread.
 _TS = re.compile(r"\d{1,20}\.\d{1,20}")
 
@@ -650,75 +649,76 @@ class Send(Protocol):
 
 @dataclass
 class Threads:
-    """The sink's own record of each thread it posts in today, and what a delivery that failed partway posted.
+    """For one channel and repository: each thread the sink posts in today, and what a failed delivery posted.
 
-    A thread is keyed by channel, repository, and what it is about, so channels and workspaces sharing the file keep
-    their own. Losing the file costs nothing worse than new threads.
+    The file holds a scope for each channel and repository, so sinks and workspaces sharing it keep their own, and a
+    save replaces only its own scope. Losing the file costs nothing worse than new threads.
     """
 
     path: Path
-    # Key to the day the thread was started and its first message's `ts`.
+    # The channel and repository, as a JSON list: the key of this record's part of the file.
+    scope: str
+    # What a thread is about, such as a ticket key, to the day it was started and its first message's `ts`.
     threads: dict[str, tuple[str, str]]
     # Fingerprints of the items posted by a delivery that has not yet posted whole, so canopy's retry skips them.
     posted: set[str]
 
     @classmethod
-    def load(cls, path: Path) -> Threads:
-        """Read `path`, or start empty when it is missing or holds what this sink did not write.
+    def load(cls, path: Path, channel: str, repo: str) -> Threads:
+        """Read the scope of `channel` and `repo` from `path`: empty if missing or not what this sink wrote.
 
         Returns:
-            The threads and fingerprints the file holds.
+            The threads and fingerprints the scope holds.
 
         Raises:
             SinkError: `path` is there but cannot be read, or is not a regular file.
         """
-        try:
-            st = path.stat()
-        except FileNotFoundError:
-            return cls(path, {}, set())
-        except OSError as e:
-            raise SinkError(f"cannot read the threads file {path}: {e.strerror}") from e
-        # Checked before reading: opening a FIFO would block.
-        if not stat.S_ISREG(st.st_mode):
-            raise SinkError(f"the threads file {path} is not a regular file")
-        try:
-            parsed: object = json.loads(path.read_text(encoding="utf-8"))
-        except OSError as e:
-            raise SinkError(f"cannot read the threads file {path}: {e.strerror}") from e
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            parsed = None
+        scope = json.dumps([channel, repo])
+        given = _scopes(path).get(scope)
+        mine: dict[str, object] = {str(k): v for k, v in given.items()} if isinstance(given, dict) else {}
         threads: dict[str, tuple[str, str]] = {}
-        posted: set[str] = set()
-        if isinstance(parsed, dict):
-            given: object = parsed.get("threads")
-            for key, thread in given.items() if isinstance(given, dict) else ():
-                day, ts = (thread.get("day"), thread.get("ts")) if isinstance(thread, dict) else (None, None)
-                if isinstance(day, str) and isinstance(ts, str) and _TS.fullmatch(ts):
-                    threads[str(key)] = (day, ts)
-            fingerprints: object = parsed.get("posted")
-            posted = {f for f in fingerprints if isinstance(f, str)} if isinstance(fingerprints, list) else set()
-        return cls(path, threads, posted)
+        recorded = mine.get("threads")
+        for key, thread in recorded.items() if isinstance(recorded, dict) else ():
+            day, ts = (thread.get("day"), thread.get("ts")) if isinstance(thread, dict) else (None, None)
+            if isinstance(day, str) and isinstance(ts, str) and _TS.fullmatch(ts):
+                threads[str(key)] = (day, ts)
+        fingerprints = mine.get("posted")
+        posted = {f for f in fingerprints if isinstance(f, str)} if isinstance(fingerprints, list) else set()
+        return cls(path, scope, threads, posted)
 
     def save(self) -> None:
-        """Write the file whole, replacing it, so a sink killed mid-write leaves the last one.
+        """Replace this scope in the file, leaving the others as another sink last wrote them.
+
+        Under a lock, so two sinks saving at once each keep the other's scope; the file is replaced whole, so a sink
+        killed mid-write leaves the last one.
 
         Raises:
-            SinkError: The file or its directory cannot be written.
+            SinkError: The file or its directory cannot be read or written.
         """
-        data = {
-            "version": 1,
+        mine = {
             "threads": {key: {"day": day, "ts": ts} for key, (day, ts) in sorted(self.threads.items())},
             "posted": sorted(self.posted),
         }
+        tmp: Path | None = None
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            with tempfile.NamedTemporaryFile(
-                "w", encoding="utf-8", dir=self.path.parent, prefix=".slack-threads-", delete=False
-            ) as f:
-                json.dump(data, f)
-                f.write("\n")
-            Path(f.name).replace(self.path)
+            lock = os.open(self.path.with_name(self.path.name + ".lock"), os.O_CREAT | os.O_RDWR, 0o600)
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                scopes = _scopes(self.path)
+                scopes[self.scope] = mine
+                with tempfile.NamedTemporaryFile(
+                    "w", encoding="utf-8", dir=self.path.parent, prefix=".slack-threads-", delete=False
+                ) as f:
+                    tmp = Path(f.name)
+                    json.dump({"version": 1, "scopes": dict(sorted(scopes.items()))}, f)
+                    f.write("\n")
+                tmp.replace(self.path)
+            finally:
+                os.close(lock)
         except OSError as e:
+            if tmp is not None:
+                tmp.unlink(missing_ok=True)
             raise SinkError(f"cannot write the threads file {self.path}: {e.strerror or e}") from e
 
     def finish(self, day: str) -> None:
@@ -730,6 +730,34 @@ class Threads:
         self.posted.clear()
         self.threads = {key: thread for key, thread in self.threads.items() if thread[0] == day}
         self.save()
+
+
+def _scopes(path: Path) -> dict[str, object]:
+    """The scopes the threads file at `path` holds, as written: none if it is missing or not one this sink wrote.
+
+    Returns:
+        Each scope's key and its record, unchecked.
+
+    Raises:
+        SinkError: `path` is there but cannot be read, or is not a regular file.
+    """
+    try:
+        st = path.stat()
+    except FileNotFoundError:
+        return {}
+    except OSError as e:
+        raise SinkError(f"cannot read the threads file {path}: {e.strerror}") from e
+    # Checked before reading: opening a FIFO would block.
+    if not stat.S_ISREG(st.st_mode):
+        raise SinkError(f"the threads file {path} is not a regular file")
+    try:
+        parsed: object = json.loads(path.read_text(encoding="utf-8"))
+    except OSError as e:
+        raise SinkError(f"cannot read the threads file {path}: {e.strerror}") from e
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return {}
+    scopes = parsed.get("scopes") if isinstance(parsed, dict) else None
+    return {str(k): v for k, v in scopes.items()} if isinstance(scopes, dict) else {}
 
 
 @dataclass
@@ -771,14 +799,17 @@ class Part:
 
     @property
     def urgent(self) -> bool:
-        """Whether the post holds something canopy would not hold back: a new attention item, a question, a plan."""
+        """Whether a reply holds what canopy sends unbatched: a new attention item, a question, a plan to approve.
+
+        The loop's events are urgent too, but go in the channel, never in a thread.
+        """
         return bool(self.added) or any(
-            e.get("kind") in _URGENT_KINDS or (e.get("kind") == "run.ended" and e.get("status") == "blocked")
+            e.get("kind") == "plan.proposed" or (e.get("kind") == "run.ended" and e.get("status") == "blocked")
             for e in self.events
         )
 
 
-def post_threaded(message: Mapping[str, object], send: Send, threads: Threads, channel: str) -> tuple[bool, str]:
+def post_threaded(message: Mapping[str, object], send: Send, threads: Threads) -> tuple[bool, str]:
     """Post `message` as `split` divides it, recording in `threads` each thread it starts and each post it makes.
 
     What is about a ticket, a chore, or a review's PR goes in its thread for the day; the first post about it that day
@@ -793,11 +824,9 @@ def post_threaded(message: Mapping[str, object], send: Send, threads: Threads, c
         SinkError: `threads` cannot be saved.
     """
     day = _day(message.get("sent_at"))
-    repo = str(message.get("repo") or "")
     ok, reply = True, ""
     for part in split(message, threads.posted):
-        key = json.dumps([channel, repo, part.thread])
-        started = threads.threads.get(key) if part.thread is not None else None
+        started = threads.threads.get(part.thread) if part.thread is not None else None
         ts = started[1] if started is not None and started[0] == day else None
         cut = part.message(message)
         ok, reply = send(
@@ -810,7 +839,7 @@ def post_threaded(message: Mapping[str, object], send: Send, threads: Threads, c
             return ok, reply
         threads.posted.update(_fingerprint(item) for item in part.items())
         if part.thread is not None and ts is None and (first := _ts(reply)) is not None:
-            threads.threads[key] = (day, first)
+            threads.threads[part.thread] = (day, first)
         threads.save()
     threads.finish(day)
     return ok, reply
@@ -947,7 +976,7 @@ def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_u
     if args.channel is not None and args.webhook_file is not None:
         parser.error("--webhook-file and --channel are two ways to post; give one")
     send: Callable[[str, list[Block]], tuple[bool, str]]
-    threaded: tuple[Send, Threads, str] | None = None
+    threaded: tuple[Send, str] | None = None
     try:
         if args.channel is None:
             send = functools.partial(post, read_webhook(args.webhook_file or default_webhook_file(), prefix=prefix))
@@ -962,13 +991,16 @@ def run(argv: Sequence[str], stdin: TextIO, *, prefix: str = SLACK_PREFIX, api_u
                 icon_emoji=None if args.icon_emoji is None else check_icon_emoji(args.icon_emoji),
             )
             send = to_channel
-            if args.threads:
-                threads = Threads.load(default_threads_file())
-                # Saved before anything is posted, so a file that cannot be written refuses the delivery whole.
-                threads.save()
-                threaded = (to_channel, threads, channel)
+            threaded = (to_channel, channel) if args.threads else None
         parsed = read_message(stdin.read())
-        ok, reply = send(render(parsed), blocks(parsed)) if threaded is None else post_threaded(parsed, *threaded)
+        if threaded is None:
+            ok, reply = send(render(parsed), blocks(parsed))
+        else:
+            to_channel, channel = threaded
+            threads = Threads.load(default_threads_file(), channel, str(parsed.get("repo") or ""))
+            # Saved before anything is posted, so a file that cannot be written refuses the delivery whole.
+            threads.save()
+            ok, reply = post_threaded(parsed, to_channel, threads)
     except SinkError as e:
         print(f"canopy-notify-slack: {e}", file=sys.stderr)  # noqa: T201
         return 2

@@ -418,9 +418,10 @@ posts one message per delivery, as Block Kit built from the `json` fields with t
   in its PR's, a new thread each day, started by the first post about it that day; loop events, a repository's
   attention items, and the digest go in the channel, with the header. A reply holding something urgent (Batching,
   above) is also shown in the channel. So a delivery can be several posts. The threads are the sink's own, recorded
-  in `~/.local/state/canopy/slack-threads.json` (under `$XDG_STATE_HOME`), never in canopy's journal. A delivery
-  refused partway exits 1; the file keeps what it already posted, so canopy's retry posts only the rest. Losing the
-  file costs only new threads. A webhook cannot thread: it does not say which message it posted.
+  in `~/.local/state/canopy/slack-threads.json` (under `$XDG_STATE_HOME`), never in canopy's journal, each channel
+  and repository apart, so sinks of several workspaces can share the file. A delivery refused partway exits 1; the
+  file keeps what it already posted, so canopy's retry posts only the rest. Losing the file costs only new threads.
+  A webhook cannot thread: it does not say which message it posted.
 - Journal text is escaped for Slack markup (`&`, `<`, `>`) and every text object is `verbatim`, so Slack parses no
   `@here`, `@channel`, person, or channel name in it, and nothing can disguise a link. A URL is shown as itself; one
   holding `|`, which would take a label, stays text.
