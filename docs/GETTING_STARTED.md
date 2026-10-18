@@ -111,6 +111,9 @@ For setup that depends only on the base branch, such as downloading a toolchain,
 better; stage 5 shows one. canopy's own pool (`pools.backend = "canopy"`, DESIGN §18) runs no hook, so there it goes
 in `setup_cmd` too, as BAZEL.md shows. DESIGN §9 says how the three steps fit together.
 
+To have workers run your repository's fast checks before they push, install its git hooks in the primary clone:
+[HOOKS.md](HOOKS.md) says how, with prek.
+
 ## 3. A pool of a set size
 
 Left alone, a repository's pool grows as runs need slots, up to treehouse's `max_trees`, and each new slot is set up
