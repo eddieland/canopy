@@ -2017,6 +2017,15 @@ class RunsUpdated(_Model):
     """The runs, as `GET /runs` returns them."""
 
 
+class ReviewsUpdated(_Model):
+    """canopy's reviews changed. The payload is the whole list, as `GET /reviews` returns it."""
+
+    type: Literal["reviews.updated"] = "reviews.updated"
+    """What the event is."""
+    reviews: list[ReviewSummary]
+    """The latest review runs, as `GET /reviews` returns them."""
+
+
 class TicketsUpdated(_Model):
     """The tickets list changed. The payload is the whole list, as `GET /tickets` returns it."""
 
@@ -2085,6 +2094,7 @@ class StreamEvent(
         Annotated[
             AttentionUpdated
             | RunsUpdated
+            | ReviewsUpdated
             | TicketsUpdated
             | TicketChanged
             | ChoresUpdated

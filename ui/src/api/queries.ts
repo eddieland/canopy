@@ -314,7 +314,7 @@ export function searchQuery(q: string) {
     })
 }
 
-/** canopy's latest review runs, newest first. Marked stale with the ticks: a review ends between two of them. */
+/** canopy's latest review runs, newest first. The stream sends them whole whenever one starts or ends. */
 export const reviewsQuery = queryOptions({
     queryKey: keys.reviews,
     queryFn: async ({ signal }) => unwrap(await api.GET('/api/reviews', { signal })),

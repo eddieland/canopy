@@ -39,6 +39,7 @@ from canopy.serve.schema import (
     AttentionUpdated,
     ChoresUpdated,
     LoopUpdated,
+    ReviewsUpdated,
     RunsUpdated,
     SpendUpdated,
     StreamEvent,
@@ -463,13 +464,15 @@ def read_events(port: int, n: int) -> tuple[httpx2.Headers, list[StreamEvent]]:
 
 
 def test_the_stream_starts_with_every_list_then_sends_what_changed(served: int) -> None:
-    headers, events = read_events(served, 9)
+    headers, events = read_events(served, 10)
     assert headers["content-type"].startswith("text/event-stream")
     assert headers["x-accel-buffering"] == "no"
     assert headers["cache-control"] == "no-cache"
-    first, runs, tickets, chores, spend, tick, loop, changed, spent = (e.root for e in events)
+    first, runs, reviews, tickets, chores, spend, tick, loop, changed, spent = (e.root for e in events)
     assert isinstance(first, AttentionUpdated)
     assert isinstance(runs, RunsUpdated)
+    assert isinstance(reviews, ReviewsUpdated)
+    assert reviews.reviews
     assert isinstance(tickets, TicketsUpdated)
     assert isinstance(chores, ChoresUpdated)
     assert [c.name for c in chores.chores] == ["build-health", "deps"]
@@ -591,7 +594,7 @@ def test_the_stream_sends_the_chores_again_when_the_loop_reads_its_config_again(
     async def first_and_after_a_reload() -> tuple[list[StreamEvent], StreamEvent]:
         with closing(live.Stream(backend)) as opened:
             stream = opened.events(poll_seconds=0.01)
-            first = [await anext(stream) for _ in range(7)]
+            first = [await anext(stream) for _ in range(8)]
             # A reload commits nothing to the journal: the stream sees it in the config it serves.
             chores = {k: v for k, v in backend.config.chores.items() if k == "deps"}
             backend.use(backend.config.model_copy(update={"chores": chores}), backend.workspace)

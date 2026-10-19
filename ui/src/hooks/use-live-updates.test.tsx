@@ -3,7 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { mockAttention, mockTickets } from '@/api/mocks'
+import { mockAttention, mockReviews, mockTickets } from '@/api/mocks'
 import { keys } from '@/api/queries'
 import type { TicketSummary } from '@/api/types'
 import { ToastContext } from '@/hooks/use-toast'
@@ -73,7 +73,7 @@ describe('useLiveUpdates', () => {
 
     it('shows a toast for a ticket moving into a state Settings turned on, and none for the first list', () => {
         const show = vi.fn<(toast: NewToast) => void>()
-        setToastSettings({ tickets: ['blocked'] })
+        setToastSettings({ tickets: ['blocked'], reviews: [] })
         live(new QueryClient(), true, show)
         act(() => {
             latest().open()
@@ -88,6 +88,21 @@ describe('useLiveUpdates', () => {
         expect(show.mock.calls).toEqual([
             [{ title: 'ABC-102: blocked', detail: 'Export reports as CSV', tone: 'moved' }],
         ])
+    })
+
+    it('shows a toast for a review that ended in a state Settings turned on', () => {
+        const show = vi.fn<(toast: NewToast) => void>()
+        setToastSettings({ tickets: [], reviews: ['clean'] })
+        live(new QueryClient(), true, show)
+        const ended = mockReviews.map((review) =>
+            Object.assign(structuredClone(review), { state: 'done', verdict: 'clean' }),
+        )
+        act(() => {
+            latest().open()
+            latest().send(JSON.stringify({ type: 'reviews.updated', reviews: mockReviews }))
+            latest().send(JSON.stringify({ type: 'reviews.updated', reviews: ended }))
+        })
+        expect(show.mock.calls).toEqual([[{ title: 'review:4: clean', detail: 'acme/web#12', tone: 'moved' }]])
     })
 
     it("after a drop, reads the server's meta and the tickets shown again, not the lists the stream resends", () => {

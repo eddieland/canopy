@@ -2,7 +2,7 @@ import { QueryClient } from '@tanstack/react-query'
 import { describe, expect, it } from 'vitest'
 
 import { applyStreamEvent, parseStreamEvent } from './live'
-import { mockAttention, mockChores, mockRuns, mockTickets } from './mocks'
+import { mockAttention, mockChores, mockReviews, mockRuns, mockTickets } from './mocks'
 import { keys } from './queries'
 import type { ChoreDetail, ChoreRunDetail, Run, TicketDetail } from './types'
 
@@ -18,6 +18,7 @@ describe('applyStreamEvent', () => {
         applyStreamEvent(client, { type: 'runs.updated', runs: [{ ...first, state: 'stopped' }] })
         applyStreamEvent(client, { type: 'attention.updated', items: mockAttention })
         applyStreamEvent(client, { type: 'tickets.updated', tickets: mockTickets })
+        applyStreamEvent(client, { type: 'reviews.updated', reviews: mockReviews })
         const spend = {
             day: { since: '2026-10-07T12:00:00Z', hours: 24, cost_usd: 2.5 },
             month: { since: '2026-09-08T12:00:00Z', hours: 720, cost_usd: 31.4 },
@@ -32,6 +33,7 @@ describe('applyStreamEvent', () => {
         expect(client.getQueryData<Run[]>(keys.runs)?.[0]?.state).toBe('stopped')
         expect(client.getQueryData(keys.attention)).toEqual(mockAttention)
         expect(client.getQueryData(keys.tickets)).toEqual(mockTickets)
+        expect(client.getQueryData(keys.reviews)).toEqual(mockReviews)
     })
 
     it("marks every window's spend breakdown stale on a spend or a tick, and keeps the spend's own data", () => {
@@ -271,6 +273,9 @@ describe('parseStreamEvent', () => {
         expect(parseStreamEvent('{"type":"lease.updated","lease":{}}')).toBeNull()
         expect(parseStreamEvent('{"type":"runs.updated"}')).toBeNull()
         expect(parseStreamEvent('{"type":"runs.updated","runs":{}}')).toBeNull()
+        const reviews = { type: 'reviews.updated', reviews: mockReviews }
+        expect(parseStreamEvent(JSON.stringify(reviews))).toEqual(reviews)
+        expect(parseStreamEvent('{"type":"reviews.updated","reviews":null}')).toBeNull()
         const chores = { type: 'chores.updated', chores: mockChores }
         expect(parseStreamEvent(JSON.stringify(chores))).toEqual(chores)
         expect(parseStreamEvent('{"type":"chores.updated","chores":null}')).toBeNull()
