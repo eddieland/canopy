@@ -17,6 +17,9 @@ export type MemoryShow = (typeof MEMORY_SHOWS)[number]
 /** The longest text filter kept: longer than any key, and enough of a lesson's words to find it. */
 export const MEMORY_QUERY_MAX = 200
 
+/** The most notes the page's search returns, the server's cap (`memory_search.MAX_LIMIT`). */
+export const MEMORY_FOUND_MAX = 50
+
 /** What the memory page is filtered by: each undefined when it filters nothing. */
 export interface MemoryFilter {
     /** Words each shown memory or ticket holds. */
@@ -68,6 +71,12 @@ export function memoryShown(
 /** Whether the page shows a ticket with notes: its key or title holds every word of `q`. */
 export function ticketNotesShown(ticket: Pick<TicketNotes, 'ticket_key' | 'title'>, q: string | undefined): boolean {
     return holdsEvery(`${ticket.ticket_key} ${ticket.title ?? ''}`, q)
+}
+
+/** How many notes the page's search found: `3 notes found`, or `50+ notes found` at the cap, where more may hold it. */
+export function foundCount(found: number): string {
+    const count = found >= MEMORY_FOUND_MAX ? `${MEMORY_FOUND_MAX}+` : String(found)
+    return `${count} ${found === 1 ? 'note' : 'notes'} found`
 }
 
 /** How many a panel shows, and of how many while a filter left some out: `2 of 7`. */

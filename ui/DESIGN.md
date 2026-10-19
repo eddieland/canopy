@@ -234,8 +234,10 @@ Rules:
   sit beside the other two. Over all three, a filter field and a chip for each repository narrow the page (`?q=`,
   `?repo=`, `src/lib/memory-filter.ts`), as the tickets filters do: a word in a memory's key, text, ticket, or
   repository, or a ticket's key or title, and, since the page holds only each ticket's count of notes, what notes say
-  through `canopy memory search`'s operator search (`GET /api/memory/search`), listed under the tickets as Notes that
-  say it, each with its verbs; while a repository chip is on, Ticket notes says it is not narrowed by one, since a note
+  through `canopy memory search`'s operator search (`GET /api/memory/search`, every word, as the rows above hold them),
+  listed under the tickets as Notes that say it, each with its verbs, counted in the header as `N notes found`, and
+  `50+` with a muted `the best 50` beside the label at the server's cap; while a repository chip is on, Ticket notes
+  says it is not narrowed by one, since a note
   is read by its own ticket's runs in any repository; a lesson for every repository is kept under any repository's chip.
   While lessons are in use, the Lessons header has `all`, `due`, and `wrong` chips with their dots (`?show=`). A
   filtered count says `2 of 7`, and an empty result says which filter left nothing. The proposals flip with an
