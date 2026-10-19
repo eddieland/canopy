@@ -234,6 +234,8 @@ describe('ProposalActions private', () => {
     it('never promotes a private ticket’s proposal in one click: its first button opens the form, which warns', () => {
         renderIn(<ProposalActions proposal={{ ...ENTRY, private: true }} onSaid={vi.fn<(said: string) => void>()} />)
         expect(screen.queryByRole('button', { name: 'Promote as written' })).toBeNull()
+        // One promote button, in place of both: the form is its only way.
+        expect(screen.queryByRole('button', { name: 'Edit and promote' })).toBeNull()
         fireEvent.click(screen.getByRole('button', { name: 'Promote' }))
         expect(screen.getByRole('form', { name: 'Promote memory:5' })).toBeDefined()
         expect(sent).toEqual([])
@@ -392,6 +394,33 @@ describe('LessonActions', () => {
         expect(screen.getByRole('form', { name: 'Forget memory:8' }).textContent).toContain(
             'promote its note, memory:2, again',
         )
+    })
+
+    it('says why, and reads memory again, when a Forget is refused because the lesson changed', async () => {
+        answer = Response.json(
+            { detail: { guard: 'forgotten', reason: "memory 8's text is already gone: forgotten" } },
+            { status: 409 },
+        )
+        const onSaid = vi.fn<(said: string) => void>()
+        renderIn(<LessonActions lesson={LESSON} onSaid={onSaid} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Forget' }))
+        fireEvent.change(screen.getByRole('textbox', { name: 'Type memory:8 to confirm' }), {
+            target: { value: 'memory:8' },
+        })
+        fireEvent.click(screen.getByRole('button', { name: 'Forget memory:8' }))
+        await vi.waitFor(() => {
+            expect(onSaid).toHaveBeenCalledWith("refused (forgotten): memory 8's text is already gone: forgotten")
+        })
+    })
+
+    it('says why, and reads memory again, when a Renew is refused because the lesson is gone', async () => {
+        answer = Response.json({ detail: { guard: 'unknown', reason: 'no lesson has id 8' } }, { status: 409 })
+        const onSaid = vi.fn<(said: string) => void>()
+        renderIn(<LessonActions lesson={{ ...LESSON, review_at: '2026-01-01T00:00:00Z' }} onSaid={onSaid} />)
+        fireEvent.click(screen.getByRole('button', { name: 'Renew' }))
+        await vi.waitFor(() => {
+            expect(onSaid).toHaveBeenCalledWith('refused (unknown): no lesson has id 8')
+        })
     })
 
     it('offers Renew alone on a lesson_review item', () => {
