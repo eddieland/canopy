@@ -96,6 +96,15 @@ own and does it in this process, its reviewer reporting what the test gives it:
         reviewed = scenario.review(reviews(head(git_pool), ticket="PROJ-1"), reviewer=reviewer_reports(CLEAN))
         assert (reviewed.status, reviewed.row.ticket_key) == ("done", "PROJ-1")
 
+A review is held at work as a run is, with `starts_review`. The overseer's own commands are moves too: `overseer` runs
+one in a tick of its own, or in the one `ticking` holds open, so what several raise is the attention list:
+
+    def test_two_items_raised_in_one_tick(scenario: Scenario) -> None:
+        with scenario.ticking():
+            scenario.overseer("attention", "PROJ-1", "needs_human", "--detail", "one")
+            scenario.overseer("attention", "PROJ-2", "needs_human", "--detail", "two")
+        assert len(scenario.attention()) == 2
+
 A step the verbs do not cover is written as before, in the same test: the verbs are argv lists and context managers, so
 they mix with `canopy(...)`, `overseer_does`, and the journal's own queries.
 
@@ -122,6 +131,7 @@ import shlex
 import sqlite3
 import sys
 import time
+from collections import UserList
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import AbstractContextManager, ExitStack, contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import dataclass, field, replace
@@ -136,6 +146,7 @@ from canopy.core.vocab import Phase, ResumeReason, ReviewRunStatus, RunKind, Run
 from canopy.infra import procs
 from canopy.loop import attention
 from tests.canopy.helpers import (
+    DRAFTS_PR,
     KEY,
     LABEL,
     QUESTION,
@@ -147,7 +158,6 @@ from tests.canopy.helpers import (
     blocked_result,
     canopy,
     commit_and_push,
-    decisions,
     in_tick,
     last_run,
     last_tick,
@@ -177,12 +187,20 @@ TOLD_LINES = 2
 #: How long a held worker, or a test waiting on one, waits before it gives up.
 HOLD_TIMEOUT = 60
 
-#: The command a held worker runs first, with the gates' directory: it says it is at work, in `<run id>.working`, then
-#: waits for `<run id>.open` before it goes on to what its script says. It gives up after HOLD_TIMEOUT, failing, so a
-#: worker no test lets go of does not outlast its test by much.
+#: The roles a held run's agent may play, each scripted by its own `FAKE_<ROLE>_*` variables: a worker, a private
+#: ticket's, a planner, a splitter, and a reviewer. The overseer is never held.
+HELD_ROLES = ("WORKER", "WORKER_PRIVATE", "PLANNER", "SPLITTER", "REVIEWER")
+
+#: The command a held agent runs first, with the gates' directory: it says it is at work, in `<run id>.working`, its run
+#: id as CANOPY_RUN_ID names it (`7`, or `review-7` for a review), then waits for `<run id>.open` before it goes on to
+#: what its script says. It gives up after HOLD_TIMEOUT, failing, so an agent no test lets go of does not outlast its
+#: test by much. An agent with no run id is not one a test holds, and goes on at once.
 GATE = f"""
 import os, pathlib, sys, time
-gate = pathlib.Path(sys.argv[1], os.environ["CANOPY_RUN_ID"])
+run = os.environ.get("CANOPY_RUN_ID")
+if not run:
+    sys.exit(0)
+gate = pathlib.Path(sys.argv[1], run)
 gate.with_suffix(".working").touch()
 deadline = time.monotonic() + {HOLD_TIMEOUT}
 while not gate.with_suffix(".open").exists():
@@ -301,12 +319,7 @@ class Working:
         Its row stays `running`, and the worker it started stays at work, as they would for the next tick's reconcile
         to find.
         """
-        pid = int(self.row["pid"])
-        procs.kill_group(pid)
-        deadline = time.monotonic() + HOLD_TIMEOUT
-        while procs.alive(pid):
-            assert time.monotonic() < deadline, f"run {self.id}'s `canopy _run` outlived its kill"
-            time.sleep(0.02)
+        _killed(int(self.row["pid"]), f"run {self.id}'s `canopy _run`")
         self.scenario.story.append(
             f"{_named(self.row, self.reasons)}: its `canopy _run` dies, its worker still at work"
         )
@@ -344,11 +357,80 @@ class Reviewed:
 
     def __str__(self) -> str:
         """The review run in a line, for a failed step's message: what it reviewed, how it ended, and what it said."""
-        row = self.row
-        result: dict[str, Any] = json.loads(row.result_json or "{}")
+        result: dict[str, Any] = json.loads(self.row.result_json or "{}")
         said = [str(result[k]) for k in ("verdict", "summary", "harness") if result.get(k)]
-        ticket = f" for {row.ticket_key}" if row.ticket_key else ""
-        return ": ".join([f"review run {row.id} of {row.pr_url} at {row.sha[:7]}{ticket}", row.status, *said])
+        return ": ".join([_reviewed(self.row), self.row.status, *said])
+
+
+@dataclass(frozen=True)
+class Reviewing:
+    """A review run held at work: its reviewer started and waits there until the test says what becomes of the run."""
+
+    #: The scenario the review run is part of.
+    scenario: "Scenario"
+    #: The review run's id.
+    id: int
+
+    @property
+    def row(self) -> records.ReviewRun:
+        """The review run's row as it stands."""
+        return present(db.get_review_run(self.scenario.conn, self.id))
+
+    def finishes(self) -> Reviewed:
+        """Let the reviewer go on to what its script says, and wait for the review run to end.
+
+        Returns:
+            The review run, closed, with what its `canopy _review` printed to its log.
+        """
+        (self.scenario.gates / f"review-{self.id}.open").touch()
+        deadline = time.monotonic() + HOLD_TIMEOUT
+        while (row := self.row).status == ReviewRunStatus.RUNNING:
+            assert time.monotonic() < deadline, f"{self} did not end after {HOLD_TIMEOUT}s"
+            time.sleep(0.02)
+        log = Path(row.log_path)
+        printed = Printed(log.read_text() if log.exists() else "", "")
+        reviewed = Reviewed(row, self.scenario.env.state_dir / "reviews" / f"{self.id}.prompt", printed)
+        self.scenario.story.append(str(reviewed))
+        return reviewed
+
+    def dies(self) -> None:
+        """Kill the review run's own process, `canopy _review`, at once, as a crash or a machine's shutdown would.
+
+        Its row stays `running`, and the reviewer it started stays at work, as they would for the next tick's reconcile
+        to find.
+        """
+        _killed(present(self.row.pid), f"review run {self.id}'s `canopy _review`")
+        self.scenario.story.append(f"{_reviewed(self.row)}: its `canopy _review` dies, its reviewer still at work")
+
+    def __str__(self) -> str:
+        """The review run in a line, for a failed step's message: what it reviews, and that it is at work."""
+        return f"{_reviewed(self.row)}: at work"
+
+
+class Refused(UserList[tuple[str, str]]):
+    """What canopy refused: the decisions of the tick it refused in, as (action, rationale), the refusal and the
+    attention it raised, if any, and beside them that tick, its decisions whole, and what the refused command printed.
+    """
+
+    def __init__(
+        self,
+        decided: Iterable[tuple[str, str]] = (),
+        *,
+        tick: int | None = None,
+        made: Sequence[records.Decision] = (),
+        printed: Printed | None = None,
+    ) -> None:
+        """Hold what refusing `tick` decided, `made`, and what the refused command printed.
+
+        `decided` is given alone when a list's own methods make a new one, a slice say, which keeps no tick.
+        """
+        super().__init__([*decided, *((d.action, d.rationale) for d in made)])
+        #: The tick canopy refused in.
+        self.tick = tick
+        #: Its decisions whole, with the ticket, repository, and PR each named.
+        self.decisions = list(made)
+        #: What the refused command printed, its refusal on stderr.
+        self.printed = printed or Printed("", "")
 
 
 @dataclass(frozen=True)
@@ -394,6 +476,10 @@ class Scenario:
     story: list[str] = field(default_factory=list, init=False)
     #: Each run held so far, whatever became of it since, for `close` to stop what is left of it.
     held: list[int] = field(default_factory=list, init=False)
+    #: Each review run held so far, likewise.
+    held_reviews: list[int] = field(default_factory=list, init=False)
+    #: The tick `ticking` holds open for the overseer's commands, if one is.
+    open_tick: int | None = field(default=None, init=False)
 
     def tick(
         self,
@@ -528,25 +614,51 @@ class Scenario:
         assert exited == 0, reviewed
         return reviewed
 
-    def refuses(self, command: list[str], *, dry_run: bool = False) -> list[tuple[str, str]]:
+    def starts_review(self, command: list[str], *, reviewer: Worker | None = None) -> Reviewing:
+        """Start the review `command`, a `reviews(...)`, in a tick of its own, and hold its reviewer at work, the
+        reviewer set to do `reviewer`, a `reviewer_reports(...)`, once the test lets it go on.
+
+        The review run is detached, as the overseer's is, and the overseer is not run.
+
+        Returns:
+            The review run, at work.
+        """
+        assert command[:3] == ["canopy", "review", "run"], command
+        with ExitStack() as stack:
+            if reviewer is not None:
+                stack.enter_context(reviewer)
+            stack.enter_context(self._held())
+            with in_tick(self.conn) as tick_id:
+                exited = main(command[1:])
+                if exited != 0:
+                    self._tell(f"tick {tick_id} does not start {shlex.join(command)}", tick_id)
+                assert exited == 0, db.decisions_for_tick(self.conn, tick_id)
+                db.finish_tick(self.conn, tick_id, TickStatus.OK, "test")
+                run_id = int(self.conn.execute("SELECT max(id) FROM review_runs").fetchone()[0])
+        reviewing = self._reviewing(run_id)
+        self.story.append(str(reviewing))
+        return reviewing
+
+    def refuses(self, command: list[str], *, dry_run: bool = False) -> Refused:
         """Dispatch `command`, a `dispatches(...)`, or start the review `command`, a `reviews(...)`, in a tick of its
         own, which canopy must refuse, starting no run.
 
         Returns:
-            The tick's decisions, as (action, rationale): the refusal, and the attention it raised, if any.
+            The tick's decisions, as (action, rationale): the refusal, and the attention it raised, if any; the tick,
+            its decisions whole, and what the command printed ride along.
         """
         review = command[:3] == ["canopy", "review", "run"]
         assert review or command[:2] == ["canopy", "dispatch"], command
         with in_tick(self.conn, dry_run=dry_run, ends_ok=True) as tick_id:
-            exited = main(command[1:], runner=InlineRunner())
-        made = decisions(self.conn, tick_id)
+            exited, printed = _printing(lambda: main(command[1:], runner=InlineRunner()))
+        refused = Refused(tick=tick_id, made=db.decisions_for_tick(self.conn, tick_id), printed=printed)
         self._tell(f"tick {tick_id} {'refuses' if exited == 1 else 'does not refuse'} {shlex.join(command)}", tick_id)
-        assert exited == 1, f"{shlex.join(command[:3])} exited {exited}, not refused: {made}"
+        assert exited == 1, f"{shlex.join(command[:3])} exited {exited}, not refused: {list(refused)} {printed.err}"
         # The table's name is one of two literals.
         runs = "review_runs" if review else "runs"
         started = self.conn.execute(f"SELECT count(*) FROM {runs} WHERE tick_id = ?", (tick_id,)).fetchone()[0]  # noqa: S608
-        assert started == 0, made
-        return made
+        assert started == 0, list(refused)
+        return refused
 
     def time_passes(self, *, hours: float = 0, minutes: float = 0) -> None:
         """Move every time the journal recorded, in a column of its own, `hours` and `minutes` into the past.
@@ -582,12 +694,53 @@ class Scenario:
         assert exited == code, f"{command} exited {exited}, not {code}: {printed.err or printed.out}"
         return printed
 
+    def overseer(self, *args: str, code: int = 0, dry_run: bool = False) -> Printed:
+        """Run one of the overseer's commands, `canopy ARGS`, in the tick `ticking` holds open, or in a tick of its own
+        that ends ok, a dry run with `dry_run`; it must exit `code`.
+
+        Returns:
+            What it printed, as the overseer would read it.
+        """
+        command = shlex.join(["canopy", *args])
+        with ExitStack() as stack:
+            tick_id = self.open_tick
+            if tick_id is None:
+                tick_id = stack.enter_context(in_tick(self.conn, dry_run=dry_run, ends_ok=True))
+            else:
+                assert not dry_run, "a command in the tick `ticking` holds open runs as that tick does"
+            exited, printed = _printing(lambda: main(list(args)))
+        said = f"the overseer runs {command} in tick {tick_id}, which exits {exited}"
+        self.story.append("\n".join([said, *printed.told()]))
+        assert exited == code, f"{command} exited {exited}, not {code}: {printed.err or printed.out}"
+        return printed
+
+    @contextmanager
+    def ticking(self, *, dry_run: bool = False) -> Iterator[int]:
+        """Hold a tick open for the overseer's commands, a dry run with `dry_run`: each `overseer` move inside the block
+        runs in it, the test may look at the tick while it is still running, and it ends ok as the block does, as one
+        whose overseer finished, so what they raised is the attention list.
+
+        Yields:
+            The tick's id.
+        """
+        assert self.open_tick is None, f"tick {self.open_tick} is open already"
+        with in_tick(self.conn, dry_run=dry_run, ends_ok=True) as tick_id:
+            dry = "dry-run " if dry_run else ""
+            self.story.append(f"{dry}tick {tick_id} begins, for the overseer's commands")
+            self.open_tick = tick_id
+            try:
+                yield tick_id
+            finally:
+                self.open_tick = None
+        self.story.append(f"tick {tick_id} ends ok")
+
     def configures(self, file: ConfigFile = "user", /, **tables: Mapping[str, object]) -> None:
         """Set the keys of each table in `tables`, named as in TOML, in the config `file`; the next command reads them.
 
         A key set takes the place of the one there, and every other key stays, whatever table it is in, so a test sets
         only what its story is about: `configures(policy={"max_resume_attempts": 2})`, or a table inside another as a
-        mapping inside one, `configures(notify={"sinks": {"slack": {"cmd": "true"}}})`.
+        mapping inside one, `configures(notify={"sinks": {"slack": {"cmd": "true"}}})`. A key set to None is dropped,
+        a table with it: `configures(notify={"sinks": {"slack": None}})`.
         """
         assert tables, "configures sets at least one table's keys"
         match file:
@@ -645,32 +798,41 @@ class Scenario:
         return Ran(row, reasons, self.env.state_dir / "runs" / f"{run_id}.prompt")
 
     def close(self) -> None:
-        """Stop what is left of every run held at work, its `canopy _run` and its worker both, as the test ends."""
+        """Stop what is left of every run held at work, its `canopy _run` and its worker both, and of every review run,
+        its `canopy _review` and its reviewer, as the test ends."""
         for run_id in self.held:
             row = present(db.get_run(self.conn, run_id))
             if row["status"] == RunStatus.RUNNING:
                 for pid in (row["pid"], row["worker_pid"]):
                     if pid is not None:
                         procs.kill_group(int(pid))
+        for run_id in self.held_reviews:
+            review = present(db.get_review_run(self.conn, run_id))
+            if review.status == ReviewRunStatus.RUNNING:
+                for pid in (review.pid, review.agent_pid):
+                    if pid is not None:
+                        procs.kill_group(pid)
 
     def _tell(self, step: str, tick_id: int) -> None:
         self.story.append("\n".join([step, *map(_decided, db.decisions_for_tick(self.conn, tick_id))]))
 
     @contextmanager
     def _held(self) -> Iterator[None]:
-        # The worker's script is in its environment by now; GATE goes first in it. A run reads the environment as it
+        # Each role's script is in its environment by now; GATE goes first in it. A run reads the environment as it
         # starts, so the gate lasts as long as the run does.
         self.gates.mkdir(exist_ok=True)
         gate = [sys.executable, "-c", GATE, str(self.gates)]
-        script = os.environ.get("FAKE_WORKER_COMMANDS", os.environ.get("FAKE_AGENT_COMMANDS", "[]"))
-        env = {"FAKE_WORKER_COMMANDS": json.dumps([gate, *json.loads(script)])}
-        # A ticket's own script stands in for the role's, commands and all, so its commands are gated too.
-        tickets: dict[str, dict[str, str]] = json.loads(os.environ.get("FAKE_WORKER_FOR", "{}"))
-        for settings in tickets.values():
-            if "COMMANDS" in settings:
-                settings["COMMANDS"] = json.dumps([gate, *json.loads(settings["COMMANDS"])])
-        if tickets:
-            env["FAKE_WORKER_FOR"] = json.dumps(tickets)
+        env: dict[str, str] = {}
+        for role in HELD_ROLES:
+            script = os.environ.get(f"FAKE_{role}_COMMANDS", os.environ.get("FAKE_AGENT_COMMANDS", "[]"))
+            env[f"FAKE_{role}_COMMANDS"] = json.dumps([gate, *json.loads(script)])
+            # A ticket's own script stands in for the role's, commands and all, so its commands are gated too.
+            tickets: dict[str, dict[str, str]] = json.loads(os.environ.get(f"FAKE_{role}_FOR", "{}"))
+            for settings in tickets.values():
+                if "COMMANDS" in settings:
+                    settings["COMMANDS"] = json.dumps([gate, *json.loads(settings["COMMANDS"])])
+            if tickets:
+                env[f"FAKE_{role}_FOR"] = json.dumps(tickets)
         with mock.patch.dict(os.environ, env):
             yield
 
@@ -688,6 +850,20 @@ class Scenario:
             time.sleep(0.02)
         reasons = db.run_reasons(self.conn, [run_id]).get(run_id, ())
         return Working(self, run_id, reasons)
+
+    def _reviewing(self, run_id: int) -> Reviewing:
+        self.held_reviews.append(run_id)
+        working = self.gates / f"review-{run_id}.working"
+        deadline = time.monotonic() + HOLD_TIMEOUT
+        while True:
+            review = present(db.get_review_run(self.conn, run_id))
+            # The reviewer's pid too, which `_review` records as it starts the reviewer, so `close` knows what to stop.
+            if working.exists() and review.agent_pid is not None:
+                break
+            assert review.status == ReviewRunStatus.RUNNING, f"{_reviewed(review)}: {review.status} before at work"
+            assert time.monotonic() < deadline, f"review run {run_id}'s reviewer was not at work after {HOLD_TIMEOUT}s"
+            time.sleep(0.02)
+        return Reviewing(self, run_id)
 
 
 # What the overseer does in a tick: each is the command it runs, for `Scenario.tick`.
@@ -779,6 +955,9 @@ def pushes(
             del result["pr"]
             result["prs"] = {name: f"https://example.test/{name}/pr/{number}" for name in repos}
             commands = [["git", "-C", name, *command[1:]] for name in repos for command in commands]
+        if "prs" in reported:
+            # A result names its PRs one way: the joint `prs`, which a test may give for one repository too.
+            result.pop("pr", None)
         return worker_does(*commands, result=json.dumps(result | reported))
 
     return replace(made(KEY), per_ticket=made)
@@ -796,6 +975,12 @@ def asks(question: str = QUESTION) -> Script:
 def fails(summary: str = "could not build") -> Script:
     """The worker pushes nothing and reports it failed, saying `summary`."""
     return worker_does(result=json.dumps({"status": "failed", "summary": summary}))
+
+
+def sends_drafts(entries: object, *, pr: str = DRAFTS_PR) -> Script:
+    """The worker pushes its ticket's branch and reports it done with `pr` open in `repo`, sending `entries` as its
+    drafts, whatever they hold, so a test can send ones canopy refuses."""
+    return pushes(prs={"repo": pr}, drafts=entries)
 
 
 @contextmanager
@@ -834,6 +1019,19 @@ def _printing(command: Callable[[], int]) -> tuple[int, Printed]:
 def _named(row: sqlite3.Row, reasons: Sequence[ResumeReason]) -> str:
     why = f" for {', '.join(reasons)}" if reasons else ""
     return f"run {row['id']}, {row['kind']} of {row['ticket_key']}{why}"
+
+
+def _reviewed(row: records.ReviewRun) -> str:
+    ticket = f" for {row.ticket_key}" if row.ticket_key else ""
+    return f"review run {row.id} of {row.pr_url} at {row.sha[:7]}{ticket}"
+
+
+def _killed(pid: int, what: str) -> None:
+    procs.kill_group(pid)
+    deadline = time.monotonic() + HOLD_TIMEOUT
+    while procs.alive(pid):
+        assert time.monotonic() < deadline, f"{what} outlived its kill"
+        time.sleep(0.02)
 
 
 def _decided(decision: records.Decision) -> str:

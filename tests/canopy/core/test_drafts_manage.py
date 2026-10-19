@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -12,41 +11,42 @@ from unittest import mock
 import pytest
 
 from canopy.core import drafts, drafts_manage, observe
-from canopy.core.vocab import DraftStatus
+from canopy.core.vocab import DraftStatus, ResumeReason, RunKind
 from canopy.infra import logs, procs
 from canopy.runs import drafted
 from tests.canopy.helpers import (
+    APPROVE,
     DRAFTS_PR,
+    TRACKER_POSTS,
     all_drafts,
-    approving,
     comment,
     github_has,
-    operator,
+    in_run,
     present,
     reads,
-    run_drafting,
     thread,
 )
+from tests.canopy.scenario_helpers import dispatches, sends_drafts
 
 if TYPE_CHECKING:
-    from collections.abc import Collection
+    from collections.abc import Collection, Mapping
 
     from canopy.core.config import Config
     from canopy.core.context import Context
-    from tests.conftest import CanopyEnv
+    from tests.canopy.scenario_helpers import Scenario
 
 PR = DRAFTS_PR
 OLD = "2020-01-01T00:00:00Z"
 ISSUE = "https://github.com/acme/api/issues/1"
-TRACKER_POSTS = '\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "canopy-post-github"\n'
+#: A resume of KEY for its PR's review.
+RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
 
 
-def drafted_run(canopy_env: CanopyEnv, conn: sqlite3.Connection, state: Path, entries: object, extra: str = "") -> int:
+def drafted_run(scenario: Scenario, state: Path, entries: object, connect: Mapping[str, object] | None = None) -> int:
     """A run whose drafts `entries` were checked against a PR holding comments 501 and 502, on two threads."""
-    approving(canopy_env, extra)
+    scenario.configures("private", trust=APPROVE, **({"connect": connect} if connect else {}))
     github_has(state, {**comment(501), "time": OLD}, {**comment(502, "PRRT_2"), "time": OLD})
-    run = run_drafting(conn, entries)
-    return int(run["id"])
+    return scenario.run(dispatches(slug="work"), worker=sends_drafts(entries)).id
 
 
 def hashed(conn: sqlite3.Connection, run_id: int, number: int) -> str:
@@ -60,14 +60,12 @@ def state_of(path: Path) -> dict[str, Any]:
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_drafts_sent_together_post_their_text_verbatim_as_one_review(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_drafts_sent_together_post_their_text_verbatim_as_one_review(scenario: Scenario, github_state: Path) -> None:
+    conn = scenario.conn
     reply = "Renamed.\n\nSee `app.py`."
     entries = [thread(501, text=reply), thread(502, "answered", "Because."), {"on": "pr", "pr": PR, "text": "Done."}]
-    run_id = drafted_run(canopy_env, conn, github_state, entries)
-    capsys.readouterr()
-    assert operator("draft", "send", f"run:{run_id}", *(hashed(conn, run_id, n) for n in (1, 2, 3))) == 0
+    run_id = drafted_run(scenario, github_state, entries)
+    sent = scenario.operator("draft", "send", f"run:{run_id}", *(hashed(conn, run_id, n) for n in (1, 2, 3)))
     [posted] = reads(github_state, "post")
     assert posted == {
         "pr": PR,
@@ -83,33 +81,33 @@ def test_drafts_sent_together_post_their_text_verbatim_as_one_review(
     assert body.sent_review_id == first.sent_review_id
     assert body.sent_url == f"{PR}#pullrequestreview-{body.sent_review_id}"
     assert first.sent_channel == "cli"
-    assert "Sent run" in capsys.readouterr().out
+    assert "Sent run" in sent.out
     # GitHub holds exactly the text, under the operator's login, with no mark.
     texts = [r["body"] for r in state_of(github_state)["prs"][PR]["reviews"] if r.get("author") == "me"]
     assert texts == [reply, "Because.", "Done."]
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_a_second_send_posts_nothing(canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path) -> None:
-    run_id = drafted_run(canopy_env, conn, github_state, [thread(501)])
-    wanted = hashed(conn, run_id, 1)
-    assert operator("draft", "send", f"run:{run_id}", wanted) == 0
-    assert operator("draft", "send", f"run:{run_id}", wanted) == 0
+def test_a_second_send_posts_nothing(scenario: Scenario, github_state: Path) -> None:
+    run_id = drafted_run(scenario, github_state, [thread(501)])
+    wanted = hashed(scenario.conn, run_id, 1)
+    scenario.operator("draft", "send", f"run:{run_id}", wanted)
+    scenario.operator("draft", "send", f"run:{run_id}", wanted)
     assert len(reads(github_state, "post")) == 1
 
 
 @pytest.mark.usefixtures("git_pool")
 def test_an_edit_since_the_operator_read_the_draft_refuses_the_send_stale(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, capsys: pytest.CaptureFixture[str]
+    scenario: Scenario, github_state: Path
 ) -> None:
-    run_id = drafted_run(canopy_env, conn, github_state, [thread(501)])
+    conn = scenario.conn
+    run_id = drafted_run(scenario, github_state, [thread(501)])
     seen = hashed(conn, run_id, 1)
-    assert operator("draft", "edit", f"run:{run_id}", "1", "--text", "Renamed it to `retries`.") == 0
-    capsys.readouterr()
-    assert operator("draft", "send", f"run:{run_id}", seen) == 1
-    assert "send refused (stale)" in capsys.readouterr().err
+    scenario.operator("draft", "edit", f"run:{run_id}", "1", "--text", "Renamed it to `retries`.")
+    refused = scenario.operator("draft", "send", f"run:{run_id}", seen, code=1)
+    assert "send refused (stale)" in refused.err
     assert reads(github_state, "post") == []
-    assert operator("draft", "send", f"run:{run_id}", hashed(conn, run_id, 1)) == 0
+    scenario.operator("draft", "send", f"run:{run_id}", hashed(conn, run_id, 1))
     [posted] = reads(github_state, "post")
     assert posted["replies"] == [{"comment": 501, "text": "Renamed it to `retries`."}]
     [draft] = all_drafts(conn)
@@ -118,10 +116,10 @@ def test_an_edit_since_the_operator_read_the_draft_refuses_the_send_stale(
 
 @pytest.mark.usefixtures("git_pool")
 def test_an_edit_while_the_send_reads_the_pr_refuses_it_stale_and_posts_nothing(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, capsys: pytest.CaptureFixture[str]
+    scenario: Scenario, github_state: Path
 ) -> None:
-    run_id = drafted_run(canopy_env, conn, github_state, [thread(501)])
-    seen = hashed(conn, run_id, 1)
+    run_id = drafted_run(scenario, github_state, [thread(501)])
+    seen = hashed(scenario.conn, run_id, 1)
     read = observe.read
 
     def edited_meanwhile(
@@ -129,99 +127,87 @@ def test_an_edit_while_the_send_reads_the_pr_refuses_it_stale_and_posts_nothing(
     ) -> observe.Read:
         # The operator edits in another tab while the send reads the PR again, after it checked the hash.
         found = read(conn, config, runner, prs, log)
-        assert operator("draft", "edit", f"run:{run_id}", "1", "--text", "Not what was seen.") == 0
+        scenario.operator("draft", "edit", f"run:{run_id}", "1", "--text", "Not what was seen.")
         return found
 
-    capsys.readouterr()
     with mock.patch.object(observe, "read", autospec=True, side_effect=edited_meanwhile):
-        assert operator("draft", "send", f"run:{run_id}", seen) == 1
-    assert "send refused (stale)" in capsys.readouterr().err
+        refused = scenario.operator("draft", "send", f"run:{run_id}", seen, code=1)
+    assert "send refused (stale)" in refused.err
     assert reads(github_state, "post") == []
-    assert drafts_manage.find(conn, run_id, 1).status is DraftStatus.WAITING
+    assert drafts_manage.find(scenario.conn, run_id, 1).status is DraftStatus.WAITING
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_a_comment_since_the_draft_refuses_the_send_once_and_names_it(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    run_id = drafted_run(canopy_env, conn, github_state, [thread(501)])
+def test_a_comment_since_the_draft_refuses_the_send_once_and_names_it(scenario: Scenario, github_state: Path) -> None:
+    run_id = drafted_run(scenario, github_state, [thread(501)])
     state = state_of(github_state)
     newer = {**comment(510, author="bob", body="Also the docstring."), "time": "2099-01-01T00:00:00Z"}
     state["prs"][PR]["reviews"].append(newer)
     github_state.write_text(json.dumps(state))
-    wanted = hashed(conn, run_id, 1)
-    capsys.readouterr()
-    assert operator("draft", "send", f"run:{run_id}", wanted) == 1
-    err = capsys.readouterr().err
+    wanted = hashed(scenario.conn, run_id, 1)
+    err = scenario.operator("draft", "send", f"run:{run_id}", wanted, code=1).err
     assert "send refused (thread_changed)" in err
     assert "comment 510 by bob: Also the docstring." in err
     assert reads(github_state, "post") == []
-    [draft] = all_drafts(conn)
+    [draft] = all_drafts(scenario.conn)
     assert draft.basis == "2099-01-01T00:00:00Z"
     # The operator has seen it: sending again posts.
-    assert operator("draft", "send", f"run:{run_id}", wanted) == 0
+    scenario.operator("draft", "send", f"run:{run_id}", wanted)
     assert len(reads(github_state, "post")) == 1
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_a_draft_that_waits_on_a_read_cannot_be_sent(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    approving(canopy_env)
+def test_a_draft_that_waits_on_a_read_cannot_be_sent(scenario: Scenario, github_state: Path) -> None:
+    scenario.configures("private", trust=APPROVE)
     github_has(github_state, comment(501), down=True)
-    run_id = int(run_drafting(conn, [thread(501)])["id"])
-    capsys.readouterr()
-    assert operator("draft", "send", f"run:{run_id}", hashed(conn, run_id, 1)) == 1
-    assert "send refused (unchecked)" in capsys.readouterr().err
+    run_id = scenario.run(dispatches(slug="work"), worker=sends_drafts([thread(501)])).id
+    refused = scenario.operator("draft", "send", f"run:{run_id}", hashed(scenario.conn, run_id, 1), code=1)
+    assert "send refused (unchecked)" in refused.err
     assert reads(github_state, "post") == []
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_the_draft_verbs_refuse_inside_a_run(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    run_id = drafted_run(canopy_env, conn, github_state, [thread(501)])
-    capsys.readouterr()
-    with mock.patch.dict(os.environ, {"CANOPY_RUN_ID": str(run_id)}):
-        assert operator("draft", "send", f"run:{run_id}", hashed(conn, run_id, 1)) == 1
-        assert operator("draft", "edit", f"run:{run_id}", "1", "--text", "x") == 1
-        assert operator("draft", "drop", f"run:{run_id}", "1") == 1
-    err = capsys.readouterr().err
-    assert err.count("(inside_run)") == 3
+def test_the_draft_verbs_refuse_inside_a_run(scenario: Scenario, github_state: Path) -> None:
+    run_id = drafted_run(scenario, github_state, [thread(501)])
+    wanted = hashed(scenario.conn, run_id, 1)
+    with in_run(run_id):
+        refusals = [
+            scenario.operator("draft", "send", f"run:{run_id}", wanted, code=1),
+            scenario.operator("draft", "edit", f"run:{run_id}", "1", "--text", "x", code=1),
+            scenario.operator("draft", "drop", f"run:{run_id}", "1", code=1),
+        ]
+    assert ["(inside_run)" in refused.err for refused in refusals] == [True, True, True]
     assert reads(github_state, "post") == []
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_a_dropped_draft_is_not_sent_until_the_drop_is_taken_back(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    run_id = drafted_run(canopy_env, conn, github_state, [thread(501)])
+def test_a_dropped_draft_is_not_sent_until_the_drop_is_taken_back(scenario: Scenario, github_state: Path) -> None:
+    conn = scenario.conn
+    run_id = drafted_run(scenario, github_state, [thread(501)])
     wanted = hashed(conn, run_id, 1)
-    assert operator("draft", "drop", f"run:{run_id}", "1") == 0
-    capsys.readouterr()
-    assert operator("draft", "send", f"run:{run_id}", wanted) == 1
-    assert "send refused (dropped)" in capsys.readouterr().err
-    assert operator("draft", "drop", f"run:{run_id}", "1", "--undo") == 0
+    scenario.operator("draft", "drop", f"run:{run_id}", "1")
+    assert "send refused (dropped)" in scenario.operator("draft", "send", f"run:{run_id}", wanted, code=1).err
+    scenario.operator("draft", "drop", f"run:{run_id}", "1", "--undo")
     assert present(drafts.get(conn, all_drafts(conn)[0].id)).status is DraftStatus.WAITING
-    assert operator("draft", "send", f"run:{run_id}", wanted) == 0
+    scenario.operator("draft", "send", f"run:{run_id}", wanted)
 
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_refused_post_leaves_the_drafts_waiting_and_names_its_pending_review_for_the_next(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, capsys: pytest.CaptureFixture[str]
+    scenario: Scenario, github_state: Path
 ) -> None:
-    run_id = drafted_run(canopy_env, conn, github_state, [thread(501)])
+    conn = scenario.conn
+    run_id = drafted_run(scenario, github_state, [thread(501)])
     state = state_of(github_state)
     github_state.write_text(json.dumps({**state, "post": "pending_left"}))
     wanted = hashed(conn, run_id, 1)
-    capsys.readouterr()
-    assert operator("draft", "send", f"run:{run_id}", wanted) == 1
-    assert "was not sent: nothing was posted" in capsys.readouterr().out
+    unsent = scenario.operator("draft", "send", f"run:{run_id}", wanted, code=1)
+    assert "was not sent: nothing was posted" in unsent.out
     [draft] = all_drafts(conn)
     assert draft.status is DraftStatus.WAITING
     assert draft.pending_review is not None
     github_state.write_text(json.dumps({**state_of(github_state), "post": "ok"}))
-    assert operator("draft", "send", f"run:{run_id}", wanted) == 0
+    scenario.operator("draft", "send", f"run:{run_id}", wanted)
     assert reads(github_state, "post")[-1]["delete_pending"] == draft.pending_review
     assert present(drafts.get(conn, draft.id)).pending_review is None
 
@@ -229,26 +215,18 @@ def test_a_refused_post_leaves_the_drafts_waiting_and_names_its_pending_review_f
 @pytest.mark.usefixtures("git_pool")
 @pytest.mark.parametrize(("posted", "status"), [(True, DraftStatus.SENT), (False, DraftStatus.WAITING)])
 def test_an_unconfirmed_send_is_settled_by_a_read_never_by_sending_again(
-    canopy_env: CanopyEnv,
-    conn: sqlite3.Connection,
-    github_state: Path,
-    ctx: Context,
-    capsys: pytest.CaptureFixture[str],
-    *,
-    posted: bool,
-    status: DraftStatus,
+    scenario: Scenario, github_state: Path, ctx: Context, *, posted: bool, status: DraftStatus
 ) -> None:
-    run_id = drafted_run(canopy_env, conn, github_state, [thread(501)])
+    conn = scenario.conn
+    run_id = drafted_run(scenario, github_state, [thread(501)])
     github_state.write_text(json.dumps({**state_of(github_state), "post": "unknown", "posted": posted}))
     wanted = hashed(conn, run_id, 1)
-    capsys.readouterr()
-    assert operator("draft", "send", f"run:{run_id}", wanted) == 1
-    assert "may have been posted" in capsys.readouterr().out
+    assert "may have been posted" in scenario.operator("draft", "send", f"run:{run_id}", wanted, code=1).out
     [draft] = all_drafts(conn)
     assert draft.status is DraftStatus.UNCONFIRMED
     assert draft.pending_review_id is not None
-    assert operator("draft", "send", f"run:{run_id}", wanted) == 1
-    assert "send refused (unconfirmed)" in capsys.readouterr().err
+    refused = scenario.operator("draft", "send", f"run:{run_id}", wanted, code=1)
+    assert "send refused (unconfirmed)" in refused.err
     assert len(reads(github_state, "post")) == 1
     drafted.reconcile(ctx, logs.for_tick(None))
     settled = present(drafts.get(conn, draft.id))
@@ -260,59 +238,47 @@ def test_an_unconfirmed_send_is_settled_by_a_read_never_by_sending_again(
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_tickets_draft_posts_through_the_trackers_command_and_is_settled_by_the_operator(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path
+    scenario: Scenario, github_state: Path
 ) -> None:
+    conn = scenario.conn
     ticket = {"on": "ticket", "url": ISSUE, "text": "Which base should this target?"}
-    run_id = drafted_run(canopy_env, conn, github_state, [ticket], TRACKER_POSTS)
-    assert operator("draft", "send", f"run:{run_id}", hashed(conn, run_id, 1)) == 0
+    run_id = drafted_run(scenario, github_state, [ticket], TRACKER_POSTS)
+    scenario.operator("draft", "send", f"run:{run_id}", hashed(conn, run_id, 1))
     assert reads(github_state, "post") == [{"issue": ISSUE, "ticket": "PROJ-1", "body": ticket["text"]}]
     [draft] = all_drafts(conn)
     assert draft.status is DraftStatus.SENT
     assert draft.sent_url is not None
 
-    second = int(
-        run_drafting(conn, [ticket], "--label", "agent-ready-tester", "--kind", "resume", "--reason", "review")["id"]
-    )
+    second = scenario.run(RESUME, worker=sends_drafts([ticket])).id
     github_state.write_text(json.dumps({**state_of(github_state), "post": "unknown", "posted": True}))
-    assert operator("draft", "send", f"run:{second}", hashed(conn, second, 1)) == 1
+    scenario.operator("draft", "send", f"run:{second}", hashed(conn, second, 1), code=1)
     assert drafts_manage.find(conn, second, 1).status is DraftStatus.UNCONFIRMED
-    assert operator("draft", "settle", f"run:{second}", "1", "--sent") == 0
+    scenario.operator("draft", "settle", f"run:{second}", "1", "--sent")
     assert drafts_manage.find(conn, second, 1).status is DraftStatus.SENT
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_list_and_show_print_each_draft_with_its_thread_and_hash(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    run_id = drafted_run(canopy_env, conn, github_state, [thread(501), thread(999)])
-    capsys.readouterr()
-    assert operator("draft", "list") == 0
-    out = capsys.readouterr().out
+def test_list_and_show_print_each_draft_with_its_thread_and_hash(scenario: Scenario, github_state: Path) -> None:
+    run_id = drafted_run(scenario, github_state, [thread(501), thread(999)])
+    out = scenario.operator("draft", "list").out
     assert "Review replies: approve." in out
     assert f"run:{run_id} 1  waiting  a reply to comment 501 on {PR} (changed)" in out
     assert f"> alice at {OLD}: Rename this." in out
     assert f"hash {drafts_manage.hash_of('Renamed.')}:\n    Renamed." in out
     assert "comment 999" not in out
-    assert operator("draft", "show", f"run:{run_id}") == 0
-    out = capsys.readouterr().out
+    out = scenario.operator("draft", "show", f"run:{run_id}").out
     assert f"2: unknown_thread: {PR} has no review comment 999" in out
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_status_says_how_replies_go_and_how_many_drafts_wait(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    canopy_env.write_private('[trust]\nreview_replies = "post"\n')
-    capsys.readouterr()
-    assert operator("status") == 0
-    assert "Review replies" not in capsys.readouterr().out
-    canopy_env.private_file.unlink()
-    assert operator("status") == 0
-    assert "Review replies: approve, workers draft their comments for you\n" in capsys.readouterr().out
-    drafted_run(canopy_env, conn, github_state, [thread(501), thread(502)])
-    capsys.readouterr()
-    assert operator("status") == 0
-    out = capsys.readouterr().out
+def test_status_says_how_replies_go_and_how_many_drafts_wait(scenario: Scenario, github_state: Path) -> None:
+    scenario.configures("private", trust={"review_replies": "post"})
+    assert "Review replies" not in scenario.operator("status").out
+    # Unset, replies are drafted for the operator.
+    scenario.configures("private", trust={"review_replies": None})
+    assert "Review replies: approve, workers draft their comments for you\n" in scenario.operator("status").out
+    drafted_run(scenario, github_state, [thread(501), thread(502)])
+    out = scenario.operator("status").out
     assert (
         "Review replies: approve, workers draft their comments for you; 2 drafts wait on you: `canopy draft list`"
         in out
@@ -320,15 +286,11 @@ def test_status_says_how_replies_go_and_how_many_drafts_wait(
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_the_next_resume_is_told_what_the_operator_sent(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path
-) -> None:
-    run_id = drafted_run(canopy_env, conn, github_state, [thread(501)])
-    assert operator("draft", "send", f"run:{run_id}", hashed(conn, run_id, 1)) == 0
-    [sent] = all_drafts(conn)
-    resume = ("--label", "agent-ready-tester", "--kind", "resume", "--reason", "review")
-    later = run_drafting(conn, [], *resume)
-    text = (canopy_env.state_dir / "runs" / f"{later['id']}.prompt").read_text()
+def test_the_next_resume_is_told_what_the_operator_sent(scenario: Scenario, github_state: Path) -> None:
+    run_id = drafted_run(scenario, github_state, [thread(501)])
+    scenario.operator("draft", "send", f"run:{run_id}", hashed(scenario.conn, run_id, 1))
+    [sent] = all_drafts(scenario.conn)
+    text = scenario.run(RESUME, worker=sends_drafts([])).prompt
     assert (
         f"The operator already sent these through canopy, unmarked, as their own: {PR}: comments "
         f"{sent.sent_comment_id}, reviews {sent.sent_review_id}." in text

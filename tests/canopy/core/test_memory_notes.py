@@ -215,8 +215,7 @@ def test_done_and_forget_invalidate_a_tickets_notes(scenario: Scenario, git_pool
     scenario.configures("private", memory=RECORDING)
     scenario.run(WORK, worker=pushes(notes=[{"key": "lint", "text": NOTE}]))
     if how == "done":
-        with in_tick(scenario.conn):
-            assert main(["ticket", "set", KEY, "--done"]) == 0
+        scenario.overseer("ticket", "set", KEY, "--done")
         why = "ticket done"
     else:
         scenario.operator("forget", KEY)

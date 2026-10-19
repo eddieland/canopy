@@ -16,24 +16,12 @@ import pytest
 
 from canopy.core import drafts, observe, records, replies, review_diff
 from canopy.core.config import load
-from canopy.core.vocab import DraftKind, DraftStatus, ReviewItem
+from canopy.core.vocab import DraftKind, DraftStatus, ResumeReason, ReviewItem, RunKind
 from canopy.infra import logs, procs
 from canopy.loop import attention
 from canopy.runs import drafted
-from tests.canopy.helpers import (
-    DRAFTS_PR,
-    KEY,
-    all_drafts,
-    approving,
-    comment,
-    github_has,
-    posting,
-    present,
-    reads,
-    run_drafting,
-    thread,
-    waits,
-)
+from tests.canopy.helpers import APPROVE, DRAFTS_PR, KEY, all_drafts, comment, github_has, present, reads, thread, waits
+from tests.canopy.scenario_helpers import dispatches, sends_drafts
 
 if TYPE_CHECKING:
     from canopy.core.context import Context
@@ -41,22 +29,26 @@ if TYPE_CHECKING:
     from tests.conftest import CanopyEnv
 
 PR = DRAFTS_PR
-RESUME = ("--label", "agent-ready-tester", "--kind", "resume", "--reason", "review")
+#: KEY's run on its `work` branch, as each drafting run here is.
+WORK = dispatches(slug="work")
+#: A resume of KEY for its PR's review.
+RESUME = dispatches(kind=RunKind.RESUME, reasons=[ResumeReason.REVIEW])
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_after_a_run_its_pr_is_read_and_its_drafts_checked(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path
-) -> None:
-    approving(canopy_env)
+def test_after_a_run_its_pr_is_read_and_its_drafts_checked(scenario: Scenario, github_state: Path) -> None:
+    conn = scenario.conn
+    scenario.configures("private", trust=APPROVE)
     github_has(github_state, comment(501), comment(502, "PRRT_2"))
-    run = run_drafting(conn, [thread(501), thread(999), {"on": "pr", "pr": PR, "text": "Fixed CI."}])
+    run = scenario.run(
+        WORK, worker=sends_drafts([thread(501), thread(999), {"on": "pr", "pr": PR, "text": "Fixed CI."}])
+    )
     reply, unknown, body = all_drafts(conn)
     assert (reply.status, reply.thread_id) == (DraftStatus.WAITING, "PRRT_1")
     assert reply.checked_at is not None
     assert (unknown.status, unknown.why) == (DraftStatus.REFUSED, f"unknown_thread: {PR} has no review comment 999")
     assert (body.status, body.thread_id) == (DraftStatus.WAITING, None)
-    found = present(replies.run_replies(conn, int(run["id"])))
+    found = present(replies.run_replies(conn, run.id))
     assert [(r.number, r.why) for r in drafts.refused_of(found)] == [(2, unknown.why)]
     assert reads(github_state) == [{"prs": [PR]}]
     observed = records.fetch_all(conn, records.ObservedReview, "SELECT * FROM observed_reviews ORDER BY id")
@@ -68,11 +60,12 @@ def test_after_a_run_its_pr_is_read_and_its_drafts_checked(
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_failed_read_keeps_the_drafts_unchecked_until_a_tick_reads_the_pr_whole(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, ctx: Context
+    scenario: Scenario, github_state: Path, ctx: Context
 ) -> None:
-    approving(canopy_env)
+    conn = scenario.conn
+    scenario.configures("private", trust=APPROVE)
     github_has(github_state, comment(501), down=True)
-    run_drafting(conn, [thread(501)])
+    scenario.run(WORK, worker=sends_drafts([thread(501)]))
     [draft] = all_drafts(conn)
     assert draft.status is DraftStatus.UNCHECKED
     [item] = drafted.waiting(conn)
@@ -97,20 +90,18 @@ def test_a_failed_read_keeps_the_drafts_unchecked_until_a_tick_reads_the_pr_whol
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_a_stop_cuts_the_read_after_a_run_short(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, tmp_path: Path
-) -> None:
-    approving(canopy_env)
+def test_a_stop_cuts_the_read_after_a_run_short(scenario: Scenario, github_state: Path, tmp_path: Path) -> None:
+    scenario.configures("private", trust=APPROVE)
     reading = tmp_path / "reading"
     github_has(github_state, comment(501), hang=str(reading))
     stopper = threading.Thread(target=stop_once_there, args=(reading,), daemon=True)
     stopper.start()
     started = time.monotonic()
-    run = run_drafting(conn, [thread(501)])
+    run = scenario.run(WORK, worker=sends_drafts([thread(501)]))
     stopper.join()
     assert time.monotonic() - started < 50, "the read was not cut short"
-    assert run["status"] == "done"
-    [draft] = all_drafts(conn)
+    assert run.status == "done"
+    [draft] = all_drafts(scenario.conn)
     assert draft.status is DraftStatus.UNCHECKED
     assert signal.getsignal(signal.SIGTERM) is signal.SIG_DFL
 
@@ -127,26 +118,27 @@ def stop_once_there(path: Path) -> None:
 
 @pytest.mark.usefixtures("git_pool")
 def test_a_later_runs_draft_supersedes_an_unsent_one_for_the_same_thread(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path
+    scenario: Scenario, github_state: Path
 ) -> None:
-    approving(canopy_env)
+    scenario.configures("private", trust=APPROVE)
     github_has(github_state, comment(501), comment(503, "PRRT_1", "bob"), comment(502, "PRRT_2"))
-    run_drafting(conn, [thread(501), thread(502), {"on": "pr", "pr": PR, "text": "One."}])
-    later = run_drafting(conn, [thread(503, text="Renamed, again."), {"on": "pr", "pr": PR, "text": "Two."}], *RESUME)
-    old_reply, untouched, old_body, reply, body = all_drafts(conn)
+    scenario.run(WORK, worker=sends_drafts([thread(501), thread(502), {"on": "pr", "pr": PR, "text": "One."}]))
+    again = [thread(503, text="Renamed, again."), {"on": "pr", "pr": PR, "text": "Two."}]
+    later = scenario.run(RESUME, worker=sends_drafts(again))
+    old_reply, untouched, old_body, reply, body = all_drafts(scenario.conn)
     assert (old_reply.status, old_reply.superseded_by) == (DraftStatus.SUPERSEDED, reply.id)
-    assert old_reply.why == f"superseded by run {later['id']}'s draft 1"
+    assert old_reply.why == f"superseded by run {later.id}'s draft 1"
     assert untouched.status is DraftStatus.WAITING
     assert (old_body.status, old_body.superseded_by) == (DraftStatus.SUPERSEDED, body.id)
     assert (reply.status, body.status) == (DraftStatus.WAITING, DraftStatus.WAITING)
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_a_run_drafts_once_for_a_thread(canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path) -> None:
-    approving(canopy_env)
+def test_a_run_drafts_once_for_a_thread(scenario: Scenario, github_state: Path) -> None:
+    scenario.configures("private", trust=APPROVE)
     github_has(github_state, comment(501), comment(503, "PRRT_1", "bob"))
-    run_drafting(conn, [thread(501), thread(503)])
-    first, second = all_drafts(conn)
+    scenario.run(WORK, worker=sends_drafts([thread(501), thread(503)]))
+    first, second = all_drafts(scenario.conn)
     assert first.status is DraftStatus.WAITING
     assert (second.status, second.why) == (
         DraftStatus.REFUSED,
@@ -155,14 +147,14 @@ def test_a_run_drafts_once_for_a_thread(canopy_env: CanopyEnv, conn: sqlite3.Con
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_a_ticket_draft_supersedes_the_ticket_draft_before_it(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path
-) -> None:
-    approving(canopy_env, '\n[connect.sources.issues]\nkind = "tracker"\npost_cmd = "canopy-post-github"\n')
+def test_a_ticket_draft_supersedes_the_ticket_draft_before_it(scenario: Scenario, github_state: Path) -> None:
+    conn = scenario.conn
+    issues = {"kind": "tracker", "post_cmd": "canopy-post-github"}
+    scenario.configures("private", trust=APPROVE, connect={"sources": {"issues": issues}})
     github_has(github_state)
     ticket = {"on": "ticket", "url": "https://github.com/acme/api/issues/1", "text": "Which base?"}
-    run_drafting(conn, [ticket])
-    run_drafting(conn, [{**ticket, "text": "Which base, main or next?"}], *RESUME)
+    scenario.run(WORK, worker=sends_drafts([ticket]))
+    scenario.run(RESUME, worker=sends_drafts([{**ticket, "text": "Which base, main or next?"}]))
     old, new = all_drafts(conn)
     assert (old.kind, old.status, old.superseded_by) == (DraftKind.TICKET, DraftStatus.SUPERSEDED, new.id)
     assert new.status is DraftStatus.WAITING
@@ -171,28 +163,25 @@ def test_a_ticket_draft_supersedes_the_ticket_draft_before_it(
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_drafts_on_a_merged_pr_wait_on_nobody(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path
-) -> None:
-    approving(canopy_env)
+def test_drafts_on_a_merged_pr_wait_on_nobody(scenario: Scenario, github_state: Path) -> None:
+    conn, env = scenario.conn, scenario.env
+    scenario.configures("private", trust=APPROVE)
     github_has(github_state, comment(501))
-    run_drafting(conn, [thread(501)])
+    scenario.run(WORK, worker=sends_drafts([thread(501)]))
     assert len(drafted.waiting(conn)) == 1
     state = json.loads(github_state.read_text())
     state["prs"][PR]["pr"] = {"state": "merged"}
     github_state.write_text(json.dumps(state))
-    found = observe.read(
-        conn, load(canopy_env.root, canopy_env.user_file), procs.SubprocessRunner(), [PR], logs.for_tick(None)
-    )
+    found = observe.read(conn, load(env.root, env.user_file), procs.SubprocessRunner(), [PR], logs.for_tick(None))
     assert found.whole == {PR}
     assert drafted.waiting(conn) == []
 
 
 @pytest.mark.usefixtures("git_pool")
 def test_waiting_drafts_are_the_operators_item_alone(scenario: Scenario, github_state: Path) -> None:
-    scenario.configures("private", trust={"review_replies": "approve"})
+    scenario.configures("private", trust=APPROVE)
     github_has(github_state, comment(501))
-    run_drafting(scenario.conn, [thread(501)])
+    scenario.run(WORK, worker=sends_drafts([thread(501)]))
     scenario.tick(*waits(KEY, rationale="waiting on review"))
     assert [(i.ticket_key, i.reason, i.repo) for i in attention.current(scenario.conn)] == [
         (KEY, "drafts_waiting", "repo")
@@ -232,13 +221,11 @@ def test_a_read_records_only_what_it_read_whole_and_passes_over_lines_it_cannot_
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_a_run_under_approve_keeps_its_diff_at_its_pushed_head(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path
-) -> None:
-    approving(canopy_env)
+def test_a_run_under_approve_keeps_its_diff_at_its_pushed_head(scenario: Scenario, github_state: Path) -> None:
+    scenario.configures("private", trust=APPROVE)
     github_has(github_state, comment(501))
-    run = run_drafting(conn, [thread(501)])
-    diff = review_diff.run_path_for(str(run["log_path"]), "repo")
+    run = scenario.run(WORK, worker=sends_drafts([thread(501)]))
+    diff = review_diff.run_path_for(str(run.row["log_path"]), "repo")
     assert diff.is_file()
     assert review_diff.read(diff) is not None
     head = review_diff.read_head(diff)
@@ -249,20 +236,20 @@ def test_a_run_under_approve_keeps_its_diff_at_its_pushed_head(
 @pytest.mark.usefixtures("git_pool")
 @pytest.mark.parametrize("write", ["keep_head", "keep"])
 def test_a_diff_that_cannot_be_kept_leaves_the_run_and_its_drafts_as_they_are(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, github_state: Path, write: str
+    scenario: Scenario, github_state: Path, write: str
 ) -> None:
-    approving(canopy_env)
+    scenario.configures("private", trust=APPROVE)
     github_has(github_state, comment(501))
     with mock.patch.object(review_diff, write, autospec=True, side_effect=OSError("No space left on device")):
-        run = run_drafting(conn, [thread(501)])
-    assert run["status"] == "done"
-    [draft] = drafts.of_run(conn, int(run["id"]))
+        run = scenario.run(WORK, worker=sends_drafts([thread(501)]))
+    assert run.status == "done"
+    [draft] = drafts.of_run(scenario.conn, run.id)
     assert draft.status is DraftStatus.WAITING
-    assert not review_diff.run_path_for(str(run["log_path"]), "repo").exists()
+    assert not review_diff.run_path_for(str(run.row["log_path"]), "repo").exists()
 
 
 @pytest.mark.usefixtures("git_pool")
-def test_a_run_under_post_keeps_no_diff(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> None:
-    posting(canopy_env)
-    run = run_drafting(conn, [])
-    assert not review_diff.run_path_for(str(run["log_path"]), "repo").exists()
+def test_a_run_under_post_keeps_no_diff(scenario: Scenario) -> None:
+    scenario.configures("private", trust={"review_replies": "post"})
+    run = scenario.run(WORK, worker=sends_drafts([]))
+    assert not review_diff.run_path_for(str(run.row["log_path"]), "repo").exists()

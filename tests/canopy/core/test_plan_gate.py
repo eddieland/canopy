@@ -15,12 +15,9 @@ from canopy.core import conversation, db, plans
 from canopy.core.vocab import PlanSetting, PlanStatus, ResumeReason, RunKind, RunStatus
 from tests.canopy.helpers import (
     KEY,
-    LABEL,
     approve_policy,
     context,
-    dispatch_in_tick,
     in_run,
-    last_run,
     operator,
     plan_file,
     planner_does,
@@ -30,7 +27,6 @@ from tests.canopy.helpers import (
 from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import CanopyEnv, GitPool
 
-PLAN = ("--label", LABEL, "--kind", "plan")
 TEXT = "# Plan for PROJ-1\n\n## repo\n\nAdd the button.\n"
 # `canopy plan KEY`, asking for a plan, and its two flags.
 VERBS: tuple[tuple[str, ...], ...] = ((), ("--skip",), ("--approve",))
@@ -150,9 +146,8 @@ def test_the_operators_plan_verbs_refuse_inside_a_run(
 def test_the_plan_verbs_refuse_while_a_plan_run_is_running(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.configures("workspace", policy=APPROVE)
     planned(scenario)
-    # A plan run still running: dispatched, its worker not yet started.
-    assert dispatch_in_tick(scenario.conn, *PLAN).code == 0
-    running = last_run(scenario.conn)["id"]
+    # A plan run still running, its planner held at work.
+    running = scenario.starts(dispatches(kind=RunKind.PLAN)).id
     for flags in VERBS:
         refused = scenario.operator("plan", KEY, *flags, code=1)
         reason = f"plan run {running} for {KEY} is running; wait for it to end, then decide on its plan"
@@ -187,9 +182,8 @@ def test_start_with_plan_refuses_a_ticket_with_a_branch(
 
 def test_start_with_plan_refuses_while_a_plan_run_is_running(scenario: Scenario, git_pool: GitPool) -> None:
     scenario.configures("workspace", policy=APPROVE)
-    # A plan run still running: dispatched, its worker not yet started.
-    assert dispatch_in_tick(scenario.conn, *PLAN).code == 0
-    running = last_run(scenario.conn)["id"]
+    # A plan run still running, its planner held at work.
+    running = scenario.starts(dispatches(kind=RunKind.PLAN)).id
     refused = scenario.operator("start", KEY, "--plan", code=1)
     assert f"start refused (bad_plan): plan run {running} for {KEY} is running" in refused.err
     assert conversation.start_of(scenario.conn, KEY) is None

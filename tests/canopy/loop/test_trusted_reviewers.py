@@ -7,7 +7,6 @@ from typing import cast
 
 import pytest
 
-from canopy.cli.main import main
 from canopy.core import conversation, db
 from canopy.core.vocab import ResumeReason, RunKind
 from canopy.loop.state import OverseerState, TicketState
@@ -55,7 +54,7 @@ def test_the_overseer_reads_the_trusted_list_and_a_public_tickets_operator_messa
     assert "operator" not in tickets["PROJ-2"]
 
     # Handled, the message moves the cursor past it, and the ticket has nothing new from the operator.
-    assert main(["ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={message}"]) == 0
+    scenario.overseer("ticket", "set", KEY, "--repo", "repo", "--cursor", f"message={message}")
     ticket = present(db.get_ticket(conn, KEY))
     assert conversation.operator_section(conn, ticket) is None
 

@@ -125,15 +125,12 @@ def test_detached_run_finishes_on_its_own(scenario: Scenario, git_pool: GitPool,
     assert not lifelock_left(run.row)
 
 
-def test_capacity_guard(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_capacity_guard(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
     scenario.configures(capacity={"max_workers": 1})
     scenario.starts()
-    capsys.readouterr()
-    assert scenario.refuses(dispatches("PROJ-2")) == [("refused:capacity", "1 of 1 workers are running")]
-    # What `canopy dispatch` printed, which the scenario leaves to the test's own output.
-    assert "dispatch refused (capacity): 1 of 1 workers are running" in capsys.readouterr().err
+    refused = scenario.refuses(dispatches("PROJ-2"))
+    assert refused == [("refused:capacity", "1 of 1 workers are running")]
+    assert "dispatch refused (capacity): 1 of 1 workers are running" in refused.printed.err
     assert sum(s["status"] == "leased" for s in pool(treehouse_state)) == 1
     assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 1
 
@@ -144,26 +141,9 @@ def test_one_worker_per_ticket(scenario: Scenario, git_pool: GitPool) -> None:
 
 
 @pytest.mark.parametrize("slug", ["Add", "a_b", "-a", "a-", "a--b", "a" * 41, "a/b", "a\n"])
-def test_bad_slugs_are_usage_errors(canopy_env: CanopyEnv, conn: sqlite3.Connection, slug: str) -> None:
-    with in_tick(conn):
-        assert (
-            main(
-                [
-                    "dispatch",
-                    "PROJ-1",
-                    "--repo",
-                    "repo",
-                    "--label",
-                    "agent-ready-tester",
-                    "--kind",
-                    "implement",
-                    "--slug",
-                    slug,
-                ],
-                runner=InlineRunner(),
-            )
-            == 2
-        )
+def test_bad_slugs_are_usage_errors(scenario: Scenario, slug: str) -> None:
+    scenario.overseer(*dispatches(slug=slug)[1:], code=2)
+    assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0
 
 
 @pytest.mark.parametrize("mode", ["live", "dry run"])
@@ -206,23 +186,12 @@ def test_unauthorized_is_checked_before_the_other_guards(scenario: Scenario, tre
 
 @pytest.mark.parametrize("mode", ["live", "dry run"])
 def test_label_matches_case_insensitively_and_records_the_configured_spelling(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    conn: sqlite3.Connection,
-    mode: str,
+    scenario: Scenario, git_pool: GitPool, mode: str
 ) -> None:
     # GitHub labels are case-insensitive, so an overseer that reads `Agent-Ready-Tester` has read the configured label.
-    with in_tick(conn, dry_run=mode == "dry run") as tick_id:
-        assert (
-            main(
-                ["dispatch", "PROJ-1", "--repo", "repo", "--label", "Agent-Ready-TESTER", "--kind", "implement"],
-                runner=InlineRunner(),
-            )
-            == 0
-        )
-        [(action, rationale)] = decisions(conn, tick_id)
-        assert action == "dispatch:implement"
-        assert rationale.endswith("; label agent-ready-tester")
+    ticked = scenario.tick(dispatches(label="Agent-Ready-TESTER"), dry_run=mode == "dry run")
+    assert ticked.actions == ["queried", "dispatch:implement"]
+    assert ticked.decisions[1].rationale.endswith("; label agent-ready-tester")
 
 
 def test_stale_worker_prompt_override_is_refused(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
