@@ -344,3 +344,8 @@ def test_memory_search_finds_what_a_note_says_as_the_cli_does(backend: Backend) 
     billing = c.get("/api/memory/search", params={"q": "billing"}).json()["entries"]
     assert sorted(m["scope"] for m in billing) == ["lesson", "proposal", "proposal"]
     assert c.get("/api/memory/search", params={"q": "billing", "notes": "true"}).json() == {"entries": []}
+    # With every, only what holds each word: ABC-100's notes say checkout and cache, but none says both.
+    either = c.get("/api/memory/search", params={"q": "checkout cache", "notes": "true"}).json()["entries"]
+    assert sorted(m["id"] for m in either) == [2, 3]
+    every = {"q": "checkout cache", "notes": "true", "every": "true"}
+    assert c.get("/api/memory/search", params=every).json() == {"entries": []}
