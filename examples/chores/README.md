@@ -4,8 +4,8 @@ What engineers may want to use chores for, with worked examples. `build-health.m
 `canopy-health.md`, `canopy-efficiency.md`, and `memory-tickets.md` in this directory are the prompts that ship; the
 rest are ideas to write your own from. The rules are in DESIGN §19.
 
-`canopy chore install <name>` sets up one of the five in the workspace you run it in. It copies the prompt to
-`~/.config/canopy/chores/<name>.md` and writes the `[chores.<name>]` table from `<name>.toml` here to the workspace's
+`canopy chore install <name>` sets up one of the five in the workspace you run it in. It copies the prompt to the
+workspace's `.canopy/chore-prompts/<name>.md` and writes the `[chores.<name>]` table from `<name>.toml` here to its
 private config, `cwd` set to the workspace root where the chore reads canopy's journal, then prints what is left to do,
 such as an agent to define. The command owns both: running it again, as after an upgrade, replaces them with the
 shipped ones, so an edit to either is lost. Steer an installed chore with `canopy reply` notes, which survive it, or

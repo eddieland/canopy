@@ -1,8 +1,11 @@
 """`canopy chore install`: one of the example chores canopy ships, set up for the operator (DESIGN §19).
 
 An example is a prompt, `<name>.md`, and its config table, `<name>.toml`, in `examples/chores/`. Installing one copies
-the prompt into the user config directory's `chores/`, and writes the table to the workspace's private file, with
-`prompt` naming the copy and `cwd`, where the example has one, the workspace root. The command owns both: installing
+the prompt into the workspace's state directory, `chore-prompts/<name>.md`, and writes the table to the workspace's
+private file, with `prompt` naming the copy and `cwd`, where the example has one, the workspace root. Both are the
+workspace's own, so another workspace's copy of the same example is filled in apart from it. The state directory is the
+operator's alone, as a prompt file must be (TRUST_MODEL T7), and the copy is not in `chores/`, under which a chore with
+no `cwd` runs. The command owns both: installing
 again replaces the prompt and the whole `[chores.<name>]` table with the shipped ones, so an upgraded canopy's example
 replaces the old, and an edit to either is lost. Every other line of the private file stays as it was, or nothing is
 written.
@@ -32,6 +35,8 @@ if TYPE_CHECKING:
 
     from canopy.core.workspace import Workspace
 
+#: The directory of the state directory installed prompts are copied into.
+PROMPTS_DIR = "chore-prompts"
 #: The comment above an installed table, which says who owns it.
 MARKER = "# Written by `canopy chore install {name}`, which replaces this table whole when run again."
 # A line that starts a table or an array of tables, and so ends the one before it.
@@ -78,7 +83,7 @@ def available() -> list[str]:
 def install(ws: Workspace, name: str) -> Installed:
     """Install example chore `name` in `ws`: its prompt and its table, each replacing what was there.
 
-    The prompt goes in the user config directory's `chores/`, the table in the workspace's private file.
+    The prompt goes in the workspace's state directory, the table in its private file.
 
     Returns:
         What was written, and what the operator still has to do.
@@ -107,7 +112,7 @@ def install(ws: Workspace, name: str) -> Installed:
             f"your chores are in {config.user_config_path()}, and a chore in {private} would hide them all; move them "
             "there first"
         )
-    prompt = config.user_config_dir() / "chores" / f"{name}.md"
+    prompt = ws.state_dir / PROMPTS_DIR / f"{name}.md"
     table = dict(tomllib.loads(shipped_text)["chores"][name])
     table["prompt"] = str(prompt)
     if "cwd" in table:
@@ -116,8 +121,8 @@ def install(ws: Workspace, name: str) -> Installed:
     new_text, replaced = _with_table(old_text, name, _render(name, table))
     _check(private, old, new_text, name, table)
     replaced = replaced or prompt.exists()
-    prompt.parent.mkdir(parents=True, exist_ok=True)
-    prompt.write_text((resources.example_chores_dir() / f"{name}.md").read_text(encoding="utf-8"), encoding="utf-8")
+    prompt.parent.mkdir(mode=0o700, exist_ok=True)
+    logs.write_private(prompt, (resources.example_chores_dir() / f"{name}.md").read_text(encoding="utf-8"))
     _write(private, new_text)
     return Installed(name, prompt, private, replaced, _next_steps(shipped_text))
 

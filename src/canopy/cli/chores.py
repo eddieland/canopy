@@ -138,9 +138,9 @@ def cmd_chore_try(click_ctx: click.Context, name: str, context: str | None, *, n
 def cmd_chore_install(name: str | None) -> int:
     """Set up example chore NAME, one canopy ships, in this workspace; with no NAME, list them.
 
-    The prompt goes in the user config directory's chores/ and the [chores.NAME] table in the workspace's private
-    config. The command owns both: running it again, as after upgrading canopy, replaces them with the shipped ones,
-    and an edit to either is lost. Answer a chore with `canopy reply chore:NAME` instead, which survives it.
+    The prompt goes in the workspace's .canopy/chore-prompts/ and the [chores.NAME] table in its private config. The
+    command owns both: running it again, as after upgrading canopy, replaces them with the shipped ones, and an edit
+    to either is lost. Answer a chore with `canopy reply chore:NAME` instead, which survives it.
     """
     if name is None:
         for example in install.available():

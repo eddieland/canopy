@@ -39,7 +39,7 @@ def test_install_writes_the_prompt_and_the_table_and_keeps_the_rest(
 ) -> None:
     canopy_env.write_private(PRIVATE)
     assert main(["chore", "install", "memory-tickets"]) == 0
-    prompt = canopy_env.home / ".config" / "canopy" / "chores" / "memory-tickets.md"
+    prompt = canopy_env.state_dir / "chore-prompts" / "memory-tickets.md"
     out = capsys.readouterr().out
     assert out.startswith(f"wrote {prompt}, and [chores.memory-tickets] in {canopy_env.private_file}\n")
     assert "define the canopy-memory-tickets agent" in out
@@ -49,6 +49,7 @@ def test_install_writes_the_prompt_and_the_table_and_keeps_the_rest(
         PRIVATE + "\n" + install.MARKER.format(name="memory-tickets") + "\n[chores.memory-tickets]\n"
     )
     assert canopy_env.private_file.stat().st_mode & 0o777 == 0o600
+    assert prompt.stat().st_mode & 0o777 == 0o600
     chore = config.load(canopy_env.root).chores["memory-tickets"]
     assert chore.prompt == prompt
     assert chore.cwd == canopy_env.root.absolute()
@@ -82,7 +83,7 @@ def test_install_refuses_to_hide_the_user_files_chores(
     assert main(["chore", "install", "build-health"]) == 1
     assert f"your chores are in {canopy_env.user_file}" in capsys.readouterr().err
     assert canopy_env.private_file.read_text() == PRIVATE
-    assert not (canopy_env.home / ".config" / "canopy" / "chores").exists()
+    assert not (canopy_env.state_dir / "chore-prompts").exists()
 
 
 @pytest.mark.parametrize(
@@ -99,7 +100,7 @@ def test_install_refuses_a_table_it_cannot_replace_and_writes_nothing(
     assert main(["chore", "install", "build-health"]) == 1
     assert "cannot replace [chores.build-health]" in capsys.readouterr().err
     assert canopy_env.private_file.read_text() == PRIVATE + form
-    assert not (canopy_env.home / ".config" / "canopy" / "chores").exists()
+    assert not (canopy_env.state_dir / "chore-prompts").exists()
 
 
 def test_install_lists_the_examples_and_refuses_an_unknown_one_a_missing_file_and_inside_runs(

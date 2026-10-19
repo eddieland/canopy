@@ -140,7 +140,7 @@ fi
 
 # The example chores ship in the wheel too: installing one copies its prompt and writes its table to the private file.
 canopy chore install build-health >/dev/null || fail "canopy chore install build-health failed"
-[ -s "$XDG_CONFIG_HOME/canopy/chores/build-health.md" ] || fail "canopy chore install did not copy the prompt"
+[ -s "$workspace/.canopy/chore-prompts/build-health.md" ] || fail "canopy chore install did not copy the prompt"
 grep -q '^\[chores\.build-health\]$' "$private" || fail "canopy chore install did not write the table to $private"
 
 # The migrations, prompts, agent definitions, skills, and example chores came from the wheel, not from this checkout.
