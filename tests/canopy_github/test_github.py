@@ -138,7 +138,14 @@ class Fake:
             pull = self.pull_by_node(variables["pr"])
             if any(r.author == self.viewer and r.state == "PENDING" for r in pull.reviews):
                 return {"errors": [{"message": "User can only have one pending review per pull request"}]}
-            review = Review(node=f"PRR_{self.new_id()}", id=self.next_id, author=self.viewer, state="PENDING", at=None)
+            review = Review(
+                node=f"PRR_{self.new_id()}",
+                id=self.next_id,
+                author=self.viewer,
+                state="PENDING",
+                body=variables.get("body") or "",
+                at=None,
+            )
             pull.reviews.append(review)
             node = {"id": review.node, "fullDatabaseId": str(review.id)}
             return {"data": {"addPullRequestReview": {"pullRequestReview": node}}}
@@ -548,6 +555,37 @@ def test_drafts_post_as_one_comment_review(github: tuple[Fake, str]) -> None:
     assert fake.ops().count("Submit") == 1
 
 
+def test_staged_drafts_are_left_in_a_pending_review_for_the_operator_to_submit(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    request = {
+        "pr": PR,
+        "submit": False,
+        "body": "Thanks, all done.",
+        "replies": [{"comment": 501, "text": "Renamed."}, {"comment": 503, "text": "Kept it."}],
+    }
+    code, lines, _ = send(url, request)
+    assert code == 0
+    review = fake.pulls["acme", "api", 7].reviews[-1]
+    assert (review.author, review.state, review.body) == ("me", "PENDING", "Thanks, all done.")
+    threads = fake.pulls["acme", "api", 7].threads
+    assert [threads[0].comments[-1].body, threads[1].comments[-1].body] == ["Renamed.", "Kept it."]
+    assert all(t.comments[-1].review == review.id for t in threads)
+    assert [line["kind"] for line in lines] == ["as", "pending", "comment", "comment", "end"]
+    assert lines[1] == {"kind": "pending", "review": review.node, "id": review.id}
+    assert lines[2]["id"] == threads[0].comments[-1].id
+    assert lines[-1] == {"kind": "end", "submitted": False, "staged": True}
+    assert "Submit" not in fake.ops()
+
+
+def test_a_staged_reply_that_fails_deletes_the_pending_review(github: tuple[Fake, str]) -> None:
+    fake, url = github
+    fake.fail["Reply"] = "refuse"
+    code, lines, _ = send(url, {"pr": PR, "submit": False, "replies": [{"comment": 501, "text": "Renamed."}]})
+    assert code == 1
+    assert lines[-1] == {"kind": "end", "submitted": False}
+    assert [r.state for r in fake.pulls["acme", "api", 7].reviews] == ["COMMENTED"]
+
+
 def test_a_body_alone_is_a_review_with_no_replies(github: tuple[Fake, str]) -> None:
     fake, url = github
     code, lines, _ = send(url, {"pr": PR, "body": "Fixed CI."})
@@ -755,6 +793,11 @@ def test_an_issue_comment_that_may_have_posted_prints_no_end(github: tuple[Fake,
         ({"pr": PR, "replies": "x"}, "replies must be a list"),
         ({"pr": PR, "body": "x" * 65537}, "longer than GitHub's"),
         ({"pr": PR, "body": "x", "delete_pending": 3}, "delete_pending must be"),
+        ({"pr": PR, "body": "x", "submit": "no"}, "submit must be true or false"),
+        (
+            {"pr": PR, "submit": False, "replies": [{"comment": 501, "text": "x", "reaction": "+1"}]},
+            "a staged review holds no reaction",
+        ),
     ],
 )
 def test_the_poster_refuses_what_it_cannot_use(github: tuple[Fake, str], request_: object, message: str) -> None:

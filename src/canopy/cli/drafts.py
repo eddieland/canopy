@@ -2,8 +2,9 @@
 
 A draft is a worker's text, written from coworkers' comments, until the operator sends it, so every command prints it
 as plain text with each character that hides text named. A draft is named as a review's finding is: its run,
-`run:ID`, and its number in that run. Sending names each draft with the hash of its text as `list` or `show` printed
-it, so what is posted is what the operator read. The commands that write refuse inside canopy's own ticks and runs.
+`run:ID`, and its number in that run. Sending, or staging in a pending review to submit on GitHub, names each draft
+with the hash of its text as `list` or `show` printed it, so what is posted is what the operator read. The commands that
+write refuse inside canopy's own ticks and runs.
 """
 
 from __future__ import annotations
@@ -30,7 +31,7 @@ CLI = "cli"
 _RUN_REF = re.compile(r"run:([1-9][0-9]*)")
 _WANTED = re.compile(r"([1-9][0-9]*)@([0-9a-f]+)")
 # The statuses `list` shows: what still waits on the operator, or on a read.
-_OPEN = (DraftStatus.WAITING, DraftStatus.UNCHECKED, DraftStatus.UNCONFIRMED)
+_OPEN = (DraftStatus.WAITING, DraftStatus.UNCHECKED, DraftStatus.UNCONFIRMED, DraftStatus.STAGED)
 
 
 def _run_ref(value: str) -> int:
@@ -38,6 +39,16 @@ def _run_ref(value: str) -> int:
     if found is None:
         raise click.BadParameter(f"{value!r} is not a run's ref, like run:12")
     return int(found.group(1))
+
+
+def _wanted(run_id: int, wanted: tuple[str, ...]) -> list[drafts_manage.Wanted]:
+    named: list[drafts_manage.Wanted] = []
+    for item in wanted:
+        found = _WANTED.fullmatch(item)
+        if found is None:
+            raise click.BadParameter(f"{item!r} is not N@HASH, as `canopy draft list` prints them")
+        named.append(drafts_manage.Wanted(run_id, int(found.group(1)), found.group(2)))
+    return named
 
 
 @click.group("draft", cls=Group)
@@ -178,12 +189,7 @@ def cmd_send(click_ctx: click.Context, run_ref: str, wanted: tuple[str, ...]) ->
     without saying whether it posted leaves its drafts unconfirmed until a read of the PR says.
     """
     run_id = _run_ref(run_ref)
-    named: list[drafts_manage.Wanted] = []
-    for item in wanted:
-        found = _WANTED.fullmatch(item)
-        if found is None:
-            raise click.BadParameter(f"{item!r} is not N@HASH, as `canopy draft list` prints them")
-        named.append(drafts_manage.Wanted(run_id, int(found.group(1)), found.group(2)))
+    named = _wanted(run_id, wanted)
     try:
         conversation.check_operator()
         ctx = open_context(click_ctx)
@@ -204,6 +210,42 @@ def cmd_send(click_ctx: click.Context, run_ref: str, wanted: tuple[str, ...]) ->
             "its PR settles it; canopy sends it no other time."
         )
     return 1 if sent.failed or sent.unconfirmed else 0
+
+
+@draft_group.command("stage")
+@click.argument("run_ref", metavar="run:ID")
+@click.argument("wanted", metavar="N@HASH...", nargs=-1, required=True)
+@click.pass_context
+def cmd_stage(click_ctx: click.Context, run_ref: str, wanted: tuple[str, ...]) -> int:
+    """Start a review on GitHub holding drafts of run:ID, for you to finish and submit there, each N@HASH as for send.
+
+    The drafts for one PR go into one pending review, which only you see until you submit it. A reaction is added only
+    by a send, so a draft that adds one is refused. Each read of the PR after you submit or delete the review settles
+    its drafts: sent, or waiting on you again.
+    """
+    run_id = _run_ref(run_ref)
+    named = _wanted(run_id, wanted)
+    try:
+        conversation.check_operator()
+        ctx = open_context(click_ctx)
+        log = logs.for_tick(None)
+        staged = drafts_manage.stage(ctx.conn, ctx.config, ctx.runner, named, channel=CLI, log=log)
+    except conversation.Refused as r:
+        raise CliError(f"stage refused ({r.guard}): {r.reason}") from None
+    attention.write(ctx, log)
+    for pr in dict.fromkeys(d.pr_url for d in staged.staged):
+        numbers = ", ".join(str(d.number) for d in staged.staged if d.pr_url == pr)
+        click.echo(f"Staged run {run_id}'s drafts {numbers} in a review on {pr}; finish it at {pr}/files")
+    for draft in staged.already:
+        click.echo(f"Run {run_id}'s draft {draft.number} was sent already: {draft.sent_url}")
+    for draft, why in staged.failed:
+        click.echo(f"Run {run_id}'s draft {draft.number} was not staged: {why}")
+    for draft in staged.unconfirmed:
+        click.echo(
+            f"Run {run_id}'s draft {draft.number} may have been staged: the post ended without saying. A read of its "
+            "PR settles it."
+        )
+    return 1 if staged.failed or staged.unconfirmed else 0
 
 
 @draft_group.command("settle")
@@ -235,8 +277,10 @@ def _print(conn: sqlite3.Connection, draft: records.Draft) -> None:
         case DraftKind.TICKET:
             where = f"a comment on {draft.ticket_key}'s ticket, {draft.issue_url}"
     click.echo(f"\nrun:{draft.run_id} {draft.number}  {draft.status}  {where}")
-    if draft.why:
-        click.echo(f"  {draft.why}")
+    staged = f"in the review you staged; submit or delete it at {draft.pr_url}/files"
+    note = staged if draft.status is DraftStatus.STAGED else draft.why
+    if note:
+        click.echo(f"  {note}")
     if draft.kind is DraftKind.THREAD and draft.thread_id is not None:
         for c in records.fetch_all(
             conn,

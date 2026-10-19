@@ -58,15 +58,13 @@ Sending is the operator's act, from the web UI or `canopy draft`, through one fu
 is refused as `inside_run` inside a tick or a run: an agent that could send a draft could post as the operator. A send
 names the text the operator last saw, and every check runs before anything posts. It refuses a draft that is
 unchecked, superseded, dropped, refused, or of unknown outcome; one whose text changed since the operator saw it; and
-one whose thread has a comment newer than the draft, other than the operator's own through canopy. That refusal names
-the new comments, so the operator reads them before sending again.
+one whose thread has a comment newer than the draft, other than the operator's own through canopy.
 
 What reaches GitHub is the text, verbatim, with no marks. The drafts sent together for one PR are one comment review, so
 a reviewer gets one notification. Nothing canopy sends resolves a thread, approves, or requests changes: that stays the
 reviewer's, and is what §6's "never submit a PR review" means. A draft is posted at most once. A post that ends without
-saying whether it submitted is never sent again until a whole read, or the operator, settles it. Each sent draft records
-its comment, the run that drafted it, and whether the operator edited it. Garbage collection (§26) deletes no draft,
-since a sent one is how canopy knows its comment.
+saying whether it submitted is never sent again until a whole read, or the operator, settles it. Garbage collection (§26)
+deletes no draft, since a sent one is how canopy knows its comment.
 
 A sent reply carries no mark and is by the operator's login, so the loop would read it as new review feedback, or as an
 authorized reply; canopy knows it instead by the id the post returned. The state block lists, per PR, the comments the
@@ -75,26 +73,30 @@ operator sent through canopy as neither review feedback nor a go-ahead, and the 
 The harness raises `drafts_waiting` (§14), the operator's alone, for each unit or ticket with a draft to send, until
 each is sent, dropped, or superseded, or the PR closes. It says when the threads could not be read, and holds nothing.
 
+In place of a send, after the same checks, the operator may stage a PR's drafts: canopy opens one pending review
+holding them, with no reaction, which GitHub cannot keep pending, and never submits it; the operator does, on GitHub. A
+whole read settles a staged draft: sent once its review is submitted, dropped if its reply was taken out first, waiting
+again if the review is gone. Its reply's id is the operator's from the start, so the loop never reads their words as
+feedback. While a PR holds one, canopy posts nothing else on it.
+
 ### Reactions
 
 A thread's draft may stage a reaction, one of the eight GitHub offers, on the review comment it names, beside its reply
 or alone: a `+1` on a fixed nit says what "Done." would. It is part of the draft's words: the operator sets, changes, or
 clears it as they edit, and a send names it with the text. A send adds its reactions first, and opens no review for
-reactions alone. GitHub keeps one reaction of a kind a person, so one a failed send added stays, the draft says so, and
-sending again adds no second. Nothing canopy reads gives a reaction meaning, so a sent one is neither feedback nor a
-go-ahead.
+reactions alone, and sending again adds no second. Nothing canopy reads gives a reaction meaning, so a sent one is
+neither feedback nor a go-ahead.
 
 ### On the PR's diff
 
 The operator reads each draft under its thread, on the diff the run pushed (§8 step 5), told when the PR has moved on.
-A draft and a thread are untrusted text and are shown as text, never Markdown, every hidden character named (§28); a
-comment's `<details>` block folds under its summary, as GitHub shows it, and says while closed when it hides a character.
+A draft and a thread are untrusted text and are shown as text, never Markdown, every hidden character named (§28).
 
 ### canopy's GitHub program
 
 `packages/canopy-github` is a program of its own, which the harness may not import (§5). Its reader reads a PR's reviews
-and threads (§30); its poster posts one PR's drafts as one review, or one ticket's comment, and reports whether it
-submitted.
+and threads (§30); its poster posts or stages one PR's drafts as one review, or one ticket's comment, and
+reports whether it submitted.
 
 The program, never the harness, reads the host from the PR's URL and uses the token `gh` holds for it, so GitHub
 Enterprise works as github.com does and the harness never holds a token (TRUST_MODEL T2). A URL is a worker's word, so

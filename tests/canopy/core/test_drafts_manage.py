@@ -1,4 +1,4 @@
-"""The operator's verbs on drafts (DESIGN §29, Sending): edit, drop, send, and settle, through `canopy draft`."""
+"""The operator's verbs on drafts (DESIGN §29, Sending): edit, drop, send, stage, and settle, through `canopy draft`."""
 
 from __future__ import annotations
 
@@ -391,3 +391,127 @@ def test_the_next_resume_is_told_what_the_operator_sent(scenario: Scenario, gith
         f"The operator already sent these through canopy, unmarked, as their own: {PR}: comments "
         f"{sent.sent_comment_id}, reviews {sent.sent_review_id}." in text
     )
+
+
+def on_github(state: Path, review_id: int, *, then: str) -> None:
+    """The operator acts on their staged review on GitHub: `submit` it, `delete` it, or take its first reply `out`."""
+    found = state_of(state)
+    lines: list[dict[str, Any]] = found["prs"][PR]["reviews"]
+    mine = [line for line in lines if line.get("review") == review_id]
+    match then:
+        case "submit":
+            next(line for line in lines if line["item"] == "review" and line["id"] == review_id)["state"] = "commented"
+        case "delete":
+            lines[:] = [line for line in lines if line["id"] != review_id and line not in mine]
+        case "out":
+            lines.remove(mine[0])
+            next(line for line in lines if line["item"] == "review" and line["id"] == review_id)["state"] = "commented"
+        case _:
+            raise AssertionError(then)
+    state.write_text(json.dumps(found))
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_staged_drafts_wait_in_one_pending_review_until_the_operator_submits_it_on_github(
+    scenario: Scenario, github_state: Path, ctx: Context
+) -> None:
+    conn = scenario.conn
+    entries = [thread(501), thread(502, "answered", "Because."), {"on": "pr", "pr": PR, "text": "Done."}]
+    run_id = drafted_run(scenario, github_state, entries)
+    staged = scenario.operator("draft", "stage", f"run:{run_id}", *(hashed(conn, run_id, n) for n in (1, 2, 3)))
+    assert f"Staged run {run_id}'s drafts 1, 2, 3 in a review on {PR}; finish it at {PR}/files" in staged.out
+    [posted] = reads(github_state, "post")
+    assert posted == {
+        "pr": PR,
+        "delete_pending": None,
+        "body": "Done.",
+        "replies": [{"comment": 501, "text": "Renamed."}, {"comment": 502, "text": "Because."}],
+        "submit": False,
+    }
+    first, second, body = all_drafts(conn)
+    assert {d.status for d in (first, second, body)} == {DraftStatus.STAGED}
+    review = first.pending_review_id
+    assert review is not None
+    assert first.sent_comment_id is not None
+    # The loop knows the replies as the operator's before they submit them.
+    assert drafts.sent_by_pr(conn)[PR]["comments"] == [first.sent_comment_id, second.sent_comment_id]
+    assert "3 in the review you staged there" in drafted.waiting(conn)[0].detail
+    assert "in the review you staged; submit or delete it" in scenario.operator("draft", "list").out
+    refused = scenario.operator("draft", "edit", f"run:{run_id}", "1", "--text", "Other.", code=1)
+    assert "edit refused (staged)" in refused.err
+
+    drafted.reconcile(ctx, logs.for_tick(None))
+    assert {d.status for d in all_drafts(conn)} == {DraftStatus.STAGED}
+    on_github(github_state, review, then="submit")
+    drafted.reconcile(ctx, logs.for_tick(None))
+    first, second, body = all_drafts(conn)
+    assert {d.status for d in (first, second, body)} == {DraftStatus.SENT}
+    assert body.sent_review_id == review
+    assert first.sent_url == f"{PR}#discussion_r{first.sent_comment_id}"
+    assert drafted.waiting(conn) == []
+    assert len(reads(github_state, "post")) == 1
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_staged_review_deleted_on_github_leaves_its_drafts_waiting_to_send_again(
+    scenario: Scenario, github_state: Path, ctx: Context
+) -> None:
+    conn = scenario.conn
+    run_id = drafted_run(scenario, github_state, [thread(501)])
+    wanted = hashed(conn, run_id, 1)
+    scenario.operator("draft", "stage", f"run:{run_id}", wanted)
+    [draft] = all_drafts(conn)
+    on_github(github_state, present(draft.pending_review_id), then="delete")
+    drafted.reconcile(ctx, logs.for_tick(None))
+    [draft] = all_drafts(conn)
+    assert draft.status is DraftStatus.WAITING
+    assert draft.why == "the review you staged was deleted on GitHub"
+    assert (draft.pending_review, draft.sent_comment_id) == (None, None)
+    assert drafts.sent_by_pr(conn) == {}
+    scenario.operator("draft", "send", f"run:{run_id}", wanted)
+    assert reads(github_state, "post")[-1]["delete_pending"] is None
+    assert all_drafts(conn)[0].status is DraftStatus.SENT
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_reply_taken_out_of_the_staged_review_before_it_is_submitted_is_dropped(
+    scenario: Scenario, github_state: Path, ctx: Context
+) -> None:
+    conn = scenario.conn
+    run_id = drafted_run(scenario, github_state, [thread(501), thread(502)])
+    scenario.operator("draft", "stage", f"run:{run_id}", hashed(conn, run_id, 1), hashed(conn, run_id, 2))
+    on_github(github_state, present(all_drafts(conn)[0].pending_review_id), then="out")
+    drafted.reconcile(ctx, logs.for_tick(None))
+    first, second = all_drafts(conn)
+    assert first.status is DraftStatus.DROPPED
+    assert first.why == "taken out of the review you staged before you submitted it"
+    assert second.status is DraftStatus.SENT
+    assert drafts.sent_by_pr(conn)[PR]["comments"] == [second.sent_comment_id]
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_nothing_else_is_sent_or_staged_on_a_pr_while_it_holds_a_staged_review(
+    scenario: Scenario, github_state: Path
+) -> None:
+    conn = scenario.conn
+    run_id = drafted_run(scenario, github_state, [thread(501), thread(502)])
+    first = hashed(conn, run_id, 1)
+    scenario.operator("draft", "stage", f"run:{run_id}", first)
+    for verb, wanted in (("send", hashed(conn, run_id, 2)), ("stage", hashed(conn, run_id, 2)), ("send", first)):
+        refused = scenario.operator("draft", verb, f"run:{run_id}", wanted, code=1)
+        assert f"{verb} refused (staged)" in refused.err
+        assert "submit or delete it on GitHub" in refused.err
+    assert len(reads(github_state, "post")) == 1
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_tickets_draft_or_a_reaction_not_yet_added_is_not_staged(scenario: Scenario, github_state: Path) -> None:
+    conn = scenario.conn
+    ticket = {"on": "ticket", "url": ISSUE, "text": "Which base should this target?"}
+    run_id = drafted_run(scenario, github_state, [ticket, thread(501)], TRACKER_POSTS)
+    refused = scenario.operator("draft", "stage", f"run:{run_id}", hashed(conn, run_id, 1), code=1)
+    assert "stage refused (not_pr)" in refused.err
+    scenario.operator("draft", "edit", f"run:{run_id}", "2", "--react", "+1")
+    refused = scenario.operator("draft", "stage", f"run:{run_id}", hashed(conn, run_id, 2), code=1)
+    assert "stage refused (reaction)" in refused.err
+    assert reads(github_state, "post") == []

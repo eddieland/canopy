@@ -4,22 +4,28 @@ On stdin, one JSON object: one PR's drafts, `{"pr": URL, "delete_pending": ID | 
 "replies": [{"comment": ID, "text": TEXT | null, "reaction": REACTION | null}, ...]}`, posted as one review: a pending
 review, each reply's text added to the thread of the review comment it names, the body as the review's, submitted as
 `COMMENT`; or one ticket's, `{"issue": URL, "ticket": KEY, "body": TEXT}`, posted as one comment on that issue, which
-must be numbered as the key is. `delete_pending` names a pending review an earlier post left, which is deleted first,
-and only if it is still pending, on that PR, and the poster's own. A reply's `reaction`, one of `+1`, `-1`, `laugh`,
-`confused`, `heart`, `hooray`, `rocket`, and `eyes`, is added to the comment it names before the review is opened; a
-reply with a reaction and no text adds the reaction alone, and a PR's drafts that are all such open no review.
+must be numbered as the key is. A PR's drafts with `"submit": false` are staged instead: the pending review is opened
+with the body as its own and each reply added, and left for the operator to submit on GitHub. A staged review holds no
+reaction, since GitHub has no pending one. `delete_pending` names a pending review an earlier post left, which is
+deleted first, and only if it is still pending, on that PR, and the poster's own. A reply's `reaction`, one of `+1`,
+`-1`, `laugh`, `confused`, `heart`, `hooray`, `rocket`, and `eyes`, is added to the comment it names before the review
+is opened; a reply with a reaction and no text adds the reaction alone, and a PR's drafts that are all such open no
+review.
 
 On stdout, one JSON line each: `as`, the login it posts as; for a PR, `reaction` for each reaction added (the comment,
 the reaction, and the comment's URL), then `pending`, the pending review's node id and its id, once it has one; once it
 is submitted, `comment` for each reply (the comment it answered, the new comment's id and URL) and `review` (its id and
-URL); for an issue, `comment`; last, `end`, saying whether it submitted: `"submitted": true` once the review or the
-issue comment is submitted, or once every reaction is added when there is nothing else to post. `"submitted": false` is
-printed only when nothing but the reactions its `reaction` lines name was posted, with `pending` naming a pending review
-it could not delete; a pending review GitHub may have opened without saying so is looked for and deleted. No `end` line
+URL); once a staged review holds every reply, its `comment` lines; for an issue, `comment`; last, `end`, saying whether
+it submitted: `"submitted": true` once the review or the issue comment is submitted, or once every reaction is added
+when there is nothing else to post; `"submitted": false, "staged": true` once a staged review holds every reply.
+Otherwise `"submitted": false` is printed only when nothing but the reactions its `reaction` lines name was posted,
+with `pending` naming a pending review it could not delete; a pending review GitHub may have opened without saying so
+is looked for and deleted. No `end` line
 means the outcome is unknown: the submit may have reached GitHub. A reaction GitHub already holds is not added twice, so
 a reaction whose outcome is unknown is one to send again, never one that can post twice.
 
-It never approves, requests changes, resolves a thread, or deletes a review but the pending one it is handed.
+It never approves, requests changes, resolves a thread, or deletes a review but the pending one it is handed, or one it
+opened and could not fill.
 
 Exit codes: 0 posted; 1 GitHub refused, or the outcome is unknown, as the `end` line says; 2 stdin is not usable, `gh`
 holds no token for the host, or a reply names a comment the PR has no thread for, and nothing was posted.
@@ -96,8 +102,8 @@ query Review($id: ID!) {
 }
 """
 _ADD_REVIEW = """
-mutation AddReview($pr: ID!) {
-  addPullRequestReview(input: {pullRequestId: $pr}) { pullRequestReview { id fullDatabaseId } }
+mutation AddReview($pr: ID!, $body: String) {
+  addPullRequestReview(input: {pullRequestId: $pr, body: $body}) { pullRequestReview { id fullDatabaseId } }
 }
 """
 _REPLY = """
@@ -145,12 +151,13 @@ class Reply:
 
 @dataclass(frozen=True)
 class Review:
-    """One PR's drafts, to post as one comment review."""
+    """One PR's drafts, to post as one comment review, or with `submit` false to stage as a pending one."""
 
     pr: Ref
     delete_pending: str | None
     body: str | None
     replies: tuple[Reply, ...]
+    submit: bool = True
 
 
 @dataclass(frozen=True)
@@ -257,11 +264,17 @@ def parse_request(request: Mapping[str, object]) -> Review | IssueComment:
     body = request.get("body")
     if body is None and not replies:
         raise InputError("there is nothing to post: no body and no replies")
+    submit = request.get("submit", True)
+    if not isinstance(submit, bool):
+        raise InputError("submit must be true or false")
+    if not submit and any(r.reaction is not None for r in replies):
+        raise InputError("a staged review holds no reaction: GitHub has no pending one")
     return Review(
         pr=pr,
         delete_pending=pending,
         body=None if body is None else _text(body, "body"),
         replies=replies,
+        submit=submit,
     )
 
 
@@ -287,7 +300,7 @@ def _text(value: object, what: str) -> str:
 
 
 def post_review(client: Client, review: Review, login: str, out: Out) -> None:
-    """Post `review`'s drafts as one comment review, printing as the module says.
+    """Post `review`'s drafts as one comment review, or stage them as a pending one, printing as the module says.
 
     Raises:
         InputError: A reply names a comment the PR has no thread for, or the pending review to delete is not one.
@@ -311,26 +324,30 @@ def post_review(client: Client, review: Review, login: str, out: Out) -> None:
     if review.body is None and not replies:
         out.line({"kind": "end", "submitted": True})
         return
-    _submit(client, pr, pr_id, review.body, replies, login, out)
+    _submit(client, pr, pr_id, review, replies, login, out)
 
 
 def _submit(  # noqa: PLR0917  (what one review is posted from)
     client: Client,
     pr: Ref,
     pr_id: str,
-    body: str | None,
+    review: Review,
     replies: Sequence[tuple[int, str, str]],
     login: str,
     out: Out,
 ) -> None:
-    """Post `body` and `replies`, each a comment answered, its thread's node id, and the text, as one comment review.
+    """Post `review`'s body and `replies`, each a comment answered, its thread's node id, and the text, as one review.
+
+    The review is submitted as a comment, or, for `review.submit` false, left pending with the body as its own.
 
     Raises:
         UnknownOutcomeError: The submit may have reached GitHub.
         GitHubError: GitHub refused before anything of it could be seen; the pending review is deleted, or named.
     """
+    # A staged review keeps its body from the start, since the operator submits it on GitHub, not canopy.
+    opening = {"pr": pr_id, "body": None if review.submit else review.body}
     try:
-        added = obj(client.query(_ADD_REVIEW, {"pr": pr_id}).get("addPullRequestReview"), "addPullRequestReview")
+        added = obj(client.query(_ADD_REVIEW, opening).get("addPullRequestReview"), "addPullRequestReview")
         opened = obj(added.get("pullRequestReview"), "pullRequestReview")
         pending = _id(opened.get("id"), "pending review's id")
     except GitHubError as e:
@@ -350,8 +367,13 @@ def _submit(  # noqa: PLR0917  (what one review is posted from)
         # Nobody else sees a pending review or its replies, so a reply that failed posted nothing.
         _abandon(client, pending, out)
         raise
+    if not review.submit:
+        for line in posted:
+            out.line({"kind": "comment", **line})
+        out.line({"kind": "end", "submitted": False, "staged": True})
+        return
     try:
-        submit = client.query(_SUBMIT, {"review": pending, "body": body})
+        submit = client.query(_SUBMIT, {"review": pending, "body": review.body})
     except GitHubError as e:
         if not e.certain:
             raise UnknownOutcomeError(e) from e

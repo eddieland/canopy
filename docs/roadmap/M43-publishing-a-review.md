@@ -22,7 +22,7 @@ word".
 - canopy imports no GitHub client: the post goes through M53's `canopy-post-github`, a separate program canopy ships,
   which posts the approved text verbatim and returns what it made, so no agent writes the review. Open: whether canopy
   should only create a pending review for the operator to submit on GitHub themselves, so that submitting stays a
-  human's click.
+  human's click, as M53's drafts can be staged (DESIGN §29).
 - TRUST_MODEL §6 (a comment review of approved text only, as M53 changes it), T1, T5 (what a posted review says it is,
   with no bot identity, so it speaks in the operator's name), T6, and T8 (publishing from the web channel), and D114.
 - Open: whether a published review is followed on the next commit (M32's open question of a finding's identity across

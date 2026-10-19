@@ -8,11 +8,13 @@ export const MAX_DRAFT_CHARS = 4000
 
 /**
  * A draft's status chip's tone (ui/DESIGN.md, "A PR's threads"): one waiting on the operator, or that may have posted,
- * in the color of what waits on them; one refused in the failure color; one sending as running; the rest plain.
+ * or staged on GitHub for them to submit, in the color of what waits on them; one refused in the failure color; one
+ * sending as running; the rest plain.
  */
 export const DRAFT_TONE: Record<DraftStatus, Tone> = {
     waiting: 'blocked',
     unconfirmed: 'blocked',
+    staged: 'blocked',
     refused: 'failed',
     sending: 'running',
     unchecked: 'plain',
