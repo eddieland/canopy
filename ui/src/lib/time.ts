@@ -32,8 +32,32 @@ const STAMP = new Intl.DateTimeFormat(undefined, {
 
 /** An ISO time as a short local stamp, its month in the operator's language: `Oct 8 10:30`. */
 export function stamp(iso: string): string {
-    const parts = Object.fromEntries(STAMP.formatToParts(new Date(iso)).map((p) => [p.type, p.value]))
-    return `${parts['month'] ?? ''} ${parts['day'] ?? ''} ${parts['hour'] ?? ''}:${parts['minute'] ?? ''}`
+    const parts = stampParts(iso)
+    return `${parts.month ?? ''} ${parts.day ?? ''} ${clock(parts)}`
+}
+
+/**
+ * When something that ran ended, set after when it started: the local time alone when it ended the day it started
+ * (`06:59`), else the whole stamp (`Oct 9 01:10`).
+ */
+export function endStamp(started: string, ended: string): string {
+    const sameDay = new Date(started).toDateString() === new Date(ended).toDateString()
+    return sameDay ? clock(stampParts(ended)) : stamp(ended)
+}
+
+/** How long something ran, from its start to its end, in the CLI's largest whole unit, as an age is: `29m`. */
+export function lasted(started: string, ended: string): string {
+    return age(started, Date.parse(ended))
+}
+
+type StampParts = Partial<Record<Intl.DateTimeFormatPartTypes, string>>
+
+function stampParts(iso: string): StampParts {
+    return Object.fromEntries(STAMP.formatToParts(new Date(iso)).map((p) => [p.type, p.value]))
+}
+
+function clock(parts: StampParts): string {
+    return `${parts.hour ?? ''}:${parts.minute ?? ''}`
 }
 
 // One clock for every age on the page: it ticks every second while something reads it, so an age in seconds counts.

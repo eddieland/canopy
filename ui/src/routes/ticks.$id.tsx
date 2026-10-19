@@ -4,26 +4,22 @@ import { createFileRoute } from '@tanstack/react-router'
 import { ApiError } from '@/api/client'
 import { tickDetailQuery, tickTranscriptQuery } from '@/api/queries'
 import type { TickDetail, Transcript } from '@/api/types'
-import { Age } from '@/components/age'
-import { Copyable, CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { Decisions } from '@/components/decisions'
 import { Field, Fields } from '@/components/fields'
 import { OrderToggle } from '@/components/order-toggle'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
-import { Chip, RunDot, Word } from '@/components/status'
+import { Chip } from '@/components/status'
 import { TickOutputPanel } from '@/components/raw-output'
 import { TickSteps } from '@/components/tick-steps'
-import { Timestamp } from '@/components/timestamp'
 import { TranscriptPanel } from '@/components/transcript'
+import { WhenField } from '@/components/when-field'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { tickDescription } from '@/lib/descriptions'
 import { tickRef } from '@/lib/refs'
-import { RUN_TEXT } from '@/lib/run-state'
-import { tickId, tickState } from '@/lib/ticks'
+import { tickId } from '@/lib/ticks'
 import { RUN_TOKENS_TITLE, runTokens } from '@/lib/transcript'
-import { cn } from '@/lib/utils'
 import { None } from '@/components/none'
 
 /** One tick: the decisions it recorded, the overseer's transcript, and its output as written. */
@@ -94,38 +90,13 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                 {tickDescription(tick, decisions.length)}
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
+                {/* Its facts in the order a run's and a chore run's keep (ui/DESIGN.md, the detail skeleton): its
+                    state is the header's, its session the transcript's, its output's path the Output panel's. */}
                 <Panel>
-                    <PanelHeader label="Tick">
-                        <span
-                            className={cn(
-                                'flex items-center gap-1.5 font-mono text-xs',
-                                RUN_TEXT[tickState(tick.status)],
-                            )}
-                        >
-                            <RunDot state={tickState(tick.status)} />
-                            <Word word={tick.status} />
-                        </span>
-                    </PanelHeader>
+                    <PanelHeader label="Tick" />
                     <Fields>
-                        <Field label="started" mono>
-                            <span className="flex items-baseline gap-2">
-                                <Timestamp at={tick.started_at} />
-                                <Age at={tick.started_at} variant="ago" />
-                            </span>
-                        </Field>
-                        <Field label="ended" mono>
-                            {tick.ended_at === null ? 'still running' : <Timestamp at={tick.ended_at} />}
-                        </Field>
                         <Field label="summary">{tick.summary ? <RichText text={tick.summary} /> : <None />}</Field>
-                        <Field label="overseer" mono>
-                            {tick.session_id ? (
-                                <Copyable text={tick.session_id} label="session id">
-                                    session {tick.session_id}
-                                </Copyable>
-                            ) : (
-                                <None />
-                            )}
-                        </Field>
+                        <WhenField started={tick.started_at} ended={tick.ended_at} />
                         <Field label="spent" mono>
                             <Cost usd={tick.cost_usd} />
                             <span title={RUN_TOKENS_TITLE}>{runTokens(tick.new_tokens, tick.peak_context)}</span>
@@ -136,9 +107,6 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                             title="the version of canopy that ran this tick and recorded its decisions"
                         >
                             {tick.canopy_version ?? <None />}
-                        </Field>
-                        <Field label="output" mono title="the overseer's stdout and stderr: yours alone">
-                            {output === null ? <None /> : <CopyablePath path={output} label="output path" />}
                         </Field>
                     </Fields>
                 </Panel>
@@ -155,14 +123,8 @@ function Tick({ detail, transcript }: { detail: TickDetail; transcript: Transcri
                         <Decisions decisions={ordered('tick-decisions', decisionsOrder, decisions)} />
                     )}
                 </Panel>
-                {/* Its session id is the Tick panel's overseer field: said once. */}
-                <TranscriptPanel
-                    transcript={transcript}
-                    running={tick.status === 'running'}
-                    page="tick"
-                    session={false}
-                />
-                <TickOutputPanel id={tick.id} path={output} running={tick.status === 'running'} />
+                <TranscriptPanel transcript={transcript} running={tick.status === 'running'} page="tick" />
+                <TickOutputPanel id={tick.id} path={output} />
             </div>
         </>
     )

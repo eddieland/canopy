@@ -2,9 +2,11 @@ import { useQuery } from '@tanstack/react-query'
 import type { QueryKey, UseQueryOptions } from '@tanstack/react-query'
 import { Braces } from 'lucide-react'
 import { Fragment, useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { runOutputQuery, tickOutputQuery } from '@/api/queries'
 import type { RawOutput } from '@/api/types'
+import { CopyablePath } from '@/components/copy-button'
 import { Disclosure } from '@/components/disclosure'
 import { JsonTokens } from '@/components/json-text'
 import { Empty, Panel, PanelHeader, PanelScroll, PanelSkeleton } from '@/components/panel'
@@ -17,16 +19,19 @@ import { byteSize } from '@/lib/ticks'
 /**
  * A tick's overseer output as written (DESIGN §22): its stdout, a `--- stderr ---` line, and its stderr, the lines
  * the transcript leaves out included. Its JSON is one line an event, as written, until the operator turns on pretty,
- * which each tick's panel remembers (src/lib/pretty-output.ts). `path` is where the file is, or null when the tick kept
- * none: its overseer has not started, or never ran.
+ * which each tick's panel remembers (src/lib/pretty-output.ts). `path` is where the file is, named once, here, with its
+ * copy button; or null when the tick kept none (its overseer has not started, or never ran), and then there is no
+ * panel: the transcript, read from the same file, says why in its header.
  */
-export function TickOutputPanel({ id, path, running }: { id: number; path: string | null; running: boolean }) {
+export function TickOutputPanel({ id, path }: { id: number; path: string | null }) {
     const pretty = usePrettyOutput(id)
+    if (path === null) {
+        return null
+    }
     return (
         <OutputPanel
             query={tickOutputQuery(id)}
-            file={path}
-            none={running ? 'no output yet: the overseer has not started' : 'no output kept'}
+            file={<CopyablePath path={path} label="output path" />}
             whose="the overseer"
             written="stdout, then stderr"
             pretty={pretty}
@@ -48,7 +53,6 @@ export function RunOutputPanel({ id }: { id: number }) {
             query={runOutputQuery(id)}
             // Its path is the Run panel's log field, with its copy button: named once.
             file="the run’s log"
-            none="no log kept"
             whose="the run"
             written="its setup commands’ output, then the worker’s stdout and stderr"
             pretty={pretty}
@@ -61,12 +65,11 @@ export function RunOutputPanel({ id }: { id: number }) {
 /**
  * The end of a file of agent output as written, hidden until the operator shows it, so a page reads the file only when
  * asked; it opens at its end, where stderr is. All of it is agent output, rendered as text. `file` names it while
- * hidden, or is null when there is none to show.
+ * hidden.
  */
 function OutputPanel<K extends QueryKey>({
     query,
     file,
-    none,
     whose,
     written,
     pretty,
@@ -74,8 +77,7 @@ function OutputPanel<K extends QueryKey>({
     testId,
 }: {
     query: UseQueryOptions<RawOutput, Error, RawOutput, K>
-    file: string | null
-    none: string
+    file: ReactNode
     whose: string
     written: string
     pretty: boolean
@@ -83,7 +85,7 @@ function OutputPanel<K extends QueryKey>({
     testId: string
 }) {
     const [shown, setShown] = useState(false)
-    const { data } = useQuery({ ...query, enabled: shown && file !== null })
+    const { data } = useQuery({ ...query, enabled: shown })
     return (
         <Collapsible asChild open={shown} onOpenChange={setShown}>
             <Panel data-testid={testId}>
@@ -105,26 +107,20 @@ function OutputPanel<K extends QueryKey>({
                                 Pretty
                             </Toggle>
                         )}
-                        {file !== null && <Disclosure open={shown} what="output" />}
+                        <Disclosure open={shown} what="output" />
                     </span>
                 </PanelHeader>
-                {file === null ? (
-                    <Empty>{none}</Empty>
-                ) : (
-                    <>
-                        <CollapsibleContent>
-                            {data === undefined ? (
-                                <PanelSkeleton />
-                            ) : (
-                                <Body output={data} pretty={pretty} whose={whose} testId={testId} />
-                            )}
-                        </CollapsibleContent>
-                        {!shown && (
-                            <p className="px-3 py-2 font-mono text-xs text-muted-foreground">
-                                <span className="break-all">{file}</span> as written: {written}
-                            </p>
-                        )}
-                    </>
+                <CollapsibleContent>
+                    {data === undefined ? (
+                        <PanelSkeleton />
+                    ) : (
+                        <Body output={data} pretty={pretty} whose={whose} testId={testId} />
+                    )}
+                </CollapsibleContent>
+                {!shown && (
+                    <p className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                        <span className="break-all">{file}</span> as written: {written}
+                    </p>
                 )}
             </Panel>
         </Collapsible>
