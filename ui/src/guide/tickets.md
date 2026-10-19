@@ -31,9 +31,10 @@ At the top, the key, the title, and whether the ticket is public or private, wit
 and its branches. Below:
 
 - **Work**: the ticket's phase, its branch, each PR with its own phase (a ticket that spans repositories has one per
-  repository), what the ticket has cost so far, and the ticket's actions.
-- **Conversation**: every message, and the box to reply in, folded on a public ticket with nothing waiting.
-  [Attention](attention#replying) covers how a reply works.
+  repository), and what the ticket has cost so far.
+- **Conversation**: every message, the box to reply in, folded on a public ticket with nothing waiting, and under it
+  the ticket's actions. [Attention](attention#replying) covers how a reply works. When one of the ticket's attention
+  items clears while you're here, a leaf drifts off the panel, the same one the attention list drops.
 - **Runs**: every run on the ticket, each linking to its transcript.
 - **Decisions**: what each tick decided about the ticket, and why, in the overseer's words. A `refused` decision names
   the guard that stopped it, and an `attention` decision the reason it reached your list.
@@ -52,7 +53,8 @@ A key canopy has never seen gets a page too, saying so, with the form to start i
 
 ## Acting on a ticket
 
-The ticket's actions sit on its Work panel and on its attention item. Hover over each to see its command.
+The ticket's actions sit under the reply box, on its page and on its attention item, so the keyboard reaches the
+reply before **Stop** or **Forget**. Hover over each to see its command.
 
 - **Start privately**, or **Start again** on a stopped ticket: as above.
 - **Stop**, as `canopy stop KEY`: nothing new is dispatched for the ticket. A run already on it finishes. A public

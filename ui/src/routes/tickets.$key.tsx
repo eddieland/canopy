@@ -10,42 +10,28 @@ import { CostTotalRow } from '@/components/cost-total'
 import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
 import { Field, Fields } from '@/components/fields'
-import { GrantLimits } from '@/components/grant-limits'
 import { MemoryBand, MemoryDigestView, MemoryRows } from '@/components/memory'
 import { MemorySaid, NoteActions } from '@/components/memory-actions'
 import { Notice } from '@/components/notice'
 import { OrderToggle } from '@/components/order-toggle'
 import { PlanCard } from '@/components/plan-card'
-import {
-    Empty,
-    PageHeader,
-    Panel,
-    PanelHeader,
-    PanelLoading,
-    PanelScroll,
-    PanelSkeleton,
-    ThreadScroll,
-} from '@/components/panel'
+import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
-import { ReplyForm } from '@/components/reply-form'
 import { RunsTable } from '@/components/runs-table'
 import { StartTicket } from '@/components/start-ticket'
 import { Chip, Word } from '@/components/status'
-import { TicketActions } from '@/components/ticket-actions'
+import { TicketAnswer, TicketVerbs } from '@/components/ticket-answer'
 import { TicketDrafts } from '@/components/ticket-drafts'
 import { TicketLinks } from '@/components/ticket-links'
-import { TicketThread } from '@/components/ticket-thread'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
-import { useUntrustedReview } from '@/hooks/use-untrusted-review'
-import { sinceForget } from '@/lib/forgotten'
 import { ordered, useListOrder } from '@/lib/list-order'
 import { cn } from '@/lib/utils'
 import { phaseLabel, phaseWord } from '@/lib/phase'
 import { None } from '@/components/none'
 
 /**
- * One ticket: its work and the operator's actions, its conversation and the reply, then its runs and decisions; and
+ * One ticket: its work, then its conversation, the reply, and the operator's actions, then its runs and decisions; and
  * for a ticket plans touch, its plan's card below them, which opens the plan's own page (DESIGN §25).
  */
 export const Route = createFileRoute('/tickets/$key')({
@@ -87,7 +73,7 @@ function TicketPage() {
 }
 
 function Ticket({ detail }: { detail: TicketDetail }) {
-    const { ticket, units, limits, runs, messages, decisions, cost } = detail
+    const { ticket, units, limits, runs, decisions, cost } = detail
     const tracker = useTicketUrl(ticket.key)
     const branchUrl = useBranchUrls()
     const branch = ticket.branch
@@ -97,8 +83,6 @@ function Ticket({ detail }: { detail: TicketDetail }) {
     })
     const runsOrder = useListOrder('ticket-runs')
     const decisionsOrder = useListOrder('ticket-decisions')
-    const conversationOrder = useListOrder('conversation')
-    const untrusted = useUntrustedReview(ticket.key)
     const plans = useQuery(ticketPlansQuery(ticket.key)).data
     const planned = plans !== undefined && (plans.needed || plans.plans.length > 0)
     // A plan waiting on the operator is what they came to answer, so its card leads the page. Where it sits is settled
@@ -121,7 +105,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 {how}
             </PageHeader>
             {planned && planLeads === true && <PlanCard ticketKey={ticket.key} plans={plans} />}
-            {/* The detail skeleton (DESIGN.md): what it is and its actions, its conversation, then its lists. */}
+            {/* The detail skeleton (DESIGN.md): what it is, its conversation and its answer, then its lists. */}
             {/* Wide, the conversation moves beside the rest, as in the inbox; the source keeps the reading order. */}
             <div
                 className={cn(
@@ -137,7 +121,7 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                         </span>
                     </PanelHeader>
                     {/* Three field lists spaced as one: a ticket across many repositories scrolls its units in */}
-                    {/* place, so its total and actions stay in reach. */}
+                    {/* place, so its total stays in reach. */}
                     <Fields className="pb-0">
                         <Field label="phase" mono>
                             <Word word={phaseWord(ticket)} text={phaseLabel(ticket)} />
@@ -159,30 +143,13 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                     <Fields className="pt-1.5">
                         <CostTotalRow cost={cost} />
                     </Fields>
-                    <div className="border-t" data-testid="ticket-actions">
-                        <TicketActions ticket={ticket} />
-                    </div>
-                    <GrantLimits limits={limits} ticketKey={ticket.key} className="border-t" />
                 </Panel>
+                {/* The answer: the conversation, the reply, then the ticket's verbs, so the keyboard reaches the
+                    reply before Stop or Forget, as on its attention item. */}
                 <Panel className="2xl:col-start-2 2xl:row-span-3 2xl:row-start-1" data-testid="ticket-conversation">
-                    <PanelHeader label="Conversation">
-                        <span className="flex items-center gap-2">
-                            {messages.length > 1 && <OrderToggle list="conversation" />}
-                            <span className="readout text-xs text-muted-foreground">{sinceForget(detail).length}</span>
-                        </span>
-                    </PanelHeader>
-                    <ThreadScroll
-                        key={ticket.key}
-                        label="Conversation"
-                        end={conversationOrder === 'oldest' ? 'bottom' : 'top'}
-                    >
-                        <TicketThread detail={detail} order={conversationOrder} />
-                    </ThreadScroll>
-                    <ReplyForm
-                        key={ticket.key}
-                        target={{ kind: 'ticket', key: ticket.key, isPublic: !ticket.private }}
-                        waiting={ticket.awaiting}
-                        untrusted={untrusted}
+                    <TicketAnswer
+                        detail={detail}
+                        after={<TicketVerbs ticket={ticket} limits={limits} place="after" testId="ticket-actions" />}
                     />
                 </Panel>
                 <Panel className="2xl:col-start-1 2xl:row-start-2" data-testid="ticket-runs">
