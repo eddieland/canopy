@@ -650,9 +650,10 @@ class Runtime(Section):
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json --thinking "
         "--title={title} {prompt}"
     )
-    #: The reviewer's temperature, or -1 to set none and leave the model's own: set -1 when `review_cmd` names a model
-    #: that refuses one, such as OpenAI's reasoning models.
-    review_temperature: Annotated[Temperature, Scope.PRIVATE] = 0.1
+    #: The reviewer's temperature, or -1, the default, to set none and leave the model's own. The reviewer is meant to
+    #: run on another model than the worker's (DESIGN §21), and some, such as OpenAI's reasoning models, refuse a
+    #: request that sets one; set a low one when `review_cmd` names a model that takes it.
+    review_temperature: Annotated[Temperature, Scope.PRIVATE] = NO_TEMPERATURE
     # Words before and after each command a worker run starts (`worker_cmd`, `private_worker_cmd`, `split_cmd`,
     # `plan_cmd`), such as a sandbox wrapper or a model option, so one key covers all four (DESIGN §12).
     worker_cmd_prefix: Annotated[Wrapper, Scope.PRIVATE] = ""
