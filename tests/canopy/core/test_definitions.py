@@ -38,11 +38,11 @@ def test_no_agent_has_web_tools(name: str) -> None:
         assert f"\n  {tool}: deny\n" in frontmatter
 
 
-@pytest.mark.parametrize("name", [name for name in definitions.agent_names() if name != "canopy-overseer"])
-def test_no_agent_but_the_overseer_sets_a_temperature(name: str) -> None:
+@pytest.mark.parametrize("name", definitions.agent_names())
+def test_no_bundled_agent_sets_a_temperature(name: str) -> None:
     # An agent runs on whatever model its command names, and some, such as OpenAI's reasoning models, refuse a request
-    # that sets one. The overseer keeps its own: its decisions are the corpus prompt changes are evaluated on. The
-    # reviewer's is `runtime.review_temperature`, rendered into the snapshot rather than set in its bundled file.
+    # that sets one. The overseer's, the triage agent's, and the reviewer's come from `runtime`, rendered into the
+    # snapshot rather than set in their bundled files.
     frontmatter = (resources.agents_dir() / f"{name}.md").read_text().split("---")[1]
     assert "\ntemperature:" not in frontmatter
 
@@ -211,30 +211,41 @@ def test_with_rebase_workers_may_push_with_a_lease_and_no_other_force(canopy_env
         assert not _allowed(rules, refused), refused
 
 
+# Each agent whose temperature is rendered from config, with its key in `[runtime]`.
+TEMPERATURES = [
+    ("canopy-reviewer", "review_temperature"),
+    ("canopy-overseer", "overseer_temperature"),
+    ("canopy-plan-triage", "plan_triage_temperature"),
+]
+
+
+@pytest.mark.parametrize(("agent", "key"), TEMPERATURES)
 @pytest.mark.parametrize(("setting", "rendered"), [(None, "0.1"), ("0.7", "0.7"), ("0", "0.0")])
-def test_the_reviewer_gets_its_configured_temperature(
-    canopy_env: CanopyEnv, setting: str | None, rendered: str
+def test_an_agent_gets_its_configured_temperature(
+    canopy_env: CanopyEnv, agent: str, key: str, setting: str | None, rendered: str
 ) -> None:
     if setting is not None:
-        _set_runtime(canopy_env, f"review_temperature = {setting}")
-    text = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))["agents/canopy-reviewer.md"].decode()
+        _set_runtime(canopy_env, f"{key} = {setting}")
+    text = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{agent}.md"].decode()
     assert f"\ntemperature: {rendered}\n" in text.split("---")[1]
 
 
-def test_a_reviewer_temperature_of_minus_one_sets_none(canopy_env: CanopyEnv) -> None:
+@pytest.mark.parametrize(("agent", "key"), TEMPERATURES)
+def test_a_temperature_of_minus_one_sets_none(canopy_env: CanopyEnv, agent: str, key: str) -> None:
     """-1 leaves the model's own, for a model that refuses a request that sets one; a new snapshot says so."""
     default = config.load(canopy_env.root, canopy_env.user_file)
-    _set_runtime(canopy_env, "review_temperature = -1")
+    _set_runtime(canopy_env, f"{key} = -1")
     unset = config.load(canopy_env.root, canopy_env.user_file)
-    frontmatter = definitions.sources(unset)["agents/canopy-reviewer.md"].decode().split("---")[1]
+    frontmatter = definitions.sources(unset)[f"agents/{agent}.md"].decode().split("---")[1]
     assert "\ntemperature:" not in frontmatter
     assert definitions.digest(unset) != definitions.digest(default)
 
 
-def test_a_reviewer_definition_without_its_temperature_line_is_refused() -> None:
-    bundled = (resources.agents_dir() / "canopy-reviewer.md").read_text()
+@pytest.mark.parametrize("agent", [agent for agent, _ in TEMPERATURES])
+def test_a_definition_without_its_temperature_line_is_refused(agent: str) -> None:
+    bundled = (resources.agents_dir() / f"{agent}.md").read_text()
     with pytest.raises(definitions.DefinitionsError, match="no line"):
-        definitions.render_temperature(bundled.replace("# canopy: temperature\n", ""), "canopy-reviewer", 0.1)
+        definitions.render_temperature(bundled.replace("# canopy: temperature\n", ""), agent, 0.1)
 
 
 def _set_runtime(canopy_env: CanopyEnv, line: str) -> None:
@@ -495,7 +506,8 @@ def test_the_overseer_definition_carries_its_prompt_and_the_trackers_skill(canop
     # The prompt is the agent's system prompt, cached across ticks; the tick's message is the state block (DESIGN §6).
     snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
     text = (snapshot / "agents" / "canopy-overseer.md").read_text()
-    head = (resources.agents_dir() / "canopy-overseer.md").read_text().split(PROMPT_MARKER)[0]
+    bundled = (resources.agents_dir() / "canopy-overseer.md").read_text()
+    head = definitions.render_temperature(bundled, "canopy-overseer", 0.1).split(PROMPT_MARKER)[0]
     assert text.startswith(head)
     body = text.removeprefix(head)
     prompt = (resources.prompts_dir() / "overseer.md").read_text().strip("\n")
