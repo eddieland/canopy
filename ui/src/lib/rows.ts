@@ -8,7 +8,7 @@ const FREE = `minmax(${FLOOR_REM}rem,1fr)`
 
 /**
  * The container sizes a column can show from (Tailwind's, in rem), narrowest first. A list's width picks one, so a row
- * fits the panel it is in, wherever the panel sits: half a monitor, beside a ticket's thread.
+ * fits the panel it is in, wherever the panel sits: a narrow window, beside a ticket's thread.
  */
 export const ROW_TIERS = [
     ['sm', 24],

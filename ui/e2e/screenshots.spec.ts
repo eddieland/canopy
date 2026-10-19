@@ -17,6 +17,9 @@ import {
 } from './helpers.ts'
 import type { DiffFinding } from './helpers.ts'
 
+// The operator's window (PRODUCT.md): half their 3440×1440 ultrawide, about as wide as the MacBook they also use.
+test.use({ viewport: { width: 1720, height: 1320 } })
+
 for (const theme of THEMES) {
     for (const route of ROUTES.filter((r) => theme === 'dark' || LIGHT_ROUTES.includes(r))) {
         test(`${route} in ${theme}`, async ({ page }) => {
@@ -128,41 +131,12 @@ test('a long review diff folded in dark', async ({ page }) => {
     await expect(panel).toHaveScreenshot('reviews-folded-dark.png')
 })
 
-// A wide screen: the interface is a quarter larger from a 2560px window, and the inbox and a ticket use the width.
-test.describe('on a wide screen', () => {
-    test.use({ viewport: { width: 2560, height: 1440 } })
-
-    test('the root size grows with the window', async ({ page }) => {
-        await signIn(page)
-        await page.goto('attention')
-        await settled(page)
-        expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('20px')
-    })
-
-    for (const route of ['attention', 'tickets/ABC-102'] as const) {
-        test(`${route} wide`, async ({ page }) => {
-            await page.clock.setFixedTime(NOW)
-            await storeTheme(page, 'dark')
-            await signIn(page)
-            await page.goto(route)
-            await settled(page)
-            await screenshotWhole(page, `${route.replace('/', '-')}-wide-dark.png`)
-        })
-    }
-})
-
-// Half of a second monitor: the rail a strip of the nav, each list showing the columns its width has room for.
-test.describe('at half a monitor', () => {
-    test.use({ viewport: { width: 820, height: 900 } })
-
-    for (const route of ['attention', 'tickets', 'runs', 'tickets/ABC-102'] as const) {
-        test(`${route} at half width`, async ({ page }) => {
-            await page.clock.setFixedTime(NOW)
-            await storeTheme(page, 'dark')
-            await signIn(page)
-            await page.goto(route)
-            await settled(page)
-            await screenshotWhole(page, `${route.replace('/', '-')}-half-dark.png`)
-        })
-    }
+// The interface is a quarter larger from a 2560px window. The images are of the operator's window, which already
+// uses the width (2xl), so a wider one's would only repeat them larger.
+test('the root size grows with the window', async ({ page }) => {
+    await page.setViewportSize({ width: 2560, height: 1440 })
+    await signIn(page)
+    await page.goto('attention')
+    await settled(page)
+    expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize)).toBe('20px')
 })

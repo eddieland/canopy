@@ -360,7 +360,7 @@ test("a tool call's name takes its own width, so its command keeps the rest on e
     const dispatch = transcript.getByTestId('transcript-tool').filter({ hasText: 'canopy dispatch ABC-104' })
     const command = dispatch.locator('summary').getByText('canopy dispatch ABC-104', { exact: false })
     const refusal = dispatch.locator('summary').getByText(/^dispatch refused/u)
-    // On half a monitor the command keeps 300px, and its refusal reads to what refused it.
+    // In a narrow window the command keeps 300px, and its refusal reads to what refused it.
     await expect.poll(async () => (await command.boundingBox())?.width ?? 0).toBeGreaterThanOrEqual(300)
     expect(await cutAfter(refusal, 'run 43 is still working')).toBeLessThanOrEqual(0)
     // A short name takes no more than its own width.

@@ -153,15 +153,16 @@ Rules:
   the window's edge. It sits at the foot of the sticky column, so at the window's foot however long the page; in a
   window too short for the rest, the part above it scrolls on its own. The room left between the blocks and the footer
   is Sprig's (Fun, below).
-- **Narrower than `lg`, the rail is a strip** (`useRailMode`), since half of a second monitor is under it and a whole
+- **Narrower than `lg`, the rail is a strip** (`useRailMode`), since a narrow window is under it and a whole
   rail there left a list too little room: 3.5rem of the nav's icons (the nav's `compact`), each named on hover and to a
   screen reader, each count one number on its icon's corner, Attention's in its most severe item's color. A button
   atop the strip opens the whole rail, footer included, the same column, as a sheet over the page (`Sheet`, a Radix
   dialog: Escape or a click outside closes it, and the focus goes back to the button). It opens in its search box, so
   `/` opens it too. A link followed or a search sent from it closes it, since the page it covered is leaving. The
   breakpoint is the viewport's, as the rail's place is the window's; what a list shows, and every other layout step
-  inside the pane, is its own width's (Primitives). Half a monitor, about 820px, is the narrowest window the UI is
-  made for; a phone's is not.
+  inside the pane, is its own width's (Primitives). The UI is made for the operator's window, about 1720px wide
+  (`PRODUCT.md`), where its screenshots are taken. Down to about 820px it holds up, the rail a strip; a phone's does
+  not.
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
@@ -351,7 +352,7 @@ Rules:
   thread has its main content there instead: a run's transcript, a chore's open findings and runs, a chore run's
   findings and transcript, a tick's decisions, a review's findings and diff, a PR's reviews. A chore's notes are a
   thread nothing waits on, written now and then, so they follow its main content, with its spend. Then the supporting
-  lists: runs, decisions, spend. So on a half-width second monitor a ticket's reply is reached before its runs and
+  lists: runs, decisions, spend. So in a narrow window a ticket's reply is reached before its runs and
   decisions, and the attention detail, the other place a ticket is answered, reads in the same order: the item, then
   what its reason asks for first (below, "The attention detail"), any limit it is stuck at, then its conversation and
   the reply. An action over a whole list
@@ -486,7 +487,7 @@ side.
   takes the rest and cuts its text to fit, so every row of a list lines up whatever its cells hold. The free column
   never gets under 8rem: it holds the row's name, a ticket's title, which never vanishes.
   **A narrow list lets columns go**, in the order its kind gives them (a third entry in `ROW_COLUMNS`, 1 first), so it
-  fits its panel wherever the panel sits: half a monitor, beside a ticket's thread. A column shows from the narrowest
+  fits its panel wherever the panel sits: a narrow window, beside a ticket's thread. A column shows from the narrowest
   of Tailwind's container sizes (`ROW_TIERS`, `@sm` to `@4xl`) with room for it, the columns that go after it, and
   those that never do, the free one at its floor (`rowTiers`). The `Panel` is the container (`@container`), so a list
   goes by its own width, not the window's. The row's template at each size is a custom property, and a column left

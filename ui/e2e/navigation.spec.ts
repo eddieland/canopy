@@ -255,7 +255,7 @@ test("a ticket's page links to its PR and its branch under its title, beside the
     await expect(links.getByRole('link', { name: branch })).toHaveAttribute('href', `https://${branch}`)
 })
 
-test("a ticket's page puts its reply before its runs and decisions on a half-width screen", async ({ page }) => {
+test("a ticket's page puts its reply before its runs and decisions in a narrow window", async ({ page }) => {
     await page.setViewportSize({ width: 820, height: 900 })
     await page.goto('tickets/ABC-102')
     await settled(page)

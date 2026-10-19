@@ -12,6 +12,8 @@ The primary user is the operator: one developer who runs several coding agents a
 machine, under their own credentials. They label tickets, answer the agents' questions, and review the PRs that come
 back. The web UI stays open all day in a tab or on a second monitor. Mostly the operator glances at it to see what
 needs them, then spends a short burst reading a ticket's conversation and answering it. They live in the dark theme.
+Their window is half a 3440×1440 ultrawide, or a MacBook Pro 16"'s whole screen: about 1720px wide either way. Design
+for that width; a narrower window holds up, but is not what the layout is made for.
 
 The next audience is coworkers who install canopy in five steps and run their own instance, each for themselves.
 There are no team, shared, or multi-user views. Design for the operator first. A coworker's first run matters, but it
