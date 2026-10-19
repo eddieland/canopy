@@ -29,8 +29,8 @@ test("the pull requests list has each PR once, and a PR's page its runs, reviews
     // The PR's own title, as its worker reported it, rather than its ticket's.
     await expect(ours).toContainText('ABC-099: debounce the search box by 250 ms')
     await expect(ours.getByTestId('pull-request-review')).toContainText('review:4')
-    // A PR canopy only reviews has no ticket, whoever asked for the review.
-    await expect(rows.filter({ hasText: 'acme/api#12' })).toContainText('none: canopy only reviews it')
+    // A PR canopy only reviews has no ticket, whoever asked for the review: `none`, and why on hover.
+    await expect(rows.filter({ hasText: 'acme/api#12' }).getByTitle('none: canopy only reviews it')).toHaveText('none')
     await expect(rows.filter({ hasText: 'acme/api#12' })).toContainText('Bump the retry budget for flaky upstreams')
     // One the operator asked canopy to review is listed before its first review.
     await expect(rows.filter({ hasText: 'acme/web#95' })).toContainText('requested')
