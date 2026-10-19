@@ -253,6 +253,8 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
         ("[runtime]\nreview_temperature = 2.5\n", "must be from 0 to 2, or -1 to set none"),
         ("[runtime]\nreview_temperature = true\n", r"runtime\.review_temperature: Input should be a valid number"),
         ("[runtime]\nreview_temperature = '0.1'\n", r"runtime\.review_temperature: Input should be a valid number"),
+        ("[runtime]\noverseer_temperature = -0.5\n", "must be from 0 to 2, or -1 to set none"),
+        ("[runtime]\nplan_triage_temperature = 3.0\n", "must be from 0 to 2, or -1 to set none"),
     ],
 )
 def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) -> None:

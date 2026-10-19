@@ -4,9 +4,11 @@
 # before its exceptions. `ask` is auto-rejected under `opencode run`; `deny` is enforced. The old `tools:` map is
 # deprecated in favor of `permission:`.
 # The body is rendered: canopy puts the overseer's prompt at its marked line (DESIGN §6, §13).
+# Its temperature is rendered at the marked line from `runtime.overseer_temperature`, unless that is -1: some models,
+# such as OpenAI's reasoning models, refuse a request that sets one.
 description: canopy overseer. Reads tracker and GitHub state, records decisions, dispatches workers through the canopy CLI. Read-only otherwise.
 mode: primary
-temperature: 0.1
+# canopy: temperature
 permission:
   edit: deny
   # A path outside the workspace would otherwise `ask`, which ends the run and loses every decision not yet recorded.

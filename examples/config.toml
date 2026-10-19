@@ -40,6 +40,9 @@ max_chores = 1
 # {title}, optional, is the session's title: `<KEY> <kind>: <the ticket's title>` for a worker (DESIGN §13).
 overseer_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json
     --title={title} {prompt}'''
+# The overseer's temperature: -1 sends none, for when overseer_cmd names a model that refuses one, such as OpenAI's
+# reasoning models. plan_triage_temperature and review_temperature, below, do the same for theirs.
+# overseer_temperature = 0.1
 worker_cmd   = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json
     --title={title} {prompt}'''
 # A ticket you started with `canopy start` runs `private_worker_cmd`: worker_cmd's default with
@@ -58,6 +61,7 @@ plan_cmd     = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent
 # plan_triage_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-plan-triage
 #     --format json --title={title} {prompt}'''
 # plan_triage_timeout_minutes = 10
+# plan_triage_temperature = 0.1
 # The reviewer's temperature (DESIGN §21): -1 sends none, for when review_cmd names a model that refuses one, such as
 # OpenAI's reasoning models.
 # review_temperature = 0.1

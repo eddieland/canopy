@@ -8,8 +8,11 @@
 # canopy renders this file into its definitions directory with the tracker's MCP server and tools from the operator's
 # config (`tracker.mcp_server`, `tracker.read_tools`), at the marked line below, as for canopy-planner. As shipped it
 # names none, and dispatch refuses a triage then (`no_read_tools`).
+# Its temperature is rendered at the marked line from `runtime.plan_triage_temperature`, unless that is -1: some
+# models, such as OpenAI's reasoning models, refuse a request that sets one.
 description: canopy triage. Judges whether one ticket's work needs a plan before it is implemented; reads only.
 mode: primary
+# canopy: temperature
 permission:
   bash: deny
   # Nothing to write: no file is read back from a triage, and the primary clones it reads are the operator's.

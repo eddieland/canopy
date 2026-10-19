@@ -607,6 +607,9 @@ class Runtime(Section):
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json --thinking "
         "--title={title} {prompt}"
     )
+    #: The overseer's temperature, or -1 to set none and leave the model's own: set -1 when `overseer_cmd` names a
+    #: model that refuses one, such as OpenAI's reasoning models.
+    overseer_temperature: Annotated[Temperature, Scope.PRIVATE] = 0.1
     worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json --thinking "
         "--title={title} {prompt}"
@@ -634,6 +637,9 @@ class Runtime(Section):
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-plan-triage --format json --thinking "
         "--title={title} {prompt}"
     )
+    #: The triage agent's temperature, or -1 to set none and leave the model's own: set -1 when `plan_triage_cmd`
+    #: names a model that refuses one, such as OpenAI's reasoning models.
+    plan_triage_temperature: Annotated[Temperature, Scope.PRIVATE] = 0.1
     # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).
     chore_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
         "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json --thinking "
