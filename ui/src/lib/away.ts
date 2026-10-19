@@ -3,6 +3,7 @@
 // again, compared with the list the tab held as it was hidden, and the runs counted by the server over the journal.
 import type { AttentionItem, RunsSince } from '@/api/types'
 import { blocking } from '@/lib/attention'
+import { currentClock } from '@/lib/clock'
 import { endStamp } from '@/lib/time'
 
 /** How long the tab stays hidden before showing it again brings the note: a coffee is not an absence. */
@@ -45,7 +46,7 @@ export function awayLine(since: string, now: string, changes: AwayChanges): stri
         changes.prsOpened > 0 && `${counted(changes.prsOpened, 'PR')} opened`,
         changes.runsEnded > 0 && `${counted(changes.runsEnded, 'run')} ended`,
     ].filter((part) => part !== false)
-    return parts.length === 0 ? null : `Since ${endStamp(since, now)}: ${parts.join(', ')}`
+    return parts.length === 0 ? null : `Since ${endStamp(since, now, currentClock())}: ${parts.join(', ')}`
 }
 
 function counted(n: number, noun: string): string {

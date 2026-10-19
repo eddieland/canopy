@@ -1,7 +1,13 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { age, endStamp, lasted, stamp, useNow } from './time'
+import { DEFAULT_CLOCK } from '@/lib/clock'
+import type { Clock } from '@/lib/clock'
+
+import { age, endStamp, lasted, localTime, stamp, useNow } from './time'
+
+const H12: Clock = { hours: '12', zone: false }
+const ZONED: Clock = { hours: '24', zone: true }
 
 describe('age', () => {
     const now = Date.parse('2026-10-08T12:30:00Z')
@@ -24,7 +30,22 @@ describe('stamp', () => {
         const local = new Date(iso)
         const hh = String(local.getHours()).padStart(2, '0')
         const mm = String(local.getMinutes()).padStart(2, '0')
-        expect(stamp(iso)).toMatch(new RegExp(`^\\S+ ${local.getDate()} ${hh}:${mm}$`, 'u'))
+        expect(stamp(iso, DEFAULT_CLOCK)).toMatch(new RegExp(`^\\S+ ${local.getDate()} ${hh}:${mm}$`, 'u'))
+    })
+
+    it('reads a 12-hour clock with its hour bare and AM or PM after it', () => {
+        const morning = new Date(2026, 9, 8, 9, 5).toISOString()
+        const afternoon = new Date(2026, 9, 8, 14, 5).toISOString()
+        const midnight = new Date(2026, 9, 8, 0, 5).toISOString()
+        expect(stamp(morning, H12)).toMatch(/^\S+ 8 9:05 AM$/u)
+        expect(stamp(afternoon, H12)).toMatch(/^\S+ 8 2:05 PM$/u)
+        expect(stamp(midnight, H12)).toMatch(/^\S+ 8 12:05 AM$/u)
+    })
+
+    it('names the time zone after the time when asked', () => {
+        const iso = new Date(2026, 9, 8, 14, 5).toISOString()
+        expect(stamp(iso, ZONED)).toMatch(/^\S+ 8 14:05 \S+$/u)
+        expect(stamp(iso, { hours: '12', zone: true })).toMatch(/^\S+ 8 2:05 PM \S+$/u)
     })
 })
 
@@ -33,9 +54,22 @@ describe('endStamp', () => {
         // Noon local, so 29 minutes on is the same local day and 26 hours on is not, in any time zone.
         const started = new Date(2026, 9, 8, 12, 0).toISOString()
         const sameDay = new Date(2026, 9, 8, 12, 29).toISOString()
-        expect(endStamp(started, sameDay)).toBe('12:29')
+        expect(endStamp(started, sameDay, DEFAULT_CLOCK)).toBe('12:29')
+        expect(endStamp(started, sameDay, H12)).toBe('12:29 PM')
+        expect(endStamp(started, sameDay, ZONED)).toMatch(/^12:29 \S+$/u)
         const nextDay = new Date(2026, 9, 9, 14, 5).toISOString()
-        expect(endStamp(started, nextDay)).toBe(stamp(nextDay))
+        expect(endStamp(started, nextDay, DEFAULT_CLOCK)).toBe(stamp(nextDay, DEFAULT_CLOCK))
+        expect(endStamp(started, nextDay, H12)).toBe(stamp(nextDay, H12))
+    })
+})
+
+describe('localTime', () => {
+    it('reads the date and the time to the second, on the clock asked for', () => {
+        const iso = new Date(2026, 9, 8, 14, 5, 9).toISOString()
+        expect(localTime(iso, DEFAULT_CLOCK)).toContain('14:05:09')
+        expect(localTime(iso, DEFAULT_CLOCK)).toContain('2026')
+        expect(localTime(iso, H12)).toMatch(/2:05:09\sPM/u)
+        expect(localTime(iso, ZONED)).toMatch(/14:05:09 \S+$/u)
     })
 })
 

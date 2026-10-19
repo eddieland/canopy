@@ -8,6 +8,7 @@ import { Age } from '@/components/age'
 import { Button } from '@/components/ui/button'
 import { LOOP_DOWN_TITLE, useLoopDown } from '@/hooks/use-loop-down'
 import { failedText } from '@/lib/outcomes'
+import { useClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -25,6 +26,7 @@ const CHANNEL: Record<Paused['channel'], string> = {
  * the loop isn't answering, it waits, and says so on hover.
  */
 export function LoopPause() {
+    const clock = useClock()
     const client = useQueryClient()
     const loop = useQuery(loopQuery)
     const down = useLoopDown().offline
@@ -43,7 +45,7 @@ export function LoopPause() {
             {paused !== null && (
                 <span
                     className="readout text-xs whitespace-nowrap text-status-blocked"
-                    title={`Paused at ${localTime(paused.since)} from ${CHANNEL[paused.channel]}`}
+                    title={`Paused at ${localTime(paused.since, clock)} from ${CHANNEL[paused.channel]}`}
                 >
                     paused · <Age at={paused.since} className="text-inherit" />
                 </span>

@@ -1,13 +1,20 @@
 # Settings
 
 A handful of things you set from the browser: how the UI looks and sends, a notice for every worker, reloading your
-config, and the fun. It opens from the rail's foot, beside the guide. The theme, the send key, and the fun are kept in
-this browser; everything else canopy reads from its config files, as it always did.
+config, and the fun. It opens from the rail's foot, beside the guide. The theme, the clock, the send key, and the fun
+are kept in this browser; everything else canopy reads from its config files, as it always did.
 
 ## Theme
 
 **Light**, **Dark**, or **System**, which follows your machine. Every open tab follows along. The button at the right
 of the header flips it too.
+
+## Time
+
+How every time of day on the page reads: **24-hour** (`14:05`, the default) or **12-hour** (`2:05 PM`). **Show time
+zone** puts the zone after each one, as your browser abbreviates it (`14:05 EDT`), which settles the question of whose
+2 PM it was before anyone has to ask. The line above the switches shows the time now, as it will read. Every time
+follows along, the ones you hover for included. Ages (`3m ago`) don't change; minutes are minutes everywhere.
 
 ## Replies
 

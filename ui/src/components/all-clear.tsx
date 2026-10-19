@@ -5,6 +5,7 @@ import { ticketsQuery } from '@/api/queries'
 import { Empty, Panel, PanelSkeleton } from '@/components/panel'
 import { TickNow } from '@/components/shell/tick-now'
 import { useLoopDown } from '@/hooks/use-loop-down'
+import { useClock } from '@/lib/clock'
 import { stamp } from '@/lib/time'
 
 /**
@@ -46,13 +47,14 @@ export function EmptyAttention() {
  * celebrates.
  */
 export function AllClear() {
+    const clock = useClock()
     const down = useLoopDown()
     if (down.offline && down.since !== null) {
         return (
             <Panel data-testid="all-clear">
                 <div className="grid min-h-40 place-items-center content-center gap-0.5 p-6 text-center">
                     <span className="text-sm">
-                        Nothing needed you as of {stamp(new Date(down.since).toISOString())}.
+                        Nothing needed you as of {stamp(new Date(down.since).toISOString(), clock)}.
                     </span>
                     <span className="font-mono text-xs text-muted-foreground">
                         the loop isn&apos;t answering, so this list can&apos;t change

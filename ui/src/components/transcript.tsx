@@ -31,6 +31,7 @@ import { ordered, useListOrder } from '@/lib/list-order'
 import { tokenize } from '@/lib/json-lines'
 import { rowLineFrom } from '@/lib/rows'
 import { markedTokens } from '@/lib/search'
+import { useClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 import {
     byCall,
@@ -463,10 +464,11 @@ function reveal(element: HTMLElement | null) {
 }
 
 function When({ at, start }: { at: string | null; start: string | null }) {
+    const clock = useClock()
     return (
         <span
             className="readout w-14 shrink-0 text-xs text-muted-foreground"
-            title={at === null ? undefined : localTime(at)}
+            title={at === null ? undefined : localTime(at, clock)}
         >
             {elapsed(at, start)}
         </span>

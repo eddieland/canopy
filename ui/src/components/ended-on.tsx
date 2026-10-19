@@ -2,6 +2,7 @@ import type { Transcript } from '@/api/types'
 import { Field } from '@/components/fields'
 import { None } from '@/components/none'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 import { elapsed, endedOn, startOf } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
@@ -26,6 +27,7 @@ export function EndedOnField({
     transcript: Transcript | undefined
     onShow: (i: number) => void
 }) {
+    const clock = useClock()
     if (!ENDED_BADLY.has(status)) {
         return null
     }
@@ -62,7 +64,7 @@ export function EndedOnField({
                 )}
             >
                 {entry.at !== null && (
-                    <span className="readout shrink-0" title={localTime(entry.at)}>
+                    <span className="readout shrink-0" title={localTime(entry.at, clock)}>
                         {elapsed(entry.at, startOf(transcript.entries))}
                     </span>
                 )}

@@ -51,6 +51,26 @@ export const THEMES = ['light', 'dark'] as const
 /** Half an hour after the fixtures' T0 (canopy/serve/mock.py): every age on a page is the same on every run. */
 export const NOW = new Date('2026-10-08T12:30:00Z')
 
+/**
+ * An ISO time as the page writes it on hover with the clock at its default (src/lib/time.ts `localTime`): the
+ * browser's local date and 24-hour time to the second, `10/8/2026, 12:00:00` in en-US.
+ */
+export function hoverTime(page: Page, iso: string): Promise<string> {
+    return page.evaluate(
+        (at) =>
+            new Intl.DateTimeFormat(undefined, {
+                year: 'numeric',
+                month: 'numeric',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hourCycle: 'h23',
+            }).format(new Date(at)),
+        iso,
+    )
+}
+
 /** Stores `theme` before any page script runs, as if chosen on an earlier visit. */
 export async function storeTheme(page: Page, theme: 'light' | 'dark'): Promise<void> {
     await page.addInitScript(
