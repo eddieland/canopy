@@ -74,7 +74,8 @@ shadow, and a measurement says which rows code may take.
 - The derivation is recorded beside `decisions`. It writes no decision, and changes no state block, attention item,
   cursor, phase, or guard.
 - It agrees with the overseer when the phase the overseer set is one of the rows that held and its decision one that
-  row allows. Agreement is computed, never stored, so a fix to the comparison reads every tick already recorded.
+  row allows. Agreement is computed, never stored, so a fix to the comparison reads every tick already recorded; the
+  rows themselves go under §26's window, and the measurement in `MEASUREMENTS.md` outlives them.
 
 ### Checks that are not CI
 

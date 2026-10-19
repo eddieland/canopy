@@ -61,8 +61,9 @@ one rejects, in code, any key that does not match `[A-Za-z0-9][A-Za-z0-9_-]*`.
 canopy runs only from a workspace, even for one repository: a workspace of one repository is a map with one entry. A
 workspace is a directory canopy manages and the loop runs from: the map, `canopy-workspace.toml`, also the shared
 config layer; `MAP.md`, on what each repository owns and how they depend on each other; a primary clone of each
-repository; the worktree pools; a desk per joint run; and canopy's state, which only the operator may read. A command
-run outside a workspace that needs its config or journal refuses, naming a `canopy.toml` it did not read (D016).
+repository; the worktree pools; a desk per joint run; and canopy's state, which only the operator may read.
+
+It relies on TRUST_MODEL T1, T4, T6, T7, and §7, branch protection in every mapped repository.
 
 ### The map
 
@@ -108,47 +109,17 @@ callers do not know which they have. canopy's pool keeps every guarantee above. 
 its lease, so switching with runs in flight is safe. A quarantined slot, in either pool, waits for the operator's
 release, since the file seeding collided with may be a run's work. Every git canopy's pool runs has D107's flags; a
 slot that does not point into its primary clone (D118), or whose processes cannot be read, is never reset, reused, or
-removed. It uses no network but a lease's fetch, so a stale ref keeps a slot rather than losing one.
+removed.
 
 ### Upgrading past treehouse
 
-Designed, not built (ROADMAP M45, stage 4). Proposed (2026-10-19, #813), for the operator to accept by merging. The
-release that removes treehouse finishes, with git alone, a move the workspace has not made yet, rather than refuse to
-run until the operator makes it on the release before: that would mean a downgrade, and config is not
-downgrade-compatible. Nothing here may stop a tick. Three things can be left over: a lease the journal says treehouse
-made (`'treehouse'` in a run's or review's lease, as every lease from before the journal named the pool is), a
-worktree of a clone still under `.treehouse/`, and a config still setting `pools.backend`.
-
-- **A treehouse lease goes back through canopy.** `'treehouse'` stays a value the journal holds, and names a lease of
-  a worktree under `.treehouse/`. When its run or review ends, or reconcile closes it as crashed, canopy returns the
-  worktree itself, with no treehouse call: forced, its processes ended, reset to its lease's base as the journal
-  records it (the default branch where none is), ignored files kept, as a return to canopy's pool is. The slot must be
-  under `.treehouse/` and pass D118's check, or it is left as it is, never reset. There is no treehouse record to hold
-  the lease against, so the journal is the record: the return is refused while another running run or review names the
-  slot under another lease. A slot whose directory is gone has nothing to return. Every failure is logged and answers
-  `failed`, never an error, so no tick stops on one; the worktree stays under `.treehouse/`, for sync.
-- **Sync moves what is left.** It finds each worktree of a clone under `.treehouse/` with `git worktree list` and moves
-  it into `pools/` as a switch does (canopy's pool, above), keeping its ignored files, and records with it the base of
-  the last lease the journal names for it, so reuse treats it as a slot parked there. One a running run or review holds
-  waits for a later sync, and counts toward the declared size as a slot waiting on a switch does; one with changes, a
-  process in it, or a git link canopy cannot vouch for stays, and sync says so and exits 1. Once `.treehouse/` holds no
-  worktree, sync removes it. A dry run lists what it would move and changes nothing. Reconcile no longer reads
-  `.treehouse/`: a treehouse lease the journal never recorded, such as one whose `_run` died before its run row, is an
-  idle worktree to sync.
-- **What treehouse seeded is recorded as seeded.** treehouse removed its seeded files at a return, and canopy cannot
-  know which they were. So a moved slot records as seeded each path the include file selects whose copy in the slot is
-  the clone's, byte for byte (a link as treehouse wrote it, a file holding its target): the next reset removes it and
-  seeding writes it again, losing nothing. One that differs stays, as any ignored file does, and the next lease that
-  seeds it quarantines the slot until `canopy workspace release`.
-- **`pools.backend` is warned about, then ignored,** whichever value it sets: canopy's pool makes every lease, and its
-  slots are made beside the ones still to move, within the declared size.
-- **The release note** asks the operator to run `canopy workspace sync` on the release that made `"canopy"` the
-  default, and to upgrade with no run in flight, since a `_run` of the release before returns its slot through
-  treehouse. It is advice, not the guarantee: the path above is what a workspace that skipped it relies on.
-
-Rejected: refusing to run until the operator finishes the move on the release before (a downgrade); reading
-treehouse's state for its leases and seeded files (canopy would depend on the private format of a program it no longer
-installs); a release note alone (a workspace that skipped it would fail its first tick with a treehouse lease in it).
+Designed, not built (ROADMAP M45, stage 4). The release that removes treehouse finishes the move to canopy's pool with
+git alone, rather than refuse to run until the operator makes it on the release before, which would mean a downgrade;
+nothing in it may stop a tick. A lease the journal says treehouse made is returned by canopy as a return to its own pool
+is, only for a slot under `.treehouse/` that passes D118's check and no other running run names; a failure is logged and
+the slot left for sync. `canopy workspace sync` moves each idle, clean worktree left under `.treehouse/` into the pool,
+recording as seeded only files identical to what seeding would write, so the next reset loses nothing; one it cannot
+vouch for stays, and sync says so. `pools.backend` is warned about, then ignored.
 
 ### Units
 
@@ -164,21 +135,17 @@ attempt limits and the CI cooldown count per unit; capacity counts runs, not slo
 
 ### Runs over several repositories
 
-The branch has one name in every repository. Branch setup, push verification (§8 steps 2 and 5), and the shadowing
-check (§13) cover each worktree; the run is `unpushed` if any is. A joint run's worker runs in a desk of links to its
+The branch has one name in every repository. Branch setup, push verification (§8 steps 2 and 5), and the shadowing check
+(§13) cover each worktree; the run is `unpushed` if any is. A joint run's worker runs in a desk of links to its
 worktrees (TRUST_MODEL T4); canopy makes desks only where no symlink redirects them, never follows their links on
-removal, and removes only desks it marked as its own. The result line's `"pr"` becomes `"prs"`, from repository name to
-PR URL or null, and `"pr_titles"` the same (§8). Each PR links its siblings and says which to merge first.
+removal, and removes only desks it marked as its own. The result line names a PR per repository (§8), and each PR links
+its siblings and says which to merge first.
 
 ### Splitting
 
 Until ROADMAP M46 replaces it with follow-up tickets, canopy splits a ticket only when an authorized replier's comment
-asks for it, and never schedules what it split: children start without a queue label, so a human authorizes each
-(TRUST_MODEL T1). The harness cannot read the comment (D003), so the splitter, which can create tickets but not edit
-or push, checks the claim. It creates one unlabeled child per repository, ordered with blocker relations (§10), or
-none, and prints `{"status":"done|failed","summary":"...","children":{"PROJ-13":"api"}}`. A child is a candidate only
-if its queue label was added after the split ended, as label history shows (D003); one labeled earlier is
-`split_self_labeled`, and one unlabeled `split_unlabeled`, while the parent waits in phase `split`.
+asks for it. The splitter, which can create tickets but not edit or push, checks the claim (D003) and creates one
+unlabeled child per repository, so a human authorizes each by labeling it after the split (TRUST_MODEL T1).
 
 ### Follow-up tickets
 
@@ -187,10 +154,6 @@ its ticket files it as a follow-up, worked under its ticket's authorization, sin
 human reviews and merges (TRUST_MODEL §6). canopy records the follow-ups a public `implement` or `resume` run reports,
 bounded per run, checking only each key's text (D003), so a worker can record a ticket it did not file: an accepted
 gap, backed by review of every PR. A refused entry never changes the run's status. TRUST_MODEL T1, T3, and T6 change.
-
-### Trust model changes
-
-This section relies on TRUST_MODEL T1, T4, T6, T7, and §7, branch protection in every mapped repository.
 
 ### Open
 

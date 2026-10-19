@@ -34,7 +34,8 @@ third column says, and §6, §11, §12, §18, and §22 describe canopy as it is;
 - A record a guard counts: runs, their slots, review runs, attempt and review grants, and dismissals. Limits count
   over all time, and a guard that history can reset is not a guard (D030, D086).
 - Ticks, tickets, messages, units, forgets, starts, notices, ended review requests, chore runs, and the overseer's own
-  decisions, the audit log and prompt-evaluation corpus (§11, §19, §21, §22).
+  decisions, the audit log and prompt-evaluation corpus (§11, §19, §21, §22); plan files, the operator's to remove
+  (§25).
 - Anything a live run uses, or a run's lifelock holds; remote branches, which `canopy gc` lists and deletes none of,
   since deleting one is outward-facing and may lose work (§22); and what is not canopy's: a chore's working
   directory (§19), ignored files in a pool slot (§18), the runtime's own data.
@@ -57,7 +58,9 @@ before deleting, which gives the transcript reader two formats for history rarel
 
 A harness-raised attention item is deleted only once it is older than `journal_days` and its tick is outside the
 window the attention list reads, so the list, its open-since, and notifications do not change. Rejected: recording
-an item only when it opens and closes, which changes how §14 derives the list and every reader with it. `--vacuum`
+an item only when it opens and closes, which changes how §14 derives the list and every reader with it. Connector runs
+and derivations (§30) go under the same rule, except each source's newest run and the newest that recorded the query's
+result, which `canopy status`, `connector_failed`, and the derivation read. `--vacuum`
 refuses while any run is live, and when the disk has less free space than the journal, since `VACUUM` writes a whole
 copy first.
 
@@ -78,4 +81,5 @@ Each is a non-negative integer, and `0` keeps that kind forever. The defaults ar
 - The defaults, from the measurement.
 - Whether the overseer's own attention rows, also recorded every tick an item stays open, need a rule of their own.
   They are the evaluation corpus, so not until the measurement shows their share.
+- Whether connector runs and derivations need a key of their own rather than `journal_days`.
 - Whether the pass runs `--git` on its own, weekly, once the command has run live (SCENARIOS).
