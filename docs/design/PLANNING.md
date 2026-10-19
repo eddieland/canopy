@@ -84,8 +84,9 @@ or if anything goes wrong, the ticket is planned. Triage's keys are private, unl
 triage loosens the operator's plan gate (T7).
 
 A triage is due only when the ticket needs a plan by `policy.plan` alone (a ticket the operator marked is always
-planned) and has had no branch, plan run, or triage, so it is triaged at most once, never reset or granted (D030). It
-reads only, holds no slot, and writes nothing, as the planner with nothing to edit. Result contract (D026):
+planned) and has had no branch, plan run, or triage, so it is triaged at most once, never reset or granted (D030).
+While one is due, the overseer's plan is refused in code: only the operator's own word plans a ticket ahead of its
+triage. It reads only, holds no slot, and writes nothing, as the planner with nothing to edit. Result contract (D026):
 
 ```json
 {"status":"done|failed","reason":"one sentence","verdict":"trivial|plan"}
