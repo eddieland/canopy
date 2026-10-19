@@ -40,7 +40,7 @@ export function useContextChartOpen(page: TranscriptPage): boolean {
     return useSyncExternalStore(subscribe, getSnapshot).includes(page)
 }
 
-/** Opens or closes the context chart on every `page`, stores it, and applies it now. */
+/** Opens or closes the context chart on `page`, stores it, and applies it now. */
 export function setContextChartOpen(page: TranscriptPage, open: boolean): void {
     const raw = withOpen(snapshot, page, open)
     try {
