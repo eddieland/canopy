@@ -49,9 +49,11 @@ where it stands and how old it is. Older plans are folded under **Earlier plans*
 leads back to the ticket.
 
 A plan that replaced one opens with its changes marked: the words added and removed since the plan before, word by
-word, so formatting alone is no change. **Changes since plan N**, in the Plan panel's header, turns the marks off and
+word, so formatting alone is no change. A paragraph, heading, or table cell that's new whole gets one green block with
+a bar at its left, rather than confetti. **Changes since plan N**, in the Plan panel's header, turns the marks off and
 back on; while they're on, the header counts them, **Previous change** and **Next change** step through them, round
-to the other end, and the comments' highlights step aside so a passage never wears two colors. After asking for
+to the other end, and the comments' highlights step down to a thin underline so a passage never wears two colors,
+but you can still see where your comments are. After asking for
 changes, that's how you check you got them without reading the whole plan again.
 
 **Outline**, at the right of the Plan panel's header, lists the plan's headings, each step indented under its

@@ -82,4 +82,39 @@ describe('PlanChanges', () => {
         expect(changesKey.getState(editor.state)?.starts).toEqual([])
         editor.destroy()
     })
+
+    it('marks a block added whole as one, not as words, and the words added to an old block as words', () => {
+        const editor = new Editor({
+            extensions: planExtensions([PlanChanges]),
+            content: '# Plan\n\nStream the rows to the client.\n\n## Risks\n\nA `job` may **fail** twice.',
+            contentType: 'markdown',
+        })
+        const base = textOf(editor, '# Plan\n\nStream the rows.')
+        editor.view.dispatch(editor.state.tr.setMeta(changesKey, { base }))
+        const blocks = [...editor.view.dom.querySelectorAll('.plan-block-add')].map((node) => node.textContent)
+        expect(blocks).toEqual(['Risks', 'A job may fail twice.'])
+        // The words diff matches the old plan's last stop to the new one's, so the old paragraph's stop is added here.
+        const added = [...editor.view.dom.querySelectorAll('ins.plan-ins')].map((node) => node.textContent)
+        expect(added).toEqual(['to the client.'])
+        // The new blocks are one change with the words before them: they start where those do.
+        expect(changesKey.getState(editor.state)?.starts).toHaveLength(1)
+        editor.destroy()
+    })
+
+    it("marks a table's cell added whole as the cell", () => {
+        const editor = new Editor({
+            extensions: planExtensions([PlanChanges]),
+            content: '# Plan\n\n| File | Why |\n| --- | --- |\n| `job.py` | the job |\n| `menu.py` | the menu |',
+            contentType: 'markdown',
+        })
+        const base = textOf(editor, '# Plan\n\n| File | Why |\n| --- | --- |\n| `job.py` | the job |')
+        editor.view.dispatch(editor.state.tr.setMeta(changesKey, { base }))
+        const cells = [...editor.view.dom.querySelectorAll('.plan-cell-add')]
+        expect(cells.map((node) => [node.nodeName, node.textContent])).toEqual([
+            ['TD', 'menu.py'],
+            ['TD', 'the menu'],
+        ])
+        expect(editor.view.dom.querySelectorAll('ins.plan-ins, .plan-block-add')).toHaveLength(0)
+        editor.destroy()
+    })
 })
