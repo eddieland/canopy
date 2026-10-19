@@ -939,8 +939,9 @@ def _memory(conn: sqlite3.Connection) -> None:
             "proposal",
             "ABC-102",
             None,
-            "export-fixtures",
-            "Report fixtures live in tests/fixtures/reports; regenerate them with `make fixtures`, never by hand.",
+            # Under lesson 8's key, so the memory page shows a proposal that would replace a lesson in force.
+            "billing-client",
+            "Billing retries go through retry() in src/billing/client.ts too; never loop on a 503 by hand.",
             "pending",
             None,
             42,

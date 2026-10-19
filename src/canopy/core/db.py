@@ -385,21 +385,6 @@ def phases(conn: sqlite3.Connection) -> dict[tuple[str, str | None], str | None]
     return found
 
 
-def tickets_snapshot(conn: sqlite3.Connection) -> frozenset[tuple[object, ...]]:
-    """Every ticket's and unit's phase, branch, cursors, and done flag, to tell whether a tick changed any (§6).
-
-    Returns:
-        One tuple per ticket and per unit. Two snapshots are equal when nothing in them changed.
-    """
-    tickets = conn.execute(
-        "SELECT 'ticket', key, phase, branch, last_comment_id, last_message_id, last_mirrored_id, done FROM tickets"
-    )
-    units = conn.execute(
-        "SELECT 'unit', ticket_key, repo, branch, pr_url, phase, last_review_id, last_ci_run_id FROM ticket_units"
-    )
-    return frozenset(tuple(r) for rows in (tickets, units) for r in rows)
-
-
 def acknowledged_message_id(conn: sqlite3.Connection) -> int | None:
     """The newest message the latest `ok` tick read, or None before the first `ok` tick that recorded one (§22).
 

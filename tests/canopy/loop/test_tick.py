@@ -20,89 +20,83 @@ from tests.canopy.helpers import (
     canopy,
     in_tick,
     only_tick,
-    overseer_does,
     overseer_titles,
     present,
-    state_block,
     titled_overseer,
     tools_of,
     tools_printed,
+    waits,
     with_events,
 )
+from tests.canopy.scenario_helpers import Scenario, Ticked, dispatches, raises, sets_phase
 from tests.conftest import CanopyEnv, executable
 
 
-def test_dry_run_tick_records_the_overseer_plan(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    with overseer_does(
-        canopy("decide", "PROJ-1", "wait", "--rationale", "checks pending"),
-        canopy("ticket", "set", "PROJ-1", "--repo", "repo", "--phase", "ci_running", "--cursor", "ci=run-1"),
-        canopy("dispatch", "PROJ-2", "--repo", "repo", "--label", "agent-ready-tester", "--kind", "implement"),
-        canopy("attention", "PROJ-3", "needs_reviewer", "--detail", "https://example.test/pr/3"),
+def test_dry_run_tick_records_the_overseer_plan(scenario: Scenario, treehouse_state: Path) -> None:
+    env = scenario.env
+    ticked = scenario.tick(
+        *waits("PROJ-1", rationale="checks pending"),
+        sets_phase("PROJ-1", Phase.CI_RUNNING, repo="repo", cursor="ci=run-1"),
+        dispatches("PROJ-2"),
+        raises("PROJ-3", "needs_reviewer", "https://example.test/pr/3"),
         canopy("decide", "PROJ-4;rm", "wait", "--rationale", "bad key"),
-    ):
-        assert main(["tick", "--dry-run"]) == 0
-        assert capsys.readouterr().out.startswith("tick 1: ok: dry run; 4 decisions")
+        dry_run=True,
+    )
+    assert ticked.printed.out.startswith("tick 1: ok: dry run; 4 decisions")
 
-        [run] = agent_runs(agent_log)
-        commands = run["commands"]
-        assert isinstance(commands, list)
-        assert commands[0]["argv"] == ["canopy", "queried"]  # the query was due, and found nothing
-        assert [c["returncode"] for c in commands] == [0, 0, 0, 0, 0, 2], commands
-        argv = run["argv"]
-        assert isinstance(argv, list)
-        assert argv[:3] == ["run", "--agent", "canopy-overseer"]
-        # The message is the state block alone; the prompt is in the definition, cached across ticks (DESIGN §6).
-        prompt = argv[3]
-        assert isinstance(prompt, str)
-        assert prompt.startswith("## State\n")
-        assert "# canopy overseer" not in prompt
-        # The state is compact JSON, one line: every step of the tick re-reads it (DESIGN §6 step 4).
-        state = prompt.split("```json\n", 1)[1].split("\n```", 1)[0]
-        assert "\n" not in state
-        assert '"tick_id":1,' in state
-        assert '"dry_run":true' in state
-        assert '"labels":["agent-ready-tester"]' in state
-        assert run["cwd"] == str(canopy_env.root)
-        snapshot = definitions.ensure(canopy_env.state_dir, config.load(canopy_env.root))
-        assert run["env"] == {"CANOPY_TICK_ID": "1", "OPENCODE_CONFIG_DIR": str(snapshot)}
-        assert "\n# canopy overseer\n" in (snapshot / "agents" / "canopy-overseer.md").read_text()
+    [run] = agent_runs(scenario.agent_log)
+    commands = run["commands"]
+    assert isinstance(commands, list)
+    assert commands[0]["argv"] == ["canopy", "queried"]  # the query was due, and found nothing
+    assert [c["returncode"] for c in commands] == [0, 0, 0, 0, 0, 2], commands
+    argv = run["argv"]
+    assert isinstance(argv, list)
+    assert argv[:3] == ["run", "--agent", "canopy-overseer"]
+    # The message is the state block alone; the prompt is in the definition, cached across ticks (DESIGN §6).
+    prompt = argv[3]
+    assert isinstance(prompt, str)
+    assert prompt.startswith("## State\n")
+    assert "# canopy overseer" not in prompt
+    # The state is compact JSON, one line: every step of the tick re-reads it (DESIGN §6 step 4).
+    state = prompt.split("```json\n", 1)[1].split("\n```", 1)[0]
+    assert "\n" not in state
+    assert '"tick_id":1,' in state
+    assert '"dry_run":true' in state
+    assert '"labels":["agent-ready-tester"]' in state
+    assert run["cwd"] == str(env.root)
+    snapshot = definitions.ensure(env.state_dir, config.load(env.root))
+    assert run["env"] == {"CANOPY_TICK_ID": "1", "OPENCODE_CONFIG_DIR": str(snapshot)}
+    assert "\n# canopy overseer\n" in (snapshot / "agents" / "canopy-overseer.md").read_text()
 
-        conn = canopy_env.journal(migrate=False)
-        tick = only_tick(conn)
-        assert (tick.status, tick.dry_run) == ("ok", 1)
-        assert tick.ended_at is not None
-        decisions = [(d.ticket_key, d.action) for d in db.decisions_for_tick(conn, 1)]
-        assert decisions == [
-            (None, "queried"),
-            ("PROJ-1", "wait"),
-            ("PROJ-2", "dispatch:implement"),
-            ("PROJ-3", "attention:needs_reviewer"),
-        ]
-        proj1 = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
-        assert proj1["phase"] is None
-        [unit] = db.units(conn, "PROJ-1")  # a phase about the PR is the unit's
-        assert (unit["phase"], unit["last_ci_run_id"]) == ("ci_running", None)  # a dry run never advances cursors
-        assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0  # nothing was dispatched
-        assert [c[0] for c in json.loads(treehouse_state.read_text())["calls"]] == ["status"]
+    conn = scenario.conn
+    assert only_tick(conn).id == ticked.tick.id
+    assert (ticked.tick.status, ticked.tick.dry_run) == ("ok", 1)
+    assert ticked.tick.ended_at is not None
+    assert [(d.ticket_key, d.action) for d in ticked.decisions] == [
+        (None, "queried"),
+        ("PROJ-1", "wait"),
+        ("PROJ-2", "dispatch:implement"),
+        ("PROJ-3", "attention:needs_reviewer"),
+    ]
+    proj1 = conn.execute("SELECT * FROM tickets WHERE key = 'PROJ-1'").fetchone()
+    assert proj1["phase"] is None
+    [unit] = db.units(conn, "PROJ-1")  # a phase about the PR is the unit's
+    assert (unit["phase"], unit["last_ci_run_id"]) == ("ci_running", None)  # a dry run never advances cursors
+    assert conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 0  # nothing was dispatched
+    assert ticked.runs == []
+    assert [c[0] for c in json.loads(treehouse_state.read_text())["calls"]] == ["status"]
 
-        log_lines = [json.loads(line) for line in (canopy_env.state_dir / "canopy.log").read_text().splitlines()]
-        tick_lines = [
-            line for line in log_lines if line["msg"] in ("tick started", "running overseer", "tick finished")
-        ]
-        assert [line["tick_id"] for line in tick_lines] == [1, 1, 1]
-        output = canopy_env.state_dir / "ticks" / "1.log"
-        assert output.read_text().startswith("fake agent: starting")
-        assert output.stat().st_mode & 0o077 == 0
-        # The state block is kept beside it, as the input of the transcript's first model call (DESIGN §22).
-        kept = canopy_env.state_dir / "ticks" / "1.prompt"
-        assert kept.read_text() == prompt
-        assert kept.stat().st_mode & 0o077 == 0
-        assert canopy_env.state_dir.stat().st_mode & 0o077 == 0
+    log_lines = [json.loads(line) for line in (env.state_dir / "canopy.log").read_text().splitlines()]
+    tick_lines = [line for line in log_lines if line["msg"] in ("tick started", "running overseer", "tick finished")]
+    assert [line["tick_id"] for line in tick_lines] == [1, 1, 1]
+    output = env.state_dir / "ticks" / "1.log"
+    assert output.read_text().startswith("fake agent: starting")
+    assert output.stat().st_mode & 0o077 == 0
+    # The state block is kept beside it, as the input of the transcript's first model call (DESIGN §22).
+    kept = env.state_dir / "ticks" / "1.prompt"
+    assert kept.read_text() == prompt
+    assert kept.stat().st_mode & 0o077 == 0
+    assert env.state_dir.stat().st_mode & 0o077 == 0
 
 
 @pytest.mark.parametrize(
@@ -121,62 +115,49 @@ def test_the_session_title_says_what_started_the_tick_and_what_it_faces(
     assert tick.session_title(7, woken_by, tickets=tickets, running=running, open_items=open_items) == title
 
 
-def test_a_tick_run_by_hand_gives_its_overseer_a_session_title(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
-) -> None:
-    titled_overseer(canopy_env)
-    with overseer_does(
-        canopy("ticket", "set", "PROJ-1", "--repo", "repo", "--phase", "ci_running"),
-        canopy("decide", "PROJ-1", "wait", "--rationale", "checks pending"),
-    ):
-        assert main(["tick", "--dry-run"]) == 0
-        assert main(["tick", "--dry-run"]) == 0
-    assert overseer_titles(agent_log) == ["tick 1 · by hand · nothing open", "tick 2 · by hand · 1 ticket"]
+def test_a_tick_run_by_hand_gives_its_overseer_a_session_title(scenario: Scenario) -> None:
+    titled_overseer(scenario.env)
+    ci_running = sets_phase("PROJ-1", Phase.CI_RUNNING, repo="repo")
+    for _ in range(2):
+        scenario.tick(ci_running, *waits("PROJ-1", rationale="checks pending"), dry_run=True)
+    assert overseer_titles(scenario.agent_log) == ["tick 1 · by hand · nothing open", "tick 2 · by hand · 1 ticket"]
 
 
-def test_overseer_state_names_the_configured_needs_human_label(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
-) -> None:
-    canopy_env.append_shared('needs_human_label = "blocked-on-team"\n')
-    with overseer_does():
-        assert main(["tick", "--dry-run"]) == 0
-        [run] = agent_runs(agent_log)
-        argv = run["argv"]
-        assert isinstance(argv, list)
-        assert '"needs_human_label":"blocked-on-team"' in str(argv[3])
+def test_overseer_state_names_the_configured_needs_human_label(scenario: Scenario) -> None:
+    scenario.configures("workspace", tracker={"needs_human_label": "blocked-on-team"})
+    scenario.tick(dry_run=True)
+    [run] = agent_runs(scenario.agent_log)
+    argv = run["argv"]
+    assert isinstance(argv, list)
+    assert '"needs_human_label":"blocked-on-team"' in str(argv[3])
 
 
-def test_overseer_state_names_the_comment_marks(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
+def test_overseer_state_names_the_comment_marks(scenario: Scenario) -> None:
     # The overseer recognizes workers' comments by these, since workers post as the operator (D069).
-    canopy_env.append_user('\n[trust]\ncomment_suffix = "(canopy)"\n')
-    with overseer_does():
-        assert main(["tick", "--dry-run"]) == 0
-        [run] = agent_runs(agent_log)
-        argv = run["argv"]
-        assert isinstance(argv, list)
-        assert '"comment_prefix":"CANOPY:"' in str(argv[3])
-        assert '"comment_suffix":"(canopy)"' in str(argv[3])
+    scenario.configures(trust={"comment_suffix": "(canopy)"})
+    scenario.tick(dry_run=True)
+    [run] = agent_runs(scenario.agent_log)
+    argv = run["argv"]
+    assert isinstance(argv, list)
+    assert '"comment_prefix":"CANOPY:"' in str(argv[3])
+    assert '"comment_suffix":"(canopy)"' in str(argv[3])
 
 
-def test_next_tick_sees_the_journal(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
-    with overseer_does(canopy("ticket", "set", "PROJ-9", "--repo", "repo", "--phase", "needs_human")):
-        assert main(["tick", "--dry-run"]) == 0
-    with overseer_does(canopy("decide", "PROJ-9", "wait", "--rationale", "needs a human")):
-        assert main(["tick", "--dry-run"]) == 0
-        second = agent_runs(agent_log)[1]["argv"]
-        assert isinstance(second, list)
-        assert '"key":"PROJ-9"' in second[-1]
-        assert '"phase":"needs_human"' in second[-1]
-        assert '"tick_id":2' in second[-1]
+def test_next_tick_sees_the_journal(scenario: Scenario) -> None:
+    scenario.tick(sets_phase("PROJ-9", Phase.NEEDS_HUMAN, repo="repo"), dry_run=True)
+    scenario.tick(*waits("PROJ-9", rationale="needs a human"), dry_run=True)
+    second = agent_runs(scenario.agent_log)[1]["argv"]
+    assert isinstance(second, list)
+    assert '"key":"PROJ-9"' in second[-1]
+    assert '"phase":"needs_human"' in second[-1]
+    assert '"tick_id":2' in second[-1]
 
 
-def test_the_state_block_names_the_tickets_marked_done_lately(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
-) -> None:
+def test_the_state_block_names_the_tickets_marked_done_lately(scenario: Scenario) -> None:
     # A merged ticket stays open in the tracker until a human closes it, so the query keeps finding it: listed, the
     # overseer leaves it alone instead of reading it, mirroring it, and marking it done again every tick (DESIGN §7).
-    conn = canopy_env.journal()
-    repo = str(canopy_env.root)
+    conn = scenario.conn
+    repo = str(scenario.env.root)
     with in_tick(conn) as tick_id:
         for key in ("PROJ-1", "PROJ-2", "PROJ-3", "PROJ-7"):
             db.set_ticket(conn, key, repo, done=True)
@@ -192,6 +173,7 @@ def test_the_state_block_names_the_tickets_marked_done_lately(
     with db.transaction(conn):
         db.forget_ticket(conn, "PROJ-7", channel="cli", branch=None, prs=[])
     db.set_ticket(conn, "PROJ-7", repo, done=True)
+    # Time passes for these two tickets alone, which `time_passes` cannot say.
     long_ago = db.format_time(datetime.now(UTC) - timedelta(days=tick.RECENTLY_DONE_DAYS + 1))
     with db.transaction(conn):
         conn.execute("UPDATE decisions SET created_at = ? WHERE ticket_key = 'PROJ-2'", (long_ago,))
@@ -202,9 +184,8 @@ def test_the_state_block_names_the_tickets_marked_done_lately(
         db.finish_tick(conn, tick_id, TickStatus.OK, "")
     [done_at] = conn.execute("SELECT created_at FROM decisions WHERE ticket_key = 'PROJ-1'").fetchone()
     [newest_at] = conn.execute("SELECT created_at FROM decisions WHERE id = ?", (newest,)).fetchone()
-    with overseer_does(canopy("decide", "PROJ-5", "wait", "--rationale", "checks pending")):
-        assert main(["tick", "--dry-run"]) == 0
-        state = state_block(agent_log)
+    scenario.tick(*waits("PROJ-5", rationale="checks pending"), dry_run=True)
+    state = scenario.state()
     # Not PROJ-2, done too long ago; not PROJ-4, with no `done` decision; not PROJ-5, which is not marked done; not
     # PROJ-6, closed; not PROJ-7, whose decision came before it was forgotten.
     assert state["recently_done"] == [
@@ -214,68 +195,48 @@ def test_the_state_block_names_the_tickets_marked_done_lately(
     assert [t["key"] for t in state["tickets"]] == ["PROJ-5"]
 
 
-def query_every(env: CanopyEnv, minutes: int) -> None:
-    labels = 'labels = ["agent-ready-tester"]\n'
-    env.write_user(env.user_file.read_text().replace(labels, f"{labels}query_every_minutes = {minutes}\n"))
+def test_the_query_runs_every_tick_by_default(scenario: Scenario) -> None:
+    ticks = [scenario.tick(), scenario.tick()]
+    assert scenario.state()["query_due"] is True
+    assert [t.tick.query_due for t in ticks] == [True, True]
 
 
-def test_the_query_runs_every_tick_by_default(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
-    with overseer_does():
-        assert main(["tick"]) == 0
-        assert main(["tick"]) == 0
-        assert state_block(agent_log)["query_due"] is True
-    rows = canopy_env.journal(migrate=False).execute("SELECT query_due FROM ticks ORDER BY id").fetchall()
-    assert [r["query_due"] for r in rows] == [1, 1]
-
-
-def test_the_query_runs_again_once_its_spacing_has_passed(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
-) -> None:
-    query_every(canopy_env, 30)
-    conn = canopy_env.journal(migrate=False)
+def test_the_query_runs_again_once_its_spacing_has_passed(scenario: Scenario) -> None:
+    scenario.configures(tracker={"query_every_minutes": 30})
     due: list[bool] = []
-    with overseer_does():
-        for _ in range(2):
-            assert main(["tick"]) == 0
-            due.append(state_block(agent_log)["query_due"])
-        # The first tick ran it 31 minutes ago; the second, which left it out, does not count.
-        ago = db.format_time(datetime.now(UTC) - timedelta(minutes=31))
-        with db.transaction(conn):
-            conn.execute("UPDATE ticks SET started_at = ? WHERE id = 1", (ago,))
-        assert main(["tick"]) == 0
-        due.append(state_block(agent_log)["query_due"])
+    ticks: list[Ticked] = []
+    for _ in range(2):
+        ticks.append(scenario.tick())
+        due.append(scenario.state()["query_due"])
+    # The first tick ran it 31 minutes ago; the second, which left it out, does not count.
+    scenario.time_passes(minutes=31)
+    ticks.append(scenario.tick())
+    due.append(scenario.state()["query_due"])
     assert due == [True, False, True]
-    assert [r["query_due"] for r in conn.execute("SELECT query_due FROM ticks ORDER BY id")] == [1, 0, 1]
+    assert [t.tick.query_due for t in ticks] == [True, False, True]
 
 
-def test_only_a_live_ok_tick_counts_as_having_run_the_query(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
-) -> None:
-    query_every(canopy_env, 30)
+def test_only_a_live_ok_tick_counts_as_having_run_the_query(scenario: Scenario) -> None:
+    scenario.configures(tracker={"query_every_minutes": 30})
     due: list[bool] = []
-    with overseer_does():
-        assert main(["tick", "--dry-run"]) == 0
-        due.append(state_block(agent_log)["query_due"])
-        with overseer_does(exit_code=3):
-            assert main(["tick"]) == 1
-        due.append(state_block(agent_log)["query_due"])
-        for _ in range(2):
-            assert main(["tick"]) == 0
-            due.append(state_block(agent_log)["query_due"])
+    scenario.tick(dry_run=True)
+    due.append(scenario.state()["query_due"])
+    scenario.tick(exit_code=3, code=1)
+    due.append(scenario.state()["query_due"])
+    for _ in range(2):
+        scenario.tick()
+        due.append(scenario.state()["query_due"])
     assert due == [True, True, True, False]
 
 
-def test_a_tick_from_before_the_spacing_was_recorded_ran_the_query(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
-) -> None:
-    query_every(canopy_env, 30)
-    conn = canopy_env.journal()
+def test_a_tick_from_before_the_spacing_was_recorded_ran_the_query(scenario: Scenario) -> None:
+    scenario.configures(tracker={"query_every_minutes": 30})
+    conn = scenario.conn
     with in_tick(conn) as tick_id:
         db.finish_tick(conn, tick_id, TickStatus.OK, "")
     assert conn.execute("SELECT query_due FROM ticks").fetchone()["query_due"] is None
-    with overseer_does():
-        assert main(["tick"]) == 0
-        assert state_block(agent_log)["query_due"] is False
+    scenario.tick()
+    assert scenario.state()["query_due"] is False
 
 
 @pytest.mark.parametrize(
@@ -286,18 +247,12 @@ def test_a_tick_from_before_the_spacing_was_recorded_ran_the_query(
         (0, "", "final message has no CANOPY_TICK_DONE line"),
     ],
 )
-def test_overseer_failure_closes_the_tick(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    case: tuple[int, str, str],
-) -> None:
+def test_overseer_failure_closes_the_tick(scenario: Scenario, case: tuple[int, str, str]) -> None:
     exit_code, last_line, summary = case
-    with overseer_does(result=last_line, exit_code=exit_code):
-        assert main(["tick", "--dry-run"]) == 1
-        tick = only_tick(canopy_env.journal(migrate=False))
-        assert tick.status == "overseer_failed"
-        assert summary in tick.summary
+    failed = scenario.tick(result=last_line, exit_code=exit_code, dry_run=True, code=1)
+    assert only_tick(scenario.conn).id == failed.tick.id
+    assert failed.tick.status == "overseer_failed"
+    assert summary in failed.tick.summary
 
 
 @pytest.mark.parametrize(
@@ -311,128 +266,95 @@ def test_overseer_failure_closes_the_tick(
         ("canopy_tick_done", "overseer_failed"),
     ],
 )
-def test_the_done_token_is_a_line_anywhere_in_the_final_message(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    final: str,
-    status: str,
-) -> None:
-    with_events(canopy_env, "canopy-overseer")
-    with overseer_does(result=final):
-        main(["tick", "--dry-run"])
-        assert canopy_env.journal(migrate=False).execute("SELECT status FROM ticks").fetchone()[0] == status
+def test_the_done_token_is_a_line_anywhere_in_the_final_message(scenario: Scenario, final: str, status: str) -> None:
+    with_events(scenario.env, "canopy-overseer")
+    ticked = scenario.tick(result=final, dry_run=True, code=0 if status == "ok" else 1)
+    assert ticked.tick.status == status
 
 
-def test_the_done_token_in_an_earlier_message_fails_the_tick(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-) -> None:
+def test_the_done_token_in_an_earlier_message_fails_the_tick(scenario: Scenario) -> None:
     """A run that named the token, then stopped before the procedure's end, did not finish it."""
-    with_events(canopy_env, "canopy-overseer")
-    with overseer_does(result="Now reading the next ticket.", says="CANOPY_TICK_DONE"):
-        main(["tick", "--dry-run"])
-        tick = only_tick(canopy_env.journal(migrate=False))
-        assert (tick.status, tick.summary) == (
-            "overseer_failed",
-            "overseer's final message has no CANOPY_TICK_DONE line",
-        )
+    with_events(scenario.env, "canopy-overseer")
+    failed = scenario.tick(result="Now reading the next ticket.", says="CANOPY_TICK_DONE", dry_run=True, code=1)
+    assert only_tick(scenario.conn).id == failed.tick.id
+    assert (failed.tick.status, failed.tick.summary) == (
+        "overseer_failed",
+        "overseer's final message has no CANOPY_TICK_DONE line",
+    )
 
 
 @pytest.mark.parametrize(("last_line", "status"), [("CANOPY_TICK_DONE", "ok"), ("I got distracted", "overseer_failed")])
 def test_an_overseer_printing_json_events_is_read_by_their_text(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    last_line: str,
-    status: str,
+    scenario: Scenario, last_line: str, status: str
 ) -> None:
     """With OpenCode's `--format json`, its last line of stdout is an event; the done line is in the events' text."""
-    with_events(canopy_env, "canopy-overseer")
-    with overseer_does(result=last_line):
-        main(["tick", "--dry-run"])
-        assert canopy_env.journal(migrate=False).execute("SELECT status FROM ticks").fetchone()[0] == status
+    with_events(scenario.env, "canopy-overseer")
+    ticked = scenario.tick(result=last_line, dry_run=True, code=0 if status == "ok" else 1)
+    assert ticked.tick.status == status
 
 
 @pytest.mark.parametrize("last_line", ["CANOPY_TICK_DONE", "I got distracted"])
-def test_a_tick_records_and_prints_what_its_overseer_cost(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    capsys: pytest.CaptureFixture[str],
-    last_line: str,
-) -> None:
+def test_a_tick_records_and_prints_what_its_overseer_cost(scenario: Scenario, last_line: str) -> None:
     """With events, the tick keeps the overseer's session and summed cost, whether or not the overseer succeeded."""
-    with_events(canopy_env, "canopy-overseer")
+    with_events(scenario.env, "canopy-overseer")
     read = ["echo", "read it"]
-    with overseer_does(read, result=last_line, session="ses_o1"):
-        main(["tick", "--dry-run"])
+    code = 0 if last_line == "CANOPY_TICK_DONE" else 1
+    ticked = scenario.tick(read, result=last_line, session="ses_o1", dry_run=True, code=code)
 
-        conn = canopy_env.journal(migrate=False)
-        tick = only_tick(conn)
-        assert (tick.session_id, tick.cost_usd) == ("ses_o1", 0.25)  # two model calls, summed
-        tokens = ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
-        assert tuple(getattr(tick, c) for c in tokens) == (2000, 400, 60, 8000, 1000)
-        assert tick.tokens_peak_context == 5500
-        assert (tick.tokens_first_call, tick.tokens_first_cache_write) == (5500, 500)
-        assert (canopy_env.state_dir / definitions.RUNTIME_DIR / present(tick.definitions_digest)).is_dir()
-        # `canopy queried` and the echo, each a `bash` call that returned its stdout.
-        [(tool, calls, _, _)] = tools_of(conn, "ticks", tick.id)
-        assert (tool, calls) == ("bash", 2)
-        assert tools_of(conn, "ticks", tick.id) == tools_printed(agent_log, "canopy-overseer")
-        assert capsys.readouterr().out.rstrip().endswith("(cost $0.25, 3.5k tokens, 5.5k peak context)")
+    conn = scenario.conn
+    tick = ticked.tick
+    assert only_tick(conn).id == tick.id
+    assert (tick.session_id, tick.cost_usd) == ("ses_o1", 0.25)  # two model calls, summed
+    tokens = ("tokens_input", "tokens_output", "tokens_reasoning", "tokens_cache_read", "tokens_cache_write")
+    assert tuple(getattr(tick, c) for c in tokens) == (2000, 400, 60, 8000, 1000)
+    assert tick.tokens_peak_context == 5500
+    assert (tick.tokens_first_call, tick.tokens_first_cache_write) == (5500, 500)
+    assert (scenario.env.state_dir / definitions.RUNTIME_DIR / present(tick.definitions_digest)).is_dir()
+    # `canopy queried` and the echo, each a `bash` call that returned its stdout.
+    [(tool, calls, _, _)] = tools_of(conn, "ticks", tick.id)
+    assert (tool, calls) == ("bash", 2)
+    assert tools_of(conn, "ticks", tick.id) == tools_printed(scenario.agent_log, "canopy-overseer")
+    assert ticked.printed.out.rstrip().endswith("(cost $0.25, 3.5k tokens, 5.5k peak context)")
 
 
-def test_a_running_tick_shows_its_overseer_session_spend_and_output_so_far(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
-) -> None:
+def test_a_running_tick_shows_its_overseer_session_spend_and_output_so_far(scenario: Scenario) -> None:
     """What the overseer has printed is on the tick and in its log as it prints it, so a page or `canopy decisions`
     shows it mid-tick: its session, what its finished model calls cost, and its output (DESIGN §6, §22)."""
-    with_events(canopy_env, "canopy-overseer")
-    with overseer_does(canopy("decisions"), session="ses_o1"):
-        assert main(["tick", "--dry-run"]) == 0
+    with_events(scenario.env, "canopy-overseer")
+    scenario.tick(canopy("decisions"), session="ses_o1", dry_run=True)
 
-        [run] = agent_runs(agent_log)
-        commands = run["commands"]
-        assert isinstance(commands, list)
-        queried, decisions = commands
-        assert queried["argv"] == ["canopy", "queried"]
-        assert "Tick 1: running (dry run)" in decisions["stdout"]
-        # The first of its two model calls has ended, before it ran its commands.
-        assert "overseer session ses_o1  $0.12, 1.7k tokens, 5.5k peak context\n" in decisions["stdout"]
-        assert "overseer output: " in decisions["stdout"]
+    [run] = agent_runs(scenario.agent_log)
+    commands = run["commands"]
+    assert isinstance(commands, list)
+    queried, decisions = commands
+    assert queried["argv"] == ["canopy", "queried"]
+    assert "Tick 1: running (dry run)" in decisions["stdout"]
+    # The first of its two model calls has ended, before it ran its commands.
+    assert "overseer session ses_o1  $0.12, 1.7k tokens, 5.5k peak context\n" in decisions["stdout"]
+    assert "overseer output: " in decisions["stdout"]
     # Its log holds the events as printed, then its stderr once it ended.
-    output = (canopy_env.root / ".canopy" / "ticks" / "1.log").read_text()
+    output = (scenario.env.root / ".canopy" / "ticks" / "1.log").read_text()
     assert '"sessionID": "ses_o1"' in output
     assert output.rstrip().endswith("--- stderr ---")
 
 
-def test_a_tick_whose_overseer_reports_nothing_records_no_cost(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_a_tick_whose_overseer_reports_nothing_records_no_cost(scenario: Scenario) -> None:
     """Plain stdout, as from a template without `--format json`, reports no session and no cost."""
-    with overseer_does():
-        main(["tick", "--dry-run"])
-        tick = only_tick(canopy_env.journal(migrate=False))
-        assert (tick.status, tick.session_id, tick.cost_usd) == ("ok", None, None)
-        assert "cost" not in capsys.readouterr().out
+    ticked = scenario.tick(dry_run=True)
+    assert only_tick(scenario.conn).id == ticked.tick.id
+    assert (ticked.tick.status, ticked.tick.session_id, ticked.tick.cost_usd) == ("ok", None, None)
+    assert "cost" not in ticked.printed.out
 
 
-def test_overseer_refuses_to_start_when_the_workspace_defines_its_agent(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
-) -> None:
+def test_overseer_refuses_to_start_when_the_workspace_defines_its_agent(scenario: Scenario) -> None:
     # The overseer runs at the workspace root, where OpenCode reads config (D044).
-    config = canopy_env.root / "opencode.json"
+    config = scenario.env.root / "opencode.json"
     config.write_text('{"agent": {"canopy-overseer": {"permission": {"bash": {"*": "deny", "rm *": "allow"}}}}}')
-    assert main(["tick", "--dry-run"]) == 1
-    tick = only_tick(canopy_env.journal(migrate=False))
-    assert tick.status == "overseer_failed"
-    assert f"defines one of canopy's agents ({config})" in tick.summary
-    assert not agent_log.exists()
+    failed = scenario.tick(dry_run=True, code=1)
+    assert only_tick(scenario.conn).id == failed.tick.id
+    assert failed.tick.status == "overseer_failed"
+    assert f"defines one of canopy's agents ({config})" in failed.tick.summary
+    assert not scenario.agent_log.exists()
 
 
 class TimingOutAgent:
@@ -466,21 +388,22 @@ def test_overseer_timeout(canopy_env: CanopyEnv, treehouse_state: Path) -> None:
     assert (tick.status, tick.summary) == ("overseer_failed", "overseer timed out after 15 minutes")
 
 
-def test_missing_overseer_command(canopy_env: CanopyEnv, treehouse_state: Path) -> None:
-    canopy_env.write_user(canopy_env.user_file.read_text().replace("'env ", "'no-such-program ", 1))
-    assert main(["tick", "--dry-run"]) == 1
-    tick = only_tick(canopy_env.journal(migrate=False))
-    assert tick.status == "overseer_failed"
-    assert "command not found" in tick.summary
+def test_missing_overseer_command(scenario: Scenario) -> None:
+    command = "no-such-program OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-overseer {prompt}"
+    scenario.configures(runtime={"overseer_cmd": command})
+    failed = scenario.tick(dry_run=True, code=1)
+    assert only_tick(scenario.conn).id == failed.tick.id
+    assert failed.tick.status == "overseer_failed"
+    assert "command not found" in failed.tick.summary
 
 
-def test_treehouse_failure_skips_the_overseer(canopy_env: CanopyEnv, agent_log: Path) -> None:
+def test_treehouse_failure_skips_the_overseer(scenario: Scenario) -> None:
     with mock.patch.dict(os.environ):
         os.environ.pop("FAKE_TREEHOUSE_STATE", None)  # the fake treehouse then exits 2
-        assert main(["tick", "--dry-run"]) == 1
-        tick = only_tick(canopy_env.journal(migrate=False))
-        assert tick.status == "reconcile_failed"
-        assert not agent_log.exists()
+        failed = scenario.tick(dry_run=True, code=1)
+    assert only_tick(scenario.conn).id == failed.tick.id
+    assert failed.tick.status == "reconcile_failed"
+    assert not scenario.agent_log.exists()
 
 
 @contextmanager
@@ -510,34 +433,24 @@ def broken_canopy(tmp_path: Path, script: str) -> Iterator[None]:
     ],
 )
 def test_a_canopy_that_does_not_work_closes_the_tick_without_the_overseer(
-    canopy_env: CanopyEnv,
-    treehouse_state: Path,
-    agent_log: Path,
-    tmp_path: Path,
-    script: str,
-    summary: str,
+    scenario: Scenario, tmp_path: Path, script: str, summary: str
 ) -> None:
-    with overseer_does():
-        assert main(["tick", "--dry-run"]) == 0  # an `ok` tick, whose list the failed one leaves standing
-        with broken_canopy(tmp_path, script):
-            assert main(["tick", "--dry-run"]) == 1
-            assert main(["tick", "--dry-run"]) == 1
-        assert len(agent_runs(agent_log)) == 1  # the overseer ran for the first tick alone
+    scenario.tick(dry_run=True)  # an `ok` tick, whose list the failed one leaves standing
+    with broken_canopy(tmp_path, script):
+        broken = [scenario.tick(dry_run=True, code=1) for _ in range(2)]
+    assert len(agent_runs(scenario.agent_log)) == 1  # the overseer ran for the first tick alone
 
-        conn = canopy_env.journal(migrate=False)
-        ticks = conn.execute("SELECT id, status, summary FROM ticks ORDER BY id").fetchall()
-        assert [(t["status"], t["summary"]) for t in ticks[1:]] == [("canopy_unavailable", summary)] * 2
-        [item] = attention.current(conn)
-        assert (item.ticket_key, item.reason) == (None, "canopy_unavailable")
-        assert item.detail.startswith(f"{summary}; the overseer did not run.")
-        first = conn.execute("SELECT created_at FROM decisions WHERE tick_id = ?", (ticks[1]["id"],)).fetchone()[0]
-        assert item.since == first  # open since the first tick of the streak
-        assert "canopy_unavailable" in (canopy_env.state_dir / "attention.md").read_text()
+    assert [(t.tick.status, t.tick.summary) for t in broken] == [("canopy_unavailable", summary)] * 2
+    assert scenario.attention() == [(None, "canopy_unavailable")]
+    [item] = attention.current(scenario.conn)
+    assert item.detail.startswith(f"{summary}; the overseer did not run.")
+    assert item.since == broken[0].decisions[0].created_at  # open since the first tick of the streak
+    assert "canopy_unavailable" in (scenario.env.state_dir / "attention.md").read_text()
 
-        # Once `canopy` works again, the next tick runs the overseer and the item is gone.
-        assert main(["tick", "--dry-run"]) == 0
-        assert len(agent_runs(agent_log)) == 2
-        assert attention.current(conn) == []
+    # Once `canopy` works again, the next tick runs the overseer and the item is gone.
+    scenario.tick(dry_run=True)
+    assert len(agent_runs(scenario.agent_log)) == 2
+    assert scenario.attention() == []
 
 
 def test_busy_lock_exits_zero_without_a_tick(
@@ -555,65 +468,52 @@ def test_busy_lock_exits_zero_without_a_tick(
     )
 
 
-def test_unfinished_tick_is_abandoned(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
-    with overseer_does():
-        assert main(["status"]) == 0  # creates and migrates the journal
-        conn = canopy_env.journal(migrate=False)
-        dead = db.start_tick(conn, dry_run=True)
-        assert main(["tick", "--dry-run"]) == 0
-        assert conn.execute("SELECT status FROM ticks WHERE id = ?", (dead,)).fetchone()[0] == "abandoned"
+def test_unfinished_tick_is_abandoned(scenario: Scenario) -> None:
+    dead = db.start_tick(scenario.conn, dry_run=True)
+    scenario.tick(dry_run=True)
+    assert present(db.get_tick(scenario.conn, dead)).status == "abandoned"
 
 
-def test_prompt_override(canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path) -> None:
-    with overseer_does():
-        overrides = canopy_env.user_file.parent / "prompts"
-        overrides.mkdir()
-        (overrides / "overseer.md").write_text("# my overseer\n")
-        assert main(["tick", "--dry-run"]) == 0
-        [run] = agent_runs(agent_log)
-        argv, env = run["argv"], run["env"]
-        assert isinstance(argv, list)
-        assert isinstance(env, dict)
-        # The override still wins, and reaches the run in its definition, not its message (DESIGN §6, §12).
-        assert argv[-1].startswith("## State\n")
-        definition = Path(env["OPENCODE_CONFIG_DIR"]) / "agents" / "canopy-overseer.md"
-        assert "\n---\n\n# my overseer\n\n" in definition.read_text()
-        assert "# canopy overseer" not in definition.read_text()
+def test_prompt_override(scenario: Scenario) -> None:
+    overrides = scenario.env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "overseer.md").write_text("# my overseer\n")
+    scenario.tick(dry_run=True)
+    [run] = agent_runs(scenario.agent_log)
+    argv, env = run["argv"], run["env"]
+    assert isinstance(argv, list)
+    assert isinstance(env, dict)
+    # The override still wins, and reaches the run in its definition, not its message (DESIGN §6, §12).
+    assert argv[-1].startswith("## State\n")
+    definition = Path(env["OPENCODE_CONFIG_DIR"]) / "agents" / "canopy-overseer.md"
+    assert "\n---\n\n# my overseer\n\n" in definition.read_text()
+    assert "# canopy overseer" not in definition.read_text()
 
 
-def test_overseer_output_is_private_even_if_the_file_existed(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
-) -> None:
-    with overseer_does():
-        ticks = canopy_env.state_dir / "ticks"
-        ticks.mkdir(parents=True)
-        stale = ticks / "1.log"
-        stale.write_text("left over from a restored backup\n")
-        stale.chmod(0o644)
-        assert main(["tick", "--dry-run"]) == 0
-        assert stale.stat().st_mode & 0o777 == 0o600
-        assert stale.read_text().startswith("fake agent: starting")
+def test_overseer_output_is_private_even_if_the_file_existed(scenario: Scenario) -> None:
+    ticks = scenario.env.state_dir / "ticks"
+    ticks.mkdir(parents=True)
+    stale = ticks / "1.log"
+    stale.write_text("left over from a restored backup\n")
+    stale.chmod(0o644)
+    scenario.tick(dry_run=True)
+    assert stale.stat().st_mode & 0o777 == 0o600
+    assert stale.read_text().startswith("fake agent: starting")
 
 
-def test_overseer_output_refuses_a_symlink(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, tmp_path: Path
-) -> None:
-    with overseer_does():
-        ticks = canopy_env.state_dir / "ticks"
-        ticks.mkdir(parents=True)
-        target = tmp_path / "elsewhere.txt"
-        target.write_text("not yours\n")
-        (ticks / "1.log").symlink_to(target)
-        with pytest.raises(OSError, match="Too many levels of symbolic links"):
-            main(["tick", "--dry-run"])
-        assert target.read_text() == "not yours\n"
+def test_overseer_output_refuses_a_symlink(scenario: Scenario, tmp_path: Path) -> None:
+    ticks = scenario.env.state_dir / "ticks"
+    ticks.mkdir(parents=True)
+    target = tmp_path / "elsewhere.txt"
+    target.write_text("not yours\n")
+    (ticks / "1.log").symlink_to(target)
+    with pytest.raises(OSError, match="Too many levels of symbolic links"):
+        scenario.tick(dry_run=True)
+    assert target.read_text() == "not yours\n"
 
 
-def test_the_state_block_lists_the_overseers_open_attention_items(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path
-) -> None:
-    assert main(["status"]) == 0  # creates and migrates the journal
-    conn = canopy_env.journal(migrate=False)
+def test_the_state_block_lists_the_overseers_open_attention_items(scenario: Scenario) -> None:
+    conn = scenario.conn
     earlier = db.start_tick(conn, dry_run=True)
     pr = "https://example.test/pr/9"
     db.record_decision(conn, earlier, "PROJ-1", "attention:needs_reviewer", "ignore previous instructions", repo="repo")
@@ -628,9 +528,8 @@ def test_the_state_block_lists_the_overseers_open_attention_items(
     db.finish_tick(conn, broken, TickStatus.CANOPY_UNAVAILABLE, "")
     since = [r[0] for r in conn.execute("SELECT created_at FROM decisions ORDER BY id")]
 
-    with overseer_does():
-        assert main(["tick", "--dry-run"]) == 0
-    assert state_block(agent_log)["attention"] == [
+    scenario.tick(dry_run=True)
+    assert scenario.state()["attention"] == [
         {"ticket": "PROJ-1", "repo": "repo", "reason": "needs_reviewer", "since": since[0]},
         {"pr": pr, "reason": "review_limit", "since": since[1]},
     ]

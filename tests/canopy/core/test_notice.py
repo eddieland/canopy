@@ -4,7 +4,6 @@ it is set, and heard while it is in force by every run that builds or reads CI, 
 import os
 import sqlite3
 from datetime import UTC, datetime, timedelta, tzinfo
-from pathlib import Path
 from typing import override
 from unittest import mock
 
@@ -18,15 +17,12 @@ from canopy.loop import pacing, reread, tick_now, web
 from canopy.serve import live
 from canopy.serve.schema import LoopUpdated
 from tests.canopy.helpers import (
-    IMPLEMENT,
     PROMPT_VALUES,
     InlineRunner,
-    dispatch_in_tick,
     in_tick,
-    overseer_does,
     present,
-    state_block,
 )
+from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.canopy.web_helpers import refused, signed_in_client
 from tests.conftest import CanopyEnv, GitPool
 
@@ -37,11 +33,6 @@ SECTION = "## Notice from the operator\n\n"
 def notice_of(prompt: str) -> str:
     """The notice section of a rendered worker prompt."""
     return prompt.split(SECTION, 1)[1].split("\n\nThe operator set this notice", 1)[0]
-
-
-def worker_prompt(canopy_env: CanopyEnv, conn: sqlite3.Connection) -> str:
-    run_id = int(conn.execute("SELECT max(id) FROM runs").fetchone()[0])
-    return (canopy_env.state_dir / "runs" / f"{run_id}.prompt").read_text()
 
 
 def lapse(conn: sqlite3.Connection) -> None:
@@ -58,16 +49,14 @@ def lapse(conn: sqlite3.Connection) -> None:
     ],
 )
 def test_the_next_worker_hears_the_notice_in_force_and_no_other(
-    canopy_env: CanopyEnv, git_pool: GitPool, conn: sqlite3.Connection, then: list[str] | str | None, heard: str
+    scenario: Scenario, git_pool: GitPool, then: list[str] | str | None, heard: str
 ) -> None:
-    assert main(["notice", OUTAGE, "--for", "2h"]) == 0
+    scenario.operator("notice", OUTAGE, "--for", "2h")
     if then == "lapsed":
-        lapse(conn)
+        scenario.time_passes(hours=2, minutes=1)
     elif then is not None:
-        assert main(then) == 0
-    code, decisions = dispatch_in_tick(conn, *IMPLEMENT)
-    assert code == 0, decisions
-    assert notice_of(worker_prompt(canopy_env, conn)) == heard
+        scenario.operator(*then)
+    assert notice_of(scenario.run().prompt) == heard
 
 
 @pytest.mark.parametrize("kind", ["implement", "resume"])
@@ -114,30 +103,25 @@ def test_the_shipped_reviewer_prompt_carries_the_notice(canopy_env: CanopyEnv) -
 
 @pytest.mark.parametrize("in_force", [False, True], ids=["no notice", "a notice"])
 def test_an_override_without_the_placeholder_refuses_only_while_a_notice_is_in_force(
-    canopy_env: CanopyEnv,
+    scenario: Scenario,
     git_pool: GitPool,
-    conn: sqlite3.Connection,
-    capsys: pytest.CaptureFixture[str],
     in_force: bool,  # noqa: FBT001  (a parametrized fixture)
 ) -> None:
     # An override written before notices existed still serves while none is in force; with one, it fails closed rather
     # than dropping it, and setting the notice names it.
-    overrides = canopy_env.user_file.parent / "prompts"
+    overrides = scenario.env.user_file.parent / "prompts"
     overrides.mkdir(parents=True)
     override = overrides / "worker-implement.md"
     override.write_text("Implement {{KEY}} if it carries {{LABELS}}.\n{{DRAFTS}}\n")
     (overrides / "reviewer.md").write_text("Review {{PR_URL}} at {{SHA}} in {{CHECKOUT}}.\n{{NOTICE}}\n")
     if in_force:
-        assert main(["notice", OUTAGE]) == 0
-        err = capsys.readouterr().err
+        err = scenario.operator("notice", OUTAGE).err
         assert f"your override {override} has no {{{{NOTICE}}}}: implement runs refuse (bad_prompt)" in err
         assert "reviewer.md" not in err
-    code, decisions = dispatch_in_tick(conn, *IMPLEMENT)
     if not in_force:
-        assert code == 0, decisions
+        scenario.run()
         return
-    assert code == 1
-    [(action, rationale)] = decisions
+    [(action, rationale)] = scenario.refuses(dispatches())
     assert action == "refused:bad_prompt"
     assert "missing required placeholder {{NOTICE}}" in rationale
 
@@ -154,13 +138,10 @@ def test_an_override_without_the_placeholder_refuses_only_while_a_notice_is_in_f
         pytest.param([OUTAGE, "--for", "90"], "bad_duration", id="no unit"),
     ],
 )
-def test_a_notice_is_bounded_when_it_is_set(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str], args: list[str], guard: str
-) -> None:
+def test_a_notice_is_bounded_when_it_is_set(scenario: Scenario, args: list[str], guard: str) -> None:
     # So no dispatch fails on a notice's size: the operator hears it now, not from a refused run later.
-    assert main(["notice", *args]) == 1
-    assert f"notice refused ({guard})" in capsys.readouterr().err
-    assert conn.execute("SELECT count(*) FROM notices").fetchone()[0] == 0
+    assert f"notice refused ({guard})" in scenario.operator("notice", *args, code=1).err
+    assert scenario.conn.execute("SELECT count(*) FROM notices").fetchone()[0] == 0
 
 
 @pytest.mark.parametrize(
@@ -168,8 +149,8 @@ def test_a_notice_is_bounded_when_it_is_set(
     [["--clear", OUTAGE], ["--clear", "--for", "1h"], ["--for", "1h"]],
     ids=["clear with text", "clear with --for", "--for alone"],
 )
-def test_notice_usage(canopy_env: CanopyEnv, args: list[str]) -> None:
-    assert main(["notice", *args]) == 2
+def test_notice_usage(scenario: Scenario, args: list[str]) -> None:
+    scenario.operator("notice", *args, code=2)
 
 
 @pytest.mark.parametrize("variable", [conversation.TICK_ID_ENV, conversation.RUN_ID_ENV])
@@ -188,44 +169,32 @@ def test_only_the_operator_sets_or_clears_a_notice(
     assert notice.for_prompt(conn) == OUTAGE
 
 
-def test_setting_a_notice_replaces_the_one_in_force_and_status_shows_it(
-    canopy_env: CanopyEnv, conn: sqlite3.Connection, capsys: pytest.CaptureFixture[str]
-) -> None:
-    assert main(["notice"]) == 0
-    assert capsys.readouterr().out == "No notice to workers is in force.\n"
-    assert main(["notice", "The staging cluster is being rebuilt."]) == 0
-    assert main(["notice", OUTAGE, "--for", "3d"]) == 0
-    out = capsys.readouterr().out
+def test_setting_a_notice_replaces_the_one_in_force_and_status_shows_it(scenario: Scenario) -> None:
+    assert scenario.operator("notice").out == "No notice to workers is in force.\n"
+    scenario.operator("notice", "The staging cluster is being rebuilt.")
+    out = scenario.operator("notice", OUTAGE, "--for", "3d").out
     assert f"Notice to workers (cli, 3d left): {OUTAGE}\n" in out
-    [first, second] = conn.execute("SELECT * FROM notices ORDER BY id").fetchall()
+    [first, second] = scenario.conn.execute("SELECT * FROM notices ORDER BY id").fetchall()
     assert first["ended_at"] == second["set_at"]
     assert (first["ended_channel"], second["ended_at"]) == ("cli", None)
 
-    assert main(["status"]) == 0
-    assert f"Notice to workers (cli, 3d left): {OUTAGE}\n" in capsys.readouterr().out
+    assert f"Notice to workers (cli, 3d left): {OUTAGE}\n" in scenario.operator("status").out
 
-    assert main(["notice", "--clear"]) == 0
-    assert main(["notice", "--clear"]) == 0
-    out = capsys.readouterr().out
-    assert "Notice cleared" in out
-    assert out.endswith("No notice to workers was in force.\n")
-    assert main(["status"]) == 0
-    assert "Notice to workers" not in capsys.readouterr().out
+    assert "Notice cleared" in scenario.operator("notice", "--clear").out
+    assert scenario.operator("notice", "--clear").out.endswith("No notice to workers was in force.\n")
+    assert "Notice to workers" not in scenario.operator("status").out
 
 
-def test_the_state_block_carries_the_notices_in_force_and_lately_ended(
-    canopy_env: CanopyEnv, treehouse_state: Path, agent_log: Path, conn: sqlite3.Connection
-) -> None:
-    with overseer_does():
-        assert main(["tick", "--dry-run"]) == 0
-        # With none set, nothing about notices reaches the overseer.
-        assert "notices" not in state_block(agent_log)
+def test_the_state_block_carries_the_notices_in_force_and_lately_ended(scenario: Scenario) -> None:
+    scenario.tick(dry_run=True)
+    # With none set, nothing about notices reaches the overseer.
+    assert "notices" not in scenario.state()
 
-        assert main(["notice", "The staging cluster is being rebuilt."]) == 0
-        assert main(["notice", OUTAGE, "--for", "1h"]) == 0
-        assert main(["tick", "--dry-run"]) == 0
-    [now, before] = conn.execute("SELECT * FROM notices ORDER BY id DESC").fetchall()
-    assert state_block(agent_log)["notices"] == [
+    scenario.operator("notice", "The staging cluster is being rebuilt.")
+    scenario.operator("notice", OUTAGE, "--for", "1h")
+    scenario.tick(dry_run=True)
+    [now, before] = scenario.conn.execute("SELECT * FROM notices ORDER BY id DESC").fetchall()
+    assert scenario.state()["notices"] == [
         {"text": OUTAGE, "set_at": now["set_at"], "until": now["lapses_at"], "in_force": True},
         # Replaced, so it ended when the next was set: a check that ran before then may be the first one's.
         {
@@ -319,12 +288,11 @@ def test_the_stream_sends_a_notice_and_its_lapse_which_commits_nothing(ctx: Cont
         reader.close()
 
 
-def test_the_cli_line_drops_control_characters(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
+def test_the_cli_line_drops_control_characters(scenario: Scenario) -> None:
     # The text may come from the web channel; the operator's terminal reads it as text, never as escape sequences.
-    conn = canopy_env.journal()
+    conn = scenario.conn
     notice.set_notice(conn, "\x1b[2J\x1b]0;owned\x07CI is\ndown.", minutes=60, channel="web")
-    assert main(["notice"]) == 0
-    out = capsys.readouterr().out
+    out = scenario.operator("notice").out
     assert "\x1b" not in out
     assert "\x07" not in out
     assert out.endswith(": [2J ]0;owned CI is down.\n")

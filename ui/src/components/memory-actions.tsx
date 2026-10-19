@@ -53,9 +53,11 @@ export function MemorySaid({ said, className }: { said: string | null; className
  * own words and for its repository, as `canopy memory promote ID` does, since most proposals need no edit; Edit and
  * promote, which opens the form for the lesson's words and repository; and at the line's end, apart from both, Reject,
  * and Forget, for a proposal whose text must go and not merely be declined. With `edit` false, as on an attention
- * item, no Edit and promote; with `forget` false, as there, no Forget. A private ticket's run's proposal is never
- * promoted in one click: its words may hold what the operator kept off the tracker, and the form warns of that before
- * the save, so its first button opens the form, and where there is no form it says to promote it from the memory page.
+ * item, no Edit and promote; with `forget` false, as there, no Forget. Two proposals are never promoted in one click,
+ * since the form says what the click would not before the save: a private ticket's run's, whose words may hold what the
+ * operator kept off the tracker, and one whose key a lesson in force has, which the promote replaces. Their first
+ * button opens the form, and where there is no form the line says to promote them from the memory page. It reads the
+ * lessons in force to tell (`memoryQuery`, which the memory page has already read), and promotes nothing until then.
  */
 export function ProposalActions({
     proposal,
@@ -83,15 +85,23 @@ export function ProposalActions({
         onError: (error) => void refreshIfStale(client, error, onSaid),
     })
     const pending = promote.isPending || reject.isPending
+    const { data } = useQuery(memoryQuery)
+    const replaced = data === undefined ? undefined : inForceUnder(data.lessons, proposal.key)
+    const viaForm = proposal.private || replaced !== undefined
+    // What the button that opens the form says on hover, read only while `viaForm`.
+    const formTitle =
+        proposal.private || replaced === undefined
+            ? "A private ticket's run wrote it: the form warns before you save"
+            : `It replaces ${memoryRef(replaced.id)}: the form shows that lesson before you save`
     return (
         <RowLine from="key" className="flex flex-col gap-2">
             {!open && (
                 <span className="flex flex-wrap items-center gap-2">
-                    {proposal.private && edit ? (
+                    {viaForm && edit ? (
                         <Button
                             variant="outline"
                             size="xs"
-                            title="A private ticket's run wrote it: the form warns before you save"
+                            title={formTitle}
                             onClick={() => setOpen(true)}
                             disabled={pending}
                         >
@@ -102,19 +112,30 @@ export function ProposalActions({
                         <span className="text-xs text-muted-foreground" data-testid="promote-private-elsewhere">
                             private: promote it from the memory page, where the form warns first
                         </span>
-                    ) : (
+                    ) : replaced === undefined ? (
                         <Button
                             variant="outline"
                             size="xs"
                             title={`canopy memory promote ${proposal.id}`}
                             onClick={() => promote.mutate()}
-                            disabled={pending}
+                            // Until the lessons in force are read, whether it replaces one is not known.
+                            disabled={pending || data === undefined}
                         >
                             <ArrowUpFromLine />
                             Promote as written
                         </Button>
+                    ) : (
+                        <span className="text-xs text-muted-foreground" data-testid="promote-replaces-elsewhere">
+                            replaces {memoryRef(replaced.id)}: promote it from the memory page, where the form shows
+                            both
+                        </span>
                     )}
-                    {edit && !proposal.private && (
+                    {replaced !== undefined && edit && (
+                        <span className="text-xs text-muted-foreground" data-testid="proposal-replaces">
+                            replaces {memoryRef(replaced.id)}
+                        </span>
+                    )}
+                    {edit && !viaForm && (
                         <Button
                             variant="ghost"
                             size="xs"
@@ -220,15 +241,20 @@ export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson
         },
         onError: (error) => void refreshIfStale(client, error, onSaid),
     })
-    // A lesson that asks nothing keeps its verbs' room but shows them only on its row's hover or focus, as a row's copy
-    // button does, so a list of hundreds is not a wall of buttons. A touch screen, with no hover, always shows them.
+    // A lesson that asks nothing shows its verbs only on its row's hover or focus, as a row's copy button does, so a
+    // list of hundreds is not a wall of buttons, and at rest they take no room: they show over the row's end, on the
+    // panel's ground, so nothing under the row moves. A touch screen, with no hover, keeps them in the row's flow.
     const shown = asked || confirming || renew.error !== null
     return (
         <RowLine
             from="key"
             className={cn(
                 'flex flex-col gap-2',
-                !shown && 'opacity-0 group-hover/copy:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100',
+                !shown && [
+                    'pointer-fine:absolute pointer-fine:right-3 pointer-fine:bottom-1.5 pointer-fine:bg-surface',
+                    'pointer-fine:pl-2 opacity-0 group-hover/copy:opacity-100 focus-within:opacity-100',
+                    'pointer-coarse:opacity-100',
+                ],
             )}
         >
             <span className="flex flex-wrap items-center gap-2">
@@ -289,7 +315,7 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
     })
     const chars = lessonChars(text)
     const fits = chars > 0 && chars <= MAX_LESSON_CHARS
-    const replaced = data?.lessons.find((m) => m.key === source.key)
+    const replaced = data === undefined ? undefined : inForceUnder(data.lessons, source.key)
     const privateWords = source.private && text.trim() === own.trim()
 
     function submit(event: SubmitEvent<HTMLFormElement>) {
@@ -389,6 +415,11 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
             <Notice error={promote.error} />
         </form>
     )
+}
+
+/** The lesson in force under `key`, which promoting a memory under it replaces, as `promote` does; else undefined. */
+function inForceUnder(lessons: MemoryEntry[], key: string): MemoryEntry | undefined {
+    return lessons.find((m) => m.key === key)
 }
 
 /**

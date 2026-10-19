@@ -19,13 +19,13 @@ from tests.canopy.helpers import (
     DEAD_PID,
     InlineRunner,
     in_tick,
-    overseer_does,
     pool,
     present,
     slot_of,
     waits,
     worker_does,
 )
+from tests.canopy.scenario_helpers import Scenario, dispatches
 from tests.conftest import CanopyEnv, GitPool, git
 
 # What a sandbox wrapper does before git runs: new objects to the run's directory, the slot's shared ones read through.
@@ -65,49 +65,34 @@ def assert_healthy(slot: Path, primary: Path) -> None:
 
 
 def test_a_sandboxed_workers_commits_are_pushed_from_the_run_directory_and_the_slot_is_tidied(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    worktree_pool: tuple[Path, list[Path]],
-    agent_log: Path,
-    treehouse_state: Path,
-    conn: sqlite3.Connection,
+    scenario: Scenario, git_pool: GitPool, worktree_pool: tuple[Path, list[Path]], treehouse_state: Path
 ) -> None:
     primary, _ = worktree_pool
-    with worker_does(["sh", "-c", WORKER]):
-        runner = InlineRunner()
-        run_id = dispatch(conn, runner)
-        assert main(["_run", str(run_id)], runner=runner) == 0
+    run = scenario.run(dispatches(slug="work"), worker=worker_does(["sh", "-c", WORKER]))
 
-        run = present(db.get_run(conn, run_id))
-        assert run["status"] == "done"
-        pushed = git_pool.remote_head(BRANCH)
-        assert pushed is not None  # `_run`'s own push read the commit from the run's directory
-        # The commit was only ever in the run's directory: the shared one never had it.
-        assert not SubprocessRunner().run(["git", "cat-file", "-e", pushed], cwd=primary).ok
-        slot = Path(slot_of(conn, run_id)["slot_path"])
-        assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")  # back on origin/main
-        assert git("for-each-ref", "refs/worktree", cwd=slot) == ""
-        assert not objects_of(canopy_env, run_id).exists()
-        assert_healthy(slot, primary)
-        assert all(s["status"] == "available" for s in pool(treehouse_state))
+    assert run.status == "done"
+    pushed = git_pool.remote_head(BRANCH)
+    assert pushed is not None  # `_run`'s own push read the commit from the run's directory
+    # The commit was only ever in the run's directory: the shared one never had it.
+    assert not SubprocessRunner().run(["git", "cat-file", "-e", pushed], cwd=primary).ok
+    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
+    assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")  # back on origin/main
+    assert git("for-each-ref", "refs/worktree", cwd=slot) == ""
+    assert not objects_of(scenario.env, run.id).exists()
+    assert_healthy(slot, primary)
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 
 def test_an_unsandboxed_run_leaves_the_directory_empty_and_its_slot_alone(
-    canopy_env: CanopyEnv,
-    git_pool: GitPool,
-    worktree_pool: tuple[Path, list[Path]],
-    agent_log: Path,
-    conn: sqlite3.Connection,
+    scenario: Scenario, git_pool: GitPool, worktree_pool: tuple[Path, list[Path]]
 ) -> None:
-    with worker_does(hostgit.argv("commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work")):
-        runner = InlineRunner()
-        run_id = dispatch(conn, runner)
-        assert main(["_run", str(run_id)], runner=runner) == 0
+    commits = worker_does(hostgit.argv("commit", "--quiet", "--allow-empty", "-m", "PROJ-1: work"))
+    run = scenario.run(dispatches(slug="work"), worker=commits)
 
-        slot = Path(slot_of(conn, run_id)["slot_path"])
-        # Not tidied: HEAD stays on the worker's commit, which `_run` pushed, as before the object directory.
-        assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head(BRANCH)
-        assert not objects_of(canopy_env, run_id).exists()
+    slot = Path(slot_of(scenario.conn, run.id)["slot_path"])
+    # Not tidied: HEAD stays on the worker's commit, which `_run` pushed, as before the object directory.
+    assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head(BRANCH)
+    assert not objects_of(scenario.env, run.id).exists()
 
 
 def sandboxed_worker_then_kill(canopy_env: CanopyEnv, conn: sqlite3.Connection, run_id: int, slot: Path) -> None:
@@ -125,35 +110,33 @@ def sandboxed_worker_then_kill(canopy_env: CanopyEnv, conn: sqlite3.Connection, 
 @pytest.mark.parametrize("rewrites", [None, ".git", "commondir"])
 def test_reconcile_tidies_the_slots_of_a_killed_run(
     rewrites: str | None,
-    canopy_env: CanopyEnv,
+    scenario: Scenario,
     git_pool: GitPool,
     worktree_pool: tuple[Path, list[Path]],
-    agent_log: Path,
     treehouse_state: Path,
-    conn: sqlite3.Connection,
 ) -> None:
     primary, _ = worktree_pool
+    conn = scenario.conn
     run_id = dispatch(conn, InlineRunner())
     slot = Path(slot_of(conn, run_id)["slot_path"])
     link = (slot / ".git").read_bytes()
     own = present(hostgit.own_git_dir(slot, link))
-    sandboxed_worker_then_kill(canopy_env, conn, run_id, slot)
+    sandboxed_worker_then_kill(scenario.env, conn, run_id, slot)
     if rewrites == ".git":
         (slot / ".git").write_text("gitdir: /somewhere/else\n")
     elif rewrites == "commondir":
         (own / "commondir").write_text("/somewhere/else\n")
 
-    with overseer_does(*waits("PROJ-1")):
-        assert main(["tick"]) == 0
+    scenario.tick(*waits("PROJ-1"))
 
-        run = present(db.get_run(conn, run_id))
-        assert run["status"] == "crashed"
-        assert (slot / ".git").read_bytes() == link  # put back, from what `_run` recorded, before any git ran there
-        assert (own / "commondir").read_bytes() == hostgit.COMMONDIR_CONTENT
-        assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")
-        assert not objects_of(canopy_env, run_id).exists()
-        assert_healthy(slot, primary)
-        assert all(s["status"] == "available" for s in pool(treehouse_state))
+    run = present(db.get_run(conn, run_id))
+    assert run["status"] == "crashed"
+    assert (slot / ".git").read_bytes() == link  # put back, from what `_run` recorded, before any git ran there
+    assert (own / "commondir").read_bytes() == hostgit.COMMONDIR_CONTENT
+    assert git("rev-parse", "HEAD", cwd=slot) == git_pool.remote_head("main")
+    assert not objects_of(scenario.env, run_id).exists()
+    assert_healthy(slot, primary)
+    assert all(s["status"] == "available" for s in pool(treehouse_state))
 
 
 def test_without_tidying_the_run_directory_cannot_go(

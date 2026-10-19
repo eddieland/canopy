@@ -70,6 +70,25 @@
 }
 
 /*
+ * A document's type (ui/DESIGN.md, "A document"): long-form prose, a guide page or a plan, a step up from the 14px
+ * around it, with two steps of heading over it, a section and a subsection. The only `text-base` in the app, so the
+ * guide and a plan read alike.
+ */
+@utility document-text {
+    @apply text-base/7;
+}
+
+/* A document's section, `#` or `##`: the page title's size and weight. */
+@utility document-section {
+    @apply text-xl font-semibold tracking-tight;
+}
+
+/* A document's subsection, `###` or `####`: the body's size, set apart by its weight. */
+@utility document-subsection {
+    @apply text-base/7 font-semibold;
+}
+
+/*
  * What the page scrolls in, everything under the header (AppShell), so a scrollbar never sits beside the header. Its
  * gutter is kept whether or not the page is long enough to need it: no layout shift when a page grows a scrollbar.
  */
@@ -787,21 +806,17 @@
     }
 
     .plan-doc {
-        @apply flex min-h-72 max-w-3xl flex-col gap-3 text-sm leading-relaxed break-words text-foreground outline-none;
+        @apply flex min-h-72 max-w-3xl flex-col gap-3 document-text break-words text-foreground outline-none;
 
-        & h1 {
-            @apply mt-2 text-xl font-semibold tracking-tight;
-        }
-        & h2 {
-            @apply mt-2 text-base font-semibold;
+        & :is(h1, h2) {
+            @apply mt-2 document-section;
         }
         /* The empty plan's prompt (Placeholder in plan-editor.tsx), where its first line's text would start. */
         & p.is-editor-empty:first-child::before {
             @apply pointer-events-none float-left h-0 text-muted-foreground content-[attr(data-placeholder)];
         }
-        & h3,
-        & h4 {
-            @apply mt-1 text-sm font-semibold;
+        & :is(h3, h4) {
+            @apply mt-1 document-subsection;
         }
         & :is(h1, h2, h3, h4):first-child {
             @apply mt-0;
@@ -836,11 +851,12 @@
         & blockquote {
             @apply border-l-2 pl-3 text-muted-foreground;
         }
+        /* Code a step down from the prose, as the guide sets it. */
         & code {
-            @apply rounded-xs bg-surface-raised px-1 py-px font-mono text-xs;
+            @apply rounded-xs bg-surface-raised px-1 py-px font-mono text-sm;
         }
         & pre {
-            @apply overflow-x-auto rounded-md border bg-surface-raised px-3 py-2 font-mono text-xs leading-relaxed;
+            @apply overflow-x-auto rounded-md border bg-surface-raised px-3 py-2 font-mono text-sm/6;
         }
         & pre code {
             @apply bg-transparent p-0;
@@ -872,7 +888,7 @@
         }
         /* What a planner wrote as HTML or an image, as its characters (src/lib/plan-schema.ts). */
         & .plan-verbatim {
-            @apply rounded-xs bg-surface-raised px-1 font-mono text-xs text-muted-foreground;
+            @apply rounded-xs bg-surface-raised px-1 font-mono text-sm text-muted-foreground;
         }
         & .plan-verbatim-block {
             @apply text-muted-foreground;

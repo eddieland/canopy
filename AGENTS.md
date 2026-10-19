@@ -210,9 +210,11 @@ If code and the design disagree, the design doc wins until a decision entry says
   workers of a tick that dispatches several tickets each play their script as made for their own ticket, so `pushes()`
   pushes that ticket's branch, and `workers={"PROJ-2": fails()}` gives one ticket a script of its own. The
   overseer is played whole: `scenario.tick(queried=["PROJ-9"], code=1)` is a tick that leaves a duty undone, and
-  `result=` and `exit_code=` one it fails. A run comes back as a `Ran`, with its `reasons` and its worker's `prompt`;
-  `scenario.refuses(...)` is a dispatch canopy turns down, as the decisions it made instead, and
-  `scenario.time_passes(minutes=31)` moves the journal's times into the past, never an `UPDATE` of one table's times.
+  `result=` and `exit_code=` one it fails. A run comes back as a `Ran`, with its `reasons`, its worker's `prompt`, and,
+  from `scenario.run`, what its `canopy _run` printed (`.printed`), the run log among it; `runner=` gives that run a
+  runner of its own, one that times its worker out. `scenario.refuses(...)` is a dispatch canopy turns down, as the
+  decisions it made instead, and `scenario.time_passes(minutes=31)` moves the journal's times into the past, never an
+  `UPDATE` of one table's times.
   The config is set the same way: `scenario.configures(policy={"max_resume_attempts": 2})` merges keys into the user
   file, or into the `"workspace"` or `"private"` file named first, never TOML appended to whatever table is last.
   A run the story goes on around is held at work, `scenario.starts(...)` or `scenario.tick(..., hold=True)`, until the
