@@ -142,6 +142,10 @@ fi
 canopy chore install build-health >/dev/null || fail "canopy chore install build-health failed"
 [ -s "$workspace/.canopy/chore-prompts/build-health.md" ] || fail "canopy chore install did not copy the prompt"
 grep -q '^\[chores\.build-health\]$' "$private" || fail "canopy chore install did not write the table to $private"
+# One that comes with its agent copies that too, for its command to run.
+canopy chore install memory-tickets >/dev/null || fail "canopy chore install memory-tickets failed"
+agent="$workspace/.canopy/chore-agents/memory-tickets/agents/canopy-memory-tickets.md"
+[ -s "$agent" ] || fail "canopy chore install did not copy the agent to $agent"
 
 # The migrations, prompts, agent definitions, skills, and example chores came from the wheel, not from this checkout.
 state="$workspace/.canopy"

@@ -391,6 +391,64 @@ def test_the_reviewer_keeps_its_read_tools(tool: str) -> None:
     assert _allowed(_rules("canopy-reviewer"), tool)
 
 
+#: The agents example chores come with, copies of `canopy-chore` that `canopy chore install` puts in the workspace, and
+#: commands their prompts run.
+CHORE_AGENTS = {
+    "canopy-introspect": (
+        "canopy health --json --days 7",
+        "canopy spend --json --days 28",
+        "canopy decisions 12",
+        "canopy show run:4",
+        "canopy show chore:canopy-health",
+        "opencode mcp list",
+        "canopy chore history canopy-health",
+    ),
+    "canopy-memory-tickets": (
+        "canopy memory lessons",
+        "canopy memory proposals",
+        "canopy memory list",
+        "canopy chore history memory-tickets",
+    ),
+}
+
+
+@pytest.mark.parametrize("agent", sorted(CHORE_AGENTS))
+def test_an_example_chores_agent_is_canopy_chore_with_a_shell_for_its_prompts_commands(agent: str) -> None:
+    """Everything but bash is `canopy-chore`'s (DESIGN §19), so it can write nothing `canopy-chore` could not."""
+    definition = (resources.example_chores_dir() / "agents" / f"{agent}.md").read_text()
+    assert _outside_bash(definition) == _outside_bash((resources.agents_dir() / "canopy-chore.md").read_text())
+    rules = _rules_in(definition, "bash")
+    for command in CHORE_AGENTS[agent]:
+        assert _allowed(rules, command), command
+    for refused in (
+        "canopy memory forget 3",
+        "canopy memory promote 3",
+        "canopy decide PROJ-1 wait --rationale x",
+        "canopy reply chore:x hi",
+        "canopy dismiss chore:x id",
+        "canopy chore try x",
+        "canopy show PROJ-1",
+        "opencode run --agent canopy-worker x",
+        "gh issue create",
+        "rm -rf .canopy",
+    ):
+        assert not _allowed(rules, refused), refused
+
+
+def _outside_bash(definition: str) -> list[str]:
+    """The definition's frontmatter lines but its description, its comments, and its `bash` rules."""
+    kept: list[str] = []
+    in_bash = False
+    for line in definition.split("---")[1].splitlines():
+        if line.lstrip().startswith("#") or line.startswith("description:"):
+            continue
+        if line.startswith("  ") and not line.startswith("   "):
+            in_bash = line.strip() == "bash:"
+        if not in_bash:
+            kept.append(line)
+    return kept
+
+
 @pytest.mark.parametrize(
     ("tool", "allowed"),
     [
