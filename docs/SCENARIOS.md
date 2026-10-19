@@ -153,8 +153,9 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   the channel once; an attention item is posted when it opens and when it resolves. Remove the webhook file: Slack
   fails for several ticks while another sink keeps delivering and reports `loop.sink_failing`; restore it and what
   was missed arrives in one message. A digest arrives on its interval, a quiet one included. With a bot token and
-  `--threads`: the dispatch starts the ticket's thread, its question is a reply also shown in the channel, a chore's
-  run starts its own thread, and the next day's first post about the ticket starts a new one.
+  `--threads`: the dispatch starts the ticket's thread, its question is a reply in it and not in the channel, a chore's
+  run starts its own thread, and the next day's first post about the ticket starts a new one. Add
+  `--broadcast blocked`: the next question is a reply also shown in the channel.
 
 ### Notices and search
 
