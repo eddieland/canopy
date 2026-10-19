@@ -76,6 +76,9 @@ test("a ticket's page lists its notes and what its next run gets", async ({ page
     await settled(page)
     const panel = page.getByTestId('ticket-memory')
     await expect(panel.getByTestId('memory-band')).toContainText('In use.')
+    // Folded on each visit, the least read of the page: the band, then what opens its notes.
+    await expect(panel.getByTestId('memory-1')).toHaveCount(0)
+    await panel.getByRole('button', { name: 'Show 3 notes' }).click()
     await expect(panel.getByTestId('memory-1')).toContainText('superseded')
     // A note names the runs that relied on it, each opening its page.
     await expect(panel.getByTestId('memory-1')).toContainText('used in run:40')
@@ -83,8 +86,20 @@ test("a ticket's page lists its notes and what its next run gets", async ({ page
         'href',
         /\/runs\/40$/u,
     )
-    await expect(panel.getByText('served to its next run')).toBeVisible()
+    // What its next run is served is folded at the notes' foot until asked for.
+    await expect(panel.getByTestId('memory-digest')).toHaveCount(0)
+    await panel.getByRole('button', { name: 'Show what its next run is served' }).click()
+    await expect(panel.getByRole('region', { name: 'served to its next run' })).toBeVisible()
     await expect(panel.getByTestId('memory-digest')).toContainText('## Notes from earlier runs')
+})
+
+test("a ticket with no decisions, runs, or notes shows each list's header alone", async ({ page }) => {
+    await page.goto('tickets/ABC-105')
+    await settled(page)
+    // ABC-105 has runs but no decision and no note: their panels count 0 and say nothing under it.
+    await expect(page.getByTestId('ticket-decisions')).toHaveText('Decisions0')
+    await expect(page.getByTestId('ticket-memory')).toHaveText('Memory0')
+    await expect(page.getByText(/no decisions yet|no notes yet|no runs yet/u)).toHaveCount(0)
 })
 
 test('a run says what it wrote, what it read, and what was refused, and recording apart from empty', async ({

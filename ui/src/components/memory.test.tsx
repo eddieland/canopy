@@ -8,7 +8,7 @@ import { api } from '@/api/client'
 import type { MemoryEntry, MemoryProposal } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
-import { MemoryBand, MemoryDigestView, MemoryPurge, MemoryRows, ProposalFacts } from './memory'
+import { MemoryBand, MemoryDigestFold, MemoryDigestView, MemoryPurge, MemoryRows, ProposalFacts } from './memory'
 import { MemoryText } from './memory-text'
 
 afterEach(() => {
@@ -213,6 +213,24 @@ describe('MemoryDigestView', () => {
         rerender(<MemoryDigestView digest={{ ...digest, served: false }} served="served to the next run" />)
         expect(screen.getByRole('region', { name: 'would be served at use' })).toBeDefined()
         expect(screen.queryByText('served to the next run')).toBeNull()
+    })
+})
+
+describe('MemoryDigestFold', () => {
+    it('arrives folded, and opens to the digest under the runs it goes to', () => {
+        const digest = { ids: [12], left_out: 0, served: true, text: '- export-encoding: emit a BOM' }
+        render(<MemoryDigestFold digest={digest} who="its next run" />)
+        expect(screen.queryByText('- export-encoding: emit a BOM')).toBeNull()
+        fireEvent.click(screen.getByRole('button', { name: 'Show what its next run is served' }))
+        const region = screen.getByRole('region', { name: 'served to its next run' })
+        expect(within(region).getByText('- export-encoding: emit a BOM')).toBeDefined()
+        expect(screen.getByRole('button', { name: 'Hide what its next run is served' })).toBeDefined()
+    })
+
+    it('says what would be served while its tier records', () => {
+        const digest = { ids: [12], left_out: 0, served: false, text: '- export-encoding: emit a BOM' }
+        render(<MemoryDigestFold digest={digest} who="every run" />)
+        expect(screen.getByRole('button', { name: 'Show what every run would be served at use' })).toBeDefined()
     })
 })
 

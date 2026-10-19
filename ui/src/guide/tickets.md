@@ -41,6 +41,10 @@ Below:
 - **Runs**: every run on the ticket, each linking to its transcript.
 - **Decisions**: what each tick decided about the ticket, and why, in the overseer's words. A `refused` decision names
   the guard that stopped it, and an `attention` decision the reason it reached your list.
+- **Memory**, while ticket notes are on: the notes its runs left for the runs after them. It arrives folded, since
+  you'll read it far less often than you decide anything here: the band saying what reads the notes, then **Show 3
+  notes**. Open, each note that keeps its text has Promote while lessons are on, and **Show what its next run is
+  served** at the foot shows the prompt section itself. See [Memory](memory#promoting-and-rejecting).
 - **Drafts for the ticket**, when its runs drafted comments for it: a question a blocked run would have asked there, or
   what a run did, each with the issue it goes to, so you can check a worker didn't get creative with the URL. **Send**,
   **Edit**, and **Drop** work as on a PR's threads ([Pull requests](pull-requests#replying-to-your-coworkers-reviews)).
@@ -49,8 +53,10 @@ Below:
 - **Plan**, when the ticket has or needs one: a card saying where the plan stands, with **Approve** while it can be
   approved and **Open plan**, which opens the plan on its own page. When a plan waits on your approval, the card leads
   the page. See [Plans](plans).
-- **Memory**, while ticket notes are on: the notes its runs left for the runs after them, each one that keeps its text
-  with Promote while lessons are on. See [Memory](memory#promoting-and-rejecting).
+
+A list with nothing in it is its header alone, counting `0`: a ticket no tick has decided anything about yet doesn't
+spend a panel telling you so. On a wide screen the conversation moves to the right, beside Work, Runs, Decisions, and
+Memory.
 
 A key canopy has never seen gets a page too, saying so, with the form to start it.
 

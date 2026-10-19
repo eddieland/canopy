@@ -9,13 +9,14 @@ import { Age } from '@/components/age'
 import { CostTotalRow } from '@/components/cost-total'
 import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
+import { Disclosure } from '@/components/disclosure'
 import { Field, Fields } from '@/components/fields'
-import { MemoryBand, MemoryDigestView, MemoryRows } from '@/components/memory'
+import { MemoryBand, MemoryDigestFold, MemoryRows } from '@/components/memory'
 import { MemorySaid, NoteActions } from '@/components/memory-actions'
 import { Notice } from '@/components/notice'
-import { OrderToggle } from '@/components/order-toggle'
 import { PlanCard } from '@/components/plan-card'
-import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
+import { ListPanel } from '@/components/list-panel'
+import { PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { PullRequestLink } from '@/components/pull-request-link'
 import { RunsTable } from '@/components/runs-table'
 import { StartTicket } from '@/components/start-ticket'
@@ -23,6 +24,7 @@ import { Chip, Word } from '@/components/status'
 import { TicketAnswer, TicketVerbs } from '@/components/ticket-answer'
 import { TicketDrafts } from '@/components/ticket-drafts'
 import { TicketLinks } from '@/components/ticket-links'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
 import { useTicketUrl } from '@/hooks/use-ticket-url'
 import { ticketDescription } from '@/lib/descriptions'
@@ -32,8 +34,9 @@ import { phaseLabel, phaseWord } from '@/lib/phase'
 import { None } from '@/components/none'
 
 /**
- * One ticket: its work, then its conversation, the reply, and the operator's actions, then its runs and decisions; and
- * for a ticket plans touch, its plan's card below them, which opens the plan's own page (DESIGN §25).
+ * One ticket: its work, then its conversation, the reply, and the operator's actions, then its runs and decisions, each
+ * its header alone while empty, and its memory, folded; and for a ticket plans touch, its plan's card below them, which
+ * opens the plan's own page (DESIGN §25).
  */
 export const Route = createFileRoute('/tickets/$key')({
     component: TicketPage,
@@ -103,6 +106,9 @@ function Ticket({ detail }: { detail: TicketDetail }) {
         setPlanLeads(plans.newest?.plan.status === 'proposed' && plans.planning === null)
     }
     const state = ticketDescription(ticket, plans)
+    // Ticket notes on, the Memory panel is the left column's last row, which takes what the conversation is taller by.
+    const memoryTier = useQuery(loopQuery).data?.memory?.ticket_notes
+    const memoryOn = memoryTier !== undefined && memoryTier.mode !== 'off'
     return (
         <>
             <PageHeader
@@ -129,8 +135,8 @@ function Ticket({ detail }: { detail: TicketDetail }) {
             <div
                 className={cn(
                     'stagger flex flex-col gap-6',
-                    '2xl:grid 2xl:grid-cols-[minmax(0,36rem)_minmax(0,1fr)] 2xl:grid-rows-[auto_auto_1fr]',
-                    '2xl:items-start',
+                    '2xl:grid 2xl:grid-cols-[minmax(0,36rem)_minmax(0,1fr)] 2xl:items-start',
+                    memoryOn ? '2xl:grid-rows-[auto_auto_auto_1fr]' : '2xl:grid-rows-[auto_auto_1fr]',
                 )}
             >
                 <Panel className="2xl:col-start-1 2xl:row-start-1">
@@ -161,63 +167,62 @@ function Ticket({ detail }: { detail: TicketDetail }) {
                 </Panel>
                 {/* The answer: the conversation, the reply, then the ticket's verbs, so the keyboard reaches the
                     reply before Stop or Forget, as on its attention item. */}
-                <Panel className="2xl:col-start-2 2xl:row-span-3 2xl:row-start-1" data-testid="ticket-conversation">
+                <Panel
+                    className={cn('2xl:col-start-2 2xl:row-start-1', memoryOn ? '2xl:row-span-4' : '2xl:row-span-3')}
+                    data-testid="ticket-conversation"
+                >
                     <TicketAnswer
                         detail={detail}
                         after={<TicketVerbs ticket={ticket} limits={limits} place="after" testId="ticket-actions" />}
                     />
                 </Panel>
-                <Panel className="2xl:col-start-1 2xl:row-start-2" data-testid="ticket-runs">
-                    <PanelHeader label="Runs">
-                        <span className="flex items-center gap-2">
-                            {runs.length > 1 && <OrderToggle list="ticket-runs" />}
-                            <span className="readout text-xs text-muted-foreground">{runs.length}</span>
-                        </span>
-                    </PanelHeader>
-                    {runs.length === 0 ? (
-                        <Empty>no runs yet: none has worked it</Empty>
-                    ) : (
-                        <PanelScroll label="Runs">
-                            <RunsTable runs={ordered('ticket-runs', runsOrder, runs)} ticket={false} />
-                        </PanelScroll>
-                    )}
-                </Panel>
-                <Panel className="2xl:col-start-1 2xl:row-start-3" data-testid="ticket-decisions">
-                    <PanelHeader label="Decisions">
-                        <span className="flex items-center gap-2">
-                            {decisions.length > 1 && <OrderToggle list="ticket-decisions" />}
-                            <span className="readout text-xs text-muted-foreground">{decisions.length}</span>
-                        </span>
-                    </PanelHeader>
-                    {decisions.length === 0 ? (
-                        <Empty>no decisions yet: no tick has decided anything about it</Empty>
-                    ) : (
-                        <PanelScroll label="Decisions">
-                            <Decisions decisions={ordered('ticket-decisions', decisionsOrder, decisions)} byTick />
-                        </PanelScroll>
-                    )}
-                </Panel>
+                {/* Each list is its header alone while it holds nothing (ListPanel): the count says so. */}
+                <ListPanel
+                    label="Runs"
+                    count={runs.length}
+                    list="ticket-runs"
+                    className="2xl:col-start-1 2xl:row-start-2"
+                    data-testid="ticket-runs"
+                >
+                    <PanelScroll label="Runs">
+                        <RunsTable runs={ordered('ticket-runs', runsOrder, runs)} ticket={false} />
+                    </PanelScroll>
+                </ListPanel>
+                <ListPanel
+                    label="Decisions"
+                    count={decisions.length}
+                    list="ticket-decisions"
+                    className="2xl:col-start-1 2xl:row-start-3"
+                    data-testid="ticket-decisions"
+                >
+                    <PanelScroll label="Decisions">
+                        <Decisions decisions={ordered('ticket-decisions', decisionsOrder, decisions)} byTick />
+                    </PanelScroll>
+                </ListPanel>
+                {/* The least read, so last; wide, in the left column under the lists rather than across the page. */}
+                {memoryOn && <TicketMemoryPanel ticketKey={ticket.key} className="2xl:col-start-1 2xl:row-start-4" />}
             </div>
             {/* What its runs would have said on it, waiting on the operator to send (DESIGN §29). */}
             <TicketDrafts ticketKey={ticket.key} drafts={detail.drafts} />
             {planned && planLeads === false && <PlanCard ticketKey={ticket.key} plans={plans} />}
-            <TicketMemoryPanel ticketKey={ticket.key} />
         </>
     )
 }
 
 /**
- * The ticket's notes (DESIGN §28), under the band that says what reads them; none while ticket notes are off. Each
- * note that keeps its text is forgotten from its row, and while proposals are on, promoted to a lesson, done or
- * invalidated ones too.
+ * The ticket's notes (DESIGN §28), the least read of its page, so folded on each visit: the band that says what reads
+ * them, then `Show 3 notes`, which opens the rows and, folded at their foot, what its next run is served. With none,
+ * its header alone, counting `0`, as an empty list's is. Each note that keeps its text is forgotten from its row, and
+ * while proposals are on, promoted to a lesson, done or invalidated ones too. Shown only while ticket notes are on.
  */
-function TicketMemoryPanel({ ticketKey }: { ticketKey: string }) {
+function TicketMemoryPanel({ ticketKey, className }: { ticketKey: string; className?: string }) {
     const memory = useQuery(loopQuery).data?.memory
     const tier = memory?.ticket_notes
     const on = tier !== undefined && tier.mode !== 'off'
     const { data } = useQuery({ ...ticketMemoryQuery(ticketKey), enabled: on })
     // What a promote did, under the band, as the memory page says it.
     const [said, setSaid] = useState<string | null>(null)
+    const [open, setOpen] = useState(false)
     if (!on) {
         return null
     }
@@ -230,33 +235,38 @@ function TicketMemoryPanel({ ticketKey }: { ticketKey: string }) {
             <NoteActions key={n.id} note={n} promote={promoting} onSaid={setSaid} />,
         ]),
     )
+    const count = data?.notes.length ?? 0
     return (
-        <Panel data-testid="ticket-memory">
+        <Panel className={className} data-testid="ticket-memory">
             <PanelHeader label="Memory">
-                <span className="readout text-xs text-muted-foreground">{data?.notes.length ?? ''}</span>
+                <span className="readout text-xs text-muted-foreground">{data === undefined ? '' : count}</span>
             </PanelHeader>
-            <MemoryBand tier={tier} name="ticket notes" />
-            <MemorySaid said={said} className="border-b px-3 py-2" />
-            {data === undefined ? (
-                <PanelSkeleton rows={1} />
-            ) : data.notes.length === 0 ? (
-                <Empty>no notes yet: its runs write them as they end</Empty>
-            ) : (
-                <PanelScroll label="Memory">
-                    <MemoryRows
-                        entries={data.notes}
-                        digest={data.digest}
-                        below={below}
-                        onVersionSaid={setSaid}
-                        modes={
-                            memory
-                                ? { ticket_notes: memory.ticket_notes.mode, lessons: memory.lessons.mode }
-                                : undefined
-                        }
-                    />
-                </PanelScroll>
+            {data === undefined && <PanelSkeleton rows={1} />}
+            {count > 0 && <MemoryBand tier={tier} name="ticket notes" />}
+            <MemorySaid said={said} className="border-b px-3 py-2 last:border-b-0" />
+            {data !== undefined && count > 0 && (
+                <Collapsible open={open} onOpenChange={setOpen}>
+                    <div className="px-3 py-1.5">
+                        <Disclosure open={open} what={count === 1 ? '1 note' : `${count} notes`} className="-ml-2" />
+                    </div>
+                    <CollapsibleContent className="border-t">
+                        <PanelScroll label="Memory">
+                            <MemoryRows
+                                entries={data.notes}
+                                digest={data.digest}
+                                below={below}
+                                onVersionSaid={setSaid}
+                                modes={
+                                    memory
+                                        ? { ticket_notes: memory.ticket_notes.mode, lessons: memory.lessons.mode }
+                                        : undefined
+                                }
+                            />
+                        </PanelScroll>
+                        {data.digest && <MemoryDigestFold digest={data.digest} who="its next run" />}
+                    </CollapsibleContent>
+                </Collapsible>
             )}
-            {data?.digest && <MemoryDigestView digest={data.digest} served="served to its next run" />}
         </Panel>
     )
 }

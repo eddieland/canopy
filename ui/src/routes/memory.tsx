@@ -17,7 +17,7 @@ import type {
 import { Age } from '@/components/age'
 import { Disclosure } from '@/components/disclosure'
 import { SearchField } from '@/components/input'
-import { MemoryBand, MemoryDigestView, MemoryPurge, MemoryRows, ProposalFacts } from '@/components/memory'
+import { MemoryBand, MemoryDigestFold, MemoryPurge, MemoryRows, ProposalFacts } from '@/components/memory'
 import { LessonActions, MemorySaid, NoteActions, ProposalActions } from '@/components/memory-actions'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { OrderToggle } from '@/components/order-toggle'
@@ -338,7 +338,7 @@ function Lessons({
                 </PanelScroll>
             )}
             {past !== undefined && <Past label="Retired" entries={past} none="no lesson replaced or forgotten yet" />}
-            {digest !== null && <ServedDigest digest={digest} />}
+            {digest !== null && <MemoryDigestFold digest={digest} who="every run" />}
         </Panel>
     )
 }
@@ -399,20 +399,6 @@ function HistoryToggle() {
             <History aria-hidden className="size-3.5" />
             history
         </Link>
-    )
-}
-
-/** What every run is served of the lessons, folded at the panel's foot until the operator asks to read it. */
-function ServedDigest({ digest }: { digest: MemoryDigest }) {
-    const [open, setOpen] = useState(false)
-    const what = digest.served ? 'what every run is served' : 'what every run would be served at use'
-    return (
-        <Collapsible open={open} onOpenChange={setOpen} className="border-t px-3 py-1.5">
-            <Disclosure open={open} what={what} className="-ml-2" data-testid="memory-digest-toggle" />
-            <CollapsibleContent className="-mx-3 -mb-1.5">
-                <MemoryDigestView digest={digest} served="served to every run" labelled={false} />
-            </CollapsibleContent>
-        </Collapsible>
     )
 }
 
