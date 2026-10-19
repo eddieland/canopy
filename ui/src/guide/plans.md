@@ -123,9 +123,9 @@ or send them.
 The note on the whole plan travels the same way: only with Ask for changes. Press Approve with words in it and the
 foot asks whether to approve without them, rather than quietly throw away what you wrote.
 
-After you ask, the plan's page says "You asked for changes" until the next planner starts, its chip reads
-`changes asked`, and the button reads **Ask again**, so you never send a second request without knowing about the
-first.
+After you ask, a green band under the plan's title says "You asked for changes", and when, until the next planner
+starts; the ticket's Plan card carries the same band, and the plan's chip reads `changes asked`. The button reads
+**Ask again**, so you never send a second request without knowing about the first.
 
 Approving is the moment an agent gets the go-ahead to write code, so the foot marks it: a check, the CLI's words on
 the accent, a leaf, and a **Back to Attention** link for whatever is next. It shows only once the approval is in the
