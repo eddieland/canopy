@@ -213,6 +213,44 @@ test('the toolbar stays at the top of the page while the plan scrolls under it',
     await expect(page.getByLabel('Plan Markdown')).toContainText('a **template cache**')
 })
 
+test("the outline lists the plan's headings and goes to the one chosen, under the toolbar, the cursor in it", async ({
+    page,
+}) => {
+    const toolbar = page.getByRole('toolbar', { name: 'Format' })
+    await page.getByRole('button', { name: 'Outline' }).click()
+    await expect(page.getByRole('menuitem')).toHaveText([
+        'Export reports as CSV',
+        'What changes',
+        'Files',
+        'Tests',
+        'Out of scope',
+        'Risks',
+    ])
+    await page.getByRole('menuitem', { name: 'Tests' }).click()
+    const heading = plan(page).getByRole('heading', { name: 'Tests' })
+    await expect(heading).toBeInViewport()
+    const below = async () => {
+        const [bar, top] = await Promise.all([toolbar.boundingBox(), heading.boundingBox()])
+        return (top?.y ?? 0) - ((bar?.y ?? 0) + (bar?.height ?? 0))
+    }
+    await expect.poll(below).toBeGreaterThanOrEqual(0)
+    await expect(plan(page)).toBeFocused()
+    await expect(toolbar.getByRole('button', { name: /^Text style/u })).toHaveAccessibleName('Text style: Heading 2')
+})
+
+test('the outline marks the section being read as it opens', async ({ page }) => {
+    const outline = page.getByRole('button', { name: 'Outline' })
+    await outline.click()
+    await expect(page.getByRole('menuitem', { name: 'Export reports as CSV' })).toHaveAttribute(
+        'aria-current',
+        'location',
+    )
+    await page.getByRole('menuitem', { name: 'Files' }).click()
+    await outline.click()
+    await expect(page.getByRole('menuitem', { name: 'Files' })).toHaveAttribute('aria-current', 'location')
+    await expect(page.locator('[role=menuitem][aria-current]')).toHaveCount(1)
+})
+
 test('each comment sits beside its passage, and moves with it as the plan is edited above', async ({ page }) => {
     const card = comments(page).filter({ hasText: 'proxy in front' })
     const passage = plan(page).locator('[data-thread=sample-1]')

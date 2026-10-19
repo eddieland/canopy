@@ -871,6 +871,10 @@
         & [data-level]:first-child {
             @apply mt-0;
         }
+        /* A heading the outline goes to stops clear of the sticky toolbar: TOOLBAR_CLEARANCE in plan-editor.tsx. */
+        & [data-level] {
+            @apply scroll-mt-20;
+        }
         & ul {
             @apply flex list-disc flex-col gap-1 pl-5;
         }

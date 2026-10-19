@@ -1087,7 +1087,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   (the words added on `diff-add` at 18%, those removed struck through on `diff-del` at 14%, where they were, as `ins`
   and `del`), pressed as a waiting plan opens, since that is when it is read for what changed; while pressed, how many
   changes it marks (`12 changes`, a removal and what replaced it one) and ghost `icon-xs` buttons that step the cursor
-  to the change before or after it, round to the other end, the plan scrolling to it. While the changes are marked, a
+  to the change before or after it, round to the other end, the plan scrolling to it. Last, a ghost `xs` `Outline ▾`
+  (`src/lib/plan-outline.ts`) lists the plan's headings, a step deeper for each level under its shallowest, the
+  section the page has scrolled to as it opens in the accent (`aria-current`), and puts the one chosen at the top of
+  the page under the header, the cursor at its start where the plan may be edited. While the changes are marked, a
   commented passage drops its tint, so no word wears a comment's and a change's at once; the open one keeps its own.
   The toolbar takes the header's second line, under the label. The header is `sticky`, and what the editor scrolls
   into view (the cursor as it types, a passage a comment shows) stops 80px below it. A selection also shows a
