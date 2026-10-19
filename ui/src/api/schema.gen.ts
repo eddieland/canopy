@@ -376,6 +376,9 @@ export type paths = {
         /**
          * Get agent memory
          * @description Each tier's mode, every ticket's notes in force, the proposals waiting, and the lessons and what they serve.
+         *
+         *     With `history`, the latest proposals and lessons no longer pending or in force too, as `past_proposals` and
+         *     `past_lessons`.
          */
         get: operations["getMemory"];
         put?: never;
@@ -2625,6 +2628,20 @@ export type components = {
             lessons: components["schemas"]["MemoryEntry"][];
             /** @description What every run would be served of the lessons; None while proposals are off. */
             lessons_digest: components["schemas"]["MemoryDigest"] | null;
+            /**
+             * Past Lessons
+             * @description With `history`, the lessons no longer in force, replaced or forgotten, the latest to leave first, at most 50;
+             *     else none.
+             * @default []
+             */
+            past_lessons: components["schemas"]["MemoryEntry"][];
+            /**
+             * Past Proposals
+             * @description With `history`, the proposals no longer pending, rejected, lapsed, promoted, or forgotten, the latest to leave
+             *     first, at most 50; else none.
+             * @default []
+             */
+            past_proposals: components["schemas"]["MemoryEntry"][];
             /**
              * Proposals
              * @description The proposals waiting on the operator, oldest first.
@@ -6911,7 +6928,10 @@ export interface operations {
     };
     getMemory: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Also send the latest proposals and lessons no longer pending or in force. */
+                history?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -6961,6 +6981,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
             /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */

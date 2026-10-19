@@ -49,6 +49,8 @@ const OVERVIEW: MemoryOverview = {
     lessons: [LESSON],
     lessons_digest: null,
     repos: ['api', 'mobile', 'web'],
+    past_proposals: [],
+    past_lessons: [],
 }
 
 function promoted(fields: Partial<MemoryPromoted> = {}): MemoryPromoted {
