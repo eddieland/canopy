@@ -320,6 +320,46 @@ canopy's pool's checks and logs a `pool_shadow_mismatch` line, with the reposito
 wherever they disagree. It changes nothing, and a check that fails is logged, never raised. Each mismatch the operator
 explains becomes a contract case, and canopy's checks are fixed until it passes.
 
+### Upgrading past treehouse
+
+Designed, not built (ROADMAP M45, stage 4). Proposed (2026-10-19, #813), for the operator to accept by merging. The
+release that removes treehouse finishes, with git alone, a move the workspace has not made yet, rather than refuse to
+run until the operator makes it on the release before: that would mean a downgrade, and config is not
+downgrade-compatible. Nothing here may stop a tick. Three things can be left over: a lease the journal says treehouse
+made (`'treehouse'` in a run's or review's lease, as every lease from before the journal named the pool is), a
+worktree of a clone still under `.treehouse/`, and a config still setting `pools.backend`.
+
+- **A treehouse lease goes back through canopy.** `'treehouse'` stays a value the journal holds, and names a lease of
+  a worktree under `.treehouse/`. When its run or review ends, or reconcile closes it as crashed, canopy returns the
+  worktree itself, with no treehouse call: forced, its processes ended, reset to its lease's base as the journal
+  records it (the default branch where none is), ignored files kept, as a return to canopy's pool is. The slot must be
+  under `.treehouse/` and pass D118's check, or it is left as it is, never reset. There is no treehouse record to hold
+  the lease against, so the journal is the record: the return is refused while another running run or review names the
+  slot under another lease. A slot whose directory is gone has nothing to return. Every failure is logged and answers
+  `failed`, never an error, so no tick stops on one; the worktree stays under `.treehouse/`, for sync.
+- **Sync moves what is left.** It finds each worktree of a clone under `.treehouse/` with `git worktree list` and moves
+  it into `pools/` as a switch does (canopy's pool, above), keeping its ignored files, and records with it the base of
+  the last lease the journal names for it, so reuse treats it as a slot parked there. One a running run or review holds
+  waits for a later sync, and counts toward the declared size as a slot waiting on a switch does; one with changes, a
+  process in it, or a git link canopy cannot vouch for stays, and sync says so and exits 1. Once `.treehouse/` holds no
+  worktree, sync removes it. A dry run lists what it would move and changes nothing. Reconcile no longer reads
+  `.treehouse/`: a treehouse lease the journal never recorded, such as one whose `_run` died before its run row, is an
+  idle worktree to sync.
+- **What treehouse seeded is recorded as seeded.** treehouse removed its seeded files at a return, and canopy cannot
+  know which they were. So a moved slot records as seeded each path the include file selects whose copy in the slot is
+  the clone's, byte for byte (a link as treehouse wrote it, a file holding its target): the next reset removes it and
+  seeding writes it again, losing nothing. One that differs stays, as any ignored file does, and the next lease that
+  seeds it quarantines the slot until `canopy workspace release`.
+- **`pools.backend` is warned about, then ignored,** whichever value it sets: canopy's pool makes every lease, and its
+  slots are made beside the ones still to move, within the declared size.
+- **The release note** asks the operator to run `canopy workspace sync` on the release that made `"canopy"` the
+  default, and to upgrade with no run in flight, since a `_run` of the release before returns its slot through
+  treehouse. It is advice, not the guarantee: the path above is what a workspace that skipped it relies on.
+
+Rejected: refusing to run until the operator finishes the move on the release before (a downgrade); reading
+treehouse's state for its leases and seeded files (canopy would depend on the private format of a program it no longer
+installs); a release note alone (a workspace that skipped it would fail its first tick with a treehouse lease in it).
+
 ### Units
 
 A ticket's work is divided into units, one per repository it changes, each with its own PR, phase, review and CI
@@ -596,3 +636,9 @@ workspace file; the private state directory, D053), and §7 (branch protection i
 - Whether a started ticket should ever be split. `bad_split` refuses it now; a human splits one by hand.
 - Whether a follow-up PR after a unit merged, for late review feedback, should be possible inside the ticket, on an
   authorized replier's comment. D058 leaves it to a new ticket; revisit if filing those proves friction.
+- Whether sync should reset a `.treehouse/` worktree it moves whose HEAD holds commits not merged into its base, as
+  only a lease whose forced return failed leaves one. As proposed (Upgrading past treehouse), it moves as it is, and
+  reuse passes over it until those commits merge; canopy's pool does not see a squash merge, so it may wait for good.
+- Whether the worktrees page and the state block list what is left under `.treehouse/` until sync moves it. As
+  proposed, they show canopy's pool only, a run still on a treehouse slot shows as its run, and sync's dry run lists
+  the rest.
