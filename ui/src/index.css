@@ -107,8 +107,12 @@
     }
 }
 
-/* A panel's sticky foot (`PanelFooter`) covers the page's foot: what the page scrolls into view stops above it. */
-.page-scroll:has([data-sticky-foot]) {
+/*
+ * A panel's sticky foot (`PanelFooter`) covers the page's foot: what the page scrolls into view stops above it. Not
+ * while the foot holds the focus: its own field is never under it, and with the padding the page would scroll on every
+ * key typed there, to clear a caret that the foot carries down with it.
+ */
+.page-scroll:has([data-sticky-foot]):not(:has([data-sticky-foot]:focus-within)) {
     scroll-padding-bottom: 8rem;
 }
 
