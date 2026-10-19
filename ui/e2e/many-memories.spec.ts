@@ -3,12 +3,14 @@ import type { Page } from '@playwright/test'
 
 import { settled, signIn } from './helpers.ts'
 
-// A workspace far past the mock's handful of memories: hundreds of tickets with notes in force, and hundreds of lessons
-// promoted. The memory page must keep each tier in reach, send counts rather than every note, and say which lessons
-// the digest's cap leaves out.
+// A workspace far past the mock's handful of memories: hundreds of tickets with notes in force, hundreds of lessons
+// promoted, and the most proposals that wait at once. The memory page must keep each tier in reach, send counts rather
+// than every note, and say which lessons the digest's cap leaves out.
 
 const TICKETS = 300
 const LESSONS = 200
+// MAX_PENDING: past it, a new proposal is refused.
+const PROPOSALS = 20
 // The lessons the digest serves; the cap leaves out the rest.
 const SERVED = 4
 
@@ -34,6 +36,9 @@ test('the memory page lists a row a ticket, scrolls each list, and opens notes o
     await expect(notes.getByTestId(/^memory-ticket-/u)).toHaveCount(TICKETS)
     await expect(notes.getByTestId('memory-notes-count')).toHaveText(`${TICKETS} tickets · ${TICKETS * 3} notes`)
     // Each list scrolls in its own region, so the tickets stand within a window or two of the page's top.
+    const proposals = page.getByTestId('memory-proposals').getByRole('region', { name: 'Proposals' })
+    await expect(proposals.getByTestId(/^memory-\d+$/u)).toHaveCount(PROPOSALS)
+    expect(await proposals.evaluate((el) => el.scrollHeight > el.clientHeight)).toBe(true)
     const lessons = page.getByTestId('memory-lessons')
     const top = await notes.evaluate((el) => el.getBoundingClientRect().top)
     expect(top).toBeLessThan(2000)
@@ -51,19 +56,24 @@ test('the memory page lists a row a ticket, scrolls each list, and opens notes o
     await expect(promoted.getByText('would be left out at use, past its cap')).toHaveCount(LESSONS - SERVED)
 })
 
-/** Serves the mock's memory, grown: its ticket's counts over hundreds of tickets, and its lesson hundreds of times. */
+/**
+ * Serves the mock's memory, grown: its ticket's counts over hundreds of tickets, its lesson hundreds of times, and its
+ * proposal as many times as may wait.
+ */
 async function manyMemories(page: Page): Promise<void> {
     await page.route('**/api/memory', async (route) => {
         const response = await route.fetch()
         const mock = (await response.json()) as {
             tickets: { ticket_key: string; count: number; used: number; latest_at: string }[]
             lessons: { id: number; key: string }[]
+            proposals: { entry: { id: number; key: string } }[]
             lessons_digest: { ids: number[]; left_out: number } | null
         }
         const [ticket] = mock.tickets
         const [lesson] = mock.lessons
-        if (ticket === undefined || lesson === undefined || mock.lessons_digest === null) {
-            throw new Error('the mock has no ticket with notes, or no lesson')
+        const [proposal] = mock.proposals
+        if (ticket === undefined || lesson === undefined || proposal === undefined || mock.lessons_digest === null) {
+            throw new Error('the mock has no ticket with notes, no lesson, or no proposal')
         }
         // ABC-100 stays, so its row opens to its real notes.
         const tickets = Array.from({ length: TICKETS }, (_, t) => ({
@@ -72,6 +82,10 @@ async function manyMemories(page: Page): Promise<void> {
             count: 3,
         }))
         const lessons = Array.from({ length: LESSONS }, (_, l) => ({ ...lesson, id: 1000 + l, key: `lesson-${l}` }))
+        const proposals = Array.from({ length: PROPOSALS }, (_, p) => ({
+            ...proposal,
+            entry: { ...proposal.entry, id: 2000 + p, key: `proposal-${p}` },
+        }))
         const ids = lessons.slice(0, SERVED).map((l) => l.id)
         await route.fulfill({
             response,
@@ -79,6 +93,7 @@ async function manyMemories(page: Page): Promise<void> {
                 ...mock,
                 tickets,
                 lessons,
+                proposals,
                 lessons_digest: { ...mock.lessons_digest, ids, left_out: LESSONS - SERVED },
             },
         })

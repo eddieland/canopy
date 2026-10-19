@@ -253,14 +253,17 @@ function Proposals({
                     {said === null ? 'no proposals wait on you now' : 'all decided: no proposal waits on you'}
                 </Empty>
             ) : (
-                // At most 20 wait at once (MAX_PENDING), so the list grows with them rather than scroll in its panel.
-                <MemoryRows
-                    entries={ordered('memory-proposals', order, proposals).map((p) => p.entry)}
-                    ticket
-                    facts={facts}
-                    below={below}
-                    lapses={new Map(proposals.map((p) => [p.entry.id, p.expires_at]))}
-                />
+                // Up to 20 wait at once (MAX_PENDING), each with its verbs: past the panel's height they scroll in it,
+                // so the lessons under them stay in reach.
+                <PanelScroll label="Proposals">
+                    <MemoryRows
+                        entries={ordered('memory-proposals', order, proposals).map((p) => p.entry)}
+                        ticket
+                        facts={facts}
+                        below={below}
+                        lapses={new Map(proposals.map((p) => [p.entry.id, p.expires_at]))}
+                    />
+                </PanelScroll>
             )}
             {past !== undefined && <Past label="Decided" entries={past} ticket none="no proposal decided yet" />}
         </Panel>
