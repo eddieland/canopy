@@ -1124,7 +1124,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   under them says how many open comments go with Ask for changes, or how far over a reply's bound the request is, then
   what the caller says of its own actions: on a ticket's plan, that approving sends none of the open comments, since the
   implement reads the plan alone, or that an approved plan's edit is approved again. What `Approve` takes is on its
-  hover. What an action did goes under that line. At 820px the foot is two lines at rest. The editor keeps what it
+  hover. `Skip the plan`, and `Approve` while the note holds words it would leave unsent, ask first in the actions'
+  place, as a comment's Delete does: the question, then `Keep`, which takes the focus and Escape gives too, then the
+  action. What an action did goes under that line, and stays once the plan turns read only, Skip's, so the foot stays
+  for it. At 820px the foot is two lines at rest. The editor keeps what it
   scrolls into view 128px clear of the foot. A ticket's plan opens on its page, `/tickets/$key/plan`; `/plan-editor`
   is kept as the editor's bench, linked from nowhere: over a sample plan on mock data only, with what the planner would
   read and the plan's Markdown under it, and outside mock, an `Empty` saying a ticket's plan opens on its page. The

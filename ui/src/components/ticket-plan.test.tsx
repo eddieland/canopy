@@ -242,6 +242,13 @@ describe('TicketPlan', () => {
             )
         })
 
+        it('says a ticket that needs no plan needs none, and no planner for changes asked before', async () => {
+            const superseded = { ...NEWEST, plan: { ...PLAN, status: 'superseded' as const } }
+            expect(await state({ newest: superseded, needed: false, changes_asked: '2026-10-08T11:40:00Z' })).toBe(
+                'Written by run:50. Its ticket needs no plan now.',
+            )
+        })
+
         it('says nothing with no plan, whose panel says what comes', async () => {
             expect(await state({ newest: null, plans: [] })).toBe('')
         })
@@ -263,8 +270,37 @@ describe('TicketPlan', () => {
         expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
     })
 
+    it('asks before approving while the note holds words, which only Ask for changes sends', async () => {
+        renderPlan()
+        fireEvent.change(screen.getByRole('textbox', { name: 'On the whole plan' }), {
+            target: { value: 'Name the timezone.' },
+        })
+        fireEvent.click(button('Approve'))
+        expect(screen.getByText('Approve without your note? It goes only with Ask for changes.')).toBeDefined()
+        expect(document.activeElement).toBe(button('Keep'))
+        expect(sent).toEqual([])
+        fireEvent.click(button('Approve'))
+        expect((await screen.findByRole('status')).textContent).toBe(
+            'Plan 2 of ABC-1 is approved as its file stands now. The next tick can implement it.',
+        )
+        expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
+    })
+
+    it('skips the plan as canopy plan --skip does, once asked in its place, Keep keeping it', () => {
+        renderPlan()
+        fireEvent.click(button('Skip the plan'))
+        expect(screen.getByText('Skip the plan? Its implement goes ahead without it.')).toBeDefined()
+        expect(document.activeElement).toBe(button('Keep'))
+        fireEvent.keyDown(button('Keep'), { key: 'Escape' })
+        expect(screen.queryByText(/^Skip the plan\?/u)).toBeNull()
+        expect(button('Approve')).toBeDefined()
+        expect(sent).toEqual([])
+    })
+
     it('skips the plan as canopy plan --skip does', async () => {
         renderPlan()
+        fireEvent.click(button('Skip the plan'))
+        expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull()
         fireEvent.click(button('Skip the plan'))
         expect((await screen.findByRole('status')).textContent).toBe(
             "ABC-1's plan is skipped: its implement goes ahead without one.",

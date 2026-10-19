@@ -515,11 +515,15 @@ test("a plan's comment is kept, its edit saved and approved, and then the plan s
     await expect(panel).toContainText('approved')
     await expect(state).toContainText('edited since the planner wrote it')
 
-    // Skip supersedes it: no plan waits, and the ticket's own word now says so.
+    // Skip asks first, in its place, then supersedes it: no plan waits, and the ticket's own word now says so. What
+    // it did stays in the foot, though the plan is read only now and the foot's actions are gone.
+    await actions.getByRole('button', { name: 'Skip the plan' }).click()
+    await expect(actions.getByText('Skip the plan? Its implement goes ahead without it.')).toBeVisible()
     await actions.getByRole('button', { name: 'Skip the plan' }).click()
     await expect(state).toContainText('Its ticket needs no plan now.')
     await expect(panel).toContainText('superseded')
     await expect(page.getByTestId('plan-actions')).toHaveCount(0)
+    await expect(said).toContainText("ABC-105's plan is skipped")
 
     // The ticket's page has the request in its conversation, and the plan's card says where the plan stands.
     await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'ABC-105' }).click()
