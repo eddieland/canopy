@@ -17,10 +17,12 @@ implement: the guard is `unplanned`, and no prompt gets around it.
 ## Triage: skipping the plan for trivial work
 
 A typo fix doesn't need a plan, and approving one is a minute you won't get back. With `policy.plan_triage = "on"` in
-your own config, and `policy.trivial` saying in plain words what you count as trivial, a ticket that needs a plan only
-because `policy.plan` says so gets a **triage** first: a cheaper run that reads the ticket and the code and answers
-`trivial` or `plan`. Only a clean `trivial` waives the plan, and the implement goes ahead without one. Anything else, a
-`plan` verdict, a failure, a timeout, is planned as usual. A ticket you asked a plan for yourself is never triaged.
+your own config, a ticket that needs a plan only because `policy.plan` says so gets a **triage** first: a cheaper run
+that reads the ticket and the code and answers `trivial` or `plan`. It knows trivial work when it sees it: settled work
+with one reasonable way to do it. If you'd draw the line elsewhere, say where in `policy.trivial`, in plain words, and
+it judges by yours instead. Only a clean `trivial` waives the plan, and the implement goes ahead without one. Anything
+else, a `plan` verdict, a failure, a timeout, is planned as usual. A ticket you asked a plan for yourself is never
+triaged.
 
 The ticket's **Plan** card shows the triage: its run, what it judged (`running`, `trivial`, `needs a plan`, or how it
 failed), when, and its one-sentence reason under **triage said**. While a waiver is in force, the card's chip says
