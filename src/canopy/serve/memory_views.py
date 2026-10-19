@@ -81,10 +81,11 @@ def overview(ctx: Context, *, history: bool = False) -> MemoryOverview:
     )
 
 
-def found(ctx: Context, query: str, *, notes: bool = False) -> MemoryFound:
+def found(ctx: Context, query: str, *, notes: bool = False, every: bool = False) -> MemoryFound:
     """What `canopy memory search QUERY` finds in the operator's shell: every memory that keeps its text.
 
-    With `notes`, only ticket notes in force, so the limit is spent on the notes a page lists.
+    With `notes`, only ticket notes in force, so the limit is spent on the notes a page lists; with `every`, only those
+    that hold every word, as the memory page's filter keeps its rows.
 
     Returns:
         The memories found, best match first, at most `memory_search.MAX_LIMIT`; none for a query of no word.
@@ -97,6 +98,7 @@ def found(ctx: Context, query: str, *, notes: bool = False) -> MemoryFound:
         scope=None,
         kind=MemoryScope.TICKET if notes else None,
         in_force=notes,
+        every=every,
         limit=memory_search.MAX_LIMIT,
     )
     return MemoryFound(entries=[entry(ctx, m) for m in hits])

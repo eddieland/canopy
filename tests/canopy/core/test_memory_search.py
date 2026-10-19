@@ -206,6 +206,14 @@ def test_a_search_for_notes_in_force_spends_its_limit_on_them_alone(conn: sqlite
     assert [m.id for m in found] == [note]
 
 
+def test_a_search_for_every_word_finds_only_what_holds_them_all(conn: sqlite3.Connection) -> None:
+    both = written(conn, "Warm the cache before the tests.")
+    written(conn, "The cache lives in .cache.", key="cache-dir")
+    written(conn, "Run the tests once.", key="tests")
+    assert len(search.search(conn, "cache tests", scope=None)) == 3
+    assert [m.id for m in search.search(conn, "cache tests", scope=None, every=True)] == [both]
+
+
 @pytest.mark.parametrize("query", ['cache" OR (body*', "NEAR(cache)", "-cache", "cache:*"])
 def test_a_query_is_words_never_fts5_syntax(conn: sqlite3.Connection, query: str) -> None:
     note = written(conn, "Warm the cache first.")

@@ -30,6 +30,8 @@ import { ordered, useListOrder } from '@/lib/list-order'
 import { ticketNotesUsedText } from '@/lib/memory'
 import type { TierModes } from '@/lib/memory'
 import {
+    foundCount,
+    MEMORY_FOUND_MAX,
     MEMORY_QUERY_MAX,
     MEMORY_SHOWS,
     memoryQueryOf,
@@ -403,9 +405,11 @@ function ServedDigest({ digest }: { digest: MemoryDigest }) {
 
 /**
  * The tickets with notes in force, a row each, under the tier's band. Its header counts the rows, the tickets, and the
- * notes they hold beside them, since a row opens to several. Each opened note is forgotten from its row, and, while
+ * notes they hold beside them, since a row opens to several, or while the filter has words the notes found that hold
+ * them. Each opened note is forgotten from its row, and, while
  * lessons are on (`promote`), promoted; what that did is said under the band. While the filter has words, `found` is
- * the notes in force whose key or text holds one, as `canopy memory search` finds them, listed under the tickets.
+ * the notes in force whose key or text holds every one, as the rows above hold them, found by the function
+ * `canopy memory search` runs, listed under the tickets.
  */
 function TicketNotesPanel({
     tickets,
@@ -429,7 +433,9 @@ function TicketNotesPanel({
     const ticketsWord = total === 1 ? 'ticket' : 'tickets'
     const notesWord = notes === 1 ? 'note' : 'notes'
     const shown = shownCount(tickets.length, total, filter.q !== undefined)
-    const ticketsCount = `${shown} ${ticketsWord} · ${notes} ${notesWord}`
+    // While searching, the notes counted are those found, which the list under the tickets shows.
+    const notesCount = found === undefined ? `${notes} ${notesWord}` : foundCount(found.length)
+    const ticketsCount = `${shown} ${ticketsWord} · ${notesCount}`
     const order = useListOrder('memory-tickets')
     const filteredOut = tickets.length === 0 && total > 0
     const notesFound = found !== undefined && found.length > 0
@@ -476,7 +482,14 @@ function TicketNotesPanel({
             )}
             {notesFound && (
                 <section aria-label="Notes that say it" className="border-t" data-testid="memory-notes-found">
-                    <h3 className="px-3 pt-2 panel-label">Notes that say it</h3>
+                    <h3 className="flex items-baseline gap-2 px-3 pt-2">
+                        <span className="panel-label">Notes that say it</span>
+                        {found.length >= MEMORY_FOUND_MAX && (
+                            <span className="text-xs text-muted-foreground" data-testid="memory-notes-found-capped">
+                                the best {MEMORY_FOUND_MAX}: another word narrows them
+                            </span>
+                        )}
+                    </h3>
                     <PanelScroll label="Notes that say it">
                         <MemoryRows
                             entries={found}

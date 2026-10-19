@@ -199,4 +199,13 @@ test('the memory page finds a note by what it says, as canopy memory search does
     const found = page.getByTestId('memory-notes-found')
     await expect(found.getByTestId('memory-3')).toContainText('ci-cache')
     await expect(found.getByTestId('memory-3').getByRole('link', { name: 'ABC-100', exact: true })).toBeVisible()
+    const count = page.getByTestId('memory-notes-count')
+    await expect(count).toHaveText('0 of 2 tickets · 1 note found')
+
+    // Every word, as the panels' rows hold them: notes say checkout and cache, but none says both.
+    await page
+        .getByRole('searchbox', { name: 'Filter memory by key, text, ticket, or repository' })
+        .fill('checkout cache')
+    await expect(found).toHaveCount(0)
+    await expect(count).toHaveText('0 of 2 tickets · 0 notes found')
 })
