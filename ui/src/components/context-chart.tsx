@@ -89,44 +89,58 @@ export function ContextChart({
             >
                 {line}
                 <CollapsibleContent className="flex flex-col gap-2">
-                    <ToggleGroup
-                        type="single"
-                        aria-label="Model calls"
-                        value={String(shown.n)}
-                        // The picked call stays picked: pressing it again would leave nothing to name.
-                        onValueChange={(value) => {
-                            if (value !== '') {
-                                setPicked(Number(value))
-                            }
-                        }}
-                        className={cn(
-                            'flex h-20 w-full items-stretch gap-1',
-                            'rounded-none border-0 border-b bg-transparent p-0',
-                        )}
-                    >
-                        {calls.map((call) => (
-                            <ToggleGroupItem
-                                key={call.n}
-                                value={String(call.n)}
-                                aria-label={callLabel(call)}
-                                title={callLabel(call)}
-                                className={cn(
-                                    'relative flex h-full max-w-8 min-w-px flex-1 flex-col justify-end',
-                                    'rounded-t-xs p-0 hover:bg-surface-raised',
-                                )}
-                                data-testid={`context-call-${call.n}`}
-                            >
-                                <Bar call={call} top={top} peak={call === peak} />
-                            </ToggleGroupItem>
-                        ))}
-                    </ToggleGroup>
-                    <div aria-hidden className="-mt-1 flex items-start gap-1 text-muted-foreground">
-                        {calls.map((call, i) => (
-                            <span key={call.n} className="readout max-w-8 min-w-px flex-1 text-center text-2xs">
-                                {axisNames(i, calls.length, axisStep(calls.length, AXIS_ALL)) ? call.n : ''}
-                            </span>
-                        ))}
-                        <ul className="ml-auto flex shrink-0 gap-3 pl-3 text-xs">
+                    {/*
+                     * One track for the bars and their axis, the legend in a column of its own beside both, so a
+                     * call's number sits under its bar at any count, and a short session's bars are centered in the
+                     * track rather than clumped at its left, as the spend chart's are (ui/DESIGN.md, "Charts").
+                     */}
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1">
+                        <ToggleGroup
+                            type="single"
+                            aria-label="Model calls"
+                            value={String(shown.n)}
+                            // The picked call stays picked: pressing it again would leave nothing to name.
+                            onValueChange={(value) => {
+                                if (value !== '') {
+                                    setPicked(Number(value))
+                                }
+                            }}
+                            className={cn(
+                                'flex h-20 w-full items-stretch justify-center gap-1',
+                                'rounded-none border-0 border-b bg-transparent p-0',
+                            )}
+                            data-testid="context-plot"
+                        >
+                            {calls.map((call) => (
+                                <ToggleGroupItem
+                                    key={call.n}
+                                    value={String(call.n)}
+                                    aria-label={callLabel(call)}
+                                    title={callLabel(call)}
+                                    className={cn(
+                                        'relative flex h-full max-w-8 min-w-px flex-1 flex-col justify-end',
+                                        'rounded-t-xs p-0 hover:bg-surface-raised',
+                                    )}
+                                    data-testid={`context-call-${call.n}`}
+                                >
+                                    <Bar call={call} top={top} peak={call === peak} />
+                                </ToggleGroupItem>
+                            ))}
+                        </ToggleGroup>
+                        {/* The legend's column is empty beside the bars, so the legend sits at the axis's height. */}
+                        <span />
+                        <div aria-hidden className="flex items-start justify-center gap-1 text-muted-foreground">
+                            {calls.map((call, i) => (
+                                <span
+                                    key={call.n}
+                                    className="readout max-w-8 min-w-px flex-1 text-center text-2xs"
+                                    data-testid={`context-axis-${call.n}`}
+                                >
+                                    {axisNames(i, calls.length, axisStep(calls.length, AXIS_ALL)) ? call.n : ''}
+                                </span>
+                            ))}
+                        </div>
+                        <ul aria-hidden className="flex gap-3 text-xs text-muted-foreground">
                             {/* One word each; what the first call's two parts are is on hover, as its line says it. */}
                             <li className="flex items-center gap-1.5" title={CARRIED_HINT}>
                                 <span className="size-2.5 rounded-xs bg-context-carried" />
