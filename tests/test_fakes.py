@@ -92,6 +92,17 @@ def test_agent_prints_configured_result(agent_log: Path, configured: str) -> Non
         assert run(["agent"]).stdout.splitlines()[-1] == configured
 
 
+def test_agent_reads_the_settings_of_the_ticket_its_title_names_first(agent_log: Path) -> None:
+    tickets = {"PROJ-2": {"RESULT": "for PROJ-2", "EXIT": "3"}}
+    env = {"FAKE_WORKER_RESULT": "for the role", "FAKE_WORKER_FOR": json.dumps(tickets)}
+    with mock.patch.dict(os.environ, env):
+        theirs = run(["agent", "--agent", "canopy-worker", "--title=PROJ-2 implement: Log in", "PROJ-1 in the prompt"])
+        assert (theirs.returncode, theirs.stdout.splitlines()[-1]) == (3, "for PROJ-2")
+        for untitled in (["--title=PROJ-1 resume", "PROJ-2"], ["PROJ-2"]):
+            other = run(["agent", "--agent", "canopy-worker", *untitled])
+            assert (other.returncode, other.stdout.splitlines()[-1]) == (0, "for the role")
+
+
 PR = "https://github.com/acme/api/pull/7"
 COMMENT = {
     "item": "comment",

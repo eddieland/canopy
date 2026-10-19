@@ -80,7 +80,7 @@ def test_a_run_whose_process_died_is_crashed_its_worker_killed_and_its_slot_retu
     scenario: Scenario, treehouse_state: Path, git_pool: GitPool
 ) -> None:
     dies = scenario.starts(worker=pushes())
-    lives = scenario.starts(dispatches("PROJ-2"), worker=pushes("agent/PROJ-2-work", "PROJ-2: the change"))
+    lives = scenario.starts(dispatches("PROJ-2"), worker=pushes())
     left_behind = int(dies.row["worker_pid"])
     dies.dies()
     assert procs.alive(left_behind)  # the worker leads its own group, so it outlives the run's process
