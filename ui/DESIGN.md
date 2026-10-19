@@ -243,8 +243,10 @@ Rules:
   is read by its own ticket's runs in any repository; a lesson for every repository is kept under any repository's chip.
   While lessons are in use, the Lessons header has `all`, `due`, and `wrong` chips with their dots (`?show=`). A
   filtered count says `2 of 7`, and an empty result says which filter left nothing. The proposals flip with an
-  `OrderToggle`, oldest first by default, which is the nearest to lapsing. A `history` chip in the Proposals and Lessons
-  headers (`?history=true`, `GET /api/memory?history=true`) lists each panel's latest memories no longer pending or in
+  `OrderToggle`, oldest first by default, which is the nearest to lapsing. A `history` chip at the end of the filter
+  bar,
+  one since it acts on every panel (`?history=true`, `GET /api/memory?history=true`) lists each panel's latest memories
+  no longer pending or in
   force under the rest, Decided and Retired, at most 50 each, with their standing and reason and no verbs; turning it
   on or off keeps the panels and the rows opened on them, the sections holding a row's skeleton until read. Each list
   scrolls in its panel but the proposals, which hold 20 at most and so grow with their rows. A row in force that its
@@ -261,8 +263,9 @@ Rules:
   at the line's end, a ghost `Reject`, which cannot be undone, `Promote` under a ticket's note that keeps its text, on
   the memory page as on its ticket's, and `Renew` under a lesson, outlined once it
   is `due` or `wrong` and a muted ghost before, since only then does it ask for a decision; a lesson that asks nothing
-  keeps its line's room but shows it only while its row is hovered or holds the focus, as a row's copy button does, and
-  always on a touch screen; each ends its line with a ghost `Forget`, muted at rest, the rarest verb and one that cannot
+  shows its line only while its row is hovered or holds the focus, as a row's copy button does, over the row's end on
+  `bg-surface`, so at rest it takes no room and nothing moves when it shows, and always, in the row's flow, on a touch
+  screen; each ends its line with a ghost `Forget`, muted at rest, the rarest verb and one that cannot
   be undone, and in `status-failed` while its row is hovered or it has the focus, but on an attention item. A memory's
   row leads with its standing, a dot and its word in a run state's color (`memoryStand`): `wrong` (failed) and `due`
   (blocked) for a lesson that calls for the operator, `pending` (blocked), `active` (done), `superseded` or `invalid`

@@ -141,7 +141,8 @@ export function MemoryRows({
                     <ListRow
                         key={entry.id}
                         kind={ticket || across ? 'memory-across' : 'memory'}
-                        className="group/copy"
+                        // Relative, so a quiet lesson's verbs can show over its end (`LessonActions`).
+                        className="group/copy relative"
                         data-testid={`memory-${entry.id}`}
                     >
                         <MemoryStanding
