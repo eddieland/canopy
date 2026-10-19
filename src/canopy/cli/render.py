@@ -1,9 +1,13 @@
-"""How `canopy status`, `canopy show`, and the other read-back commands name tickets, runs, costs, and chores."""
+"""How `canopy status`, `canopy show`, and the other read-back commands name tickets, runs, costs, and chores.
+
+And how a report prints as JSON, for `--json`.
+"""
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from canopy.core import contract, db, records
 from canopy.loop import attention
@@ -100,3 +104,16 @@ def chore_line(state: chore_view.ChoreState, now: datetime) -> str:
     due = state.due_at(now)
     when = "due now" if due is None or due <= now else f"due in {attention.age(db.format_time(now), due)}"
     return f"{last}, {when}"
+
+
+def report_json(report: dict[str, Any]) -> str:
+    """A report as `--json` prints it: one JSON object, with each value on a line of its own.
+
+    An agent reads a long report from the file its runtime saves it to, through file tools that cut a line at a few
+    thousand characters, so a report on one line is cut short. A line for each value keeps all of it readable for about
+    2% more than the compact form, where indenting by two costs a third to a half more.
+
+    Returns:
+        The JSON text, its keys sorted.
+    """
+    return json.dumps(report, sort_keys=True, indent=0)

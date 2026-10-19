@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import dataclasses
-import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 import click
 
 from canopy.cli.common import open_context
+from canopy.cli.render import report_json
 from canopy.core import spend
 from canopy.runtime.report import count_text
 
@@ -76,7 +76,7 @@ def cmd_spend(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     ctx = open_context(click_ctx)
     found = spend.breakdown(ctx.conn, datetime.now(UTC), days)
     if as_json:
-        click.echo(json.dumps(as_dict(found), sort_keys=True))
+        click.echo(report_json(as_dict(found)))
         return 0
     for line in render(found):
         click.echo(line)

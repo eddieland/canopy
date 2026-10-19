@@ -336,7 +336,10 @@ def test_canopy_health_on_an_empty_journal(canopy_env: CanopyEnv, capsys: pytest
 def test_canopy_health_json_is_the_report(canopy_env: CanopyEnv, capsys: pytest.CaptureFixture[str]) -> None:
     journal_of_failures(canopy_env.journal(), datetime.now(UTC))
     assert main(["health", "--json", "--days", "3"]) == 0
-    data = json.loads(capsys.readouterr().out)
+    out = capsys.readouterr().out
+    data = json.loads(out)
+    # A value to a line, so an agent's file tools, which cut a long line, read all of a report too long to print whole.
+    assert all(line.count('": ') <= 1 for line in out.splitlines())
     assert data["days"] == 3
     timeout = {"kind": "workers", "what": "implement", "status": "timeout", "failed": True, "runs": 1, "cost_usd": 3.0}
     assert timeout in data["outcomes"]

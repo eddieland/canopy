@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import dataclasses
-import json
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, assert_never
 
 import click
 
 from canopy.cli.common import open_context
+from canopy.cli.render import report_json
 from canopy.cli.spend import cost_text
 from canopy.core import health, spend
 
@@ -49,7 +49,7 @@ def cmd_health(click_ctx: click.Context, *, days: int, as_json: bool) -> int:
     ctx = open_context(click_ctx)
     found = health.report(ctx.conn, datetime.now(UTC), days)
     if as_json:
-        click.echo(json.dumps(dataclasses.asdict(found), sort_keys=True))
+        click.echo(report_json(dataclasses.asdict(found)))
         return 0
     for line in render(found):
         click.echo(line)
