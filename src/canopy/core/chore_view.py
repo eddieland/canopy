@@ -9,7 +9,7 @@ from __future__ import annotations
 import functools
 import sqlite3
 import threading
-from collections.abc import Callable, Iterable, Iterator, Mapping
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, TypedDict
@@ -74,7 +74,7 @@ class ChoreState:
 
     name: str
     chore: Chore
-    runs: list[records.ChoreRun]
+    runs: Sequence[records.ChoreRun]
     older: Callable[[int], list[records.ChoreRun]]
     dismissals: Mapping[str, str]
     starts: FindingStarts | None = None

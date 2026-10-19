@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import sqlite3
 from collections import Counter
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -84,7 +84,7 @@ class Event:
     id: int
     kind: str
     at: str
-    fields: dict[str, object]
+    fields: Mapping[str, object]
 
     @classmethod
     def of(cls, row: sqlite3.Row) -> Event:
@@ -166,12 +166,12 @@ class Digest:
 
     since: str
     until: str
-    ticks: dict[str, int]
-    runs_started: dict[str, int]
-    runs_ended: dict[str, int]
-    done: list[DoneRun]
-    blocked: list[BlockedRun]
-    attention: dict[str, int]
+    ticks: Mapping[str, int]
+    runs_started: Mapping[str, int]
+    runs_ended: Mapping[str, int]
+    done: Sequence[DoneRun]
+    blocked: Sequence[BlockedRun]
+    attention: Mapping[str, int]
     oldest: str | None
     running: int
 
@@ -211,12 +211,16 @@ class Digest:
         return {
             "since": self.since,
             "until": self.until,
-            "ticks": self.ticks,
-            "runs_started": self.runs_started,
-            "runs_ended": self.runs_ended,
-            "done": self.done,
-            "blocked": self.blocked,
-            "attention": {"open": sum(self.attention.values()), "by_reason": self.attention, "oldest": self.oldest},
+            "ticks": dict(self.ticks),
+            "runs_started": dict(self.runs_started),
+            "runs_ended": dict(self.runs_ended),
+            "done": list(self.done),
+            "blocked": list(self.blocked),
+            "attention": {
+                "open": sum(self.attention.values()),
+                "by_reason": dict(self.attention),
+                "oldest": self.oldest,
+            },
             "running": self.running,
             "lines": self.lines(),
         }
@@ -331,15 +335,15 @@ class Message:
         """
         return not self.attention and not self.events and self.digest is None
 
-    def _bounded(self) -> tuple[list[Item], list[tuple[str, str]], list[Event], int]:
+    def _bounded(self) -> tuple[Sequence[Item], Sequence[tuple[str, str]], Sequence[Event], int]:
         """The attention lines and events to list, and how many are left out.
 
         Returns:
             The items added and resolved and the events to list, together at most `MAX_LINES` attention lines and
             `MAX_LINES` events, and the count of the rest. Events older than `STALE_EVENTS` are counted, not listed.
         """
-        added: list[Item] = self.attention.added if self.attention else []
-        resolved: list[tuple[str, str]] = self.attention.resolved if self.attention else []
+        added = self.attention.added if self.attention else ()
+        resolved = self.attention.resolved if self.attention else ()
         listed_added = added[:MAX_LINES]
         listed_resolved = resolved[: max(0, MAX_LINES - len(listed_added))]
         omitted = len(added) - len(listed_added) + len(resolved) - len(listed_resolved)
@@ -363,7 +367,7 @@ class Message:
         else:
             lines = ["canopy digest"]
         lines += [f"+ {i.subject} {i.reason}: {_line(i.detail)}" for i in added]
-        dismissed: list[bool] = self.attention.resolved_dismissed if self.attention else []
+        dismissed = self.attention.resolved_dismissed if self.attention else ()
         lines += [
             f"- {name} {reason}{' (dismissed)' if i < len(dismissed) and dismissed[i] else ''}"
             for i, (name, reason) in enumerate(resolved)
