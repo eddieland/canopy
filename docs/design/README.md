@@ -26,7 +26,7 @@ The rest goes where the next person to change it will look:
 - every flag and output line of a command: its `--help` and its tests;
 - what a measurement found: `MEASUREMENTS.md`, cited here by date and finding, without its figures;
 - how a behavior came to be, who asked for it, and which milestone built it: the PR, and the milestone's lines in
-  `ROADMAP.md`;
+  `roadmap/`;
 - what a prompt tells an agent beyond the contract the harness checks: the prompt;
 - the web UI's pages and how they look: `ui/DESIGN.md`.
 
@@ -154,7 +154,7 @@ canopy (harness, Python)
   chores/      the operator's recurring chores (§19)
   notify/      notification sinks (§20)
   reviews/     adversarial reviews of PRs (§21)
-  memory/      agent memory's feature (§28): proposals' expiry, its attention items, and search
+  memory/      agent memory's feature (§28): proposals' expiry and its attention items
   serve/       the web UI's server (§22, D079); the only package that imports fastapi, starlette, uvicorn, or anyio
   setup/       canopy init, the sandbox's setup, and workspace sync (§18, §24)
   core/        what every feature shares: config, the Context, the journal and its typed rows, vocabularies, contracts,

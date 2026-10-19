@@ -12,7 +12,7 @@ import { Copyable } from '@/components/copy-button'
 import { Decisions } from '@/components/decisions'
 import { Field, Fields } from '@/components/fields'
 import { GrantLimits } from '@/components/grant-limits'
-import { OrderToggle } from '@/components/order-toggle'
+import { ListPanel } from '@/components/list-panel'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll } from '@/components/panel'
 import { ReviewRequestStatus } from '@/components/review-request'
 import { ReviewThreads } from '@/components/review-threads'
@@ -114,7 +114,7 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                     </nav>
                 }
             >
-                {pullRequestDescription(pr, reviews.length)}
+                {pullRequestDescription(pr, reviewLimit)}
             </PageHeader>
             <div className="stagger flex flex-col gap-6">
                 <Panel>
@@ -124,12 +124,8 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                         </span>
                     </PanelHeader>
                     <Fields>
-                        <TicketField ticketKey={pr.ticket_key} title={pr.ticket_title} />
-                        {pr.repo && (
-                            <Field label="repository" mono>
-                                {pr.repo}
-                            </Field>
-                        )}
+                        {/* Its title names its repository, and a ticketless PR says why in its description. */}
+                        {pr.ticket_key !== null && <TicketField ticketKey={pr.ticket_key} title={pr.ticket_title} />}
                         {pr.branch && (
                             <Field label="branch" mono>
                                 <Copyable text={pr.branch} label="branch" />
@@ -152,53 +148,32 @@ function PullRequestView({ detail, title }: { detail: PullRequestDetail; title: 
                 {/* Its threads, which the drafts_waiting item opens, when canopy has read them or holds a draft: the
                     detail says so up front, so the page reserves their place before they arrive. */}
                 {detail.threads && <ReviewThreads url={pr.url} />}
-                <Panel data-testid="pull-request-reviews">
-                    <PanelHeader label="Reviews">
-                        <span className="flex items-center gap-2">
-                            {reviews.length > 1 && <OrderToggle list="pr-reviews" />}
-                            <span className="readout text-xs text-muted-foreground">{reviews.length}</span>
-                        </span>
-                    </PanelHeader>
-                    {reviews.length === 0 ? (
-                        <Empty>no reviews yet: canopy has not reviewed it</Empty>
-                    ) : (
-                        <ReviewsTable reviews={ordered('pr-reviews', reviewsOrder, reviews)} pr={false} />
-                    )}
-                </Panel>
-                <Panel data-testid="pull-request-runs">
-                    <PanelHeader label="Runs">
-                        <span className="flex items-center gap-2">
-                            {runs.length > 1 && <OrderToggle list="pr-runs" />}
-                            <span className="readout text-xs text-muted-foreground">{runs.length}</span>
-                        </span>
-                    </PanelHeader>
-                    {runs.length === 0 ? (
-                        <Empty>no runs yet: none of its ticket&apos;s runs has pushed to it</Empty>
-                    ) : (
+                {/* Each list is its header alone while it holds none, and a ticketless PR has no runs to list: runs
+                    are its ticket's. */}
+                <ListPanel label="Reviews" count={reviews.length} list="pr-reviews" data-testid="pull-request-reviews">
+                    <ReviewsTable reviews={ordered('pr-reviews', reviewsOrder, reviews)} pr={false} />
+                </ListPanel>
+                {pr.ticket_key !== null && (
+                    <ListPanel label="Runs" count={runs.length} list="pr-runs" data-testid="pull-request-runs">
                         <PanelScroll label="Runs">
                             <RunsTable runs={ordered('pr-runs', runsOrder, runs)} ticket={false} ownPr={pr.url} />
                         </PanelScroll>
-                    )}
-                </Panel>
-                <Panel data-testid="pull-request-decisions">
-                    <PanelHeader label="Decisions">
-                        <span className="flex items-center gap-2">
-                            {decisions.length > 1 && <OrderToggle list="pr-decisions" />}
-                            <span className="readout text-xs text-muted-foreground">{decisions.length}</span>
-                        </span>
-                    </PanelHeader>
-                    {decisions.length === 0 ? (
-                        <Empty>no decisions yet: no tick has named it</Empty>
-                    ) : (
-                        <PanelScroll label="Decisions">
-                            <Decisions
-                                decisions={ordered('pr-decisions', decisionsOrder, decisions)}
-                                byTick
-                                ownPr={pr.url}
-                            />
-                        </PanelScroll>
-                    )}
-                </Panel>
+                    </ListPanel>
+                )}
+                <ListPanel
+                    label="Decisions"
+                    count={decisions.length}
+                    list="pr-decisions"
+                    data-testid="pull-request-decisions"
+                >
+                    <PanelScroll label="Decisions">
+                        <Decisions
+                            decisions={ordered('pr-decisions', decisionsOrder, decisions)}
+                            byTick
+                            ownPr={pr.url}
+                        />
+                    </PanelScroll>
+                </ListPanel>
             </div>
         </>
     )

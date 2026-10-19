@@ -54,6 +54,9 @@ REVIEW_DAYS = 90
 MAX_LESSONS_DIGEST = 2 * 1024
 # The runs a memory names as having relied on it, the latest first; its use count counts every one.
 USED_BY_SHOWN = 5
+# The most proposals or lessons no longer pending or in force a history lists: the latest to leave, enough to look back
+# a few weeks without sending a busy workspace's whole past.
+HISTORY_SHOWN = 50
 # The attention reasons memory raises (DESIGN §14, §28): the harness's, and the operator's alone.
 PROPOSAL_REASON = "memory_proposal"
 REVIEW_REASON = "lesson_review"
@@ -685,6 +688,20 @@ def active_lessons(conn: sqlite3.Connection) -> list[records.Memory]:
     )
 
 
+def past(conn: sqlite3.Connection, scope: MemoryScope, *, limit: int = HISTORY_SHOWN) -> list[records.Memory]:
+    """Return the latest proposals or lessons of `scope` no longer pending or in force, the latest to leave first.
+
+    A proposal leaves when rejected, lapsed, promoted, or forgotten; a lesson when replaced or forgotten.
+    """
+    return records.fetch_all(
+        conn,
+        records.Memory,
+        "SELECT * FROM memories WHERE scope = ? AND status IN (?, ?) "
+        "ORDER BY coalesce(invalidated_at, created_at) DESC, id DESC LIMIT ?",
+        (scope, MemoryStatus.SUPERSEDED, MemoryStatus.INVALID, limit),
+    )
+
+
 def get(conn: sqlite3.Connection, memory_id: int) -> records.Memory | None:
     """Return memory `memory_id`, or None."""
     return records.fetch_one(conn, records.Memory, "SELECT * FROM memories WHERE id = ?", (memory_id,))
@@ -791,7 +808,7 @@ def ticket_digest(conn: sqlite3.Connection, key: str) -> Digest:
     if left_out:
         body.append(f"[{left_out} older notes are left out of this prompt.]")
     if active:
-        # Search reaches what the cap left out, and the notes a later note under the key replaced (`memory.search`).
+        # Search reaches what the cap left out, and the notes a later note under the key replaced (`memory_search`).
         body.append(
             f"`{SEARCH_COMMAND}` searches this ticket's notes, the ones later notes replaced"
             f"{' and the ones left out here' if left_out else ''} included."

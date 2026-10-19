@@ -1,6 +1,7 @@
 import { useState } from 'react'
 
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { axisNames, axisStep } from '@/lib/chart'
 import { signed, summary, tokenCount } from '@/lib/transcript'
 import type { Addition, CallContext, ContextShape } from '@/lib/transcript'
 import { cn } from '@/lib/utils'
@@ -102,7 +103,7 @@ export function ContextChart({ shape, onShow }: { shape: ContextShape; onShow: (
                                 key={call.n}
                                 className="readout max-w-6 min-w-px flex-1 text-center text-2xs text-muted-foreground"
                             >
-                                {calls.length <= AXIS_ALL || (calls.length - 1 - i) % 5 === 0 ? call.n : ''}
+                                {axisNames(i, calls.length, axisStep(calls.length, AXIS_ALL)) ? call.n : ''}
                             </span>
                         ))}
                     </div>

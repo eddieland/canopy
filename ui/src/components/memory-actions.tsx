@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowUpFromLine, Eraser, RefreshCw, X } from 'lucide-react'
+import type { QueryClient } from '@tanstack/react-query'
+import { ArrowUpFromLine, Eraser, Pencil, RefreshCw, X } from 'lucide-react'
 import { useId, useState } from 'react'
 import type { ReactNode, SubmitEvent } from 'react'
 
+import { ApiError } from '@/api/client'
 import { forgetMemory, promoteMemory, refreshMemory, rejectMemory, renewMemory } from '@/api/mutations'
 import { memoryQuery } from '@/api/queries'
 import type { MemoryEntry } from '@/api/types'
@@ -29,6 +31,9 @@ import { cn } from '@/lib/utils'
 // letters, digits, and hyphens. Not '': a segmented control takes that for nothing picked.
 const EVERY = '*'
 
+// The refusals that mean the memory is not as the page last read it.
+const STALE: ReadonlySet<string> = new Set(['not_pending', 'forgotten', 'unknown'])
+
 /** What a list of memories hands its rows' actions: where to say what one did, under the list. */
 interface Said {
     /** Says what a verb did, in the CLI's words, under the list the row is in. */
@@ -44,18 +49,20 @@ export function MemorySaid({ said, className }: { said: string | null; className
 }
 
 /**
- * A proposal's verbs, under its row: Promote, which opens the form for the lesson's words and repository, As written,
- * which promotes it at once in its own, Reject, and at the line's end Forget, for a proposal whose text must go and
- * not merely be declined. With `asWritten`, as on an
- * attention item, Promote makes the lesson at once, in the proposal's own words and for its repository, as `canopy
- * memory promote ID` does. With `forget` false, as there, no Forget.
+ * A proposal's verbs, under its row: Promote as written, the outline, which makes the lesson at once in the proposal's
+ * own words and for its repository, as `canopy memory promote ID` does, since most proposals need no edit; Edit and
+ * promote, which opens the form for the lesson's words and repository; and at the line's end, apart from both, Reject,
+ * and Forget, for a proposal whose text must go and not merely be declined. With `edit` false, as on an attention
+ * item, no Edit and promote; with `forget` false, as there, no Forget. A private ticket's run's proposal is never
+ * promoted in one click: its words may hold what the operator kept off the tracker, and the form warns of that before
+ * the save, so its first button opens the form, and where there is no form it says to promote it from the memory page.
  */
 export function ProposalActions({
     proposal,
-    asWritten = false,
+    edit = true,
     forget = true,
     onSaid,
-}: Said & { proposal: MemoryEntry; asWritten?: boolean; forget?: boolean }) {
+}: Said & { proposal: MemoryEntry; edit?: boolean; forget?: boolean }) {
     const client = useQueryClient()
     const [open, setOpen] = useState(false)
     const [confirming, setConfirming] = useState(false)
@@ -65,6 +72,7 @@ export function ProposalActions({
             onSaid(promotedText(promoted))
             void refreshMemory(client)
         },
+        onError: (error) => void refreshIfStale(client, error, onSaid),
     })
     const reject = useMutation({
         mutationFn: () => rejectMemory(proposal.id),
@@ -72,48 +80,70 @@ export function ProposalActions({
             onSaid(rejectedText(rejected.id))
             void refreshMemory(client)
         },
+        onError: (error) => void refreshIfStale(client, error, onSaid),
     })
     const pending = promote.isPending || reject.isPending
     return (
         <RowLine from="key" className="flex flex-col gap-2">
             {!open && (
                 <span className="flex flex-wrap items-center gap-2">
-                    <Button
-                        variant="outline"
-                        size="xs"
-                        title={`canopy memory promote ${proposal.id}`}
-                        onClick={() => (asWritten ? promote.mutate() : setOpen(true))}
-                        disabled={pending}
-                    >
-                        <ArrowUpFromLine />
-                        {asWritten ? 'Promote as written' : 'Promote'}
-                    </Button>
-                    {/* Most proposals are promoted in their own words: one click, as `canopy memory promote ID`. */}
-                    {!asWritten && (
+                    {proposal.private && edit ? (
                         <Button
-                            variant="ghost"
+                            variant="outline"
                             size="xs"
-                            title={`canopy memory promote ${proposal.id}: in its own words and for its repository`}
+                            title="A private ticket's run wrote it: the form warns before you save"
+                            onClick={() => setOpen(true)}
+                            disabled={pending}
+                        >
+                            <ArrowUpFromLine />
+                            Promote
+                        </Button>
+                    ) : proposal.private ? (
+                        <span className="text-xs text-muted-foreground" data-testid="promote-private-elsewhere">
+                            private: promote it from the memory page, where the form warns first
+                        </span>
+                    ) : (
+                        <Button
+                            variant="outline"
+                            size="xs"
+                            title={`canopy memory promote ${proposal.id}`}
                             onClick={() => promote.mutate()}
                             disabled={pending}
                         >
-                            As written
+                            <ArrowUpFromLine />
+                            Promote as written
                         </Button>
                     )}
-                    <Button
-                        variant="ghost"
-                        size="xs"
-                        className="text-muted-foreground"
-                        title={`canopy memory reject ${proposal.id}`}
-                        onClick={() => reject.mutate()}
-                        disabled={pending}
-                    >
-                        <X />
-                        Reject
-                    </Button>
-                    {forget && !confirming && (
-                        <ForgetButton memory={proposal} onClick={() => setConfirming(true)} disabled={pending} />
+                    {edit && !proposal.private && (
+                        <Button
+                            variant="ghost"
+                            size="xs"
+                            className="text-muted-foreground"
+                            title={`canopy memory promote ${proposal.id} --text TEXT --repo REPO`}
+                            onClick={() => setOpen(true)}
+                            disabled={pending}
+                        >
+                            <Pencil />
+                            Edit and promote
+                        </Button>
                     )}
+                    {/* Reject cannot be undone: it stands apart from the promotes, at the line's end with Forget. */}
+                    <span className="ml-auto flex items-center gap-2">
+                        <Button
+                            variant="ghost"
+                            size="xs"
+                            className="text-muted-foreground"
+                            title={`canopy memory reject ${proposal.id}`}
+                            onClick={() => reject.mutate()}
+                            disabled={pending}
+                        >
+                            <X />
+                            Reject
+                        </Button>
+                        {forget && !confirming && (
+                            <ForgetButton memory={proposal} onClick={() => setConfirming(true)} disabled={pending} />
+                        )}
+                    </span>
                 </span>
             )}
             {open && <PromoteForm source={proposal} onSaid={onSaid} onClose={() => setOpen(false)} />}
@@ -130,9 +160,11 @@ export function ProposalActions({
 
 /**
  * A ticket's note's verbs, under its row, while it keeps its text: Promote, which opens the form for the lesson, and
- * at the line's end Forget, which cannot be undone and so asks for the note's ref typed.
+ * at the line's end Forget, which cannot be undone and so asks for the note's ref typed. With `promote` false, while
+ * lessons are off, Forget alone: a note holding what should not be kept is forgotten from where it shows, whatever
+ * lessons' mode (DESIGN §28).
  */
-export function NoteActions({ note, onSaid }: Said & { note: MemoryEntry }) {
+export function NoteActions({ note, promote = true, onSaid }: Said & { note: MemoryEntry; promote?: boolean }) {
     const [open, setOpen] = useState(false)
     const [confirming, setConfirming] = useState(false)
     if (note.text === null) {
@@ -144,15 +176,17 @@ export function NoteActions({ note, onSaid }: Said & { note: MemoryEntry }) {
                 <PromoteForm source={note} onSaid={onSaid} onClose={() => setOpen(false)} />
             ) : (
                 <span className="flex flex-wrap items-center gap-2">
-                    <Button
-                        variant="outline"
-                        size="xs"
-                        title={`canopy memory promote ${note.id}`}
-                        onClick={() => setOpen(true)}
-                    >
-                        <ArrowUpFromLine />
-                        Promote
-                    </Button>
+                    {promote && (
+                        <Button
+                            variant="outline"
+                            size="xs"
+                            title={`canopy memory promote ${note.id}`}
+                            onClick={() => setOpen(true)}
+                        >
+                            <ArrowUpFromLine />
+                            Promote
+                        </Button>
+                    )}
                     {!confirming && <ForgetButton memory={note} onClick={() => setConfirming(true)} />}
                 </span>
             )}
@@ -168,8 +202,9 @@ export function NoteActions({ note, onSaid }: Said & { note: MemoryEntry }) {
 }
 
 /**
- * A lesson's verbs, under its row: Renew, and Forget, which cannot be undone and so asks for the lesson's ref typed.
- * Until then Forget is the quieter, at the line's end. With `forget` false, as on a `lesson_review` item, Renew alone.
+ * A lesson's verbs, under its row, shown at rest only while it is due or wrong: Renew, and Forget, which cannot be
+ * undone and so asks for the lesson's ref typed. Until then Forget is the quieter, at the line's end. With `forget`
+ * false, as on a `lesson_review` item, Renew alone.
  */
 export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson: MemoryEntry; forget?: boolean }) {
     const client = useQueryClient()
@@ -183,9 +218,19 @@ export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson
             onSaid(renewedText(renewed))
             void refreshMemory(client)
         },
+        onError: (error) => void refreshIfStale(client, error, onSaid),
     })
+    // A lesson that asks nothing keeps its verbs' room but shows them only on its row's hover or focus, as a row's copy
+    // button does, so a list of hundreds is not a wall of buttons. A touch screen, with no hover, always shows them.
+    const shown = asked || confirming || renew.error !== null
     return (
-        <RowLine from="key" className="flex flex-col gap-2">
+        <RowLine
+            from="key"
+            className={cn(
+                'flex flex-col gap-2',
+                !shown && 'opacity-0 group-hover/copy:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100',
+            )}
+        >
             <span className="flex flex-wrap items-center gap-2">
                 <Button
                     variant={asked ? 'outline' : 'ghost'}
@@ -205,7 +250,7 @@ export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson
             {confirming && (
                 <ForgetChallenge memory={lesson} onSaid={onSaid} onCancel={() => setConfirming(false)}>
                     canopy deletes this lesson&apos;s text, and no run reads it again. Its row stays, saying who
-                    promoted it and when. This cannot be undone: promote its proposal or note again to have it back.
+                    promoted it and when. This cannot be undone: {backText(lesson)}
                 </ForgetChallenge>
             )}
             <Notice error={renew.error} />
@@ -240,6 +285,7 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
             onClose()
             void refreshMemory(client)
         },
+        onError: (error) => void refreshIfStale(client, error, onSaid),
     })
     const chars = lessonChars(text)
     const fits = chars > 0 && chars <= MAX_LESSON_CHARS
@@ -346,6 +392,30 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
 }
 
 /**
+ * How a forgotten lesson could come back, as the server allows it: a note is promoted again while it keeps its text,
+ * but a proposal is used up once promoted (`not_pending`), so a lesson from one cannot.
+ */
+function backText(lesson: MemoryEntry): string {
+    if (lesson.origin?.scope === 'ticket') {
+        return `promote its note, ${memoryRef(lesson.origin.id)}, again to have it back, while the note keeps its text.`
+    }
+    return 'it cannot come back, though a worker may propose it again.'
+}
+
+/**
+ * After a verb the server refused because the memory changed under it (decided from the attention list or the CLI,
+ * forgotten, or gone), read memory again, so its row leaves or shows where it stands now. Its row may leave with the
+ * refusal under it, so the refusal is said under the list too.
+ */
+function refreshIfStale(client: QueryClient, error: Error, onSaid: (said: string) => void): Promise<void> {
+    if (!(error instanceof ApiError) || !STALE.has(error.guard ?? '')) {
+        return Promise.resolve()
+    }
+    onSaid(`refused (${error.guard ?? ''}): ${error.message}`)
+    return refreshMemory(client)
+}
+
+/**
  * The quiet Forget at the end of a memory's line of verbs, which opens the challenge under it: muted at rest, since it
  * is the rarest verb and cannot be undone, and in `status-failed` only while its row is hovered or it has the focus.
  */
@@ -386,6 +456,7 @@ function ForgetChallenge({
             onSaid(memoryForgottenText(forgot))
             void refreshMemory(client)
         },
+        onError: (error) => void refreshIfStale(client, error, onSaid),
     })
     return (
         <ForgetForm

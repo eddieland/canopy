@@ -111,12 +111,11 @@ def test_a_failed_tick_leaves_the_list_and_notifies_nothing_new(
 
 
 def test_a_tick_wide_skip_leaves_the_list_and_notifies_nothing(
-    scenario: Scenario, canopy_env: CanopyEnv, notified: Path, capsys: pytest.CaptureFixture[str]
+    scenario: Scenario, canopy_env: CanopyEnv, notified: Path
 ) -> None:
     scenario.tick(*recorded(("PROJ-3", "needs_reviewer")), dry_run=True)
-    capsys.readouterr()
     skipped = scenario.tick(skips_tick("mcp_unavailable: github"), dry_run=True, code=1)
-    assert capsys.readouterr().out == "tick 2: skipped: dry run; overseer skipped the tick: mcp_unavailable: github\n"
+    assert skipped.printed.out == "tick 2: skipped: dry run; overseer skipped the tick: mcp_unavailable: github\n"
 
     assert skipped.tick.status == "skipped"
     assert scenario.attention() == [("PROJ-3", "needs_reviewer")]

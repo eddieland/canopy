@@ -376,6 +376,9 @@ export type paths = {
         /**
          * Get agent memory
          * @description Each tier's mode, every ticket's notes in force, the proposals waiting, and the lessons and what they serve.
+         *
+         *     With `history`, the latest proposals and lessons no longer pending or in force too, as `past_proposals` and
+         *     `past_lessons`.
          */
         get: operations["getMemory"];
         put?: never;
@@ -470,6 +473,28 @@ export type paths = {
          *     Refused `off`, or `unknown` for an id no lesson in force has, as the CLI refuses it.
          */
         post: operations["renewMemory"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/memory/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search agent memory
+         * @description `canopy memory search Q` in the operator's shell: every memory that keeps its text, best match first, at most 50.
+         *
+         *     It reads only, as the overview does.
+         */
+        get: operations["searchMemory"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2586,6 +2611,17 @@ export type components = {
             scope: components["schemas"]["MemoryScopeName"];
         };
         /**
+         * MemoryFound
+         * @description What `canopy memory search` finds as the operator (DESIGN §28, Search): every memory that keeps its text.
+         */
+        MemoryFound: {
+            /**
+             * Entries
+             * @description The memories whose key or text holds any of the words, best match first, at most 50.
+             */
+            entries: components["schemas"]["MemoryEntry"][];
+        };
+        /**
          * @description A memory tier's mode (DESIGN §28): `record` writes and serves nothing; `use` serves too.
          * @enum {string}
          */
@@ -2625,6 +2661,20 @@ export type components = {
             lessons: components["schemas"]["MemoryEntry"][];
             /** @description What every run would be served of the lessons; None while proposals are off. */
             lessons_digest: components["schemas"]["MemoryDigest"] | null;
+            /**
+             * Past Lessons
+             * @description With `history`, the lessons no longer in force, replaced or forgotten, the latest to leave first, at most 50;
+             *     else none.
+             * @default []
+             */
+            past_lessons: components["schemas"]["MemoryEntry"][];
+            /**
+             * Past Proposals
+             * @description With `history`, the proposals no longer pending, rejected, lapsed, promoted, or forgotten, the latest to leave
+             *     first, at most 50; else none.
+             * @default []
+             */
+            past_proposals: components["schemas"]["MemoryEntry"][];
             /**
              * Proposals
              * @description The proposals waiting on the operator, oldest first.
@@ -6911,7 +6961,10 @@ export interface operations {
     };
     getMemory: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Also send the latest proposals and lessons no longer pending or in force. */
+                history?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -6961,6 +7014,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
             /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
@@ -7286,6 +7348,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RefusalResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a chunked body, with no Content-Length. */
+            411: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a body over 1280 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The journal is busy: another writer, such as the loop, held it past the busy timeout. Try again. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    searchMemory: {
+        parameters: {
+            query: {
+                /** @description Only ticket notes in force, the 50 best of them. */
+                notes?: boolean;
+                /** @description The words to find, any of them, as canopy memory search. */
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemoryFound"];
+                };
+            };
+            /** @description No valid session: sign in with the listener secret. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Refused before the route ran: a Host or Origin header naming another host, or a write without the session's token or an Origin naming this server. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Refused before the route ran: a chunked body, with no Content-Length. */

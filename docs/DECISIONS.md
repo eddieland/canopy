@@ -20,7 +20,7 @@ Everything else goes where the next person to change that code will look:
 - why a feature behaves as it does, and what was rejected for it: the design (`design/`), next to the behavior;
 - why a line of code is the way it is: a comment at that line;
 - the story of a change: its PR;
-- progress, and what a milestone taught: its `Status:`, `Learned:`, and `Next:` lines in `ROADMAP.md`.
+- progress, and what a milestone taught: its `Status:`, `Learned:`, and `Next:` lines in `roadmap/`.
 
 A new feature, command, config key, default, or mechanism is not a decision by itself. When in doubt, leave it out:
 an entry that turns out to matter can be added later, and one that does not costs every future reader.

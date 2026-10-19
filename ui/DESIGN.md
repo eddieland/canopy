@@ -157,8 +157,9 @@ Rules:
   atop the strip opens the whole rail, footer included, the same column, as a sheet over the page (`Sheet`, a Radix
   dialog: Escape or a click outside closes it, and the focus goes back to the button). It opens in its search box, so
   `/` opens it too. A link followed or a search sent from it closes it, since the page it covered is leaving. The
-  breakpoint is the viewport's, as the rail's place is the window's; what a list shows is its own width's (Primitives,
-  `ListRow`). Half a monitor, about 820px, is the narrowest window the UI is made for; a phone's is not.
+  breakpoint is the viewport's, as the rail's place is the window's; what a list shows, and every other layout step
+  inside the pane, is its own width's (Primitives). Half a monitor, about 820px, is the narrowest window the UI is
+  made for; a phone's is not.
 - **Sizes are in rem, and rem grows with the window**: the browser's size up to a 1600px window, rising to a quarter
   larger at 2560px (`font-size` on `html` in `src/index.css`). Write sizes in rem (Tailwind's scale) so a large
   screen scales them; px only for hairlines and the like. Breakpoints are not scaled.
@@ -230,39 +231,56 @@ Rules:
   notes, a row a ticket opening to its notes, which it reads only then, counted `2 tickets · 3 notes`. Wide, the tickets
   sit beside the other two. Over all three, a filter field and a chip for each repository narrow the page (`?q=`,
   `?repo=`, `src/lib/memory-filter.ts`), as the tickets filters do: a word in a memory's key, text, ticket, or
-  repository, or a ticket's key or title; a lesson for every repository is kept under any repository's chip. While
-  lessons are in use, the Lessons header has `all`, `due`, and `wrong` chips with their dots (`?show=`). A filtered
-  count says `2 of 7`, and an empty result says which filter left nothing. The proposals flip with an `OrderToggle`,
-  oldest first by default, which is the nearest to lapsing. Each list scrolls in its panel, and a row in force that its
+  repository, or a ticket's key or title, and, since the page holds only each ticket's count of notes, what notes say
+  through `canopy memory search`'s operator search (`GET /api/memory/search`), listed under the tickets as Notes that
+  say it, each with its verbs; while a repository chip is on, Ticket notes says it is not narrowed by one, since a note
+  is read by its own ticket's runs in any repository; a lesson for every repository is kept under any repository's chip.
+  While lessons are in use, the Lessons header has `all`, `due`, and `wrong` chips with their dots (`?show=`). A
+  filtered count says `2 of 7`, and an empty result says which filter left nothing. The proposals flip with an
+  `OrderToggle`, oldest first by default, which is the nearest to lapsing. A `history` chip in the Proposals and Lessons
+  headers (`?history=true`, `GET /api/memory?history=true`) lists each panel's latest memories no longer pending or in
+  force under the rest, Decided and Retired, at most 50 each, with their standing and reason and no verbs. Each list
+  scrolls in its panel but the proposals, which hold 20 at most and so grow with their rows. A row in force that its
   digest's cap leaves out says so in its second line, in the same words for served and recording that the digest's label
   keeps apart. The verbs on memory (`src/components/memory-actions.tsx`) sit in a line under a row, `xs` as a row's
-  buttons are, and only while lessons are on: an outline `Promote`, a ghost `As written` that promotes at once, and a
-  ghost `Reject` under a proposal, `Promote` under a ticket's note that keeps its text, on the memory page as on its
-  ticket's, and `Renew` under a lesson, outlined once it is `due` or `wrong` and a muted ghost before, since only then
-  does it ask for a decision; each ends its line with a ghost `Forget`, muted at rest, the rarest verb and one that
-  cannot be undone, and in `status-failed` while its row is hovered or it has the focus, but on an attention item. A
-  memory's row leads with its standing, a dot and its word in a run state's color (`memoryStand`): `wrong` (failed) and
-  `due` (blocked) for a lesson that calls for the operator, `pending` (blocked), `active` (done), `superseded` or
-  `invalid` (stopped), and `recorded` (stopped) for one in force under a tier that only records, which no run reads, so
-  a row never reads as in force under a `recording` band; then its ref, its ticket in a list across tickets, its
-  repository's chip, each in a fixed column, the key in the free column, and its use only once a run relied on it. Under
-  the text, one line says where it came from, the commit on the run's hover, a proposal's run's end, ticket, and
-  `private` chip (`ProposalFacts`) among it. In a list of proposals, where every row is pending, the standing says the
-  time left in its place (`3d left`, muted, in `status-blocked` in the last two days, `lapsing` once past). On the
-  memory page the Lessons take the Proposals' columns, the ticket's empty, so key and text line up down the page, and a
-  ticket's opened notes sit on `surface-raised` at 40%, so they read as its own. A ticket's row on the memory page
-  carries its title (`TicketTitle`). A row's ref copies (`CopyButton`, shown on the row's hover), since Forget asks for
-  it typed. A lesson names what it was promoted from, as the CLI does, and when a run reported it wrong. **Promote**
-  opens its form in place of that line, on the surface with a hairline: the lesson's words in a field, starting as the
-  source's own, with their count against the bound in the readout at its corner (in `status-failed` past it, when the
-  button is disabled); the repositories whose runs read it as a segmented control, `every repository` first for a source
-  that names none; a muted line naming the lesson in force under its key that it would replace, as plain `MemoryText`,
-  reserved while the lessons are read; the CLI's warning in `status-blocked` while the text is still a private ticket's
-  run's own words; and `Promote memory:5` with a ghost `Cancel`. **Forget** asks for the memory's ref typed out, in the
-  same form as a ticket's Forget asks for its key (`ForgetForm`). A row can leave once its verb is done, so what it did
-  is said once, in the CLI's words, under the panel's header or band, and only a refusal stays under the row; proposals
-  all decided from the page say so in the accent. On the attention list, a `memory_proposal` item lists its proposals
-  with `Promote as written`, which saves at once, and `Reject`; a `lesson_review`, its lessons due with `Renew` alone.
+  buttons are, and only while lessons are on, but Forget under a ticket's note, which shows while ticket notes are on,
+  since forgetting a note needs no lesson; a tier that is off shows no panel on the memory page, so with lessons off it
+  holds Ticket notes alone: under a proposal an outline `Promote as written`, which saves at once, since most proposals
+  need no edit, and a muted ghost `Edit and promote`, which opens the form (a private ticket's run's proposal, whose
+  words may hold what the operator kept off the tracker, has `Promote` in place of both, which opens the form and its
+  warning before the save, and on an attention item, which has no form, a muted line saying to promote it from the
+  memory page), then, apart from both at the line's end, a ghost `Reject`, which cannot be undone, `Promote` under a
+  ticket's note that keeps its text, on the memory page as on its ticket's, and `Renew` under a lesson, outlined once it
+  is `due` or `wrong` and a muted ghost before, since only then does it ask for a decision; a lesson that asks nothing
+  keeps its line's room but shows it only while its row is hovered or holds the focus, as a row's copy button does, and
+  always on a touch screen; each ends its line with a ghost `Forget`, muted at rest, the rarest verb and one that cannot
+  be undone, and in `status-failed` while its row is hovered or it has the focus, but on an attention item. A memory's
+  row leads with its standing, a dot and its word in a run state's color (`memoryStand`): `wrong` (failed) and `due`
+  (blocked) for a lesson that calls for the operator, `pending` (blocked), `active` (done), `superseded` or `invalid`
+  (stopped), and `recorded` (stopped) for one in force under a tier that only records, which no run reads, so a row
+  never reads as in force under a `recording` band; then its ref, its ticket in a list across tickets, its repository's
+  chip, each in a fixed column, the key in the free column, and its use only once a run relied on it. Under the text,
+  one line says where it came from, the commit on the run's hover, a proposal's run's end, ticket, and `private` chip
+  (`ProposalFacts`) among it. In a list of proposals, where every row is pending, the standing says the time left in its
+  place (`3d left`, muted, in `status-blocked` in the last two days, `lapsing` once past). On the memory page the
+  Lessons and a ticket's opened notes take the Proposals' columns (`memory-across`), the ticket's empty, so key and text
+  line up down the page, and the tickets with notes flip with an `OrderToggle`, newest first by default; and a ticket's
+  opened notes sit on `surface-raised` at 40%, so they read as its own. A ticket's row on the memory page carries its
+  title (`TicketTitle`). A row's ref copies (`CopyButton`, shown on the row's hover), since Forget asks for it typed. A
+  lesson names what it was promoted from, as the CLI does, and when a run reported it wrong. **Edit and promote** (or
+  `Promote` under a note) opens its form in place of that line, on the surface with a hairline: the lesson's words in a
+  field, starting as the source's own, with their count against the bound in the readout at its corner (in
+  `status-failed` past it, when the button is disabled); the repositories whose runs read it as a segmented control,
+  `every repository` first for a source that names none; a muted line naming the lesson in force under its key that it
+  would replace, as plain `MemoryText`, reserved while the lessons are read; the CLI's warning in `status-blocked` while
+  the text is still a private ticket's run's own words; and `Promote memory:5` with a ghost `Cancel`. **Forget** asks
+  for the memory's ref typed out, in the same form as a ticket's Forget asks for its key (`ForgetForm`). A row can leave
+  once its verb is done, so what it did is said once, in the CLI's words, under the panel's header or band, and only a
+  refusal stays under the row, but one saying the memory changed under it (`not_pending`, `forgotten`, `unknown`,
+  decided from the attention list or the CLI), which reads memory again, so its row may leave, and is said under the
+  list too; proposals all decided from the page say so in the accent. On the attention list, a `memory_proposal` item
+  lists its proposals with `Promote as written`, which saves at once, and `Reject`; a `lesson_review`, its lessons due
+  with `Renew` alone.
 - **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
   (`NewerBuild`): a ghost button on the accent's tint at 14%, its label in the accent, the action to take without a
   fill that outshouts the ghost buttons beside it, saying on hover why and that unsent text is lost. It never
@@ -288,10 +306,10 @@ Rules:
   `acme/web#88 Debounce search input`, a review's `review:4 acme/web#88` then its ticket's title. With no subject (a
   tick, a chore run, a PR canopy only reviews, a ticket untitled yet), the reference alone is the title. Its
   description is that subject's state, a line of facts (`src/lib/descriptions.ts`): `done · implement · ABC-099`,
-  `ABC-099 · 2 reviews`, `ok · 5 decisions · woken by timer`, a chore's `choreLine`, so no two pages of a kind say
-  the same thing there. What every page of its kind shows, the same each time, is its `help`, on the title's hover,
-  as the nav's items say what their pages hold. A ticket is named one way in every identity panel that names one
-  (`TicketField`: its key, a run's kind as a chip, its title).
+  `review:4 3 findings, 1 major · at its review limit`, `ok · 5 decisions · woken by timer`, a chore's `choreLine`,
+  so no two pages of a kind say the same thing there. What every page of its kind shows, the same each time, is its
+  `help`, on the title's hover, as the nav's items say what their pages hold. A ticket is named one way in every
+  identity panel that names one (`TicketField`: its key, a run's kind as a chip, its title).
   A tick's page steps to its neighbours from the right of its title's row (`PageHeader`'s `controls`, `TickSteps`):
   two ghost `xs` links, `‹ tick:40` and `tick:42 ›`, through every tick by id, dry runs included, found by query so a
   gap is stepped over. At an end the button stays, disabled, saying on hover there is none, so the pair never shifts;
@@ -428,6 +446,14 @@ Every list and detail page is built from the same few pieces, so a new page line
 measuring. A page that needs something they do not offer extends them here first; it never builds a row, a field
 list, an empty state, or a skeleton by hand.
 
+**A layout step inside the content pane is a container query, never a viewport breakpoint** (`@container` on the
+pane's part or its `Panel`, then `@min-[…]:` or a named size). The rail takes 13rem from the pane at `lg`, so a step
+keyed to the window is tightest just past it: going from a 1023px window to a 1024px one makes the pane about 150px
+narrower. A step comes in once the pane has room for it and what it sits beside at full size, so nothing narrows as
+the window widens: the worktrees counters stand four across once each gets 11rem, else two by two, never three and
+one. The wide screens' second column (Shape and space) stays the window's, at `2xl`, where the rail is whole either
+side.
+
 - **`ListRow`** (`src/components/rows.tsx`): a list's row, a CSS grid in its kind's columns (`ROW_COLUMNS` in
   `src/lib/rows.ts`). Each column is a named grid line and a width; every one is fixed but one free column, which
   takes the rest and cuts its text to fit, so every row of a list lines up whatever its cells hold. The free column
@@ -464,6 +490,12 @@ list, an empty state, or a skeleton by hand.
   finds nothing says so; a page whose subject is missing (a 404) says why. An error is never an `Empty`, and never a
   red sentence in a panel: it is a `Notice`, which names a refusal's guard and sets its `code` spans as code, as an
   attention item's detail is. A page whose read was refused (a 409) shows its `Notice` in its main panel.
+- **`ListPanel`** (`src/components/list-panel.tsx`): a detail page's supporting list (runs, reviews, decisions) in its
+  panel, headed by its noun, its `OrderToggle` from two rows, and its count. With no rows it is its header alone,
+  counting `0`, with no `Empty` under it and no hairline under the header: the count already says it, and an empty
+  list should not take a panel's worth of the page. A list the page's subject can never have is left out, not
+  counted: a PR canopy only reviews has no ticket, so no runs. A PR's page is built from it; the other detail pages
+  keep their `Empty` rows until they move to it, one rule for every page rather than one per page.
 - **`None`** (`src/components/none.tsx`): what a field or a cell holds when it has no value, `none` in muted text in
   its place's own type, never a sentence of its own. With a reason, the reason follows a colon; in a column too narrow
   for it (`brief`), the reason is on hover. One phrase per concept: a summary, a branch, a PR, a session, or a tick's
@@ -495,6 +527,31 @@ list, an empty state, or a skeleton by hand.
 - **A table of figures** (a chore's spend, the Spend page's) is a `table` across its whole panel: its column heads in
   `panel-label` type, its row heads in plain text, its figures right-aligned readouts. Its panel's header repeats none
   of its rows.
+
+## Charts
+
+What every chart follows (`src/lib/chart.ts`), so a new one needs no rules of its own; each chart's entry under
+Patterns names what is its own.
+
+- **Bars from zero**, in fill tokens of their own (Tokens), never a state's color. The plot's top is the peak and a
+  quarter more (`HEADROOM`), so the tallest bar stops short of the edge, and the peak's value sits over its bar as a
+  `readout`: the scale reads without hovering. Over the first or last bar it is flush with the bar's outer edge, since
+  it is wider than a narrow bar and would overhang the chart's padding.
+- **A bar's width is capped**, the row centered, so a sparse window draws narrow bars rather than slabs.
+- **Stacked segments are 2px apart**, the surface between them, and any segment with a value is 2px tall at least, so a
+  sliver still shows; the top segment's corners are rounded.
+- **The axis** names its marks by one helper, `axisStep`: every mark of a short axis, every fifth of a long one, back
+  from the last, so the latest is always named, and fewer where names that often would touch. A name is centered under
+  its bar and may be wider than it; it is never cut to fit.
+- **The legend**'s words are `muted-foreground` beside a swatch of the fill.
+- **A value is on hover**, with its unit: `$1.50`, `30.2k sent`.
+- **No data is `Empty`**, saying what there was none of: never an empty plot under a legend.
+- **A table holds the same numbers** wherever the chart is `aria-hidden`, for a screen reader and for a value too small
+  to see.
+
+The context chart differs where it must: its bars are its controls, each named for its call on hover and to a screen
+reader, so no table repeats them; a call's added part is 1px at least, since it is one of two segments and never a
+sliver beside four others; and its axis names short call numbers without measuring, every one up to twelve.
 
 ## Patterns
 
@@ -607,12 +664,18 @@ list, an empty state, or a skeleton by hand.
   Each is a label, the value, and one line under it, with a 2px top rule in the state color it counts:
   `status-running`, `status-stopped` for held, `status-blocked`, `status-failed` while something is broken. The
   same color washes down from the rule at 12%, fading out by 70% of the counter's height; a plain counter has none.
-- **The spend chart** (the spend page): a bar per UTC day, the series stacked bottom up in `SERIES` order, idle
-  overseer spend on the baseline so it compares across days, each segment as tall as its share of the dearest day.
+- **The spend chart** (the spend page) follows Charts: a bar per UTC day, the series stacked bottom up in `SERIES`
+  order, each segment its series' share of the day, the whole as tall as the day's share of the chart's top. Idle
+  overseer spend sits on the baseline under the rest of the overseer's, a lighter shade of its hue, so the two read as
+  one; at real costs it is a sliver beside a worker's, so its trend across days is read from the table, not the bars.
+  A day with no cost is a 1px `border` stub on the baseline, so it reads as nothing spent, not a column gone missing.
   A bar says its day and each series' cost on hover. The chart is `aria-hidden`: the table under it, newest day first,
-  holds the same numbers for a screen reader, each a `Cost`, and scrolls past a week (`PanelScroll`). A week names
-  every day on the axis; 30 days every fifth, back from today. The window is a segmented control (`ToggleGroup`) in
-  the totals' panel header, kept in `?days=`.
+  holds the same numbers for a screen reader, each a `Cost`, every cell after the first `pl-3` from the one before, and
+  scrolls past a week (`PanelScroll`), sideways when the pane is too narrow for its columns. A week names every day on
+  the axis; 30 days every fifth, back from today. A window where no run reported a cost is one `Empty` line in place of
+  the chart, its legend, and its table; the totals then leave out idle ticks' share while the overseer spent nothing,
+  and what reported no cost while no run ended. The window is a segmented control (`ToggleGroup`) in the totals' panel
+  header, kept in `?days=`.
 - **A slot strip** in a pool's header: one 10px square per slot, in slot order, in the worktree state's color, an
   idle one hollow. The counts beside it say the same in words, so the strip is `aria-hidden`. A pool of many slots
   wraps its squares onto more lines, sharing the header's room with the pool's root, never past the panel's edge.
@@ -720,9 +783,10 @@ list, an empty state, or a skeleton by hand.
 - **A transcript** (`TranscriptPanel`) is a session's events as rows, in the order the runtime printed them, each with
   its time from the session's first event (`+12:05`; the local time on hover). The agent's text keeps its line breaks,
   its reasoning muted and italic under a `thinking` label. A tool call is a native `<details>` whose line says what it
-  did and how it ended (`src/lib/transcript.ts`): a `RunDot` in `done` or `failed`, the tool's name, and in monospace a
-  shell call's command (the agent's description of it on hover), else the runtime's title, else its input's short values
-  as `key=value`; under that, muted, its error's first line in `status-failed`, or an output of one short line that is
+  did and how it ended (`src/lib/transcript.ts`): a `RunDot` in `done` or `failed`, the tool's name at its own width up
+  to 14rem, the first to give way, and in monospace a shell call's command (the agent's description of it on hover),
+  else the runtime's title, else its input's short values as `key=value`; under that, muted, its error's first line in
+  `status-failed`, or an output of one short line that is
   not JSON; then how long it took. A canopy command that printed a refusal is `failed`, with a `refused: <guard>` chip
   in `status-failed`. It opens to its input and its output (or error), JSON indented and colored as a tick's output is
   with Pretty on (below), every value as written, in monospace blocks at most 24rem tall. A model call is a muted line
@@ -802,12 +866,15 @@ list, an empty state, or a skeleton by hand.
 - **The guide** (`/guide/PAGE`, `src/lib/guide.ts`, `GuideText`) is the operator's documentation, a page each, as
   Markdown in `src/guide/` (docs/design/CONVERSATIONS.md §22), laid out as a documentation site rather than in panels.
   On the left, the pages by group (`SOURCES`), each group a heading over its pages on a hairline, the page shown in
-  the accent on an accent stroke; under `lg` the same list folds into a `Guide pages` toggle above the page. In the
-  middle, the article at `max-w-3xl`: the group as the header's trail, the title, and the lead, then the body at
-  `text-base` with soft line breaks read as spaces, each `##` a section under a hairline and each heading a `#` link to
-  itself on hover, and at its foot Previous and Next, the pages either side in the sidebar's order. On the right from
-  `xl`, `On this page`, its `##` headings. The sidebar and contents stick as the article scrolls. `/guide` opens the
-  first page. It reads what rich text reads, `##` and `###` headings as real headings, each with its anchor as its id,
+  the accent on an accent stroke, once the pane holds it and the article's whole measure (62.5rem, a container query
+  as the plan editor's, so the rail's width counts); short of that the same list folds into a `Guide pages` toggle
+  above the page. In the middle, the article at `max-w-3xl`: the group as the header's trail, the title, and the lead,
+  then the body at `text-base` with soft line breaks read as spaces, each `##` a section under a hairline and each
+  heading a `#` link to itself on hover, and at its foot Previous and Next, the pages either side in the sidebar's
+  order. On the right, once the pane holds that too (76.5rem), `On this page`, its `##` headings. So the article never
+  narrows as the window widens: a column comes in only where the article keeps its measure. The sidebar and contents
+  stick as the article scrolls. `/guide` opens the first page. It reads what rich text reads, `##` and `###` headings
+  as real headings, each with its anchor as its id,
   and labelled links in the accent, underlined: `[text](page)` or `(page#heading)` to the guide, `(#heading)` on this
   page, `(/runs)` to a section, and `(https://...)` to the web in a new tab. A link to anything else stays characters,
   and `guide.test.ts` fails on it. A page opens with `# Title` and then a lead of a sentence or two, says what the
@@ -1099,12 +1166,17 @@ list, an empty state, or a skeleton by hand.
   the operator's request is open; the PR (`PullRequestLink`, the URL on hover); its unit's phase as a chip; then its
   ticket and title (or `none: canopy only reviews it`, `None`) in the free column, and its age. The ticket shares the
   free column with its title: a column of its own, beside where the PR stands, would not fit a 1280px window. Its
-  page: the PR's name (`org/repo#123`) as the title with its phase as a chip, a link out under it as a ticket's page
-  has (`LinkOutButton`), saying where it goes (`on GitHub`) rather than repeating the title, then panels for its
-  fields and total cost, with a grant of another review in its foot when it is at its review limit, its review threads
-  when canopy has read them or holds a draft for it (below), its reviews (`ReviewsTable`), the runs that pushed to it
-  (`RunsTable`), and its decisions. The journal keeps no PR's own title,
-  so the page has none to show.
+  page: the PR's name (`org/repo#123`) as the title, then its own title as its worker reported it, else its ticket's,
+  with its phase as a chip. Its description is where it stands, as its row leads with it: its latest review and that
+  review's verdict (`review:4 3 findings, 1 major`, or `not reviewed`), `at its review limit` while it is, the run
+  working it now, and for a PR canopy only reviews, `canopy only reviews it`, said there alone; its ticket and how many
+  reviews it has are said in its panels, not again there. A link out follows, as a ticket's page has
+  (`LinkOutButton`), saying where it goes (`on GitHub`) rather than repeating the title. Then panels: its fields (its
+  ticket, a `TicketField` left out when it has none; its branch; its total cost; no repository, which its name says),
+  with a grant of another review in its foot when it is at its review limit; its review threads when canopy has read
+  them or holds a draft for it (below); then its reviews (`ReviewsTable`), the runs that pushed to it (`RunsTable`),
+  and its decisions, each a `ListPanel`, so an empty one is its header alone, and no Runs at all on a PR with no
+  ticket, since runs are a ticket's.
 - **A PR's threads** (`ReviewThreads`, DESIGN §29) are its coworkers' review threads, as canopy's reader last read
   them, on the diff the latest run kept, with the replies runs drafted under them. The PR's detail says up front
   whether there are any (`threads`), so their place is held (`PanelLoading`) before they arrive. A `Review threads`
