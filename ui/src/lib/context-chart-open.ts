@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react'
+import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
 
 /**
  * Which kinds of page open a transcript's context chart (ui/DESIGN.md, "A transcript's context"): its bars and what
@@ -30,71 +30,19 @@ export function parseOpen(raw: string | null): TranscriptPage[] {
     return PAGES.filter((page) => value.includes(page))
 }
 
-/** The pages with `page` opened or closed, as stored. */
-export function withOpen(pages: readonly TranscriptPage[], page: TranscriptPage, open: boolean): string {
-    return JSON.stringify(PAGES.filter((p) => (p === page ? open : pages.includes(p))))
+/** The pages with `page` opened or closed, in their own order. */
+export function withOpen(pages: readonly TranscriptPage[], page: TranscriptPage, open: boolean): TranscriptPage[] {
+    return PAGES.filter((p) => (p === page ? open : pages.includes(p)))
 }
 
 /** Whether a transcript on a `page` opens its context chart. Re-renders on a change from this tab or another. */
 export function useContextChartOpen(page: TranscriptPage): boolean {
-    return useSyncExternalStore(subscribe, getSnapshot).includes(page)
+    return useStoredSetting(setting).includes(page)
 }
 
 /** Opens or closes the context chart on `page`, stores it, and applies it now. */
 export function setContextChartOpen(page: TranscriptPage, open: boolean): void {
-    const raw = withOpen(snapshot, page, open)
-    try {
-        globalThis.localStorage.setItem(STORAGE_KEY, raw)
-    } catch {
-        // Not persisted, but still applied for this page.
-    }
-    announce(raw)
+    setting.set(withOpen(setting.get(), page, open))
 }
 
-function readRaw(): string | null {
-    try {
-        return globalThis.localStorage.getItem(STORAGE_KEY)
-    } catch {
-        // Storage can be unavailable (privacy modes).
-        return null
-    }
-}
-
-let stored = readRaw()
-let snapshot = parseOpen(stored)
-const listeners = new Set<() => void>()
-
-function announce(raw: string | null): void {
-    if (raw === stored) {
-        return
-    }
-    stored = raw
-    snapshot = parseOpen(raw)
-    for (const listener of listeners) {
-        listener()
-    }
-}
-
-function onStorage(event: StorageEvent): void {
-    if (event.key === STORAGE_KEY || event.key === null) {
-        announce(readRaw())
-    }
-}
-
-function subscribe(listener: () => void): () => void {
-    listeners.add(listener)
-    if (listeners.size === 1) {
-        globalThis.addEventListener('storage', onStorage)
-        announce(readRaw())
-    }
-    return () => {
-        listeners.delete(listener)
-        if (listeners.size === 0) {
-            globalThis.removeEventListener('storage', onStorage)
-        }
-    }
-}
-
-function getSnapshot(): readonly TranscriptPage[] {
-    return snapshot
-}
+const setting = storedSetting({ key: STORAGE_KEY, parse: parseOpen, serialize: JSON.stringify })
