@@ -6,33 +6,38 @@ cross-cutting constraints, trust-boundary rules, and runtime dependencies.
 
 ## What belongs here
 
-The design says what canopy does and why, at the level someone needs to rely on it or to change it safely. It is not
-the implementation written out in prose, a changelog, or a measurement report: every detail it fixes is one more thing
-every later change must keep in step, and one more thing to read before making it.
+The design is a map of canopy, not a specification of every behavior. It says what each part does, what it promises,
+and why, so that someone can rely on it or change it without breaking a promise. The code is the specification of how.
 
-It holds:
+A statement belongs here only if it is one of:
 
-- behavior seen from outside the code: what the operator, the overseer, workers, and the tracker see and may do; the
-  commands and config keys and what they mean; what a tick, a run, or a sink is promised;
-- the guards and invariants the harness enforces, and the contracts between parts: a result line, what the state block
-  carries, what a pool guarantees, what a channel may write;
-- why each is so, in a sentence or two, and the alternatives rejected for it, a line each, where they would otherwise
-  be proposed again.
+- a promise someone outside the code relies on: what the operator, the overseer, a worker, or a coworker sees and may
+  do;
+- a guard or invariant the harness enforces, or a contract between parts: a result line, the state block, a pool, a
+  channel;
+- the reason for one of those, in a sentence, and an alternative rejected for it, in a line, only where it would
+  otherwise be proposed again.
 
-The rest goes where the next person to change it will look:
+Everything else is cut on sight, by the author or the reviewer:
 
-- how the code does it (modules, functions, columns, field order, algorithms, which test enforces what): the code, its
-  docstrings and comments, and `migrations/` for the schema. §5 maps packages, not modules;
-- every flag and output line of a command: its `--help` and its tests;
-- what a measurement found: `MEASUREMENTS.md`, cited here by date and finding, without its figures;
-- how a behavior came to be, who asked for it, and which milestone built it: the PR, and the milestone's lines in
-  `roadmap/`;
-- what a prompt tells an agent beyond the contract the harness checks: the prompt;
-- the web UI's pages and how they look: `ui/DESIGN.md`.
+- how the code does it: procedures step by step, modules, functions, tables and columns, field order, algorithms,
+  error messages, timeouts and limits the operator never sets, which test enforces what. The code and its comments
+  hold it; §5 maps packages, not modules;
+- every command flag, config key, and output line. `--help`, `examples/config.toml`, and the tests hold them; the design
+  names a key only where a behavior turns on it;
+- edge cases, unless one is itself a promise;
+- measurements: `MEASUREMENTS.md`, cited here by date only where a finding is the reason for a behavior;
+- history: how a behavior came to be, the bug that prompted it, the milestone that built it. The PR and `roadmap/` hold
+  it, and headings carry no milestone numbers;
+- what a prompt tells an agent beyond what the harness checks: the prompt;
+- what a third-party tool does: a comment where canopy depends on it, or a measurement;
+- the web UI's pages: `ui/DESIGN.md` and the guide.
 
-A behavior change edits the design only where the design says something about it, and a refactor usually edits none.
-Prefer the shorter statement: a detail that turns out to matter can be added later, and one that does not costs every
-reader.
+The default for a PR is no design change. A new feature gets a few sentences in the section it belongs to, or a short
+new section; a fix or a refactor edits the design only when it changes a promise. Prefer changing a sentence to adding
+one, and delete what the change makes stale. A numbered section past about 100 lines is due a prune: the PR that would
+grow it prunes it instead. A detail that turns out to matter can be added later; one that does not costs every reader,
+and every later change has to keep it in step.
 
 The design is the files in this directory, read in the order below. Sections are numbered across all of them, so the
 numbers run on from one file to the next, and §N, or DESIGN §N from code and other documents, names one section wherever
@@ -71,24 +76,24 @@ not go in the middle of the sequence.
 - [Conversations](CONVERSATIONS.md): the journal's conversation, private tickets, its channels, and the web UI.
   - [22. Conversations](CONVERSATIONS.md#22-conversations)
 - [Flaky CI](FLAKY_CI.md): triage of a CI failure before a `resume` is sent to fix it.
-  - [23. Flaky CI (M25)](FLAKY_CI.md#23-flaky-ci-m25)
+  - [23. Flaky CI](FLAKY_CI.md#23-flaky-ci)
 - [Sandboxed runs](SANDBOXING.md): the opt-in OS sandbox around every agent run but the overseer's.
-  - [24. Sandboxed runs (M26)](SANDBOXING.md#24-sandboxed-runs-m26)
+  - [24. Sandboxed runs](SANDBOXING.md#24-sandboxed-runs)
 - [Plans](PLANNING.md): a plan for a ticket, approved by the operator before any `implement`, and the triage that
   waives one for trivial work.
-  - [25. Plans before implementing (M44)](PLANNING.md#25-plans-before-implementing-m44)
+  - [25. Plans before implementing](PLANNING.md#25-plans-before-implementing)
 - [Garbage collection](GARBAGE_COLLECTION.md): what canopy removes of its own history and caches, and what it keeps.
-  - [26. Garbage collection (M47)](GARBAGE_COLLECTION.md#26-garbage-collection-m47)
+  - [26. Garbage collection](GARBAGE_COLLECTION.md#26-garbage-collection)
 - [The overseer's tools](OVERSEER_TOOLS.md): the MCP tools canopy serves the overseer, in place of the CLI.
-  - [27. The overseer's tools (M48)](OVERSEER_TOOLS.md#27-the-overseers-tools-m48)
+  - [27. The overseer's tools](OVERSEER_TOOLS.md#27-the-overseers-tools)
 - [Agent memory](MEMORY.md): what workers record of what they learn, who reads it, and who decides.
-  - [28. Agent memory (M50)](MEMORY.md#28-agent-memory-m50)
+  - [28. Agent memory](MEMORY.md#28-agent-memory)
 - [Review replies](REVIEW_REPLIES.md): replies to coworkers' review comments that workers draft and the operator
   sends.
-  - [29. Review replies the operator sends (M53)](REVIEW_REPLIES.md#29-review-replies-the-operator-sends-m53)
+  - [29. Review replies the operator sends](REVIEW_REPLIES.md#29-review-replies-the-operator-sends)
 - [Connectors](CONNECTORS.md): the programs that read the tracker and GitHub into the journal, and the phases canopy
   derives from them beside the overseer's.
-  - [30. Connectors (M36)](CONNECTORS.md#30-connectors-m36)
+  - [30. Connectors](CONNECTORS.md#30-connectors)
 
 ## 1. Problem
 
@@ -177,30 +182,20 @@ packages/        uv workspace members: separate programs canopy ships, run only 
 ui/              the web UI (D079): a Vite and React app, its own rules in ui/AGENTS.md and ui/DESIGN.md
 ```
 
-`prompts/`, `agents/`, `skills/`, and `operator-skill/` live under `.agents/` in this repository. The wheel bundles
-them, with `migrations/` and the built UI, so a new runtime directory needs a line in `pyproject.toml`.
-
-canopy installs from git with `uv tool install` (D046), which builds the wheel and so the web UI, and puts `canopy`,
-both sinks, the GitHub reader and poster (§29), and the sandbox wrapper on `PATH`. Dispatch, chores, and reviews start
-`_run`, `_chore`, and `_review` via `sys.executable -m canopy`, so whatever runs canopy must be an interpreter that
-imports it. The version is the tag's
-(D085). A tag's GitHub Release carries notes, not a build: the install is still from git.
+`prompts/`, `agents/`, `skills/`, and `operator-skill/` live under `.agents/` in this repository; the wheel bundles
+them with `migrations/` and the built UI. canopy installs from git with `uv tool install` (D046), which puts `canopy`
+and every workspace member's script on `PATH`. Dispatch, chores, and reviews start their detached processes via
+`sys.executable -m canopy`, so whatever runs canopy must be an interpreter that imports it.
 
 Where later work goes:
 
-- A feature is a features-layer package plus a `cli/` command module: `chores` (§19), `notify` (§20), `reviews`
-  (§21). `loop` calls its reconcile and publish steps and its state block part. Deleting a feature deletes those three.
-- A command's module is imported only when that command runs, and `cli/common.py`, which every command imports,
-  imports nothing from `loop`. The overseer and workers run `canopy` many times a tick, and each process pays for every
-  module it imports.
-- A pydantic model defers building its schema until it first validates, for the same reason. The web server's models
-  stay eager, since FastAPI builds them all when it creates the app.
-- A feature others write to keeps its writing half in `core`: dispatch, `_run`, `_chore`, and reconcile record §20's
-  events through `core.outbox`; `notify` delivers them.
-- Code that runs in its own process and must not share the harness's imports or dependencies is a uv workspace member
-  under `packages/`, such as §20's Slack sink and the sandbox wrapper. `canopy`, the workspace root, lists each one's
-  script among its own, so one install puts them all on `PATH`. canopy reads the wrapper's bundled templates and
-  lockfile, and never runs it: only a command template does.
+- A feature is a features-layer package plus a `cli/` command module; `loop` calls its reconcile and publish steps and
+  its state block part. Deleting a feature deletes those three.
+- A feature others write to keeps its writing half in `core`, as §20's events go through `core.outbox`.
+- A command imports only what it needs, and `cli/common.py` imports nothing from `loop`: the overseer and workers run
+  `canopy` many times a tick, and each process pays for every module it imports.
+- Code that runs in its own process and must not share the harness's dependencies is a uv workspace member under
+  `packages/`, run only as a command.
 - A module that takes on a second concern splits into a same-named package in the same layer.
 
 Roles:
