@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { api } from '@/api/client'
 import { keys } from '@/api/queries'
 import type { LoopState } from '@/api/types'
+import { DEFAULT_CLOCK } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 
 import { NoticeBanner } from './worker-notice'
@@ -71,8 +72,10 @@ describe('NoticeBanner', () => {
         const banner = screen.getByRole('region', { name: 'Notice to workers' })
         expect(banner.textContent).toContain('Notice to workers: Freeze on main until the release')
         expect(screen.getByRole('link', { name: 'https://example.com/freeze' })).toBeDefined()
-        const until = screen.getByText(`Every run dispatched until ${localTime('2026-10-08T15:00:00Z')} hears it.`)
-        expect(until.title).toBe(`Set at ${localTime('2026-10-08T11:00:00Z')} from \`canopy notice\``)
+        const until = screen.getByText(
+            `Every run dispatched until ${localTime('2026-10-08T15:00:00Z', DEFAULT_CLOCK)} hears it.`,
+        )
+        expect(until.title).toBe(`Set at ${localTime('2026-10-08T11:00:00Z', DEFAULT_CLOCK)} from \`canopy notice\``)
     })
 
     it('clears the notice as `canopy notice --clear` does, and goes once none is in force', async () => {

@@ -9,6 +9,7 @@ import { TickLink } from '@/components/tick-link'
 import type { StreamStatus } from '@/hooks/use-event-stream'
 import { useLoopDown } from '@/hooks/use-loop-down'
 import { TICK_TONE } from '@/lib/ticks'
+import { useClock } from '@/lib/clock'
 import { localTime } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -60,6 +61,7 @@ export function LiveReadouts() {
  * word hugs its text and a drop moves nothing: the ticker's window gives way, not the actions or the readouts.
  */
 export function StreamReadout({ stream }: { stream: StreamStatus }) {
+    const clock = useClock()
     const meta = useQuery(metaQuery)
     const down = useLoopDown()
     // Down past the first retry's wait, it says for how long, in the color of what waits on the operator.
@@ -68,7 +70,7 @@ export function StreamReadout({ stream }: { stream: StreamStatus }) {
     return (
         <span
             className="readout inline-flex items-center gap-1.5 text-2xs whitespace-nowrap uppercase"
-            title={since === null ? undefined : `Down since ${localTime(since)}: the loop isn't answering.`}
+            title={since === null ? undefined : `Down since ${localTime(since, clock)}: the loop isn't answering.`}
             data-testid="stream-status"
             data-status={since === null ? stream : 'down'}
         >

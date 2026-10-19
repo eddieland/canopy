@@ -661,10 +661,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   its line stays short. A moment shown whole is `Timestamp`, the local `Oct 8 10:30` with the ISO time the journal
   keeps on hover, beside its age on a review's page, and in a run's, tick's, or chore run's `when` field, which sets
   its end after it, the time alone on the same day, how long it ran (`lasted`, the age's units), and its `span` age;
-  a raw ISO string is never shown. A
-  cost is `Cost`: `$0.42` as a readout, its dollars grouped by thousands (`$1,234.50`, `costText`, rounded to the cent
-  as the CLI rounds), or a dash when nothing reported one, `none reported` on hover; never formatted in place, a hat's
-  price included.
+  a raw ISO string is never shown. Every time of day, hovered ones included, reads on the clock picked in Settings
+  (`useClock`): 24-hour or `10:30 AM`, with the zone or without. A cost is `Cost`: `$0.42` as a readout, its
+  dollars grouped by thousands (`$1,234.50`, `costText`, rounded to the cent as the CLI rounds), or a dash when
+  nothing reported one, `none reported` on hover; never formatted in place, a hat's price included.
 - **A fact on hover is a tip** (`Tip` in `src/components/tip.tsx`, on the `Tooltip` wrapper): a word's CLI spelling,
   an age's local time, a commit's whole hash, every one of a `+N more`. A `title` reaches neither the keyboard nor a
   touch screen, so a fact a list keeps out of its text is a `Tip`: it opens on hover, after half a second so a pointer

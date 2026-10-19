@@ -19,6 +19,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { setBuddy, useBuddy } from '@/lib/buddy'
+import { setClock, useClock } from '@/lib/clock'
+import type { Hours } from '@/lib/clock'
 import { costText } from '@/lib/cost-total'
 import { balanceCents, buy, HATS, setWardrobe, useWardrobe } from '@/lib/hats'
 import type { Hat } from '@/lib/hats'
@@ -28,13 +30,16 @@ import { setRave, useRave } from '@/lib/rave'
 import { dropDrafts } from '@/lib/reply-draft'
 import { setSendKey, useSendKey } from '@/lib/send-key'
 import type { SendKey } from '@/lib/send-key'
+import { stamp, useNow } from '@/lib/time'
 import { clampGap, MAX_GAP, setTickerSettings, useTickerSettings, withTopic } from '@/lib/ticker-settings'
 import type { TickerSpeed } from '@/lib/ticker-settings'
 import type { ThemePreference } from '@/theme/store'
 import { switchTheme } from '@/theme/transition'
 import { useTheme } from '@/theme/use-theme'
 
-/** What this browser keeps (the theme, the send key, the fun, the session), and reloading the loop's config. */
+/**
+ * What this browser keeps (the theme, the clock, the send key, the fun, the session), and reloading the loop's config.
+ */
 export const Route = createFileRoute('/settings')({
     component: SettingsPage,
 })
@@ -64,6 +69,11 @@ const LASTS: { value: string; label: string; minutes: number }[] = [
     { value: '1d', label: '1 day', minutes: 1440 },
 ]
 
+const HOURS: { value: Hours; label: string }[] = [
+    { value: '24', label: '24-hour' },
+    { value: '12', label: '12-hour' },
+]
+
 const SEND_KEYS: { value: SendKey; label: string }[] = [
     { value: 'enter', label: 'Enter' },
     { value: 'mod-enter', label: 'Ctrl+Enter' },
@@ -75,8 +85,8 @@ function SettingsPage() {
     return (
         <>
             <PageHeader title="Settings">
-                The theme, the send key, and the fun are kept in this browser. Everything else canopy reads from its
-                config files.
+                The theme, the clock, the send key, and the fun are kept in this browser. Everything else canopy reads
+                from its config files.
             </PageHeader>
             <Panel>
                 <PanelHeader label="Theme" />
@@ -100,6 +110,7 @@ function SettingsPage() {
                     </ToggleGroup>
                 </div>
             </Panel>
+            <ClockPanel />
             <SendKeyPanel />
             <NoticePanel />
             <ConfigPanel />
@@ -353,6 +364,62 @@ function HatItem({
                 </Button>
             )}
         </li>
+    )
+}
+
+/** How every time of day on the page reads: on a 24-hour or a 12-hour clock, and with its time zone or without. */
+function ClockPanel() {
+    const clock = useClock()
+    const now = new Date(useNow()).toISOString()
+    return (
+        <Panel>
+            <PanelHeader label="Time" />
+            <div className="flex items-center justify-between gap-4 border-b p-3">
+                <p className="max-w-3xl text-sm text-muted-foreground">
+                    How every time on the page reads. Now is{' '}
+                    <time dateTime={now} className="readout text-xs text-foreground" data-testid="clock-sample">
+                        {stamp(now, clock)}
+                    </time>
+                    .
+                </p>
+                <ToggleGroup
+                    type="single"
+                    value={clock.hours}
+                    aria-label="Clock"
+                    className="shrink-0"
+                    onValueChange={(value) => {
+                        const picked = HOURS.find((h) => h.value === value)
+                        if (picked) {
+                            setClock({ hours: picked.value })
+                        }
+                    }}
+                >
+                    {HOURS.map(({ value, label }) => (
+                        <ToggleGroupItem key={value} value={value} data-testid={`clock-${value}`}>
+                            {label}
+                        </ToggleGroupItem>
+                    ))}
+                </ToggleGroup>
+            </div>
+            <div className="flex items-center justify-between gap-4 p-3">
+                <p id="clock-zone-about" className="max-w-3xl text-sm text-muted-foreground">
+                    The time zone after each time, as this browser abbreviates it: EDT, UTC, GMT+2.
+                </p>
+                <label
+                    htmlFor="clock-zone"
+                    className="inline-flex shrink-0 items-center gap-2 text-xs whitespace-nowrap"
+                >
+                    <Checkbox
+                        id="clock-zone"
+                        checked={clock.zone}
+                        aria-describedby="clock-zone-about"
+                        data-testid="clock-zone"
+                        onCheckedChange={(checked) => setClock({ zone: checked === true })}
+                    />
+                    Show time zone
+                </label>
+            </div>
+        </Panel>
     )
 }
 
