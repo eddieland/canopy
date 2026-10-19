@@ -59,7 +59,7 @@ Result contract, one JSON line, last line of the agent's text (§13), validated 
 `unknown`, with no findings recorded:
 
 ```json
-{"status":"ok|failed","summary":"one paragraph",
+{"status":"ok|failed","summary":"a paragraph, line breaks sparingly",
  "findings":[{"id":"flaky/checkout-service/test_retry","title":"one line","detail":"a paragraph","link":"https://..."}],
  "more_findings":0}
 ```
@@ -255,8 +255,8 @@ sent to fix code its PR did not touch. Rejected: a second agent verifying each f
 Result contract, the last line of the reviewer's text (§13), validated (D026); anything else is `unknown`:
 
 ```json
-{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","summary":"one paragraph",
- "pr_title":"the PR's title as it stands",
+{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high",
+ "summary":"a paragraph, line breaks sparingly","pr_title":"the PR's title as it stands",
  "findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line","detail":"what and why"}]}
 ```
 

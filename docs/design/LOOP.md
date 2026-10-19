@@ -238,7 +238,7 @@ in to its PR, and `pr_titles` is optional and for display only:
 
 ```json
 {"status":"done|blocked|failed","branch":"agent/KEY-slug","prs":{"api":"https://...|null"},
- "pr_titles":{"api":"KEY: ...|null"},"summary":"one paragraph","question":"only when blocked"}
+ "pr_titles":{"api":"KEY: ...|null"},"summary":"a paragraph, line breaks sparingly","question":"only when blocked"}
 ```
 
 **Worker obligations**, stated in every worker prompt:

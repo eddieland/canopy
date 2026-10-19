@@ -114,4 +114,4 @@ Do not guess on decisions that would be expensive to reverse.
 Your last line of stdout must be exactly one JSON object and nothing after it. Its summary is your report to the
 operator: what you did, every PR link, and anything a reviewer should look at first.
 
-{"status":"done|blocked|failed","branch":"agent/PROJ-1-work","prs":{"repo":"<url or null>"},"pr_titles":{"repo":"<its title or null>"},"summary":"<one paragraph>","question":"<only when blocked>"}
+{"status":"done|blocked|failed","branch":"agent/PROJ-1-work","prs":{"repo":"<url or null>"},"pr_titles":{"repo":"<its title or null>"},"summary":"<your report, line breaks sparingly>","question":"<only when blocked>"}

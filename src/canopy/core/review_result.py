@@ -77,7 +77,8 @@ def stored(result_json: object) -> ReviewResult | None:
 
 
 CONTRACT = (
-    '{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high","summary":"one paragraph",'
+    '{"status":"done|failed","verdict":"clean|findings","impact":"low|normal|high",'
+    '"summary":"a paragraph, line breaks sparingly",'
     '"pr_title":"the PR\'s title as it stands",'
     '"findings":[{"severity":"blocking|major|minor","title":"one line","location":"path:line",'
     '"detail":"what is wrong and why"}]}'
