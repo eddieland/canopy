@@ -10,7 +10,18 @@ import pytest
 
 from canopy.core import db, drafts_manage
 from canopy.infra import resources
-from tests.canopy.helpers import APPROVE, DRAFTS_PR, all_drafts, comment, context, github_has, reads, thread
+from tests.canopy.helpers import (
+    APPROVE,
+    DRAFTS_PR,
+    KEY,
+    all_drafts,
+    comment,
+    context,
+    github_has,
+    reads,
+    thread,
+    waits,
+)
 from tests.canopy.scenario_helpers import dispatches, sends_drafts
 from tests.canopy.web_helpers import refused, signed_in_client
 
@@ -113,6 +124,17 @@ def test_the_page_drops_a_draft_and_takes_the_drop_back(scenario: Scenario, gith
     undone = c.post(f"/api/runs/{run_id}/drafts/1/drop", json={"undo": True}, headers=write).json()
     assert undone["status"] == "waiting"
     assert refused(c.post(f"/api/runs/{run_id}/drafts/9/drop", json={}, headers=write)).startswith("unknown: ")
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_a_drop_from_the_page_takes_the_drafts_off_its_attention_list(scenario: Scenario, github_state: Path) -> None:
+    c, write, run_id = drafted(scenario, github_state)
+    scenario.tick(*waits(KEY))
+    assert "drafts_waiting" in [i["reason"] for i in c.get("/api/attention").json()]
+    for number in (1, 2):
+        c.post(f"/api/runs/{run_id}/drafts/{number}/drop", json={}, headers=write)
+    assert "drafts_waiting" not in [i["reason"] for i in c.get("/api/attention").json()]
+    assert "drafts_waiting" not in (scenario.env.state_dir / "attention.md").read_text()
 
 
 def test_a_pr_the_journal_knows_nothing_of_is_not_found_and_a_bad_url_refused(canopy_env: CanopyEnv) -> None:
