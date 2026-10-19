@@ -480,7 +480,7 @@ prompt changes (§6), and "why has the loop not picked this up" is answered wher
   workspace, so its cost is no ticket's.
 
 The spend page (ROADMAP M33): every agent run records its cost, and the loop records whether each tick was idle (§6,
-Idle pacing), so how much of the spend bought nothing is read from the journal rather than from a one-off analysis of
+Idle pacing), so how much of the spend started no work is read from the journal rather than from a one-off analysis of
 the log.
 
 - Its breakdown is `canopy spend`'s (§11), from the same code, so the page and the command agree by construction, over
