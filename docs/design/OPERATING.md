@@ -246,10 +246,10 @@ too, with the loop's state and the running and recent runs.
 
 Reasons are the phase table's attention rows (§7), the run reasons below, `attempt_limit`, and those the sections that
 raise them define: `canopy_unavailable` (§6), `fix_ci_override` and `notice_rerun` (§8), `repo_missing`, `multi_repo`,
-`split_unlabeled`, and `split_self_labeled` (§18), `chore_failed` and chore findings (§19), `review_failed` and
-`review_limit` (§21), `awaiting_reply` (§22, §25), `plan_review`, `plan_changed`, and `not_trivial` (§25),
-`memory_proposal`, `lesson_review`, and `lesson_wrong` (§28), and `drafts_waiting` (§29). An item about one unit names
-its repository, shown as `KEY (repo)`.
+`split_unlabeled`, `split_self_labeled`, `follow_up_filed`, and `follow_up_unrecorded` (§18), `chore_failed` and
+chore findings (§19), `review_failed` and `review_limit` (§21), `awaiting_reply` (§22, §25), `plan_review`,
+`plan_changed`, and `not_trivial` (§25), `memory_proposal`, `lesson_review`, and `lesson_wrong` (§28), and
+`drafts_waiting` (§29). An item about one unit names its repository, shown as `KEY (repo)`.
 
 **Raised by the harness.** Every tick, after reconcile, for a ticket not done, its latest run's status maps to a
 reason: `crashed`, `unpushed`, `unknown_result` (for `unknown` or `timeout`), or `worker_failed` (for `failed`). The
@@ -258,7 +258,11 @@ an authorized replier comments, or the operator sends a message, after the run e
 says "try again". `blocked` and `stopped` raise nothing, nor does a ticket the operator stopped (§22). The harness also
 raises `awaiting_reply` for a started ticket's or a planner's unanswered question (§22, §25), `repo_missing` for a
 mapped repository with no clone (§18), and `canopy_unavailable` for a tick whose `canopy --version` check failed (§6
-step 5).
+step 5). It raises `follow_up_filed` about a ticket not done whose runs filed follow-ups since its latest forget, naming
+each with its repository while canopy has no run of it, no start record, and no mark that it is done: a queue label,
+which the overseer then dispatches on, or the operator's start ends its wait. Items have no dismissal, so a follow-up
+the operator leaves stops being asked about when its parent is done or forgotten. It raises `follow_up_unrecorded`
+about a ticket whose runs reported tickets the journal did not record, until the ticket is done or forgotten (§18).
 
 **Recorded by the overseer.** The overseer records an item with `canopy attention <KEY> <reason> --detail ...`, every
 tick its cause holds. Items are stored as decisions, not a table of their own (D020). The current list is the attention

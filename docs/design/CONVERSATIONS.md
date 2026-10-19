@@ -51,8 +51,13 @@ so no agent can lift a limit that bounds it (TRUST_MODEL T1).
   ticket's private worker and prompt. A started ticket is never split: a split creates tickets in the tracker.
 - `stop` keeps the ticket private and lets nothing dispatch it until it is started again. Stopped now, its run is ended
   as reconcile ends a crashed one (§6) and still counts toward attempt limits. Stop and dispatch cannot interleave.
-- The private worker can read the tracker but not write to it: it is allowed only the tracker tools config names as
-  read tools, so a wrong list fails closed, and with none a private run is refused (TRUST_MODEL T6, D044).
+- The private worker reads the tracker, and writes to it only to file follow-ups, which authorize nothing (§18): it
+  is allowed the tracker tools config names as read tools, so a wrong list fails closed, and the provider's tools that
+  create a ticket, whole; with no read tools a private run is refused (TRUST_MODEL T6, D044). canopy's definition
+  allows the create tools by name, and OpenCode merges it after the operator's own config, whose last matching rule it
+  overrides (D021, D044), so a deny there cannot take them back. `policy.max_follow_ups = 0` has workers file none and
+  records none; only the MCP server's own tool selection, where it has one, takes the tools away. A follow-up a
+  private run filed is a public ticket like any other, worked only once the operator labels or starts it.
 - Its phases (§7) come from the journal: `needs_human` after a `blocked` run with no operator message since,
   `human_replied` after one. The harness raises `awaiting_reply` for an unanswered question (§14).
 - Workers' prompts carry the operator's messages as instructions, and reports and mirrored comments as data; the

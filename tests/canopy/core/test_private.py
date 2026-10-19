@@ -375,13 +375,14 @@ def test_a_private_run_refuses_a_worktree_config_that_names_the_trackers_tools(
     assert not scenario.agent_log.exists()
 
 
-def test_the_private_worker_definition_allows_only_the_trackers_read_tools(canopy_env: CanopyEnv) -> None:
+def test_the_private_worker_definition_allows_only_the_trackers_read_and_create_tools(canopy_env: CanopyEnv) -> None:
     cfg = config.load(canopy_env.root)
     text = (definitions.ensure(canopy_env.state_dir, cfg) / "agents" / "canopy-worker-private.md").read_text()
     rules = [line.strip() for line in text.splitlines() if line.startswith('  "atlassian_')]
     tools = present(cfg.tracker.tools())
-    # The wildcard deny comes first: the last matching rule wins (D021).
-    assert rules == ['"atlassian_*": deny', *(f'"atlassian_{t}": allow' for t in tools.allowed)]
+    # The wildcard deny comes first: the last matching rule wins (D021). The create tool files follow-ups (§18).
+    assert tools.create == ("createJiraIssue",)
+    assert rules == ['"atlassian_*": deny', *(f'"atlassian_{t}": allow' for t in (*tools.allowed, *tools.create))]
     writes = ("addOrEditJiraIssueComment", "editJiraIssue", "createJiraIssue", "transitionJiraIssue", "executeWrite")
     assert not set(writes) & set(tools.allowed)
     for cli in ("gh", "acli", "jira"):
@@ -397,6 +398,8 @@ def test_github_defaults_keep_the_pr_tools_and_no_issue_writes() -> None:
     tools = config.DEFAULT_TRACKER_TOOLS["github"]
     assert tools.server == "github"
     assert "create_pull_request" in tools.allowed
+    # Creating follow-ups is apart from the read tools, and only the private worker's definition allows it.
+    assert tools.create == ("issue_write",)
     for write in ("issue_write", "add_issue_comment", "sub_issue_write", "merge_pull_request", "actions_run_trigger"):
         assert write not in tools.allowed
 

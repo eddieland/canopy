@@ -4,9 +4,10 @@
 # auto-rejected under `opencode run`; `deny` is enforced. Bash compound commands are checked command by command.
 # These permissions are defense in depth, not the boundary (TRUST_MODEL T4). Branch protection governs where pushes can
 # land (TRUST_MODEL T1), and `canopy _run` verifies what was pushed.
-# canopy-worker for a private ticket (DESIGN §22): the same rules, and none of the tracker's tools but the reads.
-# canopy renders this file into its definitions directory with the tracker's MCP server and tools from the operator's
-# config (`tracker.mcp_server`, `tracker.read_tools`), at the marked line below. As shipped it names none.
+# canopy-worker for a private ticket (DESIGN §22): the same rules, and none of the tracker's tools but the reads and the
+# ones that create a ticket, for its follow-ups (§18). canopy renders this file into its definitions directory with the
+# tracker's MCP server and tools from the operator's config (`tracker.mcp_server`, `tracker.read_tools`) and the
+# provider's create tools, at the marked line below. As shipped it names none.
 description: canopy private worker. Works one private ticket; pushes a branch, opens a PR, never writes to the ticket.
 mode: primary
 permission:
@@ -103,8 +104,9 @@ permission:
   "*updateConfluence*": deny
   # With `trust.review_replies = "approve"`, canopy renders the denial of the GitHub server's comment tools here.
   # canopy: reply tools
-  # Every tool of the tracker's MCP server is denied by a wildcard, then only its read tools are allowed by name: the
-  # last matching rule wins (D021), so a write tool missing from both lists fails closed.
+  # Every tool of the tracker's MCP server is denied by a wildcard, then only its read tools, and the tool that creates
+  # a ticket, are allowed by name, whole: the last matching rule wins (D021), so a write tool missing from both lists
+  # fails closed. GitHub's `issue_write` also edits and closes issues; the prompt keeps it to filing follow-ups.
   # canopy: tracker tools
 ---
 

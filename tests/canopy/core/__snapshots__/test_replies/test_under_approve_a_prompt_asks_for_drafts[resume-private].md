@@ -21,8 +21,8 @@ neither the ticket nor the code settles, do not guess: abort and ask, as under "
 
 The operator started PROJ-1 in canopy, which authorized this run; there is no label to check. Its conversation stays
 with the operator: never comment on the ticket, label it, edit it, or change its state in any way, through any tool or
-command. Your tracker tools can only read. Your report to the operator is your result line's `summary`, and your
-question to them its `question`.
+command. Your tracker tools only read, but for creating the follow-up tickets below. Your report to the operator is your
+result line's `summary`, and your question to them its `question`.
 
 ## Conversation with the operator
 
@@ -140,6 +140,14 @@ leaves out a change to behavior this run made that a reviewer must know of. Othe
 restyle it, summarize this run, or list what you addressed. When you must, change only the sentences that are wrong or
 missing, keep the title, and add no closing keywords or tracker commands. A PR you opened in this run already has the
 body you wrote.
+
+## Follow-up tickets
+
+You may file follow-up tickets: work outside this ticket that you found while doing it, such as a TODO your change leaves, a fix you saw and did not make, or a next step the change makes possible. Do this ticket's own work yourself, never as a follow-up. File at most 5, and none for work that is already a ticket.
+
+Create each in PROJ-1's project through the tracker, linked to PROJ-1 as its parent the way the tracker skill says, with no assignee and no labels: never one of `agent-ready-alice`, and never `needs-human`. Its body says what it covers, as a description of the work rather than instructions to an agent, and, when one repository applies, names it on a line of its own, `canopy-repo: <name>`, one of `repo`. A follow-up that must land after another ticket, this one included, gets the tracker's blocker relation. Creating them is the one thing you write to the tracker: no comment on any ticket, and no edit to PROJ-1 or to any other ticket, though the tool that creates tickets may be able to. A follow-up is read by everyone who reads the tracker, while PROJ-1's conversation stays private: its title and body describe the work in your own words, and carry nothing from the operator's messages, the conversation, or the plan. Your summary lists the follow-ups you filed.
+
+A follow-up is a request, not work you start: canopy asks the operator about each one, and works it only once they label it or start it, as any ticket. Name every ticket you created in your result line's object, also when you report `blocked` or `failed`: `"created":{"<key>":"<repository or null>"}`, each with the repository its body names, or null when it names none. Leave the field out when you created none.
 
 ## Result
 

@@ -929,6 +929,7 @@ def _spawn(
         "PLAN_OUT": plans.WRITTEN,
         "MAX_PLAN_CHARS": f"{plans.MAX_CHARS:,}",
         "REASONS": prompts.reasons_note(tuple(reasons), private=plan.private),
+        "FOLLOW_UPS": _follow_ups_note(ctx, key, private=plan.private),
     }
     # A joint run's worker learns its repositories only from these, so an override without them fails closed. A
     # splitter's own check of who asked for the split needs the request.
@@ -981,6 +982,28 @@ def _spawn(
     )
     pid = _launch(ctx, run_id, prompt)
     return Started(run_id=run_id, branch=branch, slots=slots, pid=pid, label=plan.label, desk=desk, starts=plan.starts)
+
+
+def _follow_ups_note(ctx: Context, key: str, *, private: bool) -> str:
+    """Return an implement's or a resume's `{{FOLLOW_UPS}}`: whether its worker may file follow-ups, and how (§18).
+
+    Returns:
+        What a follow-up is, the bound, the repositories it may name, and the result field; or why it files none.
+    """
+    limit = ctx.config.policy.max_follow_ups
+    parent = db.get_follow_up(ctx.conn, key)
+    if parent is not None:
+        return prompts.no_follow_ups(f"{key} is itself a follow-up of {parent.parent_key}, and a follow-up files none")
+    if limit == 0:
+        return prompts.no_follow_ups("the operator set policy.max_follow_ups to 0")
+    return prompts.follow_ups(
+        key,
+        limit,
+        [r.name for r in ctx.workspace.repos],
+        needs_human=ctx.config.tracker.needs_human_label,
+        labels=ctx.config.tracker.labels,
+        private=private,
+    )
 
 
 def _spawn_triage(ctx: Context, *, tick_id: int, key: str, plan: Plan, attempt: int, limit: int) -> Started:

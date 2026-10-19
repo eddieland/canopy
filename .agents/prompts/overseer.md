@@ -197,7 +197,9 @@ again as new.
 - When you cannot read what raised an item this tick (its PR, its comments), the tick is on partial data: end it with
   the tick-wide `mcp_unavailable` skip below rather than recording a list without it.
 - The harness re-raises its own items (run failures, `awaiting_reply`, `repo_missing`, chores'); they are not in
-  `attention`, and you never record them.
+  `attention`, and you never record them. Among them, `follow_up_filed` names the follow-up tickets a ticket's workers
+  filed, and `follow_up_unrecorded` the ones the harness could not record. A follow-up authorizes nothing: it is an
+  ordinary ticket, a candidate only once it carries a configured label or the operator started it, as any ticket.
 
 ## Phase table
 

@@ -234,7 +234,8 @@ maintenance off (D107): a worker can write the git directory its slot shares, an
 on the host. A command named in that directory's config still runs (§24, Git state).
 
 Worker result contract, one JSON line, the last of the worker's text (§13); `prs` maps each repository the run worked
-in to its PR, and `pr_titles` is optional and for display only:
+in to its PR, and `pr_titles` is optional and for display only. An `implement` or `resume` may add `"created"`, the
+follow-up tickets it filed, each with its repository or null, which authorize nothing (§18):
 
 ```json
 {"status":"done|blocked|failed","branch":"agent/KEY-slug","prs":{"api":"https://...|null"},

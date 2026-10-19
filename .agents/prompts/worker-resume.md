@@ -153,6 +153,10 @@ restyle it, summarize this run, or list what you addressed. When you must, chang
 missing, keep the title, and add no closing keywords or tracker commands. A PR you opened in this run already has the
 body you wrote.
 
+## Follow-up tickets
+
+{{FOLLOW_UPS}}
+
 ## Result
 
 Last line of stdout, exactly one JSON object:

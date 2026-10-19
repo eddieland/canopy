@@ -14,7 +14,7 @@ import pytest
 from canopy.core import prompts
 from canopy.core.config import load
 from canopy.core.vocab import RunKind
-from tests.canopy.helpers import PROMPT_VALUES
+from tests.canopy.helpers import PRIVATE_PROMPT_VALUES, PROMPT_VALUES
 
 if TYPE_CHECKING:
     from syrupy.assertion import SnapshotAssertion
@@ -41,4 +41,6 @@ def test_with_memory_off_every_worker_prompt_is_as_it_was(
     canopy_env: CanopyEnv, markdown_snapshot: SnapshotAssertion, kind: str, *, private: bool
 ) -> None:
     cfg = load(canopy_env.root, canopy_env.user_file)
-    assert prompts.render_worker(cfg, kind, VALUES, private=private and kind != RunKind.PLAN) == markdown_snapshot
+    # A private ticket's worker files follow-ups as one that writes nothing else to the tracker (DESIGN §18, §22).
+    values = {**VALUES, "FOLLOW_UPS": PRIVATE_PROMPT_VALUES["FOLLOW_UPS"]} if private else VALUES
+    assert prompts.render_worker(cfg, kind, values, private=private and kind != RunKind.PLAN) == markdown_snapshot

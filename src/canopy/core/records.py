@@ -439,6 +439,23 @@ class PlanWaiver(Row):
 
 
 @dataclass(frozen=True)
+class FollowUp(Row):
+    """A follow-up ticket a public worker filed and its validated result reported, worked under its parent (§18)."""
+
+    TABLE: ClassVar[str] = "follow_ups"
+
+    #: The follow-up's own key, a ticket of the tracker's that may have no `tickets` row yet.
+    key: str
+    #: The ticket whose run filed it, whose authorization it is worked under.
+    parent_key: str
+    #: The run whose result reported it.
+    run_id: int
+    #: The repository the worker named for it, the only one it is dispatched in; None leaves that to the overseer.
+    repo: str | None
+    at: str
+
+
+@dataclass(frozen=True)
 class RunTool(Row):
     """What one tool's calls in an agent run put into its context (DESIGN §13): the run, by its table and id."""
 

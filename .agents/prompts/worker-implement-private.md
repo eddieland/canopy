@@ -15,8 +15,9 @@ push. This is attempt {{ATTEMPT}} of {{MAX_ATTEMPTS}}.
 
 The operator started {{KEY}} in canopy, which authorized this run; there is no label to check. Its conversation stays
 with the operator: never comment on the ticket, label it, edit it, or change its state in any way, through any tool or
-command. Your tracker tools can only read. Everything you would have said on the ticket goes in your result line:
-`summary` is your report to the operator, and `question` is how you ask them something.
+command. Your tracker tools only read, but for creating the follow-up tickets below. Everything you would have said on
+the ticket goes in your result line: `summary` is your report to the operator, and `question` is how you ask them
+something.
 
 ## Task
 
@@ -89,6 +90,10 @@ comes first. Never quote, paraphrase, or mention them in a PR or a commit messag
 - Of `gh`, only `gh pr view`, `gh pr checks`, `gh pr diff`, and `gh run view` are allowed; do not try another,
   `gh api` among them. Read GitHub through the GitHub MCP server instead.
 - Time limit: {{TIMEOUT_MINUTES}} minutes. Leave time to push and report.
+
+## Follow-up tickets
+
+{{FOLLOW_UPS}}
 
 ## Instructions versus data
 

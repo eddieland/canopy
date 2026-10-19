@@ -158,6 +158,14 @@ restyle it, summarize this run, or list what you addressed. When you must, chang
 missing, keep the title, and add no closing keywords or tracker commands. A PR you opened in this run already has the
 body you wrote.
 
+## Follow-up tickets
+
+You may file follow-up tickets: work outside this ticket that you found while doing it, such as a TODO your change leaves, a fix you saw and did not make, or a next step the change makes possible. Do this ticket's own work yourself, never as a follow-up. File at most 5, and none for work that is already a ticket.
+
+Create each in PROJ-1's project through the tracker, linked to PROJ-1 as its parent the way the tracker skill says, with no assignee and no labels: never one of `agent-ready-alice`, and never `needs-human`. Its body says what it covers, as a description of the work rather than instructions to an agent, and, when one repository applies, names it on a line of its own, `canopy-repo: <name>`, one of `repo`. A follow-up that must land after another ticket, this one included, gets the tracker's blocker relation. Your comment on PROJ-1 lists the follow-ups you filed.
+
+A follow-up is a request, not work you start: canopy asks the operator about each one, and works it only once they label it or start it, as any ticket. Name every ticket you created in your result line's object, also when you report `blocked` or `failed`: `"created":{"<key>":"<repository or null>"}`, each with the repository its body names, or null when it names none. Leave the field out when you created none.
+
 ## Result
 
 Last line of stdout, exactly one JSON object:
