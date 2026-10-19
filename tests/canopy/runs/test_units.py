@@ -113,17 +113,15 @@ def test_a_joint_implement_works_in_a_desk_and_opens_a_pr_per_repository(
     assert f"- `web` at `{desk / 'web'}`: branch `{BRANCH}` from `main`; PR: {PRS['web']}." in review_fix.prompt
 
 
-def test_leases_are_all_or_nothing(
-    ws_scenario: Scenario, ws: Ws, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_leases_are_all_or_nothing(ws_scenario: Scenario, ws: Ws, treehouse_state: Path) -> None:
     state = json.loads(treehouse_state.read_text())
     state["pools"][str(ws.clone("web"))].update(max_trees=1, slots=[{"name": "1", "path": "/busy", "status": "in-use"}])
     treehouse_state.write_text(json.dumps(state))
 
     # Refused, the dispatch starts no run.
-    assert [a for a, _ in ws_scenario.refuses(dispatches(repo=("api", "web")))] == ["refused:no_slot"]
-    # What `canopy dispatch` printed, which the scenario leaves to the test's own output.
-    assert "dispatch refused (no_slot): web: treehouse get exited 1: " in capsys.readouterr().err
+    refused = ws_scenario.refuses(dispatches(repo=("api", "web")))
+    assert [a for a, _ in refused] == ["refused:no_slot"]
+    assert "dispatch refused (no_slot): web: treehouse get exited 1: " in refused.printed.err
     # api's slot was leased first, and returned before the refusal was recorded.
     assert pool_statuses(treehouse_state) == ["available", "in-use"]
     calls: list[list[str]] = json.loads(treehouse_state.read_text())["calls"]

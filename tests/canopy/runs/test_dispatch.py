@@ -125,15 +125,12 @@ def test_detached_run_finishes_on_its_own(scenario: Scenario, git_pool: GitPool,
     assert not lifelock_left(run.row)
 
 
-def test_capacity_guard(
-    scenario: Scenario, git_pool: GitPool, treehouse_state: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
+def test_capacity_guard(scenario: Scenario, git_pool: GitPool, treehouse_state: Path) -> None:
     scenario.configures(capacity={"max_workers": 1})
     scenario.starts()
-    capsys.readouterr()
-    assert scenario.refuses(dispatches("PROJ-2")) == [("refused:capacity", "1 of 1 workers are running")]
-    # What `canopy dispatch` printed, which the scenario leaves to the test's own output.
-    assert "dispatch refused (capacity): 1 of 1 workers are running" in capsys.readouterr().err
+    refused = scenario.refuses(dispatches("PROJ-2"))
+    assert refused == [("refused:capacity", "1 of 1 workers are running")]
+    assert "dispatch refused (capacity): 1 of 1 workers are running" in refused.printed.err
     assert sum(s["status"] == "leased" for s in pool(treehouse_state)) == 1
     assert scenario.conn.execute("SELECT count(*) FROM runs").fetchone()[0] == 1
 

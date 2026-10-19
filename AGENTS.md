@@ -220,11 +220,15 @@ If code and the design disagree, the design doc wins until a decision entry says
   one canopy turns down.
   The config is set the same way: `scenario.configures(policy={"max_resume_attempts": 2})` merges keys into the user
   file, or into the `"workspace"` or `"private"` file named first, never TOML appended to whatever table is last.
-  A run the story goes on around is held at work, `scenario.starts(...)` or `scenario.tick(..., hold=True)`, until the
-  test says it `finishes()` or `dies()`, rather than a worker left to sleep or a run row with a made-up pid.
+  A run the story goes on around is held at work, `scenario.starts(...)` or `scenario.tick(..., hold=True)`, whatever
+  role its agent plays, and a review the same way, `scenario.starts_review(reviews(...))`, until the test says it
+  `finishes()` or `dies()`, rather than an agent left to sleep or a row with a made-up pid.
   The operator is played whole too: `scenario.operator("grant", KEY, "fix-ci", code=1)` is a command canopy refuses,
-  and it and a tick give back what canopy printed (`.out`, `.err`; a tick's `.printed`), read from the move rather
-  than from `capsys`.
+  and it, a tick, and a refusal give back what canopy printed (`.out`, `.err`; a tick's or a refusal's `.printed`),
+  read from the move rather than from `capsys`. So is one of the overseer's commands outside a tick it runs:
+  `scenario.overseer("ticket", "set", KEY, "--phase", "approved", code=2)`, in a tick of its own, or in one shared
+  with the others inside `with scenario.ticking():`. A key the story drops is set to None,
+  `configures(notify={"sinks": {"slack": None}})`, and a worker that sends drafts is `drafts([...])`.
   A story in the workspace of two repositories, `api` and `web`, is told the same way through `ws_scenario`, whose
   pools are seeded: each dispatch names its repositories, `dispatches(repo=("api", "web"))`, and a joint run's worker
   `pushes(repos=("api", "web"))` in each.
