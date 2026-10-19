@@ -306,10 +306,10 @@ Rules:
   `acme/web#88 Debounce search input`, a review's `review:4 acme/web#88` then its ticket's title. With no subject (a
   tick, a chore run, a PR canopy only reviews, a ticket untitled yet), the reference alone is the title. Its
   description is that subject's state, a line of facts (`src/lib/descriptions.ts`): `done · implement · ABC-099`,
-  `ABC-099 · 2 reviews`, `ok · 5 decisions · woken by timer`, a chore's `choreLine`, so no two pages of a kind say
-  the same thing there. What every page of its kind shows, the same each time, is its `help`, on the title's hover,
-  as the nav's items say what their pages hold. A ticket is named one way in every identity panel that names one
-  (`TicketField`: its key, a run's kind as a chip, its title).
+  `review:4 3 findings, 1 major · at its review limit`, `ok · 5 decisions · woken by timer`, a chore's `choreLine`,
+  so no two pages of a kind say the same thing there. What every page of its kind shows, the same each time, is its
+  `help`, on the title's hover, as the nav's items say what their pages hold. A ticket is named one way in every
+  identity panel that names one (`TicketField`: its key, a run's kind as a chip, its title).
   A tick's page steps to its neighbours from the right of its title's row (`PageHeader`'s `controls`, `TickSteps`):
   two ghost `xs` links, `‹ tick:40` and `tick:42 ›`, through every tick by id, dry runs included, found by query so a
   gap is stepped over. At an end the button stays, disabled, saying on hover there is none, so the pair never shifts;
@@ -490,6 +490,12 @@ side.
   finds nothing says so; a page whose subject is missing (a 404) says why. An error is never an `Empty`, and never a
   red sentence in a panel: it is a `Notice`, which names a refusal's guard and sets its `code` spans as code, as an
   attention item's detail is. A page whose read was refused (a 409) shows its `Notice` in its main panel.
+- **`ListPanel`** (`src/components/list-panel.tsx`): a detail page's supporting list (runs, reviews, decisions) in its
+  panel, headed by its noun, its `OrderToggle` from two rows, and its count. With no rows it is its header alone,
+  counting `0`, with no `Empty` under it and no hairline under the header: the count already says it, and an empty
+  list should not take a panel's worth of the page. A list the page's subject can never have is left out, not
+  counted: a PR canopy only reviews has no ticket, so no runs. A PR's page is built from it; the other detail pages
+  keep their `Empty` rows until they move to it, one rule for every page rather than one per page.
 - **`None`** (`src/components/none.tsx`): what a field or a cell holds when it has no value, `none` in muted text in
   its place's own type, never a sentence of its own. With a reason, the reason follows a colon; in a column too narrow
   for it (`brief`), the reason is on hover. One phrase per concept: a summary, a branch, a PR, a session, or a tick's
@@ -1129,12 +1135,17 @@ side.
   the operator's request is open; the PR (`PullRequestLink`, the URL on hover); its unit's phase as a chip; then its
   ticket and title (or `none: canopy only reviews it`, `None`) in the free column, and its age. The ticket shares the
   free column with its title: a column of its own, beside where the PR stands, would not fit a 1280px window. Its
-  page: the PR's name (`org/repo#123`) as the title with its phase as a chip, a link out under it as a ticket's page
-  has (`LinkOutButton`), saying where it goes (`on GitHub`) rather than repeating the title, then panels for its
-  fields and total cost, with a grant of another review in its foot when it is at its review limit, its review threads
-  when canopy has read them or holds a draft for it (below), its reviews (`ReviewsTable`), the runs that pushed to it
-  (`RunsTable`), and its decisions. The journal keeps no PR's own title,
-  so the page has none to show.
+  page: the PR's name (`org/repo#123`) as the title, then its own title as its worker reported it, else its ticket's,
+  with its phase as a chip. Its description is where it stands, as its row leads with it: its latest review and that
+  review's verdict (`review:4 3 findings, 1 major`, or `not reviewed`), `at its review limit` while it is, the run
+  working it now, and for a PR canopy only reviews, `canopy only reviews it`, said there alone; its ticket and how many
+  reviews it has are said in its panels, not again there. A link out follows, as a ticket's page has
+  (`LinkOutButton`), saying where it goes (`on GitHub`) rather than repeating the title. Then panels: its fields (its
+  ticket, a `TicketField` left out when it has none; its branch; its total cost; no repository, which its name says),
+  with a grant of another review in its foot when it is at its review limit; its review threads when canopy has read
+  them or holds a draft for it (below); then its reviews (`ReviewsTable`), the runs that pushed to it (`RunsTable`),
+  and its decisions, each a `ListPanel`, so an empty one is its header alone, and no Runs at all on a PR with no
+  ticket, since runs are a ticket's.
 - **A PR's threads** (`ReviewThreads`, DESIGN §29) are its coworkers' review threads, as canopy's reader last read
   them, on the diff the latest run kept, with the replies runs drafted under them. The PR's detail says up front
   whether there are any (`threads`), so their place is held (`PanelLoading`) before they arrive. A `Review threads`
