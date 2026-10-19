@@ -1,30 +1,36 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ScanSearch, Square } from 'lucide-react'
-import { useState } from 'react'
+import { useId, useState } from 'react'
 
 import { refreshReviewRequests, requestReview, stopReview } from '@/api/mutations'
 import type { ReviewRequest } from '@/api/types'
 import { Age } from '@/components/age'
-import { Input } from '@/components/input'
+import { Input, Textarea } from '@/components/input'
 import { Notice } from '@/components/notice'
 import { Button } from '@/components/ui/button'
 import { reviewRequestedText, reviewStoppedText } from '@/lib/outcomes'
 import { cn } from '@/lib/utils'
 
+// The operator's bound (DESIGN §22): the server refuses more, after stripping, rather than cut it.
+const MAX_NOTES = 4000
+
 /**
- * `canopy start URL --review` from the reviews page (DESIGN §21, §22): a PR the loop does not own, by its URL.
- * canopy reviews it once, at its head, in whichever of the workspace's repositories it is in. Nothing is posted on the
- * PR, and nothing is reviewed now: the next tick does it.
+ * `canopy start URL --review --notes TEXT` from the reviews page (DESIGN §21, §22): a PR the loop does not own, by its
+ * URL, with what its reviewer should know. canopy reviews it once, at its head, in whichever of the workspace's
+ * repositories it is in. Nothing is posted on the PR, and nothing is reviewed now: the next tick does it.
  */
 export function ReviewRequestForm({ className }: { className?: string }) {
     const client = useQueryClient()
+    const id = useId()
     const [url, setUrl] = useState('')
+    const [notes, setNotes] = useState('')
     const [said, setSaid] = useState<string | null>(null)
     const request = useMutation({
-        mutationFn: () => requestReview(url.trim()),
+        mutationFn: () => requestReview(url.trim(), notes.trim()),
         onSuccess: (requested) => {
-            setSaid(reviewRequestedText(url.trim(), requested))
+            setSaid(reviewRequestedText(url.trim(), requested, notes.trim() !== ''))
             setUrl('')
+            setNotes('')
             void refreshReviewRequests(client)
         },
     })
@@ -63,6 +69,20 @@ export function ReviewRequestForm({ className }: { className?: string }) {
                     Review
                 </Button>
             </div>
+            <div className="flex flex-col gap-1.5">
+                <label className="panel-label" htmlFor={`${id}-notes`}>
+                    Notes for the reviewer (optional)
+                </label>
+                <Textarea
+                    id={`${id}-notes`}
+                    className="min-h-16 text-xs"
+                    value={notes}
+                    maxLength={MAX_NOTES}
+                    onChange={(event) => setNotes(event.target.value)}
+                    placeholder="What the author asked for, or the part of the change that worries you"
+                    data-testid="review-request-notes"
+                />
+            </div>
             <Notice error={request.error} reserve>
                 {said}
             </Notice>
@@ -71,8 +91,8 @@ export function ReviewRequestForm({ className }: { className?: string }) {
 }
 
 /**
- * A PR's review request on its page: open, with `Stop`, which ends it as `canopy stop URL` does, or how it ended.
- * Nothing when the operator never asked for the PR to be reviewed.
+ * A PR's review request on its page: open, with `Stop`, which ends it as `canopy stop URL` does, or how it ended, and
+ * the notes it gave the reviewer. Nothing when the operator never asked for the PR to be reviewed.
  */
 export function ReviewRequestStatus({
     url,
@@ -125,6 +145,12 @@ export function ReviewRequestStatus({
                     </Button>
                 )}
             </div>
+            {request.notes !== null && (
+                <div className="flex flex-col gap-1" data-testid="review-request-notes">
+                    <span className="panel-label">Your notes for the reviewer</span>
+                    <p className="text-sm break-words whitespace-pre-wrap">{request.notes}</p>
+                </div>
+            )}
             <Notice error={stop.error} reserve>
                 {said}
             </Notice>

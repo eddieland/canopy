@@ -2027,6 +2027,16 @@ class ReviewRequest(_Model):
     end_reason: Literal["reviewed", "merged", "closed", "unknown_repo", "stopped"] | None = None
     """Why it ended: a `done` review of the PR; the PR merged or closed first, or is in none of the workspace's
     repositories (the overseer's reading); or the operator stopped it. None while it is open."""
+    notes: str | None = None
+    """The operator's notes for the reviewer, which its prompt carries; None when the request has none."""
+
+
+class ReviewRequestNotes(_Model):
+    """A review request's notes, as `canopy start URL --review --notes TEXT` gives them."""
+
+    notes: Annotated[str, Field(max_length=20_000)] = ""
+    """What the reviewer should know or look at closely. Bounded again in code at 4000 characters, after stripping;
+    blank is none, and leaves an open request's notes as they were."""
 
 
 class ReviewRequested(_Model):

@@ -21,6 +21,7 @@ from canopy.serve.schema import (
     PullRequest,
     PullRequestDetail,
     ReviewRequested,
+    ReviewRequestNotes,
     ReviewRequestStopped,
 )
 
@@ -113,19 +114,22 @@ def grant(url: PrUrl, backend: BackendDep) -> Granted:
     summary="Ask for a PR to be reviewed",
     responses={**REFUSED, **_BAD_URL},
 )
-def start(url: PrUrl, backend: BackendDep) -> ReviewRequested:
-    """`canopy start URL --review`: review a PR the loop does not own, once, at its head (DESIGN §21).
+def start(url: PrUrl, backend: BackendDep, body: ReviewRequestNotes | None = None) -> ReviewRequested:
+    """`canopy start URL --review --notes TEXT`: review a PR the loop does not own, once, at its head (DESIGN §21).
 
-    It reviews nothing now: the next tick does, in whichever of the workspace's repositories the PR is in. Refused as
-    the CLI refuses it: `reviews_off`, `bad_pr`, and `loop_pr`.
+    It reviews nothing now: the next tick does, in whichever of the workspace's repositories the PR is in, its reviewer
+    given the notes. Notes on a PR already requested replace its request's. Refused as the CLI refuses it:
+    `reviews_off`, `bad_notes`, `bad_pr`, and `loop_pr`.
     """
     ref = _pr_ref(url, "start")
+    notes = body.notes if body is not None else None
     with backend.open() as ctx:
         try:
-            requested = review_requests.request(ctx.conn, ctx.config, ref, channel=WEB)
+            requested = review_requests.request(ctx.conn, ctx.config, ref, channel=WEB, notes=notes)
         except conversation.Refused as r:
             raise RefusedError(r) from None
-    _log.info("review requested", extra={"pr": ref.id, "already": requested.already, "channel": WEB})
+    noted = requested.request.notes is not None
+    _log.info("review requested", extra={"pr": ref.id, "already": requested.already, "notes": noted, "channel": WEB})
     return ReviewRequested(request=pull_requests.review_request(requested.request), already=requested.already)
 
 

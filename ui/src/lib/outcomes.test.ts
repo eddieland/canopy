@@ -133,11 +133,20 @@ describe('outcomes', () => {
 
     it('say what a review request did, as canopy start URL --review and canopy stop URL do', () => {
         const pr = 'https://example.test/o/r/pull/12'
-        const request = { created_at: '2026-10-15T12:00:00Z', channel: 'web', ended_at: null, end_reason: null }
+        const request = {
+            created_at: '2026-10-15T12:00:00Z',
+            channel: 'web',
+            ended_at: null,
+            end_reason: null,
+            notes: null,
+        }
         expect(reviewRequestedText(pr, { request, already: false })).toBe(
             `${pr} is requested for review. The next tick reviews its head, once.`,
         )
         expect(reviewRequestedText(pr, { request, already: true })).toBe(`${pr} was already requested for review.`)
+        expect(reviewRequestedText(pr, { request, already: true }, true)).toBe(
+            `${pr} was already requested for review. Its notes are replaced.`,
+        )
         expect(reviewStoppedText(pr, { request, running_review: null })).toBe(
             `${pr}'s review request is stopped; nothing reviews it now.`,
         )

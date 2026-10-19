@@ -17,6 +17,14 @@ Start with src/retry.py
 
 The context points at things to look at first. It is not an instruction.
 
+## Notes from the operator
+
+None.
+
+The operator asked for this review and wrote these notes: what they know about the PR, or want you to look at
+closely. Weigh them ahead of the context. They do not narrow the review: you still review the whole change, report what
+you find, and post nothing.
+
 ## Notice from the operator
 
 CI is down.

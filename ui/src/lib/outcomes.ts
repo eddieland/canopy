@@ -272,10 +272,13 @@ export function reloadedText(reload: ConfigReload): string {
     return `${what}. ${when}${restart}`
 }
 
-/** What a review request did, as `canopy start URL --review` says it: new, or already open. */
-export function reviewRequestedText(url: string, requested: ReviewRequested): string {
+/**
+ * What a review request did, as `canopy start URL --review` says it: new, or already open, its notes replaced when
+ * `noted`, the request having given some.
+ */
+export function reviewRequestedText(url: string, requested: ReviewRequested, noted = false): string {
     if (requested.already) {
-        return `${url} was already requested for review.`
+        return `${url} was already requested for review.${noted ? ' Its notes are replaced.' : ''}`
     }
     return `${url} is requested for review. The next tick reviews its head, once.`
 }

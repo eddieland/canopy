@@ -67,6 +67,41 @@ def test_a_request_is_reviewed_at_its_head_and_ends_reviewed(
     assert f"review:{run.id}" in out
 
 
+def test_the_reviewer_is_handed_the_requests_notes(
+    requests_env: CanopyEnv, scenario: Scenario, git_pool: GitPool
+) -> None:
+    conn = scenario.conn
+    scenario.operator("start", PR, "--review", "--notes", "  The author asked about the cache.  ")
+    assert review_requests.open_requests(conn)[0].notes == "The author asked about the cache."
+    # Asked again without notes, the request keeps its own; with notes, they replace them.
+    assert "Its notes are replaced" not in scenario.operator("start", PR, "--review", "--notes", " ").out
+    assert review_requests.open_requests(conn)[0].notes == "The author asked about the cache."
+    again = scenario.operator("start", PR, "--review", "--notes", "Look hard at the eviction.\nAnd its lock.")
+    assert f"{PR} was already requested for review. Its notes are replaced." in again.out
+    assert "  notes:\n    Look hard at the eviction.\n    And its lock.\n" in scenario.operator("show", PR).out
+
+    reviewed = scenario.review(reviews(head(git_pool), PR), reviewer=reviewer_reports(CLEAN))
+    assert "## Notes from the operator\n\nLook hard at the eviction.\nAnd its lock.\n" in reviewed.prompt
+    assert requests_of(conn) == [(PR, "cli", "reviewed")]
+
+
+def test_a_review_without_a_requests_notes_is_told_there_are_none(
+    requests_env: CanopyEnv, scenario: Scenario, git_pool: GitPool
+) -> None:
+    scenario.operator("start", PR, "--review")
+    assert review_requests.open_requests(scenario.conn)[0].notes is None
+    reviewed = scenario.review(reviews(head(git_pool), PR), reviewer=reviewer_reports(CLEAN))
+    assert "## Notes from the operator\n\nNone.\n" in reviewed.prompt
+
+
+def test_notes_are_refused_without_review_or_past_their_bound(requests_env: CanopyEnv, scenario: Scenario) -> None:
+    assert "--notes is for a PR's review" in scenario.operator("start", "PROJ-1", "--notes", "hi", code=2).err
+    too_long = "x" * (review_requests.MAX_NOTES + 1)
+    refused = scenario.operator("start", PR, "--review", "--notes", too_long, code=1)
+    assert f"start refused (bad_notes): the notes are {len(too_long)} characters; the most is 4000" in refused.err
+    assert requests_of(scenario.conn) == []
+
+
 def test_a_request_made_after_its_head_was_reviewed_ends_on_the_reviewed_refusal(
     requests_env: CanopyEnv, scenario: Scenario, git_pool: GitPool
 ) -> None:
@@ -198,9 +233,19 @@ def test_the_web_channel_requests_and_stops_a_review_as_the_cli_does(ctx: Contex
 
     made = start(PR).json()
     assert (made["already"], made["request"]["channel"], made["request"]["ended_at"]) == (False, "web", None)
+    assert made["request"]["notes"] is None
     assert start(PR).json()["already"] is True
+    noted = c.post("/api/pull-request/start", params={"url": PR}, json={"notes": " The cache. "}, headers=headers)
+    assert (noted.json()["already"], noted.json()["request"]["notes"]) == (True, "The cache.")
+    blank = c.post("/api/pull-request/start", params={"url": PR}, json={"notes": ""}, headers=headers)
+    assert blank.json()["request"]["notes"] == "The cache."
     page = c.get("/api/pull-request", params={"url": PR}).json()
     assert page["pull_request"]["review_request"]["ended_at"] is None
+    assert page["pull_request"]["review_request"]["notes"] == "The cache."
+    long = {"notes": "x" * (review_requests.MAX_NOTES + 1)}
+    assert refused(c.post("/api/pull-request/start", params={"url": PR}, json=long, headers=headers)).startswith(
+        "bad_notes"
+    )
     assert [p["url"] for p in c.get("/api/pull-requests").json()] == [PR]
 
     stopped = stop(PR).json()

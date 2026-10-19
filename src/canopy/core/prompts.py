@@ -106,6 +106,9 @@ MAX_STANDING_BYTES = 4096
 # worker's but a split's, and the reviewer's. An override written before notices existed still serves while none is in
 # force; while one is, it fails to render (`bad_prompt`) instead of dropping it, and `canopy notice` names it.
 REQUIRED_NOTICE = ("NOTICE",)
+# The operator's notes on a review request reach its reviewer through `{{NOTES}}`; a reviewer's override without it
+# still serves every review with none, and fails to render one with notes rather than drop them.
+REQUIRED_NOTES = ("NOTES",)
 # The kinds whose workers commit, and how their commits are attributed (TRUST_MODEL T5). The shipped prompts carry
 # `{{COMMIT_ATTRIBUTION}}`, the whole instruction; an older override may carry `{{COMMIT_TRAILER}}`, the trailer alone,
 # or neither. Neither still serves an operator who keeps the default trailer; once `trust.commit_trailer_name` or
@@ -457,18 +460,22 @@ def render_triage(config: Config, values: Mapping[str, str], *, required: Sequen
     return render(config, TRIAGE, values, required=(*REQUIRED_TRIAGE, *required))
 
 
-def render_reviewer(config: Config, values: Mapping[str, str], *, notice: str | None = None) -> str:
+def render_reviewer(
+    config: Config, values: Mapping[str, str], *, notice: str | None = None, notes: str | None = None
+) -> str:
     """Return the reviewer's prompt (DESIGN §21) with every `{{NAME}}` replaced from `values`.
 
     It must carry `REQUIRED_REVIEWER`. `notice` is the operator's notice in force (`core.notice`), for `{{NOTICE}}`:
-    a review reads CI too, so with one the prompt must carry it.
+    a review reads CI too, so with one the prompt must carry it. `notes` are the operator's on the review request the
+    review answers, for `{{NOTES}}`, which the prompt must carry when there are some.
 
     Returns:
         The rendered prompt.
     """
-    values = {**values, "NOTICE": notice if notice is not None else "None."}
+    values = {**values, "NOTICE": notice if notice is not None else "None.", "NOTES": notes or "None."}
     noticed = REQUIRED_NOTICE if notice is not None else ()
-    return render(config, REVIEWER, values, required=(*REQUIRED_REVIEWER, *noticed))
+    noted = REQUIRED_NOTES if notes else ()
+    return render(config, REVIEWER, values, required=(*REQUIRED_REVIEWER, *noticed, *noted))
 
 
 def render(

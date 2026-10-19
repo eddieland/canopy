@@ -267,6 +267,7 @@ class ReviewRequest(Row):
     channel: str
     ended_at: str | None
     end_reason: str | None
+    notes: str | None
 
 
 @dataclass(frozen=True)

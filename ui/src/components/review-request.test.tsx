@@ -9,22 +9,34 @@ import type { ReviewRequest } from '@/api/types'
 import { ReviewRequestForm, ReviewRequestStatus } from './review-request'
 
 const PR = 'https://github.com/acme/web/pull/88'
-const OPEN: ReviewRequest = { channel: 'web', created_at: '2026-10-08T11:00:00Z', ended_at: null, end_reason: null }
+const OPEN: ReviewRequest = {
+    channel: 'web',
+    created_at: '2026-10-08T11:00:00Z',
+    ended_at: null,
+    end_reason: null,
+    notes: null,
+}
 
-// Every request sent, by its path and the PR it names, and what the server stand-in answers each.
+// Every request sent, by its path and the PR it names, the bodies sent, and what the server stand-in answers each.
 let sent: { path: string; url: string | null }[] = []
+let bodies: unknown[] = []
 let answer: Response | undefined
 
 const server: Middleware = {
-    onRequest({ request }) {
+    async onRequest({ request }) {
         const url = new URL(request.url)
         sent.push({ path: url.pathname, url: url.searchParams.get('url') })
+        const body = await request.text()
+        if (body !== '') {
+            bodies.push(JSON.parse(body))
+        }
         return answer ?? Response.json({ already: false, request: OPEN, running_review: null })
     },
 }
 
 beforeEach(() => {
     sent = []
+    bodies = []
     answer = undefined
     api.use(server)
 })
@@ -40,6 +52,10 @@ function renderWith(ui: React.JSX.Element) {
 
 function field(): HTMLInputElement {
     return screen.getByRole('textbox', { name: 'PR URL' })
+}
+
+function notesField(): HTMLTextAreaElement {
+    return screen.getByRole('textbox', { name: 'Notes for the reviewer (optional)' })
 }
 
 describe('ReviewRequestForm', () => {
@@ -70,7 +86,30 @@ describe('ReviewRequestForm', () => {
             `${PR} is requested for review. The next tick reviews its head, once.`,
         )
         expect(sent).toEqual([{ path: '/api/pull-request/start', url: PR }])
+        expect(bodies).toEqual([{ notes: '' }])
         expect(field().value).toBe('')
+    })
+
+    it('hands the reviewer the notes as written, trimmed, and clears them with the URL', async () => {
+        renderWith(<ReviewRequestForm />)
+        fireEvent.change(field(), { target: { value: PR } })
+        fireEvent.change(notesField(), { target: { value: '  Look hard at the retry loop.\n' } })
+        fireEvent.click(screen.getByRole('button', { name: 'Review' }))
+
+        await screen.findByRole('status')
+        expect(bodies).toEqual([{ notes: 'Look hard at the retry loop.' }])
+        expect(notesField().value).toBe('')
+    })
+
+    it("says the notes replaced the open request's own when the PR was already requested", async () => {
+        answer = Response.json({ already: true, request: { ...OPEN, notes: 'Look again.' } })
+        renderWith(<ReviewRequestForm />)
+        fireEvent.change(field(), { target: { value: PR } })
+        fireEvent.change(notesField(), { target: { value: 'Look again.' } })
+        fireEvent.click(screen.getByRole('button', { name: 'Review' }))
+        expect((await screen.findByRole('status')).textContent).toBe(
+            `${PR} was already requested for review. Its notes are replaced.`,
+        )
     })
 
     it('says so when the PR was already requested', async () => {
@@ -115,6 +154,12 @@ describe('ReviewRequestStatus', () => {
                 'Review run 7 of it is still running and will finish.',
         )
         expect(sent).toEqual([{ path: '/api/pull-request/stop', url: PR }])
+    })
+
+    it('shows the notes the request gave its reviewer, line breaks kept', () => {
+        renderWith(<ReviewRequestStatus url={PR} request={{ ...OPEN, notes: 'The retry loop.\nAnd its backoff.' }} />)
+        const notes = screen.getByTestId('review-request-notes')
+        expect(notes.textContent).toBe('Your notes for the reviewerThe retry loop.\nAnd its backoff.')
     })
 
     it('says how an ended request ended, with nothing left to stop', () => {

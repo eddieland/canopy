@@ -200,7 +200,7 @@ def _spawn(
     if run is None:
         raise RuntimeError(f"review run {run_id} vanished")
     try:
-        prompt = prompts.render_reviewer(cfg, values, notice=notice.for_prompt(ctx.conn))
+        prompt = prompts.render_reviewer(cfg, values, notice=notice.for_prompt(ctx.conn), notes=_notes(ctx.conn, run))
     except (OSError, prompts.PromptError) as e:
         # Nothing started, so it costs the PR none of its reviews; the caller returns the slot.
         db.delete_review_run(ctx.conn, run_id)
@@ -223,6 +223,18 @@ def _spawn(
         raise Refusal("spawn_failed", str(e)) from e
     db.claim_run(ctx.conn, "review_runs", run_id, pid)
     return Started(run_id, pid, lease.path)
+
+
+def _notes(conn: sqlite3.Connection, run: records.ReviewRun) -> str | None:
+    """The operator's notes on the open request a `request` review answers; None for any other review, or none.
+
+    Returns:
+        The notes, or None.
+    """
+    if run.purpose != REQUEST:
+        return None
+    found = review_requests.open_request(conn, run.pr_url)
+    return found.notes if found is not None else None
 
 
 def _guard(ctx: Context, request: Request, *, planned: Collection[records.Decision] | None = None) -> str:

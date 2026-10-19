@@ -162,9 +162,10 @@ def cmd_notice(click_ctx: click.Context, text: str | None, duration: str | None,
 @click.command("start")
 @click.argument("ref", metavar="REF")
 @click.option("--review", is_flag=True, help="REF is a PR's URL: review it once, at its head.")
+@click.option("--notes", metavar="TEXT", help="With --review: what the reviewer should know or look at closely.")
 @click.option("--plan", is_flag=True, help="Plan it first: its implement waits on a plan you approve.")
 @click.pass_context
-def cmd_start(click_ctx: click.Context, ref: str, *, review: bool, plan: bool) -> int:
+def cmd_start(click_ctx: click.Context, ref: str, *, review: bool, notes: str | None, plan: bool) -> int:
     """Work a ticket privately, or with --review have canopy review someone else's PR.
 
     A ticket started here has no queue label, and nothing canopy writes reaches it. Its conversation, the workers'
@@ -175,14 +176,18 @@ def cmd_start(click_ctx: click.Context, ref: str, *, review: bool, plan: bool) -
     it with `canopy plan KEY --approve`, whatever `policy.plan` says.
 
     With --review, REF is a PR the loop does not own, by its URL. canopy reviews it once, at its head, in whichever of
-    the workspace's repositories it is in; the review goes in the journal and nothing is posted on the PR.
+    the workspace's repositories it is in; the review goes in the journal and nothing is posted on the PR. --notes
+    hands its reviewer what you want it to know, such as what the author asked for or the part that worries you; on a
+    PR already requested, they replace the request's notes.
     """
     _operator("start")
     subject = _ref(ref, "start")
+    if notes is not None and not review:
+        raise click.UsageError("--notes is for a PR's review, with --review")
     if review:
         if plan:
             raise click.UsageError("--plan is for a ticket; a PR's review has no plan")
-        return _start_review(click_ctx, subject)
+        return _start_review(click_ctx, subject, notes)
     ctx = open_context(click_ctx)
     try:
         plan_lock = ctx.dispatch_lock_path if plan else None
@@ -206,15 +211,19 @@ def cmd_start(click_ctx: click.Context, ref: str, *, review: bool, plan: bool) -
     return 0
 
 
-def _start_review(click_ctx: click.Context, subject: Ref) -> int:
+def _start_review(click_ctx: click.Context, subject: Ref, notes: str | None) -> int:
     ctx = open_context(click_ctx)
     try:
-        requested = review_requests.request(ctx.conn, ctx.config, subject, channel=CLI)
+        requested = review_requests.request(ctx.conn, ctx.config, subject, channel=CLI, notes=notes)
     except conversation.Refused as r:
         raise CliError(f"start refused ({r.guard}): {r.reason}") from None
-    logs.for_tick(None).info("review requested", extra={"pr": subject.id, "already": requested.already, "channel": CLI})
+    noted = requested.request.notes is not None
+    logs.for_tick(None).info(
+        "review requested", extra={"pr": subject.id, "already": requested.already, "notes": noted, "channel": CLI}
+    )
     if requested.already:
-        click.echo(f"{subject} was already requested for review.")
+        replaced = " Its notes are replaced." if (notes or "").strip() else ""
+        click.echo(f"{subject} was already requested for review.{replaced}")
         return 0
     click.echo(f"{subject} is requested for review. The next tick reviews its head, once. Nothing is posted on the PR.")
     return 0
@@ -545,6 +554,10 @@ def _show_pr(ctx: Context, url: str) -> None:
             click.echo(f"  review request: {made}, open")
         else:
             click.echo(f"  review request: {made}, ended {attention.age(request.ended_at)} ago ({request.end_reason})")
+        if request.notes is not None:
+            click.echo("  notes:")
+            for line in conversation.printable(request.notes).splitlines():
+                click.echo(f"    {line}")
     click.echo(f"\nReviews ({len(runs)}):")
     for r in runs:
         when = f"started {attention.age(r.started_at)} ago"

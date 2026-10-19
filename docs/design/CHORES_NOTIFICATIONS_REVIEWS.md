@@ -287,9 +287,10 @@ findings are not.
 
 The operator asks for one review of a coworker's PR at its head; asking again after a push reviews the new head. A
 request is a journal fact, at most one open per PR, ended by a `done` review, by the overseer finding the PR merged,
-closed, or in no cloned repository, or by the operator. Starting work on a coworker's PR is refused, so a review never
-turns into work on someone else's branch. Requests are refused inside a run: a request authorizes a review as
-`review.query` does, so an agent steered by a PR's text could otherwise aim the operator's spend at any PR (T1).
+closed, or in no cloned repository, or by the operator. A request may carry the operator's notes, which its reviewer's
+prompt carries; a prompt override that drops them fails to render. Starting work on a coworker's PR is refused, so a
+review never turns into work on someone else's branch. Requests are refused inside a run: a request authorizes a review
+as `review.query` does, so an agent steered by a PR's text could otherwise aim the operator's spend at any PR (T1).
 
 ### Reading reviews
 
