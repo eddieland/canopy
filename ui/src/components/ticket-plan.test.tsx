@@ -195,6 +195,12 @@ describe('TicketPlan', () => {
             ).toBeDefined()
         })
 
+        it('says what Ask again sends once changes were asked for, not that the comments are still to go', () => {
+            renderPlan({ threads: [THREAD], changes_asked: '2026-10-08T11:40:00Z' })
+            expect(screen.getByText(/^Ask again sends the 1 open comment again\./u)).toBeDefined()
+            expect(screen.queryByText(/goes with Ask for changes/u)).toBeNull()
+        })
+
         it('says a planner comes next while there is no plan, and which run writes one', () => {
             const { unmount } = renderPlan({ newest: null, plans: [] })
             expect(screen.getByText('no plan yet: the next tick dispatches a planner')).toBeDefined()
@@ -264,10 +270,33 @@ describe('TicketPlan', () => {
         renderPlan()
         expect(button('Save').disabled).toBe(true)
         fireEvent.click(button('Approve'))
-        expect((await screen.findByRole('status')).textContent).toBe(
+        // The line under the actions gives way to the approval's moment, which says it.
+        expect((await screen.findByTestId('plan-approved')).textContent).toContain(
             'Plan 2 of ABC-1 is approved as its file stands now. The next tick can implement it.',
         )
         expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
+    })
+
+    it('marks an approval as the moment it is, with the way back to Attention, and never one refused', async () => {
+        renderPlan()
+        fireEvent.click(button('Approve'))
+        const moment = await screen.findByTestId('plan-approved')
+        expect(within(moment).getByRole('status').textContent).toBe(
+            'Plan 2 of ABC-1 is approved as its file stands now. The next tick can implement it.',
+        )
+        expect(within(moment).getByRole('link', { name: 'Back to Attention' }).getAttribute('href')).toBe('/attention')
+        cleanup()
+
+        answers['POST /api/tickets/ABC-1/plan'] = Response.json(
+            { detail: { guard: 'plan_not_proposed', reason: 'plan 2 is not proposed' } },
+            { status: 409 },
+        )
+        renderPlan()
+        fireEvent.click(button('Approve'))
+        expect((await screen.findByRole('alert')).textContent).toBe(
+            'refused (plan_not_proposed): plan 2 is not proposed',
+        )
+        expect(screen.queryByTestId('plan-approved')).toBeNull()
     })
 
     it('asks before approving while the note holds words, which only Ask for changes sends', async () => {
@@ -280,7 +309,8 @@ describe('TicketPlan', () => {
         expect(document.activeElement).toBe(button('Keep'))
         expect(sent).toEqual([])
         fireEvent.click(button('Approve'))
-        expect((await screen.findByRole('status')).textContent).toBe(
+        // The line under the actions gives way to the approval's moment, which says it.
+        expect((await screen.findByTestId('plan-approved')).textContent).toContain(
             'Plan 2 of ABC-1 is approved as its file stands now. The next tick can implement it.',
         )
         expect(sent).toEqual([{ method: 'POST', path: '/api/tickets/ABC-1/plan', body: { action: 'approve' } }])
@@ -372,7 +402,7 @@ describe('TicketPlan', () => {
         renderPlan()
         typeInPlan(' Then a test.')
         fireEvent.click(button('Save and approve'))
-        expect((await screen.findByRole('status')).textContent).toMatch(/^Plan 2 of ABC-1 is approved/u)
+        expect((await screen.findByTestId('plan-approved')).textContent).toMatch(/^Plan 2 of ABC-1 is approved/u)
         expect(writes()).toEqual(['PUT /api/tickets/ABC-1/plans/2/file', 'POST /api/tickets/ABC-1/plan'])
     })
 
