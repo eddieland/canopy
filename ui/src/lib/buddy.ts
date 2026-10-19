@@ -263,6 +263,23 @@ export function nextTip(tips: readonly string[], last: string, random: () => num
     return tips[nextIndex(tips.length, tips.indexOf(last), random)] ?? ''
 }
 
+/** The fewest and most keys Sprig types in a burst before the space bar: picked at random. */
+const BURST = { least: 3, most: 6 }
+
+/**
+ * A burst of typing on Sprig's keyboard, the keys in the order it presses them: a few of `keys` at random, no key twice
+ * (`BURST`), then `last`, the space bar, to end the word.
+ */
+export function typeBurst<T>(keys: readonly T[], last: T, random: () => number = Math.random): T[] {
+    const count = Math.min(keys.length, BURST.least + Math.floor(random() * (BURST.most - BURST.least + 1)))
+    const left = [...keys]
+    const typed: T[] = []
+    while (typed.length < count) {
+        typed.push(...left.splice(Math.floor(random() * left.length), 1))
+    }
+    return [...typed, last]
+}
+
 function read(): BuddySetting {
     try {
         return parseBuddy(globalThis.localStorage.getItem(STORAGE_KEY))

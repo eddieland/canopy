@@ -567,15 +567,21 @@
 
 /*
  * Sprig types on its keyboard in bursts: each key it presses (`--key`, its place in the burst) sinks and lights in the
- * accent for a moment, a burst every 5 seconds. At rest, and under reduced motion, no key is pressed.
+ * accent for a moment, 1.5s into the burst. A burst plays once, 5 seconds long; the keyboard then remounts its keys
+ * with the next burst's, picked at random. At rest, and under reduced motion, no key is pressed.
  */
 @keyframes buddy-key {
-    1%,
-    3% {
+    0%,
+    30% {
+        fill: var(--color-buddy-key);
+        transform: none;
+    }
+    31%,
+    33% {
         fill: var(--color-accent);
         transform: translateY(0.4px);
     }
-    4% {
+    34% {
         fill: var(--color-buddy-key);
         transform: none;
     }
@@ -583,7 +589,7 @@
 
 @utility animate-buddy-key {
     @media (prefers-reduced-motion: no-preference) {
-        animation: buddy-key 5s linear calc(1.5s + var(--key, 0) * 0.17s) infinite;
+        animation: buddy-key 5s linear calc(var(--key, 0) * 0.17s);
     }
 }
 
