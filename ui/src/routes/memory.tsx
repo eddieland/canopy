@@ -112,29 +112,41 @@ function Tiers({ overview, state }: { overview: MemoryOverview; state: MemorySta
             <div
                 className={cn(
                     'stagger flex flex-col gap-6',
-                    '2xl:grid 2xl:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] 2xl:items-start',
+                    acting &&
+                        state.ticket_notes.mode !== 'off' &&
+                        '2xl:grid 2xl:grid-cols-[minmax(0,1fr)_minmax(0,34rem)] 2xl:items-start',
                 )}
             >
-                <div className="flex flex-col gap-6">
-                    <Proposals proposals={shownProposals} total={proposals.length} filter={filter} acting={acting} />
-                    <Lessons
-                        lessons={shownLessons}
-                        total={lessons.length}
+                {/* A tier that is off shows no panel: the page holds what is on (DESIGN §28). */}
+                {acting && (
+                    <div className="flex flex-col gap-6">
+                        <Proposals
+                            proposals={shownProposals}
+                            total={proposals.length}
+                            filter={filter}
+                            acting={acting}
+                        />
+                        <Lessons
+                            lessons={shownLessons}
+                            total={lessons.length}
+                            filter={filter}
+                            digest={digest}
+                            tier={state.lessons}
+                            acting={acting}
+                            modes={modes}
+                        />
+                    </div>
+                )}
+                {state.ticket_notes.mode !== 'off' && (
+                    <TicketNotesPanel
+                        tickets={shownTickets}
+                        total={tickets.length}
                         filter={filter}
-                        digest={digest}
-                        tier={state.lessons}
-                        acting={acting}
+                        tier={state.ticket_notes}
+                        promote={acting}
                         modes={modes}
                     />
-                </div>
-                <TicketNotesPanel
-                    tickets={shownTickets}
-                    total={tickets.length}
-                    filter={filter}
-                    tier={state.ticket_notes}
-                    acting={acting}
-                    modes={modes}
-                />
+                )}
             </div>
         </>
     )
@@ -285,22 +297,22 @@ function ServedDigest({ digest }: { digest: MemoryDigest }) {
 
 /**
  * The tickets with notes in force, a row each, under the tier's band. Its header counts the rows, the tickets, and the
- * notes they hold beside them, since a row opens to several. While `acting`, each opened note is promoted or
- * forgotten from its row, and what that did is said under the band.
+ * notes they hold beside them, since a row opens to several. Each opened note is forgotten from its row, and, while
+ * lessons are on (`promote`), promoted; what that did is said under the band.
  */
 function TicketNotesPanel({
     tickets,
     total,
     filter,
     tier,
-    acting,
+    promote,
     modes,
 }: {
     tickets: TicketNotes[]
     total: number
     filter: MemoryFilter
     tier: MemoryTier
-    acting: boolean
+    promote: boolean
     modes: TierModes
 }) {
     const [said, setSaid] = useState<string | null>(null)
@@ -333,7 +345,8 @@ function TicketNotesPanel({
                             <TicketNotesRow
                                 key={t.ticket_key}
                                 notes={t}
-                                onSaid={acting ? setSaid : undefined}
+                                onSaid={setSaid}
+                                promote={promote}
                                 modes={modes}
                             />
                         ))}
@@ -438,10 +451,12 @@ function filterWords(filter: MemoryFilter): string {
 function TicketNotesRow({
     notes,
     onSaid,
+    promote,
     modes,
 }: {
     notes: TicketNotes
-    onSaid: ((said: string) => void) | undefined
+    onSaid: (said: string) => void
+    promote: boolean
     modes: TierModes
 }) {
     const [open, setOpen] = useState(false)
@@ -458,7 +473,7 @@ function TicketNotesRow({
                 <span className="truncate text-right text-xs text-muted-foreground">{ticketNotesUsedText(notes)}</span>
                 <Age at={notes.latest_at} variant="ago" className="text-right" />
                 <CollapsibleContent className={cn('-mx-3 -mb-2.5 border-t bg-surface-raised/40', rowLineFrom('key'))}>
-                    <OpenNotes ticketKey={notes.ticket_key} onSaid={onSaid} modes={modes} />
+                    <OpenNotes ticketKey={notes.ticket_key} onSaid={onSaid} promote={promote} modes={modes} />
                 </CollapsibleContent>
             </ListRow>
         </Collapsible>
@@ -466,16 +481,18 @@ function TicketNotesRow({
 }
 
 /**
- * A ticket's notes in force, under its row: each marked when the cap leaves it out of its next run's prompt, and with
- * `onSaid`, each with its verbs, Promote and Forget.
+ * A ticket's notes in force, under its row: each marked when the cap leaves it out of its next run's prompt, each with
+ * Forget, and with `promote`, while lessons are on, Promote.
  */
 function OpenNotes({
     ticketKey,
     onSaid,
+    promote,
     modes,
 }: {
     ticketKey: string
-    onSaid: ((said: string) => void) | undefined
+    onSaid: (said: string) => void
+    promote: boolean
     modes: TierModes
 }) {
     const { data } = useQuery(ticketMemoryQuery(ticketKey))
@@ -487,7 +504,7 @@ function OpenNotes({
         return <Empty>no notes in force now: its page lists the ones before</Empty>
     }
     const below = new Map(
-        onSaid === undefined ? [] : inForce.map((n) => [n.id, <NoteActions key={n.id} note={n} onSaid={onSaid} />]),
+        inForce.map((n) => [n.id, <NoteActions key={n.id} note={n} promote={promote} onSaid={onSaid} />]),
     )
     return <MemoryRows entries={inForce} across digest={data.digest} below={below} modes={modes} />
 }
