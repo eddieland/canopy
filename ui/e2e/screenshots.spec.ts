@@ -94,7 +94,7 @@ for (const theme of THEMES) {
     })
 }
 
-// Every palette but indigo sets only the neutrals, so one whole page in each shows all it changes.
+// Every palette but a theme's default sets only the neutrals, so one whole page in each shows all it changes.
 for (const theme of THEMES) {
     for (const palette of OTHER_PALETTES[theme]) {
         test(`attention in ${palette} ${theme}`, async ({ page }) => {

@@ -3,15 +3,16 @@ import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
 import type { ResolvedTheme } from './store'
 
 /**
- * The palette each theme draws its neutrals from, chosen apart for light and for dark. Indigo, whose canvas carries
- * the accent's hue, is the default for both. Light can wear off-white, a warm paper, or Solarized's cream base tones;
- * dark can wear grey, the neutral one the 2026-10-19 exploration drew for Mailroom. Kept in localStorage and synced
- * across tabs; the inline script in index.html applies it before first paint, and this module afterwards.
+ * The palette each theme draws its neutrals from, chosen apart for light and for dark. Each theme's default carries
+ * the accent's hue in its canvas: lavender, a pale lavender grey with white surfaces, and indigo, a deep indigo slate.
+ * Light can wear off-white, a warm paper, or Solarized's cream base tones instead; dark can wear grey, the neutral one
+ * the 2026-10-19 exploration drew for Mailroom. Kept in localStorage and synced across tabs; the inline script in
+ * index.html applies it before first paint, and this module afterwards.
  */
 
 /** Each theme's palettes, the default first. */
 export const PALETTES = {
-    light: ['indigo', 'off-white', 'solarized'],
+    light: ['lavender', 'off-white', 'solarized'],
     dark: ['indigo', 'grey'],
 } as const
 
@@ -29,7 +30,7 @@ export interface Palettes {
 /** Shared with index.html's inline script. */
 export const STORAGE_KEY = 'canopy-palette'
 /** Each theme's palette until the operator picks one. */
-export const DEFAULT: Palettes = { light: 'indigo', dark: 'indigo' }
+export const DEFAULT: Palettes = { light: 'lavender', dark: 'indigo' }
 
 /** The setting as stored, as JSON, with the default for a theme it does not name or a palette that theme lacks. */
 export function parsePalettes(raw: string | null): Palettes {

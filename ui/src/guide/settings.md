@@ -9,10 +9,10 @@ are kept in this browser; everything else canopy reads from its config files, as
 **Light**, **Dark**, or **System**, which follows your machine. Every open tab follows along. The button at the right
 of the header flips it too.
 
-Each theme also has a palette, picked apart. **Indigo**, the default for both, tints the canvas with the accent's hue.
-Light can be **Off-white**, a warm paper, or **Solarized**, its cream; dark can be a plain **Grey**. Only the
-background, surfaces, and text change; every status color stays where you learned it. Solarized purists will notice
-the base tones sit a shade lighter than the spec, so the status colors stay readable on them.
+Each theme also has a palette, picked apart. The defaults tint the canvas with the accent's hue: **Lavender** in light,
+**Indigo** in dark. Light can be **Off-white**, a warm paper, or **Solarized**, its cream; dark can be a plain **Grey**.
+Only the background, surfaces, and text change; every status color stays where you learned it. Solarized purists will
+notice the base tones sit a shade lighter than the spec, so the status colors stay readable on them.
 
 ## Time
 

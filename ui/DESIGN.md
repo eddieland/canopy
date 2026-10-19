@@ -97,11 +97,11 @@ Rules:
   picked call's, which `tokens.test.ts` measures.
 - **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check it
   on both themes' surfaces before using it. A neutral, or a color drawn in one, is set again in each palette's rule.
-- **Palettes.** Indigo is each theme's default. The others are a rule each in `tokens.css` that sets only the neutrals
-  over indigo's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`: for light, off-white, a warm paper,
-  and Solarized's cream base tones; for dark, grey, the near-colorless neutrals the 2026-10-19 exploration drew for
-  Mailroom. A light canvas is never grey, which only looks dim. Every hue, the accent's included, is the same in all,
-  so a component never knows which it is on.
+- **Palettes.** Lavender is light's default and indigo dark's. The others are a rule each in `tokens.css` that sets only
+  the neutrals over the default's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`: for light,
+  off-white, a warm paper, and Solarized's cream base tones; for dark, grey, the near-colorless neutrals the 2026-10-19
+  exploration drew for Mailroom. A light canvas is never grey, which only looks dim. Every hue, the accent's included,
+  is the same in all, so a component never knows which it is on.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with

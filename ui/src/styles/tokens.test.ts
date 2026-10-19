@@ -15,7 +15,7 @@ type Rgb = [number, number, number]
 type Theme = Record<string, Rgb>
 
 const css = readFileSync(resolve(import.meta.dirname, 'tokens.css'), 'utf8')
-// Every other palette sets some tokens over indigo's, so each is its theme's indigo with those replaced.
+// Every other palette sets some tokens over its theme's default, so each is that default with those replaced.
 const THEMES: Record<string, Theme> = {
     light: theme(':root'),
     dark: theme('.dark'),

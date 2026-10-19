@@ -27,7 +27,7 @@
                     palettes = JSON.parse(localStorage.getItem('canopy-palette')) || {}
                 } catch (e) {}
                 var light = palettes.light
-                d.dataset.lightPalette = light === 'off-white' || light === 'solarized' ? light : 'indigo'
+                d.dataset.lightPalette = light === 'off-white' || light === 'solarized' ? light : 'lavender'
                 d.dataset.darkPalette = palettes.dark === 'grey' ? 'grey' : 'indigo'
             })()
         </script>

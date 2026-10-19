@@ -19,14 +19,14 @@ beforeEach(() => {
 
 describe('parsePalettes', () => {
     it.each([
-        { raw: null, palettes: { light: 'indigo', dark: 'indigo' } },
+        { raw: null, palettes: { light: 'lavender', dark: 'indigo' } },
         { raw: '{"light":"solarized"}', palettes: { light: 'solarized', dark: 'indigo' } },
         { raw: '{"light":"off-white","dark":"grey"}', palettes: { light: 'off-white', dark: 'grey' } },
-        { raw: '{"light":"grey","dark":"solarized"}', palettes: { light: 'indigo', dark: 'indigo' } },
-        { raw: '{"dark":"mauve"}', palettes: { light: 'indigo', dark: 'indigo' } },
-        { raw: '"grey"', palettes: { light: 'indigo', dark: 'indigo' } },
-        { raw: 'null', palettes: { light: 'indigo', dark: 'indigo' } },
-        { raw: 'not json', palettes: { light: 'indigo', dark: 'indigo' } },
+        { raw: '{"light":"grey","dark":"solarized"}', palettes: { light: 'lavender', dark: 'indigo' } },
+        { raw: '{"dark":"mauve"}', palettes: { light: 'lavender', dark: 'indigo' } },
+        { raw: '"grey"', palettes: { light: 'lavender', dark: 'indigo' } },
+        { raw: 'null', palettes: { light: 'lavender', dark: 'indigo' } },
+        { raw: 'not json', palettes: { light: 'lavender', dark: 'indigo' } },
     ])('reads $raw as $palettes', async ({ raw, palettes }) => {
         const { parsePalettes } = await load()
         expect(parsePalettes(raw)).toEqual(palettes)
@@ -37,9 +37,9 @@ describe('palettes', () => {
     it('stores one theme, keeps the other, and puts both on <html>', async () => {
         const palette = await load()
         palette.setPalette('dark', 'grey')
-        expect(JSON.parse(localStorage.getItem(palette.STORAGE_KEY) ?? '')).toEqual({ light: 'indigo', dark: 'grey' })
+        expect(JSON.parse(localStorage.getItem(palette.STORAGE_KEY) ?? '')).toEqual({ light: 'lavender', dark: 'grey' })
         expect(root.dataset.darkPalette).toBe('grey')
-        expect(root.dataset.lightPalette).toBe('indigo')
+        expect(root.dataset.lightPalette).toBe('lavender')
     })
 
     it('still applies where storage is unavailable', async () => {
@@ -52,7 +52,7 @@ describe('palettes', () => {
     it("follows another tab's pick, on <html> too", async () => {
         const palette = await load()
         const { result } = renderHook(() => palette.usePalettes())
-        expect(result.current).toEqual({ light: 'indigo', dark: 'indigo' })
+        expect(result.current).toEqual({ light: 'lavender', dark: 'indigo' })
 
         act(() => otherTab(palette.STORAGE_KEY, '{"light":"solarized","dark":"indigo"}'))
 

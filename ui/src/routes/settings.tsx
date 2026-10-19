@@ -54,7 +54,7 @@ const THEMES: { value: ThemePreference; label: string; icon: LucideIcon }[] = [
 ]
 
 const LIGHT_PALETTES: { value: Palette<'light'>; label: string }[] = [
-    { value: 'indigo', label: 'Indigo' },
+    { value: 'lavender', label: 'Lavender' },
     { value: 'off-white', label: 'Off-white' },
     { value: 'solarized', label: 'Solarized' },
 ]
@@ -140,11 +140,11 @@ function ThemePanel() {
                 </ToggleGroup>
             </div>
             <PaletteRow theme="light" value={palettes.light} options={LIGHT_PALETTES}>
-                The light theme&apos;s neutrals: indigo, which tints the canvas with the accent&apos;s hue, a warm
+                The light theme&apos;s neutrals: lavender, which tints the canvas with the accent&apos;s hue, a warm
                 off-white, or Solarized&apos;s cream.
             </PaletteRow>
             <PaletteRow theme="dark" value={palettes.dark} options={DARK_PALETTES}>
-                The dark theme&apos;s: indigo, or a plain grey.
+                The dark theme&apos;s: an indigo slate, or a plain grey.
             </PaletteRow>
         </Panel>
     )

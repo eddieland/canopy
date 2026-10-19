@@ -49,12 +49,12 @@ describe('index.html theme script', () => {
     })
 
     it.each([
-        { stored: null, light: 'indigo', dark: 'indigo' },
-        { stored: '{"dark":"grey"}', light: 'indigo', dark: 'grey' },
+        { stored: null, light: 'lavender', dark: 'indigo' },
+        { stored: '{"dark":"grey"}', light: 'lavender', dark: 'grey' },
         { stored: '{"light":"off-white","dark":"grey"}', light: 'off-white', dark: 'grey' },
         { stored: '{"light":"solarized"}', light: 'solarized', dark: 'indigo' },
-        { stored: '{"light":"grey","dark":"solarized"}', light: 'indigo', dark: 'indigo' },
-        { stored: 'not json', light: 'indigo', dark: 'indigo' },
+        { stored: '{"light":"grey","dark":"solarized"}', light: 'lavender', dark: 'indigo' },
+        { stored: 'not json', light: 'lavender', dark: 'indigo' },
     ])('stored palettes $stored: light wears $light, dark $dark', ({ stored, light, dark }) => {
         stubSystemTheme(false)
         if (stored) {

@@ -97,7 +97,7 @@ test.describe('the toggle', () => {
         await expect(page.locator('html')).toHaveClass(/\bdark\b/u)
         await expect(themes.getByRole('radio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true')
         await page.keyboard.press('Tab')
-        await expect(page.getByTestId('palette-light-indigo')).toBeFocused()
+        await expect(page.getByTestId('palette-light-lavender')).toBeFocused()
     })
 
     test('a change in one tab reaches the others', async ({ context }) => {
@@ -127,7 +127,7 @@ test.describe('palettes', () => {
         await settled(page)
         const canvas = () =>
             page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--background'))
-        const indigo = await canvas()
+        const before = await canvas()
 
         await page.getByTestId('palette-dark-grey').click()
 
@@ -135,9 +135,9 @@ test.describe('palettes', () => {
         await expect(
             page.getByRole('radiogroup', { name: 'Dark palette' }).getByRole('radio', { name: 'Grey' }),
         ).toHaveAttribute('aria-checked', 'true')
-        await expect.poll(canvas).not.toBe(indigo)
+        await expect.poll(canvas).not.toBe(before)
         expect(await page.evaluate((key) => localStorage.getItem(key), PALETTE_KEY)).toBe(
-            '{"light":"indigo","dark":"grey"}',
+            '{"light":"lavender","dark":"grey"}',
         )
     })
 

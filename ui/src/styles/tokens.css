@@ -9,9 +9,10 @@
  * status color on its own tint up to 20% (bg-status-failed/12) too; tokens.test.ts measures each pair. Section colors
  * are tuned the same way, as an icon, as text, and at 16%.
  *
- * Each theme wears a palette, picked apart for light and for dark (src/theme/palette.ts). Indigo, the default, has
- * neutrals that carry the accent's hue, so the canvas has some color of its own. The others set only the neutrals,
- * over indigo's: off-white and Solarized for light, and for dark the grey the 2026-10-19 exploration drew for Mailroom.
+ * Each theme wears a palette, picked apart for light and for dark (src/theme/palette.ts). The defaults, lavender for
+ * light and indigo for dark, have neutrals that carry the accent's hue, so the canvas has some color of its own. The
+ * others set only the neutrals, over the default's: off-white and Solarized for light, and for dark the grey the
+ * 2026-10-19 exploration drew for Mailroom.
  */
 
 :root {
@@ -177,7 +178,7 @@
     --rave-dark: oklch(0.08 0.02 275);
 }
 
-/* The light theme's other palettes: only the neutrals change, and what is drawn in them; every hue is indigo's.
+/* The light theme's other palettes: only the neutrals change, and what is drawn in them; every hue is lavender's.
  * Off-white is a warm paper, its surfaces never quite white. */
 :root[data-light-palette='off-white']:not(.dark) {
     --background: oklch(0.96 0.008 85);
@@ -193,7 +194,8 @@
 }
 
 /* Solarized's light base tones: base2 the canvas, base3 a surface, base02 the text, base01 muted. The two bases are a
- * little lighter than Solarized's own, and base01 darker, so indigo's hues still read at 4.5:1 on them. */
+ * little lighter than Solarized's own, and base01 darker, so the status and section hues still read at 4.5:1 on
+ * them. */
 :root[data-light-palette='solarized']:not(.dark) {
     --background: oklch(0.948 0.026 92);
     --surface: oklch(0.988 0.02 90);
