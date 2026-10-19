@@ -10,13 +10,14 @@ and only if it is still pending, on that PR, and the poster's own. A reply's `re
 reply with a reaction and no text adds the reaction alone, and a PR's drafts that are all such open no review.
 
 On stdout, one JSON line each: `as`, the login it posts as; for a PR, `reaction` for each reaction added (the comment,
-the reaction, and the comment's URL), then `pending`, the pending review's node id and its id, once it has one; once
-it is submitted, `comment` for each reply (the comment it answered, the new comment's id and URL) and `review` (its id
-and URL); for an issue, `comment`; last, `end`, saying whether it submitted. `"submitted": false` is printed only when
-nothing but the reactions its `reaction` lines name was posted, with `pending` naming a pending review it could not
-delete; a pending review GitHub may have opened without saying so is looked for and deleted. No `end` line means the
-outcome is unknown: the submit may have reached GitHub. A reaction GitHub already holds is not added twice, so a
-reaction whose outcome is unknown is one to send again, never one that can post twice.
+the reaction, and the comment's URL), then `pending`, the pending review's node id and its id, once it has one; once it
+is submitted, `comment` for each reply (the comment it answered, the new comment's id and URL) and `review` (its id and
+URL); for an issue, `comment`; last, `end`, saying whether it submitted: `"submitted": true` once the review or the
+issue comment is submitted, or once every reaction is added when there is nothing else to post. `"submitted": false` is
+printed only when nothing but the reactions its `reaction` lines name was posted, with `pending` naming a pending review
+it could not delete; a pending review GitHub may have opened without saying so is looked for and deleted. No `end` line
+means the outcome is unknown: the submit may have reached GitHub. A reaction GitHub already holds is not added twice, so
+a reaction whose outcome is unknown is one to send again, never one that can post twice.
 
 It never approves, requests changes, resolves a thread, or deletes a review but the pending one it is handed.
 
