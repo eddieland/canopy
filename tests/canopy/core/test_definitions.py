@@ -479,7 +479,7 @@ def test_the_planner_reads_the_ticket_and_writes_nothing(
 
 def test_the_planner_has_no_shell_or_subagent_tools() -> None:
     frontmatter = (resources.agents_dir() / f"{definitions.PLANNER}.md").read_text().split("---")[1]
-    for tool in ("bash", "task"):
+    for tool in ("bash", "task", "external_directory"):
         assert f"\n  {tool}: deny\n" in frontmatter
 
 
@@ -526,33 +526,9 @@ def test_the_triage_agent_can_edit_nothing_and_has_no_shell(canopy_env: CanopyEn
         f"agents/{definitions.PLAN_TRIAGE}.md"
     ]
     ruleset = _opencode_ruleset(rendered.decode())
-    for permission in ("edit", "bash", "task", "webfetch"):
+    for permission in ("edit", "bash", "task", "webfetch", "external_directory"):
         assert _opencode_disabled(ruleset, permission)
     assert _opencode_action(ruleset, "edit", f"desks/PROJ-1/{plans.WRITTEN}") == "deny"
-
-
-#: Where OpenCode saves a tool's output too long to return whole, with XDG_DATA_HOME unset, as its rules spell it.
-TOOL_OUTPUT = "~/.local/share/opencode/tool-output"
-
-
-@pytest.mark.parametrize("name", definitions.agent_names())
-@pytest.mark.parametrize(
-    ("path", "allowed"),
-    [
-        (f"{TOOL_OUTPUT}/*", True),
-        ("~/.local/share/opencode/*", False),
-        ("~/.ssh/*", False),
-        ("/etc/*", False),
-    ],
-)
-def test_every_agent_may_read_a_cut_tool_output_and_nothing_else_outside(
-    canopy_env: CanopyEnv, name: str, path: str, *, allowed: bool
-) -> None:
-    # OpenCode asks for the directory of the file a tool reads, as `<dir>/*`. It allows its own tool output after an
-    # agent's rules too; canopy's rules allow it without that, and nothing later in a definition takes it back.
-    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[f"agents/{name}.md"]
-    ruleset = _opencode_ruleset(rendered.decode())
-    assert _opencode_action(ruleset, "external_directory", path) == ("allow" if allowed else "deny")
 
 
 def _opencode_ruleset(definition: str) -> list[tuple[str, str, str]]:

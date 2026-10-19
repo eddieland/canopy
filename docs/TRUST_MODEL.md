@@ -536,12 +536,11 @@ also add skills (prompt text, like the repository's other docs), MCP servers, pl
 same exposure as the build scripts a worker runs, T4), agents under other names, and permission rules for permissions
 canopy's definitions leave unset. The shadowing check matches file names and text: an `opencode.json` that builds an
 agent's name out of JSON escapes or `{file:...}` substitution gets past it, and could then add bash rules to canopy's
-agents. A scalar rule canopy sets (the worker's `edit` and `task`) replaces whatever such an agent sets for it, but
-OpenCode matches each permission key as a wildcard on the permission's name: an agent that sets the same permission
-and then a key such as `external_*` keeps that key after canopy's rule, and loosens it. `external_directory`, a table
-so that every agent can read OpenCode's saved copy of a long tool output, can be loosened by repeating it as well. All
-of these are defense in depth (T4), as the bash rules are, with branch protection (§7) the boundary for what a worker
-can push.
+agents. A scalar rule canopy sets (the worker's `edit`, `external_directory`, and `task`) replaces whatever such an
+agent sets for it, but OpenCode matches each permission key as a wildcard on the permission's name: an agent that sets
+the same permission and then a key such as `external_*` keeps that key after canopy's rule, and loosens it. These
+rules are defense in depth (T4), as the bash rules are, with branch protection (§7) the boundary for what a worker can
+push.
 
 ### T8. Network listeners
 

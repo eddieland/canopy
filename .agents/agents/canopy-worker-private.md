@@ -14,11 +14,7 @@ permission:
   # are refused. A joint run's working directory is its desk, whose links lead to the worktrees it leased (DESIGN
   # §18); the desk canary in tests/canopy/test_opencode_canary.py checks edits follow them and go nowhere else.
   edit: allow
-  # Nothing outside the working directory but where OpenCode saves a tool output too long to return whole, for the
-  # agent to read as the cut output says. OpenCode allows that on its own too; this does not rely on it.
-  external_directory:
-    "*": deny
-    "~/.local/share/opencode/tool-output/*": allow
+  external_directory: deny
   # Subagents run with their own, wider permissions; the worker must not reach them.
   task: deny
   # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
