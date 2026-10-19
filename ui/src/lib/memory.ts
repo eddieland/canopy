@@ -19,13 +19,15 @@ export interface MemorySegment {
 /**
  * What a worker wrote, cut where a hidden character is, each named by its code point as the CLI names it: what was
  * written to the journal by hand, past the bounds, shows whole. Never Markdown or a link: a link in a note would be a
- * worker's link the operator reads as canopy's (unlike other journal text, D113).
+ * worker's link the operator reads as canopy's (unlike other journal text, D113). With `lines`, for text that may hold
+ * paragraphs (a draft, a review comment), line feeds and tabs are kept, as `check_text` keeps them for a draft, and a
+ * CRLF is one line feed, as GitHub sends a comment written in its editor.
  */
-export function memorySegments(text: string): MemorySegment[] {
+export function memorySegments(text: string, { lines = false }: { lines?: boolean } = {}): MemorySegment[] {
     const segments: MemorySegment[] = []
     let plain = ''
-    for (const char of text) {
-        if (!HIDDEN.test(char)) {
+    for (const char of lines ? text.replaceAll('\r\n', '\n') : text) {
+        if (!HIDDEN.test(char) || (lines && (char === '\n' || char === '\t'))) {
             plain += char
             continue
         }

@@ -42,6 +42,15 @@ describe('visibleText', () => {
         ])
         expect(memorySegments('')).toEqual([])
     })
+
+    it('keeps line breaks and tabs in text that may hold paragraphs, and names every other hidden character', () => {
+        expect(memorySegments('one\r\n\ttwo\rthree\u2028', { lines: true })).toEqual([
+            { text: 'one\n\ttwo', hidden: false },
+            { text: '<U+000D>', hidden: true },
+            { text: 'three', hidden: false },
+            { text: '<U+2028>', hidden: true },
+        ])
+    })
 })
 
 describe('usedText', () => {

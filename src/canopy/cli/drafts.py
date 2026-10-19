@@ -216,5 +216,5 @@ def _print(conn: sqlite3.Connection, draft: records.Draft) -> None:
         ):
             click.echo(f"  > {c.author} at {c.created_at}: {visible(' '.join(c.body.split()))}")
     click.echo(f"  hash {drafts_manage.hash_of(text.body)}{edited}:")
-    for line in visible(text.body).split("\n") if "\n" in text.body else [visible(text.body)]:
-        click.echo(f"    {line}")
+    for line in text.body.split("\n"):
+        click.echo(f"    {visible(line)}")
