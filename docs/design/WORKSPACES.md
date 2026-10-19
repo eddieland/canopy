@@ -457,19 +457,28 @@ overseer. It is optional, and absent means none. `_run` checks each entry alone,
 those that pass:
 
 - a valid ticket key (§17), not the run's own ticket, and new to the journal: no ticket row and no follow-up record;
+- in the parent's project, as far as a key's shape shows it: where both keys have a prefix before their last `-`
+  (`PROJ-14`), the same prefix;
 - a repository in the map, or null;
 - at most `policy.max_follow_ups` from one run, the first in the result's order;
 - none from a run whose ticket is itself a follow-up, or from a private run.
+
+The harness reads no tracker (D003), so these checks are on the key's text alone: a worker that names a ticket it did
+not file, one a stranger filed in the same project, records it all the same, and it is then worked without a queue
+label. The prefix check keeps a key from another Jira project out; on GitHub every key is `GH-N`, so it keeps out
+nothing. The worker's re-read that the ticket links its parent, which is agent judgment, and review of every PR are
+the backstops; the building PR's T1 edit names this as an accepted gap.
 
 An entry refused is not recorded, and the run's harness note says why; the run's status stays the worker's, since a
 side output must not cost the run its PRs. A run with no valid result line records none: what it created are ordinary
 tickets, and its `unknown_result` item (§14) is the operator's cue.
 
 **The journal** records each follow-up as a fact of the loop's: its key, its parent, the run that reported it, its
-repository or none, and when. It is written only from a validated result, and generalizes the split children record,
-whose rows the migration carries over as follow-ups of their parents, reported by their split runs. A split child was
-filed by a labeled ticket's run at an authorized replier's request, so the new line authorizes it as it does any
-follow-up.
+repository or none, and when. It is written only from a validated result, and generalizes the split children record.
+The migration carries over as follow-ups, reported by their split runs, only the split children already worked: those
+with a run of their own, which a human's queue label authorized. A child the operator left unlabeled may have been left
+so on purpose, to close or reorder it, so upgrading must not authorize it: it stays an ordinary ticket, worked only with
+a queue label, and the building PR's release note says so and how to find them.
 
 **Working a follow-up.**
 
