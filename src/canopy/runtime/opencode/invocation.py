@@ -1,7 +1,7 @@
 """How a command template starts one of OpenCode's agents (DESIGN §12, §13).
 
 canopy's templates are the operator's to change, so this holds only what canopy writes into one: the defaults, which
-run `opencode run` with JSON events (`canopy.runtime.events`) and a session title, and the variable that points
+run `opencode run` with JSON events (`canopy.runtime.opencode.events`) and a session title, and the variable that points
 OpenCode at canopy's definitions rather than the repository's (D040). Without it, OpenCode looks for canopy's agent in
 the repository and, not finding it, runs its default agent, which allows everything.
 """
