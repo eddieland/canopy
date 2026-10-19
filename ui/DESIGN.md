@@ -1086,13 +1086,17 @@ sliver beside four others; and its axis names short call numbers without measuri
   (`PlanChip`, `waiting on you` while it waits) and its age, then after a hairline its mode, as a transcript's are:
   with the plan this one replaces, `Changes since plan 1`, a `Toggle` that marks what changed since it over the plan
   (the words added on `diff-add` at 18%, those removed struck through on `diff-del` at 14%, where they were, as `ins`
-  and `del`), pressed as a waiting plan opens, since that is when it is read for what changed; while pressed, how many
+  and `del`; a block added whole, a paragraph or heading, as one: `diff-add` at 10% behind it and a 2px bar of it at
+  its left, in a negative margin so its words stay put, and a table's cell added whole on the tint alone, so a new
+  section or table reads as one change, not as a pill for each run its code spans and marks break it into), pressed as
+  a waiting plan opens, since that is when it is read for what changed; while pressed, how many
   changes it marks (`12 changes`, a removal and what replaced it one) and ghost `icon-xs` buttons that step the cursor
   to the change before or after it, round to the other end, the plan scrolling to it. Last, a ghost `xs` `Outline ▾`
   (`src/lib/plan-outline.ts`) lists the plan's headings, a step deeper for each level under its shallowest, the
   section the page has scrolled to as it opens in the accent (`aria-current`), and puts the one chosen at the top of
   the page under the header, the cursor at its start where the plan may be edited. While the changes are marked, a
-  commented passage drops its tint, so no word wears a comment's and a change's at once; the open one keeps its own.
+  commented passage drops its tint, so no word wears a comment's and a change's at once, but keeps a 1px underline in
+  the accent, so the operator still sees where the comments are; the open one keeps its own.
   The toolbar takes the header's second line, under the label. The header is `sticky`, and what the editor scrolls
   into view (the cursor as it types, a passage a comment shows) stops 80px below it. A selection also shows a
   `Comment` bubble over it. A commented passage sits on the accent's tint at 14%; the open one, or the one being

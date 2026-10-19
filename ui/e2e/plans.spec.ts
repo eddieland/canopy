@@ -35,7 +35,7 @@ test("a ticket's newest plan opens in the editor, its comments on their passages
     await expect(page.getByRole('button', { name: 'Changes since plan 1' })).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByTestId('plan-bar').getByRole('button', { name: 'Changes since plan 1' })).toHaveCount(0)
     await expect(page.getByText(/^\d+ changes$/u)).toBeVisible()
-    await expect(plan(page).locator('ins').filter({ hasText: 'owner_timezone()' }).first()).toBeVisible()
+    await expect(plan(page).locator('.plan-cell-add').filter({ hasText: 'owner_timezone()' })).toBeVisible()
 })
 
 test("the plan's foot sits in its panel, with one primary, and at 820px takes two lines", async ({ page }) => {

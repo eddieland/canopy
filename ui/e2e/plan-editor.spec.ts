@@ -37,6 +37,9 @@ async function topGap(a: Locator, b: Locator): Promise<number> {
     return Math.abs((boxA?.y ?? 0) - (boxB?.y ?? Infinity))
 }
 
+// What the changes since the plan before are marked with: words added and removed, and blocks and cells added whole.
+const MARKS = 'ins, del, .plan-block-add, .plan-cell-add'
+
 function comments(page: Page): Locator {
     return page.getByRole('article')
 }
@@ -544,17 +547,19 @@ test('Ask for changes stays at the bottom of the page while the plan is read, an
 test('Changes marks what the plan changed since the one it replaces, and off, marks nothing', async ({ page }) => {
     const changes = page.getByRole('button', { name: 'Changes since plan 1' })
     await expect(changes).toHaveAttribute('aria-pressed', 'false')
-    await expect(plan(page).locator('ins, del')).toHaveCount(0)
+    await expect(plan(page).locator(MARKS)).toHaveCount(0)
     await changes.click()
     await expect(changes).toHaveAttribute('aria-pressed', 'true')
     await expect(plan(page).locator('ins').filter({ hasText: 'three lines' })).toBeVisible()
     await expect(plan(page).locator('del').filter({ hasText: 'a row per line' })).toBeVisible()
-    await expect(plan(page).locator('ins').filter({ hasText: 'Scheduling exports' })).toBeVisible()
+    // A paragraph added whole is marked as one block, not as its words.
+    await expect(plan(page).locator('.plan-block-add').filter({ hasText: 'Scheduling exports' })).toBeVisible()
+    await expect(plan(page).locator('ins').filter({ hasText: 'Scheduling exports' })).toHaveCount(0)
     // What it marks is no part of the plan: its Markdown is as it was.
     await page.getByRole('button', { name: 'Show Markdown' }).click()
     await expect(page.getByLabel('Plan Markdown')).not.toContainText('a row per line')
     await changes.click()
-    await expect(plan(page).locator('ins, del')).toHaveCount(0)
+    await expect(plan(page).locator(MARKS)).toHaveCount(0)
 })
 
 test('the changes are counted, and Next and Previous step the cursor to each, round to the other end', async ({
@@ -565,10 +570,10 @@ test('the changes are counted, and Next and Previous step the cursor to each, ro
     // From the top, the one before is the last.
     await page.getByRole('button', { name: 'Previous change' }).click()
     await expect(plan(page)).toBeFocused()
-    await expect(plan(page).locator('ins, del').last()).toBeInViewport()
+    await expect(plan(page).locator(MARKS).last()).toBeInViewport()
     // And the one after the last is the first.
     await page.getByRole('button', { name: 'Next change' }).click()
-    await expect(plan(page).locator('ins, del').first()).toBeInViewport()
+    await expect(plan(page).locator(MARKS).first()).toBeInViewport()
 })
 
 test('Ask for changes sends the open comments, each on its passage, with the note', async ({ page }) => {
