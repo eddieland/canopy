@@ -136,4 +136,4 @@ Your last line of stdout must be exactly one JSON object and nothing after it. O
 when `{{PLAN_OUT}}` holds one: not empty, and at most {{MAX_PLAN_CHARS}} characters. The summary is your report to the
 operator: what the plan proposes, in a paragraph. Do not repeat the plan in your messages.
 
-{"status":"done|blocked|failed","summary":"<one paragraph>","question":"<only when blocked>"}
+{"status":"done|blocked|failed","summary":"<your report, line breaks sparingly>","question":"<only when blocked>"}
