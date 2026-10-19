@@ -1055,14 +1055,16 @@ sliver beside four others; and its axis names short call numbers without measuri
   never asks. Closing the tab asks too, in the browser's own words. A question about one item, such as deleting a
   comment, asks in that item's place instead.
 - **A plan in its editor** (`PlanEditor`, `src/components/plan-editor.tsx`; docs/design/PLANNING.md §25): the plan in a
-  `Plan` panel, and the comments in a `Comments` panel beside it, 20rem wide, once
+  `Plan` panel, and the comments in a `Comments` panel beside it, 20rem to 24rem wide as the page has room, once
   the page gives both 60rem (a container query, so the rail's width counts), and under it, as a list, below that. Under
   the plan, the comment being written, and a thread opened by a click on its passage, float over the plan under that
   passage instead, a card 24rem wide on `surface` with a hairline border, so the page never goes down to the list and
   back; it goes when the thread closes or the comment is sent or dropped. The plan's panel stops at its text's measure,
   51rem, so on a wide page the comments stay against the text and the room left over goes after them. Beside the plan,
-  the comments are its margin, as a shared document's are (`src/lib/plan-margin.ts`): each open comment is a card of its
-  own at the height of its passage, in the plan's order, and one that would overlap the card before it moves down to
+  the comments are its margin, as a shared document's are (`src/lib/plan-margin.ts`): their panel drops its border and
+  surface, so the room above and between the cards reads as margin, not an empty box, and its header, their count,
+  sticks to the top of the page as the plan's does; each open comment is a card of its own, on `surface`, at the height
+  of its passage, in the plan's order, and one that would overlap the card before it moves down to
   clear it. The open one, or the comment being written, sits exactly at its passage, and the cards before it move up to
   make room. A comment being written opens in its place among them, beside its passage, so opening one never scrolls the
   page away from what it is on. Each card is placed by its top margin and stays in the column's flow, so the comments
@@ -1084,7 +1086,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   the plan. An empty plan shows its prompt in `muted-foreground` where its first line starts:
   `Write the plan here, or paste its Markdown.` The plan's header says where the plan stands, at its right: its chip
   (`PlanChip`, `waiting on you` while it waits) and its age, then after a hairline its mode, as a transcript's are:
-  with the plan this one replaces, `Changes since plan 1`, a `Toggle` that marks what changed since it over the plan
+  with the plan this one replaces, `Changes since plan 1`, a `Toggle` led by the diff icon, so it reads as a control
+  while off too, that marks what changed since it over the plan
   (the words added on `diff-add` at 18%, those removed struck through on `diff-del` at 14%, where they were, as `ins`
   and `del`; a block added whole, a paragraph or heading, as one: `diff-add` at 10% behind it and a 2px bar of it at
   its left, in a negative margin so its words stay put, and a table's cell added whole on the tint alone, so a new
