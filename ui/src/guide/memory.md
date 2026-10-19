@@ -136,7 +136,9 @@ lessons off, the page shows only Ticket notes, and each note still has Forget.
   pick another; a note's lesson is for every repository unless you pick one. Before you save, the form names the lesson
   in force under the same key, if there is one, since yours replaces it.
 - **Promote as written**, the first button, promotes the proposal at once, in its own words and for its own repository,
-  as `canopy memory promote ID` does. Most good proposals need no editing, and this saves the form.
+  as `canopy memory promote ID` does. Most good proposals need no editing, and this saves the form. A proposal from a
+  private ticket's run never promotes in one click: its first button is **Promote**, which opens the form, so you read
+  the warning before you save, not after.
 - It promotes a ticket's note too, done or invalidated, as long as the note still has its text: what a ticket taught
   is often clearest once its PR has merged. The note stays its ticket's.
 - **Reject** ends a proposal. Nothing asks twice: nothing is lost that a worker can't propose again.

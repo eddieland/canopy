@@ -243,38 +243,41 @@ Rules:
   buttons are, and only while lessons are on, but Forget under a ticket's note, which shows while ticket notes are on,
   since forgetting a note needs no lesson; a tier that is off shows no panel on the memory page, so with lessons off it
   holds Ticket notes alone: under a proposal an outline `Promote as written`, which saves at once, since most proposals
-  need no edit, and a muted ghost `Edit and promote`, which opens the form, then, apart from both at the line's end, a
-  ghost `Reject`, which cannot be undone, `Promote` under a ticket's note that keeps its text, on the memory page as on
-  its ticket's, and `Renew` under a lesson, outlined once it is `due` or `wrong` and a muted ghost before, since only
-  then does it ask for a decision; a lesson that asks nothing keeps its line's room but shows it only while its row is
-  hovered or holds the focus, as a row's copy button does, and always on a touch screen; each ends its line with a ghost
-  `Forget`, muted at rest, the rarest verb and one that cannot be undone, and in `status-failed` while its row is
-  hovered or it has the focus, but on an attention item. A memory's row leads with its standing, a dot and its word in a
-  run state's color (`memoryStand`): `wrong` (failed) and `due` (blocked) for a lesson that calls for the operator,
-  `pending` (blocked), `active` (done), `superseded` or `invalid` (stopped), and `recorded` (stopped) for one in force
-  under a tier that only records, which no run reads, so a row never reads as in force under a `recording` band; then
-  its ref, its ticket in a list across tickets, its repository's chip, each in a fixed column, the key in the free
-  column, and its use only once a run relied on it. Under the text, one line says where it came from, the commit on the
-  run's hover, a proposal's run's end, ticket, and `private` chip (`ProposalFacts`) among it. In a list of proposals,
-  where every row is pending, the standing says the time left in its place (`3d left`, muted, in `status-blocked` in the
-  last two days, `lapsing` once past). On the memory page the Lessons and a ticket's opened notes take the Proposals'
-  columns (`memory-across`), the ticket's empty, so key and text line up down the page, and the tickets with notes flip
-  with an `OrderToggle`, newest first by default; and a ticket's opened notes sit on `surface-raised` at 40%, so they
-  read as its own. A ticket's row on the memory page carries its title (`TicketTitle`). A row's ref copies
-  (`CopyButton`, shown on the row's hover), since Forget asks for it typed. A lesson names what it was promoted from, as
-  the CLI does, and when a run reported it wrong. **Edit and promote** (or `Promote` under a note) opens its form in
-  place of that line, on the surface with a hairline: the lesson's words in a field, starting as the source's own, with
-  their count against the bound in the readout at its corner (in `status-failed` past it, when the button is disabled);
-  the repositories whose runs read it as a segmented control, `every repository` first for a source that names none; a
-  muted line naming the lesson in force under its key that it would replace, as plain `MemoryText`, reserved while the
-  lessons are read; the CLI's warning in `status-blocked` while the text is still a private ticket's run's own words;
-  and `Promote memory:5` with a ghost `Cancel`. **Forget** asks for the memory's ref typed out, in the same form as a
-  ticket's Forget asks for its key (`ForgetForm`). A row can leave once its verb is done, so what it did is said once,
-  in the CLI's words, under the panel's header or band, and only a refusal stays under the row, but one saying the
-  memory changed under it (`not_pending`, `forgotten`, `unknown`, decided from the attention list or the CLI), which
-  reads memory again, so its row may leave, and is said under the list too; proposals all decided from the page say so
-  in the accent. On the attention list, a `memory_proposal` item lists its proposals with `Promote as written`, which
-  saves at once, and `Reject`; a `lesson_review`, its lessons due with `Renew` alone.
+  need no edit, but never for a private ticket's run's, whose words may hold what the operator kept off the tracker: its
+  first button is `Promote`, which opens the form and its warning before the save, and on an attention item, which has
+  no form, a muted line says to promote it from the memory page; and a muted ghost `Edit and promote`, which opens the
+  form, then, apart from both at the line's end, a ghost `Reject`, which cannot be undone, `Promote` under a ticket's
+  note that keeps its text, on the memory page as on its ticket's, and `Renew` under a lesson, outlined once it is `due`
+  or `wrong` and a muted ghost before, since only then does it ask for a decision; a lesson that asks nothing keeps its
+  line's room but shows it only while its row is hovered or holds the focus, as a row's copy button does, and always on
+  a touch screen; each ends its line with a ghost `Forget`, muted at rest, the rarest verb and one that cannot be
+  undone, and in `status-failed` while its row is hovered or it has the focus, but on an attention item. A memory's row
+  leads with its standing, a dot and its word in a run state's color (`memoryStand`): `wrong` (failed) and `due`
+  (blocked) for a lesson that calls for the operator, `pending` (blocked), `active` (done), `superseded` or `invalid`
+  (stopped), and `recorded` (stopped) for one in force under a tier that only records, which no run reads, so a row
+  never reads as in force under a `recording` band; then its ref, its ticket in a list across tickets, its repository's
+  chip, each in a fixed column, the key in the free column, and its use only once a run relied on it. Under the text,
+  one line says where it came from, the commit on the run's hover, a proposal's run's end, ticket, and `private` chip
+  (`ProposalFacts`) among it. In a list of proposals, where every row is pending, the standing says the time left in its
+  place (`3d left`, muted, in `status-blocked` in the last two days, `lapsing` once past). On the memory page the
+  Lessons and a ticket's opened notes take the Proposals' columns (`memory-across`), the ticket's empty, so key and text
+  line up down the page, and the tickets with notes flip with an `OrderToggle`, newest first by default; and a ticket's
+  opened notes sit on `surface-raised` at 40%, so they read as its own. A ticket's row on the memory page carries its
+  title (`TicketTitle`). A row's ref copies (`CopyButton`, shown on the row's hover), since Forget asks for it typed. A
+  lesson names what it was promoted from, as the CLI does, and when a run reported it wrong. **Edit and promote** (or
+  `Promote` under a note) opens its form in place of that line, on the surface with a hairline: the lesson's words in a
+  field, starting as the source's own, with their count against the bound in the readout at its corner (in
+  `status-failed` past it, when the button is disabled); the repositories whose runs read it as a segmented control,
+  `every repository` first for a source that names none; a muted line naming the lesson in force under its key that it
+  would replace, as plain `MemoryText`, reserved while the lessons are read; the CLI's warning in `status-blocked` while
+  the text is still a private ticket's run's own words; and `Promote memory:5` with a ghost `Cancel`. **Forget** asks
+  for the memory's ref typed out, in the same form as a ticket's Forget asks for its key (`ForgetForm`). A row can leave
+  once its verb is done, so what it did is said once, in the CLI's words, under the panel's header or band, and only a
+  refusal stays under the row, but one saying the memory changed under it (`not_pending`, `forgotten`, `unknown`,
+  decided from the attention list or the CLI), which reads memory again, so its row may leave, and is said under the
+  list too; proposals all decided from the page say so in the accent. On the attention list, a `memory_proposal` item
+  lists its proposals with `Promote as written`, which saves at once, and `Reject`; a `lesson_review`, its lessons due
+  with `Renew` alone.
 - **Reload** stands before the pause only while the server serves a newer build of the UI than the page loaded
   (`NewerBuild`): a ghost button on the accent's tint at 14%, its label in the accent, the action to take without a
   fill that outshouts the ghost buttons beside it, saying on hover why and that unsent text is lost. It never
