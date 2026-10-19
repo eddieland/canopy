@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { QueryClient } from '@tanstack/react-query'
-import { ArrowUpFromLine, Eraser, RefreshCw, X } from 'lucide-react'
+import { ArrowUpFromLine, Eraser, Pencil, RefreshCw, X } from 'lucide-react'
 import { useId, useState } from 'react'
 import type { ReactNode, SubmitEvent } from 'react'
 
@@ -49,18 +49,18 @@ export function MemorySaid({ said, className }: { said: string | null; className
 }
 
 /**
- * A proposal's verbs, under its row: Promote, which opens the form for the lesson's words and repository, As written,
- * which promotes it at once in its own, Reject, and at the line's end Forget, for a proposal whose text must go and
- * not merely be declined. With `asWritten`, as on an
- * attention item, Promote makes the lesson at once, in the proposal's own words and for its repository, as `canopy
- * memory promote ID` does. With `forget` false, as there, no Forget.
+ * A proposal's verbs, under its row: Promote as written, the outline, which makes the lesson at once in the proposal's
+ * own words and for its repository, as `canopy memory promote ID` does, since most proposals need no edit; Edit and
+ * promote, which opens the form for the lesson's words and repository; and at the line's end, apart from both, Reject,
+ * and Forget, for a proposal whose text must go and not merely be declined. With `edit` false, as on an attention
+ * item, no Edit and promote; with `forget` false, as there, no Forget.
  */
 export function ProposalActions({
     proposal,
-    asWritten = false,
+    edit = true,
     forget = true,
     onSaid,
-}: Said & { proposal: MemoryEntry; asWritten?: boolean; forget?: boolean }) {
+}: Said & { proposal: MemoryEntry; edit?: boolean; forget?: boolean }) {
     const client = useQueryClient()
     const [open, setOpen] = useState(false)
     const [confirming, setConfirming] = useState(false)
@@ -89,38 +89,42 @@ export function ProposalActions({
                         variant="outline"
                         size="xs"
                         title={`canopy memory promote ${proposal.id}`}
-                        onClick={() => (asWritten ? promote.mutate() : setOpen(true))}
+                        onClick={() => promote.mutate()}
                         disabled={pending}
                     >
                         <ArrowUpFromLine />
-                        {asWritten ? 'Promote as written' : 'Promote'}
+                        Promote as written
                     </Button>
-                    {/* Most proposals are promoted in their own words: one click, as `canopy memory promote ID`. */}
-                    {!asWritten && (
+                    {edit && (
                         <Button
                             variant="ghost"
                             size="xs"
-                            title={`canopy memory promote ${proposal.id}: in its own words and for its repository`}
-                            onClick={() => promote.mutate()}
+                            className="text-muted-foreground"
+                            title={`canopy memory promote ${proposal.id} --text TEXT --repo REPO`}
+                            onClick={() => setOpen(true)}
                             disabled={pending}
                         >
-                            As written
+                            <Pencil />
+                            Edit and promote
                         </Button>
                     )}
-                    <Button
-                        variant="ghost"
-                        size="xs"
-                        className="text-muted-foreground"
-                        title={`canopy memory reject ${proposal.id}`}
-                        onClick={() => reject.mutate()}
-                        disabled={pending}
-                    >
-                        <X />
-                        Reject
-                    </Button>
-                    {forget && !confirming && (
-                        <ForgetButton memory={proposal} onClick={() => setConfirming(true)} disabled={pending} />
-                    )}
+                    {/* Reject cannot be undone: it stands apart from the promotes, at the line's end with Forget. */}
+                    <span className="ml-auto flex items-center gap-2">
+                        <Button
+                            variant="ghost"
+                            size="xs"
+                            className="text-muted-foreground"
+                            title={`canopy memory reject ${proposal.id}`}
+                            onClick={() => reject.mutate()}
+                            disabled={pending}
+                        >
+                            <X />
+                            Reject
+                        </Button>
+                        {forget && !confirming && (
+                            <ForgetButton memory={proposal} onClick={() => setConfirming(true)} disabled={pending} />
+                        )}
+                    </span>
                 </span>
             )}
             {open && <PromoteForm source={proposal} onSaid={onSaid} onClose={() => setOpen(false)} />}
