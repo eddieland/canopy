@@ -241,6 +241,10 @@ If code and the design disagree, the design doc wins until a decision entry says
   a flaky test says it passed the burn-in: one green run cannot tell a fix from a failure made rarer.
 - Prompts are not unit-tested. `canopy tick --dry-run` writes the overseer's plan to the `decisions` table; that table
   is the evaluation corpus for prompt changes. Do not add prompt "tests" that assert on model output.
+  Their sizes are recorded in `.agents/sizes.toml`. The number is a record, not a limit: grow or shrink a prompt as
+  the work needs and update its number in the same PR, so the diff shows by how much.
+  `tests/canopy/test_prompt_sizes.py` names the line to update, and `make prompt-sizes` prints the sizes with
+  estimated tokens.
 
 ## Do not build (unless a ROADMAP milestone says so)
 
