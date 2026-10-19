@@ -26,10 +26,11 @@ The items come in four groups, in this order, and within a group the one open lo
    a lesson a worker proposed for [memory](memory).
 4. **Findings**: what your chores found.
 
-The counters above the list say how many runs are going and how many wait on you, how long the oldest question has
-waited, and how the items break down. The nav's badge shows the same, and the browser tab's title counts the items
-that block work, so a glance at the tab says whether to look. Findings, `needs reviewer`, and `ready to merge` don't
-count there: they're news, not blockers.
+The counters above the list say how many runs are going, how many tickets wait on you and how long the oldest question
+has waited, and how many items the list holds. How those items break down is the nav's badge, on every page, so the
+counters don't say it again; one page saying a number five times doesn't make it truer. The browser tab's title counts
+the items that block work, so a glance at the tab says whether to look. Findings, `needs reviewer`, and
+`ready to merge` don't count there: they're news, not blockers.
 
 ## An item
 
