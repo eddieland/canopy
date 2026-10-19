@@ -1,4 +1,7 @@
-"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, check `canopy`, run and check the overseer, publish."""
+"""One tick of the loop (DESIGN §6): lock, migrate, reconcile, check `canopy`, run and check the overseer, publish.
+
+A tick that closes `ok` notes, on each ticket, what it did about the operator's messages it read (`acknowledge.py`).
+"""
 
 from __future__ import annotations
 
@@ -24,7 +27,7 @@ from canopy.core.config import render_command
 from canopy.core.items import one_line
 from canopy.core.vocab import TickStatus
 from canopy.infra import lock, logs, procs, resources
-from canopy.loop import attention, duties, state
+from canopy.loop import acknowledge, attention, duties, state
 from canopy.memory import attention as memory_attention
 from canopy.memory import reconcile as memory_reconcile
 from canopy.reviews import reconcile as review_reconcile
@@ -288,7 +291,12 @@ def _locked(ctx: Context, *, dry_run: bool, woken_by: WokenBy | None) -> Outcome
         return finish(TickStatus.OVERSEER_FAILED, f"{prefix}overseer left duties undone: {'; '.join(undone)}", usage)
     actions = Counter(d.action for d in decisions)
     counts = ", ".join(f"{action}={n}" for action, n in sorted(actions.items())) or "none"
-    return finish(TickStatus.OK, f"{prefix}{actions.total()} decisions: {counts}", usage)
+    # Closing `ok` acknowledges the operator's messages the tick read, so each ticket's conversation says what the tick
+    # did about them, in the same transaction: a tick that dies between the two leaves neither (DESIGN §22, Messages).
+    with db.transaction(ctx.conn):
+        if not dry_run:
+            acknowledge.note(ctx.conn, tick_id)
+        return finish(TickStatus.OK, f"{prefix}{actions.total()} decisions: {counts}", usage)
 
 
 def _query_due(ctx: Context, now: datetime) -> bool:

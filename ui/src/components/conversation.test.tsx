@@ -72,6 +72,23 @@ describe('Conversation', () => {
         expect(within(item(5)).getByText('reply via cli')).toBeDefined()
     })
 
+    it("heads canopy's note on a tick with who wrote it and the message it answers, never as unread", async () => {
+        const note = message({
+            id: 6,
+            kind: 'note',
+            source: 'canopy',
+            channel: 'tick',
+            answers: 5,
+            body: 'Tick 12 read message 5: started run 57 (resume).',
+        })
+        await renderRouted(<Conversation messages={[LATER, note]} />, { client: knowing(4) })
+        expect(within(item(6)).getByText('canopy')).toBeDefined()
+        expect(within(item(6)).getByText('note answering #5')).toBeDefined()
+        expect(within(item(6)).getByText('Tick 12 read message 5: started run 57 (resume).')).toBeDefined()
+        // Only the operator's own messages wait on a tick; canopy's note is what a tick said.
+        expect(within(item(6)).queryByText('waiting for the next tick')).toBeNull()
+    })
+
     it('marks a tracker comment as data that authorizes nothing, with its author and whether it was cut', async () => {
         const comment = message({
             id: 6,
