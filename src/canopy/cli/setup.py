@@ -16,8 +16,9 @@ from click.shell_completion import BashComplete, FishComplete, ShellComplete, Zs
 
 from canopy.cli import workspace as cli_workspace
 from canopy.cli.common import CliError, runner_of
-from canopy.core import config, conversation, definitions, hostgit, workspace
+from canopy.core import config, conversation, hostgit, workspace
 from canopy.infra import procs, resources
+from canopy.runtime import project_config
 from canopy.serve import secret
 from canopy.setup import init
 from canopy.setup import sandbox as setup_sandbox
@@ -150,7 +151,7 @@ def _init_workspace(click_ctx: click.Context, root: Path, provider: str | None, 
         click.echo()
         click.echo(sandbox, nl=False)
     # A repository can carry copies of canopy's agents that an earlier single-repository init committed there.
-    report.shadowing += [path for repo in ws.repos if repo.cloned for path in definitions.shadowing(repo.path)]
+    report.shadowing += [path for repo in ws.repos if repo.cloned for path in project_config.shadowing(repo.path)]
     _print_shadowing(report)
     cli_workspace.check_synced(synced)
     return 0
@@ -168,7 +169,7 @@ def _print_files(report: init.Report) -> None:
 def _print_shadowing(report: init.Report) -> None:
     if report.shadowing:
         click.echo()
-        click.echo(f"Warning: {definitions.shadowing_message(report.shadowing)}")
+        click.echo(f"Warning: {project_config.shadowing_message(report.shadowing)}")
         click.echo(
             "  Earlier versions of `canopy init` put them there. Agent runs refuse to start until they are gone."
         )

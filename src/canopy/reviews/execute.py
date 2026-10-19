@@ -17,12 +17,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
-from canopy.core import agent_output, conversation, db, definitions, hostgit, outbox, pools, review_diff
+from canopy.core import conversation, db, definitions, hostgit, outbox, pools, review_diff
 from canopy.core import review_result as result
 from canopy.core.config import render_command
 from canopy.core.vocab import ReviewRunStatus
 from canopy.infra import logs, procs, stopping
 from canopy.reviews import start
+from canopy.runtime import events, project_config
 
 if TYPE_CHECKING:
     from canopy.core import records
@@ -150,9 +151,9 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     cwd.mkdir(mode=0o700)
     (cwd / start.CHECKOUT_LINK).symlink_to(slot, target_is_directory=True)
     # The reviewer's own directory is canopy's, but OpenCode may read config above it, as in a workspace's checkout.
-    shadowing = [found for place in (cwd, ctx.workspace.root) for found in definitions.shadowing(place)]
+    shadowing = [found for place in (cwd, ctx.workspace.root) for found in project_config.shadowing(place)]
     if shadowing:
-        raise _SetupError(definitions.shadowing_message(shadowing))
+        raise _SetupError(project_config.shadowing_message(shadowing))
     prompt = start.prompt_file(ctx, run.id).read_text(encoding="utf-8")
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     argv = render_command(ctx.config.runtime.review_cmd, prompt, snapshot, f"review {run.pr_url}")
@@ -174,7 +175,7 @@ def _work(ctx: Context, run: records.ReviewRun, out: TextIO, log: logs.TickAdapt
     out.write(f"--- reviewer exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
     # Also after a timeout: whatever it printed before the kill names its session and what it had spent.
-    output = agent_output.read(done.stdout)
+    output = events.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
             ctx.conn, "review_runs", run_id, output.session_id, output.usage, digest=snapshot.name, tools=output.tools

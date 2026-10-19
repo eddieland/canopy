@@ -50,6 +50,8 @@ from pydantic import (
 from canopy.core import chore_result, contract, hostgit
 from canopy.core.vocab import MemoryMode, PoolKind, ReplyMode
 from canopy.infra import procs
+from canopy.runtime import agents, invocation
+from canopy.runtime.agents import MAX_SKILL_NAME, SKILL_NAME_RE, TOOL_PART_RE, McpTools
 
 if TYPE_CHECKING:
     from pydantic.fields import FieldInfo
@@ -72,7 +74,6 @@ REMOVED_KEYS = {
 PROMPT = "{prompt}"
 # Replaced with the snapshot of canopy's agent definitions and skills (D040).
 DEFINITIONS_DIR = "{definitions_dir}"
-DEFINITIONS_ENV_PREFIX = f"env OPENCODE_CONFIG_DIR={DEFINITIONS_DIR} "
 # Replaced with the run's session title: a worker's `<KEY> <kind>: <ticket title>`, `tick <id>`, `chore:<name>`, or
 # `review <PR URL>` (DESIGN §13). Optional in every template.
 TITLE = "{title}"
@@ -237,12 +238,12 @@ def _command_template(value: str) -> str:
 
 
 def _agent_template(value: str) -> str:
-    # Without the placeholder, OpenCode would look for canopy's agent in the repository and, not finding it, run its
+    # Without the placeholder, the runtime would look for canopy's agent in the repository and, not finding it, run its
     # default agent, which allows everything (D040). The old default templates lack it, so say what to write instead.
     if DEFINITIONS_DIR not in value:
         raise ValueError(
             f"must contain {DEFINITIONS_DIR}, the directory canopy's agent definitions are in (D040). "
-            f"For OpenCode, write: '{DEFINITIONS_ENV_PREFIX}{value}'"
+            f"For {invocation.NAME}, write: '{invocation.with_config_dir(DEFINITIONS_DIR, value)}'"
         )
     return value
 
@@ -329,11 +330,6 @@ class Section(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, validate_default=True, defer_build=True)
 
 
-# A part of an OpenCode tool name: an MCP server's name or one of its tools', as OpenCode sanitizes them. They are
-# rendered into the private worker's definition (DESIGN §22), so nothing else may reach it.
-TOOL_PART_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
-
-
 def _tool_part(value: str) -> str:
     if not TOOL_PART_RE.fullmatch(value):
         raise ValueError(f"{value!r} must match {TOOL_PART_RE.pattern}")
@@ -376,21 +372,13 @@ def link_template(placeholder: str) -> AfterValidator:
     return AfterValidator(check)
 
 
-@dataclass(frozen=True)
-class TrackerTools:
-    """The tracker's MCP server, and the tools of it a private worker may call: every other one is denied."""
-
-    server: str
-    allowed: tuple[str, ...]
-
-
-# Each shipped provider's usual MCP server, as an operator's OpenCode config usually names it, and the tools of it a
+# Each shipped provider's usual MCP server, as an operator's runtime config usually names it, and the tools of it a
 # private worker needs: reading tickets, and for GitHub, whose server is also the one PRs go through, the PR tools. None
 # of them writes to an issue (DESIGN §22). Named from the servers' tool lists (Atlassian's Rovo MCP server v2, GitHub's
 # MCP server v2.0.1); a name wrong here fails closed. Atlassian's server lists only its primary tools unless its URL
 # asks for `?tools=all`, and runs the rest through `execute*` tools that read or write by argument; those are denied.
-DEFAULT_TRACKER_TOOLS: dict[str, TrackerTools] = {
-    "jira": TrackerTools(
+DEFAULT_TRACKER_TOOLS: dict[str, McpTools] = {
+    "jira": McpTools(
         "atlassian",
         (
             "atlassianUserInfo",
@@ -407,7 +395,7 @@ DEFAULT_TRACKER_TOOLS: dict[str, TrackerTools] = {
             "searchJiraIssuesUsingJql",
         ),
     ),
-    "github": TrackerTools(
+    "github": McpTools(
         "github",
         (
             "get_me",
@@ -444,7 +432,7 @@ class Tracker(Section):
     # last live one that ran it works the tickets the journal knows and leaves the query out. 0 runs it every tick.
     # Private: it sets the operator's spend, and how long a newly labeled ticket can wait to be found.
     query_every_minutes: Annotated[Count, Scope.PRIVATE] = 0
-    # The tracker's MCP server, as the operator's OpenCode config names it, and the tools of it a private worker may
+    # The tracker's MCP server, as the operator's runtime config names it, and the tools of it a private worker may
     # call (DESIGN §22). Empty and unset mean the provider's defaults. Private: they decide what a private worker can
     # write, which a shared workspace file must not (TRUST_MODEL T7).
     mcp_server: Annotated[StrictStr, Scope.PRIVATE, AfterValidator(_server_name)] = ""
@@ -454,7 +442,7 @@ class Tracker(Section):
     # must not.
     private: Annotated[StrictBool, Scope.PRIVATE] = False
 
-    def tools(self) -> TrackerTools | None:
+    def tools(self) -> McpTools | None:
         """The server and tools a private worker gets, or None if neither config nor a default names any.
 
         Returns:
@@ -466,7 +454,7 @@ class Tracker(Section):
         allowed = self.read_tools if self.read_tools is not None else (default.allowed if default is not None else ())
         if not server or not allowed:
             return None
-        return TrackerTools(server, tuple(allowed))
+        return McpTools(server, tuple(allowed))
 
 
 #: The most `policy.trivial` may say: it is in every triage prompt (DESIGN §25).
@@ -543,13 +531,8 @@ class Trust(Section):
         return self
 
 
-# OpenCode's rule for a skill's name: lowercase letters and digits in words joined by single hyphens, at most 64.
-SKILL_NAME_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
-MAX_SKILL_NAME = 64
-
-
 def _skill_name(value: str) -> str:
-    # Empty means unset. The name is quoted in worker prompts, so it is checked as OpenCode would (DESIGN §8).
+    # Empty means unset. The name is quoted in worker prompts, so it is checked as the runtime would (DESIGN §8).
     if value and (len(value) > MAX_SKILL_NAME or not SKILL_NAME_RE.fullmatch(value)):
         raise ValueError(
             f"must be empty, or a skill name of at most {MAX_SKILL_NAME} lowercase letters and digits in words joined "
@@ -601,56 +584,36 @@ class Pools(Section):
     backend: Annotated[PoolKind, Scope.PRIVATE] = PoolKind.TREEHOUSE
 
 
+def _default_cmd(agent: str) -> str:
+    return invocation.default_template(agent, definitions_dir=DEFINITIONS_DIR, title=TITLE, prompt=PROMPT)
+
+
 class Runtime(Section):
     """The `[runtime]` table: agent command templates and timeouts."""
 
-    overseer_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-overseer --format json --thinking "
-        "--title={title} {prompt}"
-    )
+    overseer_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.OVERSEER)
     #: The overseer's temperature, or -1 to set none and leave the model's own: set -1 when `overseer_cmd` names a
     #: model that refuses one, such as OpenAI's reasoning models.
     overseer_temperature: Annotated[Temperature, Scope.PRIVATE] = 0.1
-    worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker --format json --thinking "
-        "--title={title} {prompt}"
-    )
+    worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.WORKER)
     # A private ticket's worker: its own agent, which cannot write to the tracker (DESIGN §22). Shares the worker's
     # timeout.
-    private_worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-worker-private --format json --thinking "
-        "--title={title} {prompt}"
-    )
+    private_worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.PRIVATE_WORKER)
     # The splitter is its own agent, with no edit or shell tools (DESIGN §18); it shares the worker's timeout.
-    split_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-splitter --format json --thinking "
-        "--title={title} {prompt}"
-    )
+    split_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.SPLITTER)
     # The planner is its own agent, with no edit or shell tools and only the tracker's read tools (DESIGN §25); it
     # shares the worker's timeout.
-    plan_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json --thinking "
-        "--title={title} {prompt}"
-    )
+    plan_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.PLANNER)
     #: The triage agent, which judges whether a ticket's work needs a plan (DESIGN §25, Triage before a plan): point it
     #: at a cheaper model than `plan_cmd`'s. It is no worker run, so `worker_cmd_prefix` does not wrap it.
-    plan_triage_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-plan-triage --format json --thinking "
-        "--title={title} {prompt}"
-    )
+    plan_triage_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.PLAN_TRIAGE)
     #: The triage agent's temperature, or -1 to set none and leave the model's own: set -1 when `plan_triage_cmd`
     #: names a model that refuses one, such as OpenAI's reasoning models.
     plan_triage_temperature: Annotated[Temperature, Scope.PRIVATE] = 0.1
     # A chore's default command; a chore that runs the operator's own tools sets its own (DESIGN §19).
-    chore_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-chore --format json --thinking "
-        "--title={title} {prompt}"
-    )
+    chore_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.CHORE)
     # The reviewer; pointing it at a different model from the worker's is recommended (DESIGN §21).
-    review_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = (
-        "env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-reviewer --format json --thinking "
-        "--title={title} {prompt}"
-    )
+    review_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.REVIEWER)
     #: The reviewer's temperature, or -1, the default, to set none and leave the model's own. The reviewer is meant to
     #: run on another model than the worker's (DESIGN §21), and some, such as OpenAI's reasoning models, refuse a
     #: request that sets one; set a low one when `review_cmd` names a model that takes it.

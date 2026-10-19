@@ -14,17 +14,19 @@ from pathlib import Path
 from typing import TYPE_CHECKING, TextIO
 
 from canopy.chores import history, start
-from canopy.core import agent_output, conversation, db, definitions, outbox, progress
 from canopy.core import chore_result as result
 from canopy.core import chore_view as view
+from canopy.core import conversation, db, definitions, outbox, progress
 from canopy.core.config import render_command
 from canopy.core.vocab import ChoreRunStatus
 from canopy.infra import logs, procs, stopping
+from canopy.runtime import events, project_config
 
 if TYPE_CHECKING:
     from canopy.core import records
     from canopy.core.config import Chore
     from canopy.core.context import Context
+    from canopy.runtime.report import AgentOutput
 
 
 class ChoreError(Exception):
@@ -39,7 +41,7 @@ class SetupError(Exception):
 class Printed:
     """What a chore's agent printed: its output as read, its stderr, and its exit code."""
 
-    output: agent_output.AgentOutput
+    output: AgentOutput
     stderr: str
     returncode: int
 
@@ -114,15 +116,15 @@ def prepare(ctx: Context, name: str, chore: Chore, prompt: str) -> tuple[Path, l
     # The shipped `canopy-chore` is merged with whatever OpenCode config its working directory has (D044), and OpenCode
     # reads project config from the directories above it too.
     here = cwd.resolve()
-    shadowing = [found for d in (here, *here.parents) for found in definitions.shadowing(d)]
+    shadowing = [found for d in (here, *here.parents) for found in project_config.shadowing(d)]
     if shadowing:
-        raise SetupError(definitions.shadowing_message(shadowing))
+        raise SetupError(project_config.shadowing_message(shadowing))
     template = chore.cmd if chore.cmd is not None else ctx.config.runtime.chore_cmd
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
     return cwd, render_command(template, prompt, snapshot, f"chore:{name}"), snapshot.name
 
 
-def outcome_of(done: procs.Result, output: agent_output.AgentOutput, chore: Chore) -> Outcome:
+def outcome_of(done: procs.Result, output: AgentOutput, chore: Chore) -> Outcome:
     """Return how a chore's agent ended: timed out, its validated result from `output`, or `unknown` without one."""
     printed = Printed(output, done.stderr, done.returncode)
     if done.timed_out:
@@ -174,7 +176,7 @@ def _work(ctx: Context, run: records.ChoreRun, out: TextIO, log: logs.TickAdapte
     out.write(f"\n--- chore stderr ---\n{done.stderr}\n")
     out.write(f"--- chore exit {done.returncode}{' (timed out)' if done.timed_out else ''} ---\n")
     out.flush()
-    output = agent_output.read(done.stdout)
+    output = events.read(done.stdout)
     if output.session_id is not None or output.usage is not None:
         db.set_run_report(
             ctx.conn, "chore_runs", run_id, output.session_id, output.usage, digest=digest, tools=output.tools

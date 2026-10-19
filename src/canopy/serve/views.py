@@ -25,11 +25,11 @@ from canopy.core import (
     plans,
     records,
     search,
-    transcript,
 )
 from canopy.core import spend as spending
 from canopy.core.items import fingerprint
 from canopy.core.vocab import ChoreRunStatus, RunStatus
+from canopy.runtime import transcript
 from canopy.serve import draft_views, memory_views
 from canopy.serve.schema import (
     AttentionItem,

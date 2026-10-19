@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from canopy.core import agent_output
-from canopy.core.agent_output import AgentOutput, ToolUse, Usage
+from canopy.runtime import events
+from canopy.runtime.report import AgentOutput, ToolUse, Usage
 
 RESULT = '{"status":"done","summary":"did it"}'
 TOKENS = {"input": 100, "output": 20, "reasoning": 3, "cache": {"read": 400, "write": 50}}
@@ -25,7 +25,7 @@ def step(cost: object = 0.25, tokens: object = TOKENS) -> str:
 
 def test_plain_text_is_read_as_it_is() -> None:
     stdout = f"chatter\n{RESULT}\n"
-    assert agent_output.read(stdout) == AgentOutput(stdout, stdout)  # plain text is one message
+    assert events.read(stdout) == AgentOutput(stdout, stdout)  # plain text is one message
 
 
 def test_events_give_the_text_the_session_the_cost_the_peak_context_and_the_first_call() -> None:
@@ -38,7 +38,7 @@ def test_events_give_the_text_the_session_the_cost_the_peak_context_and_the_firs
         step(1, {**TOKENS, "cache": {"read": 900, "write": 50}}),
         "not an event",
     ]
-    output = agent_output.read("\n".join(lines))
+    output = events.read("\n".join(lines))
     assert output.text == f"Working on it.\nStill working.\n{RESULT}"
     assert output.last == RESULT
     assert output.session_id == "ses_abc123"
@@ -60,12 +60,12 @@ def test_a_cost_recorded_before_the_peak_context_was_kept_says_none() -> None:
 
 def test_a_result_line_is_not_an_event() -> None:
     # The fake agent and plain-text templates print the result contract alone; it has no type or session.
-    assert agent_output.read(RESULT).text == RESULT
+    assert events.read(RESULT).text == RESULT
 
 
 def test_events_with_no_model_call_cost_nothing() -> None:
     error = json.dumps({"type": "error", "timestamp": 1, "sessionID": "ses_abc123", "error": {"name": "UnknownError"}})
-    output = agent_output.read(error)
+    output = events.read(error)
     assert (output.text, output.last, output.session_id) == ("", "", "ses_abc123")
     assert output.usage == Usage(0, 0, 0, 0, 0, 0, peak_context=0)  # and no first call
 
@@ -87,31 +87,31 @@ def test_events_with_no_model_call_cost_nothing() -> None:
 )
 def test_a_step_that_does_not_validate_reports_no_cost(bad: str) -> None:
     # One unreadable step would make the total too low, so there is no total at all.
-    output = agent_output.read(f"{step()}\n{bad}\n{text(RESULT)}")
+    output = events.read(f"{step()}\n{bad}\n{text(RESULT)}")
     assert output.usage is None
     assert (output.text, output.session_id) == (RESULT, "ses_abc123")
 
 
 def test_non_finite_cost_reports_no_cost() -> None:
     line = step().replace('"cost": 0.25', '"cost": Infinity')
-    assert agent_output.read(line).usage is None
+    assert events.read(line).usage is None
 
 
 @pytest.mark.parametrize("session", ["", "ses abc", "ses_\x1b[31m", "x" * 101, 12, None])
 def test_a_session_id_that_does_not_validate_is_not_reported(session: object) -> None:
-    output = agent_output.read(event("text", {"text": RESULT}, session))
+    output = events.read(event("text", {"text": RESULT}, session))
     assert output.session_id is None
     assert output.text == RESULT
 
 
 def test_the_first_valid_session_id_is_kept() -> None:
     stdout = "\n".join([event("text", {"text": "a"}, "bad id"), text("b"), event("text", {"text": "c"}, "ses_other")])
-    assert agent_output.read(stdout).session_id == "ses_abc123"
+    assert events.read(stdout).session_id == "ses_abc123"
 
 
 def test_a_text_part_that_does_not_validate_is_left_out() -> None:
     stdout = "\n".join([text("first"), event("text", {"text": 12}), event("text", None), text(RESULT)])
-    assert agent_output.read(stdout).text == f"first\n{RESULT}"
+    assert events.read(stdout).text == f"first\n{RESULT}"
 
 
 def tool(name: object, status: str = "completed", **state: object) -> str:
@@ -129,32 +129,32 @@ def test_tool_calls_are_rolled_up_by_tool_with_what_they_returned() -> None:
         event("tool_use", {"state": {"status": "completed", "output": "who called it?"}}),
         text(RESULT),
     ]
-    assert agent_output.read("\n".join(lines)).tools == (
+    assert events.read("\n".join(lines)).tools == (
         ToolUse("bash", calls=3, errors=1, result_chars=5 + len("no such file")),
         ToolUse("github_pull_request_read", calls=2, errors=0, result_chars=1500),
     )
 
 
 def test_plain_text_and_events_with_no_tool_call_roll_up_no_tool() -> None:
-    assert agent_output.read(f"chatter\n{RESULT}\n").tools == ()
-    assert agent_output.read("\n".join([text(RESULT), step()])).tools == ()
+    assert events.read(f"chatter\n{RESULT}\n").tools == ()
+    assert events.read("\n".join([text(RESULT), step()])).tools == ()
 
 
 def test_a_tools_name_is_one_printable_line_and_their_number_is_bounded() -> None:
     lines = [tool("evil\x1b[31m\n tool", output="a"), tool("", output="b"), tool("t" * 500, output="c")]
-    lines += [tool(f"mcp_{i}", output="d") for i in range(agent_output.MAX_TOOLS + 5)]
-    tools = agent_output.read("\n".join(lines)).tools
-    assert [t.tool for t in tools[:3]] == ["evil[31m tool", "?", "t" * agent_output.MAX_TOOL_NAME]
-    assert len(tools) == agent_output.MAX_TOOLS + 1
+    lines += [tool(f"mcp_{i}", output="d") for i in range(events.MAX_TOOLS + 5)]
+    tools = events.read("\n".join(lines)).tools
+    assert [t.tool for t in tools[:3]] == ["evil[31m tool", "?", "t" * events.MAX_TOOL_NAME]
+    assert len(tools) == events.MAX_TOOLS + 1
     # The calls of every tool past the bound count together, under a name no runtime gives a tool.
-    assert tools[-1] == ToolUse(agent_output.OTHER_TOOLS, calls=8, errors=0, result_chars=8)
+    assert tools[-1] == ToolUse(events.OTHER_TOOLS, calls=8, errors=0, result_chars=8)
 
 
 def test_a_tally_rolls_up_the_tools_as_read_does() -> None:
     lines = [tool("bash", output="12345"), tool("read", output="abc"), tool("bash", "error", error="no")]
-    tally = agent_output.Tally()
+    tally = events.Tally()
     for line in lines:
-        found = agent_output.parse_event(line)
+        found = events.parse_event(line)
         assert found is not None
         tally.add(found)
-    assert tally.tools == agent_output.read("\n".join(lines)).tools
+    assert tally.tools == events.read("\n".join(lines)).tools
