@@ -69,7 +69,9 @@ so §29's `{"prs": [...]}` is one such request:
 
 - A `tracker` source is sent `query`, `tracker.query` as configured, and `tickets`: every ticket the state block lists
   in `tickets` (§6 step 4), public and private, each with the time of the newest tracker comment the journal holds for
-  it, so the connector prints only what is newer, or every comment when it holds none.
+  it, so the connector prints only what is newer, or every comment when it holds none. A private ticket is still the
+  tracker's ticket, so its key tells the tracker nothing it does not hold. The connector observes its comments, as
+  data (TRUST_MODEL T1), and whether it is closed; its phases still come from the journal.
 - A `vcs` source is sent `prs`, every PR on a unit of a ticket not marked done, merged and closed included (2026-10-13
   F16), and every PR a draft waits on (§29); `repositories`, the map's names and clone URLs, each URL's credential
   dropped; `branch_prefix`, `trust.branch_prefix`; and `review_query`, `review.query`, when set.
@@ -207,7 +209,8 @@ human_checks = ["deploy/approval", "Product sign-off"]
   a real CI job, which the derivation would then never read as red; branch protection still holds the PR (TRUST_MODEL
   §7), and T7's residual says so.
 - In M36 only the derivation reads it: the overseer still reads every check live. M37's state block carries it with the
-  observations.
+  observations. M38, the first milestone to act on it in code, revisits whether it stays shared, so the residual is
+  settled for the shadow only.
 - Rejected: a list of the CI contexts (above); a repository's required checks from branch protection (reading them
   needs admin on the repository, and a required check can be the human one); a time past which a pending check counts
   as human (a slow build crosses any threshold, and the phase would flip under it); a private key (the list is the
