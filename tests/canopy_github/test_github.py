@@ -586,12 +586,15 @@ def test_reactions_alone_open_no_review(github: tuple[Fake, str]) -> None:
     assert lines[-1] == {"kind": "end", "submitted": True}
 
 
-def test_a_refused_reaction_opens_no_review(github: tuple[Fake, str]) -> None:
+@pytest.mark.parametrize("failure", ["refuse", "500", "lost"])
+def test_a_reaction_that_fails_or_may_have_landed_opens_no_review_and_ends_unsubmitted(
+    github: tuple[Fake, str], failure: str
+) -> None:
     fake, url = github
-    fake.fail["React"] = "refuse"
-    code, lines, err = send(url, {"pr": PR, "replies": [{"comment": 501, "text": "Renamed.", "reaction": "eyes"}]})
+    fake.fail["React"] = failure
+    code, lines, _ = send(url, {"pr": PR, "replies": [{"comment": 501, "text": "Renamed.", "reaction": "eyes"}]})
     assert code == 1
-    assert "React refused" in err
+    # Even when it may have landed, the `end` line is printed: GitHub adds a reaction once, so sending again is safe.
     assert "AddReview" not in fake.ops()
     assert lines == [{"kind": "as", "login": "me"}, {"kind": "end", "submitted": False}]
 
