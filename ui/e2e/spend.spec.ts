@@ -63,7 +63,16 @@ test("each series has one name in the totals, the legend, and the table, and the
     await expect(page.locator('main header p')).toHaveText(`${total ?? ''} over 7 days · no tickets done`)
     await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('title', /canopy spend --days N/u)
 
-    const series = ['idle ticks', 'overseer', 'workers and splits', 'plan triage', 'chores', 'reviews', 'dry runs']
+    const series = [
+        'idle ticks',
+        'overseer',
+        'workers and splits',
+        'plan triage',
+        'plans',
+        'chores',
+        'reviews',
+        'dry runs',
+    ]
     await expect(page.getByTestId('spend-legend').getByRole('listitem')).toHaveText(series)
     await expect(page.getByTestId('spend-table').locator('thead th')).toHaveText(['day', ...series, 'total', 'done'])
     // The totals name the overseer's whole before idle ticks' part of it, as canopy spend's columns do.
@@ -74,6 +83,7 @@ test("each series has one name in the totals, the legend, and the table, and the
         'idle ticks',
         'workers and splits',
         'plan triage',
+        'plans',
         'chores',
         'reviews',
         'dry runs',
@@ -203,7 +213,7 @@ test("the dearest day's total is over its bar, which stops short of the chart's 
     await page.goto('spend?days=30')
     await settled(page)
     // The mock prices today alone: its total is the dearest.
-    const total = await page.getByTestId('spend-day-2026-10-08').locator('td').nth(7).textContent()
+    const total = await page.getByTestId('spend-day-2026-10-08').locator('td').nth(8).textContent()
     const peak = page.getByTestId('spend-bar-2026-10-08').getByTestId('spend-peak')
     await expect(peak).toHaveText(total ?? '')
     await expect(peak).toHaveText(/^\$\d+\.\d\d$/u)
@@ -259,7 +269,7 @@ test('a week of one priced day draws one narrow bar, its segments apart, and the
             }),
         )
     ).toSorted((a, b) => a.top - b.top)
-    expect(segments).toHaveLength(5)
+    expect(segments).toHaveLength(6)
     for (const [i, segment] of segments.entries()) {
         expect(segment.bottom - segment.top).toBeGreaterThanOrEqual(1.99)
         const below = segments[i + 1]
