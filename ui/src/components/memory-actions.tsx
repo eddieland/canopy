@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { QueryClient } from '@tanstack/react-query'
 import { ArrowUpFromLine, Eraser, RefreshCw, X } from 'lucide-react'
 import { useId, useState } from 'react'
 import type { ReactNode, SubmitEvent } from 'react'
 
+import { ApiError } from '@/api/client'
 import { forgetMemory, promoteMemory, refreshMemory, rejectMemory, renewMemory } from '@/api/mutations'
 import { memoryQuery } from '@/api/queries'
 import type { MemoryEntry } from '@/api/types'
@@ -28,6 +30,9 @@ import { cn } from '@/lib/utils'
 // The repository choice that stands for every one: no repository's name, which the workspace map holds to lowercase
 // letters, digits, and hyphens. Not '': a segmented control takes that for nothing picked.
 const EVERY = '*'
+
+// The refusals that mean the memory is not as the page last read it.
+const STALE: ReadonlySet<string> = new Set(['not_pending', 'forgotten', 'unknown'])
 
 /** What a list of memories hands its rows' actions: where to say what one did, under the list. */
 interface Said {
@@ -65,6 +70,7 @@ export function ProposalActions({
             onSaid(promotedText(promoted))
             void refreshMemory(client)
         },
+        onError: (error) => void refreshIfStale(client, error, onSaid),
     })
     const reject = useMutation({
         mutationFn: () => rejectMemory(proposal.id),
@@ -72,6 +78,7 @@ export function ProposalActions({
             onSaid(rejectedText(rejected.id))
             void refreshMemory(client)
         },
+        onError: (error) => void refreshIfStale(client, error, onSaid),
     })
     const pending = promote.isPending || reject.isPending
     return (
@@ -183,6 +190,7 @@ export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson
             onSaid(renewedText(renewed))
             void refreshMemory(client)
         },
+        onError: (error) => void refreshIfStale(client, error, onSaid),
     })
     return (
         <RowLine from="key" className="flex flex-col gap-2">
@@ -205,7 +213,7 @@ export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson
             {confirming && (
                 <ForgetChallenge memory={lesson} onSaid={onSaid} onCancel={() => setConfirming(false)}>
                     canopy deletes this lesson&apos;s text, and no run reads it again. Its row stays, saying who
-                    promoted it and when. This cannot be undone: promote its proposal or note again to have it back.
+                    promoted it and when. This cannot be undone: {backText(lesson)}
                 </ForgetChallenge>
             )}
             <Notice error={renew.error} />
@@ -240,6 +248,7 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
             onClose()
             void refreshMemory(client)
         },
+        onError: (error) => void refreshIfStale(client, error, onSaid),
     })
     const chars = lessonChars(text)
     const fits = chars > 0 && chars <= MAX_LESSON_CHARS
@@ -346,6 +355,30 @@ export function PromoteForm({ source, onSaid, onClose }: Said & { source: Memory
 }
 
 /**
+ * How a forgotten lesson could come back, as the server allows it: a note is promoted again while it keeps its text,
+ * but a proposal is used up once promoted (`not_pending`), so a lesson from one cannot.
+ */
+function backText(lesson: MemoryEntry): string {
+    if (lesson.origin?.scope === 'ticket') {
+        return `promote its note, ${memoryRef(lesson.origin.id)}, again to have it back, while the note keeps its text.`
+    }
+    return 'it cannot come back, though a worker may propose it again.'
+}
+
+/**
+ * After a verb the server refused because the memory changed under it (decided from the attention list or the CLI,
+ * forgotten, or gone), read memory again, so its row leaves or shows where it stands now. Its row may leave with the
+ * refusal under it, so the refusal is said under the list too.
+ */
+function refreshIfStale(client: QueryClient, error: Error, onSaid: (said: string) => void): Promise<void> {
+    if (!(error instanceof ApiError) || !STALE.has(error.guard ?? '')) {
+        return Promise.resolve()
+    }
+    onSaid(`refused (${error.guard ?? ''}): ${error.message}`)
+    return refreshMemory(client)
+}
+
+/**
  * The quiet Forget at the end of a memory's line of verbs, which opens the challenge under it: muted at rest, since it
  * is the rarest verb and cannot be undone, and in `status-failed` only while its row is hovered or it has the focus.
  */
@@ -386,6 +419,7 @@ function ForgetChallenge({
             onSaid(memoryForgottenText(forgot))
             void refreshMemory(client)
         },
+        onError: (error) => void refreshIfStale(client, error, onSaid),
     })
     return (
         <ForgetForm
