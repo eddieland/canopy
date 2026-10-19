@@ -70,12 +70,15 @@ function promoted(fields: Partial<MemoryPromoted> = {}): MemoryPromoted {
 let sent: { path: string; body: unknown }[] = []
 let answer: Response | undefined
 let lessons: MemoryEntry[] = [OTHER_LESSON]
+let readFails = false
 
 const server: Middleware = {
     async onRequest({ request }) {
         const path = new URL(request.url).pathname
         if (request.method === 'GET') {
-            return Response.json({ ...OVERVIEW, lessons })
+            return readFails
+                ? Response.json({ detail: 'down' }, { status: 500 })
+                : Response.json({ ...OVERVIEW, lessons })
         }
         const text = await request.text()
         sent.push({ path, body: text ? (JSON.parse(text) as unknown) : undefined })
@@ -87,6 +90,7 @@ beforeEach(() => {
     sent = []
     answer = undefined
     lessons = [OTHER_LESSON]
+    readFails = false
     api.use(server)
 })
 
@@ -225,6 +229,26 @@ describe('ProposalActions as written', () => {
         })
         expect(sent).toEqual([{ path: '/api/memory/5/promote', body: { text: null, repo: null } }])
         expect(screen.queryByRole('form')).toBeNull()
+    })
+})
+
+describe('ProposalActions unread', () => {
+    it('says why it cannot promote in one click when the lessons in force could not be read', async () => {
+        readFails = true
+        render(
+            <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+                <ProposalActions
+                    proposal={ENTRY}
+                    edit={false}
+                    forget={false}
+                    onSaid={vi.fn<(said: string) => void>()}
+                />
+            </QueryClientProvider>,
+        )
+        expect((await screen.findByTestId('promote-unread')).textContent).toBe(
+            'the lessons in force could not be read: promote it from the memory page',
+        )
+        expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Reject'])
     })
 })
 
