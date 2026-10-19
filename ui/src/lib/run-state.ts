@@ -21,9 +21,9 @@ export const RUN_TEXT: Record<RunState, string> = {
 }
 
 /**
- * Each run state in the operator's words, wherever the UI names a state rather than a run's own status: a filter,
- * a counter. `blocked` asked a question, so it reads `waiting on you`, as the rail, the tickets list, and the
- * conversation say it. The URL and the journal keep `blocked`.
+ * Each run state in the operator's words, wherever the UI names a state rather than a run's own status: a filter's
+ * chip, an empty filter's message. `blocked` asked a question, so it reads `waiting on you`, as the rail, the tickets
+ * list, and the conversation say it. The URL and the journal keep `blocked`.
  */
 export const RUN_WORD: Record<RunState, string> = {
     running: 'running',

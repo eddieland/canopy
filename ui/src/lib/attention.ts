@@ -93,8 +93,8 @@ export interface BreakdownPart {
 }
 
 /**
- * The list's count split as the Attention counter and the nav's badge both say it, most severe first, each part only
- * when it holds an item. A finding counts as `other`.
+ * The list's count split as the nav's badge says it, most severe first, each part only when it holds an item. A
+ * finding counts as `other`.
  */
 export function breakdown(counts: Record<Severity, number>): BreakdownPart[] {
     const parts: BreakdownPart[] = [
@@ -105,9 +105,9 @@ export function breakdown(counts: Record<Severity, number>): BreakdownPart[] {
     return parts.filter(({ count }) => count > 0)
 }
 
-/** The breakdown in words: `1 broken, 1 waiting on you, 3 other`, or `nothing` when the list is empty. */
+/** The breakdown in words: `1 broken, 1 waiting on you, 3 other`. */
 export function breakdownText(parts: readonly BreakdownPart[]): string {
-    return parts.length === 0 ? 'nothing' : parts.map(({ count, label }) => `${count} ${label}`).join(', ')
+    return parts.map(({ count, label }) => `${count} ${label}`).join(', ')
 }
 
 /**

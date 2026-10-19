@@ -191,12 +191,12 @@ Rules:
   What is on screen stays. All of it reads the stream from the shell (`useLoopDown`), and leaves the moment the stream
   opens again, with no reload.
   The readouts hug their text, inset as far as a ghost button's label, so each rule sits midway. The counters are the
-  attention page's, and the nav's Attention item shows how many items it lists, on every page, split by severity as the
-  Attention counter splits them: broken in `status-failed`, waiting on the operator's answer in `status-blocked`, the
-  rest muted, each only when there is one. Never in the section's rose, too near the failure color to tell apart at that
-  size. Since color alone tells the numbers apart, they are said in words on hover and to a screen reader
-  (`1 broken, 1 waiting on you, 3 other`), the words the Attention counter's line says under its value: one function
-  splits the count for both (`breakdown` in `src/lib/attention.ts`). The Memory item shows how many proposals wait on
+  attention page's, and the nav's Attention item shows how many items it lists, on every page, split by severity:
+  broken in `status-failed`, waiting on the operator's answer in `status-blocked`, the rest muted, each only when there
+  is one. Never in the section's rose, too near the failure color to tell apart at that size. Since color alone tells
+  the numbers apart, they are said in words on hover and to a screen reader (`1 broken, 1 waiting on you, 3 other`;
+  `breakdown` in `src/lib/attention.ts`). That split is the nav's alone: the Attention counter does not say it again
+  under its value, on the one page that shows both (Counters, below). The Memory item shows how many proposals wait on
   the operator, in `status-blocked` as what waits on their answer is, said in words (`2 proposals waiting on you`), and
   nothing while none waits or proposals are off. It comes with the loop's state on the stream, so it moves as a run
   proposes and as the operator promotes or rejects.
@@ -665,8 +665,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   head line reads the state, the run's id, the ticket's key, the run's chips, and the ticket's title in the free
   column. What goes under it starts under the title. A ticket that asked, got its answer, and asked again is one
   blocked row, not two. The state
-  filter goes by each ticket's latest run, and so do the rail's working runs and the Running counter's
-  `N waiting on you`: a blocked run a later one followed waits on nothing. A ticket's page lists its runs flat
+  filter goes by each ticket's latest run, and so do the rail's working runs: a blocked run a later one followed waits
+  on nothing. A ticket's page lists its runs flat
   (`RunsTable`), since every row there is the same ticket's. A run's line of links names its first three worktrees,
   then `+N more worktrees` with every one on hover, never `+1 more`, which would take the room the fourth's path
   does: a ticket across many repositories holds a slot in each, and its run's page lists them all.
@@ -708,9 +708,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   review's was already its description alone, since its panel leads with what it found (A review, below). A run's
   journal says `done` where a tick's and a chore run's say `ok`: each is the CLI's word for its own, kept as it prints
   it, and in a list's row both wear `status-done`, as a tick's `skipped` does (`tickState` in `src/lib/ticks.ts`).
-- **A run state named in words** (a filter's chip, a counter's line) is the operator's: `blocked`, a run that asked,
-  reads `waiting on you` (`RUN_WORD` in `src/lib/run-state.ts`), as the rail, the tickets list, and a question's chip
-  say it. The URL keeps `?state=blocked`, and a run's own status in its page's header stays the CLI's word.
+- **A run state named in words** (a filter's chip, an empty filter's message) is the operator's: `blocked`, a run that
+  asked, reads `waiting on you` (`RUN_WORD` in `src/lib/run-state.ts`), as the rail, the tickets list, and a
+  question's chip say it. The URL keeps `?state=blocked`, and a run's own status in its page's header stays the CLI's
+  word.
 - **A ticket's title** (`TicketTitle`) follows its key, in medium weight, so it reads as the row's name and apart
   from what a run said under it; one line, cut to fit, the whole on hover. A ticket with none yet reads `untitled`,
   muted, so its cell is never blank, the rail's working runs included, never the run's kind in its place. A ticket's
@@ -719,10 +720,15 @@ sliver beside four others; and its axis names short call numbers without measuri
   attention; the spend is in the rail) and the worktrees page (working, held, needs a look, free, across every pool).
   The line under the value is cut to fit, and whole on hover, since it grows with the workspace (`4 pools unread`).
   A line is state, never what every visit would say: Held's names what holds its slots (`1 in use · 1 canopy-sync`).
+  Nor what another counter or the nav already says (One home per fact): on the attention page only Waiting on you has
+  a line, the oldest open question's age (`oldest 9d`), since it has no other home. Running's would count the runs
+  waiting on you, which is the next counter's value, and Attention's would split the list, which the nav's badge does
+  on every page; so neither has one, and `waiting on you` is said once there outside the rail and the nav. A counter
+  with no line of its own shows none.
   A counter counts what its line lists, and a line that splits the count names only its parts there are: Needs a look
   adds dirty slots, broken ones, and unread pools (`needsLook`), so one of each dirty and unread reads `2` over
   `1 dirty · 1 pool unread`, never a `0 broken` among them.
-  Each is a label, the value, and one line under it, with a 2px top rule in the state color it counts:
+  Each is a label, the value, and at most one line under it, with a 2px top rule in the state color it counts:
   `status-running`, `status-stopped` for held, `status-blocked`, `status-failed` while something is broken. The
   same color washes down from the rule at 12%, fading out by 70% of the counter's height; a plain counter has none.
 - **The spend chart** (the spend page) follows Charts: a bar per UTC day, the series stacked bottom up in `SERIES`
