@@ -517,7 +517,7 @@ test("a proposal is promoted in the operator's words and another rejected from t
     await page.goto('memory')
     const proposals = page.getByTestId('memory-proposals')
     const proposal = proposals.getByTestId('memory-5')
-    await proposal.getByRole('button', { name: 'Promote', exact: true }).click()
+    await proposal.getByRole('button', { name: 'Edit and promote' }).click()
     const form = proposal.getByRole('form', { name: 'Promote memory:5' })
     await expect(form.getByTestId('promote-replaces')).toHaveText(
         'No lesson is in force under web-tests: it replaces none.',

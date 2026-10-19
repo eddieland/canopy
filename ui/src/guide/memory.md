@@ -123,17 +123,17 @@ start it again.
 
 ## Promoting and rejecting
 
-Each proposal on the memory page has **Promote** and **Reject** under it, and each of a ticket's notes has Promote, on
-the memory page and on the ticket's own. They do what `canopy memory promote` and `canopy memory reject` do in your
-shell, with the same refusals, and both work at `record` as at `use`, so you can build up your lessons before any is
-served. None of them shows while lessons are off.
+Each proposal on the memory page has **Promote as written**, **Edit and promote**, and, apart at the end of its line,
+**Reject** under it, and each of a ticket's notes has Promote, on the memory page and on the ticket's own. They do what
+`canopy memory promote` and `canopy memory reject` do in your shell, with the same refusals, and both work at `record`
+as at `use`, so you can build up your lessons before any is served. None of them shows while lessons are off.
 
-- **Promote** opens the lesson to be: the proposal's words, which you can rewrite (usually an improvement), held to the
-  same 600 characters, and the repository whose runs read it. A proposal keeps its own repository unless you pick
-  another; a note's lesson is for every repository unless you pick one. Before you save, the form names the lesson in
-  force under the same key, if there is one, since yours replaces it.
-- **As written**, beside it, promotes the proposal at once, in its own words and for its own repository, as
-  `canopy memory promote ID` does. Most good proposals need no editing, and this saves the form.
+- **Edit and promote** opens the lesson to be: the proposal's words, which you can rewrite (usually an improvement),
+  held to the same 600 characters, and the repository whose runs read it. A proposal keeps its own repository unless you
+  pick another; a note's lesson is for every repository unless you pick one. Before you save, the form names the lesson
+  in force under the same key, if there is one, since yours replaces it.
+- **Promote as written**, the first button, promotes the proposal at once, in its own words and for its own repository,
+  as `canopy memory promote ID` does. Most good proposals need no editing, and this saves the form.
 - It promotes a ticket's note too, done or invalidated, as long as the note still has its text: what a ticket taught
   is often clearest once its PR has merged. The note stays its ticket's.
 - **Reject** ends a proposal. Nothing asks twice: nothing is lost that a worker can't propose again.
