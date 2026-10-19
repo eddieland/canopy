@@ -5,7 +5,7 @@ import type { CSSProperties } from 'react'
 
 import { HatDrawing } from '@/components/hat'
 import { useFits } from '@/hooks/use-fits'
-import { nextTip, setBuddy, tipsFor } from '@/lib/buddy'
+import { nextTip, setBuddy, tipsFor, typeBurst } from '@/lib/buddy'
 import type { View } from '@/lib/buddy'
 import { useWardrobe } from '@/lib/hats'
 import type { HatId } from '@/lib/hats'
@@ -384,21 +384,18 @@ const CASE = [
     `L${DECK.front.right} ${DECK.front.y} V${DECK.front.y + LIP}`,
     `H${DECK.front.left} V${DECK.front.y} Z`,
 ].join(' ')
-/** The keys Sprig presses in each burst, in the order it presses them: a row, then a key in it. The space bar last. */
-const TYPED: readonly (readonly [number, number])[] = [
-    [0, 2],
-    [1, 6],
-    [0, 4],
-    [1, 1],
-    [0, 7],
-    [2, 2],
-]
+/** The space bar, as its row and its place in the row: every burst ends on it. */
+const SPACE = '2-2'
+/** Every other key, the same way: the keys a burst picks from (`typeBurst`). */
+const LETTERS = ROWS.flatMap((row, r) => row.keys.map((_, k) => `${r}-${k}`)).filter((key) => key !== SPACE)
 
 /**
  * The keyboard Sprig vibe codes on, in front of the foot of its wire: a case seen from above, three rows of keys, the
- * last a space bar. A few keys light in the accent as Sprig types on them, a burst every few seconds.
+ * last a space bar. A few keys light in the accent as Sprig types on them, a burst every few seconds, different keys
+ * each time: when the first key's press ends its animation, the keys remount with the next burst's.
  */
 function Keyboard() {
+    const [burst, setBurst] = useState(() => ({ n: 0, typed: typeBurst(LETTERS, SPACE) }))
     return (
         <g data-keyboard>
             <path
@@ -407,23 +404,25 @@ function Keyboard() {
                 strokeLinejoin="round"
                 className="fill-buddy-keyboard stroke-buddy-keyboard"
             />
-            {ROWS.map((row, r) =>
-                keysOf(row).map((key, k) => {
-                    const typed = TYPED.findIndex(([tr, tk]) => tr === r && tk === k)
-                    return (
-                        <rect
-                            key={`${r}-${k}`}
-                            x={key.x}
-                            y={row.y}
-                            width={key.width}
-                            height={KEY.height}
-                            rx="0.4"
-                            className={cn('fill-buddy-key', typed >= 0 && 'animate-buddy-key')}
-                            style={typed >= 0 ? ({ '--key': typed } as CSSProperties) : undefined}
-                        />
-                    )
-                }),
-            )}
+            <g key={burst.n} onAnimationEnd={() => setBurst({ n: burst.n + 1, typed: typeBurst(LETTERS, SPACE) })}>
+                {ROWS.map((row, r) =>
+                    keysOf(row).map((key, k) => {
+                        const typed = burst.typed.indexOf(`${r}-${k}`)
+                        return (
+                            <rect
+                                key={`${r}-${k}`}
+                                x={key.x}
+                                y={row.y}
+                                width={key.width}
+                                height={KEY.height}
+                                rx="0.4"
+                                className={cn('fill-buddy-key', typed >= 0 && 'animate-buddy-key')}
+                                style={typed >= 0 ? ({ '--key': typed } as CSSProperties) : undefined}
+                            />
+                        )
+                    }),
+                )}
+            </g>
         </g>
     )
 }

@@ -172,7 +172,9 @@ test.describe('turned on', () => {
         await expect(pupil).toHaveAttribute('transform', /^translate\(-[\d.]+ -[\d.]+\)$/u)
     })
 
-    test('Sprig types on its keyboard, and holds its keys still under reduced motion', async ({ page }) => {
+    test('Sprig types on its keyboard, new keys each burst, and holds them still under reduced motion', async ({
+        page,
+    }) => {
         const typing = () =>
             page.evaluate(
                 () =>
@@ -182,7 +184,22 @@ test.describe('turned on', () => {
         await page.goto('attention')
         await settled(page)
         await expect(page.locator('[data-testid=buddy] [data-keyboard]')).toHaveCount(1)
-        expect(await typing()).toBe(6)
+        const keys = await typing()
+        expect(keys).toBeGreaterThanOrEqual(4)
+        expect(keys).toBeLessThanOrEqual(7)
+
+        // The burst ends and the next one begins, on keys that are mounted anew: a burst lasts 5 seconds.
+        const first = await page.evaluateHandle(() => new Set(document.querySelectorAll('[data-keyboard] rect')))
+        await expect
+            .poll(
+                () =>
+                    first.evaluate((rects) =>
+                        [...document.querySelectorAll('[data-keyboard] rect')].every((rect) => !rects.has(rect)),
+                    ),
+                { timeout: 10_000 },
+            )
+            .toBe(true)
+        expect(await typing()).toBeGreaterThanOrEqual(4)
 
         await page.emulateMedia({ reducedMotion: 'reduce' })
         await expect.poll(typing).toBe(0)
