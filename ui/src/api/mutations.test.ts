@@ -3,7 +3,7 @@ import type { Middleware } from 'openapi-fetch'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import { api } from './client'
-import { grantLimit, refreshLimits, refreshPullRequests } from './mutations'
+import { grantLimit, refreshLimits, refreshReviewRequests } from './mutations'
 import { keys } from './queries'
 import type { Granted, Limit } from './types'
 
@@ -95,13 +95,15 @@ describe('refreshLimits', () => {
     })
 })
 
-describe('refreshPullRequests', () => {
-    it("reads the PRs list and every PR's page again", async () => {
+describe('refreshReviewRequests', () => {
+    it("reads the PRs list, every PR's page, and the reviews waiting on a tick again", async () => {
         const client = new QueryClient()
         client.setQueryData(keys.pullRequests, [])
         client.setQueryData(keys.pullRequest(PR), {})
-        await refreshPullRequests(client)
+        client.setQueryData(keys.reviewRequests, [])
+        await refreshReviewRequests(client)
         expect(stale(client, keys.pullRequests)).toBe(true)
         expect(stale(client, keys.pullRequest(PR))).toBe(true)
+        expect(stale(client, keys.reviewRequests)).toBe(true)
     })
 })

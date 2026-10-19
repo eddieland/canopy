@@ -159,6 +159,8 @@ export type SearchResults = Schemas['SearchResults']
 export type SearchHit = Schemas['SearchHit']
 /** Where a search hit is (DESIGN §22, Search), in the order the search reads them. */
 export type SearchSource = Schemas['SearchSource']
+/** A PR the operator asked canopy to review that no review of is running yet: it waits on a tick (DESIGN §21). */
+export type RequestedReview = Schemas['RequestedReview']
 /** One review run of a PR at a commit (DESIGN §21): canopy's own review, never on the PR (D114). */
 export type ReviewSummary = Schemas['ReviewSummary']
 /** A PR the journal knows (DESIGN §22): one of the loop's own, by its ticket's unit, or one canopy reviewed. */

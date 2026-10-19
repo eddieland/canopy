@@ -3,7 +3,7 @@ import { cleanup, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { keys } from '@/api/queries'
-import type { ReviewSummary } from '@/api/types'
+import type { RequestedReview, ReviewSummary } from '@/api/types'
 import { renderRouted, tipOf } from '@/test-utils'
 
 import { ReviewsTable } from './reviews-table'
@@ -30,13 +30,46 @@ const REVIEW: ReviewSummary = {
     ended_at: '2026-10-08T11:04:00Z',
 }
 
+const REQUESTED: RequestedReview = {
+    pr_url: 'https://github.com/acme/web/pull/95',
+    created_at: '2026-10-08T11:40:00Z',
+    channel: 'web',
+}
+
 function renderReviews(reviews: ReviewSummary[], pr?: boolean) {
     const client = new QueryClient()
     client.setQueryDefaults(keys.meta, { enabled: false })
     return renderRouted(<ReviewsTable reviews={reviews} pr={pr} />, { client })
 }
 
+function renderRequested(requestedLast: boolean) {
+    const client = new QueryClient()
+    client.setQueryDefaults(keys.meta, { enabled: false })
+    return renderRouted(<ReviewsTable reviews={[REVIEW]} requested={[REQUESTED]} requestedLast={requestedLast} />, {
+        client,
+    })
+}
+
 describe('ReviewsTable', () => {
+    it('lists a PR asked to be reviewed before any review of it has started, opening its page', async () => {
+        await renderRequested(false)
+        const row = within(screen.getByTestId(`requested-${REQUESTED.pr_url}`))
+        expect(row.getByText('requested')).toBeDefined()
+        expect(tipOf(row.getByText('requested'))).toBe('Waiting on the next tick to start its review')
+        expect(row.getByRole('link', { name: 'acme/web#95' })).toBeDefined()
+        expect(row.queryByRole('link', { name: /^review:/u })).toBeNull()
+        // What comes next leads the list, newest first.
+        const [first, second] = screen.getAllByRole('listitem')
+        expect(first?.dataset.testid).toBe(`requested-${REQUESTED.pr_url}`)
+        expect(second?.dataset.testid).toBe('review-4')
+    })
+
+    it('puts a requested PR last when the list runs oldest first', async () => {
+        await renderRequested(true)
+        const rows = screen.getAllByRole('listitem').map((row) => row.dataset.testid)
+        expect(rows).toEqual(['review-4', `requested-${REQUESTED.pr_url}`])
+    })
+
     it('opens each review’s page, and says what it found with its worst severity', async () => {
         await renderReviews([REVIEW, { ...REVIEW, id: 5, verdict: 'clean', findings: 0, worst: null, impact: null }])
         expect(screen.getByRole('link', { name: 'review:4' }).getAttribute('href')).toBe('/reviews/4')
