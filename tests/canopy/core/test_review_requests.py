@@ -92,25 +92,25 @@ def test_a_failed_review_leaves_the_request_open(
 
 
 def test_review_end_ends_a_request_whose_pr_merged_first_and_needs_a_tick(
-    requests_env: CanopyEnv, scenario: Scenario, capsys: pytest.CaptureFixture[str]
+    requests_env: CanopyEnv, scenario: Scenario
 ) -> None:
     conn = scenario.conn
     scenario.operator("start", PR, "--review")
     assert "no tick is running" in scenario.operator("review", "end", "--pr", PR, "--reason", "closed", code=1).err
+    # A dry run's tick, which `ticking` does not hold.
     with in_tick(conn, dry_run=True, ends_ok=True) as tick_id:
         assert main(["review", "end", "--pr", PR, "--reason", "closed"]) == 0
         assert [d[2:] for d in review_decisions(conn, tick_id)] == [("review:end", "dry run: not ended; closed")]
     assert requests_of(conn) == [(PR, "cli", None)]
     other = f"{PR}0"
     scenario.operator("start", other, "--review")
-    with in_tick(conn, ends_ok=True):
-        # A PR in none of the workspace's repositories cannot be reviewed here.
-        assert main(["review", "end", "--pr", other, "--reason", "unknown_repo"]) == 0
-    with in_tick(conn, ends_ok=True) as tick_id:
-        assert main(["review", "end", "--pr", PR, "--reason", "stopped"]) == 2
-        assert main(["review", "end", "--pr", PR, "--reason", "merged"]) == 0
-        assert main(["review", "end", "--pr", PR, "--reason", "merged"]) == 1
-        assert "review end refused (not_requested)" in capsys.readouterr().err
+    # A PR in none of the workspace's repositories cannot be reviewed here.
+    scenario.overseer("review", "end", "--pr", other, "--reason", "unknown_repo")
+    with scenario.ticking() as tick_id:
+        scenario.overseer("review", "end", "--pr", PR, "--reason", "stopped", code=2)
+        scenario.overseer("review", "end", "--pr", PR, "--reason", "merged")
+        refused = scenario.overseer("review", "end", "--pr", PR, "--reason", "merged", code=1)
+        assert "review end refused (not_requested)" in refused.err
         assert [d[2:] for d in review_decisions(conn, tick_id)] == [
             ("review:end", "merged"),
             ("refused:not_requested", f"{PR} has no open request"),
