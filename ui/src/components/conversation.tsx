@@ -32,6 +32,7 @@ const TONE: Record<Message['kind'], string> = {
 }
 
 const UNREAD = 'No tick has read it yet. The loop acts on it, and the attention list catches up, at the next tick.'
+const SEEN = 'A tick has read it: the loop is acting on it.'
 
 /** Which of the operator's messages nothing has read yet, and what the chip on each says and explains. */
 export interface Pending {
@@ -48,7 +49,8 @@ export interface Pending {
  * body is untrusted text, a tracker comment's or an agent's included: it is rendered as React text, which escapes it,
  * never as HTML. Bubbles pop in from their own side, one after another, and a new one when it arrives. The operator's
  * own messages that no `ok` tick has read yet say so: the loop acts on them, and the attention list catches up, at the
- * next tick. A chore's notes say instead which its next run reads (`pending`).
+ * next tick. Once one has, they say `seen`, so the operator knows they landed. A chore's notes say instead which its
+ * next run reads (`pending`), and say nothing once read.
  */
 export function Conversation({
     messages,
@@ -81,6 +83,12 @@ export function Conversation({
                         message={message}
                         waiting={message.id === waiting}
                         unread={unread.test(message) ? unread : null}
+                        seen={
+                            pending === undefined &&
+                            message.source === 'operator' &&
+                            acknowledged !== undefined &&
+                            !awaitsTick(message, acknowledged)
+                        }
                     />
                     <p
                         className={cn(
@@ -97,7 +105,17 @@ export function Conversation({
     )
 }
 
-function Head({ message, waiting, unread }: { message: Message; waiting: boolean; unread: Pending | null }) {
+function Head({
+    message,
+    waiting,
+    unread,
+    seen,
+}: {
+    message: Message
+    waiting: boolean
+    unread: Pending | null
+    seen: boolean
+}) {
     const clock = useClock()
     const comment = message.comment
     return (
@@ -127,6 +145,11 @@ function Head({ message, waiting, unread }: { message: Message; waiting: boolean
             {unread && (
                 <span title={unread.title}>
                     <Chip tone="running">{unread.label}</Chip>
+                </span>
+            )}
+            {seen && (
+                <span title={SEEN}>
+                    <Chip>seen</Chip>
                 </span>
             )}
             <Age at={message.at} variant="ago" className="ml-auto" />
