@@ -142,24 +142,19 @@ worktrees (TRUST_MODEL T4); canopy makes desks only where no symlink redirects t
 removal, and removes only desks it marked as its own. The result line names a PR per repository (§8), and each PR links
 its siblings and says which to merge first.
 
-### Splitting
-
-Until ROADMAP M46 replaces it with follow-up tickets, canopy splits a ticket only when an authorized replier's comment
-asks for it. The splitter, which can create tickets but not edit or push, checks the claim (D003) and creates one
-unlabeled child per repository, so a human authorizes each by labeling it after the split (TRUST_MODEL T1).
-
 ### Follow-up tickets
 
-ROADMAP M46, which holds the details; built but for removing Splitting, above, which it replaces. A worker that finds
-work outside its ticket may file it as a follow-up, linked to its ticket, with no label: a request, which authorizes
-nothing (TRUST_MODEL T1, D123). The operator decided (2026-10-19) that workers notice and ask, and humans authorize:
-a follow-up is worked only once a human labels it or starts it, as any ticket. canopy records the follow-ups an
-`implement` or `resume` run, public or private, reports in its result's `created` (§8), at most
-`policy.max_follow_ups` per run, and none from a follow-up's own run or from a run that rewrote its slot's git,
-checking only each key's text (D003). It then asks the operator: `follow_up_filed` (§14), about the parent, names each
-recorded follow-up not yet dispatched, started, or done. A refused entry never changes the run's status; it raises
-`follow_up_unrecorded`. Rejected: working a follow-up under its parent's label, since a worker would then authorize
-work for itself.
+ROADMAP M46, which holds the details. A worker that finds work outside its ticket may file it as a follow-up, linked to
+its ticket, with no label: a request, which authorizes nothing (TRUST_MODEL T1, D123). The operator decided (2026-10-19)
+that workers notice and ask, and humans authorize: a follow-up is worked only once a human labels it or starts it, as
+any ticket. canopy records the follow-ups an `implement` or `resume` run, public or private, reports in its result's
+`created` (§8), at most `policy.max_follow_ups` per run, and none from a follow-up's own run or from a run that rewrote
+its slot's git, checking only each key's text (D003). It then asks the operator: `follow_up_filed` (§14), about the
+parent, names each recorded follow-up not yet dispatched, started, or done. A refused entry never changes the run's
+status; it raises `follow_up_unrecorded`. An authorized reply asking for a split is guidance to the ticket's next run,
+whose worker files the pieces as follow-ups, ordered with the tracker's blocker relation. Splitting is no longer a run
+kind; `split` survives only as the kind of old runs. Rejected: working a follow-up under its parent's label, since a
+worker would then authorize work for itself.
 
 ### Open
 

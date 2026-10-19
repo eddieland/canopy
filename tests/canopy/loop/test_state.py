@@ -74,7 +74,7 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             slots=[slot(1)],
             runs_dir=runs_dir,
         )
-        # PROJ-6 was split in two, and neither child is done.
+        # PROJ-6 was split before follow-ups replaced splits (M46): its retired phase and run kind still read.
         db.set_ticket(conn, "PROJ-6", root, title="Rework the importer", phase=Phase.SPLIT)
         split = db.insert_run(
             conn,
@@ -86,7 +86,6 @@ def test_the_state_block_of_a_busy_workspace(canopy_env: CanopyEnv, markdown_sna
             runs_dir=runs_dir,
             works_units=False,
         )
-        db.record_split_children(conn, "PROJ-6", split, {"PROJ-7": "repo", "PROJ-8": "repo"})
         # PROJ-5 merged, and the tracker still shows it open.
         db.set_ticket(conn, "PROJ-5", root, title="Bump the SDK", phase=Phase.MERGED, done=True)
         decide(conn, earlier, "PROJ-5", "done", "merged")

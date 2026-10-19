@@ -100,7 +100,7 @@ describe('spend', () => {
         expect(labels).toEqual([
             'idle ticks',
             'overseer',
-            'workers and splits',
+            'workers',
             'plan triage',
             'plans',
             'chores',

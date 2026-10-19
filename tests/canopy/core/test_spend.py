@@ -218,7 +218,7 @@ def test_canopy_spend_prints_the_breakdown(canopy_env: CanopyEnv, capsys: pytest
     assert "Idle ticks were 20% of the live overseer's spend." in out
     assert ["timer", "3", "$0.50"] in words
     # A kind whose every run reported a cost is left out.
-    assert out[-1] == "No cost reported: 1 of 8 overseer runs, 1 of 2 worker and split runs, 1 of 2 chore runs."
+    assert out[-1] == "No cost reported: 1 of 8 overseer runs, 1 of 2 worker runs, 1 of 2 chore runs."
 
 
 def test_canopy_spend_json_is_the_breakdown_with_each_total(

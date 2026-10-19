@@ -34,8 +34,8 @@ if TYPE_CHECKING:
 # a run reads.
 NOTES_TIER = "ticket notes"
 LESSONS_TIER = "lessons"
-# The kinds whose prompts carry a ticket's notes and the memory contract; a review, a chore, and a split get no memory,
-# and a plan hears lessons only (DESIGN §28).
+# The kinds whose prompts carry a ticket's notes and the memory contract; a review and a chore get no memory, and a
+# plan hears lessons only (DESIGN §28).
 NOTE_KINDS = frozenset({RunKind.IMPLEMENT, RunKind.RESUME})
 LESSON_KINDS = frozenset({*NOTE_KINDS, RunKind.PLAN})
 # Bounds on what a run may write (DESIGN §28, Writing).

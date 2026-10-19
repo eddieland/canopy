@@ -31,9 +31,7 @@ SCRIPTS_DIR = Path(sys.executable).parent
 # The prefixes tests/fakes/agent records in its log's `env`. Keep in sync with it.
 RECORDED_ENV_PREFIXES = ("CANOPY_", "OPENCODE_")
 # What tests/fakes/agent reads its behavior from, for each role it plays. Keep in sync with it.
-FAKE_AGENT_PREFIXES = tuple(
-    f"FAKE_{role}_" for role in ("AGENT", "OVERSEER", "WORKER", "SPLITTER", "PLANNER", "CHORE", "REVIEWER")
-)
+FAKE_AGENT_PREFIXES = tuple(f"FAKE_{role}_" for role in ("AGENT", "OVERSEER", "WORKER", "PLANNER", "CHORE", "REVIEWER"))
 
 # Commits made under test have a fixed author, and git reads no config of the operator's or the machine's. Nor does it
 # start automatic maintenance: newer git (2.55 on CI) runs it in the background after a commit or a fetch, where it
@@ -296,7 +294,6 @@ labels = ["agent-ready-tester"]
 overseer_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-overseer {prompt}'
 worker_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker {prompt}'
 private_worker_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-worker-private {prompt}'
-split_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-splitter {prompt}'
 plan_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-planner --format json {prompt}'
 plan_triage_cmd = 'env OPENCODE_CONFIG_DIR={definitions_dir} agent run --agent canopy-plan-triage {prompt}'
 

@@ -346,7 +346,7 @@ class CostTotal(_Model):
     """What a subject's agent runs cost in all, as the agent runtime reported it (§13), however long ago they ran."""
 
     runs: int
-    """How many worker and split runs it counts, a running one included."""
+    """How many worker runs it counts, a running one included."""
     reviews: int
     """How many review runs it counts, a running one included."""
     priced: int
@@ -1661,7 +1661,7 @@ type SpendGroup = Annotated[
 type SpendKind = Annotated[
     Literal["overseer", "workers", "triage", "plans", "chores", "reviews"],
     Field(
-        description="A kind of agent run: each tick's overseer, worker and split runs, triage runs before a plan "
+        description="A kind of agent run: each tick's overseer, worker runs, triage runs before a plan "
         "(`needs-plan`, DESIGN §25), plan runs (`plan`, §25), chore runs, review runs."
     ),
 ]
@@ -1709,7 +1709,7 @@ class SpendTicket(_Model):
     title: str | None = None
     """Its title, as the overseer named it; None before it did."""
     runs: int
-    """How many of its worker and split runs started in the window, a running one included."""
+    """How many of its worker runs started in the window, a running one included."""
     reviews: int
     """How many review runs naming it started in the window."""
     cost_usd: float | None = None

@@ -14,7 +14,7 @@ clock after that. Sketch only; the design comes first, in §13 beside what a run
   that a plugin with no imports loads with no network, inside the sandbox (§24); and that the sandbox wrappers pass the
   variable below. Recorded on the `Status:` line; the operator decides whether to go on (2026-10-18), rather than a bar
   set now.
-- **The deadline.** Every agent run canopy starts with a timeout (the overseer, workers of every kind, plans, splits,
+- **The deadline.** Every agent run canopy starts with a timeout (the overseer, workers of every kind, plans,
   reviews, chores) gets `CANOPY_DEADLINE`, the moment its timeout fires, as Unix seconds, from the same clock `procs`
   kills it by. The kill stays the only guard (T3): the agent's own clock is advice.
 - **The plugin.** canopy ships one OpenCode plugin with its definitions, snapshotted with `agents/` and `skills/` (§13,

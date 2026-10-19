@@ -63,16 +63,7 @@ test("each series has one name in the totals, the legend, and the table, and the
     await expect(page.locator('main header p')).toHaveText(`${total ?? ''} over 7 days · no tickets done`)
     await expect(page.getByRole('heading', { level: 1 })).toHaveAttribute('title', /canopy spend --days N/u)
 
-    const series = [
-        'idle ticks',
-        'overseer',
-        'workers and splits',
-        'plan triage',
-        'plans',
-        'chores',
-        'reviews',
-        'dry runs',
-    ]
+    const series = ['idle ticks', 'overseer', 'workers', 'plan triage', 'plans', 'chores', 'reviews', 'dry runs']
     await expect(page.getByTestId('spend-legend').getByRole('listitem')).toHaveText(series)
     await expect(page.getByTestId('spend-table').locator('thead th')).toHaveText(['day', ...series, 'total', 'done'])
     // The totals name the overseer's whole before idle ticks' part of it, as canopy spend's columns do.
@@ -81,7 +72,7 @@ test("each series has one name in the totals, the legend, and the table, and the
         'total',
         'overseer',
         'idle ticks',
-        'workers and splits',
+        'workers',
         'plan triage',
         'plans',
         'chores',

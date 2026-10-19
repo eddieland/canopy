@@ -55,7 +55,7 @@ faster.
 
 - Routes today: attention, runs, ticks, tickets, pull requests, reviews, worktrees, chores, search, settings.
 - Terminology is fixed by the docs and code. Ticket, run, tick, worktree/slot, overseer, worker, attention item, chore,
-  review, finding, grant, guard, journal. Run kinds are implement, resume, split, and plan; older runs may be fix-ci.
+  review, finding, grant, guard, journal. Run kinds are implement, resume, and plan; older runs may be fix-ci or split.
   Attention reasons include `needs_human`, `green_unreviewed`, `untrusted_review`, and `attempt_limit`. Use these words;
   don't invent synonyms.
 - Local only. No requests to another origin at run time: no CDN fonts, analytics, or remote images.

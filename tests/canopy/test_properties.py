@@ -188,7 +188,6 @@ def test_every_config_key_declares_a_scope() -> None:
         "trust.authorized_repliers",
         "trust.trusted_reviewers",
         "trust.comment_prefix",
-        "runtime.split_cmd",
         "runtime.plan_cmd",
         "runtime.plan_triage_cmd",
         # Triage loosens the plan gate: only the operator turns it on, and says what is trivial (DESIGN §25).

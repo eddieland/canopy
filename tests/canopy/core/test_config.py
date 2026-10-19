@@ -132,6 +132,24 @@ def test_fix_cis_keys_were_removed_and_say_what_replaced_them(
         load(canopy_env.root, canopy_env.user_file)
 
 
+@pytest.mark.parametrize(
+    ("table", "key", "says"),
+    [
+        ("policy", "max_split_attempts = 1", r"policy\.max_split_attempts was removed: delete it; workers file"),
+        ("runtime", "split_cmd = 'opencode run {prompt}'", r"runtime\.split_cmd was removed: delete it; workers file"),
+    ],
+)
+def test_splits_keys_were_removed_and_say_what_replaced_them(
+    canopy_env: CanopyEnv, table: str, key: str, says: str
+) -> None:
+    """Workers file follow-up tickets now, which replaced split runs (M46)."""
+    text = canopy_env.user_file.read_text()
+    heading = f"\n[{table}]\n"
+    canopy_env.write_user(text.replace(heading, f"{heading}{key}\n") if heading in text else f"{text}{heading}{key}\n")
+    with pytest.raises(ConfigError, match=says):
+        load(canopy_env.root, canopy_env.user_file)
+
+
 @pytest.mark.parametrize("where", ["workspace", "user"])
 def test_unknown_keys_are_errors(canopy_env: CanopyEnv, where: str) -> None:
     if where == "workspace":
@@ -385,7 +403,6 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         runtime.overseer_cmd,
         runtime.worker_cmd,
         runtime.private_worker_cmd,
-        runtime.split_cmd,
         runtime.plan_cmd,
         runtime.plan_triage_cmd,
         runtime.chore_cmd,

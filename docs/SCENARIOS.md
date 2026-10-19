@@ -30,9 +30,6 @@ any OpenCode upgrade, and before relying on a permission they check.
   pass: denied tools refused, a repository's definition not loosening canopy's, a desk worker editing through its links
   and nothing beside them (with the workspace a plain directory and a git checkout), a reviewer reading only its
   checkout, and a worker refused Bazel's output base by its own path.
-- **S2. The splitter's MCP name patterns** (M8). Not in the canary yet. Give `canopy-splitter` a ticket and check that
-  OpenCode applies its name patterns to MCP tools: it can create and link tickets and comment on the parent, and is
-  refused any other write tool.
 - **S3. The private worker's wildcard deny** (M18). Confirmed in OpenCode's source (1.18.35), not in a run. Start a
   ticket privately and check that its worker can call the tracker's `tracker.read_tools` and is refused every other
   tool of the tracker's server, and the tracker CLIs in bash.
@@ -99,9 +96,6 @@ Run the ones in the area a change touches, or that rely on a prompt or guard it 
   to reach open PRs from one queue, with every worktree under the workspace root.
 - **S14. A joint run** (M7). A ticket that touches two repositories. Expect one run to open two PRs that link each
   other. Kill a joint run mid-way: the next tick returns all its slots.
-- **S15. A split on request** (M8). After S2, on a ticket covering two repositories, an authorized replier asks for a
-  split in a comment. Expect two linked children, the second blocked by the first, with no queue label on either, and
-  nothing dispatched for them until you label them; then they are worked in order, one PR each.
 
 ### Private tickets and trust
 
@@ -373,3 +367,8 @@ Retired 2026-10-18. Daily use exercises each, and the tests with the fakes hold 
 - **S31. Reloading config** (M12). A reload, a closed terminal, and `nohup` are `tests/canopy/loop/test_loop.py`'s and
   `tests/canopy/infra/test_hangup.py`'s.
 - **S41. A plan a week later** (M44). Plans are files canopy never removes (DESIGN §25), so a week changes nothing.
+
+Retired 2026-10-19. Split runs are gone, replaced by follow-ups (M46).
+
+- **S2. The splitter's MCP name patterns** (M8). The splitter's definition is gone.
+- **S15. A split on request** (M8). A reply asking for a split is now guidance to the ticket's next run.

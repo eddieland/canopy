@@ -1,11 +1,11 @@
 """What agent runs cost, by what they bought (DESIGN §11; ROADMAP M33), read by `canopy spend` and the web UI.
 
-Reads only. Every cost is what the agent runtime reported (§13), summed by the UTC day a run started on: the overseer
-of each tick, worker and split runs, triage runs before a plan and the plan runs (§25), chore runs, and review runs. A
-dry run's overseer is kept apart from the live ones', and idle ticks' (§6, Idle pacing) are a series of their own
-within the live overseer's. Beside what the window cost, what it got done: the tickets marked done in it, the plans its
-triage runs waived, and what each ticket and PR's own runs cost. And what each kind of run's first model call was
-sent, by the definitions snapshot it loaded: its fixed overhead, and how often it started cold. And what each kind's
+Reads only. Every cost is what the agent runtime reported (§13), summed by the UTC day a run started on: the overseer of
+each tick, worker runs (old split runs among them), triage runs before a plan and the plan runs (§25), chore runs, and
+review runs. A dry run's overseer is kept apart from the live ones', and idle ticks' (§6, Idle pacing) are a series of
+their own within the live overseer's. Beside what the window cost, what it got done: the tickets marked done in it, the
+plans its triage runs waived, and what each ticket and PR's own runs cost. And what each kind of run's first model call
+was sent, by the definitions snapshot it loaded: its fixed overhead, and how often it started cold. And what each kind's
 tool calls put into its context, by tool: the reads that each later model call reads again.
 """
 
@@ -42,8 +42,8 @@ DEFAULT_DAYS = 7
 IDLE_TICKS = 20
 
 # Each kind of agent run but the overseer's, by its table and which of the table's rows it counts: a triage before a
-# plan and a plan run (§25) are rows of `runs`, each a kind of its own, and every other row there a worker's or a
-# split's. Then every kind, the overseer's ticks included. The tables and conditions are fixed, never input.
+# plan and a plan run (§25) are rows of `runs`, each a kind of its own, and every other row there a worker's, an old
+# split's among them. Then every kind, the overseer's ticks included. The tables and conditions are fixed, never input.
 _TRIAGE = f"kind = '{RunKind.NEEDS_PLAN.value}'"
 _PLANS = f"kind = '{RunKind.PLAN.value}'"
 _TABLES: dict[Kind, tuple[str, str]] = {
@@ -125,7 +125,7 @@ class Unpriced:
 class TicketSpend:
     """What one ticket's runs that started in the window cost, and whether it was marked done in the window.
 
-    `runs` counts its worker and split runs, `reviews` the review runs naming it, running ones included; `done` is how
+    `runs` counts its worker runs, `reviews` the review runs naming it, running ones included; `done` is how
     the loop marked it done (`merged`, or `closed` in the tracker, §7) and `done_at` when, both None when it was not
     marked done in the window. Not the overseer's: a tick decides for the whole workspace, so its cost is no ticket's.
     """

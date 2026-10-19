@@ -11,7 +11,15 @@ from tests.conftest import CanopyEnv
 # A row of the overseer prompt's phase table: `| `phase` | evidence | action |`.
 _PHASE_ROW = re.compile(r"^\| `([a-z_]+)` \|", re.MULTILINE)
 
-UNIT_KINDS = sorted(k for k in prompts.WORKER if k not in ("split", "plan"))
+UNIT_KINDS = sorted(k for k in prompts.WORKER if k != "plan")
+#: What a plan's prompt needs beside the worker's values (DESIGN §25).
+PLAN_VALUES = {
+    **PROMPT_VALUES,
+    "AUTHORIZATION": "check",
+    "PLAN_FILE": ".canopy-plan.md",
+    "PLAN_OUT": ".canopy-new-plan.md",
+    "MAX_PLAN_CHARS": "100,000",
+}
 # The kinds whose prompt checks the queue label through `{{LABELS}}`: a plan's carries its check in `{{AUTHORIZATION}}`.
 LABELED_KINDS = sorted(k for k in prompts.WORKER if k != "plan")
 
@@ -34,14 +42,6 @@ def test_shipped_worker_prompts_render_completely(canopy_env: CanopyEnv, kind: s
     prompts.render_worker(
         load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES, required=prompts.REQUIRED_STANDING
     )
-
-
-def test_the_shipped_split_prompt_renders_completely(canopy_env: CanopyEnv) -> None:
-    cfg = load(canopy_env.root, canopy_env.user_file)
-    text = prompts.render_worker(cfg, "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT)
-    assert "{{" not in text
-    assert "Read comment 10234 on PROJ-1." in text
-    assert text.rstrip().endswith('"children":{"<child key>":"<repository name>"}}')
 
 
 @pytest.mark.parametrize("private", [False, True])
@@ -82,16 +82,6 @@ def test_a_plan_prompt_needs_its_authorization_and_the_operators_messages(canopy
     values = {**PROMPT_VALUES, "AUTHORIZATION": "check", "PLAN_OUT": ".canopy-new-plan.md"}
     with pytest.raises(prompts.PromptError, match=rf"missing required placeholder \{{\{{{missing}\}}\}}"):
         prompts.render_worker(cfg, "plan", values)
-
-
-def test_a_split_prompt_needs_the_request(canopy_env: CanopyEnv) -> None:
-    # The splitter's own check of who asked for the split reads the request; an override without it fails closed.
-    overrides = canopy_env.user_file.parent / "prompts"
-    overrides.mkdir()
-    (overrides / "worker-split.md").write_text("Split {{KEY}} over {{REPOSITORIES}} for {{LABELS}}\n")
-    cfg = load(canopy_env.root, canopy_env.user_file)
-    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{REQUEST\}\}"):
-        prompts.render_worker(cfg, "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT)
 
 
 def test_rendering_is_one_pass(canopy_env: CanopyEnv) -> None:
@@ -244,12 +234,12 @@ def test_with_a_pr_skill_an_override_must_say_how_to_open_prs(canopy_env: Canopy
 def test_a_pr_skill_does_not_constrain_kinds_that_open_no_pr(canopy_env: CanopyEnv) -> None:
     overrides = canopy_env.user_file.parent / "prompts"
     overrides.mkdir()
-    (overrides / "worker-split.md").write_text("Split {{KEY}} for {{LABELS}} in {{REPOSITORIES}} as {{REQUEST}}\n")
-    with_pr_skill(canopy_env, "acme-pr")
-    text = prompts.render_worker(
-        load(canopy_env.root, canopy_env.user_file), "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT
+    (overrides / "worker-plan.md").write_text(
+        "Plan {{KEY}} in {{REPOSITORIES}}: {{AUTHORIZATION}} {{OPERATOR_MESSAGES}} {{PLAN_OUT}}\n"
     )
-    assert text.startswith("Split PROJ-1 for `agent-ready-alice` in ")
+    with_pr_skill(canopy_env, "acme-pr")
+    text = prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "plan", PLAN_VALUES)
+    assert text.startswith("Plan PROJ-1 in ")
 
 
 def with_trailer(env: CanopyEnv, name: str, email: str) -> None:
@@ -327,18 +317,14 @@ def test_with_the_trailer_off_an_override_must_carry_the_attribution(canopy_env:
     )
 
 
-def test_the_trailer_off_does_not_constrain_a_split(canopy_env: CanopyEnv) -> None:
+def test_the_trailer_off_does_not_constrain_a_plan(canopy_env: CanopyEnv) -> None:
     without_trailer(canopy_env)
-    prompts.render_worker(
-        load(canopy_env.root, canopy_env.user_file), "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT
-    )
+    prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "plan", PLAN_VALUES)
 
 
-def test_a_custom_trailer_does_not_constrain_a_split(canopy_env: CanopyEnv) -> None:
+def test_a_custom_trailer_does_not_constrain_a_plan(canopy_env: CanopyEnv) -> None:
     with_trailer(canopy_env, "Acme Agent", "agent@acme.test")
-    prompts.render_worker(
-        load(canopy_env.root, canopy_env.user_file), "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT
-    )
+    prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "plan", PLAN_VALUES)
 
 
 @pytest.mark.parametrize("private", [False, True])
@@ -371,11 +357,9 @@ def test_with_rebase_an_override_must_say_how_to_bring_a_base_in(canopy_env: Can
         prompts.render_worker(load(canopy_env.root, canopy_env.user_file), kind, PROMPT_VALUES)
 
 
-def test_rebase_does_not_constrain_a_split(canopy_env: CanopyEnv) -> None:
+def test_rebase_does_not_constrain_a_plan(canopy_env: CanopyEnv) -> None:
     with_rebase(canopy_env)
-    prompts.render_worker(
-        load(canopy_env.root, canopy_env.user_file), "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT
-    )
+    prompts.render_worker(load(canopy_env.root, canopy_env.user_file), "plan", PLAN_VALUES)
 
 
 def test_shipped_overseer_prompt_reads_the_comment_marks(canopy_env: CanopyEnv) -> None:
@@ -407,19 +391,20 @@ def test_ticket_set_accepts_every_phase_in_the_overseer_prompts_table() -> None:
     table = text.split("## Phase table", 1)[1].split("\n## ", 1)[0]
     phases = _PHASE_ROW.findall(table)
     assert phases
-    assert sorted(phases) == sorted(vocab.Phase)
+    # `split` is retired (M46): old tickets may hold it, and nothing records it.
+    assert sorted(phases) == sorted(p for p in vocab.Phase if p is not vocab.Phase.SPLIT)
     # The table says the phases from `pushed_no_pr` to `merged` are a unit's; the CLI then requires --repo for them.
     unit = phases[phases.index("pushed_no_pr") : phases.index("merged") + 1]
     assert set(unit) == vocab.UNIT_PHASES
 
 
-def test_every_run_kind_has_a_worker_prompt_and_every_kind_but_split_and_plan_a_private_one() -> None:
-    # A split never runs for a private ticket, and a plan's one prompt serves both (DESIGN §22, §25). A triage is no
-    # worker run: its one prompt, for both too, is its own, and hears neither the standing instructions nor the notice.
-    # `fix-ci` is dispatched no more, and its prompts went with it (DESIGN §8).
-    workers = set(vocab.RunKind) - {vocab.RunKind.FIX_CI, vocab.RunKind.NEEDS_PLAN}
+def test_every_run_kind_has_a_worker_prompt_and_every_kind_but_plan_a_private_one() -> None:
+    # A plan's one prompt serves both (DESIGN §22, §25). A triage is no worker run: its one prompt, for both too, is its
+    # own, and hears neither the standing instructions nor the notice. `fix-ci` and `split` are dispatched no more, and
+    # their prompts went with them (DESIGN §8, §18).
+    workers = set(vocab.RunKind) - {vocab.RunKind.FIX_CI, vocab.RunKind.SPLIT, vocab.RunKind.NEEDS_PLAN}
     assert set(prompts.WORKER) == workers
-    assert set(prompts.WORKER_PRIVATE) == workers - {vocab.RunKind.SPLIT, vocab.RunKind.PLAN}
+    assert set(prompts.WORKER_PRIVATE) == workers - {vocab.RunKind.PLAN}
     shipped = {p.name for p in resources.prompts_dir().iterdir()}
     assert prompts.TRIAGE in shipped
     assert shipped.isdisjoint(prompts.RETIRED_WORKER)

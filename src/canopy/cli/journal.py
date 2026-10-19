@@ -164,7 +164,8 @@ def ticket_group() -> None:
 )
 @click.option(
     "--phase",
-    type=click.Choice([p.value for p in vocab.Phase]),
+    # `split` is retired (M46): old tickets may still hold it, and nothing sets it.
+    type=click.Choice([p.value for p in vocab.Phase if p is not vocab.Phase.SPLIT]),
     help="The ticket's phase, or a unit's with --repo: pushed_no_pr to merged are about a PR, so a unit's.",
 )
 @click.option(

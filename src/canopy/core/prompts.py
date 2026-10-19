@@ -23,7 +23,6 @@ OVERSEER = "overseer.md"
 WORKER: dict[str, str] = {
     RunKind.IMPLEMENT: "worker-implement.md",
     RunKind.RESUME: "worker-resume.md",
-    RunKind.SPLIT: "worker-split.md",
     RunKind.PLAN: "worker-plan.md",
 }
 # A private ticket's worker prompts (DESIGN §22): no label check, since the harness checked the start record, and
@@ -79,9 +78,6 @@ REQUIRED_WORKER = ("LABELS",)
 # Placeholders a joint run's prompt must also use: its worker learns its repositories and the result's `prs` from them
 # (DESIGN §18). A prompt without them still serves a run in one repository.
 REQUIRED_JOINT = ("REPOSITORIES", "PRS")
-# Placeholders a split's prompt must also use: its repositories, and the comment that asked for the split, which the
-# splitter reads to check who asked. An override without it would split on the overseer's word alone.
-REQUIRED_SPLIT = ("REPOSITORIES", "REQUEST")
 # Placeholders a plan's prompt must use (DESIGN §25), for a public ticket and a private one alike: its repositories, the
 # planner's own authorization check, which names the queue labels on a public ticket (D051), the operator's messages,
 # which carry a reply asking for changes to the plan it replaces, and the file the plan is written to, without which
@@ -97,14 +93,14 @@ REQUIRED_REVIEWER = ("PR_URL", "SHA", "CHECKOUT")
 # A resume for a canopy review's findings must carry them: they are in the journal and nowhere else (D114). An
 # override written before they existed still serves every other resume.
 REQUIRED_REVIEW = ("REVIEW_FINDINGS",)
-# The operator's standing instructions (`paths.worker_instructions`, DESIGN §12), in every prompt but a split's. An
+# The operator's standing instructions (`paths.worker_instructions`, DESIGN §12), in every worker prompt. An
 # override written before they existed still serves an operator who sets none; once one is set, it fails to render
 # instead of dropping them. They are in every run's prompt, so they are bounded.
 REQUIRED_STANDING = ("STANDING_INSTRUCTIONS",)
 MAX_STANDING_BYTES = 4096
 # The operator's notice to workers (`canopy notice`, DESIGN §8), in every prompt that builds, tests, or reads CI: every
-# worker's but a split's, and the reviewer's. An override written before notices existed still serves while none is in
-# force; while one is, it fails to render (`bad_prompt`) instead of dropping it, and `canopy notice` names it.
+# worker's, and the reviewer's. An override written before notices existed still serves while none is in force; while
+# one is, it fails to render (`bad_prompt`) instead of dropping it, and `canopy notice` names it.
 REQUIRED_NOTICE = ("NOTICE",)
 # The operator's notes on a review request reach its reviewer through `{{NOTES}}`; a reviewer's override without it
 # still serves every review with none, and fails to render one with notes rather than drop them.
@@ -125,8 +121,8 @@ REQUIRED_REBASE = ("BRANCH_UPDATE",)
 # Agent memory's placeholders (DESIGN §28): a ticket's notes, the operator's lessons, and the result fields memory adds.
 # Each renders as the empty string while its tier is off; the shipped prompts place them so that leaves nothing.
 MEMORY_PARTS = ("TICKET_MEMORY", "WORKSPACE_LESSONS", "MEMORY_CONTRACT")
-# The prompt files that carry `{{NOTICE}}`, and the run kinds each serves: every worker's but a split's, public and
-# private, the planner's, and the reviewer's.
+# The prompt files that carry `{{NOTICE}}`, and the run kinds each serves: every worker's, public and private, the
+# planner's, and the reviewer's.
 _HEARS_NOTICE: dict[str, list[str]] = {
     **{WORKER[k]: [str(k)] for k in WORKER_PRIVATE},
     **{WORKER_PRIVATE[k]: [f"{k} (private)"] for k in WORKER_PRIVATE},
@@ -189,15 +185,17 @@ def follow_ups(
 ) -> str:
     """Return a worker's `{{FOLLOW_UPS}}` when it may file follow-up tickets (DESIGN §18): what one is, and how.
 
-    A follow-up is a request: it authorizes nothing, and canopy works it only once the operator labels or starts it.
-    A private ticket's worker files them too, the one thing it writes to the tracker: its version says that a follow-up
-    is public all the same, and that it lists them in its summary, since it comments nowhere.
+    A follow-up is a request: it authorizes nothing, and canopy works it only once the operator labels or starts it. A
+    request to split the ticket is the one time its own work is filed as follow-ups (M46). A private ticket's worker
+    files them too, the one thing it writes to the tracker: its version says that a follow-up is public all the same,
+    and that it lists them in its summary, since it comments nowhere.
 
     Returns:
         The instructions, the bound, the repositories a follow-up may name, and the result field that reports them.
     """
     names = ", ".join(f"`{r}`" for r in repos)
     queue = ", ".join(f"`{label}`" for label in labels)
+    asker = "the operator" if private else "an authorized replier or the operator"
     if private:
         listed = (
             "Creating them is the one thing you write to the tracker: no comment on any ticket, and no edit to "
@@ -211,7 +209,9 @@ def follow_ups(
     return (
         "You may file follow-up tickets: work outside this ticket that you found while doing it, such as a TODO your "
         "change leaves, a fix you saw and did not make, or a next step the change makes possible. Do this ticket's "
-        f"own work yourself, never as a follow-up. File at most {limit}, and none for work that is already a ticket."
+        f"own work yourself, never as a follow-up, unless {asker} asked for {key} to be split into separate tickets: "
+        "then file each part the request names as a follow-up, and do only what it leaves to this ticket, if "
+        f"anything. File at most {limit}, and none for work that is already a ticket."
         "\n\n"
         f"Create each in {key}'s project through the tracker, linked to {key} as its parent the way the tracker skill "
         f"says, with no assignee and no labels: never one of {queue}, and never `{needs_human}`. Its body says what it "
@@ -415,29 +415,28 @@ def render_worker(
     a kind that opens PRs that lacks `REQUIRED_PR_SKILL`. A `private` prompt is a private ticket's, which must carry
     `REQUIRED_PRIVATE` in place of `REQUIRED_WORKER`: it checks no label. A plan has one prompt for both, which carries
     its own check. `{{STANDING_INSTRUCTIONS}}` comes from the config, not `values`, and with
-    `paths.worker_instructions` set every prompt but a split's must carry it. `{{COMMIT_ATTRIBUTION}}` and
-    `{{COMMIT_TRAILER}}` come from the config too: with `trust.commit_trailer_name` or `trust.commit_trailer_email`
+    `paths.worker_instructions` set every prompt must carry it. `{{COMMIT_ATTRIBUTION}}` and `{{COMMIT_TRAILER}}` come
+    from the config too: with `trust.commit_trailer_name` or `trust.commit_trailer_email`
     changed from the default every prompt for a kind that commits must carry one of them, and with
     `trust.commit_trailer` off it must carry `{{COMMIT_ATTRIBUTION}}`. So does `{{BRANCH_UPDATE}}`, which every such
     prompt must carry with `trust.rebase` set. `notice` is the operator's notice in force (`core.notice`), for
-    `{{NOTICE}}`: with one, every prompt but a split's must carry it, and a split's hears none.
+    `{{NOTICE}}`: with one, every prompt must carry it.
     """
-    instructed = kind != RunKind.SPLIT
     values = {
         # Agent memory's parts (DESIGN §28): empty unless dispatch rendered them, so with memory off every prompt is
         # the same bytes as before it existed.
         **dict.fromkeys(MEMORY_PARTS, ""),
         **values,
-        "STANDING_INSTRUCTIONS": standing_instructions(config) if instructed else "None.",
-        "NOTICE": notice if notice is not None and instructed else "None.",
+        "STANDING_INSTRUCTIONS": standing_instructions(config),
+        "NOTICE": notice if notice is not None else "None.",
         "COMMIT_ATTRIBUTION": commit_attribution(config),
         "COMMIT_TRAILER": commit_trailer(config),
         "BRANCH_UPDATE": branch_update(config, values.get("BRANCH", "")),
     }
     pr_skill = REQUIRED_PR_SKILL if config.runtime.pr_skill and kind in OPENS_PRS else ()
-    standing = REQUIRED_STANDING if config.paths.worker_instructions is not None and instructed else ()
+    standing = REQUIRED_STANDING if config.paths.worker_instructions is not None else ()
     rebase = REQUIRED_REBASE if config.trust.rebase and kind in COMMITS else ()
-    noticed = REQUIRED_NOTICE if notice is not None and instructed else ()
+    noticed = REQUIRED_NOTICE if notice is not None else ()
     required = (*pr_skill, *standing, *rebase, *noticed, *required)
     one_of = _required_attribution(config) if kind in COMMITS else ()
     if kind == RunKind.PLAN:

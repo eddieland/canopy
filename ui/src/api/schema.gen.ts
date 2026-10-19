@@ -2020,7 +2020,7 @@ export type components = {
             reviews: number;
             /**
              * Runs
-             * @description How many worker and split runs it counts, a running one included.
+             * @description How many worker runs it counts, a running one included.
              */
             runs: number;
         };
@@ -4793,7 +4793,7 @@ export type components = {
          */
         SpendGroup: "idle" | "busy" | "hand_run" | "not_ok" | "dry_run";
         /**
-         * @description A kind of agent run: each tick's overseer, worker and split runs, triage runs before a plan (`needs-plan`, DESIGN §25), plan runs (`plan`, §25), chore runs, review runs.
+         * @description A kind of agent run: each tick's overseer, worker runs, triage runs before a plan (`needs-plan`, DESIGN §25), plan runs (`plan`, §25), chore runs, review runs.
          * @enum {string}
          */
         SpendKind: "overseer" | "workers" | "triage" | "plans" | "chores" | "reviews";
@@ -4866,7 +4866,7 @@ export type components = {
             reviews: number;
             /**
              * Runs
-             * @description How many of its worker and split runs started in the window, a running one included.
+             * @description How many of its worker runs started in the window, a running one included.
              */
             runs: number;
             /**

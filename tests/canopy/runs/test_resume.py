@@ -158,6 +158,14 @@ def test_fix_ci_is_refused_naming_resume(scenario: Scenario, mode: str) -> None:
     assert scenario.refuses(fix_ci, dry_run=mode == "dry run") == [("refused:bad_kind", reason)]
 
 
+@pytest.mark.parametrize("mode", ["live", "dry run"])
+def test_split_is_refused_naming_follow_ups(scenario: Scenario, mode: str) -> None:
+    split = canopy("dispatch", KEY, "--repo", "repo", *LABEL, "--kind", "split", "--context", "split it")
+    [(action, reason)] = scenario.refuses(split, dry_run=mode == "dry run")
+    assert action == "refused:bad_kind"
+    assert reason.startswith("split is retired: a worker files follow-up tickets now")
+
+
 @pytest.mark.parametrize(
     ("args", "reason"),
     [

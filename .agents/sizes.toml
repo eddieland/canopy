@@ -6,10 +6,9 @@
 "agents/canopy-plan-triage.md" = 3146
 "agents/canopy-planner.md" = 3519
 "agents/canopy-reviewer.md" = 2448
-"agents/canopy-splitter.md" = 2060
 "agents/canopy-worker-private.md" = 5849
 "agents/canopy-worker.md" = 4795
-"prompts/overseer.md" = 66794
+"prompts/overseer.md" = 63813
 "prompts/plan-triage.md" = 4480
 "prompts/reviewer.md" = 5895
 "prompts/worker-implement-private.md" = 6630
@@ -17,6 +16,5 @@
 "prompts/worker-plan.md" = 8502
 "prompts/worker-resume-private.md" = 8710
 "prompts/worker-resume.md" = 9639
-"prompts/worker-split.md" = 4981
-"skills/tracker-github/SKILL.md" = 4517
-"skills/tracker-jira/SKILL.md" = 3750
+"skills/tracker-github/SKILL.md" = 4184
+"skills/tracker-jira/SKILL.md" = 3411

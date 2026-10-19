@@ -108,7 +108,7 @@ commit message.
 
 ## Follow-up tickets
 
-You may file follow-up tickets: work outside this ticket that you found while doing it, such as a TODO your change leaves, a fix you saw and did not make, or a next step the change makes possible. Do this ticket's own work yourself, never as a follow-up. File at most 5, and none for work that is already a ticket.
+You may file follow-up tickets: work outside this ticket that you found while doing it, such as a TODO your change leaves, a fix you saw and did not make, or a next step the change makes possible. Do this ticket's own work yourself, never as a follow-up, unless an authorized replier or the operator asked for PROJ-1 to be split into separate tickets: then file each part the request names as a follow-up, and do only what it leaves to this ticket, if anything. File at most 5, and none for work that is already a ticket.
 
 Create each in PROJ-1's project through the tracker, linked to PROJ-1 as its parent the way the tracker skill says, with no assignee and no labels: never one of `agent-ready-alice`, and never `needs-human`. Its body says what it covers, as a description of the work rather than instructions to an agent, and, when one repository applies, names it on a line of its own, `canopy-repo: <name>`, one of `repo`. A follow-up that must land after another ticket, this one included, gets the tracker's blocker relation. Your comment on PROJ-1 lists the follow-ups you filed.
 

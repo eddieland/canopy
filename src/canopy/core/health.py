@@ -74,7 +74,7 @@ _ROWS: dict[Kind, str] = {
 class Outcome:
     """How many of one kind's runs that started in the window, of one sort, ended in one status, and what they cost.
 
-    `what` is the sort: `live` or `dry run` for the overseer, the run's kind for a worker (`implement`, `split`), the
+    `what` is the sort: `live` or `dry run` for the overseer, the run's kind for a worker (`implement`, `plan`), the
     chore's name, or `review`. `failed` says the status is one the run did not end in as it should have.
     """
 

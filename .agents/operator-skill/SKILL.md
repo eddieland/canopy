@@ -130,8 +130,8 @@ Work through these in order and stop at the first that explains it.
      `tracker.labels`), `capacity` (all `capacity.max_workers` slots busy), `running` (a worker is already on it),
      `attempt_limit` (the kind's `policy.max_<kind>_attempts`, plus any `canopy grant`, is used up; no count
      resets), `cooldown` (a `resume` for CI alone waits `policy.ci_cooldown_minutes` after the last run that worked on
-     CI), `bad_kind` (`fix-ci`, which a `resume --reason ci` replaced), `bad_reason` (a `resume` without `--reason`, or
-     a cursor without its reason), `no_slot` (treehouse had
+     CI), `bad_kind` (`fix-ci`, which a `resume --reason ci` replaced, or `split`, which follow-ups replaced),
+     `bad_reason` (a `resume` without `--reason`, or a cursor without its reason), `no_slot` (treehouse had
      no free worktree, or the pool is at its declared size), `bad_slug`, `bad_base`, `no_branch` (nothing to continue
      in that repository yet), `unknown_repo` (no `--repo`, or a repository not in the map or not cloned), `bad_prompt` (the
      worker prompt did not render; an override may lack `{{LABELS}}`, or for a run over several repositories
@@ -181,16 +181,14 @@ no dismissing one, except a chore's finding (below). Reasons:
 | `not_trivial` | A triage waived the ticket's plan, but a review judged its PR high impact: read the PR with that in mind. |
 | `drafts_waiting` | A run drafted replies for you: `canopy draft list KEY`, then `edit`, `drop`, or `send` each. |
 | `canopy_unavailable` | `canopy --version` failed where the loop runs, so the overseer did not run: fix the install or PATH. |
-| `multi_repo` | Independent pieces in several repositories, or a split not done: decide. Ask for a split below. |
-| `split_unlabeled` | A split's children have no queue label: label each one you want worked. |
-| `split_self_labeled` | A split child was labeled before its split ended: remove the label, add it again. |
+| `multi_repo` | Independent pieces in several repositories: decide. Ask for a split below. |
+| `follow_up_filed` | A worker filed follow-up tickets: label or `canopy start` each one you want worked. |
 
 To retry after a run went wrong, an authorized replier comments on the ticket; otherwise take the ticket over.
 
-To split a ticket that needs several repositories into one ticket per repository, an authorized replier comments on it
-asking for a split. In a workspace of several repositories, a later tick dispatches a splitter, which creates the
-children with no labels and comments on the ticket; label each child to start it. Without such a comment a ticket is
-never split.
+To split a ticket into several, such as one per repository, an authorized replier comments on it asking for a split.
+The ticket's next run files the pieces as follow-up tickets, linked to it, with no labels; label or
+`canopy start` each one you want worked. Without such a comment a ticket is never split.
 
 The overseer may record other reasons; the detail says what it wants.
 
@@ -205,7 +203,7 @@ lets the ticket move on.
 
 Workers post as the operator, so every comment they post starts with `trust.comment_prefix` (`CANOPY:` by default) and
 ends with `trust.comment_suffix`, whichever are set. A comment carrying those marks is a worker's: it never resumes,
-splits, or asks for changes, whoever wrote it. Do not start a reply meant to steer a worker with the prefix.
+asks for a split, or asks for changes, whoever wrote it. Do not start a reply meant to steer a worker with the prefix.
 
 ## Chore and review findings
 

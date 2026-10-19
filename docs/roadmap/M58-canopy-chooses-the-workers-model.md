@@ -18,8 +18,8 @@ for the canary after it.
   also passes `--model`; and whether any `--format json` event names the model that served a call. Issue #275 found
   that `step_start` and `step_finish` carry only ids, snapshot, cost, and tokens, and that the session stores each
   message's `providerID` and `modelID`, which `opencode export` prints; Stage 0 confirms both on the pinned version.
-- **Every agent** (the operator, 2026-10-19): `worker` (the public and the private worker), `planner`, `splitter`
-  while it exists, `plan_triage`, `reviewer`, `overseer`, and `chore` (§13, Each agent's model).
+- **Every agent** (the operator, 2026-10-19): `worker` (the public and the private worker), `planner`,
+  `plan_triage`, `reviewer`, `overseer`, and `chore` (§13, Each agent's model).
 - **canopy sets the model, not the template.** When `core/definitions.py` renders a run's snapshot, it writes a
   `model:` key into the frontmatter of each agent's definitions, as it renders the rebase rules and the private
   worker's tracker tools today. The digest covers the rendered text, so each set of models gets its own immutable
@@ -31,7 +31,7 @@ for the canary after it.
 - **A default per agent.** `[runtime.models]`, one `provider/model` id per agent name, each empty by default, private
   as every `runtime` key is (T7), so a shared workspace file cannot choose what the operator's spend buys.
 - **The operator's override per ticket.** `canopy model KEY provider/model` for the ticket's workers, `--agent NAME`
-  for its planner, splitter, triage, or reviewer, and `--clear`, a journal fact on the ticket and agent, which may be
+  for its planner, triage, or reviewer, and `--clear`, a journal fact on the ticket and agent, which may be
   set before canopy has seen the ticket and outlasts `canopy forget`. It covers every run of that agent for the ticket
   until it is cleared, so a canary ticket stays on one model. The overseer and chores work on no one ticket and take
   only their default. Like `stop`, `reply`, and `grant`, it refuses as `inside_run` when `CANOPY_TICK_ID` or
