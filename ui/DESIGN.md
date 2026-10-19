@@ -1165,17 +1165,17 @@ sliver beside four others; and its axis names short call numbers without measuri
   path and branch, a run's or chore run's session id, a chore run's log) it shows only while its row (`group/copy`) is
   hovered or it has the focus, keeping its space so nothing moves, and always on a touch screen. The clipboard needs a
   secure context (https or localhost), so elsewhere there is no button and the text stays selectable.
-- **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was
-  done shows too little of it: a copy names what it copied. It sits at the bottom center of the window on `surface`
-  with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title in `text-sm`, and a line under it
-  in muted monospace `text-xs`, on one line with an ellipsis where it is cut: what it names is on the clipboard,
-  whole. It closes on its own after 3 seconds, held while the pointer or the focus is on it, or when swiped down; F8
-  reaches it from the keyboard and Escape closes it. At most three show, the newest last. A screen reader announces
-  it. It never carries an action, and it is never the only place an outcome shows: the control that acted says so
-  too, and a refusal is still a `Notice`. A reply that moves the attention page on (The attention list is an inbox,
-  above) takes its form with it, so its toast says what it did, and its item's row and conversation keep it.
-  `main.tsx` renders the one `Toaster`, around the router, so a toast
-  outlives the page it came from.
+- **A toast** (`Toaster`, `useToast` in `src/hooks/use-toast.ts`) says what an action did when the place it was done
+  shows too little of it: a copy names what it copied, a draft's send what it sent. It sits at the bottom center of the
+  window on `surface` with a hairline, a `Check` in the accent or an `X` in `status-failed`, its title in `text-sm`, and
+  a line under it in muted monospace `text-xs`, on one line with an ellipsis where it is cut: a copy's text is on the
+  clipboard, whole, and a send's URL under its card. It closes on its own after 3 seconds, held while the pointer or the
+  focus is on it, or when swiped down; F8 reaches it from the keyboard and Escape closes it. At most three show, the
+  newest last. A screen reader announces it. It never carries an action, and it is never the only place an outcome
+  shows: the control that acted says so too, and a refusal is still a `Notice`. A reply that moves the attention page on
+  (The attention list is an inbox, above) takes its form with it, so its toast says what it did, and its item's row and
+  conversation keep it. `main.tsx` renders the one `Toaster`, around the router, so a toast outlives the page it came
+  from.
 - **The note of what changed while away** is the one toast no action shows (`useAwayNote`, `src/lib/away.ts`).
   Shown again after it was hidden 10 minutes or more, the tab says in one line what changed meanwhile: what newly
   blocks work first (`blocking`, as the tab's count), then the items cleared, the PRs opened, and the runs ended
@@ -1358,7 +1358,10 @@ sliver beside four others; and its axis names short call numbers without measuri
   verbs, `sm` buttons each with the CLI's command on hover: `Send` (default) on a waiting draft, outline `Edit` and
   ghost `Drop` on one waiting or unchecked, ghost `Undo` on a dropped one, and a `LinkOut` to a sent one. `Edit` opens
   the text in a `Textarea` with its count against 4,000, `Save` disabled past it. What each verb did goes under it
-  (`Notice`), in `canopy draft`'s words. A ticket's own drafts (`TicketDrafts`) are a `Drafts for the ticket` panel
+  (`Notice`), in `canopy draft`'s words. `Send` reads `Sending…` until the post returns, and a toast says what the send
+  did as well, since a send speaks for the operator outside canopy and the line under the card leaves with its attention
+  item at the next tick: the draft's fate, or how many of several reached the PR, with the URL when they share one, and
+  a cross when any is not on the PR. A ticket's own drafts (`TicketDrafts`) are a `Drafts for the ticket` panel
   under the ticket page's grid, shown only when it has any, each card naming the issue it goes to in monospace, as
   text and never a link, since a worker named it.
 - **Search** sits atop the nav on every page (`SearchBox`, a `SearchField`): a magnifier, the field, and `/` in a
