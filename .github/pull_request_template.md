@@ -25,7 +25,7 @@ goes in docs/SCENARIOS.md; a live measurement a milestone cites, in docs/MEASURE
 
 <!--
 The design section that states this behavior, and what changed in it; or why none does. Also README.md if the install
-path or daily surface changed, the milestone's Status line in docs/ROADMAP.md if this meets its acceptance criteria,
+path or daily surface changed, the milestone's Status line in docs/roadmap/ if this meets its acceptance criteria,
 and docs/DECISIONS.md only if the change passes the bar at the top of that file. Delete what does not apply.
 -->
 

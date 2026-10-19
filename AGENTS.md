@@ -9,7 +9,8 @@ Instructions for any agent working in this repository. Humans should read it too
 3. `docs/design/README.md`: target shape. Normative. It holds the overview and maps the rest of the design, in the
    same directory; read the sections your work touches.
 4. `docs/TRUST_MODEL.md`: security posture. Normative.
-5. `docs/ROADMAP.md`: milestones and acceptance criteria. Work in this order.
+5. `docs/roadmap/README.md`: milestones in order, each one's status, and a file per milestone with its acceptance
+   criteria. Work in this order; read the file of the milestone your work belongs to.
 6. `docs/DECISIONS.md`: the few choices every agent must know, whatever it works on. Read it whole; add to it rarely.
 
 If code and the design disagree, the design doc wins until a decision entry says otherwise.
@@ -17,9 +18,10 @@ If code and the design disagree, the design doc wins until a decision entry says
 ## How to work
 
 - Work one milestone at a time. Do not start milestone N+1 until milestone N meets its acceptance criteria.
-- Keep the milestone's `Status:` line in `docs/ROADMAP.md` current. The PR that meets the acceptance criteria marks it
-  done with the date, what was learned, and how that changes next steps. The format is at the top of that file. Read
-  earlier milestones' `Learned` and `Next` before starting a new one.
+- Keep the `Status:` line in the milestone's file under `docs/roadmap/` current, and its line in that directory's
+  `README.md` with it. The PR that meets the acceptance criteria marks it done with the date, what was learned, and how
+  that changes next steps. The format is at the top of the README. Read earlier milestones' `Learned` and `Next`
+  before starting a new one.
 - A live measurement a milestone cites goes in `docs/MEASUREMENTS.md`: one dated section each, not edited after, so a
   re-measurement is a new section.
 - A live check worth running again, against real systems, goes in `docs/SCENARIOS.md`, naming the milestone it came
@@ -39,7 +41,7 @@ If code and the design disagree, the design doc wins until a decision entry says
   operator settled. The test: could an agent working on an unrelated part of canopy break it, or reopen it, without
   knowing? If not, it is not a decision entry. Why a feature behaves as it does, and what was rejected for it, goes in
   the design next to the behavior; why a line of code is so goes in a comment there; the story of a change goes in its
-  PR; progress goes on the milestone's lines in `docs/ROADMAP.md`. A new feature, command, config key, default, or
+  PR; progress goes on the milestone's lines in `docs/roadmap/`. A new feature, command, config key, default, or
   dependency is not a decision by itself. When in doubt, leave it out.
 - An entry that passes is short: a title that states the decision and two to four one-line bullets. The bar and the
   format are at the top of `docs/DECISIONS.md`.
