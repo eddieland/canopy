@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { draft, pullRequestThreads, reviewThread } from '@/api/mocks'
 
-import { draftChars, movedHead, open, placeThreads, waiting } from './drafts'
+import { draftAnchor, draftChars, listDrafts, movedHead, open, placeThreads, threadWhere, waiting } from './drafts'
 
 describe('waiting', () => {
     it("takes the review's body first, then each thread's, and only what waits", () => {
@@ -44,6 +44,47 @@ describe('placeThreads', () => {
         const placed = placeThreads(pullRequestThreads())
         expect(placed.elsewhere.map((t) => t.id)).toEqual(['PRRT_1'])
         expect(placed.lines.size).toBe(0)
+    })
+})
+
+describe('listDrafts', () => {
+    it('lists every draft in the order the page shows its card, with where it is and the file it sits on', () => {
+        const threads = pullRequestThreads({
+            diff: { files: [], truncated: false },
+            pr_drafts: [draft({ kind: 'pr', number: 5, stance: null, comment_id: null })],
+            threads: [
+                reviewThread({ id: 'late', line: 40, diff_line: 40, drafts: [draft({ number: 1 })] }),
+                reviewThread({ id: 'off', path: 'README.md', line: 2, file: null, drafts: [draft({ number: 2 })] }),
+                reviewThread({ id: 'early', line: 9, diff_line: 9, drafts: [draft({ number: 3 })] }),
+                reviewThread({ id: 'first', path: 'a.ts', file: 0, diff_line: null, drafts: [draft({ number: 4 })] }),
+                reviewThread({ id: 'none', drafts: [] }),
+            ],
+            unplaced: [draft({ run: 46, number: 1, comment_id: 99, thread_id: null })],
+        })
+        expect(
+            listDrafts(threads, placeThreads(threads)).map(({ draft: d, where, file }) => [d.number, where, file]),
+        ).toEqual([
+            [5, "the review's body", null],
+            [4, 'a.ts:16', 0],
+            [3, 'src/search/useSearch.ts:9', 1],
+            [1, 'src/search/useSearch.ts:40', 1],
+            [2, 'README.md:2', null],
+            [1, 'not on a thread', null],
+        ])
+    })
+})
+
+describe('threadWhere', () => {
+    it("names a thread's file and line, its file alone, or nothing", () => {
+        expect(threadWhere({ path: 'a.ts', line: 3 })).toBe('a.ts:3')
+        expect(threadWhere({ path: 'a.ts', line: null })).toBe('a.ts')
+        expect(threadWhere({ path: null, line: null })).toBeNull()
+    })
+})
+
+describe('draftAnchor', () => {
+    it('names a draft by its run and number, which name it alone', () => {
+        expect(draftAnchor(draft({ run: 46, number: 2 }))).toBe('draft-46-2')
     })
 })
 

@@ -43,6 +43,10 @@ exception is a `<details>` block, which folds under its summary line as it does 
 agents stays out of your way until you open it. A closed block that hides a character says so on its line: a fold is
 where you'd tuck something you hoped nobody would read.
 
+The panel at the top lists every draft on the PR, in the order the page shows them: where it stands, its run, its
+first line, and where it sits, such as `src/search/useSearch.ts:16`. The first line links to the draft's card, opening
+its file if you'd folded it away, so a PR with forty threads doesn't turn into a scrolling contest.
+
 Each waiting draft has three buttons:
 
 - **Send** posts it, word for word, under your name, with no mark: you approved it, so it's yours. It's
