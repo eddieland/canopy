@@ -150,6 +150,17 @@ def test_workspace_policy_only_tightens(canopy_env: CanopyEnv) -> None:
     assert policy.max_resume_attempts == 1  # tighter: used
 
 
+def test_triage_is_off_by_default_and_only_the_operator_turns_it_on(canopy_env: CanopyEnv) -> None:
+    # It loosens the plan gate, so unlike the rest of `[policy]` a shared file may not touch it (TRUST_MODEL T7).
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    assert (cfg.policy.plan_triage, cfg.policy.trivial, cfg.runtime.plan_triage_timeout_minutes) == ("off", "", 10)
+    canopy_env.append_user('\n[policy]\nplan_triage = "on"\ntrivial = "A typo."\n')
+    assert load(canopy_env.root, canopy_env.user_file).policy.plan_triage == "on"
+    canopy_env.append_shared('[policy]\ntrivial = "Anything at all."\n')
+    with pytest.raises(ConfigError, match=r"policy\.trivial is private"):
+        load(canopy_env.root, canopy_env.user_file)
+
+
 def test_user_policy_may_loosen(canopy_env: CanopyEnv) -> None:
     canopy_env.append_shared("[policy]\nmax_resume_attempts = 1\n")
     canopy_env.append_user("\n[policy]\nmax_resume_attempts = 9\n")
@@ -234,6 +245,12 @@ def test_required_keys_name_both_files(canopy_env: CanopyEnv) -> None:
             "[loop]\nidle_max_minutes = 14\n",
             r"loop\.idle_max_minutes \(14\) must be at least loop\.interval_minutes \(15\)",
         ),
+        # With nothing trivial, every triage would answer `plan` and cost a run for nothing (DESIGN §25).
+        ('[policy]\nplan_triage = "on"\n', r"policy\.trivial must say what counts as trivial when policy\.plan_triage"),
+        ('[policy]\nplan_triage = "on"\ntrivial = "  "\n', r"policy\.trivial must say what counts as trivial"),
+        (f"[policy]\ntrivial = '{'x' * 2001}'\n", "at most 2000 characters"),
+        ('[policy]\nplan_triage = "yes"\n', "Input should be 'off' or 'on'"),
+        ("[runtime]\nplan_triage_timeout_minutes = 0\n", "greater than or equal to 1"),
     ],
 )
 def test_invalid_values(canopy_env: CanopyEnv, user_extra: str, message: str) -> None:
@@ -366,6 +383,7 @@ def test_the_default_templates_name_the_definitions_dir(canopy_env: CanopyEnv) -
         runtime.private_worker_cmd,
         runtime.split_cmd,
         runtime.plan_cmd,
+        runtime.plan_triage_cmd,
         runtime.chore_cmd,
         runtime.review_cmd,
     ):

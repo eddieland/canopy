@@ -77,6 +77,7 @@ denies writes to `~/.config/canopy`, a worker cannot remove it either.
 | `runtime.chore_cmd`, a chore's `cmd` | `chore` | A chore using the operator's own tools has a shell for them (§19). |
 | `review_cmd` | `review` | It reads the most hostile text the loop meets, a diff by anyone `review.query` matches (T1). |
 | `overseer_cmd` | none | It acts through `canopy`, which needs the journal, the lock, and the operator's config. |
+| `plan_triage_cmd` | none yet | It reads primary clones, which no role expects; which role holds it is open (§25). |
 | `notify.cmd`, `git`, `treehouse` | none | The harness's own calls; what they read of a run is below. |
 
 The overseer's sandbox would have to allow exactly what the policy denies. It has no edit or write tools, and its bash

@@ -53,6 +53,11 @@ split_cmd    = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent
 # The planner writes a ticket's plan before its first implement, reading only (DESIGN §25).
 plan_cmd     = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json
     --title={title} {prompt}'''
+# With policy.plan_triage on (below), the triage agent judges whether a ticket's work needs its plan, reading only:
+# point it at a cheaper model than plan_cmd's (DESIGN §25). No worker_cmd_prefix wraps it, and no sandbox holds it.
+# plan_triage_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-plan-triage
+#     --format json --title={title} {prompt}'''
+# plan_triage_timeout_minutes = 10
 overseer_timeout_minutes = 15
 worker_timeout_minutes = 45
 # Optional: a skill of yours that workers open PRs with, and in no other way, instead of the GitHub MCP (DESIGN §8).
@@ -69,6 +74,13 @@ worker_timeout_minutes = 45
 # an option all four take.
 # worker_cmd_prefix = "canopy-sandbox worker --read {definitions_dir} --"
 # worker_cmd_suffix = "--model provider/model"
+
+# Optional, with the workspace's policy.plan = "approve": before a ticket's first plan, a cheaper agent judges whether
+# its work is trivial by your words below, and if so waives the plan (DESIGN §25, Triage before a plan). When unsure,
+# or if anything fails, the ticket is planned. Private, unlike the rest of [policy]: only your own files turn it on.
+# [policy]
+# plan_triage = "on"
+# trivial = """A typo in docs or comments; one config value changed; a dependency moved by a patch version."""
 
 [loop]
 # `canopy loop` waits this long after each tick ends. Every tick runs the overseer, so this sets its spend.

@@ -131,6 +131,7 @@ overrides default to `prompts/` there too.
 | `tracker.private` | private | turns a queue label into a start record (§22) |
 | `tracker.query_every_minutes` | private | how often the overseer pays to run the query (§7): the operator's spend |
 | `policy.*` | shared; the repository may only tighten | limits spend, retries, and stacking |
+| `policy.plan_triage`, `policy.trivial` | private | triage loosens the operator's plan gate (§25, TRUST_MODEL T7) |
 | `trust.branch_prefix` | shared | team conventions for spotting agent work |
 | `trust.authorized_repliers` | private | who may steer this operator's workers |
 | `trust.trusted_reviewers` | private | whose review feedback reaches a worker without the operator's go-ahead (§7) |
@@ -185,6 +186,10 @@ mcp_server = ""         # optional; the tracker's MCP server as OpenCode names i
 private = false         # optional; true starts a labeled ticket privately on its first dispatch (§22)
 query_every_minutes = 0 # the least time between ticks that run the query; 0 runs it every tick (§7)
 
+[policy]
+plan_triage = "off"     # optional; "on" lets a triage waive a plan for trivial work (§25), with trivial set
+# trivial = """A typo in docs or comments; one config value changed."""   # plain language for the triage agent
+
 [capacity]
 max_workers = 2
 
@@ -200,6 +205,9 @@ split_cmd    = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent
     --thinking --title={title} {prompt}'''
 plan_cmd     = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-planner --format json
     --thinking --title={title} {prompt}'''
+plan_triage_cmd = '''env OPENCODE_CONFIG_DIR={definitions_dir} opencode run --agent canopy-plan-triage --format json
+    --thinking --title={title} {prompt}'''   # point it at a cheaper model than plan_cmd's (§25)
+plan_triage_timeout_minutes = 10
 worker_cmd_prefix = ""  # optional; words before every command a worker run starts, such as a sandbox wrapper (§24)
 worker_cmd_suffix = ""  # optional; words after them
 overseer_timeout_minutes = 15
@@ -336,8 +344,8 @@ agent, which allows everything (D040). `env` in the default templates is the ord
 `runtime.worker_cmd_prefix` and `worker_cmd_suffix` go before and after each command a worker run starts:
 `worker_cmd`, `private_worker_cmd`, `split_cmd`, and `plan_cmd`, all four from one key, so a sandbox wrapper (§24) or a
 model option cannot miss one. Each is split on its own and may name `{definitions_dir}` and `{title}`, but not
-`{prompt}`, which stays the template's to place. Empty, the default, adds nothing. The overseer's, a chore's, and the
-reviewer's templates are not wrapped: each takes a different sandbox role, or none.
+`{prompt}`, which stays the template's to place. Empty, the default, adds nothing. The overseer's, a chore's, the
+reviewer's, and a triage's (§25) templates are not wrapped: each takes a different sandbox role, or none.
 
 Overrides in `prompt_overrides` replace files of the same name in `prompts/`. An overseer override goes into the
 overseer's definition in a snapshot of its own (§13), so a change to it reaches the next tick, and one canopy cannot

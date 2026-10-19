@@ -4,13 +4,13 @@ canopy snapshots its bundled `agents/` and `skills/` into `<state_dir>/runtime/<
 contents. A snapshot is written to a temporary directory and renamed into place, so a run never sees a partial one.
 Command templates name it with `{definitions_dir}`, and OpenCode reads it through `OPENCODE_CONFIG_DIR`.
 
-Four definitions are rendered from config. `canopy-worker-private` and `canopy-planner` get the tracker's MCP server and
-the tools of it they may call, its read tools (`render_private`, DESIGN §22, §25). Both workers get the rule that lets
-them push a rebased branch with a lease when `trust.rebase` is set (`render_rebase`, DESIGN §8). `canopy-overseer` gets
-the overseer's prompt, the operator's override if any, and the tracker's skill if canopy ships one, as its body
-(`render_overseer`): the body is the agent's system prompt, which the provider caches across ticks, where the state
-block, the tick's message, changes every tick (DESIGN §6). The digest covers the rendered text, so a config or override
-change makes a new snapshot rather than changing one a run may be loading.
+Five definitions are rendered from config. `canopy-worker-private`, `canopy-planner`, and `canopy-plan-triage` get the
+tracker's MCP server and the tools of it they may call, its read tools (`render_private`, DESIGN §22, §25). Both workers
+get the rule that lets them push a rebased branch with a lease when `trust.rebase` is set (`render_rebase`, DESIGN §8).
+`canopy-overseer` gets the overseer's prompt, the operator's override if any, and the tracker's skill if canopy ships
+one, as its body (`render_overseer`): the body is the agent's system prompt, which the provider caches across ticks,
+where the state block, the tick's message, changes every tick (DESIGN §6). The digest covers the rendered text, so a
+config or override change makes a new snapshot rather than changing one a run may be loading.
 
 OpenCode merges a repository's definition of an agent into canopy's, and a repository that repeats one of canopy's
 permission patterns can put its own rules after it (D044). So a run refuses to start in a directory whose OpenCode
@@ -44,8 +44,10 @@ WORKER = "canopy-worker"
 PRIVATE_WORKER = "canopy-worker-private"
 _PRIVATE_FILE = f"agents/{PRIVATE_WORKER}.md"
 PLANNER = "canopy-planner"
+#: The triage agent: the planner with nothing to edit (DESIGN §25, Triage before a plan).
+PLAN_TRIAGE = "canopy-plan-triage"
 # The definitions that may call only the tracker's read tools, rendered at their marked line.
-_READ_ONLY_TRACKER_FILES = (_PRIVATE_FILE, f"agents/{PLANNER}.md")
+_READ_ONLY_TRACKER_FILES = (_PRIVATE_FILE, f"agents/{PLANNER}.md", f"agents/{PLAN_TRIAGE}.md")
 _WORKER_FILES = (f"agents/{WORKER}.md", _PRIVATE_FILE)
 # The line of the shipped worker definitions the rules for a rebased branch's push are rendered at.
 _REBASE_MARKER = "    # canopy: rebase rules\n"
@@ -83,7 +85,7 @@ def _files(root: Path) -> list[Path]:
 
 
 def render_private(text: str, tools: TrackerTools | None, name: str = _PRIVATE_FILE) -> str:
-    """Return definition `name`, the private worker's or the planner's, with the tracker's rules at its marked line.
+    """Return definition `name`, the private worker's, the planner's, or the triage's, with the tracker's rules.
 
     Every tool of the server is denied by a wildcard and the allowed ones named after it: the last matching rule wins
     (D021). With no tools known, the marked line stays as it is; dispatch refuses a private run or a plan then

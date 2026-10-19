@@ -221,7 +221,7 @@ def _plans(ctx: Context, tickets: Iterable[records.Ticket]) -> dict[str, plans.P
     found: dict[str, plans.PlanState] = {}
     for t in tickets:
         limit = base + granted.get(t.key, 0)
-        section = plans.state_section(ctx.conn, ctx.config.policy.plan, t, attempts=done.get(t.key, 0), limit=limit)
+        section = plans.state_section(ctx.conn, ctx.config.policy, t, attempts=done.get(t.key, 0), limit=limit)
         if section is not None:
             found[t.key] = section
     return found

@@ -67,6 +67,10 @@ def _ask(ctx: Context, key: str, *, skip: bool) -> None:
     )
     if asked.superseded is not None:
         click.echo(f"Plan {asked.superseded} of {key} is superseded; its file stays.")
+    if asked.waived is not None:
+        # The waiver a triage gave stands only while the ticket's own setting is unset (DESIGN §25).
+        undone = "your skip takes its place" if skip else "it is undone"
+        click.echo(f"Triage run {asked.waived} had waived {key}'s plan; {undone}.")
     if skip:
         state = "was already skipped" if asked.already else "is skipped"
         click.echo(f"{key}'s plan {state}: its implement goes ahead without one.")

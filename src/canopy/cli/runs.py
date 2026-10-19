@@ -209,8 +209,7 @@ def cmd_dispatch(
     if unit_cursors:
         cursors = {name: value for name, value in cursor_pairs if name in db.UNIT_CURSORS}
         db.set_unit(ctx.conn, key, ctx.repo, repo_names[0], cursors=cursors)
-    where = " in " + ", ".join(f"{s.repo} at {s.slot_path}" for s in started.slots)
-    where += f"; desk {started.desk}" if started.desk is not None else ""
+    where = _where(started)
     rationale = f"run {started.run_id}: {work}{where}; {authorized}{requested}"
     db.record_decision(ctx.conn, tick_id, key, f"dispatch:{kind}", rationale)
     log.info("dispatched", extra={"ticket": key, "kind": kind, "run_id": started.run_id, "pid": started.pid})
@@ -218,15 +217,28 @@ def cmd_dispatch(
     return 0
 
 
-def _work(key: str, kind: str, branch: str, base: str | None, repos: Sequence[str]) -> str:
-    """Return what a dispatch's decision says the run works on: its branch, or for a split or a plan, its ticket.
+def _where(started: dispatch.Started) -> str:
+    """Return where a dispatch's decision says the run works: its slots, or the clones a triage reads, and its desk."""
+    if started.slots:
+        where = " in " + ", ".join(f"{s.repo} at {s.slot_path}" for s in started.slots)
+    else:
+        # A triage leases no slot: it reads the primary clones (DESIGN §25).
+        where = " reading the primary clones"
+    return where + (f"; desk {started.desk}" if started.desk is not None else "")
 
-    A split or a plan works on no branch: it reads its repositories, and creates a ticket for each or writes a plan.
+
+def _work(key: str, kind: str, branch: str, base: str | None, repos: Sequence[str]) -> str:
+    """Return what a dispatch's decision says the run works on: its branch, or for a kind counted per ticket, its key.
+
+    A split, a plan, or a triage works on no branch: it reads its repositories, and creates a ticket for each, writes a
+    plan, or judges whether the ticket needs one.
     """
     if kind == policy.SPLIT:
         return f"split {key} into {', '.join(repos)}"
     if kind == policy.PLAN:
         return f"plan {key} over {', '.join(repos)}"
+    if kind == policy.NEEDS_PLAN:
+        return f"triage {key}'s plan over {', '.join(repos)}"
     return f"{branch} on {base}" if base is not None else branch
 
 

@@ -341,10 +341,14 @@ def test_the_reviewer_keeps_its_read_tools(tool: str) -> None:
         ("github_pull_request_read", True),
     ],
 )
-def test_the_planner_reads_the_ticket_and_writes_nothing(canopy_env: CanopyEnv, tool: str, *, allowed: bool) -> None:
+# The triage agent is the planner with nothing to edit (DESIGN §25, Triage before a plan).
+@pytest.mark.parametrize("agent", [definitions.PLANNER, definitions.PLAN_TRIAGE])
+def test_the_planner_reads_the_ticket_and_writes_nothing(
+    canopy_env: CanopyEnv, agent: str, tool: str, *, allowed: bool
+) -> None:
     # Rendered with the tracker's server and read tools: every other tool of the server is denied by its wildcard, so
     # a write tool no pattern names fails closed (DESIGN §25, TRUST_MODEL T6).
-    path = f"agents/{definitions.PLANNER}.md"
+    path = f"agents/{agent}.md"
     rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[path].decode()
     assert _allowed(_rules_in(rendered), tool) is allowed
 
@@ -390,6 +394,17 @@ def test_the_planner_keeps_its_edit_tool_and_loses_its_shell(canopy_env: CanopyE
     assert _opencode_action(ruleset, "edit", f"desks/PROJ-1/{plans.WRITTEN}") == "allow"
     for permission in ("bash", "task", "webfetch"):
         assert _opencode_disabled(ruleset, permission)
+
+
+def test_the_triage_agent_can_edit_nothing_and_has_no_shell(canopy_env: CanopyEnv) -> None:
+    # It writes nothing anywhere (TRUST_MODEL T6): OpenCode leaves each of these tools out of its toolset.
+    rendered = definitions.sources(config.load(canopy_env.root, canopy_env.user_file))[
+        f"agents/{definitions.PLAN_TRIAGE}.md"
+    ]
+    ruleset = _opencode_ruleset(rendered.decode())
+    for permission in ("edit", "bash", "task", "webfetch", "external_directory"):
+        assert _opencode_disabled(ruleset, permission)
+    assert _opencode_action(ruleset, "edit", f"desks/PROJ-1/{plans.WRITTEN}") == "deny"
 
 
 def _opencode_ruleset(definition: str) -> list[tuple[str, str, str]]:

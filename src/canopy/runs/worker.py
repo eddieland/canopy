@@ -14,6 +14,10 @@ A plan run is checked out as a split is, and always works in a desk, even over o
 the plan it replaces, if the ticket has one. The planner runs with `plan_cmd` and writes its plan to a file at the
 desk's root, the one file it may edit; a `done` one is read from there, bounded, written to the plan's own file, and
 recorded `proposed` (DESIGN §25).
+
+A triage run leases no slot and checks nothing out: its desk links the primary clone of each repository it reads, and
+the triage agent runs with `plan_triage_cmd`, unwrapped, and its own timeout. Only a validated `done` `trivial` result
+waives the ticket's plan, written in the transaction that closes the run (DESIGN §25, Triage before a plan).
 """
 
 from __future__ import annotations
@@ -27,7 +31,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Literal, Self, TextIO, assert_never
 
-from pydantic import BaseModel, ConfigDict, StrictStr
+from pydantic import BaseModel, ConfigDict, StrictStr, model_validator
 
 from canopy.core import (
     agent_output,
@@ -75,6 +79,7 @@ class _SetupError(Exception):
 
 Text = Annotated[StrictStr, contract.bounded(MAX_TEXT)]
 PrTitle = Annotated[StrictStr, contract.one_line, contract.bounded(contract.MAX_PR_TITLE)]
+TriageReason = Annotated[StrictStr, contract.one_line, contract.bounded(plans.MAX_TRIAGE_REASON)]
 
 
 class WorkerResult(BaseModel):
@@ -136,6 +141,26 @@ class PlanResult(BaseModel):
     question: Text | None = None
 
 
+class TriageResult(BaseModel):
+    """A triage's result contract (DESIGN §25, Triage before a plan): whether the ticket needs a plan, and why.
+
+    Untrusted, so bounded: the reason is one line. A `done` result names its verdict and gives a reason, and one that
+    does not is no result. `failed` means the triage could not judge. Only `done` with `trivial` waives the plan.
+    """
+
+    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
+
+    status: Literal["done", "failed"]
+    verdict: Literal["trivial", "plan"] | None = None
+    reason: TriageReason = ""
+
+    @model_validator(mode="after")
+    def _judged(self) -> Self:
+        if self.status == "done" and (self.verdict is None or not self.reason):
+            raise ValueError("a done triage names its verdict and gives a reason")
+        return self
+
+
 def parse_split(stdout: str) -> SplitResult | None:
     """Parse `stdout`'s result line (DESIGN §13) as a split's result. None if it is missing or invalid.
 
@@ -182,13 +207,15 @@ class Outcome:
     """How a run ended: its `runs.status` and the summary stored as `result_json`."""
 
     status: RunStatus
-    result: WorkerResult | SplitResult | PlanResult | None
+    result: WorkerResult | SplitResult | PlanResult | TriageResult | None
     note: str = ""
     # What the worker sent of agent memory, and the commit its branch was at when it ended (DESIGN §28).
     memory: memory.Fields | None = None
     head: str | None = None
     # The comments it drafted in place of posting them (DESIGN §29).
     drafts: drafts.Fields | None = None
+    #: A triage's reason for waiving the ticket's plan, from its validated `trivial` verdict (DESIGN §25).
+    waiver: str | None = None
 
     def result_json(self) -> str:
         """Return the summary stored in `runs.result_json`. Never raw output (DESIGN §11)."""
@@ -234,10 +261,12 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
     outcome = Outcome(RunStatus.CRASHED, None, "the run stopped before the worker finished")
     with stopping.StopOnSignal() as stop:
         try:
-            if not slots:
+            kind = RunKind(run["kind"])
+            # A triage leases none: it reads the primary clones (DESIGN §25).
+            if not slots and kind is not RunKind.NEEDS_PLAN:
                 raise _SetupError(f"run {run_id} has no slots")  # noqa: TRY301  (the same handling as git failures)
             tidy.make_objects(_objects(ctx, run))
-            outcome = _doer(RunKind(run["kind"]))(ctx, run, slots, out, log)
+            outcome = _doer(kind)(ctx, run, slots, out, log)
         except stopping.Stopped as e:
             outcome = Outcome(RunStatus.CRASHED, None, str(e))
         except (_SetupError, desks.DeskError) as e:
@@ -252,7 +281,7 @@ def execute(ctx: Context, run_id: int, *, out: TextIO) -> Outcome:
             _release(ctx, run, slots, log)
             _record_prs(ctx, run, outcome)
             stored = outcome.result_json()
-            remember = functools.partial(_record_reported, ctx, run_id, outcome)
+            remember = functools.partial(_record_reported, ctx, run, outcome)
             if not conversation.close_run(ctx.conn, ctx.config, run, outcome.status, stored, then=remember):
                 log.warning("run was already closed; its outcome is not recorded", extra=fields)
             procs.drop_lifelock(Path(run["log_path"]))
@@ -278,10 +307,16 @@ def _check_drafts(ctx: Context, run_id: int, stop: stopping.StopOnSignal, log: l
         stop.armed = False
 
 
-def _record_reported(ctx: Context, run_id: int, outcome: Outcome) -> None:
-    """Write what the run reported beside its result, in the transaction that closes it: memory (§28), drafts (§29)."""
+def _record_reported(ctx: Context, run: sqlite3.Row, outcome: Outcome) -> None:
+    """Write what the run reported beside its result, in the transaction that closes it.
+
+    That is its memory (§28), drafts (§29), and a triage's waiver (§25), so a run reconcile closed first writes none.
+    """
+    run_id = int(run["id"])
     memory.record_run(ctx.conn, run_id, outcome.memory, head=outcome.head)
     drafts.record_run(ctx.conn, run_id, outcome.drafts)
+    if outcome.waiver is not None:
+        plans.record_waiver(ctx.conn, str(run["ticket_key"]), run_id, outcome.waiver)
 
 
 type _Doer = Callable[[Context, sqlite3.Row, Sequence[_Slot], TextIO, logs.TickAdapter], Outcome]
@@ -291,13 +326,15 @@ def _doer(kind: RunKind) -> _Doer:
     """What does a `kind` run, from checkout to its outcome.
 
     Returns:
-        The function for the kind: a split's, a plan's, or a worker's.
+        The function for the kind: a split's, a plan's, a triage's, or a worker's.
     """
     match kind:
         case RunKind.SPLIT:
             return _split
         case RunKind.PLAN:
             return _plan
+        case RunKind.NEEDS_PLAN:
+            return _triage
         case RunKind.IMPLEMENT | RunKind.FIX_CI | RunKind.RESUME:
             return _work
         case _:
@@ -389,12 +426,17 @@ def _run_agent(
     *,
     template: str,
     desk_files: Mapping[str, str] | None = None,
+    reads: Sequence[tuple[str, Path]] = (),
+    timeout_minutes: int | None = None,
+    wrap: bool = True,
 ) -> tuple[procs.Result, str]:
     """Check the places the agent reads config from, make the run's desk if it has one, and run `template` in it.
 
-    `template` runs between `runtime.worker_cmd_prefix` and `worker_cmd_suffix` (DESIGN §12).
+    With `wrap`, `template` runs between `runtime.worker_cmd_prefix` and `worker_cmd_suffix` (DESIGN §12); a triage's
+    is no worker run, and is not wrapped. It runs for `timeout_minutes`, the worker's timeout if None.
 
-    A private run's places, and a plan's, must also name none of the tracker server's tools (DESIGN §22, §25).
+    A private run's places, a plan's, and a triage's must also name none of the tracker server's tools (DESIGN §22,
+    §25). A run with no slots links `reads` from its desk instead, each a repository's name and its primary clone.
     `desk_files` are written into the desk, by name, readable only by the operator, before the agent starts.
 
     The session and cost the runtime reported are recorded on the run at once, so a git step after the agent that
@@ -409,23 +451,26 @@ def _run_agent(
     """
     prompt = dispatch.prompt_file(ctx, int(run["id"])).read_text(encoding="utf-8")
     desked = dispatch.in_desk(str(run["kind"]), slots)
+    trees = [(s.repo, s.path) for s in slots] or list(reads)
     # Checked on the branch the worker will run on: OpenCode reads the worktree's config too (D044). A worker in a desk
-    # starts in no repository, so OpenCode may look above it: the directories above it are checked.
+    # starts in no repository, so OpenCode may look above it: the directories above it are checked. A triage's places
+    # are the primary clones it reads, as they stand.
     desk_parents = [ctx.workspace.root / DESKS_DIR, ctx.workspace.root] if desked else []
-    places = [s.path for s in slots] + desk_parents
+    places = [path for _, path in trees] + desk_parents
     shadowing = [found for place in places for found in definitions.shadowing(place)]
     if shadowing:
         raise _SetupError(definitions.shadowing_message(shadowing))
     tools = ctx.config.tracker.tools()
-    if (run["private"] or run["kind"] == policy.PLAN) and tools is not None:
+    if (run["private"] or run["kind"] in (policy.PLAN, policy.NEEDS_PLAN)) and tools is not None:
         naming = [found for place in places for found in definitions.naming_tools(place, tools.server)]
         if naming:
             raise _SetupError(definitions.naming_tools_message(tools.server, naming))
     title = session_title(ctx.conn, str(run["ticket_key"]), str(run["kind"]))
     snapshot = definitions.ensure(ctx.state_dir, ctx.config)
-    argv = render_command(ctx.config.runtime.worker_template(template), prompt, snapshot, title)
+    command = ctx.config.runtime.worker_template(template) if wrap else template
+    argv = render_command(command, prompt, snapshot, title)
     if desked:
-        cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), [(s.repo, s.path) for s in slots])
+        cwd = desks.make(ctx.workspace.root, str(run["ticket_key"]), trees)
         for name, text in (desk_files or {}).items():
             try:
                 logs.write_private(cwd / name, text)
@@ -433,7 +478,8 @@ def _run_agent(
                 raise _SetupError(f"could not write {name} in the desk {cwd}: {e}") from e
     else:
         cwd = slots[0].path
-    timeout_minutes = ctx.config.runtime.worker_timeout_minutes
+    if timeout_minutes is None:
+        timeout_minutes = ctx.config.runtime.worker_timeout_minutes
     log.info(
         "running worker",
         extra={"run_id": run["id"], "cmd": argv[0], "cwd": str(cwd), "timeout_minutes": timeout_minutes},
@@ -589,6 +635,59 @@ def _record_plan(ctx: Context, run: sqlite3.Row, parsed: PlanResult, text: str, 
     # Should this fail, the file stays with no row: it is never read, and its name is this run's alone (DESIGN §25).
     plan = plans.record(ctx.conn, key, run_id, written, event=outbox.plan_proposed(ctx.config, key=key, run_id=run_id))
     log.info("plan recorded", extra={"run_id": run_id, "plan_id": plan.id, "size": written.size})
+    return Outcome(RunStatus.DONE, parsed)
+
+
+def _triage(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
+    """Run the triage agent in a desk of links to the primary clones it reads, and read its verdict (DESIGN §25).
+
+    It leases no slot, so `slots` is empty, and checks nothing out: each repository is read as its primary clone holds
+    it. Only a validated `done` `trivial` result waives the plan; anything else leaves the ticket to be planned, and
+    nothing is retried.
+
+    Returns:
+        `done` with the waiver's reason for a `trivial` verdict, `done` for `plan`, `failed`, `timeout`, `unknown` for a
+        missing or invalid result line, or `stopped` when the operator stopped the ticket or started it privately since.
+
+    Raises:
+        _SetupError: a repository it reads is no longer in the workspace with a clone. The run is then `crashed`.
+    """
+    stopped = _stopped(ctx, run)
+    if stopped:
+        log.info("run not started", extra={"run_id": run["id"], "reason": stopped})
+        return Outcome(RunStatus.STOPPED, None, stopped)
+    reads: list[tuple[str, Path]] = []
+    for name in db.run_reads(ctx.conn, int(run["id"])):
+        found = ctx.workspace.repo(name)
+        if found is None or not found.cloned:
+            raise _SetupError(f"{name} has no primary clone in this workspace to read; the triage did not start")
+        reads.append((name, found.path))
+    if not reads:
+        raise _SetupError(f"run {run['id']} names no repository to read")
+    runtime = ctx.config.runtime
+    timeout_minutes = runtime.plan_triage_timeout_minutes
+    result, text = _run_agent(
+        ctx,
+        run,
+        slots,
+        out,
+        log,
+        template=runtime.plan_triage_cmd,
+        reads=reads,
+        timeout_minutes=timeout_minutes,
+        wrap=False,
+    )
+    parsed = contract.last_line(TriageResult, text)
+    if result.timed_out:
+        # Even with a verdict printed first: a waiver comes only from a run that ended as it should.
+        return Outcome(RunStatus.TIMEOUT, parsed, f"the triage timed out after {timeout_minutes} minutes")
+    if parsed is None:
+        return Outcome(RunStatus.UNKNOWN, None, "the triage's last line was not a valid triage result")
+    if parsed.status == "failed":
+        return Outcome(RunStatus.FAILED, parsed)
+    if parsed.verdict == "trivial":
+        log.info("plan waived", extra={"run_id": run["id"], "ticket": run["ticket_key"]})
+        return Outcome(RunStatus.DONE, parsed, waiver=parsed.reason)
     return Outcome(RunStatus.DONE, parsed)
 
 

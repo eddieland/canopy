@@ -877,10 +877,15 @@ def prompt_operator_messages(conn: sqlite3.Connection, key: str) -> str:
 def prompt_conversation(conn: sqlite3.Connection, key: str) -> str:
     """Return a private worker prompt's `{{CONVERSATION}}`: the ticket's latest messages, oldest first, bounded.
 
-    Messages from before the operator forgot the ticket's work are left out: they are about work that is gone.
+    Messages from before the operator forgot the ticket's work are left out: they are about work that is gone. So is a
+    triage's report: model text written from the ticket, which no other run hears (DESIGN §25, Triage before a plan).
     """
-    rows = db.messages_of(conn, TICKET, key, PROMPT_MESSAGES, after=db.forgotten_message_id(conn, key))
-    return _bounded([_prompt_message(m) for m in rows], "No messages yet.")
+    rows = conn.execute(
+        "SELECT * FROM messages WHERE subject_kind = ? AND subject_id = ? AND id > ? "
+        "AND (run_id IS NULL OR run_id NOT IN (SELECT id FROM runs WHERE kind = ?)) ORDER BY id DESC LIMIT ?",
+        (TICKET, key, db.forgotten_message_id(conn, key), RunKind.NEEDS_PLAN, PROMPT_MESSAGES),
+    ).fetchall()
+    return _bounded([_prompt_message(m) for m in reversed(rows)], "No messages yet.")
 
 
 def prompt_previous_runs(conn: sqlite3.Connection, key: str) -> str:
@@ -889,11 +894,11 @@ def prompt_previous_runs(conn: sqlite3.Connection, key: str) -> str:
     Each run's kind, how it ended, its report, and a `blocked` run's question, as the run recorded them
     (`run_messages`). Every run starts a fresh session, so this is how a worker learns what the runs before it
     concluded (DESIGN §8). A private worker reads the same reports in its conversation. Runs from before the operator
-    forgot the ticket's work are left out. A summary and a question are each at most 2000 characters
-    (`worker.MAX_TEXT`), so the section is bounded.
+    forgot the ticket's work are left out, and so are triages, whose reason no worker hears (DESIGN §25). A summary and
+    a question are each at most 2000 characters (`worker.MAX_TEXT`), so the section is bounded.
     """
     blocks: list[str] = []
-    for run in db.ended_runs_of(conn, key, PREVIOUS_RUNS):
+    for run in db.ended_runs_of(conn, key, PREVIOUS_RUNS, skip_kind=RunKind.NEEDS_PLAN):
         ended = f" at {run['ended_at']}" if run["ended_at"] else ""
         lines = [f"Run {run['id']}, `{run['kind']}`, ended `{run['status']}`{ended}."]
         for m in db.run_messages(conn, int(run["id"])):
@@ -958,11 +963,14 @@ def _quoted(text: str) -> str:
 def run_messages(status: RunStatus, result_json: str | None) -> list[tuple[str, str]]:
     """Return the `(kind, body)` messages a run that closed as `status` reports.
 
-    That is a report, and for a `blocked` run its question. The report is the worker's summary, or the harness's note,
-    or the status, then each PR on a line of its own.
+    That is a report, and for a `blocked` run its question. The report is the worker's summary, a triage's reason, or
+    the harness's note, or the status, then each PR on a line of its own.
     """
     result = contract.stored_object(result_json)
-    summary = _text(result.get("summary")) or _text(result.get("harness")) or f"ended {status}"
+    # A triage's report is its reason (DESIGN §25).
+    summary = (
+        _text(result.get("summary")) or _text(result.get("reason")) or _text(result.get("harness")) or f"ended {status}"
+    )
     prs = result.get("prs")
     urls = [str(u) for u in prs.values() if isinstance(u, str) and u] if isinstance(prs, dict) else []
     found = [("report", "\n".join([summary, *urls]))]
