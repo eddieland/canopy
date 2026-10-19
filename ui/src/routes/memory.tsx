@@ -17,7 +17,7 @@ import type {
 import { Age } from '@/components/age'
 import { Disclosure } from '@/components/disclosure'
 import { SearchField } from '@/components/input'
-import { MemoryBand, MemoryDigestView, MemoryRows, ProposalFacts } from '@/components/memory'
+import { MemoryBand, MemoryDigestView, MemoryPurge, MemoryRows, ProposalFacts } from '@/components/memory'
 import { LessonActions, MemorySaid, NoteActions, ProposalActions } from '@/components/memory-actions'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading, PanelScroll, PanelSkeleton } from '@/components/panel'
 import { OrderToggle } from '@/components/order-toggle'
@@ -60,6 +60,7 @@ interface MemorySearch {
  * a busy workspace's thousands of notes and hundreds of lessons keep the page in reach. A proposal is promoted or
  * rejected, and a lesson renewed or forgotten, from its row, as `canopy memory` does, while `memory.proposals` is on
  * (ROADMAP M52). What every run is served of the lessons is folded under them, since it is the prompt's, not a queue.
+ * Under every panel, `canopy memory purge`, the CLI's alone, copies.
  * `?q=` keeps what holds every word, `?repo=` the proposals and lessons for a repository's runs, and `?show=` the
  * lessons that stand so, over what the page already read; `?history=true` reads and lists the latest proposals and
  * lessons no longer pending or in force too.
@@ -111,6 +112,8 @@ function MemoryPage() {
             ) : (
                 <Tiers overview={data} state={data.state} pastRead={!withPast.isPlaceholderData} />
             )}
+            {/* Under every panel, and with memory off too, when what a trial wrote is what is left to clear. */}
+            {data !== undefined && <MemoryPurge />}
         </>
     )
 }

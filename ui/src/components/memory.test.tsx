@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import type { Middleware } from 'openapi-fetch'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -8,7 +8,7 @@ import { api } from '@/api/client'
 import type { MemoryEntry, MemoryProposal } from '@/api/types'
 import { renderRouted } from '@/test-utils'
 
-import { MemoryBand, MemoryDigestView, MemoryRows, ProposalFacts } from './memory'
+import { MemoryBand, MemoryDigestView, MemoryPurge, MemoryRows, ProposalFacts } from './memory'
 import { MemoryText } from './memory-text'
 
 afterEach(() => {
@@ -342,5 +342,31 @@ describe('MemoryRows, versions', () => {
             />,
         )
         expect(screen.queryByRole('button', { name: 'Show versions' })).toBeNull()
+    })
+})
+
+describe('MemoryPurge', () => {
+    it("copies purge's verb alone, and names the options that say what it deletes", async () => {
+        vi.stubGlobal('isSecureContext', true)
+        const write = vi.spyOn(navigator.clipboard, 'writeText').mockResolvedValue()
+        render(<MemoryPurge />)
+        const purge = screen.getByTestId('memory-purge')
+        expect(purge.textContent).toContain('from your shell alone')
+        for (const option of ['--ticket KEY', '--run ID', '--all']) {
+            expect(within(purge).getByText(option)).toBeDefined()
+        }
+        fireEvent.click(screen.getByRole('button', { name: 'Copy purge command' }))
+        await act(async () => {
+            await Promise.resolve()
+        })
+        expect(write).toHaveBeenCalledWith('canopy memory purge')
+        expect(screen.getByRole('button', { name: 'Copied purge command' })).toBeDefined()
+    })
+
+    it('keeps the command as text to select where the page cannot reach the clipboard', () => {
+        vi.stubGlobal('isSecureContext', false)
+        render(<MemoryPurge />)
+        expect(screen.getByText('canopy memory purge')).toBeDefined()
+        expect(screen.queryByRole('button')).toBeNull()
     })
 })

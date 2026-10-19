@@ -235,7 +235,10 @@ Rules:
   then Lessons under the tier's band, the digest folded at its foot (`Show what every run is served`); then Ticket
   notes, a row a ticket opening to its notes, which it reads only then, counted `2 tickets · 3 notes`. From 120rem,
   the tickets sit beside the queue in 34rem, where their opened notes' columns fit and the queue still keeps a
-  proposal's verbs on one line; narrower, they stack under it. Over all
+  proposal's verbs on one line; narrower, they stack under it. Under every panel, and under the panel saying memory
+  is off, a muted `xs` line says purge deletes many memories' text from the shell alone, then `canopy memory purge` in
+  monospace with a `Copyable` that copies the verb alone, never an option, so a paste purges nothing until the operator
+  names what, then its options (`MemoryPurge`), since purge is the one memory verb the page leaves to the CLI. Over all
   three, a filter field and a chip for each repository narrow the page (`?q=`, `?repo=`, `src/lib/memory-filter.ts`), as
   the tickets filters do: a word in a memory's key, text, ticket, or
   repository, or a ticket's key or title, and, since the page holds only each ticket's count of notes, what notes say
