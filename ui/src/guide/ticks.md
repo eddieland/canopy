@@ -21,10 +21,10 @@ A tick ends:
 
 ## A tick's page
 
-The **Tick** panel says when it started and ended, its summary, its overseer's session, what it spent, the version of
-canopy that ran it, and the path of its output. The version is the one to check when a decision looks like the work of
-a release you thought you'd upgraded past. The line under the title says what woke it: the timer, your reply, a run
-ending, **Tick now**, and so on.
+The line under the title says how the tick ended, how many decisions it recorded, and what woke it: the timer, your
+reply, a run ending, **Tick now**, and so on. The **Tick** panel leads with its summary, then when it ran and for how
+long, what it spent, and the version of canopy that ran it, laid out as a run's page is. The version is the one to
+check when a decision looks like the work of a release you thought you'd upgraded past.
 
 The buttons at the right of the title step to the tick before and after this one, dry runs included, so the ticks
 around an old one are a click away rather than an edit to the URL. At either end the button stays, greyed out; on the
@@ -36,10 +36,11 @@ overseer's reasons in its own words. A `refused` action, in red, names the guard
 action, in amber, is an item it put on your list. When you want to know why a ticket sat still, its refusals are
 usually the answer.
 
-Under them are the overseer's session, as a run's [Transcript](runs#a-runs-page) shows it, and its raw **Output**,
-stdout then stderr, opened with **Show output**. Both fill in while the tick runs, so a tick that seems stuck can be
-watched being stuck. **Pretty** lays each event out on its own lines. The output opens at
-its end, where the errors are, since that's usually why you're reading it.
+Under them are the overseer's session, as a run's [Transcript](runs#a-runs-page) shows it, its session id in the
+header, and its raw **Output**, stdout then stderr, under the path of its file, opened with **Show output**. Both fill
+in while the tick runs, so a tick that seems stuck can be watched being stuck. A tick that kept no output file has no
+Output panel; the transcript's header says why, once. **Pretty** lays each event out on its own lines. The output
+opens at its end, where the errors are, since that's usually why you're reading it.
 
 ## The spend page
 

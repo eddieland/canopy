@@ -177,21 +177,39 @@ describe('TranscriptPanel', () => {
             'a running session before its first event',
             'read',
             true,
+            'no events yet',
             'no events yet: they show here as the agent prints them',
         ],
-        ['a running session with no log yet', 'no_log', true, 'no events yet: they show here as the agent prints them'],
+        [
+            'a running session with no log yet',
+            'no_log',
+            true,
+            'no events yet',
+            'no events yet: they show here as the agent prints them',
+        ],
         [
             'a template that prints no events',
             'no_session',
             false,
+            'no session',
             'the runtime reported no session: a template without --format json prints no events',
         ],
-        ['an ended session whose log is gone', 'no_log', false, 'its log is gone, or is not a file canopy reads'],
-        ['an ended session with no events', 'read', false, 'the log holds none of the session’s events'],
-    ] as const)('says why it is empty for %s', (_, status, running, words) => {
+        [
+            'an ended session whose log is gone',
+            'no_log',
+            false,
+            'log gone',
+            'its log is gone, or is not a file canopy reads',
+        ],
+        ['an ended session with no events', 'read', false, 'no events', 'the log holds none of the session’s events'],
+    ] as const)('is its header alone for %s, saying why there', (_, status, running, words, reason) => {
         render(<TranscriptPanel transcript={transcript({ status, entries: [] })} running={running} />)
-        expect(screen.getByText(words)).toBeDefined()
+        expect(screen.getByText(words).title).toBe(reason)
+        // The session it names, and nothing under the header: no rows, no search, no line saying it again.
+        expect(screen.getByText('session ses_abc')).toBeDefined()
         expect(screen.queryByRole('searchbox')).toBeNull()
+        expect(screen.queryByRole('list')).toBeNull()
+        expect(screen.queryByText(reason)).toBeNull()
     })
 
     it('counts tool calls, failed and refused ones, model calls, and runtime errors, and says what is missing', () => {
@@ -240,11 +258,9 @@ describe('TranscriptPanel', () => {
         expect(within(sent).getByText('Implement ABC-1: sign in with SSO.')).toBeDefined()
     })
 
-    it('names the session in its header, but on a page that names it already', () => {
-        const { rerender } = render(<TranscriptPanel transcript={transcript()} running={false} />)
+    it('names the session in its header', () => {
+        render(<TranscriptPanel transcript={transcript()} running={false} />)
         expect(screen.getByText('session ses_abc')).toBeDefined()
-        rerender(<TranscriptPanel transcript={transcript()} running={false} session={false} />)
-        expect(screen.queryByText('session ses_abc')).toBeNull()
     })
 
     it('keeps agent output as text, never markup', () => {

@@ -223,9 +223,11 @@ Rules:
   server's sentence on what reads it. What a worker wrote is `MemoryText`: plain text, never `LinkedText`, since a link
   in a note would be a worker's link read as canopy's, with each character that hides text named (`<U+200B>`) on a
   `status-failed` tint, so it is seen. A digest is the prompt's own text in monospace, labelled `would be served at use`
-  while recording. A run's page lists what it wrote and read, and reads `none, recording only` for a run that read
-  nothing because its tier was recording. The memory page leads with what waits on the operator: a Proposals panel,
-  counted in `status-blocked` while one waits as the nav counts them, and saying that none reaches a run until promoted;
+  while recording. A run's page has it folded (`FoldPanel`): its header counts what the run wrote and read,
+  `wrote 2 · read none`, each tier's mode for the run on hover and to a screen reader, and `Show memory` opens the
+  rows; it reads `none, recording only` for a run that read nothing because its tier was recording. The memory page
+  leads with what waits on the operator: a Proposals panel, counted in `status-blocked` while one waits as the nav
+  counts them, and saying that none reaches a run until promoted;
   then Lessons under the tier's band, the digest folded at its foot (`Show what every run is served`); then Ticket
   notes, a row a ticket opening to its notes, which it reads only then, counted `2 tickets · 3 notes`. Wide, the tickets
   sit beside the other two. Over all three, a filter field and a chip for each repository narrow the page (`?q=`,
@@ -291,7 +293,9 @@ Rules:
   `ABC-099 · 2 reviews`, `ok · 5 decisions · woken by timer`, a chore's `choreLine`, so no two pages of a kind say
   the same thing there. What every page of its kind shows, the same each time, is its `help`, on the title's hover,
   as the nav's items say what their pages hold. A ticket is named one way in every identity panel that names one
-  (`TicketField`: its key, a run's kind as a chip, its title).
+  (`TicketField`: its key, then its title). A run's page names its ticket in its description instead, the key a
+  `TicketLink` after its state and kind (a resume's with its reasons, `resume (ci, review)`), since its title is the
+  page's already.
   A tick's page steps to its neighbours from the right of its title's row (`PageHeader`'s `controls`, `TickSteps`):
   two ghost `xs` links, `‹ tick:40` and `tick:42 ›`, through every tick by id, dry runs included, found by query so a
   gap is stepped over. At an end the button stays, disabled, saying on hover there is none, so the pair never shifts;
@@ -299,11 +303,20 @@ Rules:
 - **One home per fact.** What a page says, it says once. Its subject's own name is its title, so the lists under it
   leave it out: on a ticket's page its runs leave out the ticket (`ticket={false}`); on a PR's page its runs and
   decisions leave out the PR (`ownPr`), and so does its review limit (`reviews`). A PR's phase is its title's chip, not
-  a field too; whether a ticket is private is its title's chip, not a notice under its actions; a tick's session is
-  its Tick panel's field, not its transcript's header too.
+  a field too; whether a ticket is private is its title's chip, not a notice under its actions. A run's, a tick's, and
+  a chore run's pages put each fact in the same home: the state, a run's kind, and its ticket in the description, so
+  the identity panel's header is its name alone and its fields leave out the ticket; a chore run's chore in the trail,
+  never a field; the session in the transcript's header, never a field; and the paths in the identity panel, but a
+  tick's output, whose path its Output panel names.
 - **A detail page has one skeleton**: what it is, then its thread or main content, then the lists that support it.
   First the identity panel, its subject's fields (a ticket's Work, a run's Run, a PR's Pull request, a chore's
   Schedule); its actions sit in that panel's foot, under a hairline, never in a panel of their own above the content.
+  What runs and ends, a run, a tick, a chore run, keeps one order there, the page's answer first: `summary`; then what
+  came of it (a failed run's `ended on`, a running run's `last call`, a run's PRs, a chore run's `harness` note; a
+  chore run's findings are counted in its description and listed under the panel); `when` (`WhenField`), started,
+  ended, and how long it took in one field, `Oct 8 06:30 → 06:59 · 29m`, and its `span` age (`for 3m` while it
+  runs); `spent`; then a tick's canopy version; then the paths, a run's branch, worktrees, and log, a chore run's
+  log.
   Then the thread the operator came to answer, with its form: a ticket's conversation and the reply. A page with no
   thread has its main content there instead: a run's transcript, a chore's open findings and runs, a chore run's
   findings and transcript, a tick's decisions, a review's findings and diff, a PR's reviews. A chore's notes are a
@@ -408,7 +421,9 @@ a skeleton, and fun (Fun, above). The keyframes and utilities are in `src/index.
 
 - `scrollbar-gutter: stable` on what the page scrolls in (`page-scroll`), so a page that grows a scrollbar does not
   move.
-- Async content gets its space before it arrives: a fixed width for readouts, a minimum height for panels.
+- Async content gets its space before it arrives: a fixed width for readouts, a minimum height for panels. A panel
+  holds that height only while its read is pending: read, it is as tall as what it holds, and a transcript with no
+  events is its header alone.
 - A skeleton (`PanelSkeleton`) shows only while there is no data at all, and only while the read is pending: once it
   has failed, a Notice takes its place at its height (`PanelLoading`). A refetch or a stream update keeps what is on
   screen.
@@ -515,7 +530,9 @@ list, an empty state, or a skeleton by hand.
   worktree), and `bare` for how long an item has stood open, where its place says so (`3m`: an attention item, an open
   finding, the rail's runs, the oldest question). The header's tick is the one exception: `3m ago` once it ended, so
   its line stays short. A moment shown whole is `Timestamp`, the local `Oct 8 10:30` with the ISO time the journal
-  keeps on hover, beside its age on a run's, tick's, chore run's, or review's page; a raw ISO string is never shown. A
+  keeps on hover, beside its age on a review's page, and in a run's, tick's, or chore run's `when` field, which sets
+  its end after it, the time alone on the same day, how long it ran (`lasted`, the age's units), and its `span` age;
+  a raw ISO string is never shown. A
   cost is `Cost`: `$0.42` as a readout, its dollars grouped by thousands (`$1,234.50`, `costText`, rounded to the cent
   as the CLI rounds), or a dash when nothing reported one, `none reported` on hover; never formatted in place, a hat's
   price included.
@@ -585,11 +602,12 @@ list, an empty state, or a skeleton by hand.
   hairline at 40% over the same color at 10%, so it holds its edge on a selected row's tint; `plain` in
   `muted-foreground`, else the status color of the state it marks, `failed`, `blocked`, or `running`. No chip is
   colored by classes of its own.
-- **A status in a detail page's header** (a run's, a chore run's, a tick's) is a dot in its state's color
-  and its word in that color. A review's is its page's description alone, since its panel leads with what it found
-  (A review, below). A run's journal says `done` where a tick's and a chore run's say `ok`: each is the CLI's
-  word for its own, kept as it prints it, and both wear `status-done`, as a tick's `skipped` does (`tickState` in
-  `src/lib/ticks.ts`).
+- **A status on a detail page** (a run's, a chore run's, a tick's, a review's) is its description's first word
+  alone; the identity panel's header names the panel and nothing else, so the state is said once. Of the two homes
+  it had, the description was kept, as the smaller change: it is the page's line of state on every detail page, and a
+  review's was already its description alone, since its panel leads with what it found (A review, below). A run's
+  journal says `done` where a tick's and a chore run's say `ok`: each is the CLI's word for its own, kept as it prints
+  it, and in a list's row both wear `status-done`, as a tick's `skipped` does (`tickState` in `src/lib/ticks.ts`).
 - **A run state named in words** (a filter's chip, a counter's line) is the operator's: `blocked`, a run that asked,
   reads `waiting on you` (`RUN_WORD` in `src/lib/run-state.ts`), as the rail, the tickets list, and a question's chip
   say it. The URL keeps `?state=blocked`, and a run's own status in its page's header stays the CLI's word.
@@ -751,7 +769,10 @@ list, an empty state, or a skeleton by hand.
   `unknown` has an `ended on` field after its summary (`EndedOnField`, `endedOn` in `src/lib/transcript.ts`): the
   transcript's last runtime error, else its last failed or refused tool call, as its time, its name or tool, and its
   first line in mono `status-failed`, a button that shows its row as the context chart's entries do (below); the page
-  holds the transcript's view (`useTranscriptView`) for both. A skeleton holds its place while the transcript is read.
+  holds the transcript's view (`useTranscriptView`) for both. A skeleton holds its place while the transcript is read
+  (`min-h-40`, only then). A transcript with no events, its log gone, its runtime naming no session, or its run yet to
+  print one, is its header alone, the session and then why in a few words as its readout (`log gone`, `no session`,
+  `no events yet`, `no events`), the whole reason on hover.
   A transcript over 100 rows draws the first 100 (`TRANSCRIPT_BUDGET`, `src/lib/transcript.ts`), in order or By call,
   since one at the server's bounds (2,000 entries) drawn whole is 80,000 elements, and every key typed in its search
   waited on all of them; 100 keeps the page under 10,000 elements even when a search opens every call it draws. After
@@ -780,8 +801,9 @@ list, an empty state, or a skeleton by hand.
   the line does not. By call, each call's line has its step after its input, `30.2k in (+4.3k) · 1.8k out`.
 - **A tick's output** (`TickOutputPanel`, `src/components/raw-output.tsx`) is the overseer's file as written, under the
   tick's transcript, and **a run's output** (`RunOutputPanel`) its log the same way, under the run's: one muted line
-  naming the file (a run's says `the run's log`, whose path the Run panel shows) until `Show output`, a `Disclosure` in
-  the header, opens it. Open, it is one monospace block, its
+  naming the file (a tick's its path, with its copy button, the one place the page names it; a run's says `the run's
+  log`, whose path the Run panel shows) until `Show output`, a `Disclosure` in the header, opens it. A tick that kept no
+  file has no Output panel: its transcript, read from the same file, says why. Open, it is one monospace block, its
   lines wrapped anywhere (JSON events have no spaces to break at), scrolling inside the panel (`PanelScroll`) and opened
   at its end, where stderr is; the file's size is in the header, and a cut says so above the block. A line that parses
   as a JSON object or array (the runtime's events) is colored as written, never reformatted (`src/lib/json-lines.ts`,
@@ -993,8 +1015,11 @@ list, an empty state, or a skeleton by hand.
     `Show hats`). In a row's line it sits in line with the text above it (`-ml-2`), no taller than a line (`-my-1`).
     A row that opens to its own body, a transcript's tool call or model call, is the row itself, a chevron at its end.
   - Two of either are one: a pair that does and undoes (Open all, Close all) is one `Toggle` (All open).
-  - A panel header's modes sit together, after what the panel is about: a transcript's session id (but on a tick's
-    page, whose Tick panel names it), a hairline rule, then its order, By call, and All open.
+  - A panel header's modes sit together, after what the panel is about: a transcript's session id, a hairline rule,
+    then its order, By call, and All open.
+  - A panel kept at hand but seldom read whole arrives folded (`FoldPanel`, `src/components/fold-panel.tsx`): its
+    header, a readout that says what it holds in a few words, and a `Disclosure` that opens its rows under it, built
+    only once opened. A run's Memory is one.
 - **Buttons come in three sizes**, each one look: the default (`h-9`, `text-sm` at 500) in a form and a panel's foot;
   `sm` (`h-8`, the same type) in the header and for a link out, whose label is the accent's monospace at that size and
   weight (`LinkOutButton`); and `xs` (`h-6`, `text-xs` monospace at 400, as a readout beside it is) in a panel's header

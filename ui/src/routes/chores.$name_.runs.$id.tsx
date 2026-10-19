@@ -4,9 +4,7 @@ import { createFileRoute, Link } from '@tanstack/react-router'
 import { ApiError } from '@/api/client'
 import { choreRunQuery, choreRunTranscriptQuery } from '@/api/queries'
 import type { ChoreRunDetail, Transcript } from '@/api/types'
-import { Age } from '@/components/age'
 import { ChoreFindingRow } from '@/components/chore-finding'
-import { ChoreLink } from '@/components/chore-link'
 import { CopyablePath } from '@/components/copy-button'
 import { Cost } from '@/components/cost'
 import { EndedOnField } from '@/components/ended-on'
@@ -14,16 +12,13 @@ import { Field, Fields } from '@/components/fields'
 import { Notice } from '@/components/notice'
 import { Empty, PageHeader, Panel, PanelHeader, PanelLoading } from '@/components/panel'
 import { RichText } from '@/components/rich-text'
-import { RunDot, Word } from '@/components/status'
-import { Timestamp } from '@/components/timestamp'
 import { TranscriptPanel } from '@/components/transcript'
+import { WhenField } from '@/components/when-field'
 import { useTranscriptView } from '@/hooks/use-transcript-view'
 import { choreRunDescription } from '@/lib/descriptions'
 import { choreRef, choreRunRef } from '@/lib/refs'
-import { RUN_TEXT } from '@/lib/run-state'
 import { tickId } from '@/lib/ticks'
 import { RUN_TOKENS_TITLE, runTokens } from '@/lib/transcript'
-import { cn } from '@/lib/utils'
 import { None } from '@/components/none'
 
 // What every chore run's page shows, on its title's hover: its description is the run's state.
@@ -130,6 +125,10 @@ function ChoreCrumb({ name }: { name: string }) {
     )
 }
 
+/**
+ * The chore run's facts, in the order a run's and a tick's keep (ui/DESIGN.md, the detail skeleton): its answer, when,
+ * what it spent, then its log. Its state and findings are the header's, its chore the trail's, so none is said here.
+ */
 function RunPanel({
     detail,
     transcript,
@@ -142,28 +141,12 @@ function RunPanel({
     const { run } = detail
     return (
         <Panel>
-            <PanelHeader label="Run">
-                <span className={cn('flex items-center gap-1.5 font-mono text-xs', RUN_TEXT[run.state])}>
-                    <RunDot state={run.state} />
-                    <Word word={run.status} />
-                </span>
-            </PanelHeader>
+            <PanelHeader label="Run" />
             <Fields>
-                <Field label="chore">
-                    <ChoreLink name={detail.chore} />
-                </Field>
-                <Field label="started" mono>
-                    <span className="flex items-baseline gap-2">
-                        <Timestamp at={run.started_at} />
-                        <Age at={run.started_at} variant="ago" />
-                    </span>
-                </Field>
-                <Field label="ended" mono>
-                    {run.ended_at === null ? 'still running' : <Timestamp at={run.ended_at} />}
-                </Field>
-                {detail.note && <Field label="harness">{detail.note}</Field>}
                 <Field label="summary">{detail.summary ? <RichText text={detail.summary} /> : <None />}</Field>
                 <EndedOnField status={run.status} transcript={transcript} onShow={onShow} />
+                {detail.note && <Field label="harness">{detail.note}</Field>}
+                <WhenField started={run.started_at} ended={run.ended_at} />
                 <Field label="spent" mono>
                     <Cost usd={run.cost_usd} />
                     <span title={RUN_TOKENS_TITLE}>{runTokens(run.new_tokens, run.peak_context)}</span>

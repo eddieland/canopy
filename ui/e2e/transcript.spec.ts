@@ -262,9 +262,9 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
     const transcript = page.getByTestId('transcript')
     const tools = transcript.getByTestId('transcript-tool')
     await expect(tools).toHaveCount(4)
-    // Its session is named once, in the Tick panel's overseer field, not again over the transcript.
-    await expect(page.locator('main')).toContainText('session ses_tick2')
-    await expect(transcript).not.toContainText('session ses_tick2')
+    // Its session is named once, in the transcript's header, as a run's is.
+    await expect(transcript).toContainText('session ses_tick2')
+    await expect(page.locator('main').getByText('session ses_tick2')).toHaveCount(1)
     await expect(transcript).toContainText('4 tool calls, 1 refused')
 
     // A shell call's line is its command, with what it printed when that is one short line.
@@ -298,7 +298,7 @@ test("a tick's page shows its overseer's session under its decisions", async ({ 
     await expect(split).toBeHidden()
 })
 
-test("a tick's output shows as written when asked, stderr included, and a tick that kept none says so", async ({
+test("a tick's output shows as written when asked, stderr included, and a tick that kept none says so once", async ({
     page,
 }) => {
     await page.goto('ticks/2')
@@ -325,10 +325,19 @@ test("a tick's output shows as written when asked, stderr included, and a tick t
     await output.getByRole('button', { name: 'Hide output' }).click()
     await expect(text).toHaveCount(0)
 
+    // With no file, there is no Output panel: the transcript, read from the same file, says why in its header, and
+    // is that header alone.
     await page.goto('ticks/1')
     await settled(page)
-    await expect(page.getByTestId('tick-output')).toContainText('no output kept')
-    await expect(page.getByTestId('tick-output').getByRole('button')).toHaveCount(0)
+    await expect(page.getByTestId('tick-output')).toHaveCount(0)
+    const transcript = page.getByTestId('transcript')
+    await expect(transcript.getByText('log gone')).toHaveAttribute(
+        'title',
+        'its log is gone, or is not a file canopy reads',
+    )
+    await expect(page.locator('main').getByText(/log gone|no output|its log is gone/u)).toHaveCount(1)
+    // A header's height (`min-h-9`) and its borders, and no body under it.
+    expect((await transcript.boundingBox())?.height).toBeLessThanOrEqual(40)
 })
 
 test("a tick's output lays its JSON out when asked, and that tick's panel remembers it", async ({ page }) => {
@@ -386,12 +395,16 @@ test("a chore run's id opens its page: what it reported, in full, over its sessi
     await web.locator('summary').click()
     await expect(web).toContainText('1 high severity vulnerability')
 
-    await page.locator('dl').getByRole('link', { name: 'chore:deps' }).click()
+    // Its chore is its trail's step, linked there alone.
+    await page.getByRole('navigation', { name: 'Breadcrumb' }).getByRole('link', { name: 'chore:deps' }).click()
     await expect(page).toHaveURL(/\/chores\/deps$/u)
 
     await page.goto('chores/build-health/runs/4')
     await settled(page)
-    await expect(page.getByTestId('transcript')).toContainText('no events yet: they show here as the agent prints them')
+    await expect(page.getByTestId('transcript').getByText('no events yet')).toHaveAttribute(
+        'title',
+        'no events yet: they show here as the agent prints them',
+    )
     await page.goto('chores/deps/runs/4')
     await expect(page.getByText("chore 'deps' has no run 4")).toBeVisible()
 })
