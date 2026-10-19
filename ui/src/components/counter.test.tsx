@@ -40,6 +40,11 @@ describe('Counter', () => {
         expect(screen.getByTestId('counter-spend').textContent).toContain('$4.20')
     })
 
+    it('has no line when it is given none', () => {
+        render(<Counter label="Running" value={2} tone="running" />)
+        expect(screen.getByTestId('counter-running').textContent).toBe('Running2')
+    })
+
     it('keeps its whole line on hover when the line is text', () => {
         render(
             <Counter label="Worktrees" value={5} tone="plain">

@@ -122,9 +122,9 @@ describe('breakdown', () => {
         expect(breakdownText(parts)).toBe('1 broken, 1 waiting on you, 3 other')
     })
 
-    it('leaves out a part with nothing in it, and says nothing for an empty list', () => {
+    it('leaves out a part with nothing in it', () => {
         expect(breakdownText(breakdown({ failed: 0, waiting: 2, other: 0, finding: 0 }))).toBe('2 waiting on you')
-        expect(breakdownText(breakdown({ failed: 0, waiting: 0, other: 0, finding: 0 }))).toBe('nothing')
+        expect(breakdown({ failed: 0, waiting: 0, other: 0, finding: 0 })).toEqual([])
     })
 })
 

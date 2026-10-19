@@ -54,18 +54,9 @@ describe('Counters', () => {
         expect(counter('attention').textContent).toBe('Attention')
     })
 
-    it('counts the running runs, and under them the tickets whose latest run waits on you', () => {
-        const { unmount } = renderCounters({ runs: mockRuns })
-        expect(within(counter('running')).getByText('1')).toBeDefined()
-        expect(within(counter('running')).getByText('1 waiting on you')).toBeDefined()
-        unmount()
-
-        // A later run on the blocked ticket took its question up: the ticket waits on nothing now.
-        const [running, blocked] = mockRuns
-        const later = { ...running, id: 43, ticket_key: 'ABC-102' } as Run
-        renderCounters({ runs: [running, later, blocked] as Run[] })
-        expect(within(counter('running')).getByText('2')).toBeDefined()
-        expect(within(counter('running')).getByText('0 waiting on you')).toBeDefined()
+    it('counts the running runs, with nothing under them that the next counter says', () => {
+        renderCounters({ runs: mockRuns })
+        expect(counter('running').textContent).toBe('Running1')
     })
 
     it('counts the tickets waiting on you, and dates the oldest question no one has answered yet', () => {
@@ -89,15 +80,15 @@ describe('Counters', () => {
         expect(within(counter('waiting')).getByText('no question open')).toBeDefined()
     })
 
-    it('counts the attention list, and breaks it down by what broke, what waits on you, and the rest', () => {
+    it("counts the attention list, and leaves how it splits to the nav's badge", () => {
         const broken = { ...mockAttention[0], id: 'a2', reason: 'worker_failed' } as AttentionItem
         const finding = { ...mockAttention[0], id: 'a3', reason: 'deps', finding: true } as AttentionItem
-        const { unmount } = renderCounters({ attention: [...mockAttention, broken, finding] })
-        expect(within(counter('attention')).getByText('3')).toBeDefined()
-        expect(within(counter('attention')).getByText('1 broken, 1 waiting on you, 1 other')).toBeDefined()
-        unmount()
+        renderCounters({ attention: [...mockAttention, broken, finding] })
+        expect(counter('attention').textContent).toBe('Attention3')
+    })
 
-        renderCounters({ attention: [] })
-        expect(within(counter('attention')).getByText('nothing')).toBeDefined()
+    it('says waiting on you once, in the counter that counts it', () => {
+        renderCounters({ runs: mockRuns, tickets: mockTickets, attention: mockAttention })
+        expect(screen.getAllByText(/waiting on you/iu)).toHaveLength(1)
     })
 })

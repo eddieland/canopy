@@ -69,8 +69,8 @@ const ITEMS: { to: Section; icon: LucideIcon; hint: string }[] = [
  * The side navigation. Each item's icon is in its section's color. The active item is marked by one highlight, a tint
  * and a hairline in that color, which slides to the item a navigation lands on and takes on its color as it goes; a
  * ticket's page keeps Tickets active, a PR's Pull requests, a review's Reviews, a chore's Chores, and a tick's Ticks.
- * Attention shows how many items it lists, on every page, split as its counter splits them, and Memory how many
- * proposals wait on the operator, while proposals are on. Hovering an item says what its page holds.
+ * Attention shows how many items it lists, on every page, split by severity, and Memory how many proposals wait on
+ * the operator, while proposals are on. Hovering an item says what its page holds.
  *
  * `compact`, in the rail's strip under `lg`, shows the icons alone, each still named for a screen reader and on hover,
  * and each count as one number on its icon's corner: Attention's in its most severe item's color.
