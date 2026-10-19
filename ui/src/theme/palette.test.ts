@@ -20,8 +20,9 @@ beforeEach(() => {
 describe('parsePalettes', () => {
     it.each([
         { raw: null, palettes: { light: 'indigo', dark: 'indigo' } },
-        { raw: '{"light":"grey"}', palettes: { light: 'grey', dark: 'indigo' } },
-        { raw: '{"light":"grey","dark":"grey"}', palettes: { light: 'grey', dark: 'grey' } },
+        { raw: '{"light":"solarized"}', palettes: { light: 'solarized', dark: 'indigo' } },
+        { raw: '{"light":"off-white","dark":"grey"}', palettes: { light: 'off-white', dark: 'grey' } },
+        { raw: '{"light":"grey","dark":"solarized"}', palettes: { light: 'indigo', dark: 'indigo' } },
         { raw: '{"dark":"mauve"}', palettes: { light: 'indigo', dark: 'indigo' } },
         { raw: '"grey"', palettes: { light: 'indigo', dark: 'indigo' } },
         { raw: 'null', palettes: { light: 'indigo', dark: 'indigo' } },
@@ -44,8 +45,8 @@ describe('palettes', () => {
     it('still applies where storage is unavailable', async () => {
         breakStorage()
         const palette = await load()
-        palette.setPalette('light', 'grey')
-        expect(root.dataset.lightPalette).toBe('grey')
+        palette.setPalette('light', 'off-white')
+        expect(root.dataset.lightPalette).toBe('off-white')
     })
 
     it("follows another tab's pick, on <html> too", async () => {
@@ -53,9 +54,9 @@ describe('palettes', () => {
         const { result } = renderHook(() => palette.usePalettes())
         expect(result.current).toEqual({ light: 'indigo', dark: 'indigo' })
 
-        act(() => otherTab(palette.STORAGE_KEY, '{"light":"grey","dark":"indigo"}'))
+        act(() => otherTab(palette.STORAGE_KEY, '{"light":"solarized","dark":"indigo"}'))
 
-        expect(result.current).toEqual({ light: 'grey', dark: 'indigo' })
-        expect(root.dataset.lightPalette).toBe('grey')
+        expect(result.current).toEqual({ light: 'solarized', dark: 'indigo' })
+        expect(root.dataset.lightPalette).toBe('solarized')
     })
 })

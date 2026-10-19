@@ -3,25 +3,35 @@ import { storedSetting, useStoredSetting } from '@/lib/stored-setting'
 import type { ResolvedTheme } from './store'
 
 /**
- * The palette each theme draws its neutrals from, chosen apart for light and for dark: indigo, whose canvas carries
- * the accent's hue, or grey, the neutral one the 2026-10-19 exploration drew for Mailroom. Kept in localStorage and
- * synced across tabs; the inline script in index.html applies it before first paint, and this module afterwards.
+ * The palette each theme draws its neutrals from, chosen apart for light and for dark. Indigo, whose canvas carries
+ * the accent's hue, is the default for both. Light can wear off-white, a warm paper, or Solarized's cream base tones;
+ * dark can wear grey, the neutral one the 2026-10-19 exploration drew for Mailroom. Kept in localStorage and synced
+ * across tabs; the inline script in index.html applies it before first paint, and this module afterwards.
  */
 
-/** A set of neutrals a theme can wear. */
-export type Palette = 'indigo' | 'grey'
+/** Each theme's palettes, the default first. */
+export const PALETTES = {
+    light: ['indigo', 'off-white', 'solarized'],
+    dark: ['indigo', 'grey'],
+} as const
+
+/** A set of neutrals `T` can wear. */
+export type Palette<T extends ResolvedTheme = ResolvedTheme> = (typeof PALETTES)[T][number]
 
 /** The palette picked for each theme. */
-export type Palettes = Readonly<Record<ResolvedTheme, Palette>>
+export interface Palettes {
+    /** The light theme's. */
+    readonly light: Palette<'light'>
+    /** The dark theme's. */
+    readonly dark: Palette<'dark'>
+}
 
 /** Shared with index.html's inline script. */
 export const STORAGE_KEY = 'canopy-palette'
 /** Each theme's palette until the operator picks one. */
 export const DEFAULT: Palettes = { light: 'indigo', dark: 'indigo' }
 
-const PALETTES = new Set<string>(['indigo', 'grey'])
-
-/** The setting as stored, as JSON, with the default for a theme it does not name or a palette it does not know. */
+/** The setting as stored, as JSON, with the default for a theme it does not name or a palette that theme lacks. */
 export function parsePalettes(raw: string | null): Palettes {
     let stored: unknown = null
     try {
@@ -29,11 +39,14 @@ export function parsePalettes(raw: string | null): Palettes {
     } catch {
         // Not JSON: the defaults.
     }
-    const pick = (theme: ResolvedTheme): Palette => {
-        const value: unknown = typeof stored === 'object' && stored !== null ? Reflect.get(stored, theme) : undefined
-        return typeof value === 'string' && PALETTES.has(value) ? (value as Palette) : DEFAULT[theme]
+    const pick = (theme: ResolvedTheme): unknown =>
+        typeof stored === 'object' && stored !== null ? Reflect.get(stored, theme) : undefined
+    const light = pick('light')
+    const dark = pick('dark')
+    return {
+        light: PALETTES.light.find((palette) => palette === light) ?? DEFAULT.light,
+        dark: PALETTES.dark.find((palette) => palette === dark) ?? DEFAULT.dark,
     }
-    return { light: pick('light'), dark: pick('dark') }
 }
 
 const setting = storedSetting({ key: STORAGE_KEY, parse: parsePalettes, serialize: JSON.stringify })
@@ -53,8 +66,8 @@ export function usePalettes(): Palettes {
 }
 
 /** Picks `palette` for `theme` and applies it now, synchronously, so a view transition can snapshot the result. */
-export function setPalette(theme: ResolvedTheme, palette: Palette): void {
-    const next = { ...setting.get(), [theme]: palette }
+export function setPalette<T extends ResolvedTheme>(theme: T, palette: Palette<T>): void {
+    const next: Palettes = { ...setting.get(), [theme]: palette }
     setting.set(next)
     apply(next)
 }

@@ -20,7 +20,11 @@ export function switchTheme(preference: ThemePreference, origin?: HTMLElement | 
 }
 
 /** Picks `palette` for `theme`, with the same reveal as a theme's when the page shows that theme, else at once. */
-export function switchPalette(theme: ResolvedTheme, palette: Palette, origin?: HTMLElement | null): void {
+export function switchPalette<T extends ResolvedTheme>(
+    theme: T,
+    palette: Palette<T>,
+    origin?: HTMLElement | null,
+): void {
     reveal(() => setPalette(theme, palette), getSnapshot().resolved === theme ? origin : null)
 }
 

@@ -3,6 +3,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { LogOut, Megaphone, Monitor, Moon, RefreshCw, Sun } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useState } from 'react'
+import type { ReactNode } from 'react'
 
 import { reloadConfig, setNotice, showLoop, signOut } from '@/api/mutations'
 import { keys, sessionQuery, spendQuery } from '@/api/queries'
@@ -52,19 +53,15 @@ const THEMES: { value: ThemePreference; label: string; icon: LucideIcon }[] = [
     { value: 'system', label: 'System', icon: Monitor },
 ]
 
-const PALETTES: { value: Palette; label: string }[] = [
+const LIGHT_PALETTES: { value: Palette<'light'>; label: string }[] = [
     { value: 'indigo', label: 'Indigo' },
-    { value: 'grey', label: 'Grey' },
+    { value: 'off-white', label: 'Off-white' },
+    { value: 'solarized', label: 'Solarized' },
 ]
 
-// Each theme's palette row: which theme, and the line beside its choice.
-const PALETTE_ROWS: { theme: ResolvedTheme; label: string; text: string }[] = [
-    {
-        theme: 'light',
-        label: 'Light palette',
-        text: "The light theme's neutrals: indigo, which tints the canvas with the accent's hue, or a plain grey.",
-    },
-    { theme: 'dark', label: 'Dark palette', text: "The dark theme's neutrals, picked apart from the light theme's." },
+const DARK_PALETTES: { value: Palette<'dark'>; label: string }[] = [
+    { value: 'indigo', label: 'Indigo' },
+    { value: 'grey', label: 'Grey' },
 ]
 
 const SPEEDS: { value: TickerSpeed; label: string }[] = [
@@ -142,24 +139,45 @@ function ThemePanel() {
                     ))}
                 </ToggleGroup>
             </div>
-            {PALETTE_ROWS.map(({ theme, label, text }) => (
-                <div key={theme} className="flex items-center justify-between gap-4 border-b p-3 last:border-b-0">
-                    <p className="max-w-3xl text-sm text-muted-foreground">{text}</p>
-                    <ToggleGroup type="single" value={palettes[theme]} aria-label={label}>
-                        {PALETTES.map(({ value, label: name }) => (
-                            <ToggleGroupItem
-                                key={value}
-                                value={value}
-                                data-testid={`palette-${theme}-${value}`}
-                                onClick={(event) => switchPalette(theme, value, event.currentTarget)}
-                            >
-                                {name}
-                            </ToggleGroupItem>
-                        ))}
-                    </ToggleGroup>
-                </div>
-            ))}
+            <PaletteRow theme="light" value={palettes.light} options={LIGHT_PALETTES}>
+                The light theme&apos;s neutrals: indigo, which tints the canvas with the accent&apos;s hue, a warm
+                off-white, or Solarized&apos;s cream.
+            </PaletteRow>
+            <PaletteRow theme="dark" value={palettes.dark} options={DARK_PALETTES}>
+                The dark theme&apos;s: indigo, or a plain grey.
+            </PaletteRow>
         </Panel>
+    )
+}
+
+/** One theme's palette, beside the line that says what each is. */
+function PaletteRow<T extends ResolvedTheme>({
+    theme,
+    value,
+    options,
+    children,
+}: {
+    theme: T
+    value: Palette<T>
+    options: { value: Palette<T>; label: string }[]
+    children: ReactNode
+}) {
+    return (
+        <div className="flex items-center justify-between gap-4 border-b p-3 last:border-b-0">
+            <p className="max-w-3xl text-sm text-muted-foreground">{children}</p>
+            <ToggleGroup type="single" value={value} aria-label={theme === 'light' ? 'Light palette' : 'Dark palette'}>
+                {options.map((option) => (
+                    <ToggleGroupItem
+                        key={option.value}
+                        value={option.value}
+                        data-testid={`palette-${theme}-${option.value}`}
+                        onClick={(event) => switchPalette(theme, option.value, event.currentTarget)}
+                    >
+                        {option.label}
+                    </ToggleGroupItem>
+                ))}
+            </ToggleGroup>
+        </div>
     )
 }
 

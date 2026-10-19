@@ -6,13 +6,14 @@ import {
     placeholderGuide,
     LIGHT_ROUTES,
     NOW,
+    OTHER_PALETTES,
     ROUTES,
     screenshotMain,
     screenshotWhole,
     serveReview,
     settled,
     signIn,
-    storeGrey,
+    storePalette,
     storeTheme,
     THEMES,
     WHOLE_ROUTES,
@@ -91,18 +92,22 @@ for (const theme of THEMES) {
         })
         await expect(page).toHaveScreenshot(`sign-in-${theme}.png`, { fullPage: true })
     })
+}
 
-    // The grey palette sets only the neutrals, so one whole page in each theme shows all it changes.
-    test(`attention in grey ${theme}`, async ({ page }) => {
-        await page.clock.setFixedTime(NOW)
-        await storeTheme(page, theme)
-        await storeGrey(page, theme)
-        await signIn(page)
-        await page.goto('attention')
-        await settled(page)
-        await expect(page.locator('html')).toHaveAttribute(`data-${theme}-palette`, 'grey')
-        await screenshotWhole(page, `attention-grey-${theme}.png`)
-    })
+// Every palette but indigo sets only the neutrals, so one whole page in each shows all it changes.
+for (const theme of THEMES) {
+    for (const palette of OTHER_PALETTES[theme]) {
+        test(`attention in ${palette} ${theme}`, async ({ page }) => {
+            await page.clock.setFixedTime(NOW)
+            await storeTheme(page, theme)
+            await storePalette(page, theme, palette)
+            await signIn(page)
+            await page.goto('attention')
+            await settled(page)
+            await expect(page.locator('html')).toHaveAttribute(`data-${theme}-palette`, palette)
+            await screenshotWhole(page, `attention-${palette}-${theme}.png`)
+        })
+    }
 }
 
 // A tick's output as plain text: no color of its own, so dark alone.

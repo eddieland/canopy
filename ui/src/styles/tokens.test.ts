@@ -15,11 +15,12 @@ type Rgb = [number, number, number]
 type Theme = Record<string, Rgb>
 
 const css = readFileSync(resolve(import.meta.dirname, 'tokens.css'), 'utf8')
-// The grey palette sets some tokens over indigo's, so each grey theme is its indigo theme with those replaced.
+// Every other palette sets some tokens over indigo's, so each is its theme's indigo with those replaced.
 const THEMES: Record<string, Theme> = {
     light: theme(':root'),
     dark: theme('.dark'),
-    'grey light': { ...theme(':root'), ...theme(":root[data-light-palette='grey']:not(.dark)") },
+    'off-white light': { ...theme(':root'), ...theme(":root[data-light-palette='off-white']:not(.dark)") },
+    'solarized light': { ...theme(':root'), ...theme(":root[data-light-palette='solarized']:not(.dark)") },
     'grey dark': { ...theme('.dark'), ...theme(".dark[data-dark-palette='grey']") },
 }
 

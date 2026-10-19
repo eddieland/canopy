@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-import { PALETTE_KEY, settled, signIn, STORAGE_KEY, storeGrey, storeTheme } from './helpers.ts'
+import { PALETTE_KEY, settled, signIn, STORAGE_KEY, storePalette, storeTheme } from './helpers.ts'
 
 declare global {
     // A `var` in `declare global` is a property of globalThis, where the page's scripts set these.
@@ -141,9 +141,9 @@ test.describe('palettes', () => {
         )
     })
 
-    test('a reload with grey stored has it before the body', async ({ page }) => {
+    test('a reload with a palette stored has it before the body', async ({ page }) => {
         await storeTheme(page, 'light')
-        await storeGrey(page, 'light')
+        await storePalette(page, 'light', 'solarized')
         await page.addInitScript(() => {
             new MutationObserver((_, observer) => {
                 if (document.querySelector('body') !== null) {
@@ -153,6 +153,6 @@ test.describe('palettes', () => {
             }).observe(document, { childList: true, subtree: true })
         })
         await page.goto('runs')
-        await expect(page.locator('html')).toHaveAttribute('data-palette-at-body', 'grey')
+        await expect(page.locator('html')).toHaveAttribute('data-palette-at-body', 'solarized')
     })
 })

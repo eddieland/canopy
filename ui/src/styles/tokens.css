@@ -9,9 +9,9 @@
  * status color on its own tint up to 20% (bg-status-failed/12) too; tokens.test.ts measures each pair. Section colors
  * are tuned the same way, as an icon, as text, and at 16%.
  *
- * Each theme wears one of two palettes, picked apart for light and for dark (src/theme/palette.ts): indigo, the
- * default, whose neutrals carry the accent's hue so the canvas has some color of its own, or grey, which sets only the
- * neutrals, over indigo, to the near-colorless ones the 2026-10-19 exploration drew for Mailroom.
+ * Each theme wears a palette, picked apart for light and for dark (src/theme/palette.ts). Indigo, the default, has
+ * neutrals that carry the accent's hue, so the canvas has some color of its own. The others set only the neutrals,
+ * over indigo's: off-white and Solarized for light, and for dark the grey the 2026-10-19 exploration drew for Mailroom.
  */
 
 :root {
@@ -177,21 +177,38 @@
     --rave-dark: oklch(0.08 0.02 275);
 }
 
-/* The grey palette: only the neutrals change, and what is drawn in them; every hue is indigo's. Muted text is a step
- * further from the canvas than Mailroom drew it, and stopped one more, to read on its own tint as well. */
-:root[data-light-palette='grey']:not(.dark) {
-    --background: oklch(0.967 0.001 286);
-    --surface: oklch(1 0 0);
-    --surface-raised: oklch(0.956 0.004 286);
-    --border: oklch(0.92 0.005 286);
-    --foreground: oklch(0.21 0.006 286);
-    --muted-foreground: oklch(0.52 0.017 286);
-    --scrollbar: oklch(0.52 0.017 286 / 0.4);
-    --status-stopped: oklch(0.47 0.017 286);
-    --spend-dry-run: oklch(0.6 0.01 286);
-    --context-carried: oklch(0.6 0.01 286);
+/* The light theme's other palettes: only the neutrals change, and what is drawn in them; every hue is indigo's.
+ * Off-white is a warm paper, its surfaces never quite white. */
+:root[data-light-palette='off-white']:not(.dark) {
+    --background: oklch(0.96 0.008 85);
+    --surface: oklch(0.99 0.005 85);
+    --surface-raised: oklch(0.952 0.01 85);
+    --border: oklch(0.9 0.014 85);
+    --foreground: oklch(0.24 0.012 70);
+    --muted-foreground: oklch(0.5 0.02 70);
+    --scrollbar: oklch(0.5 0.02 70 / 0.4);
+    --status-stopped: oklch(0.47 0.02 70);
+    --spend-dry-run: oklch(0.6 0.015 80);
+    --context-carried: oklch(0.6 0.015 80);
 }
 
+/* Solarized's light base tones: base2 the canvas, base3 a surface, base02 the text, base01 muted. The two bases are a
+ * little lighter than Solarized's own, and base01 darker, so indigo's hues still read at 4.5:1 on them. */
+:root[data-light-palette='solarized']:not(.dark) {
+    --background: oklch(0.948 0.026 92);
+    --surface: oklch(0.988 0.02 90);
+    --surface-raised: oklch(0.962 0.026 91);
+    --border: oklch(0.895 0.03 92);
+    --foreground: oklch(0.309 0.052 220);
+    --muted-foreground: oklch(0.48 0.028 219);
+    --scrollbar: oklch(0.48 0.028 219 / 0.4);
+    --status-stopped: oklch(0.45 0.028 219);
+    --spend-dry-run: oklch(0.6 0.02 205);
+    --context-carried: oklch(0.6 0.02 205);
+}
+
+/* The dark theme's grey palette, Mailroom's neutrals. Muted text is a step further from the canvas than Mailroom drew
+ * it, and stopped one more, to read on its own tint as well. */
 .dark[data-dark-palette='grey'] {
     --background: oklch(0.169 0.004 286);
     --surface: oklch(0.206 0.006 286);

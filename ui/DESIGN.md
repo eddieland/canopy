@@ -12,8 +12,9 @@ the nav has a color of its own, for a little fun and a sense of place: its icon,
 trail over its pages wear it, and an aurora of them runs under the header. Status color is reserved for state, and a
 counter wears the color of what it counts; section colors never mark state, and nothing else is colored for
 decoration, but the fun's own (Fun, below). By default both themes' neutrals carry the accent's indigo hue, so the
-canvas has color of its own: dark is a deep indigo slate, light a lavender grey and white. Each theme can wear a plain
-grey instead, picked apart (Themes, below). Dark is the one the operator lives in; neither is the lesser theme.
+canvas has color of its own: dark is a deep indigo slate, light a lavender grey and white. Light can wear a warm
+off-white or Solarized's cream instead, and dark a plain grey, each picked apart (Themes, below). Dark is the one the
+operator lives in; neither is the lesser theme.
 This replaced an instrument panel; it and the other directions weighed are in `docs/ui-explorations/2026-10-08-style/`.
 
 ## Tokens
@@ -94,12 +95,13 @@ Rules:
   with the canvas's indigo in it for what a model call carried, a cyan for what it added. Fills, never text, so the
   legend's words are `muted-foreground` beside a swatch; each reaches 3:1 on `surface` and on `surface-raised`, the
   picked call's, which `tokens.test.ts` measures.
-- **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check
-  it on both themes' surfaces before using it. A neutral, or a color drawn in one, is set again in each grey rule.
-- **Palettes.** Indigo is the default; grey, the near-colorless neutrals the 2026-10-19 exploration drew for Mailroom,
-  is a rule per theme in `tokens.css` that sets only the neutrals over indigo's, keyed on `data-light-palette` and
-  `data-dark-palette` on `<html>`. Every hue, the accent's included, is the same in both, so a component never knows
-  which it is on.
+- **Adding a token**: define it in both `:root` and `.dark`, expose it in `@theme inline`, and add a row above. Check it
+  on both themes' surfaces before using it. A neutral, or a color drawn in one, is set again in each palette's rule.
+- **Palettes.** Indigo is each theme's default. The others are a rule each in `tokens.css` that sets only the neutrals
+  over indigo's, keyed on `data-light-palette` or `data-dark-palette` on `<html>`: for light, off-white, a warm paper,
+  and Solarized's cream base tones; for dark, grey, the near-colorless neutrals the 2026-10-19 exploration drew for
+  Mailroom. A light canvas is never grey, which only looks dim. Every hue, the accent's included, is the same in all,
+  so a component never knows which it is on.
 - **shadcn names** (`primary`, `muted`, `card`, `popover`, `input`, `destructive`, ...) are aliased onto ours so
   generated components render unchanged. New code uses our names. shadcn's own `accent` (a hover tint) is not
   aliased: here `accent` is the brand color, so replace `bg-accent` hover tints in generated code with

@@ -106,8 +106,8 @@ describe('switchPalette', () => {
         expect(document.documentElement.dataset.darkPalette).toBe('grey')
         expect(start).not.toHaveBeenCalled()
 
-        switchPalette('light', 'grey', button())
-        expect(document.documentElement.dataset.lightPalette).toBe('grey')
+        switchPalette('light', 'solarized', button())
+        expect(document.documentElement.dataset.lightPalette).toBe('solarized')
         expect(start).toHaveBeenCalledTimes(1)
     })
 })
