@@ -638,7 +638,7 @@ that section's F37 inferred. Cited by no milestone yet.
 
 ### Setup
 
-- OpenCode 1.19.3 from npm, model `anthropic/claude-opus-5-5`, its Anthropic provider's base URL pointed at
+- OpenCode 1.19.3 from npm, on 2026-10-17's model, its Anthropic provider's base URL pointed at
   2026-10-17's recorder, unchanged. One `opencode run --agent NAME --format json --thinking --title=probe "Say ok."`
   per agent `.agents/agents/` ships, as canopy's default templates run it, with `OPENCODE_CONFIG_DIR` set to the
   snapshot, in a directory that is not a git checkout, and HOME and the XDG directories empty ones of this check's. Each
