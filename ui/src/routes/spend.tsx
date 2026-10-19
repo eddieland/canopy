@@ -244,7 +244,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
                 {cells.map(({ label, usd, testId }) => (
                     <div key={testId} className="flex flex-col gap-0.5">
                         <dt className="panel-label">{label}</dt>
-                        <dd className="readout text-lg text-foreground" data-testid={`spend-total-${testId}`}>
+                        <dd className="readout text-xl text-foreground" data-testid={`spend-total-${testId}`}>
                             <Cost usd={usd} />
                         </dd>
                     </div>
@@ -258,7 +258,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
                     >
                         tickets done
                     </dt>
-                    <dd className="readout text-lg text-foreground" data-testid="spend-done">
+                    <dd className="readout text-xl text-foreground" data-testid="spend-done">
                         {found.done}
                     </dd>
                 </div>
@@ -266,7 +266,7 @@ function Totals({ found }: { found: SpendBreakdown }) {
                     <dt className="panel-label" title={PER_DONE_HINT}>
                         per ticket done
                     </dt>
-                    <dd className="readout text-lg text-foreground" data-testid="spend-per-done">
+                    <dd className="readout text-xl text-foreground" data-testid="spend-per-done">
                         <Cost usd={found.per_done} />
                     </dd>
                 </div>
