@@ -56,7 +56,10 @@ for (const theme of THEMES) {
         await signIn(page)
         await page.goto('runs/39')
         await settled(page)
-        await expect(page.getByTestId('transcript-context')).toHaveScreenshot(`runs-39-context-${theme}.png`)
+        const context = page.getByTestId('transcript-context')
+        await context.getByRole('button', { name: 'Show chart' }).click()
+        await expect(context.getByRole('radiogroup', { name: 'Model calls' })).toBeVisible()
+        await expect(context).toHaveScreenshot(`runs-39-context-${theme}.png`)
     })
 
     test(`a tick's output pretty in ${theme}`, async ({ page }) => {

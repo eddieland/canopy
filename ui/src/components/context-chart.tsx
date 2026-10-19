@@ -1,5 +1,7 @@
 import { useState } from 'react'
 
+import { Disclosure } from '@/components/disclosure'
+import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { axisNames, axisStep } from '@/lib/chart'
 import { signed, summary, tokenCount } from '@/lib/transcript'
@@ -12,60 +14,78 @@ const MAX_ADDITIONS = 5
 const AXIS_ALL = 12
 // The chart's top is the peak and this much over it, the room the peak's label sits in.
 const HEADROOM = 1.25
+// The chart's frame: in the counts' band, under them, and over the rows, so it starts at the band's spacing.
+const SECTION = 'flex flex-col gap-2 border-b px-3 pb-1'
 
 /**
- * A transcript's context by model call (ui/DESIGN.md): its peak and its largest single addition on one line, then a
- * bar per call, as tall as what it was sent, the part it carried from the call before in a neutral and what it added
- * in a hue, the first call's split into the runtime's own overhead and canopy's prompt, and the peak's size over its
- * bar. Each bar is a segmented control's item: the one picked, at first the call the largest addition grew, names
- * under the chart what grew it, largest first, each a button that shows its row in the transcript (`onShow`, by its
- * place in the entries). A session of one call has its line alone, with no bars.
+ * A transcript's context by model call (ui/DESIGN.md): its peak and its largest single addition on one line, which
+ * opens to a bar per call, as tall as what it was sent, the part it carried from the call before in a neutral and what
+ * it added in a hue, the first call's split into the runtime's own overhead and canopy's prompt, and the peak's size
+ * over its bar. Each bar is a segmented control's item: the one picked, at first the call the largest addition grew,
+ * names under the chart what grew it, largest first, each a button that shows its row in the transcript (`onShow`, by
+ * its place in the entries), as the line's largest addition does, open or not. `open` is whether the bars show, and
+ * `onOpenChange` opens or closes them. A session with fewer than two calls the runtime counted tokens for has its line
+ * alone: one bar says nothing the line does not.
  */
-export function ContextChart({ shape, onShow }: { shape: ContextShape; onShow: (i: number) => void }) {
+export function ContextChart({
+    shape,
+    onShow,
+    open,
+    onOpenChange,
+}: {
+    shape: ContextShape
+    onShow: (i: number) => void
+    open: boolean
+    onOpenChange: (open: boolean) => void
+}) {
     const [picked, setPicked] = useState<number | null>(null)
     const { calls, peak, largest } = shape
     const top = (peak?.sent ?? 0) * HEADROOM
     const shown = calls.find((c) => c.n === picked) ?? largest?.call ?? peak ?? calls[0]
-    // One call's bar says nothing its line does not.
-    const chart = calls.length > 1
+    // A call the runtime counted nothing for draws no bar, so it takes two counted calls to say more than the line.
+    const chart = calls.filter((c) => c.sent !== null).length > 1
     if (peak === null || shown === undefined) {
         return null
     }
-    return (
-        <section
-            aria-label="Context by model call"
-            className="flex flex-col gap-2 border-b px-3 py-2"
-            data-testid="transcript-context"
-        >
-            <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                <span className="panel-label">context</span>
-                <span className="readout" title={`${peak.sent} tokens`}>
-                    peak {tokenCount(peak.sent ?? 0)} at call {peak.n}
-                </span>
-                {largest !== null && (
-                    <span className="flex min-w-0 items-baseline gap-2" data-testid="context-largest">
-                        <span className="shrink-0">largest addition</span>
-                        <ShowButton addition={largest.addition} onShow={onShow} />
-                        <span className="readout shrink-0">
-                            ≈{tokenCount(largest.addition.tokens)} into call {largest.call.n}
-                        </span>
+    // With the line alone, what the one call was sent is said on the peak's hover.
+    const peakTitle = chart || peak !== calls[0] ? `${peak.sent} tokens` : `${peak.sent} tokens: ${firstSplit(shape)}`
+    const line = (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            <span className="panel-label">context</span>
+            <span className="readout" title={peakTitle}>
+                peak {tokenCount(peak.sent ?? 0)} at call {peak.n}
+            </span>
+            {largest !== null && (
+                <span className="flex min-w-0 items-baseline gap-2" data-testid="context-largest">
+                    <span className="shrink-0">largest addition</span>
+                    <ShowButton addition={largest.addition} onShow={onShow} />
+                    <span className="readout shrink-0">
+                        ≈{tokenCount(largest.addition.tokens)} into call {largest.call.n}
                     </span>
-                )}
-                {chart && (
-                    <ul aria-hidden className="ml-auto flex gap-3">
-                        <li className="flex items-center gap-1.5">
-                            <span className="size-2.5 rounded-xs bg-context-carried" />
-                            overhead, then carried
-                        </li>
-                        <li className="flex items-center gap-1.5">
-                            <span className="size-2.5 rounded-xs bg-context-added" />
-                            prompt, then added
-                        </li>
-                    </ul>
-                )}
-            </div>
+                </span>
+            )}
             {chart && (
-                <>
+                // As tall as the line's text, so the line is no taller for it.
+                <Disclosure open={open} what="chart" className="-my-1 ml-auto" />
+            )}
+        </div>
+    )
+    if (!chart) {
+        return (
+            <section aria-label="Context by model call" className={SECTION} data-testid="transcript-context">
+                {line}
+            </section>
+        )
+    }
+    return (
+        <Collapsible asChild open={open} onOpenChange={onOpenChange}>
+            <section
+                aria-label="Context by model call"
+                className={cn(SECTION, open && 'pb-2')}
+                data-testid="transcript-context"
+            >
+                {line}
+                <CollapsibleContent className="flex flex-col gap-2">
                     <ToggleGroup
                         type="single"
                         aria-label="Model calls"
@@ -97,20 +117,39 @@ export function ContextChart({ shape, onShow }: { shape: ContextShape; onShow: (
                             </ToggleGroupItem>
                         ))}
                     </ToggleGroup>
-                    <div aria-hidden className="-mt-1 flex gap-1">
+                    <div aria-hidden className="-mt-1 flex items-start gap-1 text-muted-foreground">
                         {calls.map((call, i) => (
-                            <span
-                                key={call.n}
-                                className="readout max-w-6 min-w-px flex-1 text-center text-2xs text-muted-foreground"
-                            >
+                            <span key={call.n} className="readout max-w-6 min-w-px flex-1 text-center text-2xs">
                                 {axisNames(i, calls.length, axisStep(calls.length, AXIS_ALL)) ? call.n : ''}
                             </span>
                         ))}
+                        <ul className="ml-auto flex shrink-0 gap-3 pl-3 text-xs">
+                            <li className="flex items-center gap-1.5">
+                                <span className="size-2.5 rounded-xs bg-context-carried" />
+                                overhead, then carried
+                            </li>
+                            <li className="flex items-center gap-1.5">
+                                <span className="size-2.5 rounded-xs bg-context-added" />
+                                prompt, then added
+                            </li>
+                        </ul>
                     </div>
-                </>
-            )}
-            <Grew call={shown} before={calls[calls.indexOf(shown) - 1]} shape={shape} onShow={onShow} />
-        </section>
+                    <Grew call={shown} before={calls[calls.indexOf(shown) - 1]} shape={shape} onShow={onShow} />
+                </CollapsibleContent>
+            </section>
+        </Collapsible>
+    )
+}
+
+/** What the first call was sent, split into canopy's prompt and the runtime's own, in words. */
+function firstSplit(shape: ContextShape): string {
+    const first = shape.calls[0]
+    if (shape.prompt === null || first === undefined) {
+        return 'canopy kept no prompt, so all of it reads as the runtime’s own'
+    }
+    return (
+        `≈${tokenCount(first.added)} canopy’s prompt, ≈${tokenCount(first.carried)} the runtime’s own: ` +
+        'the agent’s definition, its system prompt, and its tools'
     )
 }
 
@@ -178,13 +217,9 @@ function Grew({
         return <p className="text-xs text-muted-foreground">{head}: the runtime counted no tokens for it</p>
     }
     if (before === undefined) {
-        const split = `≈${tokenCount(call.added)} canopy’s prompt, ≈${tokenCount(call.carried)} the runtime’s own`
         return (
             <p className="text-xs text-muted-foreground">
-                {head}:{' '}
-                {shape.prompt === null
-                    ? 'canopy kept no prompt, so all of it reads as the runtime’s own'
-                    : `${split}: the agent’s definition, its system prompt, and its tools`}
+                {head}: {firstSplit(shape)}
             </p>
         )
     }

@@ -115,9 +115,11 @@ test("the context chart's row is drawn before it is shown, wherever the budget l
     await page.goto('runs/39')
     await settled(page)
     const transcript = page.getByTestId('transcript')
+    const context = transcript.getByTestId('transcript-context')
+    // The chart is folded to its line on arrival; its bars pick the call.
+    await context.getByRole('button', { name: 'Show chart' }).click()
     // The last call's largest addition is a tool call of call 99, past the page's first rows.
-    await transcript
-        .getByTestId('transcript-context')
+    await context
         .getByRole('radiogroup', { name: 'Model calls' })
         .getByRole('radio', { name: /^call 100:/u })
         .click()

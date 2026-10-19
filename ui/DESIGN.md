@@ -803,7 +803,8 @@ sliver beside four others; and its axis names short call numbers without measuri
   colored JSON too (`markedTokens`). A tool call whose input or output holds it opens to it, until All open is turned on
   or off; a model call is numbers alone and is never kept. Escape or the clear button empties it, and a search nothing
   matches says so in place of the rows. A By call `Toggle` in the header, as Pretty is, groups the rows by the model
-  call they came from (`byCall` in `src/lib/transcript.ts`), hiding the search, which is the rows' in order: each call a
+  call they came from (`byCall` in `src/lib/transcript.ts`), once the counts name two model calls (one call grouped
+  is the rows in order again), hiding the search, which is the rows' in order: each call a
   `Collapsible` row, its number, what it did (its first text, then its tools by name, `read ×2`), an `unfinished` chip
   when the session ended first, its reason as above, its tokens `in · out`, and its cost. It opens to an input and an
   output section, each a `panel-label` with its tokens: the first call's input is the prompt canopy kept, in a block,
@@ -826,22 +827,29 @@ sliver beside four others; and its axis names short call numbers without measuri
   transition behind the field (`inPage`, `src/lib/in-page.ts`), which the outlet does not cross-fade (Motion, above).
   All open opens the rows drawn. A row shown from the chart or `ended on` is drawn first, with every row before it.
 - **A transcript's context** (`ContextChart`, `contextShape` in `src/lib/transcript.ts`) sits between the counts and
-  the rows, in either view, once a model call has its tokens. Its line: a `context` label, the peak (`peak 30.2k at
-  call 3`), the largest single addition as a button in the accent (the tool and its summary, or `text` and its start)
-  with its tokens and the call it grew, and the legend. Under it a bar per call, as tall as what it was sent (input,
-  cache read, and cache write), 24px at most, from one baseline, the peak's at 80% with its size over it: what the
-  call carried from the call before in `context-carried`, what it added on top in `context-added`, 2px apart, the top
+  the rows, in either view, once a model call has its tokens. Its line, in the counts' band as their second line: a
+  `context` label, the peak (`peak 30.2k at call 3`), the largest single addition as a button in the accent (the tool
+  and its summary, or `text` and its start) with its tokens and the call it grew, and at its end `Show chart`, a
+  `Disclosure` that opens the chart under it. The chart is closed until opened, since a transcript is opened to read
+  what the agent did far more often than to ask why its context grew; each kind of page (a run's, a chore run's, a
+  tick's) keeps it open or closed across reloads, as Pretty is kept (`src/lib/context-chart-open.ts`), so the rows
+  start under the header, the counts, and one line. Open, a bar per call, as tall as what it was sent (input, cache
+  read, and cache write), 24px at most, from one baseline, the peak's at 80% with its size over it: what the call
+  carried from the call before in `context-carried`, what it added on top in `context-added`, 2px apart, the top
   segment's corners rounded. The first call's is the runtime's own overhead and canopy's prompt, the prompt's tokens
   its characters over four; a call the runtime counted none of has no bar. The bars are a `ToggleGroup`'s items, each
   named for its call, size, and step on hover and to a screen reader; the axis under them names each call, every
-  fifth back from the last past twelve. The call picked, at first the one the largest addition grew, sits raised, and
-  a line under the chart says what grew it: the step on the call before, then what that call printed (its text, and
-  its tool calls, each input and output), largest first, each its share of the step by its characters (`≈4.2k`, the
-  characters on hover), at most five and then how many more. The first call's line splits it into the prompt and the
-  runtime's own; a call smaller than the one before says so and names nothing. Each entry named is a button that shows
-  its row: it turns By call and the search off, opens the row if it is a tool call, scrolls it to the window's middle,
-  focuses it, and sets it on the accent's tint at 14%. A session of one call has the line alone: one bar says nothing
-  the line does not. By call, each call's line has its step after its input, `30.2k in (+4.3k) · 1.8k out`.
+  fifth back from the last past twelve, with the legend at its end. The call picked, at first the one the largest
+  addition grew, sits raised, and a line under the chart says what grew it: the step on the call before, then what
+  that call printed (its text, and its tool calls, each input and output), largest first, each its share of the step
+  by its characters (`≈4.2k`, the characters on hover), at most five and then how many more. The first call's line
+  splits it into the prompt and the runtime's own; a call smaller than the one before says so and names nothing. Each
+  entry named is a button that shows its row, as the line's largest addition is, open or closed: it turns By call and
+  the search off, opens the row if it is a tool call, scrolls it to the window's middle, focuses it, and sets it on the
+  accent's tint at 14%. A session with fewer than two calls the runtime counted tokens for has the line alone, with no
+  `Disclosure`: one bar says nothing the line does not, and a call that printed only an error has no bar to add. The
+  one call's split into the prompt and the runtime's own is on the peak's hover. By call, each call's line has its
+  step after its input, `30.2k in (+4.3k) · 1.8k out`.
 - **A tick's output** (`TickOutputPanel`, `src/components/raw-output.tsx`) is the overseer's file as written, under the
   tick's transcript, and **a run's output** (`RunOutputPanel`) its log the same way, under the run's: one muted line
   naming the file (a run's says `the run's log`, whose path the Run panel shows) until `Show output`, a `Disclosure` in
@@ -1056,8 +1064,9 @@ sliver beside four others; and its axis names short call numbers without measuri
     exception (`OrderToggle`): it names the order in force (`newest first`), the arrow saying it flips.
   - A **disclosure**, what opens a part of the page under it, is a `Disclosure` (`src/components/disclosure.tsx`) on
     its `Collapsible`: a ghost `xs` button, a chevron that turns down while open, and what it does in words,
-    `Show <what>` closed and `Hide <what>` open (`Show output`, `Show 2 earlier runs`, `Show 37 slots, #4 to #40`,
-    `Show hats`). In a row's line it sits in line with the text above it (`-ml-2`), no taller than a line (`-my-1`).
+    `Show <what>` closed and `Hide <what>` open (`Show output`, `Show chart`, `Show 2 earlier runs`,
+    `Show 37 slots, #4 to #40`, `Show hats`). In a row's line it sits in line with the text above it (`-ml-2`), no
+    taller than a line (`-my-1`).
     A row that opens to its own body, a transcript's tool call or model call, is the row itself, a chevron at its end.
   - Two of either are one: a pair that does and undoes (Open all, Close all) is one `Toggle` (All open).
   - A panel header's modes sit together, after what the panel is about: a transcript's session id (but on a tick's
