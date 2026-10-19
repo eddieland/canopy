@@ -179,8 +179,9 @@ export function NoteActions({ note, onSaid }: Said & { note: MemoryEntry }) {
 }
 
 /**
- * A lesson's verbs, under its row: Renew, and Forget, which cannot be undone and so asks for the lesson's ref typed.
- * Until then Forget is the quieter, at the line's end. With `forget` false, as on a `lesson_review` item, Renew alone.
+ * A lesson's verbs, under its row, shown at rest only while it is due or wrong: Renew, and Forget, which cannot be
+ * undone and so asks for the lesson's ref typed. Until then Forget is the quieter, at the line's end. With `forget`
+ * false, as on a `lesson_review` item, Renew alone.
  */
 export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson: MemoryEntry; forget?: boolean }) {
     const client = useQueryClient()
@@ -196,8 +197,17 @@ export function LessonActions({ lesson, forget = true, onSaid }: Said & { lesson
         },
         onError: (error) => void refreshIfStale(client, error, onSaid),
     })
+    // A lesson that asks nothing keeps its verbs' room but shows them only on its row's hover or focus, as a row's copy
+    // button does, so a list of hundreds is not a wall of buttons. A touch screen, with no hover, always shows them.
+    const shown = asked || confirming || renew.error !== null
     return (
-        <RowLine from="key" className="flex flex-col gap-2">
+        <RowLine
+            from="key"
+            className={cn(
+                'flex flex-col gap-2',
+                !shown && 'opacity-0 group-hover/copy:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100',
+            )}
+        >
             <span className="flex flex-wrap items-center gap-2">
                 <Button
                     variant={asked ? 'outline' : 'ghost'}

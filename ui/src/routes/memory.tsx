@@ -190,15 +190,14 @@ function Proposals({
                     {said === null ? 'no proposals wait on you now' : 'all decided: no proposal waits on you'}
                 </Empty>
             ) : (
-                <PanelScroll label="Proposals">
-                    <MemoryRows
-                        entries={ordered('memory-proposals', order, proposals).map((p) => p.entry)}
-                        ticket
-                        facts={facts}
-                        below={below}
-                        lapses={new Map(proposals.map((p) => [p.entry.id, p.expires_at]))}
-                    />
-                </PanelScroll>
+                // At most 20 wait at once (MAX_PENDING), so the list grows with them rather than scroll in its panel.
+                <MemoryRows
+                    entries={ordered('memory-proposals', order, proposals).map((p) => p.entry)}
+                    ticket
+                    facts={facts}
+                    below={below}
+                    lapses={new Map(proposals.map((p) => [p.entry.id, p.expires_at]))}
+                />
             )}
         </Panel>
     )
