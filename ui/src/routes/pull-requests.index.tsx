@@ -60,8 +60,9 @@ function PullRequestsPage() {
 }
 
 /**
- * A PR: where it stands, the PR (`org/repo#123` for GitHub's), its unit's phase, its ticket (or `none`, for any PR
- * canopy only reviews) and title, and its age. The title is the PR's own once a worker reports it, else its ticket's.
+ * A PR: where it stands, the PR (`org/repo#123` for GitHub's), its unit's phase, its ticket (or `none`, why on hover,
+ * for any PR canopy only reviews) and title, and its age. The title is the PR's own once a worker reports it, else its
+ * ticket's.
  * Where it stands is the run working it, while one does, then its latest review's verdict and whether the operator's
  * review request on it is open.
  */
@@ -73,7 +74,7 @@ function Row({ pr }: { pr: PullRequest }) {
             <span className="flex">{pr.phase && <Chip word={pr.phase} className="min-w-0 shrink" />}</span>
             <span className="flex min-w-0 items-center gap-2">
                 {pr.ticket_key === null ? (
-                    <None reason={NO_TICKET} className="shrink-0 font-mono text-xs" />
+                    <None reason={NO_TICKET} brief className="shrink-0 font-mono text-xs" />
                 ) : (
                     <TicketLink ticketKey={pr.ticket_key} className="shrink-0" />
                 )}
