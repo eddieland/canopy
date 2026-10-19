@@ -20,6 +20,7 @@ import { ListRow, RowGrid, RowLine } from '@/components/rows'
 import { RunLink } from '@/components/run-link'
 import { Chip } from '@/components/status'
 import { TicketLink } from '@/components/ticket-link'
+import { Clipped, Tip } from '@/components/tip'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent } from '@/components/ui/collapsible'
 import { useBranchUrls } from '@/hooks/use-branch-urls'
@@ -343,7 +344,7 @@ function WorktreeDot({ state }: { state: WorktreeState }) {
 
 /**
  * One slot on one line: its state, number, what holds it, its branch, what runs in it, and for how long. Our state
- * word, with the pool's own on hover; the slot's path on its number. A note or an unreadable branch gets a second
+ * word, with the pool's own in its tip; the slot's path in its number's. A note or an unreadable branch gets a second
  * line, since it is something to act on. An idle slot is the state and number alone, muted.
  */
 function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: string; shared: boolean }) {
@@ -354,17 +355,16 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
     const idle = w.state === 'idle'
     return (
         <ListRow kind="worktree" className="group/copy py-2" data-testid={`worktree-${w.name}`} data-state={w.state}>
-            <span
-                className={cn('flex h-5 items-center gap-1.5 font-mono text-xs', WORKTREE_TEXT[w.state])}
-                title={`pool: ${w.status}`}
-            >
-                <WorktreeDot state={w.state} />
-                {w.state === 'broken' ? w.status : w.state}
-            </span>
-            <span className="flex items-center">
-                <span className="readout w-8 text-xs text-muted-foreground" title={w.path}>
-                    {slotRef(w.name)}
+            <Tip fact={`pool: ${w.status}`} mono>
+                <span className={cn('flex h-5 items-center gap-1.5 font-mono text-xs', WORKTREE_TEXT[w.state])}>
+                    <WorktreeDot state={w.state} />
+                    {w.state === 'broken' ? w.status : w.state}
                 </span>
+            </Tip>
+            <span className="flex items-center">
+                <Tip fact={w.path} mono>
+                    <span className="readout w-8 text-xs text-muted-foreground">{slotRef(w.name)}</span>
+                </Tip>
                 {whole && <CopyButton text={whole(w.path)} label={`slot ${w.name}'s path`} reveal />}
             </span>
             {idle ? <span /> : <Holder worktree={w} />}
@@ -373,10 +373,10 @@ function WorktreeRow({ worktree: w, repo, shared }: { worktree: Worktree; repo: 
                 {!idle && (
                     <>
                         {branchHref === undefined ? (
-                            <span className="min-w-0 truncate font-mono text-xs" title={w.branch ?? undefined}>
+                            <Clipped text={w.branch ?? ''} mono className="min-w-0 font-mono text-xs">
                                 {w.branch ??
                                     (w.detached ? <span className="text-muted-foreground">detached</span> : null)}
-                            </span>
+                            </Clipped>
                         ) : (
                             <a
                                 href={branchHref}
@@ -432,26 +432,23 @@ function Holder({ worktree: w }: { worktree: Worktree }) {
             </span>
         )
     }
-    return (
-        <span className="truncate font-mono text-xs text-muted-foreground" title={w.holder ?? undefined}>
-            {w.holder}
-        </span>
-    )
+    return <Clipped text={w.holder ?? ''} mono className="font-mono text-xs text-muted-foreground" />
 }
 
 /**
  * The processes the pool found running in a slot, by name and pid. An agent can start many: they take what the branch
- * leaves, cut to fit, and the whole list is on hover, one to a line.
+ * leaves, cut to fit, and the whole list is in a tip, one to a line.
  */
 function Processes({ processes }: { processes: Worktree['processes'] }) {
     const named = processes.map((p) => `${p.name} ${p.pid}`)
     return (
-        <span
-            className="ml-auto max-w-72 min-w-24 truncate text-right font-mono text-xs text-muted-foreground"
-            title={`processes the pool found running in it:\n${named.join('\n')}`}
-            data-testid="worktree-processes"
-        >
-            {named.join(' · ')}
-        </span>
+        <Tip fact={`processes the pool found running in it:\n${named.join('\n')}`} mono>
+            <span
+                className="ml-auto max-w-72 min-w-24 truncate text-right font-mono text-xs text-muted-foreground"
+                data-testid="worktree-processes"
+            >
+                {named.join(' · ')}
+            </span>
+        </Tip>
     )
 }

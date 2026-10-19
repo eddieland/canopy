@@ -4,7 +4,13 @@ import type { CSSProperties } from 'react'
 const FLOOR_REM = 8
 
 /** The free column: whatever width the fixed ones leave, never under the floor, and its text cut to fit. */
-const FREE = `minmax(${FLOOR_REM}rem,1fr)`
+const FREE = free(FLOOR_REM)
+
+/**
+ * The PR list's `pr` column at its widest, in rem: `org/repo#123` and its icon for a name of 20 characters or so. A
+ * list sets it narrower, to its longest PR's name (`fitColumn`); a longer one is cut to fit.
+ */
+const PR_REM = 11
 
 /**
  * The container sizes a column can show from (Tailwind's, in rem), narrowest first. A list's width picks one, so a row
@@ -36,9 +42,35 @@ const BASE_REM = 22
 const GAP_REM = 0.75
 const PADDING_REM = 1.5
 
+/** A column whose width its list sets (`fitColumn`). */
+type FittedColumn = 'pr'
+
+/** Each fitted column's most, in rem: what it takes when its list sets nothing, and what a column's tier counts. */
+const FITTED_MOST: Record<FittedColumn, number> = { pr: PR_REM }
+
+/** How wide a character of IBM Plex Mono is at `text-xs`, in rem: 0.6em, as in any monospace face, at 0.75rem. */
+const MONO_XS_REM = 0.45
+
 /**
- * Every list's columns, by kind, each a named grid line and a width. Every column but one is fixed, so each row of a
- * list lines up with the others whatever its cells hold; the free one takes the rest, and never less than the floor.
+ * The free column with a floor of its own, `floor` rem, for a kind whose name needs more than the usual floor to be
+ * read: whatever width the fixed ones leave, and its text cut to fit.
+ */
+function free(floor: number): string {
+    return `minmax(${floor}rem,1fr)`
+}
+
+/**
+ * A column as wide as its list's longest cell, which the list sets (`fitColumn`), at most `most` rem: every row of the
+ * list shares the width, so they line up, and what it leaves goes to the free column.
+ */
+function fitted(column: FittedColumn, most: number): string {
+    return `var(--${column}-width,${most}rem)`
+}
+
+/**
+ * Every list's columns, by kind, each a named grid line and a width. Every column but one is fixed, or fitted to its
+ * list (`fitted`), so each row of a list lines up with the others whatever its cells hold; the free one takes the
+ * rest, and never less than its floor.
  * What goes under a row's head line starts at a named column (`RowLine`), never at a hand-computed indent.
  *
  * A row reads in one order in every kind (`ui/DESIGN.md`, "Lists are rows in a panel"): its state, where it has one,
@@ -122,8 +154,9 @@ export const ROW_COLUMNS = {
     'pull-request': [
         // `review:4 3 findings, 1 blocking` on one line, with its dot.
         ['state', '16rem', 3],
-        ['pr', '11rem'],
-        // Room for the longest phase's chip, `changes requested`.
+        // As wide as the list's longest PR's name, so what is left goes to the title (`fitColumn`).
+        ['pr', fitted('pr', PR_REM)],
+        // Room for the longest phase's chip, `changes requested`. It goes first, before the title is cut to a word.
         ['phase', '9rem', 1],
         ['title', FREE],
         ['age', AGE, 2],
@@ -140,13 +173,17 @@ export const ROW_COLUMNS = {
         ['title', FREE],
         ['age', AGE, 3],
     ],
-    /** A worktree slot: its state, its number, what holds it, its branch and processes, and for how long. */
+    /**
+     * A worktree slot: its state, its number, what holds it, its branch and processes, and for how long. The branch
+     * names the slot, so it never gets under room for one whole (`agent/ABC-104-retry-queue`), and what holds it goes
+     * first: the branch names its ticket too.
+     */
     worktree: [
         ['state', '5rem'],
         ['slot', '3.5rem'],
-        ['holder', '13rem', 2],
-        ['branch', FREE],
-        ['age', AGE, 1],
+        ['holder', '13rem', 1],
+        ['branch', free(12)],
+        ['age', AGE, 2],
     ],
     /** A decision in a tick: its subject, then its action and PR. */
     decision: [
@@ -301,6 +338,21 @@ export function rowLayout(kind: RowKind): { className: string; style: CSSPropert
     return { className: classes.join(' '), style }
 }
 
+/**
+ * The style that sets a fitted column's width on a list (`fitted`), for the rows in it: room for the longest of
+ * `names`, set in IBM Plex Mono at `text-xs`, and `besideRem` beside it (an icon), rounded up to a quarter rem and
+ * never over the column's most. The rows of the list share it, so they still line up.
+ */
+export function fitColumn(column: FittedColumn, names: Iterable<string>, besideRem = 0): CSSProperties {
+    let longest = 0
+    for (const name of names) {
+        longest = Math.max(longest, name.length)
+    }
+    const rem = Math.min(FITTED_MOST[column], Math.ceil((longest * MONO_XS_REM + besideRem) * 4) / 4)
+    const style: Record<string, string> = { [`--${column}-width`]: `${rem}rem` }
+    return style
+}
+
 /** Whether a column that shows from `from` (any width when undefined) shows on a list at least `tier` wide. */
 function shownAt(from: RowTier | undefined, tier: RowTier | undefined): boolean {
     if (from === undefined) {
@@ -314,12 +366,13 @@ function tierIndex(tier: RowTier): number {
 }
 
 /**
- * The least a column's width can be, in rem: a fixed width or the free column's floor.
+ * The least a column's width can be, in rem: a fixed width, a fitted column's most (it may be any width to it), or the
+ * free column's floor.
  *
  * @throws {Error} When the width is not in rem, as `auto` is not: a kind whose columns give way cannot have one.
  */
 function leastRem(width: string): number {
-    const match = /^(?:minmax\()?([\d.]+)rem\b/u.exec(width)
+    const match = /^(?:minmax\(|var\(--[\w-]+,)?([\d.]+)rem\b/u.exec(width)
     if (match?.[1] === undefined) {
         throw new Error(`no least width in rem for ${width}`)
     }

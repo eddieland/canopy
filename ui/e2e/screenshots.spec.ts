@@ -145,8 +145,8 @@ test('the root size grows with the window', async ({ page }) => {
 })
 
 // A narrow window, about the narrowest the UI holds up in (DESIGN.md): the behaviour specs hold that it fits, these
-// how it looks. The ticket page whole, for the strip rail, its one column, and the lists in its panels; the tickets
-// list for the columns it lets go.
+// how it looks. The ticket page whole, for the strip rail, its one column, and the lists in its panels; the tickets,
+// PRs, reviews, and worktrees lists for the columns they let go.
 test.describe('in a narrow window', () => {
     test.use({ viewport: { width: 820, height: 900 } })
 
@@ -155,10 +155,12 @@ test.describe('in a narrow window', () => {
         await screenshotWhole(page, 'tickets-ABC-102-narrow-dark.png')
     })
 
-    test('tickets narrow', async ({ page }) => {
-        await openInDark(page, 'tickets')
-        await screenshotMain(page, 'tickets-narrow-dark.png')
-    })
+    for (const route of ['tickets', 'pull-requests', 'reviews', 'worktrees']) {
+        test(`${route} narrow`, async ({ page }) => {
+            await openInDark(page, route)
+            await screenshotMain(page, `${route}-narrow-dark.png`)
+        })
+    }
 })
 
 // Opens `route` in dark, its clock frozen, as every screenshot here is taken.

@@ -462,9 +462,9 @@ def _fixtures(conn: sqlite3.Connection, root: Path) -> None:
     )
     for key, title, phase, branch, seen in tickets:
         conn.execute(
-            "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, title, phase, branch) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?)",
-            (key, repo, at(-300), at(seen), title, phase, branch),
+            "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, changed_at, title, phase, branch) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (key, repo, at(-300), at(seen), at(seen), title, phase, branch),
         )
     conn.execute(
         "INSERT INTO ticket_units (ticket_key, repo, branch, pr_url, phase) VALUES (?, 'web', ?, ?, ?)",
@@ -787,8 +787,9 @@ _PLAN_THREADS = (
 
 def _plans(conn: sqlite3.Connection, state_dir: Path, root: Path) -> None:
     conn.execute(
-        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, title, phase) VALUES (?, ?, ?, ?, ?, ?)",
-        ("ABC-105", str(root), at(-90), at(-8), "Schedule report exports", "plan_proposed"),
+        "INSERT INTO tickets (key, repo, first_seen_at, last_seen_at, changed_at, title, phase) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?)",
+        ("ABC-105", str(root), at(-90), at(-8), at(-8), "Schedule report exports", "plan_proposed"),
     )
     for run_id, started, ended, summary in (
         (35, -60, -52, "A schedule menu and a job that emails the CSV."),

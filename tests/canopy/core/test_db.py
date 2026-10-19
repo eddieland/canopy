@@ -7,6 +7,7 @@ from collections import Counter
 from collections.abc import Iterable
 from importlib.metadata import version
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -14,7 +15,7 @@ from canopy.core import db
 from canopy.core.agent_output import ToolUse, Usage
 from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import resources
-from tests.canopy.helpers import DEAD_PID, journal_at, present, shipped_through, versions_after
+from tests.canopy.helpers import DEAD_PID, journal_at, old_ticket, present, shipped_through, versions_after
 from tests.conftest import Journals
 
 # Each migration has a companion here, named by its version alone, that opens with the migration's sha256 over LF line
@@ -307,6 +308,40 @@ def test_ticks_tickets_and_decisions(tmp_path: Path, journals: Journals) -> None
     assert last.canopy_version == version("canopy")
 
 
+def test_a_ticket_is_active_when_it_changes_not_when_a_tick_sets_what_it_already_holds(
+    tmp_path: Path, journals: Journals
+) -> None:
+    """A tick that sets a ticket's phase, title, or PR to what it holds moves its sighting, not its activity."""
+    conn = fresh(journals, tmp_path)
+    db.migrate(conn, resources.migrations_dir())
+    url = "https://e.test/pr/1"
+
+    def at(minute: int) -> str:
+        return f"2026-10-19T09:{minute:02d}:00.000Z"
+
+    def active() -> tuple[str, str, str]:
+        [ticket] = db.recent_tickets(conn, 5)
+        [pr] = db.pull_requests(conn, 5)
+        return ticket["last_seen_at"], ticket["active_at"], pr["active_at"]
+
+    with mock.patch.object(db, "now", autospec=True, return_value=at(0)):
+        db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.CI_RED, title="Sign in")
+        db.set_unit(conn, "PROJ-1", "/repo", "api", phase=Phase.CI_RED, pr_url=url)
+    with mock.patch.object(db, "now", autospec=True, return_value=at(10)):
+        db.set_ticket(conn, "PROJ-1", "/repo", phase=Phase.CI_RED, title="Sign in", cursors={"comment": "c-1"})
+        db.set_unit(conn, "PROJ-1", "/repo", "api", phase=Phase.CI_RED, pr_url=url, cursors={"ci": "run-1"})
+    assert active() == (at(10), at(0), at(0))
+
+    with mock.patch.object(db, "now", autospec=True, return_value=at(20)):
+        db.set_unit(conn, "PROJ-1", "/repo", "api", phase=Phase.REVIEW_PENDING)
+    assert active() == (at(20), at(20), at(20))
+    with mock.patch.object(db, "now", autospec=True, return_value=at(30)):
+        db.set_ticket(conn, "PROJ-1", "/repo", done=True)
+    with mock.patch.object(db, "now", autospec=True, return_value=at(40)):
+        db.set_ticket(conn, "PROJ-1", "/repo", done=True)
+    assert active() == (at(40), at(30), at(30))
+
+
 def test_a_tickets_decisions_are_found_by_index(tmp_path: Path, journals: Journals) -> None:
     """A ticket's newest decisions are read through an index, not a scan of every decision ever recorded."""
     conn = fresh(journals, tmp_path)
@@ -351,7 +386,7 @@ def test_pending_migrations_wait_for_runs_an_earlier_canopy_started(tmp_path: Pa
     migrations = tmp_path / "migrations"
     conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
     for key in ("OLD-1", "OLD-2", "OLD-3"):
-        db.touch_ticket(conn, key, "/r")
+        old_ticket(conn, key)
     conn.execute(
         "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path, status, pid) VALUES "
         "(1, 'OLD-1', 'implement', 'agent/OLD-1-a', 'x', 'l', 'running', ?), "
@@ -375,7 +410,7 @@ def test_pending_migrations_wait_for_runs_an_earlier_canopy_started(tmp_path: Pa
 def test_a_v01_journal_gains_sessions_and_costs_with_nothing_reported(tmp_path: Path, journals: Journals) -> None:
     conn = journal_at(journals, tmp_path, 1)
     conn.execute("INSERT INTO ticks (id, started_at) VALUES (1, 'x')")
-    db.touch_ticket(conn, "OLD-1", "/r")
+    old_ticket(conn, "OLD-1")
     conn.execute(
         "INSERT INTO runs (tick_id, ticket_key, kind, branch, started_at, log_path, status) "
         "VALUES (1, 'OLD-1', 'implement', 'agent/OLD-1-a', 'x', 'l', 'done')"

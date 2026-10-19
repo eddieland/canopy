@@ -1,6 +1,7 @@
 [project]
 name = "canopy-sandbox"
-version = "0.0.1"
+# From the latest v* tag, as canopy's is (D085), so every package canopy ships carries its version.
+dynamic = ["version"]
 description = "canopy's sandbox wrapper: runs an agent command under srt with a policy made for the run."
 license = "MIT"
 authors = [{ name = "eddieland" }]
@@ -32,8 +33,22 @@ Repository = "https://github.com/eddieland/canopy/tree/main/packages/canopy-sand
 Issues = "https://github.com/eddieland/canopy/issues"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "uv-dynamic-versioning==0.14.1"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+# The same scheme as canopy's, in the root pyproject.toml.
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+bump = true
+fallback-version = "0.0.0"
+
+# The version is built from git, so a new commit or tag rebuilds the metadata, not only a changed pyproject.toml.
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { git = { commit = true, tags = true } }]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/canopy_sandbox"]

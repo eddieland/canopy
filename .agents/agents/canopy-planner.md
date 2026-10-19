@@ -9,7 +9,6 @@
 # canopy-worker-private. As shipped it names none, and dispatch refuses a plan then (`no_read_tools`).
 description: canopy planner. Writes a plan for one ticket before it is implemented; reads, and writes only its plan.
 mode: primary
-temperature: 0.1
 permission:
   bash: deny
   # No web tools: fetched and searched pages are text anyone can shape, the easiest way to steer an agent
