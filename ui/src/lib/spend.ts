@@ -50,8 +50,8 @@ export const SERIES: readonly Series[] = [
     },
     {
         key: 'workers',
-        label: 'workers and splits',
-        hint: 'The workers and splits the overseer started',
+        label: 'workers',
+        hint: 'The workers the overseer started',
         fill: 'bg-spend-workers',
     },
     {

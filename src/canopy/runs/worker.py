@@ -7,14 +7,10 @@ returns every slot, and closes the `runs` row, recording the follow-up tickets i
 exception, and SIGTERM, SIGHUP, or SIGINT. SIGKILL cannot be caught; reconcile finds that run's dead pid on the next
 tick.
 
-A split run is the same up to the worker: each slot is checked out at its base, the splitter runs with `split_cmd` in
-the desk, and nothing is pushed or verified. Its result names the tickets it created, which are validated and recorded
-in `split_children` (DESIGN §18).
-
-A plan run is checked out as a split is, and always works in a desk, even over one repository: the desk holds a copy of
-the plan it replaces, if the ticket has one. The planner runs with `plan_cmd` and writes its plan to a file at the
-desk's root, the one file it may edit; a `done` one is read from there, bounded, written to the plan's own file, and
-recorded `proposed` (DESIGN §25).
+A plan run checks each slot out at its base and pushes nothing, and always works in a desk, even over one repository:
+the desk holds a copy of the plan it replaces, if the ticket has one. The planner runs with `plan_cmd` and writes its
+plan to a file at the desk's root, the one file it may edit; a `done` one is read from there, bounded, written to the
+plan's own file, and recorded `proposed` (DESIGN §25).
 
 A triage run leases no slot and checks nothing out: its desk links the primary clone of each repository it reads, and
 the triage agent runs with `plan_triage_cmd`, unwrapped, and its own timeout. Only a validated `done` `trivial` result
@@ -61,8 +57,6 @@ if TYPE_CHECKING:
     from canopy.core.context import Context
 
 MAX_TEXT = 2000
-# A child key is a ticket key, and bounded like every other value an agent reports.
-MAX_CHILD_KEY = 100
 MAX_PR_URL = 500
 _GIT_TIMEOUT_SECONDS = 300
 # The repository whose slot `setup_cmd` runs in, by its name in the map, and the run's branch, which the slot has
@@ -115,21 +109,6 @@ class WorkerResult(BaseModel):
         return self.model_copy(update={"prs": prs, "pr_titles": titles})
 
 
-class SplitResult(BaseModel):
-    """A split's result contract (DESIGN §18): the tickets it created, each with the repository it covers.
-
-    Untrusted, so bounded; `_run` checks the children against the journal before recording any (`check_children`).
-    `children` is bounded by that check, not here: a valid split names one child per repository it was dispatched with,
-    and a refused one is stored without its children.
-    """
-
-    model_config = ConfigDict(extra="ignore", frozen=True, defer_build=True)
-
-    status: Literal["done", "failed"]
-    summary: Text = ""
-    children: dict[StrictStr, StrictStr] = {}
-
-
 class PlanResult(BaseModel):
     """A plan's result contract (DESIGN §25). The plan itself is the file the planner wrote in its desk, not a field.
 
@@ -163,53 +142,12 @@ class TriageResult(BaseModel):
         return self
 
 
-def parse_split(stdout: str) -> SplitResult | None:
-    """Parse `stdout`'s result line (DESIGN §13) as a split's result. None if it is missing or invalid.
-
-    Returns:
-        The split's result, or None.
-    """
-    return contract.last_line(SplitResult, stdout)
-
-
-def check_children(conn: sqlite3.Connection, parent: str, repos: Sequence[str], result: SplitResult) -> str:
-    """Return why a split's reported children cannot be recorded, or "" if they can.
-
-    Every key must be a ticket key, new to the journal (never a split's child, never dispatched, never in `tickets`) and
-    not the parent, so a steered splitter cannot claim an existing ticket and pin it to a repository. Every repository
-    must be one the split was dispatched with, each covered at most once. A `done` split names at least one child.
-    """
-    if result.status == "done" and not result.children:
-        return "a done split must name the tickets it created"
-    seen: set[str] = set()
-    for key, repo in result.children.items():
-        invalid = _check_child(conn, parent, repos, key, repo)
-        if invalid:
-            return invalid
-        if repo in seen:
-            return f"two children cover {repo}; a split makes at most one ticket per repository"
-        seen.add(repo)
-    return ""
-
-
-def _check_child(conn: sqlite3.Connection, parent: str, repos: Sequence[str], key: str, repo: str) -> str:
-    if len(key) > MAX_CHILD_KEY or dispatch.KEY_RE.fullmatch(key) is None:
-        return f"child {key[:MAX_CHILD_KEY]!r} is not a ticket key"
-    if key == parent:
-        return f"child {key} is the ticket that was split"
-    if db.split_child(conn, key) is not None or db.has_runs(conn, key) or db.get_ticket(conn, key) is not None:
-        return f"child {key} is not a new ticket: the journal already knows it"
-    if repo not in repos:
-        return f"child {key}'s repository {repo[:MAX_CHILD_KEY]!r} is not one the split was dispatched with"
-    return ""
-
-
 @dataclass(frozen=True)
 class Outcome:
     """How a run ended: its `runs.status` and the summary stored as `result_json`."""
 
     status: RunStatus
-    result: WorkerResult | SplitResult | PlanResult | TriageResult | None
+    result: WorkerResult | PlanResult | TriageResult | None
     note: str = ""
     # What the worker sent of agent memory, and the commit its branch was at when it ended (DESIGN §28).
     memory: memory.Fields | None = None
@@ -341,11 +279,14 @@ def _doer(kind: RunKind) -> _Doer:
     """What does a `kind` run, from checkout to its outcome.
 
     Returns:
-        The function for the kind: a split's, a plan's, a triage's, or a worker's.
+        The function for the kind: a plan's, a triage's, or a worker's.
+
+    Raises:
+        _SetupError: for `split`, a retired kind nothing dispatches now (M46).
     """
     match kind:
         case RunKind.SPLIT:
-            return _split
+            raise _SetupError("split is retired; nothing runs it")
         case RunKind.PLAN:
             return _plan
         case RunKind.NEEDS_PLAN:
@@ -552,39 +493,6 @@ class _Progress:
             self.log.info("worker session started", extra={"run_id": self.run_id, "session_id": change.session_id})
 
 
-def _split(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
-    """Run the splitter in a desk of worktrees at their bases, and record the children it reports if they are valid.
-
-    Returns:
-        The splitter's status, `timeout` if it timed out, or `unknown` for a missing or invalid result line. A result
-        whose children are refused is kept without them, with why in the note.
-    """
-    for slot in slots:
-        _check_out(slot)
-    result, text = _run_agent(ctx, run, slots, out, log, template=ctx.config.runtime.split_cmd)
-    timeout_minutes = ctx.config.runtime.worker_timeout_minutes
-    parsed = parse_split(text)
-    if parsed is None:
-        if result.timed_out:
-            # Whatever it created is unknown to the journal; its comment on the parent lists it for a human.
-            return Outcome(RunStatus.TIMEOUT, None, f"the splitter timed out after {timeout_minutes} minutes")
-        return Outcome(RunStatus.UNKNOWN, None, "the splitter's last line was not a valid split result")
-    key = str(run["ticket_key"])
-    invalid = check_children(ctx.conn, key, [s.repo for s in slots], parsed)
-    if invalid:
-        log.warning("split result refused; no child recorded", extra={"run_id": run["id"], "reason": invalid})
-        status = RunStatus.TIMEOUT if result.timed_out else RunStatus.UNKNOWN
-        # Stored without its children: a refused map is unbounded, and its note says what was wrong with it.
-        return Outcome(status, parsed.model_copy(update={"children": {}}), f"children not recorded: {invalid}")
-    if parsed.children:
-        # Also after a timeout: the children it reported exist in the tracker, and a retry must not make them again.
-        db.record_split_children(ctx.conn, key, int(run["id"]), parsed.children)
-        log.info("split children recorded", extra={"run_id": run["id"], "children": parsed.children})
-    if result.timed_out:
-        return Outcome(RunStatus.TIMEOUT, parsed, f"the splitter timed out after {timeout_minutes} minutes")
-    return Outcome(RunStatus(parsed.status), parsed)
-
-
 def _plan(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO, log: logs.TickAdapter) -> Outcome:
     """Run the planner in a desk of worktrees at their bases, and write and record the plan it wrote (DESIGN §25).
 
@@ -697,7 +605,7 @@ def _triage(ctx: Context, run: sqlite3.Row, slots: Sequence[_Slot], out: TextIO,
 def _check_out(slot: _Slot, branch: str = "") -> _Start:
     """Check out the slot's base branch from origin, detached, or `branch` from origin if it is given and there.
 
-    A split reads its base and creates no branch. A worker run passes its branch, which it continues if it was pushed.
+    A plan reads its base and creates no branch. A worker run passes its branch, which it continues if it was pushed.
     No run makes a local branch: every slot of a pool shares the repository's branch refs, so one would be state other
     slots see. The worker pushes `HEAD` to the branch by refspec (DESIGN §8, D109).
 

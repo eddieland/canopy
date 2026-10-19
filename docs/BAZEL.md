@@ -152,7 +152,7 @@ esac
 
 - canopy runs it with no shell, so give an absolute path (no `~`) or a command on your `PATH`. Write
   `sh -c '...'` for a one-liner.
-- It runs in each slot of a run: once for a run in one repository, once per repository in a joint run. Splits and
+- It runs in each slot of a run: once for a run in one repository, once per repository in a joint run. Plans and
   reviews run none.
 - Its output goes to the run's log, `.canopy/runs/<id>.log` in the workspace, after a
   `--- setup <repo> ---` header.

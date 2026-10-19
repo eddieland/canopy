@@ -8,7 +8,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import conversation, db, plans
-from canopy.core.vocab import PlanStatus, RunKind, RunStatus, TickStatus
+from canopy.core.vocab import PlanStatus, RunKind, RunStatus
 from canopy.runs import policy
 from tests.canopy.helpers import (
     KEY,
@@ -17,7 +17,6 @@ from tests.canopy.helpers import (
     InlineRunner,
     agent_runs,
     commands_run,
-    context,
     decisions,
     in_tick,
     plan_file,
@@ -171,39 +170,20 @@ def test_a_name_already_taken_is_never_overwritten(scenario: Scenario, git_pool:
             "bad_base",
             "a plan writes down the work and starts from no branch; leave out --base",
         ),
-        (["--request", "1"], "bad_request", "--request names the comment asking for a split; it is for split only"),
     ],
 )
-def test_a_plan_takes_no_slug_base_or_request(
+def test_a_plan_takes_no_slug_or_base(
     scenario: Scenario, treehouse_state: Path, args: list[str], guard: str, reason: str
 ) -> None:
     assert scenario.refuses([*PLAN, *args]) == [(f"refused:{guard}", reason)]
 
 
-def test_a_started_or_split_ticket_is_not_planned(scenario: Scenario, treehouse_state: Path) -> None:
+def test_a_started_ticket_is_not_planned(scenario: Scenario, treehouse_state: Path) -> None:
     conn, env = scenario.conn, scenario.env
     db.touch_ticket(conn, KEY, str(env.root))
     conn.execute("UPDATE tickets SET branch = 'agent/PROJ-1-work' WHERE key = ?", (KEY,))
     assert scenario.refuses(PLAN) == [
         ("refused:bad_plan", "PROJ-1 already has work on agent/PROJ-1-work; a started ticket is not planned")
-    ]
-    ctx = context(env)
-    tick_id = db.start_tick(conn, dry_run=False)
-    db.touch_ticket(conn, "PROJ-2", ctx.repo)
-    split = db.insert_run(
-        conn,
-        tick_id=tick_id,
-        key="PROJ-2",
-        kind="split",
-        branch="",
-        slots=[],
-        runs_dir=ctx.state_dir,
-        works_units=False,
-    )
-    db.record_split_children(conn, "PROJ-2", split, {"PROJ-3": "repo"})
-    db.finish_tick(conn, tick_id, TickStatus.OK, "test")
-    assert scenario.refuses(dispatches("PROJ-2", RunKind.PLAN)) == [
-        ("refused:bad_plan", "PROJ-2 was split into PROJ-3; plan those instead")
     ]
 
 

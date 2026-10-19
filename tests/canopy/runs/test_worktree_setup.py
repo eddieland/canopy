@@ -12,7 +12,6 @@ from typing import override
 import pytest
 
 from canopy.core import config
-from canopy.core.vocab import RunKind
 from canopy.infra import procs
 from tests.canopy.helpers import (
     BRANCH,
@@ -20,7 +19,6 @@ from tests.canopy.helpers import (
     agent_runs,
     pool,
     slot_of,
-    splitter_reports,
     worker_does,
 )
 from tests.canopy.scenario_helpers import Scenario, dispatches
@@ -134,17 +132,6 @@ def test_a_joint_run_sets_up_every_slot_each_naming_its_repository(ws_scenario: 
     commands = w["commands"]
     assert isinstance(commands, list)
     assert [c["returncode"] for c in commands] == [0, 0]
-
-
-def test_a_split_runs_no_setup(ws_scenario: Scenario) -> None:
-    # The splitter reads its desk and has no shell to use what setup would install (DESIGN §18).
-    ws_scenario.configures(runtime={"setup_cmd": "sh -c 'exit 1'"})
-    result = {"status": "done", "summary": "split in two", "children": {"PROJ-13": "api", "PROJ-14": "web"}}
-    split = dispatches("PROJ-12", RunKind.SPLIT, repo=("api", "web"), request="1")
-    run = ws_scenario.run(split, worker=splitter_reports(result))
-    assert run.status == "done", run.printed.out
-    assert "--- worker exit 0 ---" in run.printed.out  # the run log, which shows no setup
-    assert "--- setup" not in run.printed.out
 
 
 @pytest.mark.parametrize(

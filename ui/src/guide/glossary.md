@@ -119,10 +119,6 @@ the loop away from trackers where people you don't trust file tickets ([Philosop
 What you write to a ticket's workers, in its conversation or with `canopy reply KEY`. The loop reads it at its next
 tick. On a public ticket it reaches the workers and never the ticket. See [Attention](attention#replying).
 
-### Split
-
-A ticket too big for one PR, broken into child tickets by a `split` run. Its phase is then `split`.
-
 ### Ticket
 
 A piece of work in your tracker, by its key, such as `ABC-102`: the unit canopy works in, with its branch, its PRs,
@@ -156,7 +152,8 @@ next tick decides whether to use it.
 
 ### Kind
 
-What a run is for: `implement`, `resume`, `split`, or `plan`, and `fix-ci` on runs from before a resume fixed CI.
+What a run is for: `implement`, `resume`, or `plan`. Older runs may say `fix-ci`, from before a resume fixed CI, or
+`split`, from before workers filed follow-ups.
 Reviews and chores are kinds of their own. Each kind has its own attempt limit. See
 [How the loop works](how-the-loop-works#runs).
 

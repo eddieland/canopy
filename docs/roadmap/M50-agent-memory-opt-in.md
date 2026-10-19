@@ -109,7 +109,7 @@ each check recorded on the `Status:` line as it passes.
   `{{PREVIOUS_RUNS}}` and framed as it is: data to check against the branch and PR, kept off the tracker and PRs. Each
   note in key order, with its id, the run that wrote it (kind and outcome), how many runs ago, and the head it was
   written against. Capped at 3 KiB; past the cap, the least recently used are left out of the prompt, not the journal,
-  and the section says how many. Reviews, chores, and splits get none: a reviewer stays independent of the author's
+  and the section says how many. Reviews and chores get none: a reviewer stays independent of the author's
   beliefs.
 - At `use`, the result gains `memory_used` and `memory_wrong`, lists of ids. Only ids rendered into that run's prompt
   count, so a worker cannot renew or retire a note it never saw. A used note gets its last use and count; a wrong one is

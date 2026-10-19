@@ -73,14 +73,6 @@ def test_every_shipped_prompt_that_builds_carries_the_notice(
     assert notice_of(prompts.render_worker(cfg, kind, values, private=private)) == "None."
 
 
-def test_a_split_hears_no_notice(canopy_env: CanopyEnv) -> None:
-    # A splitter files child tickets and builds nothing, so an outage is nothing to it, and no override of it refuses.
-    cfg = load(canopy_env.root, canopy_env.user_file)
-    text = prompts.render_worker(cfg, "split", PROMPT_VALUES, required=prompts.REQUIRED_SPLIT, notice=OUTAGE)
-    assert OUTAGE not in text
-    assert "Notice from the operator" not in text
-
-
 def test_the_shipped_reviewer_prompt_carries_the_notice(canopy_env: CanopyEnv) -> None:
     cfg = load(canopy_env.root, canopy_env.user_file)
     values = {

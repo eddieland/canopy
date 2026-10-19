@@ -71,7 +71,7 @@ const PADDED_HEAD = 'sticky top-0 bg-surface [&_th]:pt-3'
 // Each kind of run in words, as `canopy spend` counts the runs that reported no cost.
 const KIND_LABEL = {
     overseer: 'overseer runs',
-    workers: 'worker and split runs',
+    workers: 'worker runs',
     triage: 'triage runs',
     plans: 'plan runs',
     chores: 'chore runs',

@@ -71,6 +71,9 @@ REMOVED_KEYS = {
     # M56: a `resume` fixes CI, so one limit counts it, and the cooldown holds a `resume` for CI alone (DESIGN §8).
     "policy.max_fix_ci_attempts": "delete it; a resume now fixes CI, so raise policy.max_resume_attempts instead",
     "policy.fix_ci_cooldown_minutes": "rename it policy.ci_cooldown_minutes; it holds a resume whose only reason is ci",
+    # M46: workers file follow-up tickets, which replaced splits (DESIGN §18).
+    "policy.max_split_attempts": "delete it; workers file follow-up tickets instead of a split run",
+    "runtime.split_cmd": "delete it; workers file follow-up tickets instead of a split run",
 }
 PROMPT = "{prompt}"
 # Replaced with the snapshot of canopy's agent definitions and skills (D040).
@@ -482,8 +485,6 @@ class Policy(Section):
     max_resume_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 6
     # How long a `resume` whose only reason is `ci` waits after the unit's last run that worked on CI ended.
     ci_cooldown_minutes: Annotated[Count, Scope.SHARED, Tighten.HIGHER] = 30
-    # Split runs per ticket (DESIGN §18). A split creates tickets in the tracker, so one try is the default.
-    max_split_attempts: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 1
     #: The most follow-up tickets one run's result has recorded, the first in its order (DESIGN §18). At 0 workers are
     #: told to file none, and none is recorded.
     max_follow_ups: Annotated[Count, Scope.SHARED, Tighten.LOWER] = 5
@@ -608,8 +609,6 @@ class Runtime(Section):
     # A private ticket's worker: its own agent, which cannot write to the tracker (DESIGN §22). Shares the worker's
     # timeout.
     private_worker_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.PRIVATE_WORKER)
-    # The splitter is its own agent, with no edit or shell tools (DESIGN §18); it shares the worker's timeout.
-    split_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.SPLITTER)
     # The planner is its own agent, with no edit or shell tools and only the tracker's read tools (DESIGN §25); it
     # shares the worker's timeout.
     plan_cmd: Annotated[AgentTemplate, Scope.PRIVATE] = _default_cmd(agents.PLANNER)
@@ -627,8 +626,8 @@ class Runtime(Section):
     #: run on another model than the worker's (DESIGN §21), and some, such as OpenAI's reasoning models, refuse a
     #: request that sets one; set a low one when `review_cmd` names a model that takes it.
     review_temperature: Annotated[Temperature, Scope.PRIVATE] = NO_TEMPERATURE
-    # Words before and after each command a worker run starts (`worker_cmd`, `private_worker_cmd`, `split_cmd`,
-    # `plan_cmd`), such as a sandbox wrapper or a model option, so one key covers all four (DESIGN §12).
+    # Words before and after each command a worker run starts (`worker_cmd`, `private_worker_cmd`, `plan_cmd`), such as
+    # a sandbox wrapper or a model option, so one key covers all three (DESIGN §12).
     worker_cmd_prefix: Annotated[Wrapper, Scope.PRIVATE] = ""
     worker_cmd_suffix: Annotated[Wrapper, Scope.PRIVATE] = ""
     review_timeout_minutes: Annotated[Minutes, Scope.PRIVATE] = 20
@@ -826,7 +825,7 @@ class Paths(Section):
     # A personal `.worktreeinclude`, passed on every `treehouse get` as `--include-file`. treehouse then seeds the
     # ignored files it selects from the primary clone in place of the committed manifest's (DESIGN §9).
     worktree_include: Annotated[UserPath | None, Scope.PRIVATE] = None
-    # The operator's standing instructions, rendered into every worker prompt but a split's (DESIGN §12).
+    # The operator's standing instructions, rendered into every worker prompt (DESIGN §12).
     worker_instructions: Annotated[UserPath | None, Scope.PRIVATE] = None
 
 
