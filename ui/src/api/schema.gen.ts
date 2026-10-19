@@ -624,10 +624,11 @@ export type paths = {
         put?: never;
         /**
          * Ask for a PR to be reviewed
-         * @description `canopy start URL --review`: review a PR the loop does not own, once, at its head (DESIGN §21).
+         * @description `canopy start URL --review --notes TEXT`: review a PR the loop does not own, once, at its head (DESIGN §21).
          *
-         *     It reviews nothing now: the next tick does, in whichever of the workspace's repositories the PR is in. Refused as
-         *     the CLI refuses it: `reviews_off`, `bad_pr`, and `loop_pr`.
+         *     It reviews nothing now: the next tick does, in whichever of the workspace's repositories the PR is in, its reviewer
+         *     given the notes. Notes on a PR already requested replace its request's. Refused as the CLI refuses it:
+         *     `reviews_off`, `bad_notes`, `bad_pr`, and `loop_pr`.
          */
         post: operations["startPullRequestReview"];
         delete?: never;
@@ -4069,6 +4070,11 @@ export type components = {
              * @description When it ended; None while it is open.
              */
             ended_at: string | null;
+            /**
+             * Notes
+             * @description The operator's notes for the reviewer, which its prompt carries; None when the request has none.
+             */
+            notes: string | null;
         };
         /**
          * ReviewRequested
@@ -4082,6 +4088,19 @@ export type components = {
             already: boolean;
             /** @description The PR's open request. */
             request: components["schemas"]["ReviewRequest"];
+        };
+        /**
+         * ReviewRequestNotes
+         * @description A review request's notes, as `canopy start URL --review --notes TEXT` gives them.
+         */
+        ReviewRequestNotes: {
+            /**
+             * Notes
+             * @description What the reviewer should know or look at closely. Bounded again in code at 4000 characters, after stripping;
+             *     blank is none, and leaves an open request's notes as they were.
+             * @default
+             */
+            notes: string;
         };
         /**
          * ReviewRequestStopped
@@ -8215,7 +8234,11 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReviewRequestNotes"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

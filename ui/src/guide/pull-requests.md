@@ -117,6 +117,12 @@ Until then it's a `requested` row at the head of the reviews list, so you can se
 [pull requests page](#the-pull-requests-page) wearing `requested` too. The PR's page shows the open request, with
 **Stop** to withdraw it.
 
+Under the URL, **Notes for the reviewer** takes whatever you want the reviewer to know before it starts: what the author
+asked you to look at, the part of the change that worries you, or why the PR exists at all. It's optional, and it's
+`--notes` on the command line. The reviewer weighs your notes ahead of the overseer's pointers, but they don't narrow
+the review: it still reads the whole change. The PR's page shows the notes with the request. Asking again for a PR
+that's already waiting, with new notes, replaces the old ones; a review already running keeps the notes it started with.
+
 The review stays in canopy, like every other. Whether you pass any of it on to your coworker, and in what tone, is
 between you and them.
 

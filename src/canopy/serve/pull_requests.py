@@ -75,7 +75,7 @@ def review_request(row: records.ReviewRequest) -> ReviewRequest:
     """A review request as the API shows it.
 
     Returns:
-        The request: when and where it was made, and when and why it ended, if it has.
+        The request: when and where it was made, its notes, and when and why it ended, if it has.
     """
     return ReviewRequest.model_validate(
         {
@@ -83,6 +83,7 @@ def review_request(row: records.ReviewRequest) -> ReviewRequest:
             "channel": row.channel,
             "ended_at": db.parse_time(row.ended_at) if row.ended_at else None,
             "end_reason": row.end_reason,
+            "notes": row.notes,
         }
     )
 

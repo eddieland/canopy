@@ -170,6 +170,6 @@ def seed(conn: sqlite3.Connection, state_dir: Path, at: Callable[[int], str]) ->
             logs.write_private(review_diff.path_for(log_path), diff)
     # A coworker's PR the operator asked canopy to review from the web UI (DESIGN §21).
     conn.execute(
-        "INSERT INTO review_requests (pr_url, created_at, channel) VALUES (?, ?, 'web')",
-        (PR_95, at(-20)),
+        "INSERT INTO review_requests (pr_url, created_at, channel, notes) VALUES (?, ?, 'web', ?)",
+        (PR_95, at(-20), "The author asked for a close look at the retry loop; I'm not sure it backs off."),
     )

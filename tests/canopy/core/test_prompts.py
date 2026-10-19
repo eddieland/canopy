@@ -162,6 +162,18 @@ def test_a_reviewer_override_must_name_the_commit(canopy_env: CanopyEnv) -> None
         prompts.render_reviewer(cfg, values)
 
 
+def test_a_reviewer_override_without_notes_serves_only_reviews_with_none(canopy_env: CanopyEnv) -> None:
+    overrides = canopy_env.user_file.parent / "prompts"
+    overrides.mkdir()
+    (overrides / "reviewer.md").write_text("Review {{PR_URL}} at {{SHA}} in {{CHECKOUT}}\n")
+    cfg = load(canopy_env.root, canopy_env.user_file)
+    values = {"PR_URL": "u", "CHECKOUT": "c", "SHA": "s"}
+    assert prompts.render_reviewer(cfg, values) == "Review u at s in c\n"
+    # The operator's notes are never dropped: the review is refused, and the overseer told why.
+    with pytest.raises(prompts.PromptError, match=r"missing required placeholder \{\{NOTES\}\}$"):
+        prompts.render_reviewer(cfg, values, notes="Look at the cache.")
+
+
 @pytest.mark.parametrize(
     ("prefix", "suffix", "recognized", "instruction"),
     [
