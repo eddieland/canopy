@@ -230,9 +230,11 @@ Rules:
   leads with what waits on the operator: a Proposals panel, counted in `status-blocked` while one waits as the nav
   counts them, and saying that none reaches a run until promoted;
   then Lessons under the tier's band, the digest folded at its foot (`Show what every run is served`); then Ticket
-  notes, a row a ticket opening to its notes, which it reads only then, counted `2 tickets · 3 notes`. Wide, the tickets
-  sit beside the other two. Over all three, a filter field and a chip for each repository narrow the page (`?q=`,
-  `?repo=`, `src/lib/memory-filter.ts`), as the tickets filters do: a word in a memory's key, text, ticket, or
+  notes, a row a ticket opening to its notes, which it reads only then, counted `2 tickets · 3 notes`. From 120rem,
+  the tickets sit beside the queue in 34rem, where their opened notes' columns fit and the queue still keeps a
+  proposal's verbs on one line; narrower, they stack under it. Over all
+  three, a filter field and a chip for each repository narrow the page (`?q=`, `?repo=`, `src/lib/memory-filter.ts`), as
+  the tickets filters do: a word in a memory's key, text, ticket, or
   repository, or a ticket's key or title, and, since the page holds only each ticket's count of notes, what notes say
   through `canopy memory search`'s operator search (`GET /api/memory/search`, every word, as the rows above hold them),
   listed under the tickets as Notes that say it, each with its verbs, counted in the header as `N notes found`, and
