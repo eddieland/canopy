@@ -23,9 +23,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-from canopy.core import definitions, hostgit, pool, pools, workspace
+from canopy.core import hostgit, pool, pools, workspace
 from canopy.core.config import REPO_NAME_RE, WORKSPACE_FILE_NAME, WORKSPACE_STATE_DIR, private_config_path
 from canopy.infra import procs
+from canopy.runtime import project_config
 from canopy.setup import init
 
 GITIGNORE = ".gitignore"
@@ -108,7 +109,7 @@ def run_init(root: Path, user_file: Path, provider: str | None) -> init.Report:
         init.write_if_missing(workspace_file, workspace_file_text(workspace.default_name(root), provider), report)
     init.write_if_missing(root / workspace.MAP_FILE_NAME, MAP_TEXT, report)
     _ignore(root / GITIGNORE, report)
-    report.shadowing = definitions.shadowing(root)
+    report.shadowing = project_config.shadowing(root)
     return report
 
 

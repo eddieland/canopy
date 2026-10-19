@@ -33,7 +33,7 @@ def prompts_dir() -> Path:
 
 
 def agents_dir() -> Path:
-    """Return the directory of OpenCode agent definitions."""
+    """Return the directory of canopy's agent definitions, in the runtime's format (`canopy.runtime.agents`)."""
     return _find("agents", ".agents/agents")
 
 

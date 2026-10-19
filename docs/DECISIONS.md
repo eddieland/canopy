@@ -83,10 +83,14 @@ such as a shipped migration, may still cite one, and git history has its text.
   permissions. A prompt cannot relax a guard.
 - Revisit: if prompt behavior proves unstable; then move one rule at a time into code.
 
-## D009. The runtime is a command template, not an adapter
+## D009. The runtime is a command template, and only `canopy.runtime` knows it
 
-- `runtime.*_cmd` are templates with `{prompt}` (rendered per D023), so another runtime is a config change.
-- Revisit: when a second runtime needs different invocation or result parsing.
+- `runtime.*_cmd` are templates with `{prompt}` (rendered per D023): how a run starts is config, not code.
+- What canopy reads and writes of OpenCode, its events, definitions' format, config files, and variables, is in the
+  `runtime` package alone, below `core`; `test_layers.py` fails on a string naming it anywhere else. A new runtime, or
+  a new major version such as OpenCode 2, is a change to that package and the default templates.
+- Rejected: an adapter interface over several runtimes at once (AGENTS.md, Do not build).
+- Revisit: when two runtimes must run side by side.
 
 ## D010. Everything runs as the operator
 

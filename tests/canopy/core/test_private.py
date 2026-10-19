@@ -17,6 +17,7 @@ from canopy.core import config, conversation, db, definitions, outbox
 from canopy.core.vocab import ResumeReason, RunKind, RunStatus, StartStatus
 from canopy.infra import procs, resources
 from canopy.loop import attention, repeat
+from canopy.runtime import agents
 from canopy.serve import views
 from tests.canopy.helpers import (
     BRANCH,
@@ -388,8 +389,8 @@ def test_the_private_worker_definition_allows_only_the_trackers_read_tools(canop
     # As shipped, it names no server: the snapshot without config is the bundled file.
     bundled = (resources.agents_dir() / "canopy-worker-private.md").read_text()
     assert '"atlassian_' not in bundled
-    with pytest.raises(definitions.DefinitionsError):
-        definitions.render_private(bundled.replace("# canopy: tracker tools", "# gone"), tools)
+    with pytest.raises(agents.DefinitionsError):
+        agents.render_private(bundled.replace("# canopy: tracker tools", "# gone"), tools)
 
 
 def test_github_defaults_keep_the_pr_tools_and_no_issue_writes() -> None:

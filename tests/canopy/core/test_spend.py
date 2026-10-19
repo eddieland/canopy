@@ -10,7 +10,7 @@ import pytest
 
 from canopy.cli.main import main
 from canopy.core import db, plans, spend
-from canopy.core.agent_output import ToolUse, Usage
+from canopy.runtime.report import ToolUse, Usage
 from tests.canopy.helpers import earlier
 from tests.conftest import CanopyEnv, Journals
 

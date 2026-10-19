@@ -12,9 +12,9 @@ from unittest import mock
 import pytest
 
 from canopy.core import db
-from canopy.core.agent_output import ToolUse, Usage
 from canopy.core.vocab import Phase, TickStatus
 from canopy.infra import resources
+from canopy.runtime.report import ToolUse, Usage
 from tests.canopy.helpers import DEAD_PID, journal_at, old_ticket, present, shipped_through, versions_after
 from tests.conftest import Journals
 

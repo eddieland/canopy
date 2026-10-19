@@ -10,8 +10,9 @@ import pytest
 
 from canopy.chores import install
 from canopy.cli.main import main
-from canopy.core import config, definitions, workspace
+from canopy.core import config, workspace
 from canopy.infra import resources
+from canopy.runtime import agents
 from tests.canopy.helpers import in_run
 from tests.conftest import CanopyEnv
 
@@ -50,7 +51,7 @@ def test_an_example_that_runs_an_agent_of_canopys_naming_comes_with_it_and_runs_
         if agent is None or not agent[1].startswith("canopy-"):
             assert installed.agent is None, name
             continue
-        assert agent[1] not in definitions.agent_names(), name
+        assert agent[1] not in agents.agent_names(), name
         agent_dir = canopy_env.state_dir / install.AGENTS_DIR / name
         copied = installed.agent
         assert copied is not None
