@@ -73,8 +73,9 @@ Controls:
   on feedback. Only a validated `done` `trivial` result writes the waiver, and its reason, model text written from the
   ticket, reaches no worker's prompt. The PR's review is the backstop. Residual, accepted by the operator: a ticket's
   text can talk a triage into `trivial`, and its work then goes to a PR unplanned. And a primary clone may lag its base
-  branch, so a `trivial` verdict can rest on code that has since changed; only the PR's review catches that until the
-  reviewer's second opinion (`not_trivial`, ROADMAP M55) is built.
+  branch, so a `trivial` verdict can rest on code that has since changed. The PR's review catches that, and where
+  `review.agent_prs` is on, canopy's reviewer may too: a waived ticket's PR it judges `high` raises `not_trivial`,
+  which tells the operator and stops nothing.
 - Workers can push only to `trust.branch_prefix` branches, with one exception: the head branch of an open PR the
   operator authored and labeled with one of `tracker.labels` (PR-scoped work, ROADMAP M14, D056). Enforced by the
   worker prompt and by repository branch protection, which the operator must configure. canopy `init` prints the
