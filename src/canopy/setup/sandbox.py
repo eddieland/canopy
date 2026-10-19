@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import canopy_sandbox
+from canopy_sandbox import credentials
 
 from canopy.core import config
 from canopy.infra import procs
@@ -66,12 +67,12 @@ SHARED_CACHE = """\
 the sandbox, the agent runtime's for the overseer included. Remove them from its allowWrite and allowRead, and
 add @CACHE@ to both, as the shipped template does (docs/SANDBOX.md)."""
 OPERATOR_DATA = """\
-{template} lets a sandboxed run read {paths}: your own OpenCode data, whose logins and config your OpenCode, the
+{template} lets a sandboxed run read {paths}: the agent runtime's own data, whose logins and config your runtime, the
 overseer's included, acts on outside the sandbox. Remove them from its allowRead and allowWrite, and add @DATA@ to
-both, as the shipped template does: a run's OpenCode keeps its data there, with a copy of your logins
+both, as the shipped template does: a run's runtime keeps its data there, with a copy of your logins
 (docs/SANDBOX.md)."""
 NO_DATA = """\
-{template} leaves @DATA@ out of its allowRead or allowWrite, so a sandboxed run's OpenCode finds none of your logins.
+{template} leaves @DATA@ out of its allowRead or allowWrite, so a sandboxed run's runtime finds none of your logins.
 Add it to both, as the shipped template does (docs/SANDBOX.md)."""
 # The roles whose command is OpenCode, which keeps its data, logins included, in the run's own data directory.
 RUNTIME_ROLES = ("worker", "chore", "review")
@@ -181,8 +182,8 @@ def _data_todo(template: Path, role: str) -> str | None:
     entries = [[e for e in entries if isinstance(e, str)] for entries in lists if isinstance(entries, list)]
     if len(entries) != len(lists):
         return None
-    operator = canopy_sandbox.data_home() / "opencode"
-    roots = {operator, Path.home() / ".local" / "share" / "opencode"}
+    operator = canopy_sandbox.data_home() / credentials.RUNTIME
+    roots = {operator, Path.home() / ".local" / "share" / credentials.RUNTIME}
     named = [e for e in dict.fromkeys(e for es in entries for e in es) if any(_under(e, root) for root in roots)]
     if named:
         return OPERATOR_DATA.format(template=template, paths=", ".join(named))
