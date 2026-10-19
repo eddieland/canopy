@@ -20,7 +20,19 @@ from canopy.core.vocab import DraftKind, DraftStatus, ResumeReason, ReviewItem, 
 from canopy.infra import logs, procs
 from canopy.loop import attention
 from canopy.runs import drafted
-from tests.canopy.helpers import APPROVE, DRAFTS_PR, KEY, all_drafts, comment, github_has, present, reads, thread, waits
+from tests.canopy.helpers import (
+    APPROVE,
+    DRAFTS_PR,
+    KEY,
+    all_drafts,
+    comment,
+    context,
+    github_has,
+    present,
+    reads,
+    thread,
+    waits,
+)
 from tests.canopy.scenario_helpers import dispatches, sends_drafts
 
 if TYPE_CHECKING:
@@ -188,6 +200,28 @@ def test_waiting_drafts_are_the_operators_item_alone(scenario: Scenario, github_
     ]
     assert "drafts_waiting" not in str(scenario.state())
     assert attention.for_overseer(scenario.conn) == []
+
+
+@pytest.mark.usefixtures("git_pool")
+def test_dropping_drafts_takes_them_off_the_attention_list_without_a_tick(
+    scenario: Scenario, github_state: Path
+) -> None:
+    scenario.configures("private", trust=APPROVE)
+    github_has(github_state, comment(501), comment(502, "PRRT_2"))
+    run = scenario.run(WORK, worker=sends_drafts([thread(501), thread(502)]))
+    scenario.tick(*waits(KEY))
+    page = scenario.env.state_dir / attention.FILE_NAME
+    ctx = context(scenario.env)
+    [item] = [i for i in attention.listed(ctx) if i.reason == drafted.WAITING_REASON]
+    assert item.detail == f"2 drafts wait on you, for {PR}"
+    scenario.operator("draft", "drop", f"run:{run.id}", "1")
+    [item] = [i for i in attention.listed(ctx) if i.reason == drafted.WAITING_REASON]
+    assert item.detail == f"1 draft waits on you, for {PR}"
+    assert "1 draft waits on you" in page.read_text()
+    scenario.operator("draft", "drop", f"run:{run.id}", "2")
+    assert [i for i in attention.listed(ctx) if i.reason == drafted.WAITING_REASON] == []
+    assert drafted.WAITING_REASON not in page.read_text()
+    assert "\nAttention (0):" in scenario.operator("status").out
 
 
 def test_a_read_records_only_what_it_read_whole_and_passes_over_lines_it_cannot_use(

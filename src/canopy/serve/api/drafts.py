@@ -102,6 +102,7 @@ def drop(run_id: RunId, number: DraftNumber, body: DraftDropRequest, backend: Ba
             [found] = drafts_manage.drop(ctx.conn, run_id, [number], undo=body.undo)
         except conversation.Refused as r:
             raise RefusedError(r) from None
+        backend.write_attention(ctx)
         _log.info("draft dropped", extra={"run_id": run_id, "number": number, "undo": body.undo, "channel": WEB})
         return threads.draft(ctx.conn, found)
 
@@ -121,6 +122,7 @@ def send(body: DraftSendRequest, backend: BackendDep) -> DraftsSent:
             outcome = drafts_manage.send(ctx.conn, ctx.config, ctx.runner, wanted, channel=WEB, log=_log)
         except conversation.Refused as r:
             raise RefusedError(r) from None
+        backend.write_attention(ctx)
         _log.info(
             "drafts sent",
             extra={"posted": len(outcome.posted), "failed": len(outcome.failed), "channel": WEB},
